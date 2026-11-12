@@ -17,6 +17,7 @@ import {
   Skeleton,
 } from '../../design/components';
 import { useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { DocumentDecisionDialog, type DocumentDecision } from './DocumentDecisionDialog';
 import { DocumentPages, usePdf } from './DocumentPages';
 import { useDocumentLink } from './queries';
@@ -55,6 +56,7 @@ export function AdminDocumentViewer(props: DocumentViewerProps) {
   const request = props.context === 'user' ? props.request : null;
 
   const failed = link.isError || pdf.failed;
+  const linkFailure = errorMessageKey(link.error, 'admin.dialogs.documentViewer.loadError');
   const pages =
     pdf.file === undefined
       ? []
@@ -105,7 +107,7 @@ export function AdminDocumentViewer(props: DocumentViewerProps) {
           {failed ? (
             <div className="stack gap-3">
               <Banner icon={{ name: 'alert-circle' }} tone="danger">
-                {t('admin.dialogs.documentViewer.loadError')}
+                {t(linkFailure.key, linkFailure.values)}
               </Banner>
               <div className="self-start">
                 <Button

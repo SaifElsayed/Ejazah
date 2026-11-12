@@ -4,7 +4,8 @@
 // over `students.suspend`, `students.ban` and `students.reinstate` (T005). `students.*` answer
 // nothing, so the board's counts, «the teacher is notified», the enrollment's subtitle and a second
 // confirmation are not drawn (the note under T051, Q2), and no word calls a ban final (Q1 (a)). A
-// refusal is said in place; after a success `onDone` runs, and the caller reads again.
+// refusal is said in place, `RATE_LIMITED` with when to try again (T058's `errorMessageKey`); after a
+// success `onDone` runs, and the caller reads again.
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -12,6 +13,7 @@ import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/compo
 import type { IconName } from '../../design/icons';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 
 export type StudentStandingKind = 'suspend' | 'ban' | 'reinstate';
 
@@ -89,7 +91,7 @@ export function StudentStandingDialog({
       client.api.students[kind].mutate({ studentUserId: student.studentUserId, reason }),
   });
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const drawn = DRAWN[kind];
   return (
     <Dialog
@@ -110,8 +112,11 @@ export function StudentStandingDialog({
           disabled: reason.trim() === '',
           loading: act.isPending,
           onPress: () => {
-            setFailed(false);
-            act.mutate(reason.trim(), { onSuccess: onDone, onError: () => setFailed(true) });
+            setFailed(null);
+            act.mutate(reason.trim(), {
+              onSuccess: onDone,
+              onError: (error) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')),
+            });
           },
         },
       ]}
@@ -133,9 +138,9 @@ export function StudentStandingDialog({
           placeholder={t('admin.dialogs.suspendStudent.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>

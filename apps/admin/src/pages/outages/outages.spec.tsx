@@ -326,3 +326,25 @@ describe('/outages, the record (FR-445)', () => {
     expect(box.queryByText(ar('admin.outages.dialog.refused.endNotAfterStart'))).toBeNull();
   });
 });
+
+describe('T058: RATE_LIMITED on /outages', () => {
+  it('the list says when to try again', async () => {
+    const api = fakeApi();
+    api.sessions.outages.list.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the record says to wait a little when no time is given, the form left open', async () => {
+    const { api } = open();
+    api.sessions.outages.record.mutate.mockRejectedValue(refusal('RATE_LIMITED'));
+    const box = await form();
+    fill(box, WHOLE);
+    press(box);
+    expect(await box.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

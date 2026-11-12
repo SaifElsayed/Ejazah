@@ -19,6 +19,7 @@ export function DisputeChatSection({ disputeId }: { readonly disputeId: string }
   const locale = useLocale();
   const zone = panelTimeZone();
   const chat = useDisputeChat(disputeId);
+  const chatFailed = chatFailure(chat.error);
   const messages = chat.data?.pages.flatMap((page) => page.messages) ?? [];
   return (
     <section className="section" aria-label={t('admin.chatLog.a11y.messages')}>
@@ -62,7 +63,7 @@ export function DisputeChatSection({ disputeId }: { readonly disputeId: string }
         )
       ) : chat.isError ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(chatFailure(chat.error))}
+          {t(chatFailed.key, chatFailed.values)}
         </Banner>
       ) : (
         <Skeleton shape="block" />

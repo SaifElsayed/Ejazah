@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Banner, Dialog, Icon, IconTile } from '../../design/components';
 import type { IconName } from '../../design/icons';
 import { type MessageKey, useT } from '../../i18n';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { useIdentityActions } from './queries';
 
 export type DocumentDecision = 'accept' | 'requestAnother';
@@ -61,13 +62,13 @@ export function DocumentDecisionDialog({
 }) {
   const t = useT();
   const actions = useIdentityActions();
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const drawn = DRAWN[decision];
   const pending = actions.accept.isPending || actions.requestAnother.isPending;
 
   const confirm = () => {
-    setFailed(false);
-    const settled = { onSuccess: onDone, onError: () => setFailed(true) };
+    setFailed(null);
+    const settled = { onSuccess: onDone, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) };
     if (decision === 'accept') {
       actions.accept.mutate({ requestId, ...(note === '' ? {} : { note }) }, settled);
     } else {
@@ -102,9 +103,9 @@ export function DocumentDecisionDialog({
           ))}
         </ul>
       </section>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>

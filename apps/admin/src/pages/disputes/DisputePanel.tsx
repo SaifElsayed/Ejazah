@@ -26,6 +26,7 @@ import {
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
 import { UserText } from '../../i18n/UserText';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { HeldFilesSection, PartyName } from '../_shared';
@@ -39,11 +40,12 @@ import { ReviseDialog } from './ReviseDialog';
 export function DisputePanel({ disputeId }: { readonly disputeId: string }) {
   const t = useT();
   const read = useDispute(disputeId);
+  const loadFailure = errorMessageKey(read.error, 'admin.common.loadError.text');
   if (read.data !== undefined) return <DisputeDetailPanel view={read.data} />;
   if (read.isError) {
     return (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     );
   }

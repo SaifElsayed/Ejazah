@@ -28,6 +28,7 @@ import {
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey, retryAfterSecondsOf } from '../../lib/error-message';
 import { mintIdempotencyKey } from './idempotency-key';
 
 type Party = CasesOpenManualOutput['party'];
@@ -43,10 +44,17 @@ const REFUSALS: Readonly<Record<string, MessageKey>> = {
   CONFLICT: 'admin.shared.keyReused',
 };
 
-/** The words of a refused opening, by its code (T064). */
-export function manualCaseFailure(error: unknown): MessageKey {
+/**
+ * The words of a refused opening, by its code (T064); `RATE_LIMITED` says when to try again when the
+ * server gives the time (T058), else keeps its own words; any other failure the generic words.
+ */
+export function manualCaseFailure(error: unknown): ErrorMessage {
   const code = errorCodeOf(error);
-  return (code === undefined ? undefined : REFUSALS[code]) ?? 'admin.dialogs.submitError';
+  if (code === 'RATE_LIMITED' && retryAfterSecondsOf(error) !== undefined) {
+    return errorMessageKey(error, 'admin.dialogs.submitError');
+  }
+  const named = code === undefined ? undefined : REFUSALS[code];
+  return named === undefined ? errorMessageKey(error, 'admin.dialogs.submitError') : { key: named };
 }
 
 export interface ManualCaseDialogProps {
@@ -76,7 +84,7 @@ export function ManualCaseDialog({
     remedyId === undefined ? undefined : 'student',
   );
   const [reason, setReason] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const [answer, setAnswer] = useState<CasesOpenManualOutput | undefined>(undefined);
   const openManual = useMutation({
     mutationFn: (input: {
@@ -205,7 +213,7 @@ export function ManualCaseDialog({
       </Field>
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
       {answer === undefined || caseHref === undefined ? null : (

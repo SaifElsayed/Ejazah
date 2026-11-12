@@ -540,6 +540,8 @@
       },
       "pdf": "PDF",
       "progress": "{done} من {total}",
+      "rateLimited": "طلبات كثيرة. لم يتغيّر شيء؛ انتظر قليلًا ثم حاول مرة أخرى.",
+      "rateLimitedIn": "طلبات كثيرة. لم يتغيّر شيء؛ حاول مرة أخرى بعد {count, plural, one {دقيقة} two {دقيقتين} few {# دقائق} many {# دقيقة} other {# دقيقة}}.",
       "reasonAuditPlaceholder": "يُسجَّل مع القرار في سجل التدقيق",
       "reasonLoggedWithAction": "يُسجَّل السبب مع الإجراء في سجل التدقيق.",
       "reasonRequiredPlaceholder": "اكتب سببًا واضحًا",
@@ -2498,6 +2500,18 @@
         "suspend": "إيقاف الحساب",
         "timeZone": "المنطقة الزمنية"
       },
+      "directory": {
+        "deletedAccount": "حساب محذوف",
+        "emptyAll": {
+          "text": "يظهر هنا كل حساب يُنشأ على المنصة.",
+          "title": "لا مستخدمين بعد"
+        },
+        "lede": "الطلاب والمعلمون، الأحدث تسجيلًا أولًا. يُبحث ببداية الاسم.",
+        "noRole": "بلا دور",
+        "pagerPage": "الصفحة {page} · الأحدث أولًا",
+        "searchEmptyText": "جرّب بداية اسم أخرى.",
+        "searchPlaceholder": "بداية الاسم"
+      },
       "filter": {
         "age": "العمر",
         "ageAll": "الكل",
@@ -2522,6 +2536,26 @@
       "lede": "الطلاب والمعلمون. كل إيقاف أو منع أو حظر يحتاج سببًا ويُسجَّل في سجل التدقيق.",
       "pagerSummary": "{shown} من {total} · حسب آخر نشاط",
       "reactivate": "إعادة تفعيل",
+      "record": {
+        "bio": "النبذة",
+        "cancellationsRecent": "الطلبات الأخيرة",
+        "cancellationsTotal": "كل الطلبات",
+        "deleted": "محذوف",
+        "email": "البريد الإلكتروني",
+        "noRepeatedAbsences": "لا اشتراك عليه علامة الغياب المتكرر.",
+        "openEnrollment": "فتح الاشتراك",
+        "qualification": "المؤهلات",
+        "repeatedAbsences": "اشتراكات عليها علامة الغياب المتكرر",
+        "verification": "حالة اعتماد المعلم",
+        "verificationStatus": {
+          "approved": "معتمد",
+          "banned": "محظور",
+          "pending": "قيد المراجعة",
+          "rejected": "مرفوض",
+          "revoked": "سُحب الاعتماد",
+          "suspended": "موقوف"
+        }
+      },
       "roleWithStatus": "{role} · {status}",
       "search": {
         "label": "بحث",

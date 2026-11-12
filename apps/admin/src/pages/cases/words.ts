@@ -2,7 +2,8 @@
 // says, each by what the server answered. Every reason of T004 and T064 in plain words (the two
 // manual reasons by their party), a complaint by its kind, a case's state and closing, a covered
 // session's remedy, and a refusal by its code and `details.cause`; any other failure is the page's
-// generic words (`admin.dialogs.submitError`), which T058 switches later. No amount is ever said.
+// generic words (`admin.dialogs.submitError`) through T058's `errorMessageKey`, which says when
+// to try again on `RATE_LIMITED`. No amount is ever said.
 import type {
   CaseCoveredSession,
   CaseDetail,
@@ -12,6 +13,7 @@ import type {
 
 import type { MessageKey } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 
 type Reason = NonNullable<CasesListItem['reason']>;
 type Remedy = NonNullable<CaseCoveredSession['remedy']>;
@@ -93,33 +95,36 @@ function causeOf(error: unknown): string | undefined {
 }
 
 /** The words of a refused resolve or dismiss (T035, T036): by its code and cause. */
-export function closingFailure(error: unknown): MessageKey {
+export function closingFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'STUDENT_SUSPENDED':
-      return 'admin.cases.close.refused.studentSuspended';
+      return { key: 'admin.cases.close.refused.studentSuspended' };
     case 'NOT_FOUND':
-      return 'admin.cases.close.refused.notFound';
+      return { key: 'admin.cases.close.refused.notFound' };
     case 'CONFLICT': {
       const cause = causeOf(error);
-      if (cause === 'not_open') return 'admin.cases.close.refused.notOpen';
-      if (cause === 'no_free_week') return 'admin.cases.close.refused.noFreeWeek';
-      return 'admin.dialogs.submitError';
+      if (cause === 'not_open') return { key: 'admin.cases.close.refused.notOpen' };
+      if (cause === 'no_free_week') return { key: 'admin.cases.close.refused.noFreeWeek' };
+      return { key: 'admin.dialogs.submitError' };
     }
     default:
-      return 'admin.dialogs.submitError';
+      return errorMessageKey(error, 'admin.dialogs.submitError');
   }
 }
 
 /** The words of a refused complaint decision (T060): by its code and cause. */
-export function decisionFailure(error: unknown): MessageKey {
+export function decisionFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'NOT_FOUND':
-      return 'admin.cases.decide.refused.notFound';
+      return { key: 'admin.cases.decide.refused.notFound' };
     case 'CONFLICT':
-      return causeOf(error) === 'enrollment_not_confirmed'
-        ? 'admin.cases.decide.refused.notConfirmed'
-        : 'admin.dialogs.submitError';
+      return {
+        key:
+          causeOf(error) === 'enrollment_not_confirmed'
+            ? 'admin.cases.decide.refused.notConfirmed'
+            : 'admin.dialogs.submitError',
+      };
     default:
-      return 'admin.dialogs.submitError';
+      return errorMessageKey(error, 'admin.dialogs.submitError');
   }
 }

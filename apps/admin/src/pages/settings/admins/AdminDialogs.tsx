@@ -9,6 +9,7 @@ import { Banner, Dialog, Field, Icon, IconTile, Input, Otp } from '../../../desi
 import type { IconName } from '../../../design/icons';
 import { type MessageKey, useLocale, useT } from '../../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../../lib/error-message';
 import { dayMonthYear } from '../../../lib/format';
 import { panelTimeZone } from '../../../lib/zone';
 import { RecoveryCodes } from '../../mfa/RecoveryCodes';
@@ -34,7 +35,7 @@ export function AddAdminDialog({ onClose }: { readonly onClose: () => void }) {
   const { add } = useAdminActions();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [refused, setRefused] = useState<MessageKey | null>(null);
+  const [refused, setRefused] = useState<ErrorMessage | null>(null);
   const [taken, setTaken] = useState(false);
   const ready = name.trim() !== '' && email.trim() !== '';
   const send = () => {
@@ -51,7 +52,7 @@ export function AddAdminDialog({ onClose }: { readonly onClose: () => void }) {
           ) {
             setTaken(true);
           } else {
-            setRefused('admin.dialogs.submitError');
+            setRefused(errorMessageKey(error, 'admin.dialogs.submitError'));
           }
         },
       },
@@ -105,7 +106,7 @@ export function AddAdminDialog({ onClose }: { readonly onClose: () => void }) {
       />
       {refused === null ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(refused)}
+          {t(refused.key, refused.values)}
         </Banner>
       )}
     </Dialog>
@@ -123,7 +124,7 @@ export function MfaResetDialog({
   const locale = useLocale();
   const { resetMfa } = useAdminActions();
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   const since =
     admin.invitedAt === undefined ? null : dayMonthYear(admin.invitedAt, locale, panelTimeZone());
   return (
@@ -148,10 +149,10 @@ export function MfaResetDialog({
           disabled: reason.trim() === '',
           loading: resetMfa.isPending,
           onPress: () => {
-            setFailed(false);
+            setFailed(null);
             resetMfa.mutate(
               { adminId: admin.adminId, reason: reason.trim() },
-              { onSuccess: onClose, onError: () => setFailed(true) },
+              { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
             );
           },
         },
@@ -176,9 +177,9 @@ export function MfaResetDialog({
           placeholder={t('admin.dialogs.mfaReset.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>
@@ -195,7 +196,7 @@ export function DisableAdminDialog({
   const t = useT();
   const { disable } = useAdminActions();
   const [reason, setReason] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<ErrorMessage | null>(null);
   return (
     <Dialog
       open
@@ -215,10 +216,10 @@ export function DisableAdminDialog({
           disabled: reason.trim() === '',
           loading: disable.isPending,
           onPress: () => {
-            setFailed(false);
+            setFailed(null);
             disable.mutate(
               { adminId: admin.adminId, reason: reason.trim() },
-              { onSuccess: onClose, onError: () => setFailed(true) },
+              { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
             );
           },
         },
@@ -241,9 +242,9 @@ export function DisableAdminDialog({
           placeholder={t('admin.dialogs.confirm.common.reasonPlaceholder')}
         />
       </Field>
-      {failed ? (
+      {failed !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failed.key, failed.values)}
         </Banner>
       ) : null}
     </Dialog>
@@ -254,7 +255,7 @@ export function RecoveryCodesDialog({ onClose }: { readonly onClose: () => void 
   const t = useT();
   const { regenerate } = useAdminActions();
   const [code, setCode] = useState('');
-  const [refused, setRefused] = useState<MessageKey | null>(null);
+  const [refused, setRefused] = useState<ErrorMessage | null>(null);
   const [codes, setCodes] = useState<readonly string[] | null>(null);
   const [saved, setSaved] = useState(false);
   const create = () => {
@@ -266,8 +267,8 @@ export function RecoveryCodesDialog({ onClose }: { readonly onClose: () => void 
         onError: (error) =>
           setRefused(
             errorCodeOf(error) === 'CODE_INVALID'
-              ? 'admin.admins.recovery.codeInvalid'
-              : 'admin.dialogs.submitError',
+              ? { key: 'admin.admins.recovery.codeInvalid' }
+              : errorMessageKey(error, 'admin.dialogs.submitError'),
           ),
       },
     );
@@ -312,7 +313,7 @@ export function RecoveryCodesDialog({ onClose }: { readonly onClose: () => void 
           </div>
           {refused === null ? null : (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t(refused)}
+              {t(refused.key, refused.values)}
             </Banner>
           )}
         </>

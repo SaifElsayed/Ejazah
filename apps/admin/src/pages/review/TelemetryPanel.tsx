@@ -26,6 +26,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { errorMessageKey } from '../../lib/error-message';
 import { cityName, dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { CorrectionDialog } from '../_shared';
@@ -74,15 +75,15 @@ function eventWords(event: Event): MessageKey {
     : 'admin.review.telemetry.events.studentLeft';
 }
 
-/** What a failed read says: a scheduled or missing session in plain words, else the generic text. */
-function readFailure(error: unknown): MessageKey {
+/** A failed read the task names: a scheduled or missing session, in plain words. */
+function readRefusal(error: unknown): MessageKey | undefined {
   const cause = errorDetailsOf(error).find((each) => each.path === 'cause')?.code;
   const code = errorCodeOf(error);
   if (code === 'CONFLICT' && cause === 'not_settled') {
     return 'admin.review.telemetry.refused.notSettled';
   }
   if (code === 'NOT_FOUND') return 'admin.review.telemetry.refused.notFound';
-  return 'admin.common.loadError.text';
+  return undefined;
 }
 
 export function TelemetryPanel({ sessionId }: { readonly sessionId: string }) {
@@ -90,13 +91,17 @@ export function TelemetryPanel({ sessionId }: { readonly sessionId: string }) {
   const read = useTelemetry(sessionId);
   if (read.data !== undefined) return <TelemetryRecord record={read.data} />;
   if (read.isError) {
-    const words = readFailure(read.error);
+    const named = readRefusal(read.error);
+    const words =
+      named === undefined
+        ? errorMessageKey(read.error, 'admin.common.loadError.text')
+        : { key: named };
     return (
       <div className="stack gap-4">
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(words)}
+          {t(words.key, words.values)}
         </Banner>
-        {words === 'admin.common.loadError.text' ? (
+        {named === undefined ? (
           <div className="row">
             <Button
               label={t('admin.common.action.retry')}

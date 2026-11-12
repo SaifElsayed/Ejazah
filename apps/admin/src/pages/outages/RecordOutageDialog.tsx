@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { calendarDateOfDayField, dayFieldText } from '../../lib/day-field';
 import { cityName } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
@@ -54,6 +55,7 @@ export function RecordOutageDialog({
   const [zone, setZone] = useState(panelTimeZone);
   const [reason, setReason] = useState('');
   const [refused, setRefused] = useState<Refused | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage>({ key: 'admin.dialogs.submitError' });
 
   const startDate = calendarDateOfDayField(startDay);
   const endDate = calendarDateOfDayField(endDay);
@@ -113,7 +115,10 @@ export function RecordOutageDialog({
             setRefused(undefined);
             record.mutate(input, {
               onSuccess: (answer) => onDone({ reclassified: answer.reclassified }),
-              onError: (error) => setRefused(refusedAt(error)),
+              onError: (error) => {
+                setFailure(errorMessageKey(error, 'admin.dialogs.submitError'));
+                setRefused(refusedAt(error));
+              },
             });
           },
         },
@@ -189,7 +194,7 @@ export function RecordOutageDialog({
       </Field>
       {refused === 'other' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
     </Dialog>

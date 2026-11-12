@@ -11,6 +11,7 @@ import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/compo
 import type { IconName } from '../../design/icons';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { type CredentialDetail, useCredentialActions } from './queries';
 
 /** What the panel sends once confirmed: the transcription, the request, the correction. */
@@ -124,7 +125,7 @@ export function CredentialConfirm({
   const locale = useLocale();
   const actions = useCredentialActions();
   const [written, setWritten] = useState('');
-  const [refused, setRefused] = useState<MessageKey | null>(null);
+  const [refused, setRefused] = useState<ErrorMessage | null>(null);
   const drawn = DRAWN[decision.kind];
   const teacher = detail.teacher.displayName;
   const names = {
@@ -145,9 +146,9 @@ export function CredentialConfirm({
     },
     onError: (error: unknown) => {
       if (errorCodeOf(error) !== 'CONFLICT') {
-        setRefused('admin.dialogs.submitError');
+        setRefused(errorMessageKey(error, 'admin.dialogs.submitError'));
       } else if (errorDetailsOf(error).some(({ code }) => code === 'subject_approved')) {
-        setRefused('admin.credentials.panel.subjectApproved');
+        setRefused({ key: 'admin.credentials.panel.subjectApproved' });
       } else {
         // Its status changed: the panel is drawn anew from the next read and says why (B14c
         // review, round 1, finding 1).
@@ -252,7 +253,7 @@ export function CredentialConfirm({
       ) : null}
       {refused === null ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(refused)}
+          {t(refused.key, refused.values)}
         </Banner>
       )}
     </Dialog>

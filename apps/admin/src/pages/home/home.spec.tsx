@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { setLocale, translate, type MessageKey } from '../../i18n';
 import { cityName, dayMonth, timeOfDay, weekdayDate } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
-import { currentPath, inBothLocales, query, renderApp } from '../../test/app-harness';
+import { currentPath, inBothLocales, query, refusal, renderApp } from '../../test/app-harness';
 
 afterEach(() => setLocale('ar'));
 
@@ -187,5 +187,17 @@ describe('AdminHome (FR-176)', () => {
       name: (name) => name.startsWith(ar('admin.nav.items.applications')),
     });
     expect(applications.querySelector('.nav-item__count')).toBeNull();
+  });
+});
+
+describe('T058: RATE_LIMITED on the home', () => {
+  it('says when to try again in place of the summary’s generic words', async () => {
+    const api = fakeApi();
+    api.home.summary.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
   });
 });

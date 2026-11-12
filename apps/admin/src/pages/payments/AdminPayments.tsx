@@ -33,6 +33,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
@@ -75,6 +76,7 @@ export function AdminPayments() {
   }
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -96,7 +98,7 @@ export function AdminPayments() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.payments.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

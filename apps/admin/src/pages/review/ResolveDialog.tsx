@@ -19,6 +19,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { useResolve } from './queries';
 
 const OUTCOMES: readonly { readonly value: AdminOutcome; readonly label: MessageKey }[] = [
@@ -29,17 +30,20 @@ const OUTCOMES: readonly { readonly value: AdminOutcome; readonly label: Message
 ];
 
 /** The words of a refused resolution, by its code and its `details.cause` (T033). */
-function resolveFailure(error: unknown): MessageKey {
+function resolveFailure(error: unknown): ErrorMessage {
   const cause = errorDetailsOf(error).find((each) => each.path === 'cause')?.code;
   switch (errorCodeOf(error)) {
     case 'CONFLICT':
-      return cause === 'not_under_review'
-        ? 'admin.review.resolve.refused.notUnderReview'
-        : 'admin.dialogs.submitError';
+      return {
+        key:
+          cause === 'not_under_review'
+            ? 'admin.review.resolve.refused.notUnderReview'
+            : 'admin.dialogs.submitError',
+      };
     case 'NOT_FOUND':
-      return 'admin.review.resolve.refused.notFound';
+      return { key: 'admin.review.resolve.refused.notFound' };
     default:
-      return 'admin.dialogs.submitError';
+      return errorMessageKey(error, 'admin.dialogs.submitError');
   }
 }
 
@@ -55,7 +59,7 @@ export function ResolveDialog({
   const resolve = useResolve();
   const [outcome, setOutcome] = useState<AdminOutcome | undefined>(undefined);
   const [reason, setReason] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const ready = outcome !== undefined && reason.trim() !== '';
   return (
     <Dialog
@@ -112,7 +116,7 @@ export function ResolveDialog({
       </Field>
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
     </Dialog>

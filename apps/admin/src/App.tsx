@@ -43,6 +43,7 @@ import { AdminReview } from './pages/review/AdminReview';
 import { AdminSessions } from './pages/sessions/AdminSessions';
 import { AdminSetPassword, SET_PASSWORD_PATH } from './pages/set-password/AdminSetPassword';
 import { AdminSignIn } from './pages/sign-in/AdminSignIn';
+import { AdminUsers } from './pages/users/AdminUsers';
 
 function Guard({
   sessions,
@@ -103,6 +104,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/outages" element={<AdminOutages />} />
               <Route path="/disputes" element={<AdminDisputes />} />
               <Route path="/cases" element={<AdminCases />} />
+              <Route path="/users" element={<AdminUsers />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>

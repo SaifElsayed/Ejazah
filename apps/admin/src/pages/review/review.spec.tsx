@@ -538,3 +538,40 @@ describe('/review?session=, the correction of an outcome nobody disputed (FR-439
     expect(await form.findByText(ar(words))).toBeTruthy();
   });
 });
+
+describe('T058: RATE_LIMITED on /review', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the queue says when to try again', async () => {
+    const api = fakeApi();
+    api.sessions.review.list.query.mockRejectedValue(limited('61'));
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the connection record says to wait a little when no time is given, and offers a retry', async () => {
+    const api = fakeApi();
+    api.sessions.review.get.query.mockRejectedValue(limited());
+    open(api, `/review?session=${S1}`);
+    expect(await screen.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+    expect(screen.getByRole('button', { name: ar('admin.common.action.retry') })).toBeTruthy();
+  });
+
+  it('the resolution says when to try again, the dialog left open', async () => {
+    const { api } = open(fakeApi(), `/review?session=${S1}`);
+    api.sessions.review.resolve.mutate.mockRejectedValue(limited('120'));
+    const box = await panel();
+    fireEvent.click(box.getByRole('button', { name: ar('admin.review.telemetry.resolve') }));
+    const form = await dialog(ar('admin.review.resolve.title'));
+    fireEvent.click(form.getByRole('radio', { name: ar('admin.status.session.teacherNoShow') }));
+    fireEvent.change(form.getByLabelText(ar('admin.sessionReview.detail.reasonLabel')), {
+      target: { value: 'لم يدخل المعلم' },
+    });
+    fireEvent.click(form.getByRole('button', { name: ar('admin.sessionReview.detail.confirm') }));
+    expect(await form.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(form.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

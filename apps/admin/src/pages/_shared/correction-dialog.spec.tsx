@@ -186,7 +186,7 @@ describe("an undisputed outcome's correction (FR-439)", () => {
   });
 
   it.each([
-    ['a refusal it does not name', refusal('RATE_LIMITED')],
+    ['a refusal it does not name', refusal('INTERNAL')],
     ['no answer', new Error('offline')],
   ])('says %s by the generic words', async (_case, error) => {
     const api = fakeApi();
@@ -203,5 +203,20 @@ describe("an undisputed outcome's correction (FR-439)", () => {
     expect(onClose).toHaveBeenCalled();
     await settle();
     expect(api.sessions.review.revise.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('T058: RATE_LIMITED on the correction (rate_limit_outcome_correction)', () => {
+  it('says when to try again in place of the generic words', async () => {
+    const api = fakeApi();
+    api.sessions.review.revise.mutate.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    const box = await correct('admin.status.session.bothNoShow', 'سبب');
+    expect(
+      await box.findByText(translate('ar', 'admin.common.rateLimitedIn', { count: 2 })),
+    ).toBeTruthy();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
   });
 });

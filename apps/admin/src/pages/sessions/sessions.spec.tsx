@@ -943,3 +943,61 @@ describe('the second factor', () => {
     expect(api.sessions.monitor.list.query).not.toHaveBeenCalled();
   });
 });
+
+describe('T058: RATE_LIMITED on /sessions', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the monitor’s search says when to try again', async () => {
+    const api = fakeApi();
+    api.sessions.monitor.list.query.mockRejectedValue(limited('61'));
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('an enrollment’s read says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.sessions.monitor.get.query.mockRejectedValue(limited());
+    open(api, `/sessions?enrollment=${E2}`);
+    const aside = within(
+      await screen.findByRole('complementary', { name: ar('admin.sessions.detail.a11y') }),
+    );
+    expect(await aside.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(aside.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the cancellation says when to try again', async () => {
+    const api = fakeApi();
+    api.sessions.cancel.mutate.mockRejectedValue(limited('120'));
+    const { panel } = await openDetail(`/sessions?enrollment=${E2}`, api);
+    fireEvent.click(
+      sessionRow(panel, 5).getByRole('button', { name: ar('admin.sessions.detail.cancel') }),
+    );
+    const dialog = within(
+      await screen.findByRole('dialog', { name: ar('admin.sessions.cancel.title', { n: 5 }) }),
+    );
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.cancel.reasonLabel')), {
+      target: { value: 'سبب' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.cancel.confirm') }));
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+
+  it('the restore says when to try again (rate_limit_enrollment_restore)', async () => {
+    const api = fakeApi();
+    api.sessions.restore.mutate.mockRejectedValue(limited('31'));
+    const { panel } = await openDetail(`/sessions?enrollment=${E2}`, api);
+    fireEvent.click(panel.getByRole('button', { name: ar('admin.sessions.detail.restore') }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: ar('admin.sessions.restore.title') }),
+    );
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.restore.reasonLabel')), {
+      target: { value: 'سبب' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.restore.confirm') }));
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

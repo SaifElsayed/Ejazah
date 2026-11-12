@@ -15,6 +15,7 @@ import { Banner, Button, List, ListRow, Skeleton } from '../../design/components
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 
@@ -32,14 +33,14 @@ const OWNER: Readonly<Record<HeldFileItem['ownerRole'], MessageKey>> = {
 };
 
 /** The words of a refused read: the list's (`generic` the read's own) or a link's. */
-function heldFilesFailure(error: unknown, generic: MessageKey, notFound: MessageKey): MessageKey {
+function heldFilesFailure(error: unknown, generic: MessageKey, notFound: MessageKey): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'NOT_FOUND':
-      return notFound;
+      return { key: notFound };
     case 'CONFLICT':
-      return 'admin.shared.heldFiles.refused.notOpen';
+      return { key: 'admin.shared.heldFiles.refused.notOpen' };
     default:
-      return generic;
+      return errorMessageKey(error, generic);
   }
 }
 
@@ -55,6 +56,11 @@ export function HeldFilesSection({ disputeId }: HeldFilesSectionProps) {
     queryKey: ['disputes', 'heldFiles', disputeId],
     queryFn: () => client.api.disputes.heldFiles.query({ disputeId }),
   });
+  const listFailure = heldFilesFailure(
+    list.error,
+    'admin.common.loadError.text',
+    'admin.shared.heldFiles.refused.notFound',
+  );
   return (
     <section className="section">
       <h2 className="group-label">{t('admin.shared.heldFiles.title')}</h2>
@@ -71,13 +77,7 @@ export function HeldFilesSection({ disputeId }: HeldFilesSectionProps) {
         )
       ) : list.isError ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(
-            heldFilesFailure(
-              list.error,
-              'admin.common.loadError.text',
-              'admin.shared.heldFiles.refused.notFound',
-            ),
-          )}
+          {t(listFailure.key, listFailure.values)}
         </Banner>
       ) : (
         <Skeleton shape="block" />
@@ -96,7 +96,7 @@ function HeldFileRow({
   const t = useT();
   const locale = useLocale();
   const { client } = useAdmin();
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const link = useMutation({
     mutationFn: () => client.api.disputes.heldFileLink.mutate({ disputeId, fileRef: file.fileRef }),
   });
@@ -118,7 +118,7 @@ function HeldFileRow({
             )}
           </span>
           {failure === undefined ? null : (
-            <span className="text-caption tone-danger">{t(failure)}</span>
+            <span className="text-caption tone-danger">{t(failure.key, failure.values)}</span>
           )}
         </span>
       }

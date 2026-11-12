@@ -24,6 +24,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { ApplicationPanel } from './ApplicationPanel';
@@ -87,6 +88,7 @@ export function AdminApplications() {
       .join(locale === 'ar' ? '، ' : ', ');
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   return (
     <Page
       title={t('admin.applications.title')}
@@ -127,7 +129,7 @@ export function AdminApplications() {
                     <strong>
                       {t('admin.common.loadError.title', { page: t('admin.applications.title') })}
                     </strong>
-                    <span>{t('admin.common.loadError.text')}</span>
+                    <span>{t(loadFailure.key, loadFailure.values)}</span>
                   </span>
                 </Banner>
                 <div className="row">

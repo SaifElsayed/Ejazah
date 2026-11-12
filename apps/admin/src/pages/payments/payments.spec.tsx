@@ -479,3 +479,26 @@ describe('the second factor and the navigation (FR-402)', () => {
     expect(entry.getAttribute('aria-current')).toBe('page');
   });
 });
+
+describe('T058: RATE_LIMITED on the payments monitor', () => {
+  it('the list says when to try again', async () => {
+    const api = fakeApi();
+    api.payments.list.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('an order’s panel says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockRejectedValue(refusal('RATE_LIMITED'));
+    open(api, `/payments?payment=${P3}`);
+    const panel = within(
+      await screen.findByRole('complementary', { name: ar('admin.payments.detail.a11y') }),
+    );
+    expect(await panel.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(panel.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+});

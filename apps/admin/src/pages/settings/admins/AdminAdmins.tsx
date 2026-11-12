@@ -26,6 +26,7 @@ import {
   Toolbar,
 } from '../../../design/components';
 import { useLocale, useT } from '../../../i18n';
+import { errorMessageKey } from '../../../lib/error-message';
 import { dayMonth, dayMonthYear, timeOfDay } from '../../../lib/format';
 import { panelTimeZone } from '../../../lib/zone';
 import { useSettled } from '../../applications/queries';
@@ -64,6 +65,7 @@ export function AdminAdmins() {
   };
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const chosen = listed?.rows.find(({ adminId }) => adminId === selected);
   const moment = (value: string) =>
     `${dayMonth(value, locale, zone)} · ${timeOfDay(value, locale, zone)}`;
@@ -77,7 +79,7 @@ export function AdminAdmins() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.admins.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

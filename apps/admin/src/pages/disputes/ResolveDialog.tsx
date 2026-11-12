@@ -22,6 +22,7 @@ import {
   Input,
 } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
+import type { ErrorMessage } from '../../lib/error-message';
 import { partyLabel } from '../_shared';
 import { resolveFailure } from './failures';
 import { ROLE, SESSION_STATUS } from './labels';
@@ -91,7 +92,7 @@ export function ResolveDialog({
   const [against, setAgainst] = useState<Party | undefined>(undefined);
   const [party, setParty] = useState<Party | undefined>(undefined);
   const [reason, setReason] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const { dispute, parties } = view;
   const outcome = t(
     dispute.outcomeUnderDispute === undefined
@@ -193,7 +194,7 @@ export function ResolveDialog({
       </Field>
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
     </Dialog>

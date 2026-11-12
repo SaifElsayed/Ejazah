@@ -230,3 +230,23 @@ describe('a student’s standing dialogs (T051, FR-486)', () => {
     },
   );
 });
+
+describe('T058: RATE_LIMITED on a student’s standing', () => {
+  it.each(KINDS)('%s says when to try again, in both languages, calling no onDone', async (kind) => {
+    await inBothLocales(
+      () => open(kind),
+      async (t) => {
+        const { api, onDone } = current;
+        api.students[kind].mutate.mockRejectedValue(
+          refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+        );
+        const dialog = await dialogOf(t, kind);
+        type(dialog.getByLabelText(t(DRAWN[kind].reason)), 'سبب واضح');
+        fireEvent.click(confirmOf(dialog, t, kind));
+        expect(await dialog.findByText(t('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+        expect(dialog.queryByText(t('admin.dialogs.submitError'))).toBeNull();
+        expect(onDone).not.toHaveBeenCalled();
+      },
+    );
+  });
+});

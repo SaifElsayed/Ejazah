@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Banner, Button, DataTable, EmptyState, Page, Skeleton } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
 import { UserText } from '../../i18n/UserText';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useOutagesPage } from './queries';
@@ -27,6 +28,7 @@ export function AdminOutages() {
   const list = useOutagesPage(cursors[page - 1]);
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -48,7 +50,7 @@ export function AdminOutages() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.outages.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">
