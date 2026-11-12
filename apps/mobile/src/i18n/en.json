@@ -1410,6 +1410,24 @@
         "title": "The student asked to cancel a session"
       }
     },
+    "counter": {
+      "accept": "Accept the time",
+      "answerClosesAt": "Answer by",
+      "decline": "Decline the time",
+      "declineNote": "If you decline, the student may accept the proposed time or propose another while their choice window is open; otherwise the proposed time is booked.",
+      "notOpen": "This proposal no longer awaits your answer.",
+      "proposal": "Time the student proposed",
+      "row": {
+        "awaitingChoice": "Make-up awaiting the student’s choice",
+        "booked": "Make-up booked",
+        "counterProposed": "The student’s proposal awaits you",
+        "frozen": "Make-up on hold",
+        "proposed": "Make-up proposed, awaiting the student",
+        "refundCase": "Refund with the administration"
+      },
+      "text": "If you do not answer by then, the session becomes a refund the administration handles.",
+      "title": "The student proposed another make-up time"
+    },
     "credentials": {
       "a11y": {
         "chain": "Chain of transmission",

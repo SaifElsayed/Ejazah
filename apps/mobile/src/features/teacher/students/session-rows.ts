@@ -1,7 +1,8 @@
 // T051 (screens.md, «Lists», decision 21 of 2026-10-17): `TeacherEnrollment`'s sessions as rows.
 // Sessions of one status in a row of three or more collapse into one range; one or two stay rows of
 // their own (the teacher's catalogue has no pair line). The next session is a row of its own and
-// breaks a range, as both boards draw it, so a range never hides what comes next.
+// breaks a range, as both boards draw it, so a range never hides what comes next. 004:T044 (FR-495):
+// a session owing a remedy is a row of its own too, so its remedy's line is never folded away.
 import type { ListedSession, SessionStatus } from '@ijazah/contracts';
 
 export type SessionRow =
@@ -37,6 +38,11 @@ export function sessionRows(
     if (session.sequenceNumber === nextSequence) {
       close();
       rows.push({ kind: 'one', session, next: true });
+      continue;
+    }
+    if (session.remedyStatus !== undefined) {
+      close();
+      rows.push({ kind: 'one', session, next: false });
       continue;
     }
     if (run[0] !== undefined && run[0].status !== session.status) close();

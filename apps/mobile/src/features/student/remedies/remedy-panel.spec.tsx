@@ -26,6 +26,7 @@ import { ME_QUERY_KEY } from '../../../lib/account';
 import type { Direction } from '../../../lib/direction';
 import { formatTime, formatWeekdayDate } from '../../../lib/formatters';
 import { apiError } from '../../shared/__tests__/api-double';
+import { sessionQueryKey } from '../../shared/room';
 import { CAIRO, DUBAI, roomApi, SESSION_ID, session } from '../../shared/room/__tests__/room-api';
 import { StudentRemedyPanel } from './index';
 
@@ -300,7 +301,10 @@ describe('the proposal and its acceptance (FR-464, FR-465, FR-466)', () => {
     for (const answer of [read(undefined), read({ status: 'lapsed' as RemedyView['status'] })]) {
       mockApi.sessions.get.query.mockResolvedValue(answer);
       const rendered = await renderIn('rtl', ui());
-      await waitFor(() => expect(mockApi.sessions.get.query).toHaveBeenCalled());
+      // This read's own answer, not an earlier case's call.
+      await waitFor(() =>
+        expect(queries.getQueryState(sessionQueryKey(SESSION_ID))?.status).toBe('success'),
+      );
       await act(async () => {
         await Promise.resolve();
       });
