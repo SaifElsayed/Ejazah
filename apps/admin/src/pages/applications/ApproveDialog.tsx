@@ -8,6 +8,7 @@ import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/compo
 import type { IconName } from '../../design/icons';
 import { type MessageKey, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { BLOCKED_TEXT, isBlockedReason } from './decisions';
 import { type ApplicationDetail, useApplicationActions } from './queries';
 
@@ -27,7 +28,7 @@ export function ApproveDialog({
   const t = useT();
   const { approve } = useApplicationActions();
   const [note, setNote] = useState('');
-  const [refused, setRefused] = useState<readonly MessageKey[] | null>(null);
+  const [refused, setRefused] = useState<readonly ErrorMessage[] | null>(null);
 
   const confirm = () => {
     setRefused(null);
@@ -42,9 +43,11 @@ export function ApproveDialog({
               ? errorDetailsOf(error)
                   .map(({ code }) => code)
                   .filter(isBlockedReason)
-                  .map((code) => BLOCKED_TEXT[code])
+                  .map((code): ErrorMessage => ({ key: BLOCKED_TEXT[code] }))
               : [];
-          setRefused(reasons.length > 0 ? reasons : ['admin.dialogs.submitError']);
+          setRefused(
+            reasons.length > 0 ? reasons : [errorMessageKey(error, 'admin.dialogs.submitError')],
+          );
         },
       },
     );
@@ -91,7 +94,7 @@ export function ApproveDialog({
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           <span className="stack gap-1">
             {refused.map((reason) => (
-              <span key={reason}>{t(reason)}</span>
+              <span key={reason.key}>{t(reason.key, reason.values)}</span>
             ))}
           </span>
         </Banner>

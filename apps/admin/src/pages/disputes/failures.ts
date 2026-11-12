@@ -1,9 +1,10 @@
 // T049: the words of each refusal the disputes page names, by the code and its `details` (the note
 // under T034, Q2 and Q3 (a); T040; T059), and the page's generic words for any other failure
-// (`admin.common.loadError.text` for a read, `admin.dialogs.submitError` for an action). T058
-// switches the generic words to `errorMessageKey` later.
+// (`admin.common.loadError.text` for a read, `admin.dialogs.submitError` for an action), through
+// T058's `errorMessageKey`, which says when to try again on `RATE_LIMITED`.
 import type { MessageKey } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 
 /** The detail at `path`, when the refusal carries one. */
 function detailOf(error: unknown, path: string): string | undefined {
@@ -11,16 +12,19 @@ function detailOf(error: unknown, path: string): string | undefined {
 }
 
 /** A chat read refused (`disputes.chat`, T040). */
-export function chatFailure(error: unknown): MessageKey {
+export function chatFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'CONFLICT':
-      return detailOf(error, 'cause') === 'not_open'
-        ? 'admin.disputes.chat.notOpen'
-        : 'admin.common.loadError.text';
+      return {
+        key:
+          detailOf(error, 'cause') === 'not_open'
+            ? 'admin.disputes.chat.notOpen'
+            : 'admin.common.loadError.text',
+      };
     case 'NOT_FOUND':
-      return 'admin.disputes.chat.notFound';
+      return { key: 'admin.disputes.chat.notFound' };
     default:
-      return 'admin.common.loadError.text';
+      return errorMessageKey(error, 'admin.common.loadError.text');
   }
 }
 
@@ -41,23 +45,29 @@ function standingFailure(error: unknown): MessageKey | undefined {
 }
 
 /** A ruling refused (`disputes.resolve`). */
-export function resolveFailure(error: unknown): MessageKey {
+export function resolveFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'CONFLICT': {
       const cause = detailOf(error, 'cause');
-      if (cause === 'not_evaluated') return 'admin.disputes.resolve.refused.notEvaluated';
-      if (cause === 'not_open') return 'admin.disputes.resolve.refused.notOpen';
-      return standingFailure(error) ?? 'admin.dialogs.submitError';
+      if (cause === 'not_evaluated') return { key: 'admin.disputes.resolve.refused.notEvaluated' };
+      if (cause === 'not_open') return { key: 'admin.disputes.resolve.refused.notOpen' };
+      return { key: standingFailure(error) ?? 'admin.dialogs.submitError' };
     }
     case 'NOT_FOUND':
-      return 'admin.disputes.resolve.refused.notFound';
+      return { key: 'admin.disputes.resolve.refused.notFound' };
     default:
-      return 'admin.dialogs.submitError';
+      return errorMessageKey(error, 'admin.dialogs.submitError');
   }
 }
 
 /** A revision refused (`disputes.revise`, T059). */
-export function reviseFailure(error: unknown): MessageKey {
+export function reviseFailure(error: unknown): ErrorMessage {
+  const named = reviseRefusal(error);
+  return named === undefined ? errorMessageKey(error, 'admin.dialogs.submitError') : { key: named };
+}
+
+/** The words of a revision's refusal the task names, by its code and cause. */
+function reviseRefusal(error: unknown): MessageKey | undefined {
   switch (errorCodeOf(error)) {
     case 'RULING_FINAL': {
       const cause = detailOf(error, 'cause');
@@ -76,6 +86,6 @@ export function reviseFailure(error: unknown): MessageKey {
     case 'NOT_FOUND':
       return 'admin.disputes.revise.refused.notFound';
     default:
-      return 'admin.dialogs.submitError';
+      return undefined;
   }
 }

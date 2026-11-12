@@ -306,3 +306,32 @@ describe('the standing of an approved teacher (FR-173)', () => {
     ).toBeNull();
   });
 });
+
+describe('T058: RATE_LIMITED on a teacher’s standing', () => {
+  it('the reinstatement says when to try again', async () => {
+    const { api } = open(fakeApi(detailOf({ accountStatus: 'suspended' })));
+    api.teachers.reinstate.mutate.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    const panel = await detail();
+    fireEvent.click(
+      panel.getByRole('button', { name: ar('admin.dialogs.confirm.reactivateAccount.confirm') }),
+    );
+    const reinstating = await dialog(
+      ar('admin.dialogs.confirm.reactivateAccount.title', { name: row.displayName }),
+    );
+    type(
+      reinstating.getByLabelText(ar('admin.dialogs.confirm.reactivateAccount.reasonLabel')),
+      'انتهت المدة',
+    );
+    fireEvent.click(
+      reinstating.getByRole('button', {
+        name: ar('admin.dialogs.confirm.reactivateAccount.confirm'),
+      }),
+    );
+    expect(
+      await reinstating.findByText(ar('admin.common.rateLimitedIn', { count: 2 })),
+    ).toBeTruthy();
+    expect(reinstating.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

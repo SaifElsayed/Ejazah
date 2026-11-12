@@ -28,6 +28,7 @@ import {
   TextLink,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { panelTimeZone } from '../../lib/zone';
 import { CorrectionDialog, ManualCaseDialog, NoShowMark, partyLabel, PartyName } from '../_shared';
 import {
@@ -56,11 +57,12 @@ import {
 export function EnrollmentPanel({ enrollmentId }: { readonly enrollmentId: string }) {
   const t = useT();
   const read = useMonitoredEnrollment(enrollmentId);
+  const loadFailure = errorMessageKey(read.error, 'admin.common.loadError.text');
   if (read.data !== undefined) return <EnrollmentDetail detail={read.data} />;
   if (read.isError) {
     return (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     );
   }

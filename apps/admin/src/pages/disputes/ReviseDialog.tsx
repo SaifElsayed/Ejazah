@@ -21,6 +21,7 @@ import {
   Input,
 } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
+import type { ErrorMessage } from '../../lib/error-message';
 import { mintIdempotencyKey } from '../_shared/idempotency-key';
 import { reviseFailure } from './failures';
 import { SESSION_STATUS } from './labels';
@@ -47,7 +48,7 @@ export function ReviseDialog({
   const revise = useRevise(disputeId, idempotencyKey);
   const [outcome, setOutcome] = useState<AdminOutcome | undefined>(undefined);
   const [reason, setReason] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const input =
     outcome === undefined || reason.trim() === '' ? undefined : { outcome, reason: reason.trim() };
   return (
@@ -105,7 +106,7 @@ export function ReviseDialog({
       </Field>
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
     </Dialog>

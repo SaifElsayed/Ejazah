@@ -32,6 +32,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import type { ErrorMessage } from '../../lib/error-message';
 import { closingFailure, DECISION, decisionFailure } from './words';
 
 /** The note's bound, the contract's. */
@@ -132,7 +133,7 @@ export function CloseCaseDialog({ kind, detail, onClose, onDone }: CloseCaseDial
   const t = useT();
   const { client } = useAdmin();
   const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const close = useMutation({
     mutationFn: async (sent: string): Promise<void> => {
       await client.api.cases[kind].mutate({ caseId: detail.caseId, note: sent });
@@ -178,7 +179,7 @@ export function CloseCaseDialog({ kind, detail, onClose, onDone }: CloseCaseDial
       <NoteField label="admin.cases.close.noteLabel" note={note} onChange={setNote} />
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
     </Dialog>
@@ -200,7 +201,7 @@ export function DecideComplaintDialog({ caseId, onClose, onDone }: DecideComplai
   const { client } = useAdmin();
   const [decision, setDecision] = useState<ComplaintDecision | undefined>(undefined);
   const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const [answer, setAnswer] = useState<CasesDecideComplaintOutput | undefined>(undefined);
   const decide = useMutation({
     mutationFn: (sent: { readonly decision: ComplaintDecision; readonly note: string }) =>
@@ -280,7 +281,7 @@ export function DecideComplaintDialog({ caseId, onClose, onDone }: DecideComplai
       />
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
       {answer === undefined ? null : (

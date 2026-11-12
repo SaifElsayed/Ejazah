@@ -729,3 +729,51 @@ describe('the decided and waiting credentials', () => {
     expect(form.queryByLabelText(ar('admin.credentials.panel.holderName'))).toBeNull();
   });
 });
+
+describe('T058: RATE_LIMITED on the credentials', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the queue says when to try again', async () => {
+    const api = fakeApi();
+    api.credentials.list.query.mockRejectedValue(limited('61'));
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('a credential’s panel says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.credentials.get.query.mockRejectedValue(limited());
+    open(api);
+    const cells = await screen.findAllByText(QURAN.nameAr);
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    expect(await screen.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('a decision’s confirmation says when to try again', async () => {
+    const { api } = open();
+    api.credentials.approve.mutate.mockRejectedValue(limited('120'));
+    const form = await select(rowA.teacher.displayName, QURAN.nameAr);
+    type(form.getByLabelText(ar('admin.credentials.panel.holderName')), 'ياسر بن محمود حمدي');
+    type(form.getByLabelText(ar('admin.credentials.panel.riwaya')), 'حفص عن عاصم');
+    fireEvent.click(
+      form.getByRole('button', { name: ar('admin.credentials.panel.addGeneration') }),
+    );
+    addName(form, 1, 'رسول الله ﷺ');
+    await approvable(form);
+    fireEvent.click(screen.getByRole('button', { name: ar('admin.credentials.panel.approve') }));
+    const confirm = await dialog(
+      ar('admin.dialogs.confirm.approveCredential.title', {
+        teacher: rowA.teacher.displayName,
+        subject: QURAN.nameAr,
+      }),
+    );
+    fireEvent.click(
+      confirm.getByRole('button', { name: ar('admin.dialogs.confirm.approveCredential.confirm') }),
+    );
+    expect(await confirm.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(confirm.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

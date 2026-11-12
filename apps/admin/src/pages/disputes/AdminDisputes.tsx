@@ -21,6 +21,7 @@ import {
   Split,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { NoShowMark } from '../_shared';
@@ -40,6 +41,7 @@ export function AdminDisputes() {
   const list = useDisputesPage(cursors[page - 1]);
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -56,7 +58,7 @@ export function AdminDisputes() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.disputes.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

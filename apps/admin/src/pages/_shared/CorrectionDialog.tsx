@@ -24,9 +24,10 @@ import {
   Input,
   TextLink,
 } from '../../design/components';
-import { type MessageKey, useT } from '../../i18n';
+import { type MessageKey, type MessageValues, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { errorMessageKey } from '../../lib/error-message';
 import { mintIdempotencyKey } from './idempotency-key';
 
 const OUTCOMES: readonly { readonly value: AdminOutcome; readonly label: MessageKey }[] = [
@@ -39,6 +40,8 @@ const OUTCOMES: readonly { readonly value: AdminOutcome; readonly label: Message
 /** What a failed correction says, and the ruled dispute's link when the refusal names one. */
 interface Failure {
   readonly words: MessageKey;
+  /** The values the words interpolate: the rate limit's minutes (T058). */
+  readonly values?: MessageValues;
   readonly disputeId?: string;
 }
 
@@ -70,8 +73,10 @@ export function correctionFailure(error: unknown): Failure {
       return { words: 'admin.shared.correction.refused.underReview' };
     case 'NOT_FOUND':
       return { words: 'admin.shared.correction.refused.notFound' };
-    default:
-      return { words: 'admin.dialogs.submitError' };
+    default: {
+      const { key, values } = errorMessageKey(error, 'admin.dialogs.submitError');
+      return { words: key, ...(values === undefined ? {} : { values }) };
+    }
   }
 }
 
@@ -158,7 +163,7 @@ export function CorrectionDialog({ sessionId, onDone, onClose }: CorrectionDialo
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           <span className="stack gap-2">
-            <span>{t(failure.words)}</span>
+            <span>{t(failure.words, failure.values)}</span>
             {disputeHref === undefined ? null : (
               <span className="self-start">
                 <TextLink

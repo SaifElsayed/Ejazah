@@ -2,10 +2,12 @@
 // timeline kind by its catalogue key; a time a session or a remedy names in its own zone with its
 // city (R-TIME-3), and an instant in the panel's zone, both through the panel's helpers
 // (`lib/format.ts`, `lib/zone.ts`); and each refusal the task names in plain words by its code and
-// `details.cause`, any other failure the generic `admin.dialogs.submitError` (T058 switches that).
+// `details.cause`, any other failure the generic `admin.dialogs.submitError` through T058's
+// `errorMessageKey`, which says when to try again on `RATE_LIMITED`.
 import type { StatusTone } from '../../design/components';
 import type { Locale, MessageKey, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { cityName, dayMonth, timeOfDay } from '../../lib/format';
 import type {
   EnrollmentStatus,
@@ -227,9 +229,10 @@ const CANCEL_REFUSALS: Readonly<Record<string, MessageKey>> = {
 };
 
 /** The words of a refused cancellation (FR-460). */
-export function cancelFailure(error: unknown): MessageKey {
+export function cancelFailure(error: unknown): ErrorMessage {
   const code = errorCodeOf(error);
-  return (code === undefined ? undefined : CANCEL_REFUSALS[code]) ?? 'admin.dialogs.submitError';
+  const named = code === undefined ? undefined : CANCEL_REFUSALS[code];
+  return named === undefined ? errorMessageKey(error, 'admin.dialogs.submitError') : { key: named };
 }
 
 const RESTORE_CAUSES: Readonly<Record<string, MessageKey>> = {
@@ -244,20 +247,23 @@ const RESTORE_CAUSES: Readonly<Record<string, MessageKey>> = {
 };
 
 /** The words of a refused restore (FR-454): its eight causes, `no_free_week`, the key reused. */
-export function restoreFailure(error: unknown): MessageKey {
+export function restoreFailure(error: unknown): ErrorMessage {
   const cause = detailOf(error, 'cause');
   switch (errorCodeOf(error)) {
     case 'RESTORE_REFUSED':
-      return (
-        (cause === undefined ? undefined : RESTORE_CAUSES[cause]) ?? 'admin.dialogs.submitError'
-      );
+      return {
+        key: (cause === undefined ? undefined : RESTORE_CAUSES[cause]) ?? 'admin.dialogs.submitError',
+      };
     case 'CONFLICT':
-      return cause === 'no_free_week'
-        ? 'admin.sessions.restore.refused.noFreeWeek'
-        : 'admin.shared.keyReused';
+      return {
+        key:
+          cause === 'no_free_week'
+            ? 'admin.sessions.restore.refused.noFreeWeek'
+            : 'admin.shared.keyReused',
+      };
     case 'NOT_FOUND':
-      return 'admin.sessions.restore.refused.notFound';
+      return { key: 'admin.sessions.restore.refused.notFound' };
     default:
-      return 'admin.dialogs.submitError';
+      return errorMessageKey(error, 'admin.dialogs.submitError');
   }
 }

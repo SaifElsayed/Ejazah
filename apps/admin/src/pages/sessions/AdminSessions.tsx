@@ -6,7 +6,8 @@
 // teacher (a deleted one's stand-in, FR-426), the status, the sessions consumed and remaining, the
 // Teacher-No-Show count and its mark (FR-451), and the next session in its own zone. A row opens the
 // enrollment beside the list at `?enrollment=` (`EnrollmentPanel`), the link the other pages use.
-// A failed read shows the page's generic words; T058 switches them to the rate limit's message.
+// A failed read shows the page's generic words, or when to try again on `RATE_LIMITED` (T058's
+// `errorMessageKey`).
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 
@@ -25,6 +26,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { calendarDateOfDayField, dayFieldText } from '../../lib/day-field';
 import { useSettled } from '../applications/queries';
 import { NoShowMark, PartyName } from '../_shared';
@@ -107,6 +109,7 @@ export function AdminSessions() {
   }
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -124,7 +127,7 @@ export function AdminSessions() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.sessions.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

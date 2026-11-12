@@ -24,6 +24,7 @@ import {
   Split,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { PartyName } from '../_shared';
@@ -42,6 +43,7 @@ export function AdminReview() {
   const list = useReviewPage(cursors[page - 1]);
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const next = listed?.nextCursor;
   const pageCount = page === cursors.length && next !== undefined ? page + 1 : cursors.length;
   const go = (target: number) => {
@@ -58,7 +60,7 @@ export function AdminReview() {
               <strong>
                 {t('admin.common.loadError.title', { page: t('admin.sessionReview.title') })}
               </strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

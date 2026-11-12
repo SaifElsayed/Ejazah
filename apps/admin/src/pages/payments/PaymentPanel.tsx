@@ -19,6 +19,7 @@ import {
   Timeline,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { amountOrDash, HOLD_RELEASE_REASONS, orderHistory } from './history';
@@ -50,11 +51,12 @@ const ENROLLMENT_STATUS: Readonly<
 export function PaymentPanel({ paymentId }: { readonly paymentId: string }) {
   const t = useT();
   const read = usePayment(paymentId);
+  const loadFailure = errorMessageKey(read.error, 'admin.common.loadError.text');
   if (read.data !== undefined) return <PaymentDetailPanel detail={read.data} />;
   if (read.isError) {
     return (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     );
   }

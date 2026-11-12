@@ -692,3 +692,24 @@ describe('a case’s page (T050, FR-478, FR-451, FR-426)', () => {
     expect(api.payments.get.query).not.toHaveBeenCalled();
   });
 });
+
+describe('T058: RATE_LIMITED on /cases', () => {
+  it('the queue says when to try again', async () => {
+    const api = fakeApi();
+    api.cases.list.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('a case’s read says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.cases.get.query.mockRejectedValue(refusal('RATE_LIMITED'));
+    open(api, `/cases?case=${SUSPENDED_CASE}`);
+    const panel = await panelOf();
+    expect(await panel.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(panel.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+});

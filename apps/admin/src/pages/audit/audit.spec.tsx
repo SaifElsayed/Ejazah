@@ -433,3 +433,28 @@ describe('the Phase 3 actions by name (T002 of specs/004-sessions, M3)', () => {
     expect(targetText(row, (key: MessageKey) => translate('en', key))).toBe(enText);
   });
 });
+
+describe('T058: RATE_LIMITED on the audit log', () => {
+  it('the list says when to try again', async () => {
+    const api = fakeApi();
+    api.audit.list.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('an entry says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.audit.get.query.mockRejectedValue(refusal('RATE_LIMITED'));
+    open(api);
+    const cells = await screen.findAllByText(ar('admin.audit.actions.teacherSuspend'));
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    const detail = within(
+      await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }),
+    );
+    expect(await detail.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(detail.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+});

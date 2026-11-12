@@ -950,3 +950,62 @@ describe('a ruling’s revision (FR-472; SRS FR-DISPUTE-7)', () => {
     sayNothingFinal();
   });
 });
+
+describe('T058: RATE_LIMITED on /disputes', () => {
+  const limited = (seconds?: string) =>
+    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it('the queue says when to try again', async () => {
+    const api = fakeApi();
+    api.disputes.list.query.mockRejectedValue(limited('61'));
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('a dispute’s read says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.disputes.get.query.mockRejectedValue(limited());
+    open(api, `/disputes?dispute=${D1}`);
+    const aside = within(
+      await screen.findByRole('complementary', { name: ar('admin.disputes.detail.a11y') }),
+    );
+    expect(await aside.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(aside.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the chat read says when to try again', async () => {
+    const api = fakeApi();
+    api.disputes.chat.query.mockRejectedValue(limited('31'));
+    open(api, `/disputes?dispute=${D1}`);
+    const aside = await detail();
+    expect(await aside.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
+    expect(aside.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('the resolution says when to try again', async () => {
+    const api = fakeApi();
+    api.disputes.resolve.mutate.mockRejectedValue(limited('120'));
+    const box = await resolution(api);
+    fireEvent.click(box.getByRole('radio', { name: ar('admin.disputes.detail.suspendParty') }));
+    fireEvent.click(
+      box.getByRole('radio', {
+        name: ar('admin.disputes.detail.partyStudent', { name: 'آمال علي' }),
+      }),
+    );
+    writeReason(box, 'admin.disputes.detail.notesLabel', 'إساءة في المحادثة');
+    fireEvent.click(box.getByRole('button', { name: ar('admin.disputes.detail.issue') }));
+    expect(await box.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+
+  it('the revision says when to try again (rate_limit_dispute_revision)', async () => {
+    const api = fakeApi();
+    api.disputes.revise.mutate.mockRejectedValue(limited('61'));
+    const { box } = await revision(api);
+    revise(box, 'admin.status.session.done', 'الحضور ثابت');
+    expect(await box.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+    sayNothingFinal();
+  });
+});

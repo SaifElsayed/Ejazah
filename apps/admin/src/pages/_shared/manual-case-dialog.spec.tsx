@@ -265,3 +265,17 @@ describe('a manual compensation case (FR-493)', () => {
     expect(api.cases.openManual.mutate).not.toHaveBeenCalled();
   });
 });
+
+describe('T058: RATE_LIMITED on the manual case (rate_limit_manual_compensation_case)', () => {
+  it('its own words for RATE_LIMITED gain the time when the server gives one', async () => {
+    const api = fakeApi();
+    api.cases.openManual.mutate.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(undefined, api);
+    const box = await openCase('partyStudent', 'سبب');
+    expect(await box.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(box.queryByText(ar('admin.shared.manualCase.refused.rateLimited'))).toBeNull();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

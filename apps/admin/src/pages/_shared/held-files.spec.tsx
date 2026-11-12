@@ -128,7 +128,7 @@ describe("a deleted party's held files (FR-487)", () => {
       'admin.shared.heldFiles.refused.notFound',
     ],
     ['CONFLICT', [{ path: 'cause', code: 'not_open' }], 'admin.shared.heldFiles.refused.notOpen'],
-    ['RATE_LIMITED', [], 'admin.common.loadError.text'],
+    ['INTERNAL', [], 'admin.common.loadError.text'],
   ] as const)(
     'says a list refused %s in plain words, in both languages',
     async (code, details, words) => {
@@ -153,7 +153,7 @@ describe("a deleted party's held files (FR-487)", () => {
       'admin.shared.heldFiles.refused.fileNotFound',
     ],
     ['CONFLICT', [{ path: 'cause', code: 'not_open' }], 'admin.shared.heldFiles.refused.notOpen'],
-    ['RATE_LIMITED', [], 'admin.dialogs.submitError'],
+    ['INTERNAL', [], 'admin.dialogs.submitError'],
   ] as const)(
     'says a link refused %s in plain words, opening nothing',
     async (code, details, words) => {
@@ -166,4 +166,28 @@ describe("a deleted party's held files (FR-487)", () => {
       expect(opened).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('T058: RATE_LIMITED on the held files', () => {
+  it('the list says to wait a little when no time is given', async () => {
+    const api = fakeApi();
+    api.disputes.heldFiles.query.mockRejectedValue(refusal('RATE_LIMITED'));
+    open(api);
+    const box = await section();
+    expect(await box.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(box.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('a held file’s link says when to try again, opening nothing', async () => {
+    const { api } = open();
+    api.disputes.heldFileLink.mutate.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    const box = await section();
+    await box.findByText(ar('admin.shared.heldFiles.kind.photo'));
+    fireEvent.click(viewButton(box, 'admin.shared.heldFiles.kind.photo', 'teacher'));
+    expect(await box.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(box.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+    expect(opened).not.toHaveBeenCalled();
+  });
 });

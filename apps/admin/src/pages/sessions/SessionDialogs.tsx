@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import type { ErrorMessage } from '../../lib/error-message';
 import { panelTimeZone } from '../../lib/zone';
 import { mintIdempotencyKey } from '../_shared/idempotency-key';
 import { useRereadMonitor } from './queries';
@@ -27,7 +28,7 @@ interface DialogShellProps {
   readonly reasonLabel: string;
   readonly confirm: string;
   readonly pending: boolean;
-  readonly failure: MessageKey | undefined;
+  readonly failure: ErrorMessage | undefined;
   readonly onSend: (reason: string) => void;
   readonly onClose: () => void;
 }
@@ -90,7 +91,7 @@ function ReasonDialog({
       </Field>
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(failure)}
+          {t(failure.key, failure.values)}
         </Banner>
       )}
     </Dialog>
@@ -109,7 +110,7 @@ export function CancelSessionDialog({
   const t = useT();
   const { client } = useAdmin();
   const reread = useRereadMonitor();
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const cancel = useMutation({
     mutationFn: (reason: string) => client.api.sessions.cancel.mutate({ sessionId, reason }),
   });
@@ -151,7 +152,7 @@ export function RestoreDialog({
   const { client } = useAdmin();
   const reread = useRereadMonitor();
   const [idempotencyKey] = useState(mintIdempotencyKey);
-  const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const restore = useMutation({
     mutationFn: (reason: string) =>
       client.api.sessions.restore.mutate({ enrollmentId, reason, idempotencyKey }),

@@ -28,6 +28,7 @@ import {
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
 import { calendarDateOfDayField, dayFieldOf, dayFieldText } from '../../lib/day-field';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { cityName, dayMonthYear } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
 import { AdminDocumentViewer, type DocumentViewerProps } from '../documents/AdminDocumentViewer';
@@ -74,10 +75,11 @@ export function ApplicationPanel({ teacherUserId }: { readonly teacherUserId: st
   const t = useT();
   const detail = useApplication(teacherUserId);
   const answer = detail.data;
+  const loadFailure = errorMessageKey(detail.error, 'admin.common.loadError.text');
   if (answer === undefined) {
     return detail.isError ? (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     ) : (
       <Skeleton shape="block" />
@@ -437,6 +439,7 @@ function CallRecord({
   const [outcome, setOutcome] = useState<string>(detail.call.outcome ?? '');
   const [notes, setNotes] = useState(detail.call.notes ?? '');
   const [state, setState] = useState<'idle' | 'saved' | 'future' | 'failed'>('idle');
+  const [failure, setFailure] = useState<ErrorMessage>({ key: 'admin.dialogs.submitError' });
 
   if (!editable) {
     return (
@@ -486,7 +489,8 @@ function CallRecord({
       },
       {
         onSuccess: () => setState('saved'),
-        onError: (error) =>
+        onError: (error) => {
+          setFailure(errorMessageKey(error, 'admin.dialogs.submitError'));
           setState(
             errorCodeOf(error) === 'VALIDATION_FAILED' &&
               errorDetailsOf(error).some(
@@ -494,7 +498,8 @@ function CallRecord({
               )
               ? 'future'
               : 'failed',
-          ),
+          );
+        },
       },
     );
   };
@@ -548,7 +553,7 @@ function CallRecord({
         </Banner>
       ) : state === 'failed' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('admin.dialogs.submitError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <div className="self-start">

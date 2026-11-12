@@ -297,7 +297,6 @@ describe('resolving and dismissing a case (T050, FR-478, FR-486)', () => {
     ['CONFLICT', []],
     ['CONFLICT', [{ path: 'cause', code: 'other' }]],
     ['INTERNAL', []],
-    ['RATE_LIMITED', []],
   ] as const)(
     'any other failure (%s %j) shows the generic words, never a named refusal',
     async (code, details) => {
@@ -490,4 +489,30 @@ describe('deciding a complaint of a teacher’s absence (T050, FR-453)', () => {
       expect(dialog.queryByText(ar('admin.cases.decide.refused.notFound'))).toBeNull();
     },
   );
+});
+
+describe('T058: RATE_LIMITED on a case’s decisions', () => {
+  const limited = (seconds: string) =>
+    refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: seconds }]);
+
+  it.each(['resolve', 'dismiss'] as const)('%s says when to try again', async (kind) => {
+    const { api } = open();
+    api.cases[kind].mutate.mockRejectedValue(limited('61'));
+    const dialog = await press(ar, CLOSING[kind].button, CLOSING[kind].title);
+    type(dialog.getByLabelText(ar('admin.cases.close.noteLabel')), 'ملاحظة');
+    fireEvent.click(closingConfirm(dialog, ar, kind));
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+
+  it('the complaint’s decision says when to try again', async () => {
+    const { api } = decideOpen();
+    api.cases.decideComplaint.mutate.mockRejectedValue(limited('120'));
+    const dialog = await decideDialog(ar);
+    fireEvent.click(dialog.getByRole('radio', { name: ar(DECISION.suspend_teacher.label) }));
+    type(dialog.getByLabelText(ar('admin.cases.decide.noteLabel')), 'ملاحظة');
+    fireEvent.click(decideConfirm(dialog, ar));
+    expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
 });

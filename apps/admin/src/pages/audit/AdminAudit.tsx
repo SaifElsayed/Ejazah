@@ -23,6 +23,7 @@ import {
   Toolbar,
 } from '../../design/components';
 import { useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { cityName, dayMonth, timeOfDay } from '../../lib/format';
 import { daysBefore, panelTimeZone, todayIn } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
@@ -59,6 +60,7 @@ export function AdminAudit() {
   }
 
   const listed = list.data;
+  const loadFailure = errorMessageKey(list.error, 'admin.common.loadError.text');
   const city = cityName(zone, locale);
   const table =
     listed === undefined ? (
@@ -67,7 +69,7 @@ export function AdminAudit() {
           <Banner icon={{ name: 'alert-circle' }} tone="danger">
             <span className="stack gap-1">
               <strong>{t('admin.common.loadError.title', { page: t('admin.audit.title') })}</strong>
-              <span>{t('admin.common.loadError.text')}</span>
+              <span>{t(loadFailure.key, loadFailure.values)}</span>
             </span>
           </Banner>
           <div className="row">

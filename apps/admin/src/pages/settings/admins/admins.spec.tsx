@@ -354,3 +354,28 @@ describe('the dialogs (FR-173, FR-174)', () => {
     );
   });
 });
+
+describe('T058: RATE_LIMITED on the administrators', () => {
+  it('the list says when to try again', async () => {
+    const api = fakeApi();
+    api.admins.list.query.mockRejectedValue(
+      refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    open(api);
+    expect(await screen.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+    expect(screen.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+
+  it('adding an administrator says to wait a little when no time is given', async () => {
+    const { api } = open();
+    api.admins.add.mutate.mockRejectedValue(refusal('RATE_LIMITED'));
+    await screen.findByText(other.email);
+    fireEvent.click(screen.getByRole('button', { name: ar('admin.admins.add') }));
+    const adding = await dialog(ar('admin.dialogs.addAdmin.title'));
+    type(adding.getByLabelText(ar('admin.dialogs.addAdmin.name')), 'هالة فؤاد');
+    type(adding.getByLabelText(ar('admin.dialogs.addAdmin.workEmail')), 'hala@example.com');
+    fireEvent.click(adding.getByRole('button', { name: ar('admin.dialogs.addAdmin.send') }));
+    expect(await adding.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
+    expect(adding.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});

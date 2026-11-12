@@ -15,6 +15,7 @@ import {
   TextLink,
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { DECISION_REASONS } from '../applications/DecisionDialog';
@@ -102,10 +103,11 @@ function wordOf(action: string, field: string, value: string): MessageKey | unde
 export function AuditEntry({ entryId }: { readonly entryId: string }) {
   const t = useT();
   const entry = useAuditEntry(entryId);
+  const loadFailure = errorMessageKey(entry.error, 'admin.common.loadError.text');
   if (entry.data === undefined) {
     return entry.isError ? (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     ) : (
       <Skeleton shape="block" />

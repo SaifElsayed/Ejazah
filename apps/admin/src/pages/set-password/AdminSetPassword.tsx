@@ -14,6 +14,7 @@ import { AuthCard, Banner, Button, Field, Input } from '../../design/components'
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import { errorCodeOf } from '../../lib/client';
+import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
 import { AUTH_PATHS } from '../../lib/session';
 import type { SignInNotice } from '../sign-in/AdminSignIn';
 
@@ -34,7 +35,7 @@ export function AdminSetPassword() {
   const [confirm, setConfirm] = useState('');
   const [mismatch, setMismatch] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<MessageKey | null>(null);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   useEffect(() => {
     if (location.hash !== '' || location.search !== '') {
@@ -59,7 +60,10 @@ export function AdminSetPassword() {
       const notice: SignInNotice = 'passwordSet';
       void navigate(AUTH_PATHS.signIn, { replace: true, state: { notice } });
     } catch (error) {
-      setFailure(FAILURE[errorCodeOf(error) ?? ''] ?? 'admin.setPassword.failed');
+      const named = FAILURE[errorCodeOf(error) ?? ''];
+      setFailure(
+        named === undefined ? errorMessageKey(error, 'admin.setPassword.failed') : { key: named },
+      );
     } finally {
       setBusy(false);
     }
@@ -75,7 +79,7 @@ export function AdminSetPassword() {
         <form className="stack gap-4" onSubmit={(event) => void save(event)}>
           {failure === null ? null : (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t(failure)}
+              {t(failure.key, failure.values)}
             </Banner>
           )}
           <Field

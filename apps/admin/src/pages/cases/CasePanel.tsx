@@ -26,6 +26,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { UserText } from '../../i18n/UserText';
+import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { HeldFilesSection, ManualCaseDialog, NoShowMark, PartyName } from '../_shared';
@@ -71,11 +72,12 @@ const TRACK: Readonly<Record<Track, MessageKey>> = {
 export function CasePanel({ caseId }: { readonly caseId: string }) {
   const t = useT();
   const read = useCase(caseId);
+  const loadFailure = errorMessageKey(read.error, 'admin.common.loadError.text');
   if (read.data !== undefined) return <CaseDetailPanel view={read.data} />;
   if (read.isError) {
     return (
       <Banner icon={{ name: 'alert-circle' }} tone="danger">
-        {t('admin.common.loadError.text')}
+        {t(loadFailure.key, loadFailure.values)}
       </Banner>
     );
   }
