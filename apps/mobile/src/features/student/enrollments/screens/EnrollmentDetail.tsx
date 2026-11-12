@@ -8,7 +8,10 @@
 // message. Drawn only on an answer read since the screen opened. The
 // back arrow returns where it was opened from (the tab or the home). Each session's status after
 // settlement is its badge (004:T020, FR-495): a disputed session reads «محل نزاع», the outcome
-// frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id.
+// frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id. A session
+// with a pending cancellation request says so on its row (004:T041, FR-495). On a confirmed
+// enrollment, the complaint of the teacher's absence (004:T042, FR-452; `ComplaintPanel`).
+// 004:T043 (FR-495): a session owing a remedy says where it stands under its time (`remedies/`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -32,10 +35,13 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { ChatEntry } from '../../chat';
+import { RemedyStatusLine } from '../../remedies';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
+import { ComplaintPanel } from '../components/ComplaintPanel';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
 import { PendingOrderBadge } from '../components/PendingOrderBadge';
@@ -113,6 +119,8 @@ export function EnrollmentDetail() {
       {read.over && isAwaitingPayment(shown) && orders.isConfirming(shown.enrollmentId) ? (
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
+      <ComplaintPanel enrollment={shown} />
+      <ChatEntry enrollmentId={shown.enrollmentId} status={shown.status} />
       {shown.sessions.length === 0 ? null : (
         <Section title={t('student.enrollmentDetail.sessions')}>
           <List>
@@ -195,6 +203,12 @@ function SessionRow({ session, zone }: { readonly session: ListedSession; readon
             })}
           </Text>
           <SessionWhen session={session} zone={zone} />
+          {session.pendingCancellation ? (
+            <Text variant="caption" tone="warning">
+              {t('session.cancellation.row.pending')}
+            </Text>
+          ) : null}
+          <RemedyStatusLine status={session.remedyStatus} />
         </View>
       }
       trailing={<Badge label={t(badge.label)} tone={badge.tone} />}

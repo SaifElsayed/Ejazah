@@ -13,7 +13,8 @@
 //      and the other gender `NOT_FOUND`; any status but `confirmed` `CHAT_CLOSED`), so a refused
 //      upload stores nothing;
 //   4. the file stored under a server-minted private key, `chat/<uuid>.pdf` or `.txt`, outside any
-//      transaction, so no lock waits on the storage port;
+//      transaction, so no lock waits on the storage port; a text one stored as
+//      `text/plain; charset=utf-8` (`STORED_TYPE_OF`, 004:T045's follow-up);
 //   5. in one transaction, the sender's `users` row then the enrollment locked and read again, the
 //      same refusals, the message inserted with the key, the name and the type (the third
 //      analysis, L-B);
@@ -67,6 +68,16 @@ export const CHAT_UPLOAD_PATH = '/uploads/chat';
 /** The two types a chat document may be, and its key's extension for each. */
 const EXTENSION_OF = { 'application/pdf': 'pdf', 'text/plain': 'txt' } as const;
 type ChatMime = keyof typeof EXTENSION_OF;
+
+/**
+ * The type each is stored under (004:T045's follow-up; B41's Q7 (a)): a remote store's signed link
+ * serves the object under it, so a text document names its character set, UTF-8, the only one the
+ * guard admits. The column `attachment_mime` and the answer keep the bare type (rule 47).
+ */
+const STORED_TYPE_OF = {
+  'application/pdf': 'application/pdf',
+  'text/plain': 'text/plain; charset=utf-8',
+} as const satisfies Record<ChatMime, string>;
 
 function isChatMime(type: string): type is ChatMime {
   return Object.hasOwn(EXTENSION_OF, type);
@@ -132,7 +143,7 @@ export function createChatUploadRoute({
       const ids = { enrollmentId, userId: uploader.userId };
       await transactions.run((tx) => openParticipantOf(tx, ids, log));
       const key = `chat/${randomUUID()}.${EXTENSION_OF[type]}`;
-      await storage.put(key, bytes, type);
+      await storage.put(key, bytes, STORED_TYPE_OF[type]);
       let row: ChatMessageRow;
       try {
         row = await transactions.run(async (tx) => {

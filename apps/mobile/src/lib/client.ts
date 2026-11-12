@@ -49,7 +49,13 @@
 //
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
-import { type PublicConfig, publicConfigOutput, refreshOutput } from '@ijazah/contracts';
+import {
+  type ChatUploadOutput,
+  chatUploadOutput,
+  type PublicConfig,
+  publicConfigOutput,
+  refreshOutput,
+} from '@ijazah/contracts';
 import {
   createTRPCClient,
   createTRPCUntypedClient,
@@ -73,6 +79,8 @@ export interface ApiClientOptions {
   readonly documentsUploadUrl?: string;
   /** `POST /uploads/photos` on the API's origin (T084). */
   readonly photosUploadUrl?: string;
+  /** `POST /uploads/chat` on the API's origin (004:T045). */
+  readonly chatUploadUrl?: string;
   /** Called once when the server refuses the session's refresh. */
   readonly onSignedOut: () => void;
   /** The transport; the platform's own unless a test hands one in. */
@@ -87,6 +95,15 @@ export interface ApiClient {
   uploadDocument(kind: DocumentKind, file: LocalFile): Promise<string>;
   /** Uploads the profile photo the person picked; the signed link to it (T084). */
   uploadPhoto(file: LocalPhoto): Promise<string>;
+  /**
+   * Sends a PDF or a text document the person picked to an enrollment's chat, under the name the
+   * chat shows; the message it became (004:T045).
+   */
+  uploadChatDocument(
+    enrollmentId: string,
+    filename: string,
+    file: LocalChatFile,
+  ): Promise<ChatUploadOutput>;
 }
 
 /** What an upload is for: the identity document or an ijazah (`POST /uploads/documents`). */
@@ -100,6 +117,12 @@ export interface LocalFile {
 
 /** An image on the device, as the picker hands it, with the type it reported. */
 export interface LocalPhoto extends LocalFile {
+  readonly mimeType: string;
+}
+
+/** A document on the device for the chat, as the picker hands it, with the type it reported. */
+export interface LocalChatFile {
+  readonly uri: string;
   readonly mimeType: string;
 }
 
@@ -226,6 +249,19 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       const answer: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new ApiRefusal(answer);
       return photoUrlOf(answer);
+    },
+    async uploadChatDocument(enrollmentId, filename, file) {
+      const target = options.chatUploadUrl;
+      if (target === undefined) throw new Error('uploadChatDocument: no chat upload URL');
+      // The two fields precede the file (contracts/app-surface.md, `POST /uploads/chat`).
+      const body = new FormData();
+      body.append('enrollmentId', enrollmentId);
+      body.append('filename', filename);
+      body.append('file', chatPart(file) as unknown as Blob);
+      const response = await uploadFetch(target, { method: 'POST', body });
+      const answer: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new ApiRefusal(answer);
+      return chatUploadOutput.parse(answer);
     },
     publicConfig() {
       config ??= api.platform.publicConfig
@@ -374,6 +410,25 @@ export const UPLOAD_PHOTO_NAMES = { jpeg: 'photo.jpg', png: 'photo.png' } as con
 export function photoPart(file: LocalPhoto): UploadPart {
   const name = file.mimeType === 'image/png' ? UPLOAD_PHOTO_NAMES.png : UPLOAD_PHOTO_NAMES.jpeg;
   return { name, type: file.mimeType, bytes: () => new File(file.uri).bytes() };
+}
+
+/**
+ * The names a chat document carries, by the type the picker reported (004:T045): the server
+ * decides the type again by content and stores the name the chat shows, sent as its own field.
+ */
+export const UPLOAD_CHAT_NAMES = { pdf: 'document.pdf', text: 'document.txt' } as const;
+
+const TEXT_PLAIN = 'text/plain';
+const APPLICATION_PDF = 'application/pdf';
+
+/** The multipart part of a chat document: a fixed name, its type, and its bytes. */
+export function chatPart(file: LocalChatFile): UploadPart {
+  const text = file.mimeType === TEXT_PLAIN;
+  return {
+    name: text ? UPLOAD_CHAT_NAMES.text : UPLOAD_CHAT_NAMES.pdf,
+    type: text ? TEXT_PLAIN : APPLICATION_PDF,
+    bytes: () => new File(file.uri).bytes(),
+  };
 }
 
 /** The photos route's answer: the signed link to the new photo. */

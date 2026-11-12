@@ -167,8 +167,8 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
       expect(screen.getAllByText(upcomingBadge)).toHaveLength(
         upcomingTile === upcomingBadge ? 3 : 2,
       );
-      // Phase 3's and later rows are not drawn: no chat, no cancellation, no settlement.
-      expect(screen.queryByText(said(direction, 'teacher.enrollment.chat'))).toBeNull();
+      // Phase 3's and later rows are not drawn: no cancellation, no settlement. The chat's entry is
+      // drawn since 004:T045 (features/teacher/chat/chat.spec.tsx).
       expect(screen.queryByText(said(direction, 'teacher.enrollment.requestCancel'))).toBeNull();
     });
     expect(get()).toHaveBeenCalledWith({ enrollmentId: ENROLLMENT_ID });

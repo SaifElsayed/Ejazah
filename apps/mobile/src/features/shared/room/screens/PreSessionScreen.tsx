@@ -10,6 +10,9 @@
 // T065 (FR-427; research R-324, item 6): «انضمّ الطرف الآخر» while `sessions.get`'s
 // `counterpartyInRoom` says the counterparty is in the room, recorded from the provider's
 // webhooks; a hint, never a decision: the join waits as before.
+//
+// B41 (the note under 004:T041, Q1 (a)): one role-neutral slot, `children`, drawn after the rows
+// once the session is read; each role's wrapper fills it with its own panels.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -47,11 +50,14 @@ function useSessionParam(): string {
 export function PreSessionScreen({
   counterpartyRole,
   roomRoute,
+  children,
 }: {
   /** Whose stand-in a deleted counterparty takes: the student meets a teacher, and the reverse. */
   readonly counterpartyRole: PartyRole;
   /** The role's room route, opened with the session's id. */
   readonly roomRoute: string;
+  /** The role's panels, drawn after the rows once the session is read (B41, Q1 (a)). */
+  readonly children?: ReactNode;
 }) {
   const t = useT();
   const sessionId = useSessionParam();
@@ -90,7 +96,9 @@ export function PreSessionScreen({
       viewerZone={zone}
       counterpartyRole={counterpartyRole}
       roomRoute={roomRoute}
-    />
+    >
+      {children}
+    </Loaded>
   );
 }
 
@@ -100,12 +108,14 @@ function Loaded({
   viewerZone,
   counterpartyRole,
   roomRoute,
+  children,
 }: {
   readonly header: ReactNode;
   readonly session: SessionsGetOutput;
   readonly viewerZone: string;
   readonly counterpartyRole: PartyRole;
   readonly roomRoute: string;
+  readonly children?: ReactNode;
 }) {
   const t = useT();
   const partyName = usePartyName();
@@ -192,6 +202,7 @@ function Loaded({
           }
         />
       </List>
+      {children}
     </StackScreen>
   );
 }

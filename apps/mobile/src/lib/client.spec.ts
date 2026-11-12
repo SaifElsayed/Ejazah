@@ -16,12 +16,14 @@ import {
 
 import {
   CALL_TIMEOUT_MS,
+  chatPart,
   createApiClient,
   errorCodeOf,
   errorDetailsOf,
   filePart,
   photoPart,
   retryNetworkFailure,
+  UPLOAD_CHAT_NAMES,
   UPLOAD_FILE_NAME,
   UPLOAD_PHOTO_NAMES,
   UPLOAD_TIMEOUT_MS,
@@ -607,6 +609,131 @@ describe('the photo upload (T084)', () => {
   });
 });
 
+// 004:T045 (FR-489, FR-490; contracts/app-surface.md, `POST /uploads/chat`): a chat document goes as
+// multipart, the enrollment and the name the chat shows before the file, through the same bearer and
+// the same one refresh as a call; the answer is the message it became, parsed by its contract. The
+// file part carries a fixed name and the type the picker reported; the server decides the type by
+// content (never trusting this one).
+describe('the chat document upload (004:T045)', () => {
+  const chatUrl = 'https://api.test/uploads/chat';
+  const enrollmentId = '0193a6f0-0000-7000-8000-0000000000e1';
+  const text = { uri: 'file:///cache/notes.txt', mimeType: 'text/plain' };
+  const answer = {
+    messageId: '0193a6f0-0000-7000-8000-0000000000f1',
+    attachment: { filename: 'ملاحظات.txt', mime: 'text/plain' },
+    sentAt: '2026-11-12T10:00:00.000Z',
+  };
+
+  function server(upload: (bearer: string | null) => { status: number; body: unknown }) {
+    const uploads: { bearer: string | null; parts: [string, unknown][] }[] = [];
+    const trpc = fakeServer((call) =>
+      call.path === 'auth.refresh' ? ok({ accessToken: 'a2', refreshToken: 'r2' }) : ok(subjects),
+    );
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) !== chatUrl) return trpc.fetch(input, init);
+      const authorization = new Headers(init?.headers).get('authorization');
+      const form = init?.body as {
+        readonly _parts?: [string, unknown][];
+        readonly entries?: () => Iterable<[string, unknown]>;
+      };
+      uploads.push({
+        bearer: authorization === null ? null : authorization.replace(/^Bearer /, ''),
+        parts: form._parts ?? [...(form.entries?.() ?? [])],
+      });
+      const { status, body } = upload(uploads.at(-1)?.bearer ?? null);
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    return { uploads, trpc, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  function clientOver(fetchImpl: typeof fetch, withUrl = true) {
+    const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+    const client = createApiClient({
+      url,
+      sessions: sessions.store,
+      ...(withUrl ? { chatUploadUrl: chatUrl } : {}),
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl,
+    });
+    return { client, sessions };
+  }
+
+  it('posts the enrollment and the name before the file, with the bearer, and answers the message', async () => {
+    const fake = server(() => ({ status: 201, body: answer }));
+    const { client } = clientOver(fake.fetch);
+    await expect(client.uploadChatDocument(enrollmentId, 'ملاحظات.txt', text)).resolves.toEqual(
+      answer,
+    );
+    expect(fake.uploads).toHaveLength(1);
+    expect(fake.uploads[0]?.bearer).toBe('a1');
+    expect(fake.uploads[0]?.parts.map(([name]) => name)).toEqual([
+      'enrollmentId',
+      'filename',
+      'file',
+    ]);
+    expect(fake.uploads[0]?.parts.slice(0, 2).map(([, value]) => value)).toEqual([
+      enrollmentId,
+      'ملاحظات.txt',
+    ]);
+  });
+
+  it('refreshes once on UNAUTHENTICATED and sends the document again with the new bearer', async () => {
+    const fake = server((bearer) =>
+      bearer === 'a1' ? refused('UNAUTHENTICATED') : { status: 201, body: answer },
+    );
+    const { client, sessions } = clientOver(fake.fetch);
+    await expect(client.uploadChatDocument(enrollmentId, 'notes.txt', text)).resolves.toEqual(
+      answer,
+    );
+    expect(fake.uploads.map(({ bearer }) => bearer)).toEqual(['a1', 'a2']);
+    expect(fake.trpc.calls.map(({ path }) => path)).toEqual(['auth.refresh']);
+    expect(sessions.current()).toEqual({ accessToken: 'a2', refreshToken: 'r2' });
+  });
+
+  it.each(['ATTACHMENT_REFUSED', 'CHAT_CLOSED', 'RATE_LIMITED'])(
+    'raises a refusal %s whose code is read as a call’s is',
+    async (code) => {
+      const fake = server(() => ({ status: 400, body: { error: { code, message: 'refused' } } }));
+      const refusal = await clientOver(fake.fetch)
+        .client.uploadChatDocument(enrollmentId, 'notes.txt', text)
+        .catch((error: unknown) => error);
+      expect(errorCodeOf(refusal)).toBe(code);
+    },
+  );
+
+  it('refuses an answer outside the contract, never handing it on as a message', async () => {
+    const fake = server(() => ({ status: 201, body: { ...answer, attachment: undefined } }));
+    await expect(
+      clientOver(fake.fetch).client.uploadChatDocument(enrollmentId, 'notes.txt', text),
+    ).rejects.toThrow();
+  });
+
+  it('sends a text document as document.txt and a PDF as document.pdf, each with its type', () => {
+    expect(UPLOAD_CHAT_NAMES).toEqual({ pdf: 'document.pdf', text: 'document.txt' });
+    expect(chatPart(text)).toEqual({
+      name: 'document.txt',
+      type: 'text/plain',
+      bytes: expect.any(Function),
+    });
+    expect(chatPart({ uri: 'file:///cache/a.pdf', mimeType: 'application/pdf' })).toEqual({
+      name: 'document.pdf',
+      type: 'application/pdf',
+      bytes: expect.any(Function),
+    });
+  });
+
+  it('refuses to upload when the client was given no chat uploads address', async () => {
+    const fake = server(() => ({ status: 201, body: answer }));
+    await expect(
+      clientOver(fake.fetch, false).client.uploadChatDocument(enrollmentId, 'notes.txt', text),
+    ).rejects.toThrow('no chat upload URL');
+    expect(fake.uploads).toEqual([]);
+  });
+});
+
 // T100: on the phone the global `fetch` is `expo/fetch`, whose multipart encoder takes a part that
 // is a string, a Blob or an object with `bytes()`, and throws on React Native's `{ uri, name, type }`
 // (`Unsupported FormDataPart implementation`). The body the client builds is run through Expo's own
@@ -651,6 +778,7 @@ describe('the multipart body expo/fetch sends (T100)', () => {
       sessions: memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
       documentsUploadUrl: documentsUrl,
       photosUploadUrl: photosUrl,
+      chatUploadUrl: 'https://api.test/uploads/chat',
       onSignedOut: jest.fn(),
       fetch: fetchImpl as unknown as typeof fetch,
     });
@@ -686,6 +814,29 @@ describe('the multipart body expo/fetch sends (T100)', () => {
     );
     expect(mockOpened).toContain(picked.uri);
     expect(body).not.toContain(own);
+  });
+
+  // 004:T045: the chat's answer is not this helper's, so the call's rejection is set aside; the
+  // body it sent is what is read.
+  it('encodes a chat document under its fixed name with its bytes, after the enrollment and the name', async () => {
+    const picked = { uri: 'file:///cache/hifz-notes.txt', mimeType: 'text/plain' };
+    const body = await encodedUpload((client) =>
+      client
+        .uploadChatDocument('0193a6f0-0000-7000-8000-0000000000e1', 'ملاحظات.txt', picked)
+        .catch(() => undefined),
+    );
+    expect(body).toContain(
+      'content-disposition: form-data; name="enrollmentId"\r\n\r\n' +
+        '0193a6f0-0000-7000-8000-0000000000e1\r\n',
+    );
+    expect(body.indexOf('name="filename"')).toBeLessThan(body.indexOf('name="file";'));
+    expect(body).toContain(
+      'content-disposition: form-data; name="file"; filename="document.txt"\r\n' +
+        'content-type: text/plain\r\n\r\n' +
+        `${mockFileBytes}\r\n`,
+    );
+    expect(mockOpened).toContain(picked.uri);
+    expect(body).not.toContain('hifz-notes');
   });
 });
 

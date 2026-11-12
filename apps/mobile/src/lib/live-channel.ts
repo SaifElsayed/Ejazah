@@ -17,9 +17,11 @@
 //
 // SIGNALS. An `account` event reads `account.me` again; the server then ends the stream. A
 // `session` or `enrollment` signal reads the open screens it names again, at most once per query key
-// per second (`Rereads`). Each (re)start reads the open live screens again, since events sent while
-// the stream was down are not replayed, but the first start after a return to the foreground, which
-// `focusManager` (lib/focus.ts) has read.
+// per second (`Rereads`). A `chat` event is handed to the open chat's merge, which places its message
+// in the chat's first page by `messageId` (T045). Each (re)start reads the open live screens again
+// (the open chat's first page among them), since events sent while the stream was down are not
+// replayed, but the first start after a return to the foreground, which `focusManager`
+// (lib/focus.ts) has read.
 //
 // THE NUMBERS are named constants on the phone, not settings (R-MONEY-12 as amended, constitution
 // 2.6.1; the owner's decision of 2026-11-06, C1, C3 and C4, and the sixth analysis, item 6), each
@@ -96,6 +98,9 @@ export interface LiveHandlers {
 /** The two signals that make the open screens read again (T065). */
 export type LiveSignal = Extract<LiveEvent, { type: 'session' | 'enrollment' }>;
 
+/** A message of an enrollment's chat, carried rather than signalled (T066, T045). */
+export type LiveChatEvent = Extract<LiveEvent, { type: 'chat' }>;
+
 /** What the channel needs from the app. */
 export interface LivePorts {
   open(handlers: LiveHandlers): { unsubscribe(): void };
@@ -103,6 +108,8 @@ export interface LivePorts {
   readAccount(): Promise<unknown>;
   /** A `session` or `enrollment` signal: its open screens read again. */
   signal(event: LiveSignal): void;
+  /** A `chat` event: handed to the open chat's merge (T045). */
+  chat(event: LiveChatEvent): void;
   /** The open live screens read again. */
   reread(): void;
   readonly random?: Random;
@@ -182,9 +189,9 @@ export class LiveChannel {
     const event = parsed.data;
     if (event.type === 'account') void this.ports.readAccount().catch(() => undefined);
     // A `chat` event carries a message for the open chat to merge by `messageId` (T045,
-    // contracts/app-surface.md's `chat` row), never a re-read: ignored until T045 merges it
-    // (PR #135's review, round 1, Minor 1).
-    else if (event.type !== 'chat') this.ports.signal(event);
+    // contracts/app-surface.md's `chat` row), never a re-read (PR #135's review, round 1, Minor 1).
+    else if (event.type === 'chat') this.ports.chat(event);
+    else this.ports.signal(event);
   }
 
   async #failed(error: unknown, started: boolean): Promise<void> {
@@ -227,14 +234,16 @@ export class LiveChannel {
 
 /**
  * The first segments of the query keys of the screens a live event can change (`sessions.get`,
- * each role's enrollment screens and lists, the teacher's day). The chat's first page joins them
- * when its screen exists (T045).
+ * each role's enrollment screens and lists, the teacher's day), and the open chat's first page
+ * (T045, `features/shared/chat/api.ts`), into which `chat` events merge: a (re)start reads it
+ * again, since no event is replayed. Its older pages no event changes, so they are not here.
  */
 const LIVE_QUERY_ROOTS: readonly (readonly string[])[] = [
   ['sessions'],
   ['student', 'enrollments'],
   ['teacher', 'students'],
   ['teacher', 'today'],
+  ['chat', 'first'],
 ];
 /** The lists an `enrollment` signal reads again (contracts/app-surface.md, "`live`"). */
 const ENROLLMENT_LIST_ROOTS: readonly (readonly string[])[] = [
@@ -311,6 +320,28 @@ export class Rereads {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The open chats (T045).
+
+/** An open chat's merge of the `chat` events; a chat of another enrollment passes them by. */
+export type ChatMerge = (event: LiveChatEvent) => void;
+
+/** The merges of the chats open now: one per mounted chat screen, removed when it unmounts. */
+const openChats = new Set<ChatMerge>();
+
+/** Adds an open chat's merge; the function returned removes it. */
+export function onChatEvent(merge: ChatMerge): () => void {
+  openChats.add(merge);
+  return () => {
+    openChats.delete(merge);
+  };
+}
+
+/** The channel's `chat` port: the event handed to every open chat's merge. */
+export function handChatEvent(event: LiveChatEvent): void {
+  for (const merge of openChats) merge(event);
+}
+
+// ---------------------------------------------------------------------------------------------
 // The root's hook.
 
 /**
@@ -333,6 +364,7 @@ export function useLiveChannel(client: Pick<ApiClient, 'api'>, queries: QueryCli
           { cancelRefetch: false },
         ),
       signal: (event) => rereads.signal(event),
+      chat: handChatEvent,
       reread: () => rereads.readOpenLiveScreens(),
     });
     channel.setActive(AppState.currentState === 'active');
