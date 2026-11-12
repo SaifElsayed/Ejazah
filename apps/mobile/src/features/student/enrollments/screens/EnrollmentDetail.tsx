@@ -9,6 +9,7 @@
 // back arrow returns where it was opened from (the tab or the home). Each session's status after
 // settlement is its badge (004:T020, FR-495): a disputed session reads «محل نزاع», the outcome
 // frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id.
+// 004:T043 (FR-495): a session owing a remedy says where it stands under its time (`remedies/`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -32,6 +33,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { RemedyStatusLine } from '../../remedies';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
@@ -195,6 +197,7 @@ function SessionRow({ session, zone }: { readonly session: ListedSession; readon
             })}
           </Text>
           <SessionWhen session={session} zone={zone} />
+          <RemedyStatusLine status={session.remedyStatus} />
         </View>
       }
       trailing={<Badge label={t(badge.label)} tone={badge.tone} />}
