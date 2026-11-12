@@ -2,7 +2,8 @@
 // Sessions of one status in a row of three or more collapse into one range; one or two stay rows of
 // their own (the teacher's catalogue has no pair line). The next session is a row of its own and
 // breaks a range, as both boards draw it, so a range never hides what comes next. A session with a
-// pending cancellation request stands alone too, so its row can say so (004:T041, FR-495).
+// pending cancellation request (004:T041, FR-495) or owing a remedy (004:T044, FR-495) is a row of its
+// own too, so its line is never folded away.
 import type { ListedSession, SessionStatus } from '@ijazah/contracts';
 
 export type SessionRow =
@@ -40,8 +41,8 @@ export function sessionRows(
       rows.push({ kind: 'one', session, next: true });
       continue;
     }
-    // 004:T041 (FR-495): a session with a pending cancellation request says so on its own row.
-    if (session.pendingCancellation) {
+    // 004:T041 and 004:T044 (FR-495): a pending cancellation request or a remedy says so on its own row.
+    if (session.pendingCancellation || session.remedyStatus !== undefined) {
       close();
       rows.push({ kind: 'one', session, next: false });
       continue;

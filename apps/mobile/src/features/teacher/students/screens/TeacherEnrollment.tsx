@@ -11,7 +11,8 @@
 // what it read since it opened (`read-since-mount.ts`). A link with no enrollment id is never read:
 // it draws the load error, as the student's detail does, and its retry sends nothing (T091).
 // Phase 3's parts are not drawn: the report, the no-show tile and banner, the chat, the
-// cancellation and every session's sub-line.
+// cancellation and every session's sub-line. 004:T044 (FR-495): a session owing a remedy says where
+// it stands under its row (`TeacherRemedyStatusLine`), the row its own (`session-rows.ts`).
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -37,6 +38,7 @@ import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { readSinceMount } from '../../read-since-mount';
+import { TeacherRemedyStatusLine } from '../../sessions';
 import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
@@ -208,16 +210,15 @@ function SessionLine({ row }: { readonly row: SessionRow }) {
   return (
     <ListRow
       label={
-        session.pendingCancellation ? (
-          <View style={{ gap: tokens.space['1'] }}>
-            {line}
+        <View style={{ gap: tokens.space['1'] }}>
+          {line}
+          {session.pendingCancellation ? (
             <Text variant="caption" tone="warning">
               {t('session.cancellation.row.pending')}
             </Text>
-          </View>
-        ) : (
-          line
-        )
+          ) : null}
+          <TeacherRemedyStatusLine status={session.remedyStatus} />
+        </View>
       }
       trailing={<SessionStatusBadge status={session.status} />}
       onPress={() =>

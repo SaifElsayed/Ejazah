@@ -11,6 +11,7 @@
 // frozen beside it never answered nor drawn (R-308); the sessions are keyed by their id. A session
 // with a pending cancellation request says so on its row (004:T041, FR-495). On a confirmed
 // enrollment, the complaint of the teacher's absence (004:T042, FR-452; `ComplaintPanel`).
+// 004:T043 (FR-495): a session owing a remedy says where it stands under its time (`remedies/`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -34,6 +35,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { RemedyStatusLine } from '../../remedies';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
@@ -204,6 +206,7 @@ function SessionRow({ session, zone }: { readonly session: ListedSession; readon
               {t('session.cancellation.row.pending')}
             </Text>
           ) : null}
+          <RemedyStatusLine status={session.remedyStatus} />
         </View>
       }
       trailing={<Badge label={t(badge.label)} tone={badge.tone} />}

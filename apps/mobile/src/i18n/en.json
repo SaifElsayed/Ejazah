@@ -1152,6 +1152,47 @@
       "save": "Save",
       "title": "Profile"
     },
+    "remedy": {
+      "accept": "Accept the proposed time",
+      "acceptSheet": {
+        "confirm": "Confirm",
+        "text": "The make-up session is booked at the proposed time.",
+        "withdraws": "Your proposal awaiting the teacher’s answer is withdrawn."
+      },
+      "answerClosesAt": "The teacher answers by",
+      "booked": "The make-up session is booked.",
+      "choiceClosesAt": "Choose by",
+      "counter": "Your proposal",
+      "counterSheet": {
+        "empty": "No free times right now.",
+        "send": "Send to the teacher",
+        "text": "The teacher’s times free for you both, of the session’s length. The teacher answers your proposal within their window."
+      },
+      "frozen": "The make-up is on hold for now.",
+      "proposal": "Proposed time",
+      "proposeOther": "Propose another time",
+      "refund": "Choose a refund",
+      "refundCase": "The refund of this session is with the administration, which will tell you its decision.",
+      "refundSheet": {
+        "confirm": "Confirm the refund",
+        "text": "No make-up session is booked; the refund of this session goes to the administration as a compensation case, and it will tell you its decision.",
+        "title": "A refund instead of a make-up"
+      },
+      "row": {
+        "awaitingChoice": "Make-up awaiting your choice",
+        "booked": "Make-up booked",
+        "counterProposed": "Your proposal awaits the teacher",
+        "frozen": "Make-up on hold",
+        "proposed": "Make-up time proposed, awaiting you",
+        "refundCase": "Refund with the administration"
+      },
+      "text": {
+        "choice": "Accept the proposed make-up time, propose another of the teacher’s times, or choose a refund. If you have not chosen by the deadline, the proposed time is booked.",
+        "counter": "Your proposal awaits the teacher’s answer: if they accept it, it is booked; if they decline it while you can still choose, you may accept the proposed time or propose another, and if they decline it after that, the proposed time is booked. If they do not answer in time, the session becomes a refund the administration handles.",
+        "proposed": "Accept the proposed make-up time, or propose another of the teacher’s times. If you have not chosen by the deadline, the proposed time is booked."
+      },
+      "title": "Making up this session"
+    },
     "report": {
       "details": "Details (optional)",
       "detailsPlaceholder": "Describe briefly what happened",
@@ -1436,6 +1477,24 @@
         "sessionLine": "Session {n} · {date} · {time} ({city})",
         "title": "The student asked to cancel a session"
       }
+    },
+    "counter": {
+      "accept": "Accept the time",
+      "answerClosesAt": "Answer by",
+      "decline": "Decline the time",
+      "declineNote": "If you decline, the student may accept the proposed time or propose another while their choice window is open; otherwise the proposed time is booked.",
+      "notOpen": "This proposal no longer awaits your answer.",
+      "proposal": "Time the student proposed",
+      "row": {
+        "awaitingChoice": "Make-up awaiting the student’s choice",
+        "booked": "Make-up booked",
+        "counterProposed": "The student’s proposal awaits you",
+        "frozen": "Make-up on hold",
+        "proposed": "Make-up proposed, awaiting the student",
+        "refundCase": "Refund with the administration"
+      },
+      "text": "If you do not answer by then, the session becomes a refund the administration handles.",
+      "title": "The student proposed another make-up time"
     },
     "credentials": {
       "a11y": {
