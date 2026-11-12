@@ -1020,6 +1020,24 @@
         "effectsTitle": "What happens on confirmation",
         "faultLabel": "Violation confirmed",
         "faultText": "Nothing is owed, as with a student absence.",
+        "honest": {
+          "ban": {
+            "account": "The account becomes banned and is signed out on every device.",
+            "cases": "A case is opened on each cancelled enrollment and their open remedies are handed to it; nothing is owed unless the administration decides otherwise in the case.",
+            "sessions": "Every upcoming session of theirs is cancelled now, their confirmed enrollments are cancelled with them for the reason “admin”, and the freed times return to booking."
+          },
+          "reinstate": {
+            "account": "Only the account is restored, and its owner can sign in again.",
+            "cancelled": "Nothing cancelled during the suspension comes back; each enrollment’s case decides.",
+            "remedies": "The frozen remedies are offered to them again, each with a new full choice window."
+          },
+          "suspend": {
+            "account": "The account becomes suspended and is signed out on every device.",
+            "enrollments": "Their confirmed enrollments stay confirmed and keep their slots, each with a compensation case opened, pending the review.",
+            "remedies": "Every remedy now offered to them is frozen: a pending counter-proposal is withdrawn, the times reserved for it are released, and nothing advances while the account is suspended.",
+            "sessions": "Every upcoming session of theirs is cancelled now, recorded as cancelled by the administration."
+          }
+        },
         "kinds": {
           "ban": "Ban account · permanent",
           "suspend": "Suspend account · temporary until review"
