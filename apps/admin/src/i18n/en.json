@@ -2500,6 +2500,18 @@
         "suspend": "Suspend account",
         "timeZone": "Time zone"
       },
+      "directory": {
+        "deletedAccount": "Deleted account",
+        "emptyAll": {
+          "text": "Every account created on the platform appears here.",
+          "title": "No users yet"
+        },
+        "lede": "Students and teachers, the newest sign-ups first. Search by the start of a name.",
+        "noRole": "No role",
+        "pagerPage": "Page {page} · newest first",
+        "searchEmptyText": "Try the start of another name.",
+        "searchPlaceholder": "Start of the name"
+      },
       "filter": {
         "age": "Age",
         "ageAll": "All",
@@ -2524,6 +2536,26 @@
       "lede": "Students and teachers. Every suspension, bar or ban needs a reason and is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · by last activity",
       "reactivate": "Reactivate",
+      "record": {
+        "bio": "Bio",
+        "cancellationsRecent": "Recent requests",
+        "cancellationsTotal": "All requests",
+        "deleted": "Deleted",
+        "email": "Email",
+        "noRepeatedAbsences": "No enrollment carries the repeated-absence mark.",
+        "openEnrollment": "Open the enrollment",
+        "qualification": "Qualification",
+        "repeatedAbsences": "Enrollments marked for repeated absence",
+        "verification": "Teacher verification",
+        "verificationStatus": {
+          "approved": "Approved",
+          "banned": "Banned",
+          "pending": "Pending review",
+          "rejected": "Rejected",
+          "revoked": "Approval revoked",
+          "suspended": "Suspended"
+        }
+      },
       "roleWithStatus": "{role} · {status}",
       "search": {
         "label": "Search",
