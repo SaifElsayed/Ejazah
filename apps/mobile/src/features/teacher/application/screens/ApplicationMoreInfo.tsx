@@ -21,6 +21,7 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useSubjectName } from '../../../../lib/subjects';
 import { PdfField, type UploadedPdf } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
@@ -39,7 +40,7 @@ export function ApplicationMoreInfo() {
   const [identity, setIdentity] = useState<UploadedPdf | undefined>(undefined);
   const [replaced, setReplaced] = useState<Readonly<Record<string, UploadedPdf>>>({});
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   const asked = (credentials.data ?? []).filter(({ status }) => status === 'needs_document');
   const ready =
@@ -49,7 +50,7 @@ export function ApplicationMoreInfo() {
 
   async function resubmit(): Promise<void> {
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       const credentialReplacements = asked.flatMap(({ credentialId }) => {
         const file = replaced[credentialId];
@@ -60,8 +61,8 @@ export function ApplicationMoreInfo() {
         ...(credentialReplacements.length === 0 ? {} : { credentials: credentialReplacements }),
       });
       router.replace('/(teacher)/application/status');
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -97,6 +98,7 @@ export function ApplicationMoreInfo() {
       {answer === undefined || credentials.data === undefined ? (
         <NotLoaded
           failed={application.isError || credentials.isError}
+          error={application.error ?? credentials.error}
           onRetry={() => {
             void application.refetch();
             void credentials.refetch();
@@ -147,9 +149,9 @@ export function ApplicationMoreInfo() {
               />
             </View>
           </Section>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
           <DeleteAccountAction />

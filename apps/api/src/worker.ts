@@ -213,7 +213,8 @@ const jobs: readonly Job[] = [
   // when `process.versions.tz` differs from its last run's, kept by the kernel in `idempotency_keys`.
   reresolveSessionInstants({ database, runs: jobRunsOver(database), settings }),
   // The sessions' sweep (T014, R-306), every minute: a cancelled session's room ended in its join
-  // period, then every session due settled under its enrollment's and its own locks.
+  // period, then every session due settled under its enrollment's and its own locks, then (T067)
+  // every room due a close at its scheduled end plus the grace ended.
   evaluateSessions({
     database,
     settings,

@@ -113,6 +113,11 @@ export const sessionsGetOutput = z.object({
   canRaiseDispute: z.boolean().optional(),
   /** T026. */
   disputeClosesAt: z.iso.datetime().optional(),
+  /**
+   * T065: whether the counterparty is in the room by the recorded participant events (R-304's
+   * per-connection rule; research R-324, item 6); a hint, never a decision, and no provider call.
+   */
+  counterpartyInRoom: z.boolean(),
 });
 
 /** What the phone connects with (FR-431): bound to this session and this caller (R-GENDER-7). */

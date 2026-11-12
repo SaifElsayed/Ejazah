@@ -22,6 +22,7 @@ export function Payout() {
       <StackScreen header={<PayoutHeader title={t('teacher.payout.start.title')} />}>
         <NotLoaded
           failed={payout.isError}
+          error={payout.error}
           onRetry={() => void payout.refetch()}
           loading={<Skeleton shape="block" />}
         />

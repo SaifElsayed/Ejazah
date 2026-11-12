@@ -116,7 +116,12 @@ export function Discovery() {
 
   const empty =
     view === 'loading' ? (
-      <NotLoaded failed={browse.isError} onRetry={retry} loading={<LoadingCards />} />
+      <NotLoaded
+        failed={browse.isError}
+        error={browse.error}
+        onRetry={retry}
+        loading={<LoadingCards />}
+      />
     ) : view === 'searchEmpty' ? (
       <DiscoverySearchEmpty query={search} onClear={() => setTyped('')} />
     ) : (
@@ -128,7 +133,7 @@ export function Discovery() {
   const footer = browse.isFetchingNextPage ? (
     <LoadingCards count={1} />
   ) : browse.isFetchNextPageError ? (
-    <LoadError onRetry={() => void browse.fetchNextPage()} />
+    <LoadError error={browse.error} onRetry={() => void browse.fetchNextPage()} />
   ) : undefined;
 
   return (

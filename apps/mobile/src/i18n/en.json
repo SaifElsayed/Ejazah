@@ -351,7 +351,9 @@
     "state": {
       "actionError": "That did not go through. Try again.",
       "loadError": "Could not load the data. Try again.",
-      "offline": "No internet connection"
+      "offline": "No internet connection",
+      "rateLimited": "Too many requests. Wait a little and try again.",
+      "rateLimitedIn": "Too many requests. Try again in {count, plural, one {# minute} other {# minutes}}."
     },
     "tabs": {
       "student": {
@@ -563,6 +565,7 @@
       "cameraStatus": {
         "off": "Off"
       },
+      "counterpartyInRoom": "The other party has joined",
       "duration": "Duration",
       "join": "Join session",
       "mic": "Microphone",

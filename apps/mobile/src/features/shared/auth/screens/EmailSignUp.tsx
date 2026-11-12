@@ -25,6 +25,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { BackBar, StackScreen } from '../../screen';
 import { PASSWORD_WEAK_PROBLEM, useAuthApi } from '../api';
 import { setPendingEmail } from '../pending';
@@ -53,7 +54,7 @@ export function EmailSignUp() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function EmailSignUp() {
   }, [sentBack]);
 
   const submit = async () => {
-    setFailed(false);
+    setFailure(null);
     const found = signUpProblem(email, password, confirm);
     setProblem(found);
     if (found !== null) return;
@@ -72,7 +73,7 @@ export function EmailSignUp() {
       router.push('/(auth)/otp');
     } catch (caught: unknown) {
       if (errorCodeOf(caught) === 'PASSWORD_WEAK') setProblem(WEAK);
-      else setFailed(true);
+      else setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setBusy(false);
     }
@@ -107,9 +108,9 @@ export function EmailSignUp() {
       }
     >
       <PageIntro title={t('auth.emailSignUp.title')} />
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <Field label={t('auth.field.email')} {...errorOf('email')}>

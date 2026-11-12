@@ -25,6 +25,7 @@ import { createApplication } from '../../app.module.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { UserSession } from '../../surfaces/context.js';
@@ -135,6 +136,15 @@ let inserted: NewChatAttachment[] = [];
 let underLock: (() => void) | undefined;
 let insertFails = false;
 const storage = storageStub();
+// T066: what the route's after-commit list sent, through the process's bus.
+let published: LiveMessage[] = [];
+const liveBus: LiveBus = {
+  publish: (message) => {
+    trace.push('publish');
+    published.push(message);
+  },
+  subscribe: () => () => undefined,
+};
 
 const tx = {} as Transaction;
 const transactions: Transactions = {
@@ -208,6 +218,7 @@ beforeAll(async () => {
         sessions: sessions.user,
         guard: { settings, rateLimiter },
         log,
+        live: liveBus,
         storage,
         transactions,
         enrollments,
@@ -243,6 +254,7 @@ beforeEach(() => {
   inserted = [];
   underLock = undefined;
   insertFails = false;
+  published = [];
   storage.calls.length = 0;
   lines = [];
   raw = [];
@@ -329,6 +341,9 @@ describe('POST /uploads/chat: accepted (FR-489)', () => {
       'clock',
       `insert attachment by ${STUDENT}`,
       'commit',
+      // T066: the two parties' events, sent once the handler resolved.
+      'publish',
+      'publish',
     ]);
   });
 
@@ -474,5 +489,90 @@ describe('POST /uploads/chat: refused under the locks, the stored file removed',
     expect(response.status).toBe(500);
     await response.arrayBuffer();
     expect(removed().map(({ args }) => args[0])).toEqual(stored().map(({ args }) => args[0]));
+  });
+});
+
+// T066 of specs/004-sessions — the chat document's live event (FR-427, FR-496; research R-324,
+// items 4 to 6; the note under T066, Q3 (a)): one `chat` event to each of the enrollment's two
+// parties, read under the insert's locks, `mine` computed for each recipient, added through the
+// upload's own after-commit list (`AcceptedUpload.live`) inside the insert's transaction and sent by
+// the route once the handler resolves, nothing when it throws; never the document's name in a log.
+describe('POST /uploads/chat: the live event (T066)', () => {
+  const document = (mine: boolean) => ({
+    type: 'chat',
+    enrollmentId: ENROLLMENT,
+    message: {
+      messageId: MESSAGE,
+      mine,
+      attachment: { filename: 'تجويد.pdf', mime: 'application/pdf' },
+      sentAt: SENT.toISOString(),
+      purged: false,
+    },
+  });
+
+  it.each([
+    ['the student', 't-student', STUDENT, TEACHER],
+    ['the teacher', 't-teacher', TEACHER, STUDENT],
+  ])(
+    'a document from %s reaches both parties once, after the commit, mine for the sender only',
+    async (_name, bearer, sender, other) => {
+      const response = await upload({ bearer, filename: 'تجويد.pdf', bytes: pdfBytes() });
+      expect(response.status).toBe(201);
+      await response.arrayBuffer();
+      expect(published).toEqual([
+        { to: [sender], event: document(true) },
+        { to: [other], event: document(false) },
+      ]);
+      expect(trace.indexOf('publish')).toBeGreaterThan(trace.lastIndexOf('commit'));
+    },
+  );
+
+  it.each([
+    [
+      'an end committed before the lock (CHAT_CLOSED)',
+      () => {
+        underLock = () =>
+          terms.set(ENROLLMENT, {
+            ...(terms.get(ENROLLMENT) as ChatEnrollmentTerms),
+            status: 'completed',
+          });
+      },
+    ],
+    [
+      'a gender corrected before the lock (NOT_FOUND)',
+      () => {
+        underLock = () => genders.set(TEACHER, 'male');
+      },
+    ],
+    [
+      'a failed insert',
+      () => {
+        insertFails = true;
+      },
+    ],
+    [
+      'a stranger',
+      () =>
+        terms.set(ENROLLMENT, {
+          ...(terms.get(ENROLLMENT) as ChatEnrollmentTerms),
+          studentUserId: STRANGER,
+        }),
+    ],
+  ])('sends nothing on %s', async (_name, arrange) => {
+    arrange();
+    const response = await upload({ filename: 'تجويد.pdf', bytes: pdfBytes() });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    await response.arrayBuffer();
+    expect(published).toEqual([]);
+  });
+
+  it('writes the document’s name in no log line', async () => {
+    const response = await upload({ filename: 'اسم-سري.pdf', bytes: pdfBytes() });
+    await response.arrayBuffer();
+    insertFails = true;
+    const failed = await upload({ filename: 'اسم-سري.pdf', bytes: pdfBytes() });
+    await failed.arrayBuffer();
+    expect(raw.length).toBeGreaterThan(0);
+    expect(raw.join('')).not.toContain('اسم-سري');
   });
 });

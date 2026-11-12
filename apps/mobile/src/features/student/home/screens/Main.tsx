@@ -63,6 +63,7 @@ export function Main({ notice }: { readonly notice?: ReactNode }) {
         {notice}
         <NotLoaded
           failed={read.failed || me.isError}
+          error={read.error ?? me.error}
           onRetry={() => {
             read.retry();
             if (me.isError) void me.refetch();
@@ -76,7 +77,15 @@ export function Main({ notice }: { readonly notice?: ReactNode }) {
   return (
     <TabScreen header={header}>
       {online ? null : <OfflineBanner onRetry={retry} />}
-      {failed && online ? <LoadError onRetry={retry} /> : null}
+      {failed && online ? (
+        <LoadError
+          error={
+            read.error ??
+            orders.error(items.filter(isAwaitingPayment).map((item) => item.enrollmentId))
+          }
+          onRetry={retry}
+        />
+      ) : null}
       {notice}
       {nextOf?.next === undefined ? null : (
         <NextSession item={nextOf} session={nextOf.next} zone={zone} />

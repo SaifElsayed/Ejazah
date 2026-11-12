@@ -40,20 +40,22 @@ export function EnrollmentsEnded() {
   const header = (
     <View style={{ gap: tokens.space['4'] }}>
       {items === undefined ? null : <OfflineNotice onRetry={retry} />}
-      {items !== undefined && ended.isRefetchError && online ? <LoadError onRetry={retry} /> : null}
+      {items !== undefined && ended.isRefetchError && online ? (
+        <LoadError error={ended.error} onRetry={retry} />
+      ) : null}
       <EnrollmentTabs value="ended" />
     </View>
   );
   const empty =
     items === undefined || zone === undefined ? (
-      <NotLoaded failed={ended.isError} onRetry={retry} />
+      <NotLoaded failed={ended.isError} error={ended.error} onRetry={retry} />
     ) : (
       <EnrollmentsEndedEmpty />
     );
   const footer = ended.isFetchingNextPage ? (
     <LoadingRows rows={1} />
   ) : ended.isFetchNextPageError ? (
-    <LoadError onRetry={() => void ended.fetchNextPage()} />
+    <LoadError error={ended.error} onRetry={() => void ended.fetchNextPage()} />
   ) : undefined;
 
   return (

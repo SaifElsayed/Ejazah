@@ -7,10 +7,15 @@
 // warning first, every time) and leaving; and the states around them: joining, the connection being
 // rejoined, when joining opens, a session that cannot be joined, the session's end. Audio needs no
 // control: it is on in every session (FR-433).
+//
+// B40a, T019's follow-up (a): leaving by the system's back is held (`usePreventRemove`) until the
+// connection is closed and the audio session stopped, as the header's back is, so the old room's
+// `stopAudio` never lands after a next room's `startAudio`; either back leaves once. T065: the
+// first join's failure says when to try again after `RATE_LIMITED` (`genericErrorKey`).
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { type TrackReference, VideoTrack } from '@livekit/react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { type ReactNode, useRef } from 'react';
+import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
+import { type ReactNode, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import {
@@ -26,6 +31,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
+import { genericErrorKey } from '../../../../lib/error-message';
 import { avatarNameOf, type PartyRole, usePartyName } from '../../../../lib/party';
 import { initialsOf } from '../../account';
 import { StackScreen } from '../../screen';
@@ -45,9 +51,9 @@ export function RoomScreen({ counterpartyRole }: { readonly counterpartyRole: Pa
   const sessionId = useSessionParam();
   const read = useSessionRead(sessionId);
   const me = useMe();
-  const room = useRoom(sessionId);
-  const partyName = usePartyName();
   const session = read.data;
+  const room = useRoom(sessionId, session?.endsAt);
+  const partyName = usePartyName();
   const party =
     session === undefined
       ? undefined
@@ -57,12 +63,20 @@ export function RoomScreen({ counterpartyRole }: { readonly counterpartyRole: Pa
         };
   const name = party === undefined ? '' : partyName(party, counterpartyRole);
   const leaving = useRef(false);
-  const leave = () => {
+  const [left, setLeft] = useState(false);
+  // The system's back waits for the room to be left, then goes on (follow-up (a)).
+  const allowRemoval = usePreventRemove(!left, ({ repeat }) => leave(repeat));
+  /** Leaves once, whichever back came first, then goes back. */
+  function leave(goBack: () => void = () => router.back()) {
     if (leaving.current) return;
     leaving.current = true;
-    void room.leave().then(() => router.back());
-  };
-  const header = <NavHeader title={name} back={{ kind: 'back', onPress: leave }} />;
+    void room.leave().then(() => {
+      setLeft(true);
+      allowRemoval();
+      goBack();
+    });
+  }
+  const header = <NavHeader title={name} back={{ kind: 'back', onPress: () => leave() }} />;
   return (
     <StackScreen header={header}>
       <Body
@@ -71,7 +85,7 @@ export function RoomScreen({ counterpartyRole }: { readonly counterpartyRole: Pa
         viewerZone={me.data?.timezone}
         name={name}
         avatar={party === undefined ? '' : initialsOf(avatarNameOf(party))}
-        onLeave={leave}
+        onLeave={() => leave()}
       />
       <Dialog
         open={room.view?.shareWarningOpen ?? false}
@@ -142,15 +156,17 @@ function Body({
           />
         </View>
       );
-    case 'failed':
+    case 'failed': {
+      const message = genericErrorKey(phase.error, 'common.state.actionError');
       return (
         <View style={{ gap: tokens.space['3'] }}>
           <Banner icon={{ name: 'triangle-alert' }} tone="danger">
-            {t('common.state.actionError')}
+            {t(message.key, message.values)}
           </Banner>
           <Button label={t('common.action.retry')} variant="secondary" onPress={room.retry} />
         </View>
       );
+    }
     case 'connected':
     case 'reconnecting':
       return (

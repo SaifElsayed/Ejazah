@@ -62,6 +62,7 @@ export function Enrollments() {
       <TabScreen header={header}>
         <NotLoaded
           failed={(items === undefined ? read.failed : ended.isError) || me.isError}
+          error={(items === undefined ? read.error : ended.error) ?? me.error}
           onRetry={retry}
         />
       </TabScreen>
@@ -71,7 +72,15 @@ export function Enrollments() {
   return (
     <TabScreen header={header}>
       <OfflineNotice onRetry={retry} />
-      {failed && online ? <LoadError onRetry={retry} /> : null}
+      {failed && online ? (
+        <LoadError
+          error={
+            read.error ??
+            orders.error(items.filter(isAwaitingPayment).map((item) => item.enrollmentId))
+          }
+          onRetry={retry}
+        />
+      ) : null}
       <EnrollmentTabs value="active" />
       {noneActive ? (
         <EmptyState

@@ -29,6 +29,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { formatPounds } from '../../../../lib/formatters';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -56,7 +57,12 @@ export function Checkout() {
   if (hold === undefined || enrollmentId !== undefined) {
     return (
       <StackScreen header={<CheckoutHeader />}>
-        <NotLoaded failed={current.isError} onRetry={retry} loading={<Skeleton shape="block" />} />
+        <NotLoaded
+          failed={current.isError}
+          error={current.error}
+          onRetry={retry}
+          loading={<Skeleton shape="block" />}
+        />
       </StackScreen>
     );
   }
@@ -88,7 +94,7 @@ function OpenCheckout({
   const locale = useLocale();
   const seconds = useSecondsLeft(hold.payBy);
   const pay = usePay(hold.holdId);
-  const [refused, setRefused] = useState<'changed' | 'expired' | 'failed' | null>(null);
+  const [refused, setRefused] = useState<'changed' | 'expired' | ErrorMessage | null>(null);
   const { summary } = hold;
   const amount = formatPounds(piasters(summary.price_piasters), locale);
 
@@ -98,8 +104,8 @@ function OpenCheckout({
     setRefused(null);
     pay.mutate(quotedOf(summary), {
       onSuccess: (handover) =>
-        openHostedCheckout(handover.checkoutUrl, handover.enrollmentId).catch(() =>
-          setRefused('failed'),
+        openHostedCheckout(handover.checkoutUrl, handover.enrollmentId).catch((caught: unknown) =>
+          setRefused(genericErrorKey(caught, 'common.state.actionError')),
         ),
       onError: (error) => {
         const code = errorCodeOf(error);
@@ -107,7 +113,7 @@ function OpenCheckout({
         else if (code === 'SUMMARY_CHANGED') {
           setRefused('changed');
           onRefresh();
-        } else setRefused('failed');
+        } else setRefused(genericErrorKey(error, 'common.state.actionError'));
       },
     });
   };
@@ -134,9 +140,9 @@ function OpenCheckout({
           {t('student.checkout.summaryChanged')}
         </Banner>
       ) : null}
-      {refused === 'failed' ? (
+      {typeof refused === 'object' && refused !== null ? (
         <Banner icon={{ name: 'triangle-alert' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(refused.key, refused.values)}
         </Banner>
       ) : null}
       <OrderSummary

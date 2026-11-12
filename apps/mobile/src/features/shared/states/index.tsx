@@ -3,12 +3,15 @@
 // pattern (a warning banner announced as a status, with a retry) on every tab root and list.
 // T138: the screens reach them through `NotLoaded`, in place of data not read yet, and
 // `OfflineNotice`, over cached data, by the connection the query cache knows (lib/online.ts).
+// T065 of specs/004-sessions: the danger banner takes the failed read's error, so a `RATE_LIMITED`
+// refusal says when to try again (`genericErrorKey`, lib/error-message.ts).
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { Banner, Button, Skeleton, TextLink } from '../../../design/primitives';
 import { tokens } from '../../../design/tokens';
 import { useT } from '../../../i18n';
+import { genericErrorKey } from '../../../lib/error-message';
 import { useOnline } from '../../../lib/online';
 
 /** Skeleton rows in place of a list: an avatar, a title and a line each. */
@@ -32,12 +35,20 @@ export function LoadingRows({ rows = 3 }: { readonly rows?: number }) {
 }
 
 /** The data did not load: a danger banner and the one next step. */
-export function LoadError({ onRetry }: { readonly onRetry: () => void }) {
+export function LoadError({
+  error,
+  onRetry,
+}: {
+  /** The failed read's error. */
+  readonly error: unknown;
+  readonly onRetry: () => void;
+}) {
   const t = useT();
+  const { key, values } = genericErrorKey(error, 'common.state.loadError');
   return (
     <View style={{ gap: tokens.space['3'] }}>
       <Banner icon={{ name: 'triangle-alert' }} tone="danger">
-        {t('common.state.loadError')}
+        {t(key, values)}
       </Banner>
       <Button label={t('common.action.retry')} variant="secondary" size="md" onPress={onRetry} />
     </View>
@@ -63,16 +74,19 @@ export function OfflineBanner({ onRetry }: { readonly onRetry: () => void }) {
  */
 export function NotLoaded({
   failed,
+  error,
   onRetry,
   loading = <LoadingRows />,
 }: {
   readonly failed: boolean;
+  /** The failed read's error, handed to the danger banner. */
+  readonly error?: unknown;
   readonly onRetry: () => void;
   readonly loading?: ReactNode;
 }) {
   const online = useOnline();
   if (!online) return <OfflineBanner onRetry={onRetry} />;
-  if (failed) return <LoadError onRetry={onRetry} />;
+  if (failed) return <LoadError error={error} onRetry={onRetry} />;
   return loading;
 }
 

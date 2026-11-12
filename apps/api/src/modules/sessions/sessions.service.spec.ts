@@ -150,6 +150,8 @@ let now: Date;
 /** The database's clock as `get` reads it on its transaction (`clockTimestamp` in production). */
 let databaseNow: Date;
 let remedies: Map<string, RemedyViewRow>;
+/** T065: `${sessionId} ${userId}` for each person the presence read says is in the session's room. */
+let inRoom: Set<string>;
 let services: SessionsServices;
 
 const tx = {} as Transaction;
@@ -242,6 +244,7 @@ beforeEach(() => {
   underLock = undefined;
   cancellations = new Map();
   remedies = new Map();
+  inRoom = new Set();
   disputeFields = new Map();
   disputeAsked = [];
   video = new RecordingVideo();
@@ -270,6 +273,11 @@ beforeEach(() => {
     disputeView,
     now: () => now,
     clock: async () => databaseNow,
+    // T065: the presence read as this spec fakes it; R-304's rule over the rows is the DB spec's.
+    inRoom: async (_tx, sessionId, userId) => {
+      trace.push(`read presence of ${userId} in ${sessionId}`);
+      return inRoom.has(`${sessionId} ${userId}`);
+    },
   });
 });
 
@@ -305,6 +313,7 @@ const studentSees: SessionsGetOutput = {
   counterparty: { displayName: 'المعلمة سارة', deleted: false },
   join: { opensAt: OPENS.toISOString(), closesAt: ENDS.toISOString() },
   canRaiseDispute: false,
+  counterpartyInRoom: false,
 };
 
 describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
@@ -373,8 +382,36 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
       `read disputes of ${SESSION} for ${STUDENT}`,
       // T028: the remedy, on the same transaction.
       `read remedy of ${SESSION}`,
+      // T065: the counterparty's presence, on the same transaction, with no lock.
+      `read presence of ${TEACHER} in ${SESSION}`,
       'commit',
     ]);
+  });
+});
+
+// T065: `counterpartyInRoom` (app-surface.md, `sessions.get`; research R-324, item 6): the presence
+// read asked for the counterparty, never the caller, on the read's own transaction, and answered as
+// it says; no provider call (the video stand-in asked nothing). R-304's per-connection rule over the
+// recorded events is tests/db-integrity/session-join.spec.ts'.
+describe('sessions.get: the counterparty’s presence (T065)', () => {
+  it('answers each party whether the other is in the room, never whether they are', async () => {
+    inRoom.add(`${SESSION} ${TEACHER}`);
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent).toEqual({ ...studentSees, counterpartyInRoom: true });
+    expect(byTeacher.counterpartyInRoom).toBe(false);
+    expect(trace.filter((step) => step.startsWith('read presence'))).toEqual([
+      `read presence of ${TEACHER} in ${SESSION}`,
+      `read presence of ${STUDENT} in ${SESSION}`,
+    ]);
+    expect(video.calls).toEqual([]);
+  });
+
+  it('reads no presence for a refused read', async () => {
+    await refusalOf(services.get({ userId: STRANGER }, { sessionId: SESSION }, log));
+    parties.set(TEACHER, { ...active('male', 'المعلم'), teacherApproved: true });
+    await refusalOf(services.get({ userId: STUDENT }, { sessionId: SESSION }, log));
+    expect(trace.filter((step) => step.startsWith('read presence'))).toEqual([]);
   });
 });
 

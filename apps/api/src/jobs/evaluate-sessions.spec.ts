@@ -1,9 +1,10 @@
 // T014 — the `evaluate-sessions` sweep (FR-441, FR-482; R-SESS-2; research R-306, R-313;
 // contracts/kernel.md, "Jobs"): a sweep under its name, every minute, run with no payload; each run
 // ends the rooms of the cancelled sessions in their join period, then settles every session due,
-// through sessions' evaluation. The rules are `modules/sessions/evaluation.service.spec.ts`'s; the
-// job over the real tables, through T010's harness, with its double-run spec, is
-// `tests/sessions/evaluate-sessions.spec.ts`.
+// through sessions' evaluation, then (T067) ends the rooms of the sessions due a close at their
+// scheduled end, after the settlement so it never waits on the provider (Q7 (a)). The rules are
+// `modules/sessions/evaluation.service.spec.ts`'s; the job over the real tables, through T010's
+// harness, with its double-run spec, is `tests/sessions/evaluate-sessions.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
 import type { Evaluation } from '../modules/sessions/index.js';
@@ -21,6 +22,10 @@ function recorded(): { readonly calls: string[]; readonly evaluation: Evaluation
       },
       endCancelledRooms: async () => {
         calls.push('endCancelledRooms');
+        return [];
+      },
+      endScheduledRooms: async () => {
+        calls.push('endScheduledRooms');
         return [];
       },
     },
@@ -58,11 +63,11 @@ describe('evaluate-sessions: the sweep (R-306)', () => {
     ]);
   });
 
-  it('a run ends the cancelled sessions’ rooms, then settles the sessions due', async () => {
+  it('a run ends the cancelled sessions’ rooms, then settles the sessions due, then ends the rooms due a close (T067, Q7 (a))', async () => {
     const { calls, evaluation } = recorded();
 
     await evaluateSessions({ evaluation }).handle({});
 
-    expect(calls).toEqual(['endCancelledRooms', 'settleDue']);
+    expect(calls).toEqual(['endCancelledRooms', 'settleDue', 'endScheduledRooms']);
   });
 });

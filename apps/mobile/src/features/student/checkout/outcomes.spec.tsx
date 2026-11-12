@@ -7,6 +7,7 @@
 // the first session moved, said plainly. `PaymentFailed` retries on the same hold through the
 // hosted page; `PaymentSlotUnavailable` says the booking was cancelled. Each case waits for the
 // loaded content itself (`findBy*`) before reading it; the schedule runs on Jest's fake timers.
+// T065 of specs/004-sessions: a read refused `RATE_LIMITED` says when to try again on every outcome.
 import type { CheckoutStatusOutput, EnrollmentSession, MeOutput } from '@ijazah/contracts';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { piasters } from '@ijazah/money';
@@ -154,6 +155,17 @@ const pounds = (direction: Direction) =>
   formatPounds(piasters(summary.price_piasters), localeOf(direction));
 const packageShort = (direction: Direction) =>
   said(direction, 'common.format.packageShort', { subject: named(direction), count: 8 });
+
+/** A `RATE_LIMITED` refusal, with the seconds until its window ends (T065 of specs/004-sessions). */
+const rateLimited = (seconds: string) =>
+  apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: seconds }]);
+/** The banner after a `RATE_LIMITED` read: when to try again, never the generic words (T065). */
+async function saysTryAgainIn(direction: Direction, count: number): Promise<void> {
+  expect(
+    await screen.findByText(said(direction, 'common.state.rateLimitedIn', { count })),
+  ).toBeTruthy();
+  expect(screen.queryByText(said(direction, 'common.state.loadError'))).toBeNull();
+}
 
 const statusCalls = () => mockApi.api.checkout.status.query.mock.calls.length;
 
@@ -314,6 +326,24 @@ describe('Processing', () => {
     expect(await screen.findByText(line)).toBeTruthy();
     expect(mockReplace).not.toHaveBeenCalled();
   });
+
+  it('a RATE_LIMITED status read with nothing read yet says when to try again (T065)', async () => {
+    mockApi.api.checkout.status.query.mockRejectedValue(rateLimited('61'));
+    await inBothDirections(within(<Processing />), async (_rendered, direction) => {
+      await saysTryAgainIn(direction, 2);
+    });
+  });
+
+  it('a failed configuration read says its own refusal before the status read’s (T065)', async () => {
+    mockApi.value.client.publicConfig.mockRejectedValue(rateLimited('61'));
+    mockApi.api.checkout.status.query.mockRejectedValue(rateLimited('180'));
+    await inBothDirections(within(<Processing />), async (_rendered, direction) => {
+      await saysTryAgainIn(direction, 2);
+      expect(
+        screen.queryByText(said(direction, 'common.state.rateLimitedIn', { count: 3 })),
+      ).toBeNull();
+    });
+  });
 });
 
 describe('PaymentSuccess', () => {
@@ -424,6 +454,13 @@ describe('PaymentSuccess', () => {
     await renderIn('rtl', within(<PaymentSuccess />)());
     fireEvent.press(await screen.findByText(ar('student.checkout.toEnrollments')));
     expect(mockReplace).toHaveBeenCalledWith(ENROLLMENTS);
+  });
+
+  it('a RATE_LIMITED status read says when to try again (T065)', async () => {
+    mockApi.api.checkout.status.query.mockRejectedValue(rateLimited('61'));
+    await inBothDirections(within(<PaymentSuccess />), async (_rendered, direction) => {
+      await saysTryAgainIn(direction, 2);
+    });
   });
 });
 
@@ -553,5 +590,12 @@ describe('PaymentSlotUnavailable', () => {
     await renderIn('rtl', within(<PaymentSlotUnavailable />)());
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(route('processing')));
     expect(screen.queryByText(ar('student.checkoutSlotUnavailable.title'))).toBeNull();
+  });
+
+  it('a RATE_LIMITED status read says when to try again (T065)', async () => {
+    mockApi.api.checkout.status.query.mockRejectedValue(rateLimited('61'));
+    await inBothDirections(within(<PaymentSlotUnavailable />), async (_rendered, direction) => {
+      await saysTryAgainIn(direction, 2);
+    });
   });
 });

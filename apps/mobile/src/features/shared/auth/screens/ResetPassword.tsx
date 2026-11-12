@@ -18,8 +18,9 @@ import {
   Text,
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
-import { type MessageKey, useT } from '../../../../i18n';
+import { type MessageKey, type MessageValues, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { genericErrorKey } from '../../../../lib/error-message';
 import { BackBar, StackScreen } from '../../screen';
 import { useAuthApi } from '../api';
 import { Resend, useCountdown } from '../components/parts';
@@ -30,6 +31,7 @@ const CODE_LENGTH = 6;
 type Problem = {
   readonly field: 'code' | 'password' | 'confirm' | 'form';
   readonly key: MessageKey;
+  readonly values?: MessageValues;
 };
 
 export function ResetPassword() {
@@ -63,7 +65,7 @@ export function ResetPassword() {
           ? { field: 'code', key: 'auth.otp.invalid' }
           : code === 'PASSWORD_WEAK'
             ? { field: 'password', key: 'auth.password.weak' }
-            : { field: 'form', key: 'common.state.actionError' },
+            : { field: 'form', ...genericErrorKey(caught, 'common.state.actionError') },
       );
     } finally {
       setBusy(false);
@@ -74,8 +76,8 @@ export function ResetPassword() {
     countdown.restart();
     try {
       await auth.requestPasswordReset(email);
-    } catch {
-      setProblem({ field: 'form', key: 'common.state.actionError' });
+    } catch (caught: unknown) {
+      setProblem({ field: 'form', ...genericErrorKey(caught, 'common.state.actionError') });
     }
   };
 
@@ -106,7 +108,7 @@ export function ResetPassword() {
       </Text>
       {problem?.field === 'form' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(problem.key)}
+          {t(problem.key, problem.values)}
         </Banner>
       ) : null}
       <View style={{ gap: tokens.space['2'] }}>

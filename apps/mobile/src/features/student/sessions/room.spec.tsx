@@ -23,6 +23,8 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 jest.mock('expo-router', () => ({
   router: { back: jest.fn(), push: jest.fn() },
   useLocalSearchParams: () => ({ id: '0193a6f0-0000-7000-8000-0000000000c1' }),
+  // B40a: the room holds the system's back until it has left (T019's follow-up (a)).
+  usePreventRemove: () => () => undefined,
 }));
 
 const said = (direction: Direction, key: Parameters<typeof translate>[1]) =>

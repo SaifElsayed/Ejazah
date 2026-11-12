@@ -12,6 +12,7 @@ import { tokens } from '../../../design/tokens';
 import { useT } from '../../../i18n';
 import { useApi } from '../../../lib/api';
 import type { DocumentKind } from '../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../lib/error-message';
 import { pickPdf } from '../../../lib/files';
 import { useFormatters } from '../../../lib/formatters';
 
@@ -61,7 +62,7 @@ export function PdfField({
   const t = useT();
   const { client } = useApi();
   const size = useFileSize();
-  const [state, setState] = useState<'idle' | 'uploading' | 'failed'>('idle');
+  const [state, setState] = useState<'idle' | 'uploading' | ErrorMessage>('idle');
 
   async function choose(): Promise<void> {
     const picked = await pickPdf();
@@ -71,8 +72,8 @@ export function PdfField({
       const documentId = await client.uploadDocument(kind, picked);
       setState('idle');
       onChange({ documentId, name: picked.name, sizeBytes: picked.sizeBytes });
-    } catch {
-      setState('failed');
+    } catch (caught: unknown) {
+      setState(genericErrorKey(caught, 'common.state.actionError'));
     }
   }
 
@@ -112,9 +113,9 @@ export function PdfField({
           }
         />
       )}
-      {state === 'failed' ? (
+      {typeof state === 'object' ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(state.key, state.values)}
         </Banner>
       ) : null}
     </View>

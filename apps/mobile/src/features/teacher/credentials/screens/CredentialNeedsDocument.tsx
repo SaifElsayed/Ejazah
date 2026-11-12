@@ -21,6 +21,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useApi } from '../../../../lib/api';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { pickPdf } from '../../../../lib/files';
 import { useSubjectName } from '../../../../lib/subjects';
 import { useFileSize } from '../../../shared/documents';
@@ -39,20 +40,20 @@ export function CredentialNeedsDocument() {
   const size = useFileSize();
   const dated = useCredentialDate();
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const credential = credentials.data?.find(({ credentialId }) => credentialId === id);
 
   async function replace(credentialId: string): Promise<void> {
     const picked = await pickPdf();
     if (picked === null) return;
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       const documentId = await client.uploadDocument('credential', picked);
       await actions.replaceDocument(credentialId, documentId);
       router.back();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -85,6 +86,7 @@ export function CredentialNeedsDocument() {
       {credential === undefined ? (
         <NotLoaded
           failed={credentials.isError}
+          error={credentials.error}
           onRetry={() => void credentials.refetch()}
           loading={<Skeleton shape="block" />}
         />
@@ -110,9 +112,9 @@ export function CredentialNeedsDocument() {
                 : { meta: size(credential.document.sizeBytes) })}
             />
           </Section>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
         </View>

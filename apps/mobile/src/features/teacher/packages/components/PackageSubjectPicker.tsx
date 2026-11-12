@@ -46,7 +46,11 @@ export function PackageSubjectPicker({
   return (
     <Sheet open={open} onClose={onClose} title={t('teacher.packages.editor.subjectPicker.title')}>
       {credentials.data === undefined ? (
-        <NotLoaded failed={credentials.isError} onRetry={() => void credentials.refetch()} />
+        <NotLoaded
+          failed={credentials.isError}
+          error={credentials.error}
+          onRetry={() => void credentials.refetch()}
+        />
       ) : (
         <Picker
           options={subjects.map((subject) => ({ value: subject.id, label: nameOf(subject) }))}

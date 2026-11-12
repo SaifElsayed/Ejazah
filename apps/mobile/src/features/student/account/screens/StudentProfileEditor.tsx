@@ -24,6 +24,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { pickPhoto } from '../../../../lib/files';
 import { useFormatters } from '../../../../lib/formatters';
 import { AccountLoading, initialsOf } from '../../../shared/account';
@@ -41,7 +42,7 @@ export function StudentProfileEditor() {
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const account = me.data;
   const typed = name ?? account?.displayName ?? '';
   const valid = displayNameSchema.safeParse(typed).success;
@@ -49,12 +50,12 @@ export function StudentProfileEditor() {
   async function changePhoto(): Promise<void> {
     const picked = await pickPhoto();
     if (picked === null) return;
-    setFailed(false);
+    setFailure(null);
     setUploading(true);
     try {
       setPhotoUrl(await actions.uploadPhoto(picked));
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setUploading(false);
     }
@@ -66,13 +67,13 @@ export function StudentProfileEditor() {
       leaveToAccount();
       return;
     }
-    setFailed(false);
+    setFailure(null);
     setSaving(true);
     try {
       await actions.rename(next);
       leaveToAccount();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSaving(false);
     }
@@ -102,14 +103,15 @@ export function StudentProfileEditor() {
       {account === undefined ? (
         <NotLoaded
           failed={me.isError}
+          error={me.error}
           onRetry={() => void me.refetch()}
           loading={<AccountLoading />}
         />
       ) : (
         <>
-          {failed ? (
+          {failure !== null ? (
             <Banner icon={{ name: 'alert-circle' }} tone="danger">
-              {t('common.state.actionError')}
+              {t(failure.key, failure.values)}
             </Banner>
           ) : null}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['4'] }}>

@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { ActionBar, Banner, Button, IconTile, PageIntro } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { StackScreen } from '../../../shared/screen';
 import { usePayoutActions } from '../api';
 import { PayoutHeader } from '../components/PayoutHeader';
@@ -21,16 +22,16 @@ export function PayoutStart({ afterRegister }: { readonly afterRegister?: () => 
   const actions = usePayoutActions();
   const [idempotencyKey] = useState(() => Crypto.randomUUID());
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function register(): Promise<void> {
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.register(PROVISIONAL_PAYOUT_DETAILS, idempotencyKey);
       afterRegister?.();
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -57,9 +58,9 @@ export function PayoutStart({ afterRegister }: { readonly afterRegister?: () => 
     >
       <IconTile icon={{ name: 'landmark' }} size="lg" />
       <PageIntro title={t('teacher.payout.start.heading')} lede={t('teacher.payout.start.lede')} />
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
     </StackScreen>

@@ -34,6 +34,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { isolate, useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { deviceTimeZone } from '../../../../lib/time-zone';
 import {
@@ -91,14 +92,18 @@ export function OnboardProfile() {
 
   if (draft === null || draft.role === undefined) return <Redirect href="/(auth)/welcome" />;
   const ready = readyDraft(draft);
+  const textOf = (caught: unknown) => {
+    const { key, values } = genericErrorKey(caught, 'common.state.actionError');
+    return t(key, values);
+  };
 
   const sendCode = async () => {
     setError(null);
     try {
       await onboarding.requestEmailCode(draft.onboardingToken, draft.email.trim());
       setCodeSent(true);
-    } catch {
-      setError(t('common.state.actionError'));
+    } catch (caught: unknown) {
+      setError(textOf(caught));
     }
   };
 
@@ -130,7 +135,7 @@ export function OnboardProfile() {
         router.dismissTo(PASSWORD_WEAK_ROUTE);
         clearDraft();
       } else {
-        setError(t('common.state.actionError'));
+        setError(textOf(caught));
       }
     } finally {
       setBusy(false);

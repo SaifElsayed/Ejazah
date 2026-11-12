@@ -6,6 +6,10 @@
 // joining opens, in both zones; the microphone granted here, and the system settings when it was
 // refused for good; the camera off, turned on only in the room (T019). The join waits for the
 // period and the microphone (`pre-session.ts`).
+//
+// T065 (FR-427; research R-324, item 6): «انضمّ الطرف الآخر» while `sessions.get`'s
+// `counterpartyInRoom` says the counterparty is in the room, recorded from the provider's
+// webhooks; a hint, never a decision: the join waits as before.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -69,6 +73,7 @@ export function PreSessionScreen({
         ) : (
           <NotLoaded
             failed={read.isError || me.isError}
+            error={read.error ?? me.error}
             onRetry={() => {
               if (read.isError) void read.refetch();
               if (me.isError) void me.refetch();
@@ -126,6 +131,9 @@ function Loaded({
           <Avatar initials={initialsOf(avatarNameOf(party))} size="lg" />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text variant="headline">{partyName(party, counterpartyRole)}</Text>
+            {session.counterpartyInRoom ? (
+              <Badge label={t('session.pre.counterpartyInRoom')} tone="success" />
+            ) : null}
           </View>
         </View>
       </Card>

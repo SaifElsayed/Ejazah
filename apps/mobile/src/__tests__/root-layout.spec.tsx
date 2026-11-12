@@ -16,12 +16,12 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { onlineManager, useQueryClient } from '@tanstack/react-query';
 import { DefaultTheme, router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
-import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
 import { tokens } from '../design/tokens';
-import { fakeProcedures } from '../features/shared/__tests__/api-double';
+import { apiError, fakeProcedures } from '../features/shared/__tests__/api-double';
 import {
   clearPendingEmail,
   getPendingEmail,
@@ -286,6 +286,90 @@ describe('the root layout', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'إعادة المحاولة' }));
     expect(await screen.findByText('restricted')).toBeTruthy();
   }, 20000);
+
+  // T065 (research R-325, item 3): the query cache retries no API refusal, so a refused read
+  // counts once against a limit; a failure with no answer is still retried, as the case above.
+  it('says at once a launch whose account read was refused, asking account.me once (T065)', async () => {
+    mockApi.account.me.query.mockRejectedValue(apiError('INTERNAL'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    expect(mockApi.account.me.query).toHaveBeenCalledTimes(1);
+  });
+
+  // T065 (the owner's decision of 2026-11-06, the RATE_LIMITED message): the launch's own read,
+  // refused by a limit, says when to try again, as every generic-error path does.
+  it('says when to try again when the launch read is refused RATE_LIMITED (T065)', async () => {
+    mockApi.account.me.query.mockRejectedValue(
+      apiError('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+    );
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(
+      await screen.findByText(translate('ar', 'common.state.rateLimitedIn', { count: 2 })),
+    ).toBeTruthy();
+    expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+  });
+
+  it('says to wait a little when the launch read is refused RATE_LIMITED with no time (T065)', async () => {
+    mockApi.account.me.query.mockRejectedValue(apiError('RATE_LIMITED'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText(ar('common.state.rateLimited'))).toBeTruthy();
+  });
+
+  // T065 (research R-324, item 3): one live channel at the root while the person is signed in.
+  it('opens the live channel once signed in, and closes it on signing out (T065)', async () => {
+    // React Native's Jest mock of AppState holds no state; the app is in the foreground here.
+    const foreground = AppState.currentState;
+    Object.assign(AppState, { currentState: 'active' });
+    try {
+      await liveChannelOpensAndCloses();
+    } finally {
+      Object.assign(AppState, { currentState: foreground });
+    }
+  });
+
+  // T065, beyond its text (the owner's decision of 2026-11-11 on lane A2's Q3, (b)): the server
+  // refuses the channel to a restricted standing, so a restricted account opens none, and one opens
+  // once the account leaves the restricted screen.
+  it('opens no live channel while the account is restricted, and one once it is not (T065)', async () => {
+    const foreground = AppState.currentState;
+    Object.assign(AppState, { currentState: 'active' });
+    try {
+      setSession({ kind: 'signed-in', landing: 'restricted', role: 'student' });
+      await renderRouter(routes, { initialUrl: '/(student)/(tabs)' });
+      expect(await screen.findByText('restricted')).toBeTruthy();
+      expect(mockApi.live.events.subscribe).not.toHaveBeenCalled();
+      await act(async () => setSession({ kind: 'signed-in', landing: 'student_home' }));
+      expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+      // As in the case above, a layout mounted again closes its stream first: one is open.
+      expect(mockApi.live.events.subscribe).toHaveBeenCalled();
+      expect(openStreams()).toBe(1);
+    } finally {
+      Object.assign(AppState, { currentState: foreground });
+    }
+  });
+
+  async function liveChannelOpensAndCloses() {
+    setSession({ kind: 'signed-in', landing: 'student_home' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+    // A layout mounted again closes its stream first: one stream is open at a time.
+    expect(openStreams()).toBe(1);
+    const opens = mockApi.live.events.subscribe.mock.calls.length;
+    await act(async () => setSession({ kind: 'signed-out' }));
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expect(openStreams()).toBe(0);
+    expect(mockApi.live.events.subscribe).toHaveBeenCalledTimes(opens);
+  }
+
+  /** The streams opened and not yet closed. */
+  function openStreams(): number {
+    return mockApi.live.events.subscribe.mock.results.filter(
+      (result) => (result.value as { unsubscribe: jest.Mock }).unsubscribe.mock.calls.length === 0,
+    ).length;
+  }
 
   it("reports the device's zone once when it differs from the account's (FR-131)", async () => {
     mockApi.account.me.query.mockResolvedValue(

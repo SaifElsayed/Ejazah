@@ -27,6 +27,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { useSlotActions } from '../api';
 import { changeOf, SLOT_LENGTHS, type SlotLength, startTimes, WEEK } from '../week';
@@ -59,7 +60,7 @@ export function SlotEditor({
   const [length, setLength] = useState<SlotLength | undefined>(slot?.durationMinutes);
   const [step, setStep] = useState<'form' | 'start' | 'disable'>('form');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<MessageKey | null>(null);
+  const [problem, setProblem] = useState<ErrorMessage | null>(null);
   const zone = slot?.timezone ?? timezone;
   const city = cityOf(zone, locale) ?? zone;
   const booked = slot?.state === 'booked' ? slot : undefined;
@@ -75,7 +76,10 @@ export function SlotEditor({
       await call();
       onClose();
     } catch (caught: unknown) {
-      setProblem(PROBLEMS[errorCodeOf(caught) ?? ''] ?? 'common.state.actionError');
+      const said = PROBLEMS[errorCodeOf(caught) ?? ''];
+      setProblem(
+        said === undefined ? genericErrorKey(caught, 'common.state.actionError') : { key: said },
+      );
     } finally {
       setBusy(false);
     }
@@ -132,7 +136,7 @@ export function SlotEditor({
     <Sheet open onClose={onClose} title={title}>
       {problem === null ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t(problem)}
+          {t(problem.key, problem.values)}
         </Banner>
       )}
       {booked !== undefined ? (

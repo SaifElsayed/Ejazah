@@ -40,7 +40,12 @@ export function Availability() {
   if (answer === undefined) {
     return (
       <TabScreen header={<AvailabilityHeader />}>
-        <NotLoaded failed={slots.isError} onRetry={retry} loading={<Skeleton shape="block" />} />
+        <NotLoaded
+          failed={slots.isError}
+          error={slots.error}
+          onRetry={retry}
+          loading={<Skeleton shape="block" />}
+        />
       </TabScreen>
     );
   }

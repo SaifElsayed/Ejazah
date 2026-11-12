@@ -36,6 +36,7 @@ import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useApi } from '../../../../lib/api';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { StackScreen } from '../../screen';
 import { NotLoaded } from '../../states';
 import { AccountLoading } from './AccountSettings';
@@ -95,6 +96,7 @@ export function Restricted() {
     return (
       <NotLoaded
         failed={me.isError}
+        error={me.error}
         onRetry={() => void me.refetch()}
         loading={<AccountLoading />}
       />
@@ -153,7 +155,7 @@ function RestrictedScreen({
       <Section title={t(text.available)}>
         <Lines items={text.availableItems} icon="check" tone="success" />
       </Section>
-      {support.failed ? <SupportFailed /> : null}
+      {support.failure === null ? null : <SupportFailed failure={support.failure} />}
       <Button
         label={t(text.deleteAccount)}
         variant="danger"
@@ -194,7 +196,7 @@ export function BannedSignedOut() {
         title={t('account.restricted.bannedTitle')}
         lede={t('account.restricted.finalLede')}
       />
-      {support.failed ? <SupportFailed /> : null}
+      {support.failure === null ? null : <SupportFailed failure={support.failure} />}
     </StackScreen>
   );
 }
@@ -202,19 +204,19 @@ export function BannedSignedOut() {
 /** «تواصل مع الدعم»: a mail to the support address the public configuration serves (FR-145). */
 function useWriteToSupport() {
   const { client } = useApi();
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
 
   async function writeToSupport(): Promise<void> {
-    setFailed(false);
+    setFailure(null);
     try {
       const { supportEmail } = await client.publicConfig();
       await Linking.openURL(`mailto:${supportEmail}`);
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     }
   }
 
-  return { failed, write: () => void writeToSupport() };
+  return { failure, write: () => void writeToSupport() };
 }
 
 function ContactSupport({ onPress }: { readonly onPress: () => void }) {
@@ -229,11 +231,11 @@ function ContactSupport({ onPress }: { readonly onPress: () => void }) {
   );
 }
 
-function SupportFailed() {
+function SupportFailed({ failure }: { readonly failure: ErrorMessage }) {
   const t = useT();
   return (
     <Banner icon={{ name: 'alert-circle' }} tone="danger">
-      {t('common.state.actionError')}
+      {t(failure.key, failure.values)}
     </Banner>
   );
 }

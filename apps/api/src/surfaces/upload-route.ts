@@ -41,7 +41,7 @@ import {
 } from '../platform/guards/upload.middleware.js';
 import { firstFileOf } from '../platform/http/multipart.js';
 import type { LiveBus } from '../platform/live/live-bus.js';
-import { type LivePublisher, RequestLive } from '../platform/live/live-publisher.js';
+import { type LivePublisher, RequestLive, unboundBus } from '../platform/live/live-publisher.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { NodeHandler } from '../platform/web/route.js';
 import {
@@ -70,12 +70,6 @@ export interface UploadRouteDependencies {
    */
   readonly live?: LiveBus;
 }
-
-/** The bus of a route built without one: what it is handed goes nowhere. */
-const unboundBus: LiveBus = {
-  publish: () => undefined,
-  subscribe: () => () => undefined,
-};
 
 /** Who uploaded, as the session resolved them. */
 export interface Uploader {

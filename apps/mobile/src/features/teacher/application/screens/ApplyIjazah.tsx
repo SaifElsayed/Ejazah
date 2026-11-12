@@ -9,6 +9,7 @@ import { useState } from 'react';
 
 import { ActionBar, Banner, Button, PageIntro, Section } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { useSubjectName, useSubjects } from '../../../../lib/subjects';
 import { PdfField } from '../../../shared/documents';
 import { StackScreen } from '../../../shared/screen';
@@ -23,17 +24,17 @@ export function ApplyIjazah() {
   const nameOf = useSubjectName();
   const actions = useApplicationActions();
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const chosen = (subjects.data ?? []).filter(({ id }) => draft.subjectIds.includes(id));
 
   async function send(): Promise<void> {
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await actions.send(draft);
       router.replace('/(teacher)/application/status');
-    } catch {
-      setFailed(true);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
     } finally {
       setSending(false);
     }
@@ -75,9 +76,9 @@ export function ApplyIjazah() {
           />
         </Section>
       ))}
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
     </StackScreen>

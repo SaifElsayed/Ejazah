@@ -97,9 +97,9 @@ declared limit does, so no search endpoint is left to the default, which fails o
 
 | Export | Contract |
 |---|---|
-| `LiveRegistry` | The open streams of this process, by user id and by sign-in session id: at most `live_channel_max_connections_per_user` per user (a setting, read at each open), the oldest ended when one more opens; a bounded queue per stream (a kernel constant in `live-constants.ts`, under R-MONEY-12 (as amended, constitution 2.6.1): it protects the API's memory), a stream that falls behind ended; `endUser(userId)`, `endSession(sessionId)` and `endAll()` |
+| `LiveRegistry` | The open streams of this process, by user id and by sign-in session id: at most `live_channel_max_connections_per_user` per user (a setting, read at each open), the oldest ended when one more opens; a bounded queue per stream (a kernel constant in `live-constants.ts`, under R-MONEY-12 (as amended, constitution 2.6.1): it protects the API's memory), a stream that falls behind ended; `endUser(userId)` and `endAll()`; a sign-out reaches that sign-in session's streams through the bus, its `account` scoped to the session, which a bus between processes keeps (no `endSession`: nit 8 of PR #130's review, the owner's decision of 2026-11-11, Q1 (a)) |
 | `LiveBus` | `publish({ to: userIds, event })` and `subscribe`; in-process only (`InProcessLiveBus`). Exact while the API is one process and every producer runs in it. A Redis bus between processes is Not scheduled, required before a second API process, any worker event made live or payment confirmation made live |
-| `LivePublisher` | What a context carries: `afterCommit(to, event)` adds to the request's after-commit list, which the administrator kind flushes once its transaction has committed and drops on a rollback, and the user kinds, which open no transaction, flush when the handler resolves and drop when it throws (Saif's review of PR #126, follow-up 4) (the shape of `deletion.service.ts`' `#afterCommit`); a publish that fails is logged at warn, without its payload, and never retried |
+| `LivePublisher` | What a context carries: `afterCommit(to, event)` adds to the request's after-commit list, which the administrator kind flushes once its transaction has committed and drops on a rollback, and the user kinds, which open no transaction, flush when the handler resolves and drop when it throws (Saif's review of PR #126, follow-up 4) (the shape of `deletion.service.ts`' `#afterCommit`); three paths outside the tRPC kinds send after their own commit: the account deletion (`deletion.service.ts`' after-commit work), the upload route after its transaction commits (`surfaces/upload-route.ts`), and `POST /webhooks/video` once its insert commits, straight through the bus with no list, for an event it recorded only (T065; contracts/video.md, "The webhook", step 4; the owner's decision of 2026-11-11 on B40a's conflict check, Q14 (a)); a publish that fails is logged at warn, without its payload, and never retried |
 | the user instance's SSE options | `procedures.ts`' user `initTRPC`: `sse.ping` every 25 s and `sse.client.reconnectAfterInactivityMs` 60 s, kernel constants as the limiter's are, named once in `apps/api/src/platform/live/live-constants.ts` (`LIVE_PING_INTERVAL_MS`, `LIVE_RECONNECT_AFTER_INACTIVITY_MS`, each with its reason beside it) and imported by `procedures.ts`, so no number of them is written in `surfaces/` (R-321, item 5; R-MONEY-12 (as amended, constitution 2.6.1), the owner's decisions of 2026-11-06, C1 and the fifth analysis's C3: the ping because an administrator changing it could break every stream, the restart because it is tied to the ping and tRPC refuses a ping above it); every yielded event parsed by `liveEvent`; the stream ended at the access token's expiry, which `ResolvedUserSession` exposes additively (`modules/identity/session.service.ts`) |
 
 **Addressing.** No event is addressed by a topic the client chose: each producer names the user ids it read in its own
@@ -135,9 +135,15 @@ Clients reconnect after a random 1 to 15 s delay.
   deleted person's files wait while an enrollment of theirs has an open dispute, case or complaint (spec FR-487,
   research R-327; the owner's decision of 2026-11-05).
 
-- the live channel's registry, in-process bus and publisher into the user and administrator contexts, the publisher
-  into sessions, chat and identity's `StandingService`, deletion and sign-out, and `live.endAll()` first in
-  `onShutdown` (R-324).
+- the live channel's registry and in-process bus into the user and administrator contexts, the upload route and the
+  deletion, and `live.endAll()` first in `onShutdown` (R-324). The publisher is not bound here: it is per request
+  (`RequestLive`), handed to the user kinds' services by their routers (`ctx.live`: `chat.send`,
+  `sessions.cancellation.request` and `.answer`; the sign-out's procedure adds to it itself), to the chat upload's
+  handler by the upload route (`AcceptedUpload.live`), and bound to the administrator kind's transaction and to the
+  deletion's own (`bindToTransaction`), where a service handed only the transaction reaches it through
+  `publisherOn(tx)` (`StandingService`, `sessions.cancel`, a complaint's decision (a), a confirmed fault,
+  `sessions.restore`, and booking's subscriber for every account's end) (T066; the owner's decision of 2026-11-11,
+  Q3 (a)).
 
 The worker binds the same port for the sweeps, and hands `erase-deleted-files` the same `heldFileOwnersAmong` as its
 `held` option. The worker publishes nothing live (R-324).

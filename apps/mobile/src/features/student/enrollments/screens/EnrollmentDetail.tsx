@@ -81,6 +81,7 @@ export function EnrollmentDetail() {
       <StackScreen header={header}>
         <NotLoaded
           failed={read.failed || me.isError || enrollmentId === ''}
+          error={read.error ?? me.error}
           onRetry={() => {
             read.retry();
             if (me.isError) void me.refetch();
@@ -93,7 +94,9 @@ export function EnrollmentDetail() {
   return (
     <StackScreen header={header}>
       <OfflineNotice onRetry={retry} />
-      {failed && online ? <LoadError onRetry={retry} /> : null}
+      {failed && online ? (
+        <LoadError error={read.error ?? orders.error([enrollmentId])} onRetry={retry} />
+      ) : null}
       <Overview
         enrollment={shown}
         zone={zone}

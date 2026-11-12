@@ -6,17 +6,26 @@
 // sent then. The caller kind that owns the request decides when the list goes out
 // (`surfaces/procedures.ts`): the administrator kind flushes it once its transaction has committed
 // and drops it on a rollback; the user kinds, which open no transaction (their services commit their
-// own), flush it when the handler resolves and drop it when it throws. The two paths outside the
-// kinds flush themselves: the account deletion through `deletion.service.ts`' own after-commit work,
-// and the upload route after its transaction commits. The shape is `deletion.service.ts`'
+// own), flush it when the handler resolves and drop it when it throws. The three paths outside the
+// kinds send after their own commit: the account deletion through `deletion.service.ts`' own
+// after-commit work, the upload route after its transaction commits, and `POST /webhooks/video`
+// (T065, `modules/sessions/video-webhook.controller.ts`) once its insert commits, straight through
+// the bus for an event it recorded. The shape is `deletion.service.ts`'
 // `#afterCommit`. A publish that fails loses a hint only: logged at warn without its payload, never
 // retried (R-SEC-2: no event's payload, no token, in any log).
+//
+// HOW A PRODUCER REACHES THE LIST (T066; the owner's decision of 2026-11-11, Q3 (a)). A user kind's
+// service is handed the request's list by its router (`ctx.live`) and adds its events inside its
+// own transaction, a keyed one inside the keyed effect, so a replay, which runs no effect, adds
+// none. An upload's handler is handed the upload's list (`AcceptedUpload.live`).
 //
 // A SERVICE THAT HAS ONLY THE TRANSACTION. The administrator kind binds its request's list to the
 // transaction it opens (`bindToTransaction`), for as long as that transaction runs, so a service
 // called on it reaches the list with the transaction it was handed (`publisherOn(tx)`), never through
 // state of its own: identity's `StandingService` publishes a person's `account` this way. The
-// binding is held weakly, by the transaction object, and removed when the transaction ends.
+// deletion binds its own transaction to its own list the same way (T066), so booking's subscriber
+// reaches the list of every account's end through the transaction. The binding is held weakly, by
+// the transaction object, and removed when the transaction ends.
 import type { LiveEvent } from '@ijazah/contracts';
 
 import type { LiveBus, LiveMessage } from './live-bus.js';
@@ -35,13 +44,22 @@ export interface LivePublishLog {
   warn(fields: Readonly<Record<string, unknown>>, message: string): void;
 }
 
+/**
+ * The bus of a context, a route or a deletion built without the process's channel: what it is
+ * handed goes nowhere (nit 8 of PR #130's review: one, shared).
+ */
+export const unboundBus: LiveBus = {
+  publish: () => undefined,
+  subscribe: () => () => undefined,
+};
+
 /** One request's after-commit list, flushed or dropped by the caller kind that owns the request. */
 export class RequestLive implements LivePublisher {
-  readonly #bus: LiveBus;
+  readonly #bus: Pick<LiveBus, 'publish'>;
   readonly #log: LivePublishLog;
   #pending: LiveMessage[] = [];
 
-  constructor(bus: LiveBus, log: LivePublishLog) {
+  constructor(bus: Pick<LiveBus, 'publish'>, log: LivePublishLog) {
     this.#bus = bus;
     this.#log = log;
   }

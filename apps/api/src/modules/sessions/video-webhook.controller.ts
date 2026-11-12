@@ -17,9 +17,19 @@
 // 200 and recorded nowhere. A session that does not exist, or an identity that is not one of its
 // two participants, is acknowledged with 200, written nowhere and reported to error tracking. Any
 // other event is inserted into `session_participant_events` in one transaction under its provider
-// event id, a duplicate writing nothing and answering 200 (R-SESS-1, SC-405); nothing else is done,
-// the evaluation reading the events later (R-SESS-2), so an event for a settled session is recorded
-// and changes nothing. A failure while recording is a 500, so the provider retries.
+// event id, a duplicate writing nothing and answering 200 (R-SESS-1, SC-405); nothing else is
+// written, the evaluation reading the events later (R-SESS-2), so an event for a settled session is
+// recorded and changes nothing. A failure while recording is a 500, so the provider retries.
+//
+// THE SIGNAL (T065; research R-324, items 5 and 6; contracts/video.md, "The webhook", step 4). Once
+// the insert's transaction has committed, and only for an event it recorded, one `session`
+// `{ sessionId, enrollmentId }` goes through the live bus, addressed from the session's two parties
+// that transaction read: a `joined` or a `left` (`participant_left` and
+// `participant_connection_aborted` alike) to the other participant, a `room_ended` to both. A
+// replay, an unmatched event, an `ignored` one and a rollback send nothing. The webhook is outside
+// the tRPC kinds and has no request list, so it publishes itself after the commit, as the account
+// deletion does (`deletion.service.ts`, `#endLiveStreams`): a publish that fails loses a hint only,
+// one warn line `{ eventType, errorName }` without the payload, never retried, the answer still 200.
 //
 // THE LOCKS (contracts/kernel.md's two `POST /webhooks/video` rows; the owner's decision of
 // 2026-11-06 on the sixth analysis, H1). A participant's event takes the participant's `users` row
@@ -54,6 +64,7 @@ import {
   type InboundEventVerifier,
   verifyInboundEvent,
 } from '../../platform/guards/webhook-signature.guard.js';
+import type { LiveBus } from '../../platform/live/live-bus.js';
 import { type Logger, requestLogger } from '../../platform/logging/logger.js';
 import type { IgnoredEvent, ParticipantEvent } from '../../platform/ports/video/video.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
@@ -61,6 +72,7 @@ import {
   insertParticipantEvent,
   keyShareRows,
   participantIdsOfSession,
+  type SessionParties,
 } from './participant-events.repository.js';
 
 /** Where the video provider posts its signed events (contracts/video.md, "The webhook"). */
@@ -88,6 +100,20 @@ export interface ParticipantEventsDependencies {
   readonly log: Pick<Logger, 'warn'>;
   /** The process's error reporting (T111); replaced by a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /** T065: the process's live bus; with none, a recorded event signals no one. */
+  readonly live?: LiveBus;
+}
+
+/** What one transaction did with an event; a recorded one carries its session's parties. */
+type Recording =
+  | { readonly outcome: 'recorded'; readonly parties: SessionParties }
+  | { readonly outcome: Exclude<VideoEventOutcome, 'recorded'> };
+
+/** Who hears of a recorded event: the other participant, or both for the room's end (R-324, item 6). */
+function recipientsOf(event: ParticipantEvent, parties: SessionParties): readonly string[] {
+  const { teacherUserId, studentUserId } = parties;
+  if (event.type === 'room_ended') return [teacherUserId, studentUserId];
+  return event.participantUserId === teacherUserId ? [studentUserId] : [teacherUserId];
 }
 
 /** Records a verified attendance event once (R-SESS-1, R-304), in one transaction. */
@@ -95,11 +121,13 @@ export class ParticipantEventsService {
   readonly #transactions: Transactions;
   readonly #log: Pick<Logger, 'warn'>;
   readonly #report: (error: Error) => void;
+  readonly #live: LiveBus | undefined;
 
-  constructor({ transactions, log, report = reportError }: ParticipantEventsDependencies) {
+  constructor({ transactions, log, report = reportError, live }: ParticipantEventsDependencies) {
     this.#transactions = transactions;
     this.#log = log;
     this.#report = report;
+    this.#live = live;
   }
 
   async record(event: ParticipantEvent): Promise<VideoEventOutcome> {
@@ -112,15 +140,22 @@ export class ParticipantEventsService {
   }
 
   async #recordOnce(event: ParticipantEvent): Promise<VideoEventOutcome> {
+    const recording = await this.#insertOnce(event);
+    // After `transactions.run` has resolved: the insert is committed (T065).
+    if (recording.outcome === 'recorded') this.#signal(event, recording.parties);
+    return recording.outcome;
+  }
+
+  async #insertOnce(event: ParticipantEvent): Promise<Recording> {
     try {
-      return await this.#transactions.run(async (tx) => {
+      return await this.#transactions.run(async (tx): Promise<Recording> => {
         const parties = await participantIdsOfSession(tx, event.sessionId);
-        if (parties === null) return 'unknown_session';
+        if (parties === null) return { outcome: 'unknown_session' };
         let userId: string | null = null;
         if (event.type !== 'room_ended') {
           const participant = event.participantUserId;
           if (participant !== parties.teacherUserId && participant !== parties.studentUserId) {
-            return 'not_a_party';
+            return { outcome: 'not_a_party' };
           }
           userId = participant;
           // The account's key-share before the insert's own, in the account's place of the order.
@@ -134,13 +169,28 @@ export class ParticipantEventsService {
           connectionRef: userId === null ? null : (event.connectionRef ?? null),
           occurredAt: event.occurredAt,
         });
-        return 'recorded';
+        return { outcome: 'recorded', parties };
       });
     } catch (error: unknown) {
       if (isUniqueViolation(error, 'session_participant_events_provider_event_id_key')) {
-        return 'replayed';
+        return { outcome: 'replayed' };
       }
       throw error;
+    }
+  }
+
+  /** T065: the `session` signal of a committed event; a failed publish is a lost hint, not retried. */
+  #signal(event: ParticipantEvent, parties: SessionParties): void {
+    try {
+      this.#live?.publish({
+        to: recipientsOf(event, parties),
+        event: { type: 'session', sessionId: event.sessionId, enrollmentId: parties.enrollmentId },
+      });
+    } catch (error: unknown) {
+      this.#log.warn(
+        { eventType: 'session', errorName: error instanceof Error ? error.name : 'unknown' },
+        'A live event could not be published; it is not retried',
+      );
     }
   }
 

@@ -111,7 +111,7 @@ export function StudentList({
 
   const empty =
     pages === undefined ? (
-      <NotLoaded failed={read.state === 'failed'} onRetry={retry} />
+      <NotLoaded failed={read.state === 'failed'} error={list.error} onRetry={retry} />
     ) : search !== '' ? (
       <EmptyState
         icon={{ name: 'search' }}
@@ -125,7 +125,7 @@ export function StudentList({
   const footer = list.isFetchingNextPage ? (
     <LoadingRows rows={1} />
   ) : list.isFetchNextPageError ? (
-    <LoadError onRetry={() => void list.fetchNextPage()} />
+    <LoadError error={list.error} onRetry={() => void list.fetchNextPage()} />
   ) : tab === 'ended' && items.length > 0 ? (
     <Text variant="caption" tone="muted">
       {t('teacher.students.endedNote')}

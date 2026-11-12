@@ -27,6 +27,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword, OtpHasher } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 
 import {
   auditEntriesAbout,
@@ -673,5 +674,80 @@ describe('the web: confirmWebDeletion (FR-143)', () => {
     await expect(spec.deletion.confirmWebDeletion(caller.email, '123456')).rejects.toEqual(
       refused('RATE_LIMITED'),
     );
+  });
+});
+
+// T066 of specs/004-sessions (FR-427; research R-324, item 6; the note under T066, Q3 (a)): the
+// deletion binds its own transaction to its after-commit list, so a consequence handed only the
+// transaction (booking's subscriber, telling the other party of each enrollment the deletion ends)
+// reaches it through `publisherOn(tx)`; the list is sent once the deletion has committed, beside the
+// person's `account`, and dropped when the deletion rolls back. Both paths: the app and the web.
+describe('the deletion’s after-commit list (T066)', () => {
+  const OTHER = '0199d0a0-0000-7000-8000-0000000d0a01';
+  const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000d0ae1';
+  const told = { to: [OTHER], event: { type: 'enrollment', enrollmentId: ENROLLMENT } };
+
+  /** A consequence as booking's subscriber adds its event: through the transaction it is handed. */
+  function tellingConsequence() {
+    spec.consequences.subscribe(async (tx) => {
+      spec.events.push(publisherOn(tx) === undefined ? 'unbound' : 'added');
+      publisherOn(tx)?.afterCommit([OTHER], { type: 'enrollment', enrollmentId: ENROLLMENT });
+    });
+  }
+
+  it('account.delete: a consequence’s event, added on the deletion’s transaction, is sent once after the commit', async () => {
+    tellingConsequence();
+    const caller = await emailAccount('teacher');
+    await deleteWith(caller.userId, byPassword());
+    await spec.settle();
+
+    expect(spec.events).toContain('added');
+    expect(spec.published).toEqual([{ to: [caller.userId], event: { type: 'account' } }, told]);
+    expect(spec.events.indexOf('added')).toBeLessThan(spec.events.indexOf('committed'));
+    expect(spec.events.lastIndexOf('live-account')).toBeGreaterThan(
+      spec.events.indexOf('committed'),
+    );
+  });
+
+  it('account.delete: nothing is sent when the deletion rolls back after the event was added', async () => {
+    tellingConsequence();
+    spec.consequences.subscribe(async () => {
+      throw new Error('a module refused the deletion');
+    });
+    const caller = await emailAccount('teacher');
+    await expect(deleteWith(caller.userId, byPassword())).rejects.toThrow(
+      'a module refused the deletion',
+    );
+    await spec.settle();
+
+    expect(spec.events).toContain('added');
+    expect(spec.published).toEqual([]);
+  });
+
+  it('the web’s confirm step sends the consequence’s event after its commit too', async () => {
+    tellingConsequence();
+    const caller = await emailAccount();
+    await spec.deletion.requestWebCode(caller.email);
+    await vi.waitFor(() =>
+      expect(codeMailedTo(spec.identity.mails(), caller.email)).toMatch(/^\d{6}$/),
+    );
+    const code = codeMailedTo(spec.identity.mails(), caller.email);
+
+    await expect(spec.deletion.confirmWebDeletion(caller.email, code)).resolves.toBe(true);
+    await spec.settle();
+
+    expect(spec.events).toContain('added');
+    expect(spec.published).toEqual([{ to: [caller.userId], event: { type: 'account' } }, told]);
+  });
+
+  it('the list is unbound once the deletion’s transaction has ended', async () => {
+    let held: unknown;
+    spec.consequences.subscribe(async (tx) => {
+      held = tx;
+    });
+    const caller = await emailAccount();
+    await deleteWith(caller.userId, byPassword());
+    expect(held).toBeDefined();
+    expect(publisherOn(held)).toBeUndefined();
   });
 });

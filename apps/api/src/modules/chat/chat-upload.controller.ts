@@ -25,6 +25,12 @@
 // writes one info line, `{ userId, enrollmentId, cause }` (the note under T038, §4), through the
 // route's refusal hook: never the file's name or any of its content, and an enrollment id that is
 // not one is left out rather than echoed.
+//
+// T066 of specs/004-sessions (FR-427; research R-324, items 4 to 6; the note under T066, Q3 (a)):
+// inside step 5's transaction, one `chat` event for each of the enrollment's two parties as the
+// locks read them, `mine` computed for each, added to the upload's own after-commit list
+// (`AcceptedUpload.live`), which the route sends once this handler resolves and drops when it
+// throws. No log line names the document (R-SEC-2).
 import { randomUUID } from 'node:crypto';
 
 import { chatUploadFields, type ChatUploadOutput, chatUploadOutput } from '@ijazah/contracts';
@@ -52,6 +58,7 @@ import {
   type ChatStore,
   chatStore,
   createChatAccess,
+  tellParties,
 } from './chat.service.js';
 
 /** Where the chat's documents are posted (contracts/app-surface.md, `POST /uploads/chat`). */
@@ -117,7 +124,7 @@ export function createChatUploadRoute({
     kindOf: () => 'chat',
     refuses: ['suspended', 'banned'],
     refused: logRefusal,
-    handle: async ({ uploader, type, bytes, fields }): Promise<ChatUploadOutput> => {
+    handle: async ({ uploader, type, bytes, fields, live }): Promise<ChatUploadOutput> => {
       const { enrollmentId, filename } = fieldsOf(fields);
       refuseImageFilename(filename);
       if (!isChatMime(type))
@@ -129,9 +136,9 @@ export function createChatUploadRoute({
       let row: ChatMessageRow;
       try {
         row = await transactions.run(async (tx) => {
-          await lockedParticipantOf(tx, ids, log);
+          const terms = await lockedParticipantOf(tx, ids, log);
           const sentAt = await clock(tx);
-          return store.insertAttachment(tx, {
+          const inserted = await store.insertAttachment(tx, {
             enrollmentId,
             senderUserId: uploader.userId,
             attachmentKey: key,
@@ -139,6 +146,8 @@ export function createChatUploadRoute({
             attachmentMime: type,
             sentAt,
           });
+          tellParties(live, terms, inserted);
+          return inserted;
         });
       } catch (error: unknown) {
         await storage.remove(key).catch(() => {

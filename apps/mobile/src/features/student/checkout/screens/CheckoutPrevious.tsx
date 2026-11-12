@@ -26,6 +26,7 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { formatPounds, useFormatters } from '../../../../lib/formatters';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -82,6 +83,7 @@ export function CheckoutPrevious() {
         {leaving ? null : (
           <NotLoaded
             failed={current.isError}
+            error={current.error}
             onRetry={retry}
             loading={<Skeleton shape="block" />}
           />
@@ -120,18 +122,20 @@ function PreviousOrder({
   const format = useFormatters();
   const seconds = useSecondsLeft(payable.expiresAt);
   const resume = useContinue();
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
   const { summary } = payable.hold;
   if (seconds === 0) return <CheckoutExpired summary={summary} />;
 
   const onContinue = () => {
-    setFailed(false);
+    setFailure(null);
     resume.mutate(payable.enrollmentId, {
       onSuccess: (handover) =>
-        openHostedCheckout(handover.checkoutUrl, payable.enrollmentId).catch(() => setFailed(true)),
+        openHostedCheckout(handover.checkoutUrl, payable.enrollmentId).catch((caught: unknown) =>
+          setFailure(genericErrorKey(caught, 'common.state.actionError')),
+        ),
       onError: (error) => {
         if (errorCodeOf(error) === 'ORDER_NOT_PAYABLE') onRefresh();
-        else setFailed(true);
+        else setFailure(genericErrorKey(error, 'common.state.actionError'));
       },
     });
   };
@@ -163,9 +167,9 @@ function PreviousOrder({
           {t('student.checkoutPrevious.title')}
         </Text>
       </View>
-      {failed ? (
+      {failure !== null ? (
         <Banner icon={{ name: 'triangle-alert' }} tone="danger">
-          {t('common.state.actionError')}
+          {t(failure.key, failure.values)}
         </Banner>
       ) : null}
       <OrderSummary
