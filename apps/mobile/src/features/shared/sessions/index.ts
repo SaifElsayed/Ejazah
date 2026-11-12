@@ -7,3 +7,16 @@ export {
   useAnswerCancellation,
   useCancellationShownExpired,
 } from './cancellation';
+// T041: the request, its control and its words, and the panel each role's session screen places
+// in its slot.
+export {
+  cancellationRefusal,
+  cancellationRequestShown,
+  type RequestableSession,
+  type RequestCancellation,
+  useAnswerRequest,
+  useCancellationRequestShown,
+  useRequestCancellation,
+} from './cancellation-request';
+export { CancellationPanel } from './components/CancellationPanel';
+export { participantReasonOf, reasonTooLong } from './reason';

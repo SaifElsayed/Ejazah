@@ -542,6 +542,35 @@
     }
   },
   "session": {
+    "cancellation": {
+      "accept": "Accept cancellation",
+      "accepted": "The cancellation request was accepted; the session is cancelled by agreement.",
+      "decline": "Decline",
+      "declined": "The cancellation request was declined; the session stands.",
+      "expired": "The cancellation request expired unanswered when the session started; the session stands.",
+      "expiresAt": "The request expires when the session starts",
+      "form": {
+        "back": "Not now",
+        "hint": "The other party sees your reason and accepts or declines. If they do not answer before the session starts, the request expires and the session stands.",
+        "reason": "Reason for cancelling",
+        "send": "Send request",
+        "tooLong": "The reason is too long."
+      },
+      "ifAnswer": "If you accept, the session is cancelled by agreement; if you decline, it stands.",
+      "pending": {
+        "mine": "You asked to cancel this session; the request is waiting for the other party's answer.",
+        "theirs": "The other party asked to cancel this session."
+      },
+      "reason": "Reason: {reason}",
+      "refused": {
+        "expired": "The session has started, so it can no longer be cancelled.",
+        "pending": "This session already has a cancellation request waiting for an answer; another cannot be sent until it is answered."
+      },
+      "request": "Request to cancel the session",
+      "row": {
+        "pending": "Cancellation request awaiting an answer"
+      }
+    },
     "ended": {
       "attendance": "Your attendance",
       "backToEnrollment": "Back to the enrollment",

@@ -69,4 +69,13 @@ describe('sessionRows', () => {
   it('draws nothing for an enrollment without sessions', () => {
     expect(sessionRows([], undefined)).toEqual([]);
   });
+
+  // 004:T041 (FR-495; the note under T041, Q3 (a)): a range never hides a pending request.
+  it('keeps a session with a pending cancellation request on a row of its own, breaking a range', () => {
+    const sessions = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+      ...session(n),
+      pendingCancellation: n === 5,
+    }));
+    expect(shape(sessionRows(sessions, 1))).toEqual(['1*', '2-4', '5', '6-8']);
+  });
 });
