@@ -39,16 +39,22 @@ export interface OrderPageQuery {
   /** The page starts after this order, newest first. */
   readonly after?: string | undefined;
   readonly limit: number;
+  /** One enrollment's orders alone (B42, T047; the note under T047, Q6 (a)). */
+  readonly enrollmentId?: string | undefined;
 }
 
-/** Up to `limit` orders, newest first, after `after`, of `status` when one is given. */
+/**
+ * Up to `limit` orders, newest first, after `after`, of `status` and of `enrollmentId` when given;
+ * an enrollment's orders over `payments_enrollment_id_idx`, an enrollment holding a few at most.
+ */
 export function orderPage(
   tx: Pick<Transaction, 'payment'>,
-  { status, after, limit }: OrderPageQuery,
+  { status, after, limit, enrollmentId }: OrderPageQuery,
 ): Promise<MonitorOrderRow[]> {
   return tx.payment.findMany({
     where: {
       ...(status === undefined ? {} : { status }),
+      ...(enrollmentId === undefined ? {} : { enrollmentId }),
       ...(after === undefined ? {} : { id: { lt: after } }),
     },
     orderBy: { id: 'desc' },

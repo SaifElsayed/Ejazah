@@ -1548,7 +1548,10 @@
           "orderFailed": "سُجّل فشل الطلب على الاشتراك",
           "paid": "أبلغت البوابة بنجاح الدفع",
           "refunded": "أبلغت البوابة بالاسترداد",
-          "transaction": "رقم المعاملة {id}"
+          "transaction": "رقم المعاملة {id}",
+          "enrollmentCompleted": "اكتمل الاشتراك",
+          "enrollmentTerminatedNoShow": "انتهى الاشتراك لغياب المعلم",
+          "enrollmentRestored": "استُعيد الاشتراك"
         },
         "eventsTitle": "ما حدث للطلب",
         "footer": "لا توجد إجراءات مالية في لوحة الإدارة. إن قررت الإدارة تعويض الطالب يُنفَّذ ذلك خارج المنصة، وتظهر حالة الطلب «مُسترد» حين تُبلغ بها البوابة.",
@@ -1560,7 +1563,13 @@
         "paidOrdersTitle": "طلبات الاشتراك المدفوعة",
         "referencesTitle": "المراجع",
         "subtitle": "{student} · {subject} · {sessions} مع {teacher}",
-        "transactionNo": "رقم المعاملة"
+        "transactionNo": "رقم المعاملة",
+        "holdsTitle": "حجوزات الموعد",
+        "holdsEmpty": "لا حجوزات لهذا الاشتراك.",
+        "holdPlaced": "حُجز {placed} · تنتهي مهلته {expires}",
+        "holdReleased": "حُرّر {released} · {reason}",
+        "holdNotReleased": "لم يُحرَّر",
+        "holdReasonNotRecorded": "السبب لم يُسجَّل"
       },
       "empty": {
         "text": "جرّب مرجعًا أو اسمًا آخر، أو أزل فلترًا.",
@@ -1588,6 +1597,16 @@
         "paymentFailed": "فشل الدفع",
         "slotUnavailable": "تعذّر حجز الموعد بعد الدفع",
         "teacherSuspended": "إيقاف المعلم"
+      },
+      "enrollmentFilter": "طلبات اشتراك واحد",
+      "holdReasons": {
+        "converted": "تحوّل إلى الاشتراك",
+        "expired": "انتهت مهلته",
+        "checkoutAbandoned": "بدأ الطالب دفعًا جديدًا",
+        "slotUnavailable": "تعذّر حجز الموعد",
+        "admin": "قرار الإدارة",
+        "teacherSuspended": "إيقاف المعلم",
+        "accountDeleted": "حُذف الحساب"
       }
     },
     "reports": {

@@ -3,7 +3,8 @@
 // order's status, a paid one included, and never 0 (the owner's decision of 2026-11-04: a gateway
 // may report neither fee nor net on its paid event). The history is the order's creation, its signed
 // events and the enrollment's outcomes that concern it, oldest first, each in plain language with
-// its day and time in the panel's zone.
+// its day and time in the panel's zone. B42, T047: Phase 3's three outcomes of an enrollment, and the
+// release reasons of its holds (R-323 GAP-8).
 import type { Piasters } from '@ijazah/money';
 
 import type { TimelineProps } from '../../design/components';
@@ -40,6 +41,21 @@ export const CANCELLATION_REASONS: Readonly<Record<CancellationReason, MessageKe
   account_deleted: 'admin.payments.cancellationReasons.accountDeleted',
 };
 
+type HoldReleaseReason = NonNullable<
+  NonNullable<PaymentDetail['enrollment']>['holds'][number]['releaseReason']
+>;
+
+/** Why a hold was released (B42, T047; R-323 GAP-8). */
+export const HOLD_RELEASE_REASONS: Readonly<Record<HoldReleaseReason, MessageKey>> = {
+  converted: 'admin.payments.holdReasons.converted',
+  expired: 'admin.payments.holdReasons.expired',
+  checkout_abandoned: 'admin.payments.holdReasons.checkoutAbandoned',
+  slot_unavailable: 'admin.payments.holdReasons.slotUnavailable',
+  admin: 'admin.payments.holdReasons.admin',
+  teacher_suspended: 'admin.payments.holdReasons.teacherSuspended',
+  account_deleted: 'admin.payments.holdReasons.accountDeleted',
+};
+
 const EVENTS: Readonly<Record<PaymentDetail['events'][number]['eventType'], MessageKey>> = {
   paid: 'admin.payments.detail.events.paid',
   failed: 'admin.payments.detail.events.failed',
@@ -66,6 +82,12 @@ function outcomeTitle(outcome: PaymentDetail['outcomes'][number], t: Translate):
             ? t('admin.payments.dash')
             : t(CANCELLATION_REASONS[outcome.cancellationReason]),
       });
+    case 'completed':
+      return t('admin.payments.detail.events.enrollmentCompleted');
+    case 'terminated_no_show':
+      return t('admin.payments.detail.events.enrollmentTerminatedNoShow');
+    case 'restored':
+      return t('admin.payments.detail.events.enrollmentRestored');
   }
 }
 

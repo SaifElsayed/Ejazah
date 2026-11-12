@@ -82,6 +82,27 @@ const detail = {
     cancellationReason: 'slot_unavailable',
     completed: 0,
     total: 8,
+    // B42, T047 (R-323 GAP-8): released before its reason was recorded, converted, still held.
+    holds: [
+      {
+        holdId: '0193a6f0-0000-7000-8000-0000000000d1',
+        placedAt: '2026-11-01T09:00:00.000Z',
+        expiresAt: '2026-11-01T09:45:00.000Z',
+        releasedAt: '2026-11-01T09:46:00.000Z',
+      },
+      {
+        holdId: '0193a6f0-0000-7000-8000-0000000000d2',
+        placedAt: '2026-11-02T09:58:00.000Z',
+        expiresAt: '2026-11-02T10:43:00.000Z',
+        releasedAt: '2026-11-02T10:05:00.000Z',
+        releaseReason: 'slot_unavailable',
+      },
+      {
+        holdId: '0193a6f0-0000-7000-8000-0000000000d3',
+        placedAt: '2026-11-09T09:00:00.000Z',
+        expiresAt: '2026-11-09T09:45:00.000Z',
+      },
+    ],
   },
   events: [{ eventType: 'paid', receivedAt: '2026-11-02T10:04:00.000Z' }],
   outcomes: [
@@ -313,6 +334,123 @@ describe('an order’s detail (FR-400, FR-401)', () => {
   it('opens an order at once from `?payment=`, the audit log’s link', async () => {
     const { api } = await opened(`/payments?payment=${P3}`);
     expect(api.payments.get.query).toHaveBeenCalledWith({ paymentId: P3 });
+  });
+
+  // B42, T047 (R-323 GAP-8): the enrollment summary lists its holds, oldest first as the server
+  // answered them, each with its release and its reason; a release with no reason reads «not
+  // recorded», and a hold not yet released says so.
+  it('lists the enrollment’s holds with their release reasons, a missing one read «not recorded», in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/payments?payment=${P3}`),
+      async (t, locale) => {
+        const aside = within(
+          await screen.findByRole('complementary', { name: t('admin.payments.detail.a11y') }),
+        );
+        const holds = within(
+          await aside.findByRole('region', { name: t('admin.payments.detail.holdsTitle') }),
+        );
+        const zone = panelTimeZone();
+        const at = (value: string) =>
+          t('admin.common.dateTime', {
+            date: dayMonth(value, locale, zone),
+            time: timeOfDay(value, locale, zone),
+          });
+        const rows = holds.getAllByRole('listitem').map((item) => item.textContent);
+        expect(rows).toEqual([
+          t('admin.payments.detail.holdPlaced', {
+            placed: at('2026-11-01T09:00:00.000Z'),
+            expires: at('2026-11-01T09:45:00.000Z'),
+          }) +
+            t('admin.payments.detail.holdReleased', {
+              released: at('2026-11-01T09:46:00.000Z'),
+              reason: t('admin.payments.detail.holdReasonNotRecorded'),
+            }),
+          t('admin.payments.detail.holdPlaced', {
+            placed: at('2026-11-02T09:58:00.000Z'),
+            expires: at('2026-11-02T10:43:00.000Z'),
+          }) +
+            t('admin.payments.detail.holdReleased', {
+              released: at('2026-11-02T10:05:00.000Z'),
+              reason: t('admin.payments.holdReasons.slotUnavailable'),
+            }),
+          t('admin.payments.detail.holdPlaced', {
+            placed: at('2026-11-09T09:00:00.000Z'),
+            expires: at('2026-11-09T09:45:00.000Z'),
+          }) + t('admin.payments.detail.holdNotReleased'),
+        ]);
+      },
+    );
+  });
+
+  it('says an enrollment with no hold has none', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockResolvedValue({
+      ...detail,
+      enrollment: { ...detail.enrollment, holds: [] },
+    });
+    open(api, `/payments?payment=${P3}`);
+    expect(await screen.findByText(ar('admin.payments.detail.holdsEmpty'))).toBeTruthy();
+  });
+
+  // B42, T047 (the follow-up under T047): Phase 3's outcomes on the order's history, so an
+  // enrollment cancelled and then restored never reads «cancelled» alone.
+  it('tells Phase 3’s outcomes: a restore, an end for the teacher’s absence and a completion', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockResolvedValue({
+      ...detail,
+      outcomes: [
+        { kind: 'cancelled', cancellationReason: 'admin', occurredAt: '2026-11-05T10:00:00.000Z' },
+        { kind: 'restored', occurredAt: '2026-11-06T10:00:00.000Z' },
+        { kind: 'terminated_no_show', occurredAt: '2026-11-07T10:00:00.000Z' },
+        { kind: 'completed', occurredAt: '2026-11-08T10:00:00.000Z' },
+      ],
+    });
+    open(api, `/payments?payment=${P3}`);
+    const history = within(
+      await screen.findByRole('region', { name: ar('admin.payments.detail.a11yEvents') }),
+    );
+    expect(
+      history.getAllByRole('listitem').map((item) => item.querySelector('strong')?.textContent),
+    ).toEqual([
+      ar('admin.payments.detail.events.created'),
+      ar('admin.payments.detail.events.paid'),
+      ar('admin.payments.detail.events.enrollmentCancelled', {
+        reason: ar('admin.payments.cancellationReasons.admin'),
+      }),
+      ar('admin.payments.detail.events.enrollmentRestored'),
+      ar('admin.payments.detail.events.enrollmentTerminatedNoShow'),
+      ar('admin.payments.detail.events.enrollmentCompleted'),
+    ]);
+  });
+});
+
+// B42, T047 (the note under T047, Q6 (a)): `/payments?enrollment=`, the link from `/sessions` and
+// `/cases`, lists that enrollment's orders; the filter shows as a removable chip.
+describe('one enrollment’s orders (`?enrollment=`)', () => {
+  it('reads the list for the enrollment named, shows the filter as a chip, and removing it reads every order', async () => {
+    const { api } = open(fakeApi(), `/payments?enrollment=${ENROLLMENT}`);
+    await waitFor(() =>
+      expect(api.payments.list.query).toHaveBeenLastCalledWith({ enrollmentId: ENROLLMENT }),
+    );
+    expect(api.payments.list.query).not.toHaveBeenCalledWith({});
+    const chips = within(
+      await screen.findByRole('group', { name: ar('admin.common.a11y.activeFilters') }),
+    );
+    expect(chips.getByText(ar('admin.payments.enrollmentFilter'))).toBeTruthy();
+    fireEvent.click(chips.getByText(ar('admin.common.action.clearAll')));
+    await waitFor(() => expect(api.payments.list.query).toHaveBeenLastCalledWith({}));
+  });
+
+  it('keeps the enrollment beside a status filter', async () => {
+    const { api } = open(fakeApi(), `/payments?enrollment=${ENROLLMENT}`);
+    await rowOf(reported.gatewayOrderId);
+    fireEvent.click(screen.getByRole('tab', { name: ar('admin.status.payment.paid') }));
+    await waitFor(() =>
+      expect(api.payments.list.query).toHaveBeenLastCalledWith({
+        status: 'paid',
+        enrollmentId: ENROLLMENT,
+      }),
+    );
   });
 });
 

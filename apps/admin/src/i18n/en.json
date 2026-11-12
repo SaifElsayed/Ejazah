@@ -1548,7 +1548,10 @@
           "orderFailed": "The failed order was recorded on the enrollment",
           "paid": "Gateway reported the payment succeeded",
           "refunded": "The gateway reported a refund",
-          "transaction": "Transaction number {id}"
+          "transaction": "Transaction number {id}",
+          "enrollmentCompleted": "The enrollment was completed",
+          "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
+          "enrollmentRestored": "The enrollment was restored"
         },
         "eventsTitle": "What happened to the order",
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
@@ -1560,7 +1563,13 @@
         "paidOrdersTitle": "Paid orders of this enrollment",
         "referencesTitle": "References",
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
-        "transactionNo": "Transaction number"
+        "transactionNo": "Transaction number",
+        "holdsTitle": "Slot holds",
+        "holdsEmpty": "This enrollment has no hold.",
+        "holdPlaced": "Held {placed} · expires {expires}",
+        "holdReleased": "Released {released} · {reason}",
+        "holdNotReleased": "Not released",
+        "holdReasonNotRecorded": "reason not recorded"
       },
       "empty": {
         "text": "Try another reference or name, or remove a filter.",
@@ -1588,6 +1597,16 @@
         "paymentFailed": "Payment failed",
         "slotUnavailable": "Slot unavailable after payment",
         "teacherSuspended": "Teacher suspended"
+      },
+      "enrollmentFilter": "One enrollment's orders",
+      "holdReasons": {
+        "converted": "Became the enrollment",
+        "expired": "Expired",
+        "checkoutAbandoned": "The student started a new payment",
+        "slotUnavailable": "The slot could not be booked",
+        "admin": "Administration's decision",
+        "teacherSuspended": "Teacher suspended",
+        "accountDeleted": "Account deleted"
       }
     },
     "reports": {
