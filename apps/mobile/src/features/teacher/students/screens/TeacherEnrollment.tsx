@@ -10,7 +10,7 @@
 // cancellation request says so on its own row (004:T041, FR-495). It decides only on
 // what it read since it opened (`read-since-mount.ts`). A link with no enrollment id is never read:
 // it draws the load error, as the student's detail does, and its retry sends nothing (T091).
-// Phase 3's parts are not drawn: the report, the no-show tile and banner, the chat, the
+// Phase 3's parts are not drawn: the report, the no-show tile and banner, the
 // cancellation and every session's sub-line. 004:T044 (FR-495): a session owing a remedy says where
 // it stands under its row (`TeacherRemedyStatusLine`), the row its own (`session-rows.ts`).
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
@@ -37,6 +37,7 @@ import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
+import { ChatEntry } from '../../chat';
 import { readSinceMount } from '../../read-since-mount';
 import { TeacherRemedyStatusLine } from '../../sessions';
 import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
@@ -116,6 +117,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
         />
         <Schedule enrollment={enrollment} />
       </Card>
+      <ChatEntry enrollmentId={enrollment.enrollmentId} status={enrollment.status} />
       {rows.length === 0 ? null : (
         <Section title={t('teacher.enrollment.sessions.title')}>
           <List>

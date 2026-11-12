@@ -231,7 +231,18 @@
     "notSent": "Not sent",
     "pdf": "PDF",
     "placeholder": "Write a message",
-    "subtitle": "{subject} · {sessions, plural, one {# session} other {# sessions}}"
+    "subtitle": "{subject} · {sessions, plural, one {# session} other {# sessions}}",
+    "thread": {
+      "attach": "Attach a PDF or a text file",
+      "closed": "This chat is read-only: nothing can be sent in it.",
+      "older": "Show older messages",
+      "openFile": "Open the file",
+      "purged": "This message was deleted when its retention ended.",
+      "readOnly": "The enrollment has ended: this chat is read-only until its messages are deleted.",
+      "refused": "This file cannot be sent: only PDF and text files are accepted, never images.",
+      "textFile": "Text file",
+      "title": "Chat"
+    }
   },
   "common": {
     "a11y": {

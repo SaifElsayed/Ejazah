@@ -2,7 +2,7 @@
 // only where `allows` says (lib/session.ts). Each screen draws its own header. The tabs draw the
 // device's top inset in their own layout; the account's pushed screens (T084) and the teacher's
 // profile (T030) take the device's insets here, and so do an enrollment's detail and the ended
-// enrollments (T050).
+// enrollments (T050), and an enrollment's chat (004:T045).
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +11,7 @@ const FRAMED = [
   'account/delete',
   'discovery/[teacherId]',
   'enrollments/[id]',
+  'enrollments/[id]/chat',
   'enrollments/ended',
 ] as const;
 

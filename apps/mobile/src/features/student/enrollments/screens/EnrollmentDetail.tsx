@@ -35,6 +35,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { ChatEntry } from '../../chat';
 import { RemedyStatusLine } from '../../remedies';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
@@ -119,6 +120,7 @@ export function EnrollmentDetail() {
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
       <ComplaintPanel enrollment={shown} />
+      <ChatEntry enrollmentId={shown.enrollmentId} status={shown.status} />
       {shown.sessions.length === 0 ? null : (
         <Section title={t('student.enrollmentDetail.sessions')}>
           <List>
