@@ -542,6 +542,58 @@
     }
   },
   "session": {
+    "cancellation": {
+      "accept": "Accept cancellation",
+      "accepted": "The cancellation request was accepted; the session is cancelled by agreement.",
+      "decline": "Decline",
+      "declined": "The cancellation request was declined; the session stands.",
+      "expired": "The cancellation request expired unanswered when the session started; the session stands.",
+      "expiresAt": "The request expires when the session starts",
+      "form": {
+        "back": "Not now",
+        "hint": "The other party sees your reason and accepts or declines. If they do not answer before the session starts, the request expires and the session stands.",
+        "reason": "Reason for cancelling",
+        "send": "Send request",
+        "tooLong": "The reason is too long."
+      },
+      "ifAnswer": "If you accept, the session is cancelled by agreement; if you decline, it stands.",
+      "pending": {
+        "mine": "You asked to cancel this session; the request is waiting for the other party's answer.",
+        "theirs": "The other party asked to cancel this session."
+      },
+      "reason": "Reason: {reason}",
+      "refused": {
+        "expired": "The session has started, so it can no longer be cancelled.",
+        "pending": "This session already has a cancellation request waiting for an answer; another cannot be sent until it is answered."
+      },
+      "request": "Request to cancel the session",
+      "row": {
+        "pending": "Cancellation request awaiting an answer"
+      }
+    },
+    "dispute": {
+      "closesAt": "This session can be disputed until",
+      "form": {
+        "back": "Not now",
+        "hint": "Administration reviews the session and decides its outcome; the outcome stays frozen until it decides.",
+        "reason": "Reason for the dispute",
+        "send": "Send dispute",
+        "tooLong": "The reason is too long."
+      },
+      "raise": "Dispute this session",
+      "refused": {
+        "notDisputable": "A cancelled session cannot be disputed.",
+        "open": "This session already has an open dispute under Administration's review.",
+        "underReview": "This session is already under Administration's review, which decides its outcome.",
+        "windowClosed": "The time to dispute this session has ended."
+      },
+      "state": {
+        "dismissed": "Administration dismissed the dispute on this session.",
+        "openMine": "You disputed this session; Administration is reviewing it.",
+        "openTheirs": "The other party disputed this session; Administration is reviewing it.",
+        "resolved": "Administration has resolved the dispute on this session."
+      }
+    },
     "ended": {
       "attendance": "Your attendance",
       "backToEnrollment": "Back to the enrollment",
@@ -851,6 +903,22 @@
       "enrollmentStatus": "Enrollment status",
       "lede": "The booking was cancelled, and we will contact you about the amount paid.",
       "title": "Your payment arrived, but the slot is no longer available"
+    },
+    "complaint": {
+      "form": {
+        "back": "Not now",
+        "hint": "Your complaint goes to Administration, which reviews it and decides.",
+        "reason": "Reason for the complaint",
+        "send": "Send complaint",
+        "tooLong": "The reason is too long."
+      },
+      "open": "Your complaint is under review",
+      "raise": "Complain of the teacher's absence",
+      "refused": {
+        "open": "You already have an open complaint on this enrollment, under review.",
+        "rateLimited": "You have sent too many complaints in a short time. Wait a little and try again.",
+        "rateLimitedIn": "You have sent too many complaints in a short time. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
     },
     "credentials": {
       "a11y": {

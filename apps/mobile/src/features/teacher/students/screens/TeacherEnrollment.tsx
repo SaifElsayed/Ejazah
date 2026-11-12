@@ -6,7 +6,8 @@
 // from the first to the last once ended; and when the teacher's zone is now another, the next
 // session there (ADR 0009 D5). Then the sessions by number (`session-rows.ts`), keyed by their id,
 // each with its status after settlement (004:T020, FR-495): a disputed session reads «محل نزاع»,
-// the outcome frozen beside it never answered nor drawn (R-308). It decides only on
+// the outcome frozen beside it never answered nor drawn (R-308); a session with a pending
+// cancellation request says so on its own row (004:T041, FR-495). It decides only on
 // what it read since it opened (`read-since-mount.ts`). A link with no enrollment id is never read:
 // it draws the load error, as the student's detail does, and its retry sends nothing (T091).
 // Phase 3's parts are not drawn: the report, the no-show tile and banner, the chat, the
@@ -196,15 +197,27 @@ function SessionLine({ row }: { readonly row: SessionRow }) {
     );
   }
   const { session } = row;
+  const line = (
+    <Text variant="callout" weight={row.next ? 'bold' : 'medium'}>
+      {t('teacher.enrollment.sessions.row', {
+        n: session.sequenceNumber,
+        date: format.weekdayDate(session.startsAt, session.timezone),
+      })}
+    </Text>
+  );
   return (
     <ListRow
       label={
-        <Text variant="callout" weight={row.next ? 'bold' : 'medium'}>
-          {t('teacher.enrollment.sessions.row', {
-            n: session.sequenceNumber,
-            date: format.weekdayDate(session.startsAt, session.timezone),
-          })}
-        </Text>
+        session.pendingCancellation ? (
+          <View style={{ gap: tokens.space['1'] }}>
+            {line}
+            <Text variant="caption" tone="warning">
+              {t('session.cancellation.row.pending')}
+            </Text>
+          </View>
+        ) : (
+          line
+        )
       }
       trailing={<SessionStatusBadge status={session.status} />}
       onPress={() =>

@@ -7,3 +7,21 @@ export {
   useAnswerCancellation,
   useCancellationShownExpired,
 } from './cancellation';
+// T041: the request, its control and its words, and the panel each role's session screen places
+// in its slot.
+export {
+  cancellationRefusal,
+  cancellationRequestShown,
+  type RequestableSession,
+  type RequestCancellation,
+  useAnswerRequest,
+  useCancellationRequestShown,
+  useRequestCancellation,
+} from './cancellation-request';
+export { CancellationPanel } from './components/CancellationPanel';
+export { participantReasonOf, reasonTooLong } from './reason';
+// T042: the dispute's control, its raise and its words, and its panel; the reason form the
+// student's complaint shares.
+export { type ReasonFormWords, ReasonForm } from './components/ReasonForm';
+export { DisputePanel } from './components/DisputePanel';
+export { disputeRaiseShown, disputeRefusal, type RaiseDispute, useRaiseDispute } from './dispute';
