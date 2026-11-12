@@ -10,10 +10,13 @@ export {
 // T041: the request, its control and its words, and the panel each role's session screen places
 // in its slot.
 export {
+  cancellationAnswerShown,
   cancellationRefusal,
   cancellationRequestShown,
   type RequestableSession,
   type RequestCancellation,
+  type SettledRequestKey,
+  settledRequestKey,
   useAnswerRequest,
   useCancellationRequestShown,
   useRequestCancellation,

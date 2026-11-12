@@ -558,6 +558,7 @@
       "accepted": "The cancellation request was accepted; the session is cancelled by agreement.",
       "decline": "Decline",
       "declined": "The cancellation request was declined; the session stands.",
+      "declinedOnly": "The cancellation request was declined.",
       "expired": "The cancellation request expired unanswered when the session started; the session stands.",
       "expiresAt": "The request expires when the session starts",
       "form": {
@@ -568,6 +569,7 @@
         "tooLong": "The reason is too long."
       },
       "ifAnswer": "If you accept, the session is cancelled by agreement; if you decline, it stands.",
+      "over": "The cancellation request ended unanswered.",
       "pending": {
         "mine": "You asked to cancel this session; the request is waiting for the other party's answer.",
         "theirs": "The other party asked to cancel this session."

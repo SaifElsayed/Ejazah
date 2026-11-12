@@ -4,10 +4,11 @@
 // screen's slot. From `sessions.get`: a pending request with its reason and its expiry at the
 // start, in the session's zone and the viewer's (`ZoneLines`); the counterparty accepts or declines
 // it; a pending request is shown expired from its expiry by the phone's clock (T065's
-// `useCancellationShownExpired`); an answered one says its answer. The request control only while
-// `useCancellationRequestShown` says so, with a free-text reason (Q2, Q4). Refusals in the screen's
-// words or through `genericErrorKey` (`cancellationRefusal`). The hooks and the server decide; this
-// draws.
+// `useCancellationShownExpired`); an answered one says its answer, «the session stands» only while
+// it is scheduled (`settledRequestKey`); the answer offered as `cancellationAnswerShown` says. The
+// request control only while `useCancellationRequestShown` says so, with a free-text reason (Q2,
+// Q4). Refusals in the screen's words or through `genericErrorKey` (`cancellationRefusal`). The
+// hooks and the server decide; this draws.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -21,7 +22,9 @@ import { useSessionRead } from '../../room/api';
 import { ZoneLines } from '../../room/components/ZoneLines';
 import { type CancellationView, useCancellationShownExpired } from '../cancellation';
 import {
+  cancellationAnswerShown,
   cancellationRefusal,
+  settledRequestKey,
   useAnswerRequest,
   useCancellationRequestShown,
   useRequestCancellation,
@@ -67,13 +70,8 @@ function RequestState({
 }) {
   const t = useT();
   const expired = useCancellationShownExpired(cancellation);
-  if (expired) return <Text tone="muted">{t('session.cancellation.expired')}</Text>;
-  if (cancellation.status === 'accepted') {
-    return <Text tone="muted">{t('session.cancellation.accepted')}</Text>;
-  }
-  if (cancellation.status !== 'pending') {
-    return <Text tone="muted">{t('session.cancellation.declined')}</Text>;
-  }
+  const settled = settledRequestKey(session.status, cancellation.status, expired);
+  if (settled !== undefined) return <Text tone="muted">{t(settled)}</Text>;
   return (
     <View style={{ gap: tokens.space['2'] }}>
       <Text weight="medium">
@@ -92,9 +90,9 @@ function RequestState({
           viewerZone={viewerZone}
         />
       </View>
-      {cancellation.requestedByMe ? null : (
+      {cancellationAnswerShown(cancellation) ? (
         <Answer session={session} requestId={cancellation.requestId} />
-      )}
+      ) : null}
     </View>
   );
 }

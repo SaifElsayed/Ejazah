@@ -292,4 +292,18 @@ describe('CancellationPanel: a pending request (T041, FR-456, FR-458, FR-494)', 
       });
     }
   });
+
+  it('never says «the session stands» on a session an administrator cancelled (PR #136, Saif r1)', async () => {
+    const over = [
+      ['expired', 'session.cancellation.over', 'session.cancellation.expired'],
+      ['declined', 'session.cancellation.declinedOnly', 'session.cancellation.declined'],
+    ] as const;
+    for (const [status, key, stands] of over) {
+      answering(session({ status: 'cancelled_by_admin', cancellation: pending({ status }) }));
+      await inBothDirections(ui, (_rendered, direction) => {
+        expect(screen.getByText(said(direction, key))).toBeTruthy();
+        expect(screen.queryByText(said(direction, stands))).toBeNull();
+      });
+    }
+  });
 });

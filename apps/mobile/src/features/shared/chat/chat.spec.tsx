@@ -334,29 +334,37 @@ describe('a text sent (T045, FR-488, FR-491)', () => {
     );
   });
 
-  it('says CHAT_CLOSED in plain words and reads the enrollment’s screens again', async () => {
-    await inEach(
-      async (direction) => {
-        const enrollmentKey = ['student', 'enrollments', 'get', ENROLLMENT_ID];
-        const reads = jest.fn(async () => 'read');
-        const observer = new QueryObserver(queries, { queryKey: enrollmentKey, queryFn: reads });
-        const stop = observer.subscribe(() => undefined);
-        await renderIn(direction, ui());
-        await screen.findByText('رسالة 11');
-        await waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
-        await fireEvent.changeText(field(direction), 'هل نبدأ؟');
-        await send(direction);
-        expect(await screen.findByText(said(direction, 'chat.thread.closed'))).toBeTruthy();
-        await waitFor(() => expect(reads).toHaveBeenCalledTimes(2));
-        expect(field(direction).props.value).toBe('هل نبدأ؟');
-        stop();
-      },
-      () => {
-        chat.list.query.mockResolvedValue(page([message(11)]));
-        chat.send.mutate.mockRejectedValue(apiError('CHAT_CLOSED'));
-      },
-    );
-  });
+  // RATE_LIMITED reads nothing again (PR #136, Saif r1's Minor 2): only CHAT_CLOSED closes the chat.
+  it.each([
+    ['CHAT_CLOSED', 'chat.thread.closed', 2],
+    ['RATE_LIMITED', 'common.state.rateLimited', 1],
+  ] as const)(
+    'says %s in plain words; only CHAT_CLOSED reads the enrollment’s screens again',
+    async (code, key, readsAfter) => {
+      await inEach(
+        async (direction) => {
+          const enrollmentKey = ['student', 'enrollments', 'get', ENROLLMENT_ID];
+          const reads = jest.fn(async () => 'read');
+          const observer = new QueryObserver(queries, { queryKey: enrollmentKey, queryFn: reads });
+          const stop = observer.subscribe(() => undefined);
+          await renderIn(direction, ui());
+          await screen.findByText('رسالة 11');
+          await waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
+          await fireEvent.changeText(field(direction), 'هل نبدأ؟');
+          await send(direction);
+          expect(await screen.findByText(said(direction, key))).toBeTruthy();
+          await act(async () => undefined);
+          await waitFor(() => expect(reads).toHaveBeenCalledTimes(readsAfter));
+          expect(field(direction).props.value).toBe('هل نبدأ؟');
+          stop();
+        },
+        () => {
+          chat.list.query.mockResolvedValue(page([message(11)]));
+          chat.send.mutate.mockRejectedValue(apiError(code));
+        },
+      );
+    },
+  );
 });
 
 describe('a document attached and opened (T045, FR-489, FR-490)', () => {
@@ -550,6 +558,25 @@ describe('the live channel’s `chat` events (T045, FR-427)', () => {
         expect(bodies()).toEqual(['رسالة 12', 'رسالة 11']);
       },
       () => chat.list.query.mockResolvedValue(page([message(11)])),
+    );
+  });
+
+  it('reads the first page again for an event that comes while the page is being read (PR #136, Saif r1)', async () => {
+    await inEach(
+      async (direction) => {
+        await renderIn(direction, ui());
+        await screen.findByText('رسالة 11');
+        void queries.refetchQueries({ queryKey: ['chat', 'first'] });
+        await waitFor(() => expect(chat.list.query).toHaveBeenCalledTimes(2));
+        await event(ENROLLMENT_ID, message(13));
+        await waitFor(() => expect(chat.list.query).toHaveBeenCalledTimes(3));
+        expect(await screen.findByText('رسالة 13')).toBeTruthy();
+      },
+      () =>
+        chat.list.query
+          .mockResolvedValueOnce(page([message(11)]))
+          .mockReturnValueOnce(new Promise(() => undefined))
+          .mockResolvedValue(page([message(13), message(11)])),
     );
   });
 

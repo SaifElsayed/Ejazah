@@ -40,6 +40,44 @@ export function cancellationRequestShown(session: RequestableSession, now: Date)
   );
 }
 
+type Cancellation = NonNullable<SessionsGetOutput['cancellation']>;
+
+/**
+ * Whether the accept and decline are offered: to the counterparty, on a pending request (FR-456).
+ * Display only; the server decides who may answer.
+ */
+export function cancellationAnswerShown(
+  cancellation: Pick<Cancellation, 'status' | 'requestedByMe'>,
+): boolean {
+  return cancellation.status === 'pending' && !cancellation.requestedByMe;
+}
+
+export type SettledRequestKey =
+  | 'session.cancellation.accepted'
+  | 'session.cancellation.declined'
+  | 'session.cancellation.declinedOnly'
+  | 'session.cancellation.expired'
+  | 'session.cancellation.over';
+
+/**
+ * The words of a request no longer waiting for its answer (FR-458, FR-495); undefined while it
+ * waits. «The session stands» only while the session is `scheduled`: `sessions.get` answers a
+ * pending request `expired` once its session is not (an administrator's cancel, a suspension, a
+ * deletion; `cancellationViewOf`), and then the words say only that the request ended (PR #136,
+ * Saif r1's Minor 1).
+ */
+export function settledRequestKey(
+  sessionStatus: SessionsGetOutput['status'],
+  requestStatus: Cancellation['status'],
+  shownExpired: boolean,
+): SettledRequestKey | undefined {
+  const stands = sessionStatus === 'scheduled';
+  if (shownExpired) return stands ? 'session.cancellation.expired' : 'session.cancellation.over';
+  if (requestStatus === 'accepted') return 'session.cancellation.accepted';
+  if (requestStatus === 'pending') return undefined;
+  return stands ? 'session.cancellation.declined' : 'session.cancellation.declinedOnly';
+}
+
 /** The same, hidden by itself when the phone's clock reaches the start, the screen left open. */
 export function useCancellationRequestShown(session: RequestableSession): boolean {
   const { status, startsAt } = session;

@@ -14,8 +14,10 @@ import type { ReactNode } from 'react';
 
 import { apiError } from '../__tests__/api-double';
 import {
+  cancellationAnswerShown,
   cancellationRefusal,
   cancellationRequestShown,
+  settledRequestKey,
   useAnswerRequest,
   useCancellationRequestShown,
   useRequestCancellation,
@@ -117,6 +119,32 @@ describe('the request control (T041, Q2 (a))', () => {
     });
     expect(shown.result.current).toBe(false);
     await shown.unmount();
+  });
+});
+
+describe('the answer and the words of a request no longer waiting (PR #136, Saif r1)', () => {
+  it('offers the answer only to the counterparty, only while the request is pending', () => {
+    expect(cancellationAnswerShown(request('pending'))).toBe(true);
+    expect(cancellationAnswerShown({ ...request('pending'), requestedByMe: true })).toBe(false);
+    expect(cancellationAnswerShown(request('declined'))).toBe(false);
+  });
+
+  it('says «the session stands» only while the session is scheduled', () => {
+    expect(settledRequestKey('scheduled', 'pending', true)).toBe('session.cancellation.expired');
+    expect(settledRequestKey('scheduled', 'declined', false)).toBe('session.cancellation.declined');
+    expect(settledRequestKey('scheduled', 'pending', false)).toBeUndefined();
+    expect(settledRequestKey('cancelled_by_agreement', 'accepted', false)).toBe(
+      'session.cancellation.accepted',
+    );
+  });
+
+  it('says only that the request ended once the session is no longer scheduled', () => {
+    for (const status of ['cancelled_by_admin', 'done', 'disputed'] as const) {
+      expect(settledRequestKey(status, 'expired', true)).toBe('session.cancellation.over');
+      expect(settledRequestKey(status, 'declined', false)).toBe(
+        'session.cancellation.declinedOnly',
+      );
+    }
   });
 });
 
