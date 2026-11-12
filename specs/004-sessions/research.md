@@ -967,11 +967,11 @@ Locks, `sessions.cancel`'s order widened: both accounts (`users`, one call; the 
 `lockKey('teacher-slots', teacher)`, the enrollment's slot (`availability_slots`, as a hold and `slotInUse` lock it,
 FR-423), `enrollments`, `sessions`, `session_remedies`, `disputes`. Under them, read again:
 
-1. The closing: the enrollment `terminated_no_show` with an open `absence_termination` case, or `cancelled` with
+1. *(Widened 2026-11-12, SRS DEC-66, DEC-68 and DEC-69: also a ban's, a revocation's and an administrator's direct end's closing; never a gender correction's; T073, T082.)* The closing: the enrollment `terminated_no_show` with an open `absence_termination` case, or `cancelled` with
    `admin` and an open `student_fault_confirmed` case; else `RESTORE_REFUSED` `not_restorable` (a ban's
    `student_banned`, a deletion, a teacher's end, a completion, an enrollment not closed), or `case_closed` when the
    closing's case was resolved or dismissed.
-2. The window: the case's `created_at`, written in the closing's own transaction, plus `enrollment_restore_window_days`,
+2. *(Retired 2026-11-12, SRS DEC-69, for every closing step 1 admits: no restore is refused for its time, `window_closed` no longer produced; the setting holds the slot, T070, T073.)* The window: the case's `created_at`, written in the closing's own transaction, plus `enrollment_restore_window_days`,
    compared with the database's clock; else `window_closed`. No column stores the closing's instant (R-DB-4).
 3. The accounts: both `active`, the teacher's approval standing, as the join reads them (FR-432); else
    `party_restricted`.
