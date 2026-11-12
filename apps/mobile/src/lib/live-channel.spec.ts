@@ -23,6 +23,8 @@ import {
   RECONNECT_BACKOFF_CAP_MS,
   RECONNECT_BACKOFF_FIRST_MS,
   REREAD_EVERY_MS,
+  handChatEvent,
+  onChatEvent,
   Rereads,
   SERVER_END_DELAY_MAX_MS,
   SERVER_END_DELAY_MIN_MS,
@@ -46,6 +48,19 @@ const SESSION_ID = '0193a6f0-0000-7000-8000-0000000000c1';
 const ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e1';
 const OTHER_ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e2';
 
+/** T045: a message of the enrollment's chat, as `chat.list` answers it to this recipient. */
+const CHAT_EVENT = {
+  type: 'chat',
+  enrollmentId: ENROLLMENT_ID,
+  message: {
+    messageId: '0193a6f0-0000-7000-8000-0000000000f1',
+    mine: false,
+    body: 'السلام عليكم',
+    sentAt: '2026-11-12T10:00:00.000Z',
+    purged: false,
+  },
+} as const;
+
 /** A channel over ports a case reads: each open hands back its handlers. */
 function channelOver(random = () => 0.5) {
   const opened: LiveHandlers[] = [];
@@ -57,6 +72,7 @@ function channelOver(random = () => 0.5) {
     }),
     readAccount: jest.fn(async () => undefined),
     signal: jest.fn(),
+    chat: jest.fn(),
     reread: jest.fn(),
     random,
   } satisfies LivePorts;
@@ -231,20 +247,13 @@ describe('the channel’s reopenings (T065)', () => {
 
   // PR #135's review, round 1, Minor 1: a `chat` event carries a message for the open chat to merge
   // (T045, contracts/app-surface.md's `chat` row), never a re-read of the enrollment's screens.
-  it('re-reads nothing and reads no account.me on a `chat` event, until T045 merges it', () => {
+  it('hands a `chat` event to the open chat’s merge, and re-reads nothing and reads no account.me (T045)', () => {
     const { channel, ports, latest } = channelOver();
     channel.setActive(true);
-    latest().onData({
-      type: 'chat',
-      enrollmentId: ENROLLMENT_ID,
-      message: {
-        messageId: '0193a6f0-0000-7000-8000-0000000000f1',
-        mine: false,
-        body: 'السلام عليكم',
-        sentAt: '2026-11-12T10:00:00.000Z',
-        purged: false,
-      },
-    });
+    latest().onData(CHAT_EVENT);
+    // A message outside the contract is no event at all.
+    latest().onData({ ...CHAT_EVENT, message: { ...CHAT_EVENT.message, sentAt: 'soon' } });
+    expect(ports.chat.mock.calls).toEqual([[CHAT_EVENT]]);
     expect(ports.signal).not.toHaveBeenCalled();
     expect(ports.readAccount).not.toHaveBeenCalled();
     expect(ports.reread).not.toHaveBeenCalled();
@@ -374,6 +383,39 @@ describe('the re-reads after a signal (T065, R-325)', () => {
     ]);
     rereads.dispose();
   });
+
+  // T045 (FR-427; research R-324): events sent while the stream was down are not replayed, so a
+  // (re)start reads the open chat's first page again; its older pages, which no event changes, are
+  // not read again.
+  it('on a (re)start reads the open chat’s first page again, never its older pages (T045)', async () => {
+    const chatFirstKey = ['chat', 'first', { enrollmentId: ENROLLMENT_ID }];
+    const chatOlderKey = ['chat', 'older', { enrollmentId: ENROLLMENT_ID, cursor: SESSION_ID }];
+    const cache = observing([chatFirstKey, chatOlderKey]);
+    await advance(0);
+    const rereads = new Rereads(cache.queries);
+    rereads.readOpenLiveScreens();
+    await advance(0);
+    expect([chatFirstKey, chatOlderKey].map(cache.reads)).toEqual([2, 1]);
+    rereads.dispose();
+  });
+});
+
+// T045: the open chat's merge. Each open chat screen adds its merge while it is mounted; the
+// channel hands every `chat` event to the merges open, and a merge removed hears nothing more.
+describe('the open chats’ merges (T045)', () => {
+  it('hands a chat event to every open chat’s merge, and none to a merge removed', () => {
+    const first = jest.fn();
+    const second = jest.fn();
+    const removeFirst = onChatEvent(first);
+    const removeSecond = onChatEvent(second);
+    handChatEvent(CHAT_EVENT);
+    removeFirst();
+    handChatEvent(CHAT_EVENT);
+    removeSecond();
+    handChatEvent(CHAT_EVENT);
+    expect(first.mock.calls).toEqual([[CHAT_EVENT]]);
+    expect(second.mock.calls).toEqual([[CHAT_EVENT], [CHAT_EVENT]]);
+  });
 });
 
 describe('the channel at the root (T065): signed in and `active`', () => {
@@ -483,5 +525,20 @@ describe('the channel at the root (T065): signed in and `active`', () => {
     stop();
     queries.unmount();
     queries.clear();
+  });
+
+  it('hands a chat event of the stream to the open chat’s merge (T045)', async () => {
+    appState('active');
+    const api = clientWithChannel();
+    const queries = new QueryClient();
+    await signIn();
+    const merge = jest.fn();
+    const remove = onChatEvent(merge);
+    const hook = await renderHook(() => useLiveChannel(api.client as never, queries));
+    const handlers = api.subscribe.mock.calls[0]?.[1];
+    await act(async () => handlers?.onData(CHAT_EVENT));
+    expect(merge.mock.calls).toEqual([[CHAT_EVENT]]);
+    remove();
+    await hook.unmount();
   });
 });

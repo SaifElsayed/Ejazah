@@ -32,6 +32,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
+import { ChatEntry } from '../../chat';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
@@ -113,6 +114,7 @@ export function EnrollmentDetail() {
       {read.over && isAwaitingPayment(shown) && orders.isConfirming(shown.enrollmentId) ? (
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
+      <ChatEntry enrollmentId={shown.enrollmentId} status={shown.status} />
       {shown.sessions.length === 0 ? null : (
         <Section title={t('student.enrollmentDetail.sessions')}>
           <List>

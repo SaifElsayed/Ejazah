@@ -35,6 +35,7 @@ import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
+import { ChatEntry } from '../../chat';
 import { readSinceMount } from '../../read-since-mount';
 import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
@@ -113,6 +114,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
         />
         <Schedule enrollment={enrollment} />
       </Card>
+      <ChatEntry enrollmentId={enrollment.enrollmentId} status={enrollment.status} />
       {rows.length === 0 ? null : (
         <Section title={t('teacher.enrollment.sessions.title')}>
           <List>

@@ -347,14 +347,19 @@ describe('POST /uploads/chat: accepted (FR-489)', () => {
     ]);
   });
 
-  it('stores UTF-8 text from the teacher as text/plain under a .txt key', async () => {
+  // 004:T045's follow-up (PR #134's review, round 1, follow-up 3; B41's Q7 (a)): a remote store's
+  // signed link serves the object under the type it was stored with, so a text document is stored
+  // naming its character set, which the guard has already checked is UTF-8; the column keeps the
+  // bare type (rule 47) and the answer says `text/plain`.
+  it('stores UTF-8 text from the teacher as text/plain; charset=utf-8 under a .txt key, the column text/plain', async () => {
     const response = await upload({ bearer: 't-teacher', filename: 'ملاحظات.txt', bytes: TEXT });
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       attachment: { filename: 'ملاحظات.txt', mime: 'text/plain' },
     });
     expect(String(stored()[0]?.args[0])).toMatch(/^chat\/[0-9a-f-]{36}\.txt$/);
-    expect(stored()[0]?.args[2]).toBe('text/plain');
+    expect(stored()[0]?.args[2]).toBe('text/plain; charset=utf-8');
+    expect(inserted[0]?.attachmentMime).toBe('text/plain');
     expect(inserted[0]?.senderUserId).toBe(TEACHER);
   });
 });
