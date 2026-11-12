@@ -50,7 +50,7 @@ with the same email creates a new account.
 it: signing up again with the same email, or with the same Google or Apple
 account, is refused with `ACCOUNT_RESTRICTED` and no detail, and no token is
 issued. Without this, deleting and signing up again would lift a ban that is
-permanent and not lifted from the panel (FR-162). *(a student's or a teacher's ban can be lifted within the Ban restore window, DEC-66; an applicant's ban, FR-162, stays permanent)* The refusal comes only after
+permanent and not lifted from the panel (FR-162). *(a student's or a teacher's ban can be lifted within the Ban restore window, DEC-66; a never-approved applicant's ban, FR-162, stays permanent)* The refusal comes only after
 the person proved the address or the account (the right code, a provider
 token, an onboarding token), never at the code request, which answers every
 address alike, so nobody learns of another person's ban. Nothing says an

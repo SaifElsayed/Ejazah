@@ -532,7 +532,7 @@ batch it would take past six, wait for the owner's approval.
    (SRS FR-NOSHOW-4, FR-DISPUTE-5; spec FR-452, FR-453; R-322.)
 4. **A ruling's revision has no threshold.** It changes the session's outcome only; the mark, being read, follows it;
    nothing re-checks a count. (SRS FR-DISPUTE-7; spec FR-472; R-308.)
-5. **The restore.** An administrator may restore, within `enrollment_restore_window_days` (a new §3.14 row, default 7)
+5. **The restore.** An administrator may restore, within `enrollment_restore_window_days` (a new §3.14 row, default 7) *(amended 2026-11-12, DEC-66: default 14; a ban's or a revocation's closing restorable, spec FR-502)*
    of its closing, an enrollment an administrator's decision closed: `terminated_no_show` on a complaint, or
    `cancelled` (`admin`) on a confirmed fault (`student_fault_confirmed`). Not one closed by a ban, a deletion or a
    teacher's end, nor a completed one. Both accounts active; the closing's case still open (resolved with compensation,
