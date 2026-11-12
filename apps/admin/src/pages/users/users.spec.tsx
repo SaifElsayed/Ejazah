@@ -93,6 +93,24 @@ function studentRecord(accountStatus: AccountStatus = 'active') {
   } as const;
 }
 
+/** A deleted student's record: erasure nulled the name, the email and the date of birth (ADR 0015),
+ *  so the server's `isMinor` is false, and the account status is the one the row kept. */
+const deletedStudentRecord = {
+  userId: U3,
+  profile: {
+    displayName: null,
+    email: null,
+    joinedAt: '2026-08-01T09:00:00.000Z',
+    deleted: true,
+  },
+  role: 'student',
+  gender: 'female',
+  isMinor: false,
+  verificationStatus: null,
+  accountStatus: 'active',
+  cancellationRequests: { total: 0, recent: 0 },
+} as const;
+
 const teacherRecord = {
   userId: U2,
   profile: {
@@ -138,6 +156,7 @@ function fakeApi(studentStatus: AccountStatus = 'active') {
   });
   api.users.get.query.mockImplementation(async (input) => {
     const { targetUserId } = input as { targetUserId: string };
+    if (targetUserId === U3) return deletedStudentRecord;
     return targetUserId === U2 ? teacherRecord : studentRecord(studentStatus);
   });
   for (const kind of ['suspend', 'ban', 'reinstate'] as const) {
@@ -318,6 +337,21 @@ describe('AdminUsers: a user’s record (SRS FR-ADMIN-4)', () => {
     expect(await panel.findByText(ar('admin.users.record.noRepeatedAbsences'))).toBeTruthy();
   });
 
+  it('a deleted account’s minor row reads «—», a live one’s its yes or no (PR #137 r1, Minor 2)', async () => {
+    const minorValue = (panel: ReturnType<typeof within>) =>
+      panel.getByText(ar('admin.users.detail.minor')).closest('.kv__item')?.querySelector('dd')
+        ?.textContent;
+    const live = open(fakeApi(), `/users?user=${U1}`);
+    const livePanel = await record(ar);
+    expect(await livePanel.findByText('abdullah@example.test')).toBeTruthy();
+    expect(minorValue(livePanel)).toBe(ar('admin.common.yes'));
+    live.view.unmount();
+    open(fakeApi(), `/users?user=${U3}`);
+    const gone = await record(ar);
+    expect(await gone.findByText(ar('admin.users.record.deleted'))).toBeTruthy();
+    expect(minorValue(gone)).toBe(ar('admin.payments.dash'));
+  });
+
   it('a teacher’s record has no student standing button', async () => {
     open(fakeApi(), `/users?user=${U2}`);
     const panel = await record(ar);
@@ -366,6 +400,15 @@ describe('AdminUsers: a student’s standing (FR-486; T051’s dialogs)', () => 
       const button = panel.queryByRole('button', { name: ar(STANDING[kind]) });
       if ((shown as readonly string[]).includes(kind)) expect(button).toBeTruthy();
       else expect(button).toBeNull();
+    }
+  });
+
+  it('a deleted student shows no standing button, whatever the status kept (PR #137 r1, Minor 1)', async () => {
+    open(fakeApi(), `/users?user=${U3}`);
+    const panel = await record(ar);
+    expect(await panel.findByText(ar('admin.users.record.deleted'))).toBeTruthy();
+    for (const kind of ['suspend', 'ban', 'reinstate'] as const) {
+      expect(panel.queryByRole('button', { name: ar(STANDING[kind]) })).toBeNull();
     }
   });
 

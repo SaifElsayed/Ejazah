@@ -51,9 +51,10 @@ const STANDING_LABEL = {
   reinstate: 'admin.users.reactivate',
 } as const;
 
-/** The standing actions a student's account status offers; a teacher's record offers none here. */
+/** The standing actions a student's account status offers; a teacher's record offers none here, and
+ *  neither does a deleted account, which the server answers `NOT_FOUND` (PR #137 r1, Minor 1). */
 function standingActions(record: UserRecord): readonly StudentStandingKind[] {
-  if (record.role !== 'student') return [];
+  if (record.role !== 'student' || record.profile.deleted) return [];
   switch (record.accountStatus) {
     case 'suspended':
       return ['reinstate'];
@@ -153,7 +154,12 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
                 label: t('admin.users.detail.gender'),
                 value: t(`admin.common.gender.${record.gender}`),
               },
-              { label: t('admin.users.detail.minor'), value: yesNo(record.isMinor) },
+              {
+                label: t('admin.users.detail.minor'),
+                // Erasure nulled a deleted account's date of birth, so its flag says nothing (PR #137
+                // r1, Minor 2): the dash, as `pages/sessions/words.ts:196` reads another page's key.
+                value: profile.deleted ? t('admin.payments.dash') : yesNo(record.isMinor),
+              },
               ...(record.verificationStatus === null
                 ? []
                 : [
