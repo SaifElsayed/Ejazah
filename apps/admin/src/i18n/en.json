@@ -1102,6 +1102,14 @@
       }
     },
     "disputes": {
+      "chat": {
+        "attachment": "Attached document: {name}",
+        "meta": "{sender} · {date} · {time}",
+        "more": "Older messages",
+        "notFound": "This dispute was not found.",
+        "notOpen": "This dispute is no longer open, so the enrollment's chat is not shown here.",
+        "purged": "This message's content was removed when its retention period ended."
+      },
       "columns": {
         "autoOutcome": "Automatic outcome",
         "session": "Session",
@@ -1173,18 +1181,117 @@
       "lede": "{count, plural, one {# open dispute} other {# open disputes}} over session outcomes. The dispute window is {hours} hours from the end of the session, and every decision is recorded in the audit log.",
       "ledeEmpty": "No open disputes now. Every decision is recorded in the audit log.",
       "pagerSummary": "{shown} of {total} · open first",
+      "queue": {
+        "columns": {
+          "dispute": "Dispute",
+          "outcome": "Outcome under dispute"
+        },
+        "empty": {
+          "text": "Each dispute a student or teacher raises over a session's outcome appears here.",
+          "title": "No disputes"
+        },
+        "notEvaluated": "Not evaluated yet",
+        "pagerPage": "Page {page} · open first"
+      },
+      "queueLede": "Every dispute a student or teacher raises over a session's outcome: the open ones first, oldest first, then the closed ones. Every decision and its reason are recorded in the audit log.",
       "raisedByStudent": "Raised by the student · {date}",
       "raisedByTeacher": "Raised by the teacher · {date}",
+      "resolve": {
+        "againstLegend": "Absence recorded against",
+        "effect": {
+          "banned": "The chosen party's account is banned now, with what a ban brings on its usual path, and the session keeps the outcome “{outcome}”. The ban is not acted on from this page.",
+          "keepsOutcome": "The session keeps the outcome “{outcome}”, and the dispute closes.",
+          "remedyLater": "If the outcome owes the student a remedy, it is offered once the session's dispute window has passed, not now.",
+          "studentNoShow": "The session's outcome becomes “Student absent” and counts against the package, and the dispute closes.",
+          "suspended": "The chosen party's account is suspended now, with what a suspension brings on its usual path, and the session keeps the outcome “{outcome}”. The suspension is not lifted from this page.",
+          "teacherNoShow": "The session's outcome becomes “Teacher absent”, and the dispute closes. The absence joins the enrollment's count of teacher absences; nothing follows from the count automatically."
+        },
+        "refused": {
+          "alreadyBanned": "This party's account is already banned, so the whole ruling was refused. Rule otherwise. Nothing changed.",
+          "alreadySuspended": "This party's account is already suspended, so the whole ruling was refused. Rule otherwise, and act on the account from its own page. Nothing changed.",
+          "notApproved": "This teacher's approval does not stand now, so they are neither suspended nor banned from here, and the whole ruling was refused. Nothing changed.",
+          "notEvaluated": "This session has not been evaluated yet, so there is no outcome to keep: re-mark it or record an absence, or wait for the evaluation. Nothing changed.",
+          "notFound": "This dispute, or the chosen party's account, was not found. Nothing changed.",
+          "notOpen": "This dispute is no longer open; it may have just been resolved. Close the dialog and read the page again. Nothing changed.",
+          "standing": "The action on this party's account was refused, so the whole ruling was refused. Nothing changed."
+        },
+        "title": "Rule on the dispute"
+      },
+      "revise": {
+        "done": "The ruling was revised: the session's outcome is now “{after}”, where it was “{before}”.",
+        "effect": "Only the session's outcome changes, to the one chosen; the earlier ruling stays recorded and the revision is written beside it. A revision lifts no suspension or ban, and reopens no enrollment that ended. If the new outcome owes the student a remedy, it is offered once the session's dispute window has passed, not now.",
+        "notUndone": {
+          "enrollment_ended": "The enrollment is no longer active, and the revision does not reopen it.",
+          "party_banned": "The account ban the earlier ruling ordered stays as it is; the revision does not lift it. It is acted on through its usual path.",
+          "party_suspended": "The account suspension the earlier ruling ordered stays as it is; the revision does not lift it. It is lifted on its usual path."
+        },
+        "notUndoneTitle": "What stays as it was",
+        "outcomeLegend": "The correct outcome",
+        "reasonLabel": "Reason for the revision (required)",
+        "refused": {
+          "disputeOpen": "This session has an open dispute, which is resolved first, before any revision. Nothing changed.",
+          "keyReused": "This request was already sent with different input, or is still being processed. Close the dialog and read the page again before you retry.",
+          "notFound": "This dispute was not found. Nothing changed.",
+          "notNow": "This ruling cannot be revised now. Nothing changed.",
+          "remedyOffered": "This ruling cannot be revised: the student has been offered a remedy for the session. Nothing changed.",
+          "superseded": "A later dispute over this session was resolved; revise that one's ruling instead. Nothing changed.",
+          "underReview": "The session was reclassified after the ruling because of a service outage, and it is in the review queue; its outcome is settled on the session review page. Nothing changed.",
+          "windowClosed": "This ruling cannot be revised: the session's dispute window has passed. Nothing changed."
+        },
+        "title": "Revise the ruling"
+      },
+      "ruling": {
+        "compensation_ordered": "Compensation ordered for the student",
+        "no_show_recorded": "Absence recorded",
+        "party_banned": "A party's account banned",
+        "party_suspended": "A party's account suspended",
+        "re_marked": "Session re-marked",
+        "upheld": "Outcome upheld"
+      },
       "search": {
         "label": "Search",
         "placeholder": "Student or teacher name"
+      },
+      "state": {
+        "dismissed": "Dismissed",
+        "open": "Open",
+        "resolved": "Resolved"
       },
       "tabs": {
         "all": "All",
         "decided": "Decided",
         "open": "Open"
       },
-      "title": "Disputes"
+      "telemetry": {
+        "eventsNone": "No join or leave was recorded.",
+        "joined": "Joined",
+        "outage": "{from} – {to}",
+        "outagesTitle": "Recorded service outages",
+        "roomEnded": "The room closed",
+        "schedule": "Scheduled",
+        "scheduleValue": "{date} · {time} · {city} time",
+        "studentLeft": "The student left",
+        "studentNotJoined": "The student did not join",
+        "teacherLeft": "The teacher left",
+        "teacherNotJoined": "The teacher did not join",
+        "together": "Simultaneous connection",
+        "togetherValue": "{duration} (min:sec)",
+        "zoneNote": "Times here are in {city} time, the session's zone."
+      },
+      "title": "Disputes",
+      "view": {
+        "enrollmentLink": "View the enrollment and its sessions",
+        "partiesTitle": "The parties",
+        "reasonTitle": "The reason, as its raiser wrote it",
+        "reviseButton": "Revise the ruling",
+        "revision": "From “{before}” to “{after}” · {date} · {time}",
+        "revisionsNone": "This ruling has not been revised.",
+        "revisionsNote": "The ruling stays as issued, and each revision is written beside it. Each revision's reason is in the audit log.",
+        "revisionsTitle": "Revisions of the ruling",
+        "rulingAt": "Issued {date} · {time}",
+        "rulingNotes": "Reason for the ruling",
+        "rulingTitle": "The ruling"
+      }
     },
     "enrollments": {
       "a11y": {

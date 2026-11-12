@@ -31,6 +31,7 @@ import { AdminAdmins } from './pages/settings/admins/AdminAdmins';
 import { AdminApplications } from './pages/applications/AdminApplications';
 import { AdminAudit } from './pages/audit/AdminAudit';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
+import { AdminDisputes } from './pages/disputes/AdminDisputes';
 import { AdminHome } from './pages/home/AdminHome';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
@@ -99,6 +100,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/sessions" element={<AdminSessions />} />
               <Route path="/review" element={<AdminReview />} />
               <Route path="/outages" element={<AdminOutages />} />
+              <Route path="/disputes" element={<AdminDisputes />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>

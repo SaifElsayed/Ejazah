@@ -2,14 +2,14 @@
 // decision 13; admin-surface.md, "`disputes`"): the administrator's disputes queue and its
 // resolution, sessions' procedures over moderation's rows. No amount crosses (R-MONEY-6):
 // `compensation_ordered` records the decision only (FR-DISPUTE-6). `disputes.get`'s `revisable` and
-// `revisions` are T059's, added then (R-API-9).
+// `revisions` are T059's, added then (R-API-9), and its `parties` B42's (T049, Q5 (b)).
 import { z } from 'zod';
 
 import { chatMessage } from '../chat.js';
 import { sessionStatus } from '../enrollments.js';
 import { idempotencyKey } from '../idempotency-key.js';
 import { adminReason } from './admins.js';
-import { adminOutcome, telemetry } from './sessions.js';
+import { adminOutcome, sessionParties, telemetry } from './sessions.js';
 
 /**
  * A page of the list starts after this position: the queue's part (`open`, oldest first; `closed`,
@@ -89,6 +89,12 @@ export const disputesGetOutput = z.object({
   revisable: z.boolean(),
   /** The ruling's revisions, oldest first (T059). */
   revisions: z.array(disputeRevision),
+  /**
+   * The session's student and teacher, a deleted one with no name (FR-426), as `cases.get` names
+   * its enrollment's (B42, the note under T049, Q5 (b): the panel's «held files» only for a deleted
+   * party).
+   */
+  parties: sessionParties,
 });
 
 /**

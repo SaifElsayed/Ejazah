@@ -75,7 +75,7 @@ describe('the guard', () => {
   });
 
   it('sends an unknown path home', () => {
-    renderAt('/disputes', verified);
+    renderAt('/no-such-page', verified);
     expect(heading('admin.home.title')).toBeTruthy();
   });
 });

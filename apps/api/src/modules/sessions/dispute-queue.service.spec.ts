@@ -5,8 +5,9 @@
 // `closed:<id>`), so a dispute resolved between two pages skips nothing (PR #133's review, round 1,
 // Minor 2); each item with who raised it, the frozen outcome and its enrollment's Teacher-No-Show
 // count and mark. The detail: the dispute, its session's telemetry and `chatAvailable` from the
-// open dispute alone; no session dispute, `NOT_FOUND` with one line. Over the real tables:
-// `tests/db-integrity/dispute-resolution.spec.ts`.
+// open dispute alone, and (B42, T049, Q5 (b)) the session's two parties as `cases.get` names them,
+// a deleted one with no name (FR-426); no session dispute, `NOT_FOUND` with one line. Over the real
+// tables: `tests/db-integrity/dispute-resolution.spec.ts` and `dispute-parties.spec.ts`.
 import type { SessionStatus } from '@ijazah/contracts';
 import type { Telemetry } from '@ijazah/contracts/admin';
 import { describe, expect, it } from 'vitest';
@@ -55,7 +56,10 @@ const OPEN = [dispute(1, 'open'), dispute(2, 'open', E2)];
 const CLOSED = [dispute(4, 'resolved'), dispute(3, 'resolved')];
 const TELEMETRY = { sessionId: OPEN[0]?.sessionId } as Telemetry;
 
-function world({ pageSize = 3, flag = 2 } = {}) {
+/** The parties' display names, as identity answers them; a deleted account has none. */
+const NAMES: Readonly<Record<string, string>> = { [STUDENT]: 'آمال علي', [TEACHER]: 'سارة عادل' };
+
+function world({ pageSize = 3, flag = 2, deleted = [] as readonly string[] } = {}) {
   const journal: string[] = [];
   const logged: { fields: Record<string, unknown>; message: string }[] = [];
   const all = [...OPEN, ...CLOSED].map((row) => ({ ...row }));
@@ -88,6 +92,15 @@ function world({ pageSize = 3, flag = 2 } = {}) {
     teacherNoShowCountsOf: async (_tx, ids) => {
       journal.push(`counts ${ids.join(',')}`);
       return new Map([[E1, 2]]);
+    },
+    namesOf: async (_tx, ids) => {
+      journal.push(`names ${ids.join(',')}`);
+      return new Map(
+        ids.flatMap((id) => {
+          const name = NAMES[id];
+          return name === undefined || deleted.includes(id) ? [] : [[id, name] as const];
+        }),
+      );
     },
     telemetrySession: async (_tx, sessionId) =>
       ({
@@ -226,11 +239,31 @@ describe('disputes.get (FR-475)', () => {
       chatAvailable: true,
       revisable: false,
       revisions: [],
+      parties: {
+        student: { userId: STUDENT, displayName: 'آمال علي', deleted: false },
+        teacher: { userId: TEACHER, displayName: 'سارة عادل', deleted: false },
+      },
     });
     expect(journal).toEqual([
       `revisions ${String(OPEN[0]?.id)}`,
+      `names ${STUDENT},${TEACHER}`,
       `telemetry ${String(OPEN[0]?.sessionId)}`,
     ]);
+  });
+
+  it('answers a deleted party deleted, with no name, the other named (B42, T049, Q5 (b); FR-426)', async () => {
+    const studentGone = world({ deleted: [STUDENT] });
+    const answer = await studentGone.service.get(tx, ADMIN, { disputeId: String(OPEN[0]?.id) });
+    expect(answer.parties).toEqual({
+      student: { userId: STUDENT, displayName: null, deleted: true },
+      teacher: { userId: TEACHER, displayName: 'سارة عادل', deleted: false },
+    });
+    const teacherGone = world({ deleted: [TEACHER] });
+    const other = await teacherGone.service.get(tx, ADMIN, { disputeId: String(OPEN[0]?.id) });
+    expect(other.parties).toEqual({
+      student: { userId: STUDENT, displayName: 'آمال علي', deleted: false },
+      teacher: { userId: TEACHER, displayName: null, deleted: true },
+    });
   });
 
   it('answers a resolved dispute with its ruling, the chat no longer available', async () => {

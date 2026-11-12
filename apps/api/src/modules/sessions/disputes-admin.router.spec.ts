@@ -7,7 +7,8 @@
 // and writing nothing; a resolution's input refused when it lacks what its resolution names
 // (`consumed`, `against`, `party`); a service's refusal rolling its audit entry back. What each does is
 // `dispute-queue.service.spec.ts`', `dispute-resolution.service.spec.ts`' and
-// `tests/db-integrity/dispute-resolution.spec.ts`'.
+// `tests/db-integrity/dispute-resolution.spec.ts`'. B42 (T049, Q5 (b)): `disputes.get` answers the
+// session's `parties` through its output schema.
 import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -72,6 +73,15 @@ const VIEWED = {
   chatAvailable: true,
   revisable: false,
   revisions: [],
+  // B42, T049, Q5 (b): the session's parties, a deleted one with no name (FR-426).
+  parties: {
+    student: { userId: '0199d0a0-0000-7000-8000-0000000000b1', displayName: null, deleted: true },
+    teacher: {
+      userId: '0199d0a0-0000-7000-8000-0000000000b2',
+      displayName: 'سارة عادل',
+      deleted: false,
+    },
+  },
 };
 const RESOLVE = { disputeId: DISPUTE, resolution: 'upheld' as const, reason: 'ثبت غياب المعلم' };
 
