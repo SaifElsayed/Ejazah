@@ -4,15 +4,20 @@
 // Viewing a document is audited as `document.view` on the document; the identity request's three
 // actions on the person (with the reason and the new request) and on the request (with the note).
 // What the requests do is `verification-request.service.spec.ts`'s.
+import type { UsersGetOutput, UsersListOutput } from '@ijazah/contracts/admin';
 import { describe, expect, it } from 'vitest';
 
+import { DomainError } from '../../platform/errors/domain-error.js';
+import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../platform/logging/logger.js';
 import { adminContextsOver, SPEC_ADMIN, VERIFIED } from '../../surfaces/admin-surface.fixtures.js';
-import type { AdminSurfaceServices } from '../../surfaces/context.js';
+import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
 import {
   createAdminCallerFactory,
   createAdminRouter,
   toErrorShape,
 } from '../../surfaces/procedures.js';
+import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
 import { documentsRouter, usersRouter } from './documents.router.js';
 
 const callerFor = createAdminCallerFactory(
@@ -23,6 +28,35 @@ const DOCUMENT = '0199d0a0-0000-7000-8000-0000000000d1';
 const REQUEST = '0199d0a0-0000-7000-8000-0000000000e1';
 const PERSON = '0199d0a0-0000-7000-8000-0000000000c1';
 const NEXT_REQUEST = '0199d0a0-0000-7000-8000-0000000000e2';
+
+// T058 of specs/004-sessions: what the user directory's stand-in answers.
+const USERS_PAGE: UsersListOutput = {
+  items: [
+    {
+      userId: PERSON,
+      displayName: 'مريم',
+      deleted: false,
+      role: 'student',
+      accountStatus: 'active',
+    },
+  ],
+  nextCursor: PERSON,
+};
+const USER_RECORD: UsersGetOutput = {
+  userId: PERSON,
+  profile: {
+    displayName: 'مريم',
+    email: null,
+    joinedAt: '2026-09-01T08:00:00.000Z',
+    deleted: false,
+  },
+  role: 'student',
+  gender: 'female',
+  isMinor: true,
+  verificationStatus: null,
+  accountStatus: 'active',
+  cancellationRequests: { total: 2, recent: 1 },
+};
 
 function surface() {
   const reached: unknown[][] = [];
@@ -45,7 +79,12 @@ function surface() {
       documentId: DOCUMENT,
     }),
   };
-  const contexts = adminContextsOver({ documents });
+  // T058 of specs/004-sessions: the user directory, answering a page and a record.
+  const users: AdminSurfaceServices['users'] = {
+    list: record('users.list', USERS_PAGE),
+    get: record('users.get', USER_RECORD),
+  };
+  const contexts = adminContextsOver({ documents, users });
   return {
     reached,
     written: contexts.written,
@@ -72,6 +111,8 @@ const CALLS: Record<string, (caller: Caller) => Promise<unknown>> = {
   'documents.accept': (caller) => caller.documents.accept({ requestId: REQUEST }),
   'documents.requestAnother': (caller) =>
     caller.documents.requestAnother({ requestId: REQUEST, note: 'الوجه الخلفي غير واضح' }),
+  'users.list': (caller) => caller.users.list({ name: 'مر' }),
+  'users.get': (caller) => caller.users.get({ targetUserId: PERSON }),
 };
 
 describe('the administrator kind', () => {
@@ -153,5 +194,109 @@ describe('the inputs', () => {
     expect(await codeOf(call(as(VERIFIED)))).toBe('VALIDATION_FAILED');
     expect(written).toEqual([]);
     expect(reached).toEqual([]);
+  });
+});
+
+// T058 of specs/004-sessions (FR-481, FR-459; SRS FR-ADMIN-4; contracts/admin-surface.md, "`users`"):
+// the user directory's two reads. `users.list` is audited `users.listed` on the reader (the `admin`
+// target of every list read), `users.get` `user.viewed` on the user, neither with a before or an
+// after; a service's refusal is answered as it is and writes nothing. What each reads is
+// `user-directory.service.spec.ts`'.
+describe('the user directory (T058 of specs/004-sessions)', () => {
+  it('users.list hands the reader and the input to the directory and audits users.listed on the reader', async () => {
+    const { as, written, reached } = surface();
+    expect(await CALLS['users.list']!(as(VERIFIED))).toEqual(USERS_PAGE);
+    expect(reached).toEqual([['users.list', SPEC_ADMIN, { name: 'مر' }]]);
+    expect(written).toEqual([
+      { adminId: SPEC_ADMIN, action: 'users.listed', targetType: 'admin', targetId: SPEC_ADMIN },
+    ]);
+  });
+
+  it('users.get hands the reader and the person to the directory and audits user.viewed on the user', async () => {
+    const { as, written, reached } = surface();
+    expect(await CALLS['users.get']!(as(VERIFIED))).toEqual(USER_RECORD);
+    expect(reached).toEqual([['users.get', SPEC_ADMIN, { targetUserId: PERSON }]]);
+    expect(written).toEqual([
+      { adminId: SPEC_ADMIN, action: 'user.viewed', targetType: 'user', targetId: PERSON },
+    ]);
+  });
+
+  it('users.get answers no date of birth, even one a service leaked, and its audit entry carries none (PDPL)', async () => {
+    const leaked = { ...USER_RECORD, dateOfBirth: '2012-03-04' } as UsersGetOutput;
+    const contexts = adminContextsOver({
+      users: { list: async () => USERS_PAGE, get: async () => leaked },
+    });
+    const answer = await callerFor(contexts.contextFor(VERIFIED)).users.get({
+      targetUserId: PERSON,
+    });
+    expect(JSON.stringify(answer)).not.toMatch(/birth|2012-03-04/);
+    expect(JSON.stringify(contexts.written)).not.toMatch(/birth|2012-03-04/);
+    expect(contexts.written).toEqual([
+      { adminId: SPEC_ADMIN, action: 'user.viewed', targetType: 'user', targetId: PERSON },
+    ]);
+  });
+
+  it('users.get answers the directory refusal NOT_FOUND, writing nothing', async () => {
+    const contexts = adminContextsOver({
+      users: {
+        list: async () => USERS_PAGE,
+        get: async () => {
+          throw new DomainError('NOT_FOUND');
+        },
+      },
+    });
+    expect(
+      await codeOf(callerFor(contexts.contextFor(VERIFIED)).users.get({ targetUserId: PERSON })),
+    ).toBe('NOT_FOUND');
+    expect(contexts.written).toEqual([]);
+  });
+
+  it.each([
+    ['a user id that is not one', (caller: Caller) => caller.users.get({ targetUserId: 'x' })],
+    ['a blank name', (caller: Caller) => caller.users.list({ name: '  ' })],
+    ['a cursor that is no id', (caller: Caller) => caller.users.list({ cursor: 'x' })],
+  ])('refuses %s as VALIDATION_FAILED, reaching nothing', async (_case, call) => {
+    const { as, written, reached } = surface();
+    expect(await codeOf(call(as(VERIFIED)))).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('users.list over rate_limit_search is refused RATE_LIMITED, opening no transaction and writing nothing (R-SEC-6, C2)', async () => {
+    const counted: unknown[][] = [];
+    const written: unknown[] = [];
+    let opened = 0;
+    const rateLimiter = {
+      check: async (key: string, subject: unknown, procedure: string) => {
+        counted.push([key, subject, procedure]);
+        throw new DomainError('RATE_LIMITED');
+      },
+    } as unknown as RateLimiter;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: {
+          write: async (_tx, entry) => {
+            written.push(entry);
+          },
+        },
+      },
+      services: unusedAdminServices,
+      rateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).users.list({ name: 'مر' }))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      ['rate_limit_search', { kind: 'administrator', adminId: SPEC_ADMIN }, 'users.list'],
+    ]);
+    expect(opened).toBe(0);
+    expect(written).toEqual([]);
   });
 });

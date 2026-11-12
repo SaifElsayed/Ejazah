@@ -32,6 +32,17 @@ import {
 import { VerificationRepository } from './verification.repository.js';
 import { VerificationService } from './verification.service.js';
 import { DocumentErasure, type DocumentErasureDependencies } from './document-erasure.js';
+// T058 of specs/004-sessions: the user directory's readers, through identity's and sessions' entries.
+import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
+import type { Logger } from '../../platform/logging/logger.js';
+import { displayNamesOf, userDirectoryPage, userRecordOf } from '../identity/index.js';
+import {
+  createCancellationRequestCounts,
+  createMarkedEnrollments,
+  createRepeatedAbsence,
+  type EnrollmentSide,
+} from '../sessions/index.js';
+import { createUserDirectoryService, type UserDirectory } from './user-directory.service.js';
 
 export { DOCUMENTS_UPLOAD_PATH };
 export type { DocumentLink, DocumentViewer } from './verification.service.js';
@@ -213,3 +224,39 @@ export {
   type DisputeHeldFilesDependencies,
   type HeldFilesStore,
 } from './dispute-held-files.js';
+
+/**
+ * T058 of specs/004-sessions (FR-481, FR-459, FR-451; SRS FR-ADMIN-4; research R-301, R-318): the
+ * user directory, `users.list` and `users.get` of the administrator surface's `users` namespace,
+ * which the admin module composes: identity's readers (deleted users through `includeDeleted`, the
+ * note under T058, Q8) and its names, the kernel's folded prefix (R-203), and sessions' counts
+ * (T025) and marked enrollments (T015, Q7) over the bound `EnrollmentSide`.
+ */
+export function createUserDirectory({
+  database,
+  settings,
+  enrollments,
+  log,
+}: {
+  readonly database: Pick<Database, 'includeDeleted'>;
+  readonly settings: SettingsReader;
+  readonly enrollments: Pick<EnrollmentSide, 'enrollmentPage'>;
+  readonly log: Pick<Logger, 'info'>;
+}): UserDirectory {
+  return createUserDirectoryService({
+    store: {
+      usersPage: (after, limit) => userDirectoryPage(database, after, limit),
+      userRecord: (userId) => userRecordOf(database, userId),
+      namePrefixMatches: idsWithFoldedNamePrefix,
+      namesOf: displayNamesOf,
+    },
+    settings,
+    counts: createCancellationRequestCounts({ settings }),
+    marked: createMarkedEnrollments({
+      absence: createRepeatedAbsence({ settings }),
+      enrollments,
+    }),
+    log,
+  });
+}
+export type { UserDirectory, UserDirectoryStore } from './user-directory.service.js';
