@@ -43,13 +43,21 @@ export const NAV_GROUPS: readonly {
         icon: 'file-text',
         queue: 'credentials',
       },
+      // B42 (the notes under T048, T049 and T050, Q4): Phase 3's three queues.
+      { path: '/review', label: 'admin.nav.items.sessionReview', icon: 'activity' },
+      { path: '/disputes', label: 'admin.nav.items.disputes', icon: 'flag' },
+      { path: '/cases', label: 'admin.nav.items.cases', icon: 'scale' },
     ],
   },
   {
     label: 'admin.nav.groups.records',
     entries: [
+      // B42 (the note under T047, Q4): the enrollment and session monitor.
+      { path: '/sessions', label: 'admin.nav.items.enrollments', icon: 'calendar' },
       // T053: the payments monitor, before the settings as the board orders the group.
       { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
+      // B42 (the note under T048, Q4): the video outages.
+      { path: '/outages', label: 'admin.nav.items.outages', icon: 'video-off' },
       { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
       { path: '/audit', label: 'admin.nav.items.audit', icon: 'list' },
     ],

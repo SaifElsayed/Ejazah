@@ -1754,6 +1754,7 @@
       "items": {
         "applications": "Applications",
         "audit": "Audit log",
+        "cases": "Cases and complaints",
         "compensation": "Compensation",
         "credentials": "Credential review",
         "disputes": "Disputes",
@@ -1762,6 +1763,7 @@
         "home": "Overview",
         "ijazahRequests": "Ijazah requests",
         "ijazahs": "Ijazahs",
+        "outages": "Video outages",
         "payments": "Payments",
         "reports": "Reports",
         "reviews": "Reviews",

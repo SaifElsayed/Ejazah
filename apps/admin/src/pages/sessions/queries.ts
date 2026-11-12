@@ -49,8 +49,17 @@ export function useMonitoredEnrollment(enrollmentId: string) {
   });
 }
 
-/** Reads the monitor again, the list and the enrollment, after an action the server took. */
+/**
+ * Reads the monitor again, the list and the enrollment, after an action the server took, and
+ * `/review`'s queue and connection records (its key `review`), whose outcome a correction or a
+ * cancellation here just changed (B42's integration, the note under T048).
+ */
 export function useRereadMonitor(): () => Promise<void> {
   const queries = useQueryClient();
-  return () => queries.invalidateQueries({ queryKey: SESSIONS });
+  return async () => {
+    await Promise.all([
+      queries.invalidateQueries({ queryKey: SESSIONS }),
+      queries.invalidateQueries({ queryKey: ['review'] }),
+    ]);
+  };
 }

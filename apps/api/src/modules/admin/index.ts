@@ -64,8 +64,10 @@ import {
 } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
+  createUserDirectory,
   createVerificationAdminServices,
   openRequestOf,
+  type UserDirectory,
   type VerificationRequestService,
 } from '../verification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
@@ -171,6 +173,8 @@ export interface AdminServices {
     DisputeMatterReads;
   /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
   readonly restore: Restore;
+  /** T058 of specs/004-sessions: the verification module's user directory (FR-481, SRS FR-ADMIN-4). */
+  readonly users: UserDirectory;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -306,6 +310,13 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
         log: dependencies.log,
       }),
       settings: dependencies.settings,
+      log: dependencies.log,
+    }),
+    // T058: the user directory over identity's readers and sessions' counts and marks.
+    users: createUserDirectory({
+      database: dependencies.database,
+      settings: dependencies.settings,
+      enrollments: dependencies.enrollmentSide,
       log: dependencies.log,
     }),
   };

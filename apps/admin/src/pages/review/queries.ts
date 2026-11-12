@@ -37,10 +37,19 @@ export function useTelemetry(sessionId: string) {
   });
 }
 
-/** Reads the queue and every connection record again. */
+/**
+ * Reads the queue and every connection record again, and `/sessions`' monitor (its key `sessions`),
+ * whose sessions show the outcome a resolution or a correction just changed (B42's integration, the
+ * note under T048).
+ */
 export function useRereadReview() {
   const queries = useQueryClient();
-  return () => queries.invalidateQueries({ queryKey: REVIEW });
+  return async () => {
+    await Promise.all([
+      queries.invalidateQueries({ queryKey: REVIEW }),
+      queries.invalidateQueries({ queryKey: ['sessions'] }),
+    ]);
+  };
 }
 
 export function useResolve() {

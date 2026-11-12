@@ -1754,6 +1754,7 @@
       "items": {
         "applications": "طلبات المعلمين",
         "audit": "سجل التدقيق",
+        "cases": "القضايا والشكاوى",
         "compensation": "التعويضات",
         "credentials": "مراجعة الإجازات",
         "disputes": "النزاعات",
@@ -1762,6 +1763,7 @@
         "home": "نظرة عامة",
         "ijazahRequests": "طلبات الإجازة",
         "ijazahs": "الإجازات",
+        "outages": "انقطاعات الفيديو",
         "payments": "المدفوعات",
         "reports": "البلاغات",
         "reviews": "التقييمات",
