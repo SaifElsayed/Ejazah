@@ -45,6 +45,7 @@ import {
   createAdminRouter,
 } from '../../apps/api/src/surfaces/procedures.js';
 import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures.js';
+import { paymentsGetOutput } from '../../packages/contracts/src/admin/index.js';
 import { addMinutes, dateColumnOf, timeColumnOf } from '../../packages/time/src/index.js';
 
 let database: Database;
@@ -321,6 +322,31 @@ describe('payments.list over the real tables', () => {
       expect(part.items).toEqual([]);
     });
   });
+
+  // B42, T047 (the note under T047, Q6 (a)): `/payments?enrollment=`, the link from `/sessions`
+  // and `/cases`, lists that enrollment's orders alone, newest first, in keyset pages.
+  it('lists one enrollment’s orders alone when asked by its id, in keyset pages', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const first = await monitor.list(tx, { enrollmentId: w.yusras });
+      expect(first.items.map(({ paymentId }) => paymentId)).toEqual([w.second.id, w.paid.id]);
+      expect(first.nextCursor).toBe(w.paid.id);
+      const rest = await monitor.list(tx, {
+        enrollmentId: w.yusras,
+        ...(first.nextCursor === undefined ? {} : { cursor: first.nextCursor }),
+      });
+      expect(rest.items.map(({ paymentId }) => paymentId)).toEqual([w.failed.id]);
+      expect(rest).not.toHaveProperty('nextCursor');
+      const failedOnly = await monitor.list(tx, { enrollmentId: w.yusras, status: 'failed' });
+      expect(failedOnly.items.map(({ paymentId }) => paymentId)).toEqual([w.failed.id]);
+      // Another enrollment's id answers its own orders, never Yusra's.
+      const hudas = await monitor.list(tx, {
+        enrollmentId: (await tx.payment.findUniqueOrThrow({ where: { id: w.refused.id } }))
+          .enrollmentId,
+      });
+      expect(hudas.items.map(({ paymentId }) => paymentId)).toEqual([w.refused.id]);
+    });
+  });
 });
 
 describe('payments.get over the real tables', () => {
@@ -384,6 +410,44 @@ describe('payments.get over the real tables', () => {
       ]);
       // Huda's refused enrollment has no hold of its own here: an empty list, never absent.
       expect((await monitor.get(tx, w.refused.id)).enrollment?.holds).toEqual([]);
+    });
+  });
+
+  // B42, T047 (the follow-up under T047): Phase 3's outcomes reach the timeline. An enrollment
+  // cancelled by the administration and then restored reads both, never «cancelled» alone, and its
+  // completion follows; each passes the contract's parse, as the procedure's output does.
+  it('answers Phase 3’s restored and completed outcomes beside the cancellation, oldest first', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      await tx.enrollmentEvent.createMany({
+        data: [
+          {
+            enrollmentId: w.yusras,
+            kind: 'cancelled',
+            cancellationReason: 'admin',
+            occurredAt: new Date('2026-11-05T10:00:00Z'),
+          },
+          {
+            enrollmentId: w.yusras,
+            kind: 'restored',
+            occurredAt: new Date('2026-11-06T10:00:00Z'),
+          },
+          {
+            enrollmentId: w.yusras,
+            kind: 'completed',
+            occurredAt: new Date('2026-11-09T10:00:00Z'),
+          },
+        ],
+      });
+      const detail = await monitor.get(tx, w.paid.id);
+      const expected = [
+        { kind: 'confirmed', occurredAt: '2026-11-01T10:06:00.000Z' },
+        { kind: 'cancelled', cancellationReason: 'admin', occurredAt: '2026-11-05T10:00:00.000Z' },
+        { kind: 'restored', occurredAt: '2026-11-06T10:00:00.000Z' },
+        { kind: 'completed', occurredAt: '2026-11-09T10:00:00.000Z' },
+      ];
+      expect(detail.outcomes).toEqual(expected);
+      expect(paymentsGetOutput.parse(detail).outcomes).toEqual(expected);
     });
   });
 

@@ -135,10 +135,12 @@ function storeOf(orders: readonly MonitorOrderRow[]): Recorded {
   const newestFirst = [...orders].sort((a, b) => b.id.localeCompare(a.id));
   return {
     asked,
-    orderPage: async (_tx, { status, after, limit }) => {
+    orderPage: async (_tx, { status, after, limit, enrollmentId }) => {
       asked.push(['orderPage', status, after, limit]);
+      if (enrollmentId !== undefined) asked.push(['orderPage.enrollmentId', enrollmentId]);
       return newestFirst
         .filter((row) => status === undefined || row.status === status)
+        .filter((row) => enrollmentId === undefined || row.enrollmentId === enrollmentId)
         .filter((row) => after === undefined || row.id < after)
         .slice(0, limit);
     },
@@ -214,6 +216,16 @@ describe('payments.list', () => {
     const answer = await serviceOver(store).list(tx, { status: 'paid' });
     expect(answer.items.map(({ paymentId }) => paymentId)).toEqual([orderId(2)]);
     expect(store.asked[0]).toEqual(['orderPage', 'paid', undefined, PAGE_SIZE + 1]);
+  });
+
+  // B42, T047 (the note under T047, Q6 (a)): `/payments?enrollment=` lists one enrollment's
+  // orders; the filter is the store's query, as the status is.
+  it('hands an enrollment filter to the store, and answers only that enrollment’s orders', async () => {
+    const store = storeOf([order(1), order(2), order(3), order(4), order(5)]);
+    const answer = await serviceOver(store).list(tx, { enrollmentId: E_HUDA });
+    expect(answer.items.map(({ paymentId }) => paymentId)).toEqual([orderId(4), orderId(2)]);
+    expect(answer).not.toHaveProperty('nextCursor');
+    expect(store.asked).toContainEqual(['orderPage.enrollmentId', E_HUDA]);
   });
 
   it('answers the amounts as reported, fee and net absent until paid, and names the student', async () => {

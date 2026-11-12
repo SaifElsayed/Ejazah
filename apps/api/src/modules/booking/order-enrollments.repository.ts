@@ -4,12 +4,15 @@
 // by the client's extension (T148), as from every ordinary read.
 //
 // Both reads are bounded: `enrollmentsAmong` by the ids of one page of orders, `outcomesOf` by one
-// enrollment, whose outcomes are a confirmation, its failed orders and a cancellation (§14's plain
-// index on `enrollment_events.enrollment_id`).
+// enrollment, whose outcomes are a confirmation, its failed orders, its cancellations, restores and
+// its end (§14's plain index on `enrollment_events.enrollment_id`).
 import type { EnrollmentStatus, PackageTrack } from '@ijazah/contracts';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import type { EnrollmentCancellationReason } from './enrollment-events.repository.js';
+import type {
+  EnrollmentCancellationReason,
+  EnrollmentOutcome,
+} from './enrollment-events.repository.js';
 
 /** One enrollment as the monitor reads it: its parties, its state and its snapshot's package line. */
 export interface OrderEnrollmentRow {
@@ -26,9 +29,9 @@ export interface OrderEnrollmentRow {
 
 /** One `enrollment_events` row as the monitor's timeline reads it. */
 export interface OutcomeRow {
-  readonly kind: (typeof OUTCOME_KINDS)[number];
+  readonly kind: EnrollmentOutcome['kind'];
   readonly cancellationReason: EnrollmentCancellationReason | null;
-  /** The order a confirmation or a failure names; null for a cancellation. */
+  /** The order a confirmation or a failure names; null for any other outcome. */
   readonly paymentId: string | null;
   readonly occurredAt: Date;
 }
@@ -56,29 +59,19 @@ export function enrollmentsAmong(
 }
 
 /**
- * The kinds the monitor's timeline shows (`enrollmentOutcomeKind`). Phase 3's `completed`,
- * `terminated_no_show` and `restored` (T001 of specs/004-sessions) are not among them until a task
- * widens the contract, so the read leaves them out rather than fail the output's parse.
+ * The enrollment's outcomes, every kind (`enrollmentOutcomeKind`, Phase 3's `completed`,
+ * `terminated_no_show` and `restored` among them since B42's T047, the follow-up under T047), oldest
+ * first, the id breaking a tie of one transaction's instant.
  */
-const OUTCOME_KINDS = ['confirmed', 'order_failed', 'cancelled'] as const;
-
-function isOutcome<Row extends { readonly kind: string }>(
-  row: Row,
-): row is Row & { readonly kind: OutcomeRow['kind'] } {
-  return (OUTCOME_KINDS as readonly string[]).includes(row.kind);
-}
-
-/** The enrollment's outcomes, oldest first, the id breaking a tie of one transaction's instant. */
-export async function outcomesOf(
+export function outcomesOf(
   tx: Pick<Transaction, 'enrollmentEvent'>,
   enrollmentId: string,
 ): Promise<OutcomeRow[]> {
-  const rows = await tx.enrollmentEvent.findMany({
-    where: { enrollmentId, kind: { in: [...OUTCOME_KINDS] } },
+  return tx.enrollmentEvent.findMany({
+    where: { enrollmentId },
     orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
     select: { kind: true, cancellationReason: true, paymentId: true, occurredAt: true },
   });
-  return rows.filter(isOutcome);
 }
 
 /**
