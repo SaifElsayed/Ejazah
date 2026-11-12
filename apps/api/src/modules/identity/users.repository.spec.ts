@@ -5,7 +5,12 @@
 // table, not Postgres.
 import { describe, expect, it, vi } from 'vitest';
 import type { Database } from '../../platform/db/prisma.repository.js';
-import { displayNamesOf, UsersRepository } from './users.repository.js';
+import {
+  displayNamesOf,
+  userDirectoryPage,
+  userRecordOf,
+  UsersRepository,
+} from './users.repository.js';
 
 const USER = '0199d0a0-0000-7000-8000-00000000000a';
 
@@ -93,5 +98,145 @@ describe('displayNamesOf (003:T049)', () => {
     const tx = { user: { findMany } } as unknown as Parameters<typeof displayNamesOf>[0];
     expect((await displayNamesOf(tx, [])).size).toBe(0);
     expect(findMany).not.toHaveBeenCalled();
+  });
+});
+
+// T058 of specs/004-sessions (FR-481; SRS FR-ADMIN-4; the owner's decision Q8 of 2026-11-12): the user
+// directory's two readers, past the soft-delete filter (`includeDeleted`, outside any transaction,
+// as `DeletedPhotosRepository` reads), so a deleted user is listed and read, without its name.
+describe('userDirectoryPage and userRecordOf (T058 of specs/004-sessions)', () => {
+  const DELETED = '0199d0a0-0000-7000-8000-00000000000c';
+  const JOINED = new Date('2026-09-01T08:00:00Z');
+  const BORN = new Date('2012-03-04T00:00:00Z');
+
+  function deletedClient(user: { findMany?: unknown; findUnique?: unknown }) {
+    return { includeDeleted: { user } } as unknown as Pick<Database, 'includeDeleted'>;
+  }
+
+  it('reads a page newest first after the cursor, with the name, the deleted flag, the role and the status', async () => {
+    const findMany = vi.fn(async () => [
+      {
+        id: USER,
+        displayName: 'سارة',
+        deletedAt: null,
+        accountStatus: 'active',
+        roles: [{ role: 'teacher' }],
+      },
+      {
+        id: DELETED,
+        displayName: 'الاسم القديم',
+        deletedAt: new Date('2026-10-01T00:00:00Z'),
+        accountStatus: 'banned',
+        roles: [{ role: 'student' }],
+      },
+    ]);
+    const page = await userDirectoryPage(deletedClient({ findMany }), DELETED, 26);
+    expect(page).toEqual([
+      { id: USER, displayName: 'سارة', deleted: false, role: 'teacher', accountStatus: 'active' },
+      { id: DELETED, displayName: null, deleted: true, role: 'student', accountStatus: 'banned' },
+    ]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { id: { lt: DELETED } },
+      orderBy: { id: 'desc' },
+      take: 26,
+      select: {
+        id: true,
+        displayName: true,
+        deletedAt: true,
+        accountStatus: true,
+        roles: { select: { role: true } },
+      },
+    });
+  });
+
+  it('reads the first page with no condition, and answers a role row missing as null', async () => {
+    const findMany = vi.fn(async () => [
+      { id: USER, displayName: 'سارة', deletedAt: null, accountStatus: 'active', roles: [] },
+    ]);
+    const page = await userDirectoryPage(deletedClient({ findMany }), undefined, 3);
+    expect(page).toEqual([
+      { id: USER, displayName: 'سارة', deleted: false, role: null, accountStatus: 'active' },
+    ]);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {}, take: 3 }));
+  });
+
+  it("reads a user's record past the filter: name, email, sign-up instant, gender, date of birth, role, status, a teacher's profile", async () => {
+    const findUnique = vi.fn(async () => ({
+      id: USER,
+      displayName: 'سارة',
+      email: 'sara@example.test',
+      createdAt: JOINED,
+      deletedAt: null,
+      gender: 'female',
+      dateOfBirth: BORN,
+      accountStatus: 'active',
+      roles: [{ role: 'teacher' }],
+      teacherProfile: {
+        bio: 'معلمة',
+        qualificationSummary: 'إجازة',
+        verificationStatus: 'approved',
+      },
+    }));
+    expect(await userRecordOf(deletedClient({ findUnique }), USER)).toEqual({
+      id: USER,
+      displayName: 'سارة',
+      email: 'sara@example.test',
+      createdAt: JOINED,
+      deleted: false,
+      gender: 'female',
+      dateOfBirth: BORN,
+      accountStatus: 'active',
+      role: 'teacher',
+      teacherProfile: { bio: 'معلمة', qualification: 'إجازة', verificationStatus: 'approved' },
+    });
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: USER },
+      select: {
+        id: true,
+        displayName: true,
+        email: true,
+        createdAt: true,
+        deletedAt: true,
+        gender: true,
+        dateOfBirth: true,
+        accountStatus: true,
+        roles: { select: { role: true } },
+        teacherProfile: {
+          select: { bio: true, qualificationSummary: true, verificationStatus: true },
+        },
+      },
+    });
+  });
+
+  it("answers a deleted user's record without a name, and a student's without a teacher's profile", async () => {
+    const findUnique = vi.fn(async () => ({
+      id: DELETED,
+      displayName: 'الاسم القديم',
+      email: null,
+      createdAt: JOINED,
+      deletedAt: new Date('2026-10-01T00:00:00Z'),
+      gender: 'male',
+      dateOfBirth: null,
+      accountStatus: 'active',
+      roles: [{ role: 'student' }],
+      teacherProfile: null,
+    }));
+    expect(await userRecordOf(deletedClient({ findUnique }), DELETED)).toEqual({
+      id: DELETED,
+      displayName: null,
+      email: null,
+      createdAt: JOINED,
+      deleted: true,
+      gender: 'male',
+      dateOfBirth: null,
+      accountStatus: 'active',
+      role: 'student',
+      teacherProfile: null,
+    });
+  });
+
+  it('answers null for no such user', async () => {
+    const findUnique = vi.fn(async () => null);
+    expect(await userRecordOf(deletedClient({ findUnique }), USER)).toBeNull();
   });
 });

@@ -10,6 +10,10 @@ import {
   documentsLinkInput,
   documentsLinkOutput,
   documentsRequestAnotherInput,
+  usersGetInput,
+  usersGetOutput,
+  usersListInput,
+  usersListOutput,
   usersRequireIdentityInput,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
@@ -80,6 +84,30 @@ export const usersRouter = createAdminRouter({
         reason: input.reason,
         after: { requestId },
       });
+    },
+  ),
+
+  // T058 of specs/004-sessions (FR-481, FR-459; SRS FR-ADMIN-4; admin-surface.md, "`users`"): the
+  // user directory, read by the verification module over identity's and sessions' entries. The list
+  // is a name search under Phase 1's `rate_limit_search`, the administrator as subject, checked
+  // before the transaction (R-SEC-6; C2); the record's entry names the user and carries no before or
+  // after, so no date of birth can reach it (PDPL).
+  list: adminProcedure({
+    input: usersListInput,
+    output: usersListOutput,
+    rateLimit: { key: 'rate_limit_search', subject: 'caller' },
+  }).query(async ({ ctx, input }) => {
+    const { adminId } = ctx.administrator;
+    const page = await ctx.services.users.list(ctx.tx, adminId, input);
+    ctx.audit.record({ action: 'users.listed', targetType: 'admin', targetId: adminId });
+    return page;
+  }),
+
+  get: adminProcedure({ input: usersGetInput, output: usersGetOutput }).query(
+    async ({ ctx, input }) => {
+      const record = await ctx.services.users.get(ctx.tx, ctx.administrator.adminId, input);
+      ctx.audit.record({ action: 'user.viewed', targetType: 'user', targetId: input.targetUserId });
+      return record;
     },
   ),
 });

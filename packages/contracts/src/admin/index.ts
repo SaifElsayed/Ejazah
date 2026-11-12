@@ -16,3 +16,5 @@ export * from './students.js';
 export * from './teachers.js';
 // T034 of specs/004-sessions: the disputes queue and its resolution.
 export * from './disputes.js';
+// T058 of specs/004-sessions: the user directory, `users.list` and `users.get`.
+export * from './users.js';
