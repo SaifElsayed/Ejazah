@@ -6,13 +6,19 @@
 // `standing.service.spec.ts`'s.
 import { describe, expect, it } from 'vitest';
 
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../platform/logging/logger.js';
 import { adminContextsOver, SPEC_ADMIN, VERIFIED } from '../../surfaces/admin-surface.fixtures.js';
-import type { AdminSurfaceServices } from '../../surfaces/context.js';
+import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
 import {
   createAdminCallerFactory,
   createAdminRouter,
   toErrorShape,
 } from '../../surfaces/procedures.js';
+import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
+import { studentsRouter } from './students.router.js';
 import { teachersRouter } from './teachers.router.js';
 
 const callerFor = createAdminCallerFactory(createAdminRouter({ teachers: teachersRouter }));
@@ -49,6 +55,10 @@ function surface() {
     revokeApproval: record('revokeApproval', MOVES.revokeApproval),
     ban: record('ban', MOVES.ban),
     reinstate: record('reinstate', MOVES.reinstate),
+    // T072: the lifts have their own router spec.
+    keyedLift: async () => {
+      throw new Error('unused');
+    },
   };
   const contexts = adminContextsOver({ teachers });
   return {
@@ -127,6 +137,274 @@ describe('the audit entries', () => {
       ).toBe('VALIDATION_FAILED');
       expect(written).toEqual([]);
       expect(reached).toEqual([]);
+    },
+  );
+});
+
+// T072 of specs/004-sessions (FR-502; SRS FR-ADMIN-5 as amended; admin-surface.md,
+// `students.liftBan`, `teachers.liftBan`, `teachers.liftRevocation`): the three lifts as they are
+// served, over a recorded standing (the students' router mounted beside this one). Each keyed
+// through the standing's `keyedLift` with its scope, the actor and the input; audited
+// `student.ban_lifted`, `teacher.ban_lifted` or `teacher.revocation_lifted` on the person with the
+// reason, the standing before and after and each enrollment's result; a replay answering the first
+// result with no second entry; a refusal writing no entry; the key required; `rate_limit_ban_lift`
+// refusing a call over it before the transaction opens; and the kind's deadlock declaration, a second
+// deadlock answering `CONFLICT` `restore_failed`. What a lift does is `standing.service.spec.ts`',
+// `ban-lift.service.spec.ts`' and `tests/db-integrity/ban-lift.spec.ts`'.
+describe('T072: the lifts', () => {
+  const liftsCallerFor = createAdminCallerFactory(
+    createAdminRouter({ students: studentsRouter, teachers: teachersRouter }),
+  );
+  const KEY = 'lift-attempt-0000000001';
+  const LIFT_REASON = 'ثبت أن الحظر كان خطأ';
+  const ENROLLMENTS = [
+    { enrollmentId: '0199d0a0-0000-7000-8000-0000000000e1', restored: true },
+    {
+      enrollmentId: '0199d0a0-0000-7000-8000-0000000000e2',
+      restored: false,
+      cause: 'slot_taken',
+    },
+  ];
+  const LIFTS = [
+    [
+      'students.liftBan',
+      'students',
+      'liftBan',
+      'studentUserId',
+      'student.ban_lifted',
+      { before: { accountStatus: 'banned' }, after: { accountStatus: 'active' } },
+    ],
+    [
+      'teachers.liftBan',
+      'teachers',
+      'liftBan',
+      'teacherUserId',
+      'teacher.ban_lifted',
+      {
+        before: {
+          accountStatus: 'banned',
+          verificationStatus: 'banned',
+          applicationStatus: 'approved',
+        },
+        after: {
+          accountStatus: 'active',
+          verificationStatus: 'approved',
+          applicationStatus: 'approved',
+        },
+      },
+    ],
+    [
+      'teachers.liftRevocation',
+      'teachers',
+      'liftRevocation',
+      'teacherUserId',
+      'teacher.revocation_lifted',
+      {
+        before: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+        after: { verificationStatus: 'approved', applicationStatus: 'approved' },
+      },
+    ],
+  ] as const;
+
+  type Lifted = { move: unknown; replayed: boolean };
+
+  function liftSurface(answer: (attempt: number) => Lifted | Error) {
+    const reached: unknown[][] = [];
+    const keyedLift = async (_tx: unknown, adminId: string, request: unknown) => {
+      reached.push([adminId, request]);
+      const outcome = answer(reached.length);
+      if (outcome instanceof Error) throw outcome;
+      return outcome;
+    };
+    const contexts = adminContextsOver({
+      students: { keyedLift } as never,
+      teachers: { keyedLift } as never,
+    });
+    return {
+      reached,
+      written: contexts.written,
+      as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+        liftsCallerFor(contexts.contextFor(session)),
+    };
+  }
+
+  // A recorded call through the surface's two routers, by namespace and procedure.
+  const call = (
+    caller: ReturnType<typeof liftsCallerFor>,
+    namespace: 'students' | 'teachers',
+    procedure: 'liftBan' | 'liftRevocation',
+    input: Record<string, unknown>,
+  ): Promise<unknown> =>
+    (caller as unknown as Record<string, Record<string, (input: unknown) => Promise<unknown>>>)[
+      namespace
+    ]![procedure]!(input);
+
+  async function liftShapeOf(attempt: Promise<unknown>) {
+    const thrown: unknown = await attempt.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    if (thrown === undefined) throw new Error('expected a refusal');
+    return toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body as {
+      code: string;
+      details?: unknown;
+    };
+  }
+
+  it.each(LIFTS)(
+    '%s is keyed through the standing with its scope and the actor, audited on the person with the reason, the standing and each enrollment’s result',
+    async (scope, namespace, procedure, field, action, move) => {
+      const { as, written, reached } = liftSurface(() => ({
+        move: { ...move, enrollments: ENROLLMENTS },
+        replayed: false,
+      }));
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      expect(await call(as(VERIFIED), namespace, procedure, input)).toEqual({
+        enrollments: ENROLLMENTS,
+      });
+      expect(reached).toEqual([
+        [SPEC_ADMIN, { scope, userId: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY }],
+      ]);
+      expect(written).toEqual([
+        {
+          adminId: SPEC_ADMIN,
+          action,
+          targetType: 'user',
+          targetId: TEACHER,
+          reason: LIFT_REASON,
+          before: move.before,
+          after: { ...move.after, enrollments: ENROLLMENTS },
+        },
+      ]);
+    },
+  );
+
+  it.each(LIFTS)(
+    '%s answers a replay the first result and records no second entry',
+    async (_scope, namespace, procedure, field, _action, move) => {
+      const { as, written } = liftSurface(() => ({
+        move: { ...move, enrollments: ENROLLMENTS },
+        replayed: true,
+      }));
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      expect(await call(as(VERIFIED), namespace, procedure, input)).toEqual({
+        enrollments: ENROLLMENTS,
+      });
+      expect(written).toEqual([]);
+    },
+  );
+
+  it.each(LIFTS)(
+    '%s refuses an anonymous caller, a missing key and a blank reason, reaching and writing nothing',
+    async (_scope, namespace, procedure, field) => {
+      const { as, written, reached } = liftSurface(() => new Error('unreached'));
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      expect((await liftShapeOf(call(as(null), namespace, procedure, input))).code).toBe(
+        'UNAUTHENTICATED',
+      );
+      for (const change of [{ idempotencyKey: undefined }, { reason: '  ' }]) {
+        expect(
+          (await liftShapeOf(call(as(VERIFIED), namespace, procedure, { ...input, ...change })))
+            .code,
+        ).toBe('VALIDATION_FAILED');
+      }
+      expect(written).toEqual([]);
+      expect(reached).toEqual([]);
+    },
+  );
+
+  it.each(LIFTS)(
+    '%s answers the standing’s refusal and keeps no entry',
+    async (_scope, namespace, procedure, field) => {
+      const refusal = new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'not_banned' }],
+      });
+      const { as, written } = liftSurface(() => refusal);
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      expect(await liftShapeOf(call(as(VERIFIED), namespace, procedure, input))).toMatchObject({
+        code: 'CONFLICT',
+        details: [{ path: 'cause', code: 'not_banned' }],
+      });
+      expect(written).toEqual([]);
+    },
+  );
+
+  it.each(LIFTS)(
+    '%s retries a deadlocked transaction once, and a second deadlock answers CONFLICT restore_failed',
+    async (_scope, namespace, procedure, field) => {
+      const deadlock = () =>
+        Object.assign(new Error('deadlock detected'), {
+          name: 'DriverAdapterError',
+          cause: { originalCode: '40P01', originalMessage: 'deadlock detected' },
+        });
+      const { as, written, reached } = liftSurface(() => deadlock());
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      expect(await liftShapeOf(call(as(VERIFIED), namespace, procedure, input))).toMatchObject({
+        code: 'CONFLICT',
+        details: [{ path: 'cause', code: 'restore_failed' }],
+      });
+      expect(reached).toHaveLength(2);
+      expect(written).toEqual([]);
+    },
+  );
+
+  it.each(LIFTS)(
+    '%s refuses a call over rate_limit_ban_lift RATE_LIMITED before the transaction opens',
+    async (_scope, namespace, procedure, field, _action, move) => {
+      const keysRead: string[] = [];
+      const counts = new Map<string, number>();
+      const rateLimiter = new RateLimiter({
+        settings: {
+          read: async (key, schema) => {
+            keysRead.push(key);
+            return schema.parse({ limit: 1, window_seconds: 60 });
+          },
+        },
+        counter: {
+          hit: async (key) => {
+            const count = (counts.get(key) ?? 0) + 1;
+            counts.set(key, count);
+            return count;
+          },
+        },
+        subjectKey: Buffer.alloc(32, 3),
+      });
+      let transactions = 0;
+      const reached: unknown[] = [];
+      const keyedLift = async (_tx: unknown, adminId: string) => {
+        reached.push(adminId);
+        return { move: { ...move, enrollments: [] }, replayed: false };
+      };
+      const context = () =>
+        createAdminContext({
+          session: VERIFIED,
+          log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+          administration: {
+            transactions: {
+              run: async <T>(work: (tx: Transaction) => Promise<T>): Promise<T> => {
+                transactions += 1;
+                return work({} as Transaction);
+              },
+            },
+            auditWriter: { write: async () => undefined },
+          },
+          services: new Proxy(unusedAdminServices, {
+            get: (target, name, receiver) =>
+              name === 'students' || name === 'teachers'
+                ? { keyedLift }
+                : Reflect.get(target, name, receiver),
+          }),
+          rateLimiter,
+          clientAddress: '203.0.113.9',
+        });
+      const input = { [field]: TEACHER, reason: LIFT_REASON, idempotencyKey: KEY };
+      await call(liftsCallerFor(context()), namespace, procedure, input);
+      expect(
+        (await liftShapeOf(call(liftsCallerFor(context()), namespace, procedure, input))).code,
+      ).toBe('RATE_LIMITED');
+      expect(keysRead).toContain('rate_limit_ban_lift');
+      expect(transactions).toBe(1);
+      expect(reached).toEqual([SPEC_ADMIN]);
     },
   );
 });

@@ -185,7 +185,11 @@ async function hold(
  * R-205's release as T026 brings it: these probes write no session, so a confirmed enrollment keeps
  * its slot whatever the clock (`discovery-slots.spec.ts` has the release week).
  */
-const RELEASE = { now: () => new Date('2026-10-04T08:00:00Z'), bufferWeeks: async () => 0 };
+const RELEASE = {
+  now: () => new Date('2026-10-04T08:00:00Z'),
+  bufferWeeks: async () => 0,
+  windowDays: async () => 14,
+};
 
 describe('slotInUse (T020, R-207, FR-318)', () => {
   it('answers false for a slot no hold and no enrollment uses', async () => {

@@ -79,7 +79,7 @@ const STARTED = new Date('2026-11-03T07:50:00Z');
 const ENDS = new Date('2026-11-03T08:50:00Z');
 const OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 /** A logger that writes nothing: the subscriber's line is its unit spec's. */
-const SILENT = { info: () => undefined };
+const SILENT = { info: () => undefined, warn: () => undefined };
 
 /** Where the webhook's transaction stops, when a probe asks it to. */
 interface WebhookStops {

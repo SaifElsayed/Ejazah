@@ -520,7 +520,8 @@ confirmed part, on the action's transaction, after the account's lock the action
 |---|---|---|---|---|
 | `account_deleted` | student | remaining `cancelled_by_admin` | `cancelled`, `account_deleted`; open remedies `lapsed`, a chosen refund's case kept open (C2) | none (T059) |
 | `account_deleted` | teacher | remaining `cancelled_by_admin` | `cancelled`, `account_deleted` | one per enrollment, `teacher_ended` (T059) |
-| `suspended`, `approval_revoked`, `banned` | teacher | remaining `cancelled_by_admin` | `cancelled`, `teacher_suspended` | one per enrollment, `teacher_ended` (FR-483) |
+| `suspended` | teacher | remaining `cancelled_by_admin`, one in its join period included | stay `confirmed`, keep their slot, cannot complete while the case is open; open remedies `frozen` and not offered while the teacher is suspended; resumed at the reinstatement (T071, **Decided**, FR-504, SRS FR-SESS-16 as amended) | one per enrollment, `teacher_suspended` (T071) |
+| `approval_revoked`, `banned` | teacher | remaining `cancelled_by_admin` | `cancelled`, `teacher_suspended` | one per enrollment, `teacher_ended` (FR-483) |
 | `suspended` | student | upcoming `cancelled_by_admin` | stay `confirmed`, keep their slot, cannot complete while the case is open (**Decided**, the owner, 2026-11-05, plan.md decision 1 (b)); open remedies `frozen` (C3) | one per enrollment, `student_suspended` (FR-486) |
 | `banned` | student | upcoming `cancelled_by_admin` | `cancelled`, `admin`, at once (**Decided**, plan.md decision 1 (a)) | one per enrollment, `student_banned`, nothing owed by default (FR-486) |
 
@@ -563,6 +564,30 @@ under FR-422's lock rule:
   enrollment not being `confirmed`; those sessions join the case the first end opened, owed as refunds, which that
   case's `covers` lists (R-312). The fault confirmed (`cases.dismiss`): they are owed nothing, and the case closes with
   no further effect (no cancellation, no new case).
+
+A teacher's suspension pauses (T071; FR-504; SRS FR-SESS-16 as amended; the notes under T071 of
+`specs/004-sessions/tasks.md`): a student's suspension's path reused, the `teacher_suspended` case named by every
+session it cancelled. The case is closed two ways only, never by `cases.resolve` or `cases.dismiss` (`CONFLICT`
+`closed_by_reinstatement`, nothing written):
+
+- **The reinstatement** (`teachers.reinstate`, `StandingService.reinstate` with the `reinstatement` the admin module
+  hands in, sessions' `createTeacherReinstatement`): in its transaction, the paused enrollments' students read with
+  no lock, then `users` (the teacher and those students, one call, id order) in place of `lockAccount`, the teacher's
+  key, the paused enrollments, their cancelled sessions, their remedies, `disputes`; each session the suspension
+  cancelled offered through T028's `offerLocked` with `clearedSuspension` (recitation `awaiting_choice`, ijazah track
+  `proposed`), the case closed `resolved`, `compensation_ordered`, the note `reinstated`; the frozen remedies offered
+  by `advance-remedies`' next run. No free week refuses the whole reinstatement `CONFLICT` `no_free_week`, nothing
+  written (T036's precedent).
+- **An end of the paused enrollment meanwhile** (Q5 (a), widened by the review session): the case closed in the end's
+  transaction, `resolved`, `compensation_ordered`, the fixed note `ended_meanwhile`, `covered_by_case_id` the end's
+  case (rule 49 as T069 widened it), by the ending administrator (`AccountConsequence`'s `actor`), `disputes` last, so
+  the sessions it cancelled are that case's `covers` (U2, `suspensionCasesCoveredBy` widened). Covered: a teacher's
+  ban or revocation (`teacher_ended`), the student's ban (`student_banned`), a complaint decided (a)
+  (`absence_termination`), a `student_suspended` case's fault confirmed (`student_fault_confirmed`); T081's and T082's
+  ends by their tasks. A person's own deletion names no administrator, so the case is left open with one warn line of
+  ids until T080 refuses such a deletion. A completion cannot end it (held while the case is open), nor a payment's or
+  a hold's cancellation (`pending_payment` only). A student's suspension of a paused enrollment ends nothing: a second
+  case opens.
 
 A student's suspension and ban are new `StandingService` methods, `suspendStudent`, `banStudent` and
 `reinstateStudent` (a reinstatement restores the account only; nothing cancelled is restored, the case deciding),
@@ -971,8 +996,28 @@ FR-423), `enrollments`, `sessions`, `session_remedies`, `disputes`. Under them, 
    `admin` and an open `student_fault_confirmed` case; else `RESTORE_REFUSED` `not_restorable` (a ban's
    `student_banned`, a deletion, a teacher's end, a completion, an enrollment not closed), or `case_closed` when the
    closing's case was resolved or dismissed.
+   *Since T073 (2026-11-13; the note under T073, Q4 (a)):* the closing is read by T070's one closing rule
+   (`sessions/restore-window.ts`, `closingOf`) over the enrollment's status, its last cancellation's reason and its
+   latest end case (`END_REASONS`, the cases read through moderation's entry): `terminated_no_show` with
+   `absence_termination`; `cancelled` `admin` with `student_fault_confirmed` or a student's ban's `student_banned`;
+   `cancelled` `teacher_suspended` with a teacher's ban's or revocation's `teacher_ended`. The case open, else
+   `case_closed`; any other closing `not_restorable`: a deletion's (`account_deleted`, whatever its case), a gender
+   correction's (`gender_correction`, Q10 (a)), a completion, an enrollment not closed. A ban's closing is admitted
+   here and refused `party_restricted` at step 3 while the ban stands. The monitor's `restorableUntil` and
+   `slotHeldUntil` read the closing the same way (`closingCaseReason`), so the panel and the restore cannot disagree.
+   `admin_ended` is T082's.
 2. *(Retired 2026-11-12, SRS DEC-69, for every closing step 1 admits: no restore is refused for its time, `window_closed` no longer produced; the setting holds the slot, T070, T073.)* The window: the case's `created_at`, written in the closing's own transaction, plus `enrollment_restore_window_days`,
    compared with the database's clock; else `window_closed`. No column stores the closing's instant (R-DB-4).
+   *Since T073:* not checked. `window_closed` stays in `restoreRefusalCause`, `@deprecated` and never produced
+   (R-API-9); the monitor's `restorableUntil` stays, `@deprecated`, answered with the hold's end (a past instant, the
+   restore still admitted); the window's setting of the closing's kind only holds the slot (T070, FR-503).
+   *The ninth cause, `refunded` (T073; FR-507; SRS FR-CANCEL-8 as amended, DEC-66; Q4 (a)):* checked after step 1,
+   before step 3: any gateway order of the enrollment `refunded` refuses `RESTORE_REFUSED` `refunded`, writing
+   nothing: a refund and the sessions are never both given back, the administrator may open a manual case (FR-493).
+   Read through the `EnrollmentPayments` port (`sessions/enrollment-payments.port.ts`, `refundedOf(tx,
+   enrollmentId)`), which payments implements and the admin module hands in, so sessions reads no payment table
+   (R-301); read with no lock (N3), every order move taking the enrollment's lock before the order's
+   (`payments/order-events.service.ts`), the restore holding it.
 3. The accounts: both `active`, the teacher's approval standing, as the join reads them (FR-432); else
    `party_restricted`.
 4. The count K of sessions to create: `snapshot_session_count` less the sessions consumed (`done`, `student_no_show`,
@@ -981,7 +1026,11 @@ FR-423), `enrollments`, `sessions`, `session_remedies`, `disputes`. Under them, 
    remedy never offered (`teacher_no_show`, `both_no_show` or `cancelled_by_agreement` with no remedy row, which
    `advance-remedies` offers once the enrollment is `confirmed` again), and a session not yet settled (`disputed`,
    `under_threshold`, `provider_outage`). A make-up the closing cancelled, its original's remedy `booked`, is among
-   the K, so no session is owed twice.
+   the K, so no session is owed twice. *(T073, 2026-11-13; SRS FR-CANCEL-8 as amended, FR-507; PR #134's Minor 1:)*
+   less each `cancelled_by_admin` session whose `session_events` row names an `admin_cancellation` case (an
+   administrator's `sessions.cancel` before the closing, the case read through moderation's entry), already owed
+   through that case; never one the closing cancelled, nor one a suspension cancelled before a fault (their rows name
+   the closing's or the suspension's case), which the K recreate.
 5. The dates: the enrollment's weekly slot (catalog's entry, under its lock; `slot_inactive` if the slot is no longer
    active), in `snapshot_slot_timezone`, K consecutive weekly occurrences from the first that starts at least
    `first_session_lead_hours` after the restore's instant (`firstOccurrenceAfter`, as generation does). For each week:
@@ -1006,7 +1055,8 @@ FR-423), `enrollments`, `sessions`, `session_remedies`, `disputes`. Under them, 
 The restore declares its own rate limit, `rate_limit_enrollment_restore` (10 per 60 s), the administrator as subject,
 apart from the key and checked before the transaction opens (R-321). Every refusal writes nothing. Then, in the same
 transaction: `EnrollmentSide.restore(tx, id)` (`confirmed`,
-`cancellation_reason` NULL, `confirmed_at` untouched, one `enrollment_events` row `restored`); the K sessions inserted
+`cancellation_reason` NULL, `confirmed_at` untouched, *(T073, T070's follow-up 2)* `slot_released_at` NULL so a later
+closing holds the slot again, one `enrollment_events` row `restored`); the K sessions inserted
 by the generation service widened additively with a count and a first sequence number (numbered after the last, FR-424:
 nothing assumes every session was generated at once; the database's exclusions the second line, an exclusion refusal
 rolling back as `time_taken`); each remedy whose `case_id` is the closing's case (`refund_case`, kind `makeup`) offered

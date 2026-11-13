@@ -9,8 +9,9 @@
 // THE MOVES (data-model.md §3, "Enrollment, this phase's moves"):
 //   terminateNoShow  confirmed → terminated_no_show                     `terminated_no_show`
 //   complete         confirmed → completed                              `completed`
-//   restore          terminated_no_show, or cancelled `admin` → confirmed `restored`
-//                    (`cancellation_reason` cleared, `confirmed_at` untouched and required, R-322)
+//   restore          terminated_no_show, or cancelled `admin` or `teacher_suspended` (T073)
+//                    → confirmed `restored` (`cancellation_reason` and `slot_released_at`
+//                    cleared, `confirmed_at` untouched and required, R-322)
 //   cancel 'admin'   confirmed → cancelled `admin`                      `cancelled` with `admin`
 // Each is one conditional update from its source states: the row the caller read under its lock is
 // still in one of them, or the move changes nothing, writes no row and answers `false` for the
@@ -48,13 +49,14 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { readSlot, type SlotRow, teacherSlotsOf } from '../catalog/index.js';
-import type {
-  EnrollmentEventEntry,
-  EnrollmentPageFilter,
-  EnrollmentPageItem,
-  EnrollmentSide,
-  EnrollmentTerms,
-  HeldTime,
+import {
+  type EnrollmentEventEntry,
+  type EnrollmentPageFilter,
+  type EnrollmentPageItem,
+  type EnrollmentSide,
+  type EnrollmentTerms,
+  type HeldTime,
+  windowDaysOf,
 } from '../sessions/index.js';
 import { type EnrollmentOutcome, recordEnrollmentEvents } from './enrollment-events.repository.js';
 import {
@@ -72,6 +74,7 @@ import { FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours } from './nearest-slo
 import { packageSessionsOn } from './session-overlap.service.js';
 import {
   isFreeOn,
+  type OccupancyReads,
   occupancyOf,
   SLOT_RELEASE_BUFFER_SETTING,
   type SlotOccupancy,
@@ -100,7 +103,7 @@ export interface EnrollmentSideStore {
   occupancyOf(
     tx: Transaction,
     slotIds: readonly string[],
-    bufferWeeks: () => Promise<number>,
+    reads: OccupancyReads,
     exceptEnrollmentId: string,
   ): Promise<ReadonlyMap<string, SlotOccupancy>>;
   activeHoldsAmong(
@@ -165,7 +168,11 @@ export function createEnrollmentSide({
   readonly now?: () => Date;
   readonly store?: EnrollmentSideStore;
 }): EnrollmentSide {
-  const bufferWeeks = () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks);
+  // R-205's buffer, and (T070) the window of a closing's hold, each read only when it is needed.
+  const reads: OccupancyReads = {
+    bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
+    windowDays: windowDaysOf(settings),
+  };
   /** Only when the update moved the row, writes its one `enrollment_events` row. */
   const recorded = async (
     tx: Transaction,
@@ -214,11 +221,11 @@ export function createEnrollmentSide({
         occurredAt,
       })),
     slotWeekTaken: async (tx, slotId, localDate: LocalDate, enrollmentId) => {
-      const occupancy = await store.occupancyOf(tx, [slotId], bufferWeeks, enrollmentId);
+      const occupancy = await store.occupancyOf(tx, [slotId], reads, enrollmentId);
       return !isFreeOn(occupancy.get(slotId), localDate);
     },
     slotsFreeFrom: async (tx, slotIds, enrollmentId) => {
-      const occupancy = await store.occupancyOf(tx, slotIds, bufferWeeks, enrollmentId);
+      const occupancy = await store.occupancyOf(tx, slotIds, reads, enrollmentId);
       return new Map(
         [...occupancy].map(([slotId, used]) => [
           slotId,

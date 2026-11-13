@@ -16,6 +16,7 @@ import {
   caseQueuePage,
   caseRecordOf,
   closeOpenCase,
+  compensationCasesAmong,
   compensationCasesOf,
   insertCase,
   lockCasesOf,
@@ -331,6 +332,88 @@ describe('compensationCasesOf', () => {
   });
 });
 
+// T070 A1 (the owner's approval of 2026-11-13; the first follow-up under T070): the hold's cases of
+// many enrollments in one statement, each enrollment answered as `compensationCasesOf` answers it.
+describe('compensationCasesAmong (T070 A1)', () => {
+  it("asks every enrollment's compensation cases in one statement and answers each newest first, none for one with no case", async () => {
+    const { tx, asked } = client({
+      findMany: [
+        [
+          {
+            enrollmentId: OTHER_ENROLLMENT,
+            id: CASE_4,
+            reason: 'student_banned',
+            status: 'open',
+            createdAt: T3,
+          },
+          {
+            enrollmentId: ENROLLMENT,
+            id: CASE_3,
+            reason: 'student_suspended',
+            status: 'open',
+            createdAt: T2,
+          },
+          {
+            enrollmentId: OTHER_ENROLLMENT,
+            id: CASE_2,
+            reason: 'absence_termination',
+            status: 'dismissed',
+            createdAt: T1,
+          },
+          {
+            enrollmentId: ENROLLMENT,
+            id: CASE,
+            reason: 'teacher_ended',
+            status: 'resolved',
+            createdAt: T0,
+          },
+        ],
+      ],
+    });
+    const cases = await compensationCasesAmong(tx, [
+      ENROLLMENT,
+      OTHER_ENROLLMENT,
+      THIRD_ENROLLMENT,
+    ]);
+    expect([...cases]).toEqual([
+      [
+        ENROLLMENT,
+        [
+          { caseId: CASE_3, reason: 'student_suspended', status: 'open', createdAt: T2 },
+          { caseId: CASE, reason: 'teacher_ended', status: 'resolved', createdAt: T0 },
+        ],
+      ],
+      [
+        OTHER_ENROLLMENT,
+        [
+          { caseId: CASE_4, reason: 'student_banned', status: 'open', createdAt: T3 },
+          { caseId: CASE_2, reason: 'absence_termination', status: 'dismissed', createdAt: T1 },
+        ],
+      ],
+      [THIRD_ENROLLMENT, []],
+    ]);
+    expect(asked).toEqual([
+      [
+        'findMany',
+        {
+          where: {
+            enrollmentId: { in: [ENROLLMENT, OTHER_ENROLLMENT, THIRD_ENROLLMENT] },
+            kind: 'compensation_case',
+          },
+          orderBy: { id: 'desc' },
+          select: { enrollmentId: true, id: true, reason: true, status: true, createdAt: true },
+        },
+      ],
+    ]);
+  });
+
+  it('asks nothing for no enrollment', async () => {
+    const { tx, asked } = client();
+    expect((await compensationCasesAmong(tx, [])).size).toBe(0);
+    expect(asked).toEqual([]);
+  });
+});
+
 describe('sessionsEverDisputedAmong', () => {
   it('asks nothing for no session', async () => {
     const { tx, asked } = client();
@@ -551,7 +634,9 @@ describe('caseQueuePage', () => {
 });
 
 describe('suspensionCasesCoveredBy', () => {
-  it('asks the student_suspended cases whose link names the case, oldest first, and answers them by case id', async () => {
+  // T071 of specs/004-sessions (rule d, an approved change: the note under T071, Q5 (a) widened):
+  // a `teacher_suspended` case an end closed is linked the same way.
+  it('asks the student_suspended and teacher_suspended cases whose link names the case, oldest first, and answers them by case id', async () => {
     const { tx, asked } = client({
       findMany: [
         [
@@ -571,7 +656,7 @@ describe('suspensionCasesCoveredBy', () => {
           where: {
             coveredByCaseId: CASE_3,
             kind: 'compensation_case',
-            reason: 'student_suspended',
+            reason: { in: ['student_suspended', 'teacher_suspended'] },
           },
           orderBy: { id: 'asc' },
           select: { id: true, status: true },

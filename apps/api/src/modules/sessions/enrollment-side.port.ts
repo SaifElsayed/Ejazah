@@ -46,9 +46,19 @@ export type EnrollmentCancellationReason =
 /** `snapshot_track`, the package's track frozen at purchase (ADR 0018 D1, `package_track`). */
 export type EnrollmentTrack = 'recitation' | 'ijazah_track';
 
-/** `enrollment_events.kind` (data-model.md §2.8, `enrollment_event_kind`). */
+/**
+ * `enrollment_events.kind` (data-model.md §2.8, `enrollment_event_kind`); `slot_released` and
+ * `slot_hold_ended` since T069's migration (data-model.md §2.13; Q-69-1 (a)).
+ */
 export type EnrollmentEventKind =
-  'confirmed' | 'order_failed' | 'cancelled' | 'completed' | 'terminated_no_show' | 'restored';
+  | 'confirmed'
+  | 'order_failed'
+  | 'cancelled'
+  | 'completed'
+  | 'terminated_no_show'
+  | 'restored'
+  | 'slot_released'
+  | 'slot_hold_ended';
 
 /**
  * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two
@@ -130,11 +140,12 @@ export interface EnrollmentSide {
   /** `confirmed` → `completed`, with one `completed` row (T015, FR-449). */
   complete(tx: Transaction, id: string): Promise<boolean>;
   /**
-   * `terminated_no_show`, or `cancelled` with the reason `admin`, → `confirmed`, with one
-   * `restored` row: an administrator's restore (T061, FR-454, R-322). `cancellation_reason` is
+   * `terminated_no_show`, or `cancelled` with the reason `admin` or (T073) `teacher_suspended`,
+   * → `confirmed`, with one `restored` row: an administrator's restore (T061, FR-454, R-322). `cancellation_reason` is
    * cleared and `confirmed_at` left as it is (R-HONEST-1); only an enrollment a payment once
    * confirmed (`confirmed_at` set) is restored, any other answering `false`. Which closing may be
-   * restored (its case, its window) is the caller's to check.
+   * restored (sessions' `closingOf`, its case open) is the caller's to check; T073 also clears
+   * `slot_released_at`, so a later closing holds its slot again.
    */
   restore(tx: Transaction, id: string): Promise<boolean>;
   /**

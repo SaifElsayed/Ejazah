@@ -26,7 +26,7 @@ import {
   StandingService,
   standingStoreOver,
 } from '../../apps/api/src/modules/identity/index.js';
-import { orderStandingsOf } from '../../apps/api/src/modules/payments/index.js';
+import { orderStandingsOf, refundedOf } from '../../apps/api/src/modules/payments/index.js';
 import {
   createAbsenceComplaint,
   createCaseClosing,
@@ -151,6 +151,7 @@ describe('a cleared suspension case links only an end case opened after it (PR #
         settings,
         log: SILENT,
         clock: async () => RESTORED,
+        payments: { refundedOf }, // T073 (rule d): the restore's new port
       }).restore(tx, admin, {
         enrollmentId: made.enrollmentId,
         reason: 'خطأ',

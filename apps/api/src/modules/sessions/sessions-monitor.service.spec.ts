@@ -15,6 +15,22 @@
 //     refused NOT_FOUND through the file's one `refusal`, with one log line.
 //
 // Over the real tables: `tests/db-integrity/sessions-monitor.spec.ts`.
+//
+// T069 (B42a lane 69, Q-69-1 (a)): the two `enrollment_event_kind` values T069's migration adds,
+// `slot_released` and `slot_hold_ended`, reach the timeline and pass the procedure's output schema.
+//
+// T070 (FR-503; SRS FR-CANCEL-9; the note under T070, Q4 (a)): `slotHeldUntil`, the closing case's
+// opening plus its kind's window, for a closing the one closing rule admits with its case open and its
+// slot not released (a complaint's, a fault's, a ban's, a teacher's ban or revocation), and
+// `slotReleasedAt`, the release's instant; neither for a deletion's closing, a closed case or an
+// enrollment not closed.
+//
+// T073 (the note under T073, Q4 (a); PR #138's review, round 3, Major 1, and round 4, nit):
+// `closingCaseReason` reads the closing as R-322's step 1 does (`closingOf`), so `restorableUntil`,
+// `@deprecated` and answered with the hold's end, is present for every closing step 1 admits with its
+// case open, a ban's and a teacher's ban's or revocation's `teacher_ended` closing included, a
+// release leaving it; never for a deletion's or a gender correction's.
+import { sessionsMonitorGetOutput } from '@ijazah/contracts/admin';
 import { addMinutes, resolveLocalDateTime } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -51,6 +67,8 @@ const SETTINGS: Readonly<Record<string, number>> = {
   repeated_absence_flag_count: 5,
   dispute_window_hours: 72,
   enrollment_restore_window_days: 7,
+  // T070: a ban's or a revocation's hold.
+  ban_restore_window_days: 3,
 };
 
 function item(n: number, overrides: Partial<EnrollmentPageItem> = {}): EnrollmentPageItem {
@@ -578,6 +596,23 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
     ]);
   });
 
+  it('T069: a slot_released and a slot_hold_ended row reach the timeline, and the output schema admits them', async () => {
+    const { monitor } = world({
+      pages: [item(1)],
+      sessions,
+      enrollmentEvents: [
+        { kind: 'slot_released', occurredAt: new Date('2026-11-09T12:00:00Z') },
+        { kind: 'slot_hold_ended', occurredAt: new Date('2026-11-10T12:00:00Z') },
+      ],
+    });
+    const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+    expect(answer.events).toEqual([
+      { source: 'enrollment', kind: 'slot_hold_ended', occurredAt: '2026-11-10T12:00:00.000Z' },
+      { source: 'enrollment', kind: 'slot_released', occurredAt: '2026-11-09T12:00:00.000Z' },
+    ]);
+    expect(sessionsMonitorGetOutput.shape.events.safeParse(answer.events).success).toBe(true);
+  });
+
   describe('restorableUntil (FR-454, R-322)', () => {
     const opened = new Date('2026-11-06T09:00:00Z');
 
@@ -638,6 +673,186 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
         },
       ],
     ])('is absent for %s', async (_name, options) => {
+      const { monitor } = world(options);
+      const { enrollment } = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      expect(enrollment).not.toHaveProperty('restorableUntil');
+    });
+  });
+
+  describe('slotHeldUntil and slotReleasedAt (T070; FR-503)', () => {
+    const opened = new Date('2026-11-06T09:00:00Z');
+    const cancelled = (reason: 'admin' | 'teacher_suspended' | 'account_deleted') => ({
+      kind: 'cancelled' as const,
+      cancellationReason: reason,
+      occurredAt: opened,
+    });
+    const open = (reason: string) => ({
+      caseId: id(60),
+      reason,
+      status: 'open' as const,
+      createdAt: opened,
+    });
+
+    it.each<[string, Partial<WorldOptions>, string]>([
+      [
+        'a complaint’s, the enrollment window',
+        { pages: [item(1, { status: 'terminated_no_show' })], cases: [open('absence_termination')] },
+        '2026-11-13T09:00:00.000Z',
+      ],
+      [
+        'a fault’s, the enrollment window',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('admin')],
+          cases: [open('student_fault_confirmed')],
+        },
+        '2026-11-13T09:00:00.000Z',
+      ],
+      [
+        'a ban’s, the ban window',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('admin')],
+          cases: [open('student_banned')],
+        },
+        '2026-11-09T09:00:00.000Z',
+      ],
+      [
+        'a teacher’s ban or revocation, the ban window',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('teacher_suspended')],
+          cases: [open('teacher_ended')],
+        },
+        '2026-11-09T09:00:00.000Z',
+      ],
+    ])('answers the hold’s end for %s', async (_name, options, until) => {
+      const { monitor } = world(options);
+      const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      expect(answer.enrollment.slotHeldUntil).toBe(until);
+      expect(answer.enrollment).not.toHaveProperty('slotReleasedAt');
+      expect(sessionsMonitorGetOutput.safeParse(answer).success).toBe(true);
+    });
+
+    it('answers the release’s instant, and no hold, once an administrator released the slot', async () => {
+      const { monitor } = world({
+        pages: [item(1, { status: 'cancelled' })],
+        enrollmentEvents: [
+          cancelled('admin'),
+          { kind: 'slot_released', occurredAt: new Date('2026-11-08T10:00:00Z') },
+        ],
+        cases: [open('student_banned')],
+      });
+      const { enrollment } = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      expect(enrollment.slotReleasedAt).toBe('2026-11-08T10:00:00.000Z');
+      expect(enrollment).not.toHaveProperty('slotHeldUntil');
+    });
+
+    it.each<[string, Partial<WorldOptions>]>([
+      [
+        'a deletion’s closing',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('account_deleted')],
+          cases: [open('teacher_ended')],
+        },
+      ],
+      [
+        'a closing whose case is closed',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('admin')],
+          cases: [{ ...open('student_banned'), status: 'resolved' }],
+        },
+      ],
+      ['a confirmed enrollment', { pages: [item(1)], cases: [open('student_banned')] }],
+    ])('answers neither for %s', async (_name, options) => {
+      const { monitor } = world(options);
+      const { enrollment } = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      expect(enrollment).not.toHaveProperty('slotHeldUntil');
+      expect(enrollment).not.toHaveProperty('slotReleasedAt');
+    });
+
+  });
+
+  describe('restorableUntil read as step 1 reads the closing (T073; Q4 (a))', () => {
+    const opened = new Date('2026-11-06T09:00:00Z');
+    const cancelled = (
+      reason: 'admin' | 'teacher_suspended' | 'account_deleted' | 'gender_correction',
+    ) => ({ kind: 'cancelled' as const, cancellationReason: reason, occurredAt: opened });
+    const open = (reason: string) => ({
+      caseId: id(60),
+      reason,
+      status: 'open' as const,
+      createdAt: opened,
+    });
+
+    it.each<[string, Partial<WorldOptions>]>([
+      [
+        'a ban’s closing (cancelled admin, its student_banned case open)',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('admin')],
+          cases: [open('student_banned')],
+        },
+      ],
+      [
+        'a teacher’s ban’s or revocation’s teacher_ended closing (PR #138’s review, round 4, nit)',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('teacher_suspended')],
+          cases: [open('teacher_ended')],
+        },
+      ],
+    ])('answers the hold’s end for %s, as slotHeldUntil', async (_name, options) => {
+      const { monitor } = world(options);
+      const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      // `ban_restore_window_days` is 3 here: the hold's end.
+      expect(answer.enrollment.restorableUntil).toBe('2026-11-09T09:00:00.000Z');
+      expect(answer.enrollment.slotHeldUntil).toBe('2026-11-09T09:00:00.000Z');
+      expect(sessionsMonitorGetOutput.safeParse(answer).success).toBe(true);
+    });
+
+    it('keeps the hold’s end in restorableUntil after a release, the restore still admitted', async () => {
+      const { monitor } = world({
+        pages: [item(1, { status: 'cancelled' })],
+        enrollmentEvents: [
+          cancelled('admin'),
+          { kind: 'slot_released', occurredAt: new Date('2026-11-08T10:00:00Z') },
+        ],
+        cases: [open('student_banned')],
+      });
+      const { enrollment } = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      expect(enrollment.restorableUntil).toBe('2026-11-09T09:00:00.000Z');
+      expect(enrollment).not.toHaveProperty('slotHeldUntil');
+    });
+
+    it.each<[string, Partial<WorldOptions>]>([
+      [
+        'a deletion’s closing',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('account_deleted')],
+          cases: [open('teacher_ended')],
+        },
+      ],
+      [
+        'a gender correction’s closing',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('gender_correction')],
+          cases: [open('student_banned')],
+        },
+      ],
+      [
+        'a ban’s closing whose case is closed',
+        {
+          pages: [item(1, { status: 'cancelled' })],
+          enrollmentEvents: [cancelled('admin')],
+          cases: [{ ...open('student_banned'), status: 'dismissed' }],
+        },
+      ],
+    ])('answers none for %s', async (_name, options) => {
       const { monitor } = world(options);
       const { enrollment } = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
       expect(enrollment).not.toHaveProperty('restorableUntil');

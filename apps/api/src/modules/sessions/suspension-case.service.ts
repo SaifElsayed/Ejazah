@@ -13,7 +13,9 @@
 // answering null, the guard of `remedy-offer.service.ts`), the whole resolve is refused `CONFLICT`
 // with `details.cause` `no_free_week` and nothing is written (Q5 (a)): no later run offers a
 // `cancelled_by_admin` session, so a closed case would leave it owed and never offered; the offer
-// writes its own warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`. The preconditions
+// writes its own warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`. T071 (Q-B1 (a), the
+// review session's ruling of 2026-11-13): refused `TEACHER_SUSPENDED` while the enrollment's teacher
+// is suspended (the enrollment paused), read under the teacher's lock before any offer. The preconditions
 // read under the locks (the enrollment `confirmed`, the student not suspended, no remedy on the
 // sessions offered) leave no other null.
 //
@@ -26,6 +28,13 @@
 // new case (opened or joined) in `covered_by_case_id` (ERD §15 rule 49; the note under T036, the
 // owner's decision (c) on PR #133's Major 1), so the sessions owed a remedy never offered and the
 // make-ups the suspension cancelled are the new case's through T035's `covers`, by id (U1).
+//
+// ON AN ENROLLMENT ALSO PAUSED (T071 of specs/004-sessions; the first note under T071, Q5 (a)
+// widened, P7): the fault confirmed ends an enrollment its teacher's suspension paused too
+// (`confirmed`), and its open `teacher_suspended` case is closed in the same transaction, after this
+// case, through `closePausedCaseOnEnd`: `resolved`, `compensation_ordered`, `ended_meanwhile`,
+// covered by the new `student_fault_confirmed` case, by the administrator who dismissed, one info
+// line of ids. Cleared ends nothing and closes no such case.
 //
 // ON AN ENROLLMENT THAT ENDED ANOTHER WAY meanwhile (a ban, a teacher's end; U2): no second end.
 // Cleared offers nothing and closes the case naming the end's case, the enrollment's latest case of
@@ -89,9 +98,14 @@ import {
   partiesOfEnrollment,
   sessionsToOfferOf,
 } from './suspension-case.repository.js';
+import {
+  closePausedCaseOnEnd,
+  type PausedCaseStore,
+  pausedCaseStore,
+} from './teacher-suspension.service.js';
 
 /** What closing a suspended student's case reads, locks and writes; faked in a spec. */
-export interface SuspensionCaseStore {
+export interface SuspensionCaseStore extends Pick<PausedCaseStore, 'pausedCaseOf'> {
   /** The enrollment's parties from its sessions' copies, no lock (F7). */
   partiesOf(tx: Transaction, enrollmentId: string): Promise<EnrollmentParties | null>;
   /** Both accounts, `FOR UPDATE`, one call, id order. */
@@ -140,6 +154,8 @@ export const suspensionCaseStore: SuspensionCaseStore = {
     latestCaseOf(tx, enrollmentId, [...END_REASONS], afterCaseId),
   cancelRemaining: (tx, enrollmentIds, now, caseOf) =>
     cancelRemainingSessions(tx, enrollmentIds, now, caseOf),
+  // T071: the paused enrollment's open `teacher_suspended` case (moderation's entry).
+  pausedCaseOf: pausedCaseStore.pausedCaseOf,
 };
 
 /** The case closed and its enrollment, as the caller read them with no lock. */
@@ -161,7 +177,7 @@ export interface SuspensionCase {
 }
 
 /** Why a closing was refused, as its one log line names it. */
-type RefusalReason = 'not_open' | 'student_suspended' | 'no_free_week';
+type RefusalReason = 'not_open' | 'student_suspended' | 'teacher_suspended' | 'no_free_week';
 
 interface RefusalIds {
   readonly adminId: string;
@@ -257,6 +273,12 @@ export function createSuspensionCase({
         endedAnotherWay(ids, terms?.status ?? 'none', 'resolved', endCase);
         return;
       }
+      // T071 (Q-B1 (a)): the teacher still suspended, the enrollment paused, T028's offer would
+      // postpone every session; refused with that standing, read under the accounts' locks before
+      // any offer, writing nothing.
+      if ((await store.accountStatusOf(tx, parties.teacherUserId)) === 'suspended') {
+        throw refusal(log, ids, 'TEACHER_SUSPENDED', 'teacher_suspended');
+      }
       const sessionIds = sortedUnique(await store.sessionsToOffer(tx, caseId));
       if (sessionIds.length > 0) {
         await store.lockSessions(tx, sessionIds);
@@ -295,6 +317,13 @@ export function createSuspensionCase({
       );
       const faultCaseId = ended.caseOf.get(enrollmentId) ?? null;
       await close(tx, ids, faultCaseId === null ? closing : { ...closing, coveredBy: faultCaseId });
+      // T071 (P7): an enrollment also paused, its `teacher_suspended` case covered by the fault case.
+      await closePausedCaseOnEnd(tx, store, log, {
+        adminId,
+        enrollmentId,
+        endCaseId: faultCaseId,
+        end: 'student_fault_confirmed',
+      });
       // T066: the enrollment closed, to both parties once this transaction commits.
       publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {
         type: 'enrollment',

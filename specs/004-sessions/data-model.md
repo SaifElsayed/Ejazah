@@ -203,11 +203,14 @@ its suspension cancelled, written by `closeCase` in the closing's one update: di
 ended, that end's case (U2, every session covered). NULL otherwise. Rule 49: `covered_by_case_id IS NULL OR (kind =
 'compensation_case' AND reason = 'student_suspended' AND status <> 'open' AND covered_by_case_id <> id)`. `cases.get`'s
 `covers` reads the link and compares no instant: `resolved_at` is the database's clock, `created_at` the application's.
+Widened by T069 (§2.13): `reason IN ('student_suspended', 'teacher_suspended')`, the link also on a closed
+`teacher_suspended` case (T071), the rest unchanged.
 
 ### 2.8 `enrollment_events`
 
-`enrollment_event_kind` gains `completed`, `terminated_no_show` and `restored` (an administrator's restore, R-322). Rule
-39's checks are unchanged (none carries a reason or a payment).
+`enrollment_event_kind` gains `completed`, `terminated_no_show` and `restored` (an administrator's restore, R-322), and,
+by T069 (§2.13), `slot_released` and `slot_hold_ended`. Rule 39's checks are unchanged (none carries a reason or a
+payment).
 
 ### 2.9 `chat_messages`
 
@@ -244,6 +247,25 @@ decision of 2026-11-06, research R-327, «The administrator's read»); no column
 The owner's decision of 2026-11-05. Not a derived value: `expires_at` against `released_at` tells an expiry only
 roughly, and nothing else tells a new checkout from an account's end for a hold with no enrollment. Phase 2's
 `payments.get` lists the enrollment's holds with it (contracts/admin-surface.md).
+
+### 2.13 A ban's lift, a held slot and a deleted teacher's kept data (T069; SRS DEC-66, DEC-67)
+
+The owner's decisions of 2026-11-12 (SRS DEC-66, DEC-67, DEC-69; spec FR-502, FR-503, FR-505, FR-508) and of
+2026-11-13 on B42a's conflict check (the note under T069 in tasks.md). One additive migration,
+`20261113120000_ban_restorable_and_kept_data` (§6). Every new column is NULL on every existing row; no backfill,
+the app has never launched.
+
+| Table | Column or object | Type | Notes |
+|---|---|---|---|
+| `users` (identity) | `banned_at` | timestamptz, nullable | The instant of the ban in force: written by every ban (`banStudent`, `ban`), cleared by its lift (T072). Check (rule 50): `banned_at IS NULL OR account_status = 'banned'` |
+| `enrollments` (booking) | `slot_released_at` | timestamptz, nullable | An administrator's release of a held slot before its hold ended (T070, `enrollments.releaseSlot`; SRS FR-CANCEL-9) |
+| `teacher_profiles` (identity) | `kept_at`, `kept_erase_at`, `kept_erased_at` | timestamptz, nullable | A deleted teacher ever approved keeps the identity and credential documents and the payout reference (T076): `kept_at` the deletion that kept them, `kept_erase_at` the erasure date an administrator set, `kept_erased_at` their erasure (T077; SRS FR-ADMIN-21) |
+| `teacher_profiles` (identity) | `verification_status_before_ban`, `application_status_before_ban` | enums `teacher_verification_status`, `teacher_application_status`, nullable | The two statuses the profile had before a ban, written by every ban and cleared by its lift, which returns the profile to them (T072; spec FR-502) |
+| `teacher_profiles` (identity) | `teacher_profiles_payout_account_ref_hash_key` | partial unique index | Rebuilt `WHERE kept_at IS NULL`: the payout hash binds the live accounts only, so a new account may register the payout account a kept profile holds (Q-E (a); rule 27 as widened) |
+| `verification_documents` (verification) | `kept_at` | timestamptz, nullable | Set at the deletion of a teacher ever approved on each identity and credential document it keeps (T076). Rule 34 widened: `kept_at IS NULL OR erased_at IS NULL`, beside its first check, so a kept document holds its key. That every document of a deleted person still holding its key is kept or erased spans `users`, so it is held by the deletion and its spec (`tests/db-integrity/ban-restorable-kept-data.spec.ts`), not by a check |
+| `enrollment_events` (booking) | `enrollment_event_kind` + `slot_released`, `slot_hold_ended` | enum values | An administrator's release of a held slot (T070) and a hold's end recorded once by the hourly sweep (T074; spec FR-505). Rule 39 unchanged: neither carries a reason or a payment |
+| `enrollments` (booking) | `enrollments_held_closing_idx` | partial index on `(id)` | `WHERE confirmed_at IS NOT NULL AND (status = 'terminated_no_show' OR (status = 'cancelled' AND cancellation_reason IN ('admin', 'teacher_suspended')))`: every held closing, none a deletion or a gender correction ended (DEC-69). The hourly sweep (T074) reads it a page at a time in id order. It keeps every held closing after its hold too, so the sweep's read grows with history: accepted, re-checked at Phase 6's load pass (Q11 (a)) |
+| `disputes` (moderation) | rule 49 | check | Widened: `covered_by_case_id IS NULL OR (kind = 'compensation_case' AND reason IN ('student_suspended', 'teacher_suspended') AND status <> 'open' AND covered_by_case_id <> id)`: the link also on a closed `teacher_suspended` case (T071) |
 
 ## 3. State machines
 
@@ -327,7 +349,7 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `video_empty_timeout_seconds` | 300 (LiveKit's own default; the owner's decision on the analysis, K2) | the room's `emptyTimeout` (R-302) |
 | `video_departure_timeout_seconds` | 20 (the same) | the room's `departureTimeout` (R-302) |
 | `repeated_absence_flag_count` | 5 (the owner's decision of no automatic termination) | FR-451's mark (R-322) |
-| `enrollment_restore_window_days` | 7 (the same) | FR-454's window (R-322) |
+| `enrollment_restore_window_days` | 14 (SRS DEC-66, T069; 7 until then, the same decision) | FR-454's window (R-322); since DEC-69 only the hold of the slot after an administrator's closing (FR-503) |
 | `rate_limit_absence_complaint` | `{ limit: 5, window_seconds: 3600 }` (the limit the same decision; its default this cycle's reading) | FR-452's rate limit, the student as subject (R-322) |
 | `rate_limit_signed_in_default` | `{ limit: 150, window_seconds: 60 }` per research R-325 (the owner's decision of 2026-11-06 on the fifth analysis, 160 until then; the owner's decision of 2026-11-05 its first value; the rule its reason: the larger of 120 and the heaviest normal minute × 2–3, never a number above 200, R-321 item 5) | FR-470's default limit on every signed-in procedure that declares none, the user or administrator as subject (R-321) |
 | `rate_limit_dispute_revision` | `{ limit: 10, window_seconds: 60 }` (the owner's decision of 2026-11-05 on the administrator's control) | `disputes.revise`'s own limit, the administrator as subject (FR-470) |
@@ -338,6 +360,13 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `live_channel_max_connections_per_user` | 3 (the same) | the most live streams one account holds, the oldest ended when one more opens (FR-428; R-324) |
 | `room_close_grace_minutes` | 0 (the owner's decision of 2026-11-09, DEC-64) | the minutes after a session's scheduled end before the `evaluate-sessions` sweep ends its video room (FR-501; SRS FR-SESS-21, §3.14; T067) |
 | `room_close_retry_minutes` | 10 (the owner's decision of 2026-11-11 on B40a's conflict check, Q5, DEC-65) | the minutes after the end plus the grace during which the sweep asks the provider again, each minute, until it reports the room ended; a positive whole number of minutes, since 0 would close nothing, so the reader refuses it and the step writes its error line and report each run (FR-501; SRS FR-SESS-21, §3.14; T067) |
+| `ban_restore_window_days` | 14 (the owner's decisions of 2026-11-12, SRS DEC-66; T069) | the days a ban's or a revocation's closing holds its slot (FR-502, FR-503; SRS §3.14 «Ban restore window (days)», DEC-69) |
+| `rate_limit_ban_lift` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `students.liftBan`, `teachers.liftBan` and `teachers.liftRevocation`'s own limit, the administrator as subject (FR-502; T072) |
+| `rate_limit_slot_release` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `enrollments.releaseSlot`'s own limit, the administrator as subject (FR-503; T070) |
+| `rate_limit_kept_data_erase_date` | `{ limit: 10, window_seconds: 60 }` (the owner's decisions of 2026-11-12, SRS DEC-67; T069) | `teachers.keptData.setEraseDate`'s own limit, the administrator as subject (FR-509; T077) |
+| `rate_limit_kept_data_erase_now` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `teachers.keptData.eraseNow`'s own limit, the administrator as subject (FR-509; T077) |
+| `rate_limit_kept_document_link` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `teachers.keptData.documentLink`'s own limit, the administrator as subject (FR-509; T077) |
+| `rate_limit_admin_user_delete` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | an administrator's deletion of an account at its owner's request, its own limit, the administrator as subject (SRS FR-ADMIN-22; T081) |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
@@ -345,6 +374,10 @@ Changed: `chat_retention_days` defaults to **30** (was 0; the owner's decision o
 still an administrator's setting (FR-492). The seed inserts a row only where it is absent, so the new default reaches a
 new database; a database already seeded keeps its row until an administrator changes it in the panel (R-PROC-11,
 research R-317).
+
+Changed (T069; SRS DEC-66, Q6 (b)): `enrollment_restore_window_days` defaults to **14** (was 7). The seed plants 14 on a
+new database, and the migration `20261113120000_ban_restorable_and_kept_data` moves an existing row to 14 only while it
+still holds 7, so a value an administrator chose is left alone.
 
 Existing keys this phase reads: `first_session_lead_hours` (fixed on each remedy at its offer), `early_join_lead_minutes`, `join_window_minutes`, `minimum_connection_seconds`,
 `attendance_threshold_pct`, `dispute_window_hours`, `makeup_choice_window_days`,
@@ -413,6 +446,15 @@ two tables with their revokes and indexes, `session_remedies_counter_slot_id_idx
 §2.7's `covered_by_case_id`, its index and rule 49; every existing row NULL, which the check admits. Before it runs on `ijazah` (the owner's rule of B26): count `disputes` rows
 that rule 46 would refuse, and `session_participant_events` rows (none expected).
 
+B42a adds a third, additive migration, `20261113120000_ban_restorable_and_kept_data` (T069): §2.13's eight columns, the
+two enum values (added `IF NOT EXISTS` and committed before the rest, as `20261108120000_sessions_pass` does), rule 50,
+rule 34 and rule 27 widened, rule 49 widened, `enrollments_held_closing_idx`, and `enrollment_restore_window_days` moved
+from 7 to 14 where its row still holds 7 (§4). Every existing row is NULL in every new column, which each new check admits,
+and rules 27 and 49 only relax. Probes in `tests/db-integrity/ban-restorable-kept-data.spec.ts` (rule 49's beside its
+first form in `sessions-pass.spec.ts`), and the step's in `tests/seed/restore-window-step.spec.ts`. Before it runs on
+`ijazah` (Q1 (a): at the next device run, on the owner's word, after B39's migration): count the rows each new check
+would refuse (0 on 2026-11-13: no user banned or deleted, no document erased, no duplicate payout hash, no dispute).
+
 ## 7. ERD amendments (v1.14 → v1.15)
 
 Applied to `docs/ERD.md` on 2026-11-05 with the owner's decisions (plan.md, "Decisions recorded"), ahead of the first
@@ -475,3 +517,8 @@ batch's migration, which builds them.
     scheduled (tasks.md). No migration in this phase.
 20. On PR #133's review, round 1, Major 1 (the owner's decision (c) of 2026-11-11; the ERD's changelog row 34):
     `disputes.covered_by_case_id` and rule 49 (§2.7, §6).
+21. On the owner's decisions of 2026-11-12 (SRS DEC-66, DEC-67) and of 2026-11-13 on B42a's conflict check (T069; the
+    ERD's changelog rows 36 to 44): `users.banned_at` and rule 50; `enrollments.slot_released_at`; the five
+    `teacher_profiles` columns; `verification_documents.kept_at` and rule 34 widened; rule 27 widened;
+    `enrollment_event_kind`'s `slot_released` and `slot_hold_ended`; `enrollments_held_closing_idx` (§14); rule 49
+    widened; the seven settings rows and `enrollment_restore_window_days` at 14 (§2.13, §4, §6).

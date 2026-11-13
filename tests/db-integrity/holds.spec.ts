@@ -85,6 +85,7 @@ const terms: HoldTerms = {
   graceMinutes: 5,
   leadHours: 24,
   bufferWeeks: async () => 0,
+  windowDays: async () => 14, // T070 (rule d)
 };
 const orders = orderStandingsOf;
 
@@ -511,7 +512,12 @@ describe('the one overlap check, every session and both axes (FR-351, FR-BOOK-5,
         bookingSlotsStore,
         studentOf(student),
         { packageId: on.packageId },
-        { now: NOW, leadHours: terms.leadHours, bufferWeeks: terms.bufferWeeks },
+        {
+          now: NOW,
+          leadHours: terms.leadHours,
+          bufferWeeks: terms.bufferWeeks,
+          windowDays: terms.windowDays,
+        },
       );
       expect(sheet.slots.map(({ slotId }) => slotId)).toEqual([on.saturday]);
       await expect(place(tx, studentOf(student), on.packageId, on.thursday)).rejects.toEqual(
@@ -541,7 +547,12 @@ describe('the one overlap check, every session and both axes (FR-351, FR-BOOK-5,
         bookingSlotsStore,
         studentOf(student),
         { packageId: on.packageId },
-        { now: NOW, leadHours: terms.leadHours, bufferWeeks: terms.bufferWeeks },
+        {
+          now: NOW,
+          leadHours: terms.leadHours,
+          bufferWeeks: terms.bufferWeeks,
+          windowDays: terms.windowDays,
+        },
       );
       expect(sheet.slots.map(({ slotId }) => slotId)).not.toContain(on.thursday);
       await expect(place(tx, studentOf(student), on.packageId, on.thursday)).rejects.toEqual(

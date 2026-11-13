@@ -72,6 +72,10 @@ export const COMPENSATION_REASONS = [
   // An administrator's manual case, its party being its reason (R-326).
   'admin_opened_for_student',
   'admin_opened_for_teacher',
+  // T071 of specs/004-sessions (FR-504; R-313's table as updated): a teacher's suspension pauses the
+  // enrollment, closed by the teacher's reinstatement or by an end of the enrollment (the note under
+  // T071, Q5 (a) widened), never by `cases.resolve` or `cases.dismiss`.
+  'teacher_suspended',
 ] as const;
 
 /**

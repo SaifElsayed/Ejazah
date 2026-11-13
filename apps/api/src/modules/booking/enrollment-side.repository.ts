@@ -85,15 +85,23 @@ export async function moveEnrollment(tx: Client, id: string, target: MoveTarget)
  * the reason cleared, by one conditional update; answers whether it moved. The confirmation path's
  * second writer of the status (`tests/pipeline/confirmation-path.spec.ts`, ALLOWED), reached only
  * from `EnrollmentSide.restore`; it never writes `confirmed_at` (R-HONEST-1).
+ *
+ * T073 of specs/004-sessions (R-322's step 1 widened, DEC-66): also `cancelled` with the reason
+ * `teacher_suspended`, a teacher's ban's or revocation's closing (a student's ban's is `admin`).
+ * Which closing may be restored stays the caller's (sessions' one closing rule, `closingOf`). And
+ * (T070's follow-up 2) `slot_released_at` is cleared, so a later closing holds the slot again.
  */
 export async function restoreEnrollment(tx: Client, id: string): Promise<boolean> {
   const { count } = await tx.enrollment.updateMany({
     where: {
       id,
       confirmedAt: { not: null },
-      OR: [{ status: 'terminated_no_show' }, { status: 'cancelled', cancellationReason: 'admin' }],
+      OR: [
+        { status: 'terminated_no_show' },
+        { status: 'cancelled', cancellationReason: { in: ['admin', 'teacher_suspended'] } },
+      ],
     },
-    data: { status: 'confirmed', cancellationReason: null },
+    data: { status: 'confirmed', cancellationReason: null, slotReleasedAt: null },
   });
   return count === 1;
 }

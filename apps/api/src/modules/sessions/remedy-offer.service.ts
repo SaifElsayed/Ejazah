@@ -9,7 +9,8 @@
 // anything (G1, A2); a `cancelled_by_agreement` session at once (decision 5); a `cancelled_by_admin`
 // session only when T036 says a cleared suspension cancelled it. Only on a `confirmed` enrollment
 // (an ended one's sessions are covered by its case, C1), and never while the student's account is
-// suspended (C3): the sweep offers it on its first run after the reinstatement. One remedy per
+// suspended (C3), nor (T071, N2) while the teacher's is, the enrollment paused (FR-504): the sweep
+// offers it on its first run after the reinstatement, either party's. One remedy per
 // session (`session_remedies_session_id_key`); a `frozen` one is offered again as a new offer (its
 // row rewritten), every other existing one leaves the session as it is.
 //
@@ -40,7 +41,7 @@
 // THE LOCKS (contracts/kernel.md, the offer row; `003:T005`'s rules). `offer` takes `users` (both,
 // one call), the teacher's `lockKey('teacher-slots')`, `enrollments`, `sessions`, then the session's
 // `session_remedies`, and reads the session, its remedy, the enrollment and the student's standing
-// again under them. `offerLocked` expects its caller to hold them (an accepted cancellation holds
+// (T071: and the teacher's, under the teacher's `users` lock) again under them. `offerLocked` expects its caller to hold them (an accepted cancellation holds
 // «cancellation accepted»'s row, the same order). The insert references the session, held.
 //
 // THE LOG (Q11). An offer is an automatic action: its caller writes one info line
@@ -106,6 +107,8 @@ export interface RemedyOfferStore {
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   lockRemedyOfSession(tx: Transaction, sessionId: string): Promise<void>;
   studentSuspended(tx: Transaction, userId: string): Promise<boolean>;
+  /** T071 (N2): whether the teacher's account is suspended, the enrollment paused (FR-504). */
+  teacherSuspended(tx: Transaction, userId: string): Promise<boolean>;
   slotOf(tx: Transaction, slotId: string): Promise<SlotRow | null>;
   lastReachedDateOf(
     tx: Transaction,
@@ -143,6 +146,8 @@ export const remedyOfferStore: RemedyOfferStore = {
   lockSessions: (tx, ids) => lockRows(tx, 'sessions', ids),
   lockRemedyOfSession,
   studentSuspended: async (tx, userId) =>
+    (await readStanding(tx, userId))?.accountStatus === 'suspended',
+  teacherSuspended: async (tx, userId) =>
     (await readStanding(tx, userId))?.accountStatus === 'suspended',
   slotOf: readSlot,
   lastReachedDateOf,
@@ -307,6 +312,9 @@ export function createRemedyOffer({
     const terms = await enrollments.enrollmentFor(tx, session.enrollmentId);
     if (terms?.status !== 'confirmed') return null;
     if (await store.studentSuspended(tx, session.studentUserId)) return null;
+    // T071 (N2): a paused enrollment's offer, a frozen remedy's included, waits for the teacher's
+    // reinstatement, which offers what the suspension cancelled; the sweep tries again each run.
+    if (await store.teacherSuspended(tx, session.teacherUserId)) return null;
     const now = await clock(tx);
     if (!(await owes(session, now, options))) return null;
     const [days, answerHours, leadHours] = await Promise.all([

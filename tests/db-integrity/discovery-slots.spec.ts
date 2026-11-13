@@ -261,6 +261,7 @@ function releaseAt(now: string, bufferWeeks = 0) {
         reads.count += 1;
         return bufferWeeks;
       },
+      windowDays: async () => 14, // T070 (rule d)
     },
   };
 }
@@ -372,6 +373,7 @@ describe('nearestFreeSlots (T026, R-205, FR-335)', () => {
     now,
     leadHours: 24,
     bufferWeeks: async () => bufferWeeks,
+    windowDays: async () => 14, // T070 (rule d)
   });
 
   it('answers the first free session of a bookable same-gender teacher, in both directions', async () => {

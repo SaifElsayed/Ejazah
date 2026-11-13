@@ -31,8 +31,11 @@
 //     of another teacher whose first session falls on a frozen proposal's date and time is listed
 //     for the same student by `booking.slots` (the owner's decision of 2026-11-07, item 6: it could
 //     not be seen red first, and will not be until T027 reads reservations);
-//   - T006 of specs/004-sessions (FR-482, FR-483, FR-485; R-313): a teacher's suspension, revocation
-//     and ban each cancel the teacher's confirmed enrollments `teacher_suspended` with one row each,
+//   - T071 of specs/004-sessions (FR-504): a teacher's suspension pauses the teacher's confirmed
+//     enrollments, kept `confirmed`, every remaining session `cancelled_by_admin` naming one
+//     `teacher_suspended` case each, the open remedies frozen;
+//   - T006 of specs/004-sessions (FR-482, FR-483, FR-485; R-313): a teacher's revocation and ban
+//     each cancel the teacher's confirmed enrollments `teacher_suspended` with one row each,
 //     every remaining session `cancelled_by_admin` (one scheduled ahead and one inside its join
 //     period) with one row naming the enrollment's one `teacher_ended` case, and every open remedy,
 //     a frozen one included, handed to it; one that fails after the subscriber leaves all of it as
@@ -100,7 +103,7 @@ const KEY = randomBytes(32).toString('base64');
 const PASSWORD = 'a long probe passphrase 41';
 const FEMALE = 'female' as RequesterGender;
 /** A logger that writes nothing: the line's fields are the subscriber's unit spec's. */
-const SILENT = { info: () => undefined };
+const SILENT = { info: () => undefined, warn: () => undefined };
 const identitySettings: SettingsReader = {
   read: async (key, schema) => schema.parse({ idempotency_key_ttl_hours: 24 }[key]),
 };
@@ -865,7 +868,7 @@ describe("a student's suspension (T005, FR-486, R-313, plan.md decision 1 (b))",
         bookingSlotsStore,
         { userId: studentId, gender: FEMALE },
         { packageId: threeWeeks },
-        { now: NOW, leadHours: 24, bufferWeeks: async () => 0 },
+        { now: NOW, leadHours: 24, bufferWeeks: async () => 0, windowDays: async () => 14 },
       ),
     );
     const listed = slots.find(({ slotId }) => slotId === elsewhere.slotIds[0]);
@@ -1055,11 +1058,62 @@ async function teacherWithTwo() {
   return { on, one, two, joining: joining?.id ?? '', frozen, waiting };
 }
 
+// T071 of specs/004-sessions (rule d, an approved change): a teacher's suspension pauses now (the
+// probe below); a revocation's and a ban's cases are unchanged.
 const TEACHER_ENDS = [
-  ['suspend', 'suspended'],
   ['revokeApproval', 'active'],
   ['ban', 'banned'],
 ] as const;
+
+// T071 of specs/004-sessions (FR-504; R-313's table as updated): the teacher `suspended` probe,
+// rewritten. A teacher's suspension pauses the confirmed enrollments as a student's does: each kept
+// `confirmed` with no `enrollment_events` row, every remaining session, one in its join period
+// included, `cancelled_by_admin` naming one `teacher_suspended` case each, and the open remedies
+// frozen, a frozen one left frozen and none handed to a case.
+describe("a teacher's suspension pauses (T071, FR-504, R-313)", () => {
+  it('keeps the enrollments confirmed, cancels every remaining session, one in its join period included, naming one teacher_suspended case each, and freezes the open remedies', async () => {
+    const { on, one, two, joining, frozen, waiting } = await teacherWithTwo();
+    const adminId = await makeAdmin(watcher);
+
+    await database.$transaction((tx) => standing.suspend(tx, adminId, on.teacherId));
+
+    expect(await accountStatusOf(on.teacherId)).toBe('suspended');
+    for (const enrollmentId of [one, two]) {
+      expect(await enrollmentOf(enrollmentId)).toMatchObject({
+        status: 'confirmed',
+        cancellationReason: null,
+      });
+      expect((await eventsOf(enrollmentId)).map(({ kind }) => kind)).toEqual(['confirmed']);
+      const cases = await casesOf(enrollmentId);
+      expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+        ['teacher_suspended', 'open'],
+      ]);
+      const remaining = (await sessionStates(enrollmentId)).filter(
+        ({ status }) => status !== 'teacher_no_show',
+      );
+      expect(remaining.length).toBeGreaterThan(0);
+      expect(new Set(remaining.map(({ status }) => status))).toEqual(
+        new Set(['cancelled_by_admin']),
+      );
+      const cancelledRows = (await sessionEventsOf(enrollmentId)).filter(
+        ({ kind }) => kind === 'cancelled_by_admin',
+      );
+      expect(cancelledRows.map(({ sessionId }) => sessionId).sort()).toEqual(
+        remaining.map(({ id }) => id).sort(),
+      );
+      for (const row of cancelledRows) expect(row.caseId).toBe(cases[0]?.id);
+    }
+    expect((await sessionStates(one)).find(({ id }) => id === joining)?.status).toBe(
+      'cancelled_by_admin',
+    );
+    for (const remedyId of [frozen, waiting]) {
+      expect(await remedyOf(remedyId)).toEqual({ status: 'frozen', caseId: null, decidedAt: null });
+    }
+    expect(
+      (await sessionEventsOf(one)).filter(({ kind }) => kind === 'remedy_handed_to_case'),
+    ).toEqual([]);
+  });
+});
 
 describe("a teacher's end (T006, FR-483, R-313)", () => {
   it.each(TEACHER_ENDS)(

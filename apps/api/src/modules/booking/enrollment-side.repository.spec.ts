@@ -104,7 +104,10 @@ describe('moveEnrollment (T008)', () => {
 });
 
 describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
-  it('returns a once-confirmed terminated or admin-cancelled enrollment to confirmed, never writing confirmed_at', async () => {
+  // T073 (R-322's step 1 widened; T070's follow-up 2): a teacher's ban or revocation closing
+  // (`cancelled` `teacher_suspended`) is restored too, and the restore clears `slot_released_at`, so
+  // a later closing holds its slot again.
+  it('returns a once-confirmed terminated, admin-cancelled or teacher-ended enrollment to confirmed, clearing its release, never writing confirmed_at', async () => {
     const { client, calls } = recorded({ updateMany: 1 });
     expect(await restoreEnrollment(client, id(1))).toBe(true);
     expect(calls).toEqual([
@@ -116,10 +119,10 @@ describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
             confirmedAt: { not: null },
             OR: [
               { status: 'terminated_no_show' },
-              { status: 'cancelled', cancellationReason: 'admin' },
+              { status: 'cancelled', cancellationReason: { in: ['admin', 'teacher_suspended'] } },
             ],
           },
-          data: { status: 'confirmed', cancellationReason: null },
+          data: { status: 'confirmed', cancellationReason: null, slotReleasedAt: null },
         },
       },
     ]);
@@ -277,13 +280,19 @@ describe("slotUses leaving out the asking enrollment (T008, R-205; the owner's d
           return [];
         },
       },
-    } as unknown as Pick<Transaction, 'slotHold' | 'enrollment'>;
-    await slotUses(client, [id(2)], id(1));
-    await slotUses(client, [id(2)]);
-    expect(calls[0]).toMatchObject({
-      where: { slotId: { in: [id(2)] }, id: { not: id(1) } },
-    });
-    expect(calls[1]).toMatchObject({ where: { slotId: { in: [id(2)] } } });
-    expect((calls[1] as { where: object }).where).not.toHaveProperty('id');
+    } as unknown as Transaction;
+    // T070 (rule d): the windows handed in, and a second read of each call, the held closings on the
+    // free slot, which leaves the asking enrollment out too.
+    const windowDays = async () => 14;
+    await slotUses(client, [id(2)], windowDays, id(1));
+    await slotUses(client, [id(2)], windowDays);
+    for (const asked of [calls[0], calls[1]]) {
+      expect(asked).toMatchObject({ where: { slotId: { in: [id(2)] }, id: { not: id(1) } } });
+    }
+    for (const asked of [calls[2], calls[3]]) {
+      expect(asked).toMatchObject({ where: { slotId: { in: [id(2)] } } });
+      expect((asked as { where: object }).where).not.toHaveProperty('id');
+    }
+    expect(calls).toHaveLength(4);
   });
 });

@@ -149,8 +149,22 @@ export const monitorEnrollment = sessionsMonitorListItem.omit({ nextSession: tru
    * The closing case's opening plus `enrollment_restore_window_days`, present only for an
    * enrollment `sessions.restore` could admit by its closing and its case (FR-454, R-322); it may
    * already have passed, the restore then refused `window_closed`.
+   * @deprecated T073 (SRS DEC-69; R-322's step 2 retired): no restore is refused for its time. Kept
+   * (R-API-9), answered with the hold's end (`slotHeldUntil`'s instant, a release leaving it) for
+   * every closing R-322's step 1 admits with its case open, a ban's and a teacher's ban's or
+   * revocation's included; a past instant does not mean the restore is refused. Read `slotHeldUntil`.
    */
   restorableUntil: z.iso.datetime().optional(),
+  // T070 (FR-503; SRS FR-CANCEL-9, DEC-69): the hold of the enrollment's weekly slot.
+  /**
+   * The closing case's opening plus the window of the closing's kind (`enrollment_restore_window_days`,
+   * or `ban_restore_window_days` for a ban's or a revocation's), present while the closing is
+   * restorable by the one closing rule (its case open) and the slot was not released; it may already
+   * have passed, the slot then free.
+   */
+  slotHeldUntil: z.iso.datetime().optional(),
+  /** The instant an administrator released the held slot (`enrollments.releaseSlot`), if one did. */
+  slotReleasedAt: z.iso.datetime().optional(),
 });
 
 /** A time a remedy names, in its own zone (FR-494). */
@@ -225,6 +239,8 @@ export const compensationCaseReason = z.enum([
   'makeup_refused',
   'admin_opened_for_student',
   'admin_opened_for_teacher',
+  // T071 (FR-504): a teacher's suspension pauses the enrollment; added, additively (R-API-9).
+  'teacher_suspended',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
@@ -278,6 +294,10 @@ export const timelineEventKind = z.enum([
   'outcome_corrected',
   'instants_reresolved',
   'counter_booking_refused',
+  // B42a's T069 (Q-69-1 (a), additive, R-API-9): two `enrollment_event_kind` values, a held slot's
+  // release (T070) and a hold's end (T074).
+  'slot_released',
+  'slot_hold_ended',
 ]);
 
 /**
@@ -451,13 +471,20 @@ export type SessionsReviewReviseOutput = z.infer<typeof sessionsReviewReviseOutp
 
 // T061 of specs/004-sessions (FR-454, FR-455, FR-470; SRS FR-CANCEL-8; research R-322, «The
 // restore»; ADR 0023 D4; admin-surface.md, `sessions.restore`): an administrator restores an
-// enrollment an administrator's decision closed, within the restore window, with a mandatory reason,
-// keyed under the administrator's idempotency key. Refused `RESTORE_REFUSED` with `details.cause`
-// one of eight causes, writing nothing. No amount crosses and `confirmed_at` is never written.
+// enrollment an administrator's decision closed, at any time while its case is open (T073, DEC-69),
+// with a mandatory reason, keyed under the administrator's idempotency key. Refused
+// `RESTORE_REFUSED` with `details.cause` one of nine causes (T073 added `refunded`; `window_closed`
+// is `@deprecated`, never produced), writing nothing. No amount crosses and `confirmed_at` is never
+// written.
 
-/** Why a restore was refused (R-322, steps 1 to 6). */
+/**
+ * Why a restore was refused (R-322, steps 1 to 6). T073 (FR-507; SRS FR-CANCEL-8 as amended,
+ * DEC-66, DEC-69): `window_closed` is never produced since step 2 was retired, kept (R-API-9); the
+ * ninth cause, `refunded`, an order of the enrollment refunded at the gateway, added at the end.
+ */
 export const restoreRefusalCause = z.enum([
   'not_restorable',
+  /** @deprecated T073 (DEC-69): never produced; no restore is refused for its time (R-API-9). */
   'window_closed',
   'case_closed',
   'party_restricted',
@@ -465,6 +492,8 @@ export const restoreRefusalCause = z.enum([
   'slot_changed',
   'slot_taken',
   'time_taken',
+  // T073 (FR-507; the note under T073, Q4 (a)): any order of the enrollment refunded.
+  'refunded',
 ]);
 
 export const sessionsRestoreInput = z.object({

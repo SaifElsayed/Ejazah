@@ -75,7 +75,14 @@ const MARKED: MarkedEnrollment[] = [
   },
 ];
 
-function world({ records = [TEACHER_ROW, STUDENT_ROW] }: { records?: UserRecordRow[] } = {}) {
+function world({
+  records = [TEACHER_ROW, STUDENT_ROW],
+  heldUntil = new Map<string, Date>(),
+}: {
+  records?: UserRecordRow[];
+  /** T072: the hold's end of each account's ban or revocation closings, sessions' read. */
+  heldUntil?: Map<string, Date>;
+} = {}) {
   const pages: [string | undefined, number][] = [];
   const matched: string[][] = [];
   const settingsRead: string[] = [];
@@ -126,6 +133,8 @@ function world({ records = [TEACHER_ROW, STUDENT_ROW] }: { records?: UserRecordR
       },
     } as never,
     clock: async () => NOW,
+    // T072 (Q9 (a)): sessions' `slotHeldUntilOf`.
+    held: { slotHeldUntilOf: async (_tx, userId) => heldUntil.get(userId) ?? null },
   });
   return { directory, pages, matched, settingsRead, marksAsked, countsAsked, lines };
 }
@@ -212,6 +221,7 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
           teacherNoShows: 6,
         },
       ],
+      enrollmentsSlotHeldUntil: null,
     });
     expect(marksAsked).toEqual([TEACHER]);
     expect(countsAsked).toEqual([TEACHER]);
@@ -231,8 +241,21 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
       verificationStatus: null,
       accountStatus: 'suspended',
       cancellationRequests: { total: 4, recent: 1 },
+      enrollmentsSlotHeldUntil: null,
     });
     expect(marksAsked).toEqual([]);
+  });
+
+  // T072 of specs/004-sessions (FR-502, FR-503; the note under T072, Q9 (a)).
+  it('answers enrollmentsSlotHeldUntil, the hold end sessions reads for the account’s ban or revocation closings', async () => {
+    const until = new Date('2026-11-27T08:00:00Z');
+    const { directory } = world({ heldUntil: new Map([[STUDENT, until]]) });
+    expect(
+      (await directory.get(tx, ADMIN, { targetUserId: STUDENT })).enrollmentsSlotHeldUntil,
+    ).toBe(until.toISOString());
+    expect(
+      (await directory.get(tx, ADMIN, { targetUserId: TEACHER })).enrollmentsSlotHeldUntil,
+    ).toBeNull();
   });
 
   it('never answers or logs the date of birth (PDPL)', async () => {

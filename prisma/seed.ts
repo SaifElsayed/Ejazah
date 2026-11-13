@@ -95,6 +95,11 @@ const SUBJECTS = [
  * T067 (specs/004-sessions/data-model.md §4; SRS §3.14, FR-SESS-21, DEC-64, DEC-65): the two rows of
  * the room's close at the scheduled end, its grace and its retries, inserted only where missing as
  * every row is.
+ *
+ * T069 (specs/004-sessions/data-model.md §4; SRS DEC-66, DEC-67): `ban_restore_window_days` and six
+ * administrator rate limits, and `enrollment_restore_window_days` at 14. A database already seeded
+ * keeps its row, as every row is kept; the migration `20261113120000_ban_restorable_and_kept_data`
+ * moves that one to 14 only while it still holds 7 (Q6 (b)).
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -164,7 +169,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['video_empty_timeout_seconds', 300],
   ['video_departure_timeout_seconds', 20],
   ['repeated_absence_flag_count', 5],
-  ['enrollment_restore_window_days', 7],
+  // T069 (SRS DEC-66): 14 days, was 7; the migration `20261113120000_ban_restorable_and_kept_data`
+  // moves a row still holding 7.
+  ['enrollment_restore_window_days', 14],
   ['rate_limit_absence_complaint', { limit: 5, window_seconds: 3600 }],
   ['rate_limit_signed_in_default', { limit: 150, window_seconds: 60 }],
   ['rate_limit_dispute_revision', { limit: 10, window_seconds: 60 }],
@@ -177,6 +184,18 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // during which the close is asked again, a positive whole number of minutes.
   ['room_close_grace_minutes', 0],
   ['room_close_retry_minutes', 10],
+  // T069 (SRS DEC-66, DEC-67, §3.14; specs/004-sessions/data-model.md §4): the days a ban's or a
+  // revocation's closing holds its slot, and the six administrator limits, each the administrator
+  // as subject: a ban's or a revocation's lift (T072), a held slot's release (T070), the kept data's
+  // erasure date, its erasure now and a kept document's link (T077), and an account's deletion at
+  // its owner's request (T081).
+  ['ban_restore_window_days', 14],
+  ['rate_limit_ban_lift', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_slot_release', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_kept_data_erase_date', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_kept_data_erase_now', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_kept_document_link', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_admin_user_delete', { limit: 10, window_seconds: 60 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

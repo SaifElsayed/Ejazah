@@ -99,6 +99,8 @@ const clockAt = (now: string, bufferWeeks = 0): DiscoveryClock => ({
   now: new Date(now),
   leadHours: LEAD,
   bufferWeeks: async () => bufferWeeks,
+  // T070 (rule d): the windows a closing's hold reads; the fake occupancy reads none.
+  windowDays: async () => 14,
 });
 
 /** Tuesday 2026-11-03, 10:00 in Cairo (+02:00 since the October change). */

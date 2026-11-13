@@ -46,9 +46,10 @@ describe('payments.list’s input', () => {
   });
 });
 
-// B42, T047 (the follow-up under T047): Phase 3's three outcomes of an enrollment on the timeline.
+// B42, T047 (the follow-up under T047): Phase 3's three outcomes of an enrollment on the timeline;
+// B42a, T069 (Q-69-1 (a)): the held slot's release and the hold's end, additively.
 describe('an enrollment’s outcome kinds', () => {
-  it('are Phase 2’s three and Phase 3’s completed, terminated_no_show and restored', () => {
+  it('are Phase 2’s three, Phase 3’s completed, terminated_no_show and restored, and T069’s slot_released and slot_hold_ended', () => {
     expect(enrollmentOutcomeKind.options).toEqual([
       'confirmed',
       'order_failed',
@@ -56,6 +57,8 @@ describe('an enrollment’s outcome kinds', () => {
       'completed',
       'terminated_no_show',
       'restored',
+      'slot_released',
+      'slot_hold_ended',
     ]);
   });
 });

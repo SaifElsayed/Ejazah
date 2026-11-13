@@ -56,7 +56,11 @@ passes `pnpm contract:snapshot --check --base origin/develop`.
   `cases.resolve` of a `student_suspended` case when T028's offer finds no free week for a session the suspension
   cancelled, the case left open (T036); on B40 (the review session's ruling on that precedent), `no_free_week` on
   `sessions.restore` when the offer finds no free week for a remedy the closing's case held, the case left open
-  (T061). Every
+  (T061); on B42a (T071; Q5 (a), the owner's delegation of 2026-11-13, and Q-B1 (a), the review session's ruling),
+  `closed_by_reinstatement` on `cases.resolve` and `cases.dismiss` of a `teacher_suspended` case, `no_free_week` on
+  `teachers.reinstate`, and on the administrator surface `TEACHER_SUSPENDED` (a student's suspension case cleared
+  while the enrollment's teacher is suspended) and `STUDENT_SUSPENDED` also on `teachers.reinstate` (a paused
+  enrollment's student still suspended). Every
   refusal writes nothing. Changed, additively (the owner's decision of 2026-11-06 on the sixth analysis, item 6; T062):
   Phase 1's `RATE_LIMITED` refusal from a rate limit's counter carries the time until its window ends,
   `details: [{ path: 'retryAfterSeconds', code: '<n>' }]`, a positive whole number of seconds as text, read from the

@@ -238,6 +238,8 @@ describe('the Phase 3 codes (T002; specs/004-sessions/contracts/README.md "Error
     ['ATTACHMENT_REFUSED', 400],
     ['CHAT_CLOSED', 409],
     ['STUDENT_SUSPENDED', 409],
+    // T071 of specs/004-sessions (Q-B1 (a)): a suspended student's case cleared while the teacher is.
+    ['TEACHER_SUSPENDED', 409],
     ['RULING_FINAL', 409],
     ['RULING_SUPERSEDED', 409],
     ['COMPLAINT_OPEN', 409],

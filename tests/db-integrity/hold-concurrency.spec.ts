@@ -59,6 +59,7 @@ const terms: HoldTerms = {
   graceMinutes: 5,
   leadHours: 24,
   bufferWeeks: async () => 0,
+  windowDays: async () => 14, // T070 (rule d)
 };
 const HOLDERS = 200;
 const TWICE_OVER = 10;
@@ -302,7 +303,12 @@ describe('a refused hold keeps nothing (FR-351, T033)', () => {
         bookingSlotsStore,
         studentOf(who),
         { packageId: on.packageId },
-        { now: NOW, leadHours: terms.leadHours, bufferWeeks: terms.bufferWeeks },
+        {
+          now: NOW,
+          leadHours: terms.leadHours,
+          bufferWeeks: terms.bufferWeeks,
+          windowDays: terms.windowDays,
+        },
       ),
     );
     expect(sheet.slots).toEqual([]);
@@ -321,7 +327,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
       terminationSubscriber({
         orders: orderStandingsOf,
         now: () => NOW,
-        log: { info: () => undefined },
+        log: { info: () => undefined, warn: () => undefined },
       }),
     );
     standing = new StandingService({

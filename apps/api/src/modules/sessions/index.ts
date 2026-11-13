@@ -176,6 +176,25 @@ export { answerClosesAt, bookingRetriedUntil } from './remedy-deadlines.js';
 export { isCorrectable } from './outcome-correction.js';
 export { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
 /**
+ * T070 (FR-503; SRS FR-CANCEL-9, DEC-69; the note under T070, Q4 (a)): the one closing rule beside
+ * the window's end, which booking's slot hold and release, the monitor and T073's restore read: an
+ * enrollment's closing (its status, its last cancellation's reason, its latest end case) to the
+ * closing's kind and its case; the window's setting of each kind, read through `windowDaysOf`.
+ */
+export {
+  BAN_RESTORE_WINDOW_SETTING,
+  type Closing,
+  type ClosingFacts,
+  type ClosingKind,
+  closingOf,
+  latestEndCaseOf,
+  type RestoreWindowSetting,
+  restoreWindowDays,
+  type WindowDays,
+  windowDaysOf,
+  windowSettingOf,
+} from './restore-window.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */
@@ -569,3 +588,44 @@ export { lockForStanding, type StandingLockStore } from './standing-locks.js';
  * restore, keyed on the call's transaction, composed into the administrator surface's `restore`.
  */
 export { createRestore, type Restore, type RestoreStore, restoreStore } from './restore.service.js';
+/**
+ * T073 of specs/004-sessions (FR-454 as amended, FR-507; research R-322; the note under T073, Q6 (a),
+ * Q8 (a)): the restore's core, `restoreClosed(tx, adminId, enrollmentId, now)`, a member of what
+ * `createRestore` builds (`Restore`), answering `RestoredClosing` or throwing the refusal, which
+ * T072's lift calls with its locks held; and the `EnrollmentPayments` port it reads a refund through,
+ * implemented by payments (`refundedOf`) and handed in by the admin module (R-301).
+ */
+export type { RestoredClosing } from './restore.service.js';
+export type { EnrollmentPayments } from './enrollment-payments.port.js';
+/**
+ * T071 of specs/004-sessions (FR-504; research R-313; the notes under T071, Q5 (a) widened and
+ * Q6 (a)): a teacher's suspension that pauses. `closePausedCaseOnEnd` closes a paused enrollment's
+ * open `teacher_suspended` case on its end's transaction (booking's subscriber, a complaint decided
+ * (a), a fault confirmed), with the store over moderation's entry; `createTeacherReinstatement`
+ * resumes the paused enrollments at the teacher's reinstatement, handed to identity's
+ * `StandingService` by the admin module.
+ */
+export {
+  closePausedCaseOnEnd,
+  createTeacherReinstatement,
+  type PausedCaseStore,
+  pausedCaseStore,
+  type PausedEnd,
+  type TeacherReinstatement,
+} from './teacher-suspension.service.js';
+/**
+ * T072 of specs/004-sessions (FR-502, FR-503; the note under T072, Q6 (a), Q7 (a), Q9 (a), Q10 (a)):
+ * what a ban's or a revocation's lift owes the enrollments it closed (`createBanLift`), handed to
+ * identity's `StandingService` as its `lift` by the admin module, and the hold's end `users.get`
+ * answers (`slotHeldUntilOf`); `isRefusedAfterWrite`, the restore's mark on a refusal thrown after
+ * its first write, which the lift turns into its whole refusal `restore_failed`.
+ */
+export {
+  type BanLift,
+  type BanLiftResult,
+  type BanLiftSide,
+  type BanLiftStore,
+  banLiftStore,
+  createBanLift,
+} from './ban-lift.service.js';
+export { isRefusedAfterWrite } from './restore.service.js';

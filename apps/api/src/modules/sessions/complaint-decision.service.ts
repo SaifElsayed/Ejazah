@@ -18,6 +18,13 @@
 // (c) `close`: the complaint `dismissed` with the note; nothing else.
 // Each writes one `session_events` row `complaint_decided` naming the complaint, with no session.
 //
+// (a) ON A PAUSED ENROLLMENT (T071 of specs/004-sessions; the first note under T071, Q5 (a) widened,
+// P6). An enrollment paused by its teacher's suspension is `confirmed`, so (a) ends it; its open
+// `teacher_suspended` case is closed in the same transaction, after the complaint, `disputes` last
+// (both rows under the enrollment's lock, which every case closing takes), through
+// `closePausedCaseOnEnd`: `resolved`, `compensation_ordered`, `ended_meanwhile`, covered by the
+// new `absence_termination` case, by the deciding administrator, one info line of ids.
+//
 // THE LOCKS (`003:T005`'s rules). The complaint is read once with no lock for its enrollment (and,
 // for (b), the enrollment's teacher, who never changes). (a) and (c): the enrollment's row, then
 // the complaint read again under it (rule 1); (a)'s hand-off then takes the sessions and the
@@ -70,9 +77,16 @@ import {
 } from './remaining-sessions.service.js';
 import { recordSessionEvents, type SessionEventRecord } from './session-events.repository.js';
 import { type LockActiveHolds, lockForStanding, type StandingLockStore } from './standing-locks.js';
+import {
+  closePausedCaseOnEnd,
+  type PausedCaseStore,
+  pausedCaseStore,
+} from './teacher-suspension.service.js';
 
 /** What the decision reads, locks and writes, each on the call's transaction; faked in a spec. */
-export interface ComplaintDecisionStore extends StandingLockStore {
+export interface ComplaintDecisionStore
+  extends StandingLockStore,
+    Pick<PausedCaseStore, 'pausedCaseOf'> {
   /** Moderation's: a `disputes` row of any kind, or null. */
   caseRecordOf(tx: Transaction, caseId: string): Promise<CaseRecord | null>;
   /** Moderation's `closeCase`: the closing instant, or null when the row is not open. */
@@ -104,6 +118,8 @@ export const complaintDecisionStore: ComplaintDecisionStore = {
   scheduledSessionsOf,
   openRemediesOf,
   lockRows,
+  // T071: the paused enrollment's open `teacher_suspended` case (moderation's entry).
+  pausedCaseOf: pausedCaseStore.pausedCaseOf,
 };
 
 export interface ComplaintDecision {
@@ -227,6 +243,13 @@ export function createComplaintDecision({
         );
         newCaseId = ended.caseOf.get(enrollmentId) ?? null;
         await close(tx, caseId, { status: 'resolved', resolution: 'enrollment_ended', note, adminId });
+        // T071 (P6): a paused enrollment's `teacher_suspended` case, covered by the new case.
+        await closePausedCaseOnEnd(tx, store, log, {
+          adminId,
+          enrollmentId,
+          endCaseId: newCaseId,
+          end: 'complaint_end_enrollment',
+        });
         // T066: the enrollment closed, to both parties once this transaction commits.
         publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {
           type: 'enrollment',

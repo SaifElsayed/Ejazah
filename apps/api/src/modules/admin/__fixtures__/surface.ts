@@ -109,6 +109,8 @@ export function surfaceOf(
     disputes: unusedAdminServices.disputes,
     // T058 of specs/004-sessions: the user directory has its own router spec (`verification/documents.router.spec.ts`).
     users: unusedAdminServices.users,
+    // T070: the release of a held slot has its own router spec (`booking/enrollments-admin.router.spec.ts`).
+    enrollments: unusedAdminServices.enrollments,
   };
   const administration = {
     transactions: transactionsOver(database),

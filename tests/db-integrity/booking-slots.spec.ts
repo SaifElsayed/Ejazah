@@ -248,6 +248,7 @@ const clock = (now: Date, bufferWeeks = 0) => ({
   now,
   leadHours: LEAD,
   bufferWeeks: async () => bufferWeeks,
+  windowDays: async () => 14, // T070 (rule d)
 });
 
 const studentOf = (id: string, gender: Gender = 'female'): BookingStudent => ({

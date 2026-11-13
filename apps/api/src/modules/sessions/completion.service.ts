@@ -22,7 +22,9 @@
 //     the enrollment, and `lapsed` owes nothing;
 //   - no `student_suspended` compensation case is open on it (FR-486, plan.md decision 1), nor an
 //     `admin_cancellation` one (B38, the owner's decision of 2026-11-10 under T023, Q3 (a): a hold
-//     can be undone, a completion cannot), moderation's rows read through its entry (R-301).
+//     can be undone, a completion cannot), nor (T071, FR-504) a `teacher_suspended` one, the
+//     enrollment paused until the teacher's reinstatement or its end closes it, moderation's rows
+//     read through its entry (R-301).
 // An enrollment in any other state, or with no session, is left as it is.
 //
 // NO COUNT (FR-448, R-322, the owner's decision of 2026-11-05). Nothing here reads the
@@ -105,6 +107,8 @@ export interface CompletionStore {
   studentSuspendedCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
   /** Whether an `admin_cancellation` compensation case is open on the enrollment (Q3 (a)). */
   adminCancellationCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  /** T071: whether a `teacher_suspended` compensation case is open on it (the pause). */
+  teacherSuspendedCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
 }
 
 const completionStore: CompletionStore = {
@@ -113,6 +117,8 @@ const completionStore: CompletionStore = {
     (await openCaseOf(tx, enrollmentId, 'student_suspended')) !== null,
   adminCancellationCaseOpen: async (tx, enrollmentId) =>
     (await openCaseOf(tx, enrollmentId, 'admin_cancellation')) !== null,
+  teacherSuspendedCaseOpen: async (tx, enrollmentId) =>
+    (await openCaseOf(tx, enrollmentId, 'teacher_suspended')) !== null,
 };
 
 export interface Completion {
@@ -170,6 +176,7 @@ export function createCompletion({
       }
       if (await store.studentSuspendedCaseOpen(tx, enrollmentId)) return false;
       if (await store.adminCancellationCaseOpen(tx, enrollmentId)) return false;
+      if (await store.teacherSuspendedCaseOpen(tx, enrollmentId)) return false;
       return enrollments.complete(tx, enrollmentId);
     },
   };

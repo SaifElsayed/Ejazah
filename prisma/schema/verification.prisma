@@ -19,6 +19,9 @@ model VerificationDocument {
   // Set in the deletion's transaction of the person who uploaded it (ADR 0015 D3; B16, decision 1);
   // the key is cleared after the commit, only once the file is removed.
   erasedAt            DateTime?                @map("erased_at") @db.Timestamptz(6)
+  // Set at the deletion of a teacher ever approved on an identity or credential document it keeps
+  // (T069, T076; SRS DEC-67, spec FR-508); never with `erased_at` (rule 34 as widened by T069).
+  keptAt              DateTime?                @map("kept_at") @db.Timestamptz(6)
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])

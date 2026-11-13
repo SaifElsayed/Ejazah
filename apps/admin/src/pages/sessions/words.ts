@@ -98,6 +98,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   makeup_refused: 'admin.sessions.caseReason.makeupRefused',
   admin_opened_for_student: 'admin.sessions.caseReason.adminOpenedForStudent',
   admin_opened_for_teacher: 'admin.sessions.caseReason.adminOpenedForTeacher',
+  // B42a, Q-B2 (a): T071's case of a teacher's suspension, which pauses the enrollment.
+  teacher_suspended: 'admin.sessions.caseReason.teacherSuspended',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {
@@ -138,6 +140,9 @@ const EVENT_KIND: Readonly<Record<MonitoredEvent['kind'], MessageKey>> = {
   outcome_corrected: 'admin.sessions.event.kind.outcomeCorrected',
   instants_reresolved: 'admin.sessions.event.kind.instantsReresolved',
   counter_booking_refused: 'admin.sessions.event.kind.counterBookingRefused',
+  // B42a, Q-B2 (a): T069's two kinds, a held slot's release and a hold's end.
+  slot_released: 'admin.sessions.event.kind.slotReleased',
+  slot_hold_ended: 'admin.sessions.event.kind.slotHoldEnded',
 };
 
 const CANCELLATION_REASON: Readonly<

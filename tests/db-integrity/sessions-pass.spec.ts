@@ -1,6 +1,9 @@
 // T001 of specs/004-sessions/tasks.md — the sessions pass (ERD §15 rules 40 to 48;
 // specs/004-sessions/data-model.md §2.1 to §2.12 and §6; migration `20261108120000_sessions_pass`),
-// and rule 49 beside them (B39, the note under T036; migration `20261111120000_case_covered_by`).
+// and rule 49 beside them (B39, the note under T036; migration `20261111120000_case_covered_by`),
+// widened by T069 to a closed `teacher_suspended` case (migration
+// `20261113120000_ban_restorable_and_kept_data`; observed red against a mutant of it that keeps
+// rule 49 as B39 wrote it).
 //
 // One describe per rule. Each probe first writes the rows the rule admits, so a refusal is the rule
 // and not a broken row, then each forbidden one, expecting its SQLSTATE: 23514 for a check, 23505
@@ -1201,6 +1204,50 @@ describe('ERD §15 rule 49: a suspension case’s link to the case that owes its
           row({
             id: itself,
             reason: 'student_suspended',
+            status: 'dismissed',
+            covered_by_case_id: itself,
+            ...closed,
+          }),
+        ),
+      ).toBe(SQLSTATE.checkViolation);
+    });
+  });
+
+  it('T069: admits the link on a closed teacher_suspended case, resolved or dismissed; refuses it open, or to itself', async () => {
+    await inRollback(db, async () => {
+      const { row, closed } = await caseRow();
+      const owed = await insertRow(db, 'disputes', row({ reason: 'teacher_ended', status: 'open' }));
+      expect(
+        await tryInsert(
+          'disputes',
+          row({
+            reason: 'teacher_suspended',
+            status: 'resolved',
+            resolution: 'compensation_ordered',
+            covered_by_case_id: owed,
+            ...closed,
+          }),
+        ),
+      ).toBeNull();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({ reason: 'teacher_suspended', status: 'dismissed', covered_by_case_id: owed, ...closed }),
+        ),
+      ).toBeNull();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({ reason: 'teacher_suspended', status: 'open', covered_by_case_id: owed }),
+        ),
+      ).toBe(SQLSTATE.checkViolation);
+      const itself = randomUUID();
+      expect(
+        await tryInsert(
+          'disputes',
+          row({
+            id: itself,
+            reason: 'teacher_suspended',
             status: 'dismissed',
             covered_by_case_id: itself,
             ...closed,

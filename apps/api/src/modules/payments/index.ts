@@ -128,6 +128,15 @@ export {
 } from './order-expiry.repository.js';
 
 /**
+ * T073 of specs/004-sessions (FR-507; the note under T073, Q4 (a), Q6 (a), N3): payments' answer to
+ * the restore's `EnrollmentPayments` port (sessions' `enrollment-payments.port.ts`), whether any order
+ * of an enrollment is `refunded`, read with no lock on the restore's transaction, which holds the
+ * enrollment's lock that every order move takes first. `main.ts` hands it to the admin module's
+ * `createAdminServices` (`enrollmentPayments`), so sessions reads no payment table (R-301).
+ */
+export { refundedOf } from './enrollment-refund.repository.js';
+
+/**
  * The `checkout` procedures' services (T036, R-208), bound once by `main.ts` and carried by the
  * request context; `checkoutRouter` is mounted under `checkout` by `app.router.ts`.
  */

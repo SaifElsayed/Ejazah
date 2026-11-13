@@ -14,6 +14,8 @@
 // since B39. Its anonymous procedures are exactly
 // the six of `auth.*` that sign an administrator in (`admin.router.spec.ts`).
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
+// T070 of specs/004-sessions: booking's `enrollments` namespace.
+import { enrollmentsAdminRouter } from '../modules/booking/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
 import { studentsRouter, teachersRouter } from '../modules/identity/index.js';
 import { paymentsAdminRouter } from '../modules/payments/index.js';
@@ -40,6 +42,8 @@ export const adminRouter = createAdminRouter({
   sessions: sessionsAdminRouter,
   disputes: disputesAdminRouter,
   cases: casesAdminRouter,
+  // T070 of specs/004-sessions: booking's `enrollments` namespace.
+  enrollments: enrollmentsAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

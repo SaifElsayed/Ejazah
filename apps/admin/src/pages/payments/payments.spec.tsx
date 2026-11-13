@@ -502,3 +502,68 @@ describe('T058: RATE_LIMITED on the payments monitor', () => {
     expect(panel.queryByText(ar('admin.common.loadError.text'))).toBeNull();
   });
 });
+
+// B42a, Q-B2 (a) (the owner, 2026-11-13; the review session's wording): T071 made a teacher's
+// suspension pause the enrollment, so a `cancelled` `teacher_suspended` now means only a ban or a
+// revocation; T069 added two outcomes, a held slot's release and a hold's end.
+describe('B42a Q-B2 (a): a teacher’s end and a held slot on the order’s history', () => {
+  async function titles(t: (key: MessageKey) => string) {
+    const history = within(
+      await screen.findByRole('region', { name: t('admin.payments.detail.a11yEvents') }),
+    );
+    return history
+      .getAllByRole('listitem')
+      .map((item) => item.querySelector('strong')?.textContent);
+  }
+
+  it('names a cancellation `teacher_suspended` and a hold’s release as the teacher’s suspension, ban or revocation', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockResolvedValue({
+      ...detail,
+      outcomes: [
+        {
+          kind: 'cancelled',
+          cancellationReason: 'teacher_suspended',
+          occurredAt: '2026-11-05T10:00:00.000Z',
+        },
+      ],
+    });
+    await inBothLocales(
+      () => open(api, `/payments?payment=${P3}`),
+      async (t, locale) => {
+        // PR #139 r1, Minor 1: `teacher_suspended` is a suspension's, a ban's or a revocation's
+        // (booking's `teacherReason`), on an enrollment's cancellation and on a hold's release alike.
+        const reason = {
+          ar: 'إيقاف المعلم أو حظره أو سحب اعتماده',
+          en: 'Teacher suspended, banned or approval revoked',
+        };
+        expect((await titles(t)).at(-1)).toBe(
+          t('admin.payments.detail.events.enrollmentCancelled', { reason: reason[locale] }),
+        );
+        expect(t('admin.payments.holdReasons.teacherSuspended')).toBe(reason[locale]);
+      },
+    );
+  });
+
+  it('tells a held slot’s release and a hold’s end', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockResolvedValue({
+      ...detail,
+      outcomes: [
+        { kind: 'slot_released', occurredAt: '2026-11-06T10:00:00.000Z' },
+        { kind: 'slot_hold_ended', occurredAt: '2026-11-07T10:00:00.000Z' },
+      ],
+    });
+    await inBothLocales(
+      () => open(api, `/payments?payment=${P3}`),
+      async (t, locale) => {
+        expect((await titles(t)).slice(-2)).toEqual(
+          {
+            ar: ['حُرّر موعد الاشتراك', 'انتهى حجز موعد الاشتراك'],
+            en: ["The enrollment's slot was released", "The hold on the enrollment's slot ended"],
+          }[locale],
+        );
+      },
+    );
+  });
+});

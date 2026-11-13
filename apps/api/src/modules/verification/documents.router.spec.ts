@@ -56,6 +56,8 @@ const USER_RECORD: UsersGetOutput = {
   verificationStatus: null,
   accountStatus: 'active',
   cancellationRequests: { total: 2, recent: 1 },
+  // T072 of specs/004-sessions: the hold's end, none here (rule d).
+  enrollmentsSlotHeldUntil: null,
 };
 
 function surface() {

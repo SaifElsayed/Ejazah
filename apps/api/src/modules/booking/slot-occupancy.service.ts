@@ -19,11 +19,16 @@
 // double-books.
 //
 // No lock: discovery only reads, and `slotInUse`'s callers lock before they ask (T005's rule 1).
+//
+// T070 of specs/004-sessions (FR-503; SRS FR-CANCEL-9, DEC-69): a closed enrollment whose closing can
+// be restored holds its slot, taken on every date, through the hold of its closing, unless an
+// administrator released it (`slotUses`). Every caller hands in how the two window settings are read
+// (`OccupancyReads.windowDays`), read only when such a closing is on a free slot.
 import { calendarWeeksAfter, type LocalDate, localDateIn, type TimeZoneId } from '@ijazah/time';
 import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { lastSessionDateOf } from '../sessions/index.js';
+import { lastSessionDateOf, type WindowDays } from '../sessions/index.js';
 import { slotUses } from './slot-occupancy.repository.js';
 
 /** The weeks a slot stays held after the week following its final session (FR-BOOK-10). */
@@ -79,27 +84,35 @@ export function isFreeOn(occupancy: SlotOccupancy | undefined, localDate: LocalD
   return occupancy.kind === 'until' && localDate >= occupancy.releasedOn;
 }
 
-type Client = Pick<Transaction, 'slotHold' | 'enrollment' | 'session'>;
+/**
+ * What a slot's occupancy reads only when it needs it: R-205's buffer, for a completed enrollment's
+ * release, and (T070) the two window settings, for a closing's hold.
+ */
+export interface OccupancyReads {
+  readonly bufferWeeks: () => Promise<number>;
+  readonly windowDays: WindowDays;
+}
 
 /**
  * Of `slotIds`, each used slot's occupancy; a free slot is absent. The buffer is read only when a
- * completed enrollment needs its release, so a free or a taken slot costs no settings read.
- * `exceptEnrollmentId` leaves that enrollment's own use out (`slotUses`; T008 of specs/004-sessions).
+ * completed enrollment needs its release, and a window only when a closing's hold needs it (T070), so
+ * a free or a taken slot costs no settings read. `exceptEnrollmentId` leaves that enrollment's own use
+ * out (`slotUses`; T008 of specs/004-sessions), its own hold included (T070).
  */
 export async function occupancyOf(
-  tx: Client,
+  tx: Transaction,
   slotIds: readonly string[],
-  bufferWeeks: () => Promise<number>,
+  reads: OccupancyReads,
   exceptEnrollmentId?: string,
 ): Promise<ReadonlyMap<string, SlotOccupancy>> {
-  const uses = [...(await slotUses(tx, slotIds, exceptEnrollmentId)).values()];
+  const uses = [...(await slotUses(tx, slotIds, reads.windowDays, exceptEnrollmentId)).values()];
   const completedIds = uses.flatMap(({ taken, completed }) =>
     taken ? [] : completed.map(({ enrollmentId }) => enrollmentId),
   );
   const [lastDates, buffer] =
     completedIds.length === 0
       ? [new Map<string, LocalDate>(), 0]
-      : await Promise.all([lastSessionDateOf(tx, completedIds), bufferWeeks()]);
+      : await Promise.all([lastSessionDateOf(tx, completedIds), reads.bufferWeeks()]);
   const occupancy = new Map<string, SlotOccupancy>();
   for (const use of uses) {
     const occupied = occupancyFrom(use, lastDates, buffer);
@@ -108,10 +121,12 @@ export async function occupancyOf(
   return occupancy;
 }
 
-/** The clock and the buffer R-205's release reads; the buffer only when it is needed. */
-export interface SlotRelease {
+/**
+ * The clock and the buffer R-205's release reads, the buffer only when it is needed; and (T070) the
+ * window settings a closing's hold reads, only when one is on the slot.
+ */
+export interface SlotRelease extends OccupancyReads {
   readonly now: () => Date;
-  readonly bufferWeeks: () => Promise<number>;
 }
 
 /**
@@ -120,11 +135,11 @@ export interface SlotRelease {
  * in the zone it snapshot the slot in.
  */
 export async function slotInUse(
-  tx: Client,
+  tx: Transaction,
   slotId: string,
   release: SlotRelease,
 ): Promise<boolean> {
-  const occupancy = (await occupancyOf(tx, [slotId], release.bufferWeeks)).get(slotId);
+  const occupancy = (await occupancyOf(tx, [slotId], release)).get(slotId);
   if (occupancy === undefined) return false;
   if (occupancy.kind === 'taken') return true;
   return !isFreeOn(occupancy, localDateIn(release.now(), occupancy.timezone));

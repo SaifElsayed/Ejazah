@@ -33,6 +33,8 @@ export const REASON: Readonly<Record<Reason, MessageKey>> = {
   makeup_refused: 'admin.cases.reason.makeupRefused',
   admin_opened_for_student: 'admin.cases.reason.adminOpenedForStudent',
   admin_opened_for_teacher: 'admin.cases.reason.adminOpenedForTeacher',
+  // B42a, Q-B2 (a): T071's case of a teacher's suspension, which pauses the enrollment.
+  teacher_suspended: 'admin.cases.reason.teacherSuspended',
 };
 
 /** What a row is: its reason's words, or a complaint by its kind (it has no reason). */

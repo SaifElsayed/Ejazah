@@ -20,6 +20,11 @@
 // teacher the enrollments FR-451 marks (sessions' `markedEnrollmentsWithStudentsOf`, Q7), each
 // student named as this phase names a party (FR-426: a deleted one unnamed).
 //
+// T072 of specs/004-sessions (FR-502, FR-503; the note under T072, Q9 (a)): the record also
+// answers `enrollmentsSlotHeldUntil`, the latest hold end among the account's enrollments its ban
+// or revocation closed whose slot is still held, sessions' read through its entry (`slotHeldUntilOf`,
+// T070's one closing rule and window), null for none.
+//
 // THE DATE OF BIRTH (the reviewer's requirement; PDPL, a minor's data is sensitive): read only to
 // derive `isMinor`. It never leaves this file: not in the answer, a log line or an audit entry.
 //
@@ -64,6 +69,11 @@ export interface UserDirectoryStore {
   ): Promise<readonly string[]>;
   /** Identity's: display names by account, a deleted account absent. */
   namesOf(tx: Transaction, userIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
+}
+
+/** T072: sessions' read of the hold's end of an account's ban or revocation closings. */
+export interface SlotHolds {
+  slotHeldUntilOf(tx: Transaction, userId: string): Promise<Date | null>;
 }
 
 export interface UserDirectory {
@@ -113,6 +123,7 @@ export function createUserDirectoryService({
   marked,
   log,
   clock = clockTimestamp,
+  held,
 }: {
   readonly store: UserDirectoryStore;
   readonly settings: SettingsReader;
@@ -121,6 +132,8 @@ export function createUserDirectoryService({
   readonly log: Pick<Logger, 'info'>;
   /** The database's clock on the call's transaction. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
+  /** T072 (Q9 (a)): the hold's end of the account's ban or revocation closings. */
+  readonly held: SlotHolds;
 }): UserDirectory {
   /** Of a batch, the users whose name begins with `name`, folded, in the batch's order. */
   const matching = async (
@@ -182,10 +195,11 @@ export function createUserDirectoryService({
       if (record === null) {
         throw refusal(log, { adminId, userId: targetUserId }, 'NOT_FOUND', 'not_found');
       }
-      const [now, cancellationRequests, repeatedAbsences] = await Promise.all([
+      const [now, cancellationRequests, repeatedAbsences, heldUntil] = await Promise.all([
         clock(tx),
         counts.cancellationRequestCountsOf(tx, targetUserId),
         record.role === 'teacher' ? repeatedAbsencesOf(tx, targetUserId) : undefined,
+        held.slotHeldUntilOf(tx, targetUserId),
       ]);
       // A live person's date of birth is set (ERD §15 rule 32); a deleted one's may be erased.
       const isMinor =
@@ -215,6 +229,8 @@ export function createUserDirectoryService({
           recent: cancellationRequests.recent,
         },
         ...(repeatedAbsences === undefined ? {} : { repeatedAbsences }),
+        // T072 (Q9 (a)).
+        enrollmentsSlotHeldUntil: heldUntil === null ? null : heldUntil.toISOString(),
       };
     },
   };

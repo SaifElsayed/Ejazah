@@ -20,16 +20,24 @@
 // and their remedies (one call), each read again under its lock (rule 1); `disputes` last, the
 // closing's case closed through `closeCase`, whose enrollment lock is the one held. The reservations
 // and the open holds are read under these: every path that places a hold or a reservation locks the
-// accounts first. Every row written references only rows held.
+// accounts first. Every row written references only rows held. T073 adds no lock (kernel.md's
+// restore row): the enrollment's cases (moderation's entry) and its `cancelled_by_admin` rows are
+// read under the enrollment's and the sessions' locks, which every case closing and every
+// cancellation take first; its orders (`EnrollmentPayments.refundedOf`) are read with no lock (N3),
+// every order move taking the enrollment's lock before the order's (`payments/order-events.service.ts`),
+// so none moves to `refunded` before this transaction commits.
 //
 // WHAT IS REFUSED (R-322's steps, in order), each `RESTORE_REFUSED` with `details.cause`, writing
-// nothing: (1) the closing — `terminated_no_show` whose latest end case is an open
-// `absence_termination`, or `cancelled` with `admin` (its last cancellation's reason) whose latest end
-// case is an open `student_fault_confirmed`; any other `not_restorable` (a ban's `student_banned`
-// case, a deletion, a teacher's end, a completion, an enrollment not closed), a closed case
-// `case_closed`; (2) the window, the case's `created_at` plus `enrollment_restore_window_days`
-// (`restore-window.ts`, the monitor's `restorableUntil`) against the database's clock,
-// `window_closed`; (3) both accounts `active` and the teacher's approval standing, as the join reads
+// nothing: (1) the closing, by T070's one closing rule (`restore-window.ts`'s `closingOf`; T073, Q4
+// (a)) over the enrollment's status, its last cancellation's reason and its latest end case, the
+// cases read through moderation's entry — `terminated_no_show` with `absence_termination`,
+// `cancelled` `admin` with `student_fault_confirmed` or (T073, DEC-66) a ban's `student_banned`, or
+// `cancelled` `teacher_suspended` with (T073) a teacher's ban's or revocation's `teacher_ended`; any
+// other `not_restorable` (a deletion, a gender correction (Q10 (a)), a completion, an enrollment not
+// closed), a closed case `case_closed`; (2) retired (T073, DEC-69): no restore is refused for its
+// time, `window_closed` never produced, the window holding only the slot (T070); then (T073, FR-507,
+// Q4 (a)) any order of the enrollment `refunded`, through the `EnrollmentPayments` port, `refunded`;
+// (3) both accounts `active` and the teacher's approval standing, as the join reads
 // them (FR-432), else `party_restricted`; (5, 6) the slot deactivated `slot_inactive`, then, before the
 // weeks, the slot's weekday, local start or zone differing from the enrollment's lowest-numbered
 // session that is not a make-up and its `snapshot_slot_timezone`, `slot_changed` (a length change
@@ -46,10 +54,15 @@
 // `refund_case` (offered again below, or refunded through its own case), a remedy never offered (a
 // Teacher-No-Show, Both-No-Show or Cancelled-By-Agreement session with no remedy), and a session not
 // yet settled (`disputed`, `under_threshold`, `provider_outage`). A make-up the closing cancelled,
-// its original's remedy `booked`, is among the K, so no session is owed twice.
+// its original's remedy `booked`, is among the K, so no session is owed twice. T073 (SRS FR-CANCEL-8
+// as amended, FR-507; PR #134's Minor 1): less each `cancelled_by_admin` session whose
+// `session_events` row names an `admin_cancellation` case (`sessions.cancel`'s, read through
+// moderation's entry), already owed through that case; never one the closing, or a suspension before
+// a fault, cancelled (their rows name the closing's or the suspension's case), which the K recreate.
 //
 // THE WRITES, in the same transaction: `EnrollmentSide.restore` (`confirmed`, the reason cleared,
-// `confirmed_at` untouched, one `restored` event); the K sessions through T034's generation widened
+// `confirmed_at` untouched, `slot_released_at` cleared (T073; T070's follow-up 2), one `restored`
+// event); the K sessions through T034's generation widened
 // with a count and a first number (after the last), from the first weekly occurrence at least
 // `first_session_lead_hours` after the restore's instant; each make-up the closing's case held
 // offered again through T028's offer (`restoredCase`: a full choice window from now, A and L read
@@ -68,6 +81,22 @@
 // sent once it commits, nothing on a replay (no effect runs) or a rollback, and inside the kind's
 // declared deadlock retry, which starts each attempt with an empty list, only the committed
 // attempt's event.
+//
+// THE CORE (T073; the note under T073, Q8 (a)): `restoreClosed(tx, adminId, enrollmentId, now)`,
+// a member of what `createRestore` builds, its dependencies bound once, which T072's lift calls
+// under its own key, audit and limit, its locks already held: the steps, the writes and the log
+// above, at the instant handed in, with no key, audit or limit of its own; it answers
+// `{ restored: true }` or throws the refusal as `sessions.restore` does (the administrator's id
+// written by `closeCase` and logged on every refusal). `sessions.restore` wraps the same core
+// unchanged: keyed through `runOn`, the instant the database's clock read under the locks.
+//
+// THE MARK (T072; the note under T072, Q7 (a); the owner's word on B42a lane D's Q-D1, «موافق»,
+// 2026-11-13). The two refusals thrown after `EnrollmentSide.restore` has landed, `no_free_week`
+// from T028's offer and `time_taken` from the database's exclusion at the insert, carry the mark
+// «refused after a write» (`isRefusedAfterWrite`, held weakly, as the «logged» mark is); every cause
+// found before the first write carries none. A lift reads it: an unmarked refusal leaves that one
+// enrollment ended, a marked one refuses the whole lift (Prisma gives no savepoint). The answers of
+// `sessions.restore` are unchanged.
 import type { SessionsRestoreInput, SessionsRestoreOutput } from '@ijazah/contracts/admin';
 import { localTimeOf, type TimeZoneId } from '@ijazah/time';
 import { z } from 'zod';
@@ -85,16 +114,14 @@ import { readSlot, type SlotRow } from '../catalog/index.js';
 import { sessionPartiesOf } from '../identity/index.js';
 import {
   type CaseClosing,
-  type CaseRecord,
-  caseRecordOf,
   closeCase,
-  latestCaseOf,
+  compensationCasesOf,
+  type EnrollmentCase,
 } from '../moderation/index.js';
-import { END_REASONS } from './case-queue.service.js';
+import type { EnrollmentPayments } from './enrollment-payments.port.js';
 import type {
   EnrollmentEventEntry,
   EnrollmentSide,
-  EnrollmentStatus,
   EnrollmentTerms,
 } from './enrollment-side.port.js';
 import {
@@ -122,8 +149,14 @@ import {
   type ReservedTime,
   reservedTimesOf,
 } from './reservations.service.js';
-import { type RestoreSession, restoreSessionsOf, sessionIdsFrom } from './restore.repository.js';
-import { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
+import {
+  type CancellationCase,
+  cancellationCasesOf,
+  type RestoreSession,
+  restoreSessionsOf,
+  sessionIdsFrom,
+} from './restore.repository.js';
+import { closingOf, latestEndCaseOf } from './restore-window.js';
 import { partiesSessionsBetween, type SessionTime } from './sessions.repository.js';
 import type { PartyStanding } from './sessions.service.js';
 
@@ -135,9 +168,13 @@ export interface RestoreStore {
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   lockRemedies(tx: Transaction, ids: readonly string[]): Promise<void>;
   sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly RestoreSession[]>;
-  /** Moderation's: the enrollment's latest case of an end's reason (`END_REASONS`); null for none. */
-  endCaseOf(tx: Transaction, enrollmentId: string): Promise<string | null>;
-  caseRecordOf(tx: Transaction, caseId: string): Promise<CaseRecord | null>;
+  /**
+   * Moderation's: the enrollment's compensation cases, newest first (`compensationCasesOf`): the
+   * closing's case for step 1 (T073, Q4 (a)) and the `admin_cancellation` cases for step 4.
+   */
+  casesOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentCase[]>;
+  /** T073: the cases the enrollment's `cancelled_by_admin` rows name, by session (step 4). */
+  cancellationCasesOf(tx: Transaction, enrollmentId: string): Promise<readonly CancellationCase[]>;
   partiesOf(
     tx: Transaction,
     userIds: readonly string[],
@@ -180,8 +217,8 @@ export const restoreStore: RestoreStore = {
   lockSessions,
   lockRemedies,
   sessionsOf: restoreSessionsOf,
-  endCaseOf: (tx, enrollmentId) => latestCaseOf(tx, enrollmentId, [...END_REASONS]),
-  caseRecordOf,
+  casesOf: compensationCasesOf,
+  cancellationCasesOf,
   partiesOf: sessionPartiesOf,
   slotOf: readSlot,
   sessionsBetween: partiesSessionsBetween,
@@ -205,6 +242,16 @@ export interface RestoreDependencies {
   /** The database's clock on the call's transaction (`clockTimestamp`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: RestoreStore;
+  /**
+   * T073 (FR-507; Q4 (a), Q6 (a), N3): whether an order of the enrollment was refunded, payments'
+   * `refundedOf`, handed in by the admin module (`AdminServiceDependencies.enrollmentPayments`).
+   */
+  readonly payments: EnrollmentPayments;
+}
+
+/** T073 (Q8 (a)): what the core answers when it restored the enrollment. */
+export interface RestoredClosing {
+  readonly restored: true;
 }
 
 export interface Restore {
@@ -214,12 +261,25 @@ export interface Restore {
     adminId: string,
     input: SessionsRestoreInput,
   ): Promise<{ readonly answer: SessionsRestoreOutput; readonly replayed: boolean }>;
+  /**
+   * T073 (Q8 (a)): the core, on the caller's transaction at `now`, with no key, audit or limit of
+   * its own (this file's head, «THE CORE»); throws the refusal as `restore` does.
+   */
+  restoreClosed(
+    tx: Transaction,
+    adminId: string,
+    enrollmentId: string,
+    now: Date,
+  ): Promise<RestoredClosing>;
 }
 
-/** The eight causes (R-322, steps 1 to 6). */
+/**
+ * R-322's causes, steps 1 to 6 and (T073) the ninth, `refunded`. `window_closed` (step 2) is never
+ * produced since T073 (DEC-69); the contract keeps it, `@deprecated` (R-API-9).
+ */
 type RestoreCause =
   | 'not_restorable'
-  | 'window_closed'
+  | 'refunded'
   | 'case_closed'
   | 'party_restricted'
   | 'slot_inactive'
@@ -257,6 +317,24 @@ function noFreeWeek(
   );
 }
 
+/** T072: the refusals thrown after `EnrollmentSide.restore` landed (this file's head, «THE MARK»). */
+const refusedAfterWrite = new WeakSet<object>();
+
+/** T072: marks `error` «refused after a write» and answers it. */
+function afterWrite<TError extends object>(error: TError): TError {
+  refusedAfterWrite.add(error);
+  return error;
+}
+
+/**
+ * T072 (the note under T072, Q7 (a)): whether the restore refused `error` after its first write
+ * (`no_free_week`, or the database's exclusion at the insert), which a lift turns into its whole
+ * refusal `restore_failed`; false for every cause found before it.
+ */
+export function isRefusedAfterWrite(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && refusedAfterWrite.has(error);
+}
+
 function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
   log.info(
     { ...ids, errorCode: 'NOT_FOUND', cause: 'not_found' },
@@ -268,7 +346,6 @@ function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
 const SCOPE = 'sessions.restore';
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
-const positiveWhole = z.int().positive();
 const wholeHours = z.int().nonnegative();
 
 const CONSUMED: ReadonlySet<string> = new Set(['done', 'student_no_show']);
@@ -281,25 +358,45 @@ const OWING: ReadonlySet<string> = new Set([
 
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
 
-/** The case whose closing a restore reverses, by the enrollment's status and last cancellation. */
-function closingReasonOf(
-  status: EnrollmentStatus,
-  events: readonly EnrollmentEventEntry[],
-): 'absence_termination' | 'student_fault_confirmed' | undefined {
-  if (status === 'terminated_no_show') return 'absence_termination';
-  if (status !== 'cancelled') return undefined;
-  const last = events.filter(({ kind }) => kind === 'cancelled').at(-1);
-  return last?.cancellationReason === 'admin' ? 'student_fault_confirmed' : undefined;
+/** T073: the reason of the case `sessions.cancel` opens or joins (moderation's `COMPENSATION_REASONS`). */
+const ADMIN_CANCELLATION = 'admin_cancellation';
+
+/** The enrollment's last cancellation's reason, from its events (oldest first); null for none. */
+function lastCancellationReasonOf(events: readonly EnrollmentEventEntry[]): string | null {
+  return events.filter(({ kind }) => kind === 'cancelled').at(-1)?.cancellationReason ?? null;
+}
+
+/**
+ * T073 (step 4): the sessions `sessions.cancel` cancelled, whose `cancelled_by_admin` row names one
+ * of the enrollment's `admin_cancellation` cases; never one whose row names the closing's case or a
+ * suspension's.
+ */
+function cancelledWithOwnCase(
+  cases: readonly EnrollmentCase[],
+  cancellations: readonly CancellationCase[],
+): ReadonlySet<string> {
+  const own = new Set(
+    cases.filter(({ reason }) => reason === ADMIN_CANCELLATION).map(({ caseId }) => caseId),
+  );
+  return new Set(
+    cancellations.filter(({ caseId }) => own.has(caseId)).map(({ sessionId }) => sessionId),
+  );
 }
 
 /** K: the sessions still owed and not settling on their own path (this file's head). */
-function sessionsStillOwed(sessionCount: number, sessions: readonly RestoreSession[]): number {
+function sessionsStillOwed(
+  sessionCount: number,
+  sessions: readonly RestoreSession[],
+  ownCase: ReadonlySet<string>,
+): number {
   const taken = sessions.filter(
-    ({ status, remedy }) =>
+    ({ id, status, remedy }) =>
       CONSUMED.has(status) ||
       UNSETTLED.has(status) ||
       remedy?.status === 'refund_case' ||
-      (OWING.has(status) && remedy === null),
+      (OWING.has(status) && remedy === null) ||
+      // T073: owed through its own `admin_cancellation` case (SRS FR-CANCEL-8, FR-507).
+      (status === 'cancelled_by_admin' && ownCase.has(id)),
   ).length;
   return Math.max(0, sessionCount - taken);
 }
@@ -337,6 +434,7 @@ export function createRestore({
   log,
   clock = clockTimestamp,
   store = restoreStore,
+  payments,
 }: RestoreDependencies): Restore {
   /** The enrollment's sessions and their remedies, locked in the row's order and read again. */
   const lockSessionsAndRemedies = async (tx: Transaction, enrollmentId: string) => {
@@ -381,10 +479,15 @@ export function createRestore({
     }
   };
 
+  /**
+   * The core (this file's head): `nowOf` answers the restore's instant, read under the locks; the
+   * database's clock for `sessions.restore`, the instant handed in for `restoreClosed` (T073).
+   */
   const restoreLocked = async (
     tx: Transaction,
     adminId: string,
     enrollmentId: string,
+    nowOf: () => Promise<Date>,
   ): Promise<SessionsRestoreOutput> => {
     const ids = { adminId, enrollmentId };
     const seen = await enrollments.enrollmentFor(tx, enrollmentId);
@@ -397,28 +500,31 @@ export function createRestore({
 
     const terms = await enrollments.enrollmentFor(tx, enrollmentId);
     if (terms === null) throw notFound(log, ids);
-    const [sessions, events] = await Promise.all([
+    // Read under the enrollment's and the sessions' locks, which every case closing and every
+    // cancellation take first (this file's head, «THE LOCKS»).
+    const [sessions, events, cases, cancellations] = await Promise.all([
       store.sessionsOf(tx, enrollmentId),
       enrollments.eventsOf(tx, enrollmentId),
+      store.casesOf(tx, enrollmentId),
+      store.cancellationCasesOf(tx, enrollmentId),
     ]);
-    // Step 1: the closing and its case.
-    const closing = closingReasonOf(terms.status, events);
+    // Step 1: the closing and its case, by T070's one closing rule (T073, Q4 (a)).
+    const closing = closingOf({
+      status: terms.status,
+      lastCancellationReason: lastCancellationReasonOf(events),
+      endCase: latestEndCaseOf(cases),
+    });
     if (closing === undefined) throw refused(log, ids, 'not_restorable');
-    const caseId = await store.endCaseOf(tx, enrollmentId);
-    const closingCase = caseId === null ? null : await store.caseRecordOf(tx, caseId);
-    if (closingCase === null || closingCase.reason !== closing) {
-      throw refused(log, ids, 'not_restorable');
-    }
-    if (closingCase.status !== 'open') throw refused(log, ids, 'case_closed');
-    // Step 2: the window, against the database's clock.
-    const [now, windowDays, leadHours] = await Promise.all([
-      clock(tx),
-      settings.read(ENROLLMENT_RESTORE_WINDOW_SETTING, positiveWhole),
+    if (!closing.restorable) throw refused(log, ids, 'case_closed');
+    const { closingCase } = closing;
+    // Step 2 retired (T073, DEC-69): no restore is refused for its time; the window holds the slot.
+    // The ninth cause (T073, FR-507, Q4 (a)): any order of the enrollment refunded at the gateway.
+    // Read with no lock (N3): every order move takes this enrollment's lock, held here, first.
+    if (await payments.refundedOf(tx, enrollmentId)) throw refused(log, ids, 'refunded');
+    const [now, leadHours] = await Promise.all([
+      nowOf(),
       settings.read(FIRST_SESSION_LEAD_SETTING, wholeHours),
     ]);
-    if (now.getTime() >= restorableUntil(closingCase.createdAt, windowDays).getTime()) {
-      throw refused(log, ids, 'window_closed');
-    }
     // Step 3: both accounts active, the teacher's approval standing (FR-432).
     const parties = await store.partiesOf(tx, [terms.studentUserId, terms.teacherUserId]);
     const student = parties.get(terms.studentUserId);
@@ -442,7 +548,11 @@ export function createRestore({
       0,
     );
     const plan = {
-      count: sessionsStillOwed(terms.sessionCount, sessions),
+      count: sessionsStillOwed(
+        terms.sessionCount,
+        sessions,
+        cancelledWithOwnCase(cases, cancellations),
+      ),
       firstSequenceNumber: lastNumber + 1,
     };
     const toSchedule: EnrollmentToSchedule = {
@@ -469,20 +579,22 @@ export function createRestore({
     try {
       await store.generate(tx, toSchedule, now, leadHours, plan);
     } catch (error: unknown) {
-      if (isOverlapRefusal(error)) throw refused(log, ids, 'time_taken');
+      if (isOverlapRefusal(error)) throw afterWrite(refused(log, ids, 'time_taken'));
       throw error;
     }
     const held = sessions
       .filter(
         ({ remedy }) =>
-          remedy?.status === 'refund_case' && remedy.kind === 'makeup' && remedy.caseId === caseId,
+          remedy?.status === 'refund_case' &&
+          remedy.kind === 'makeup' &&
+          remedy.caseId === closingCase.caseId,
       )
       .sort((one, other) => ((one.remedy?.id ?? '') < (other.remedy?.id ?? '') ? -1 : 1));
     const offered: Offered[] = [];
     for (const { id } of held) {
       const offer = await offers.offerLocked(tx, id, { restoredCase: closingCase.caseId });
       // The note under T061 (B39 Q5 (a)'s precedent): the offer wrote its warn line; nothing is kept.
-      if (offer === null) throw noFreeWeek(log, { ...ids, sessionId: id });
+      if (offer === null) throw afterWrite(noFreeWeek(log, { ...ids, sessionId: id }));
       offered.push(offer);
     }
     const closed = await store.closeCase(tx, closingCase.caseId, {
@@ -537,9 +649,14 @@ export function createRestore({
       const { outcome, replayed } = await idempotency.runOn(
         tx,
         { scope: SCOPE, key: idempotencyKey, actorId: adminId, input: { enrollmentId, reason } },
-        (keyed) => restoreLocked(keyed, adminId, enrollmentId),
+        (keyed) => restoreLocked(keyed, adminId, enrollmentId, () => clock(keyed)),
       );
       return { answer: outcome, replayed };
+    },
+    // T073 (Q8 (a)): the core, with no key, audit or limit of its own, for T072's lift.
+    restoreClosed: async (tx, adminId, enrollmentId, now) => {
+      await restoreLocked(tx, adminId, enrollmentId, async () => now);
+      return { restored: true };
     },
   };
 }

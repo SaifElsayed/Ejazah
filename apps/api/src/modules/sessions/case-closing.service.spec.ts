@@ -159,3 +159,33 @@ describe('the refusals, each writing nothing and logged once', () => {
     },
   );
 });
+
+// T071 of specs/004-sessions (the first note under T071, Q5 (a) widened): a `teacher_suspended` case
+// is closed only by the teacher's reinstatement or by an end of its enrollment, so `cases.resolve`
+// and `cases.dismiss` refuse it `CONFLICT` `closed_by_reinstatement`, writing nothing, with one
+// info line of ids.
+describe('a teacher_suspended case is closed only by the reinstatement or an end (T071)', () => {
+  it.each(['resolve', 'dismiss'] as const)(
+    '%s refuses it CONFLICT closed_by_reinstatement, writing nothing, one line of ids',
+    async (close) => {
+      const { closing, closings, handed, lines } = closingOver(
+        record({ reason: 'teacher_suspended' }),
+      );
+      const refused = await refusalOf(closing[close](tx, ADMIN, { caseId: CASE, note: 'n' }));
+      expect(refused.code).toBe('CONFLICT');
+      expect(refused.details).toEqual([{ path: 'cause', code: 'closed_by_reinstatement' }]);
+      expect(isRefusalLogged(refused)).toBe(true);
+      expect(closings).toEqual([]);
+      expect(handed).toEqual([]);
+      expect(lines).toEqual([
+        {
+          adminId: ADMIN,
+          caseId: CASE,
+          enrollmentId: ENROLLMENT,
+          errorCode: 'CONFLICT',
+          reason: 'closed_by_reinstatement',
+        },
+      ]);
+    },
+  );
+});
