@@ -109,3 +109,9 @@ export { sessionDisputesOfSession } from './session-dispute.repository.js';
  */
 export { openAbsenceComplaint } from './absence-complaint.service.js';
 export { openComplaintOf } from './absence-complaint.repository.js';
+/**
+ * T070 A1 of specs/004-sessions (the owner's approval of 2026-11-13; the first follow-up under T070,
+ * the speed): many enrollments' compensation cases in one statement, each as `compensationCasesOf`
+ * answers it, with no lock, for booking's slot hold (`slotUses`).
+ */
+export { compensationCasesAmong } from './compensation-case.repository.js';
