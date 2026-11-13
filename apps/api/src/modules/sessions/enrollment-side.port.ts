@@ -46,9 +46,19 @@ export type EnrollmentCancellationReason =
 /** `snapshot_track`, the package's track frozen at purchase (ADR 0018 D1, `package_track`). */
 export type EnrollmentTrack = 'recitation' | 'ijazah_track';
 
-/** `enrollment_events.kind` (data-model.md §2.8, `enrollment_event_kind`). */
+/**
+ * `enrollment_events.kind` (data-model.md §2.8, `enrollment_event_kind`); `slot_released` and
+ * `slot_hold_ended` since T069's migration (data-model.md §2.13; Q-69-1 (a)).
+ */
 export type EnrollmentEventKind =
-  'confirmed' | 'order_failed' | 'cancelled' | 'completed' | 'terminated_no_show' | 'restored';
+  | 'confirmed'
+  | 'order_failed'
+  | 'cancelled'
+  | 'completed'
+  | 'terminated_no_show'
+  | 'restored'
+  | 'slot_released'
+  | 'slot_hold_ended';
 
 /**
  * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two

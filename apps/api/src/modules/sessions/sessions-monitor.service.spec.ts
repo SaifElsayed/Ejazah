@@ -15,6 +15,10 @@
 //     refused NOT_FOUND through the file's one `refusal`, with one log line.
 //
 // Over the real tables: `tests/db-integrity/sessions-monitor.spec.ts`.
+//
+// T069 (B42a lane 69, Q-69-1 (a)): the two `enrollment_event_kind` values T069's migration adds,
+// `slot_released` and `slot_hold_ended`, reach the timeline and pass the procedure's output schema.
+import { sessionsMonitorGetOutput } from '@ijazah/contracts/admin';
 import { addMinutes, resolveLocalDateTime } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -576,6 +580,23 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
       },
       { source: 'enrollment', kind: 'confirmed', occurredAt: '2026-11-01T10:00:00.000Z' },
     ]);
+  });
+
+  it('T069: a slot_released and a slot_hold_ended row reach the timeline, and the output schema admits them', async () => {
+    const { monitor } = world({
+      pages: [item(1)],
+      sessions,
+      enrollmentEvents: [
+        { kind: 'slot_released', occurredAt: new Date('2026-11-09T12:00:00Z') },
+        { kind: 'slot_hold_ended', occurredAt: new Date('2026-11-10T12:00:00Z') },
+      ],
+    });
+    const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+    expect(answer.events).toEqual([
+      { source: 'enrollment', kind: 'slot_hold_ended', occurredAt: '2026-11-10T12:00:00.000Z' },
+      { source: 'enrollment', kind: 'slot_released', occurredAt: '2026-11-09T12:00:00.000Z' },
+    ]);
+    expect(sessionsMonitorGetOutput.shape.events.safeParse(answer.events).success).toBe(true);
   });
 
   describe('restorableUntil (FR-454, R-322)', () => {

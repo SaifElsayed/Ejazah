@@ -278,6 +278,10 @@ export const timelineEventKind = z.enum([
   'outcome_corrected',
   'instants_reresolved',
   'counter_booking_refused',
+  // B42a's T069 (Q-69-1 (a), additive, R-API-9): two `enrollment_event_kind` values, a held slot's
+  // release (T070) and a hold's end (T074).
+  'slot_released',
+  'slot_hold_ended',
 ]);
 
 /**

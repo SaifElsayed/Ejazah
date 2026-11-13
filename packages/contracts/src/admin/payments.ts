@@ -70,7 +70,7 @@ export const paymentEventType = z.enum(['paid', 'failed', 'expired', 'refunded']
 /**
  * ERD `enrollment_event_kind`: an outcome booking recorded for the enrollment (R-216); Phase 3's
  * `completed`, `terminated_no_show` and `restored` added by B42's T047 (the follow-up under T047;
- * additive, R-API-9).
+ * additive, R-API-9); `slot_released` and `slot_hold_ended` by B42a's T069 (Q-69-1 (a), additive).
  */
 export const enrollmentOutcomeKind = z.enum([
   'confirmed',
@@ -79,6 +79,8 @@ export const enrollmentOutcomeKind = z.enum([
   'completed',
   'terminated_no_show',
   'restored',
+  'slot_released',
+  'slot_hold_ended',
 ]);
 
 /**
