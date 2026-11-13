@@ -9,8 +9,9 @@
 // THE MOVES (data-model.md §3, "Enrollment, this phase's moves"):
 //   terminateNoShow  confirmed → terminated_no_show                     `terminated_no_show`
 //   complete         confirmed → completed                              `completed`
-//   restore          terminated_no_show, or cancelled `admin` → confirmed `restored`
-//                    (`cancellation_reason` cleared, `confirmed_at` untouched and required, R-322)
+//   restore          terminated_no_show, or cancelled `admin` or `teacher_suspended` (T073)
+//                    → confirmed `restored` (`cancellation_reason` and `slot_released_at`
+//                    cleared, `confirmed_at` untouched and required, R-322)
 //   cancel 'admin'   confirmed → cancelled `admin`                      `cancelled` with `admin`
 // Each is one conditional update from its source states: the row the caller read under its lock is
 // still in one of them, or the move changes nothing, writes no row and answers `false` for the

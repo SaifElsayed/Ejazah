@@ -378,6 +378,8 @@ const adminServices = createAdminServices({
   // T016 of specs/004-sessions: the outages' reclassification checks completion (T015) through the
   // one `EnrollmentSide` above, and logs a completion and a refusal.
   enrollmentSide,
+  // T073 of specs/004-sessions: the restore's ninth cause `refunded`, payments' read handed in.
+  enrollmentPayments: { refundedOf: payments.refundedOf },
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,

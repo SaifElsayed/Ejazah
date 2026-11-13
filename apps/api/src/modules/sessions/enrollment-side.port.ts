@@ -140,11 +140,12 @@ export interface EnrollmentSide {
   /** `confirmed` → `completed`, with one `completed` row (T015, FR-449). */
   complete(tx: Transaction, id: string): Promise<boolean>;
   /**
-   * `terminated_no_show`, or `cancelled` with the reason `admin`, → `confirmed`, with one
-   * `restored` row: an administrator's restore (T061, FR-454, R-322). `cancellation_reason` is
+   * `terminated_no_show`, or `cancelled` with the reason `admin` or (T073) `teacher_suspended`,
+   * → `confirmed`, with one `restored` row: an administrator's restore (T061, FR-454, R-322). `cancellation_reason` is
    * cleared and `confirmed_at` left as it is (R-HONEST-1); only an enrollment a payment once
    * confirmed (`confirmed_at` set) is restored, any other answering `false`. Which closing may be
-   * restored (its case, its window) is the caller's to check.
+   * restored (sessions' `closingOf`, its case open) is the caller's to check; T073 also clears
+   * `slot_released_at`, so a later closing holds its slot again.
    */
   restore(tx: Transaction, id: string): Promise<boolean>;
   /**

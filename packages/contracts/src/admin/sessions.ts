@@ -471,9 +471,11 @@ export type SessionsReviewReviseOutput = z.infer<typeof sessionsReviewReviseOutp
 
 // T061 of specs/004-sessions (FR-454, FR-455, FR-470; SRS FR-CANCEL-8; research R-322, «The
 // restore»; ADR 0023 D4; admin-surface.md, `sessions.restore`): an administrator restores an
-// enrollment an administrator's decision closed, within the restore window, with a mandatory reason,
-// keyed under the administrator's idempotency key. Refused `RESTORE_REFUSED` with `details.cause`
-// one of eight causes, writing nothing. No amount crosses and `confirmed_at` is never written.
+// enrollment an administrator's decision closed, at any time while its case is open (T073, DEC-69),
+// with a mandatory reason, keyed under the administrator's idempotency key. Refused
+// `RESTORE_REFUSED` with `details.cause` one of nine causes (T073 added `refunded`; `window_closed`
+// is `@deprecated`, never produced), writing nothing. No amount crosses and `confirmed_at` is never
+// written.
 
 /**
  * Why a restore was refused (R-322, steps 1 to 6). T073 (FR-507; SRS FR-CANCEL-8 as amended,
