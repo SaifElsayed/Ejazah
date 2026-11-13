@@ -34,7 +34,10 @@
 // `no_free_week` and nothing is written (T036's precedent, Q5 (a)), the offer's own warn line
 // written. A paused enrollment whose student identity did not lock (a suspension committed between
 // the read and the lock, which a reinstatement on a stale screen alone could race) throws before any
-// write, with one warn line of ids, and the administrator retries.
+// write, with one warn line of ids, and the administrator retries. A paused enrollment whose student
+// is suspended refuses the whole reinstatement `STUDENT_SUSPENDED` (Q-B1 (a), the review session's
+// ruling of 2026-11-13; T036's precedent), read under the accounts' locks before any offer, nothing
+// written, one info line of ids.
 //
 // THE LOCKS (`003:T005`'s rules). Every lock after `users` in the one order: the key, `enrollments`,
 // `sessions`, `session_remedies`, then `disputes` (the cases closed through `closeCase`, whose
@@ -48,6 +51,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Logger } from '../../platform/logging/logger.js';
+import { readStanding } from '../identity/index.js';
 import { type CaseClosing, closeCase, openCaseOf } from '../moderation/index.js';
 import type {
   EnrollmentPageFilter,
@@ -131,6 +135,8 @@ export interface TeacherReinstatementStore extends PausedCaseStore {
   lockTeacherSlots(tx: Transaction, teacherUserId: string): Promise<void>;
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   lockRemediesOfSessions(tx: Transaction, sessionIds: readonly string[]): Promise<void>;
+  /** Q-B1 (a): identity's, the account's status, read under its lock; null for none. */
+  accountStatusOf(tx: Transaction, userId: string): Promise<string | null>;
   /** The sessions the case's suspension cancelled, owed an offer, in id order. */
   sessionsToOffer(tx: Transaction, caseId: string): Promise<readonly string[]>;
 }
@@ -140,6 +146,7 @@ export const teacherReinstatementStore: TeacherReinstatementStore = {
   lockTeacherSlots,
   lockSessions,
   lockRemediesOfSessions,
+  accountStatusOf: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus ?? null,
   sessionsToOffer: sessionsToOfferOf,
 };
 
@@ -224,6 +231,23 @@ export function createTeacherReinstatement({
             'A teacher’s reinstatement found a paused enrollment whose student was not locked',
           );
           throw new Error('teacher reinstatement: a paused enrollment’s student was not locked');
+        }
+        // Q-B1 (a): a student still suspended, T028's offer would postpone every session of the
+        // enrollment; refused with that standing, read under the accounts' locks before any offer.
+        for (const { enrollmentId, studentUserId } of paused) {
+          if ((await store.accountStatusOf(tx, studentUserId)) !== 'suspended') continue;
+          log.info(
+            {
+              adminId,
+              teacherUserId,
+              enrollmentId,
+              studentUserId,
+              errorCode: 'STUDENT_SUSPENDED',
+              reason: 'student_suspended',
+            },
+            'A teacher’s reinstatement was refused',
+          );
+          throw markRefusalLogged(new DomainError('STUDENT_SUSPENDED'));
         }
         const sessionsOf = new Map<string, string>();
         for (const { enrollmentId, caseId } of paused) {

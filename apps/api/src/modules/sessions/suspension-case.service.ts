@@ -13,7 +13,9 @@
 // answering null, the guard of `remedy-offer.service.ts`), the whole resolve is refused `CONFLICT`
 // with `details.cause` `no_free_week` and nothing is written (Q5 (a)): no later run offers a
 // `cancelled_by_admin` session, so a closed case would leave it owed and never offered; the offer
-// writes its own warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`. The preconditions
+// writes its own warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`. T071 (Q-B1 (a), the
+// review session's ruling of 2026-11-13): refused `TEACHER_SUSPENDED` while the enrollment's teacher
+// is suspended (the enrollment paused), read under the teacher's lock before any offer. The preconditions
 // read under the locks (the enrollment `confirmed`, the student not suspended, no remedy on the
 // sessions offered) leave no other null.
 //
@@ -175,7 +177,7 @@ export interface SuspensionCase {
 }
 
 /** Why a closing was refused, as its one log line names it. */
-type RefusalReason = 'not_open' | 'student_suspended' | 'no_free_week';
+type RefusalReason = 'not_open' | 'student_suspended' | 'teacher_suspended' | 'no_free_week';
 
 interface RefusalIds {
   readonly adminId: string;
@@ -270,6 +272,12 @@ export function createSuspensionCase({
         await close(tx, ids, endCase === null ? closing : { ...closing, coveredBy: endCase });
         endedAnotherWay(ids, terms?.status ?? 'none', 'resolved', endCase);
         return;
+      }
+      // T071 (Q-B1 (a)): the teacher still suspended, the enrollment paused, T028's offer would
+      // postpone every session; refused with that standing, read under the accounts' locks before
+      // any offer, writing nothing.
+      if ((await store.accountStatusOf(tx, parties.teacherUserId)) === 'suspended') {
+        throw refusal(log, ids, 'TEACHER_SUSPENDED', 'teacher_suspended');
       }
       const sessionIds = sortedUnique(await store.sessionsToOffer(tx, caseId));
       if (sessionIds.length > 0) {

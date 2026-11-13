@@ -150,7 +150,12 @@ interface Paused {
   readonly sessions?: readonly string[];
 }
 
-function reinstatementOver(paused: readonly Paused[], noFreeWeek: readonly string[] = []) {
+function reinstatementOver(
+  paused: readonly Paused[],
+  noFreeWeek: readonly string[] = [],
+  /** T071, Q-B1 (a): the students whose accounts are suspended. */
+  suspendedStudents: readonly string[] = [],
+) {
   const calls: unknown[][] = [];
   const lines: [string, string, unknown][] = [];
   const caseReads = new Map(paused.map((one) => [one.id, [...one.cases]]));
@@ -174,6 +179,10 @@ function reinstatementOver(paused: readonly Paused[], noFreeWeek: readonly strin
     lockTeacherSlots: async (_tx, teacher) => void calls.push(['lockTeacherSlots', teacher]),
     lockSessions: async (_tx, ids) => void calls.push(['lockSessions', ids]),
     lockRemediesOfSessions: async (_tx, ids) => void calls.push(['lockRemediesOfSessions', ids]),
+    accountStatusOf: async (_tx, userId) => {
+      calls.push(['accountStatusOf', userId]);
+      return suspendedStudents.includes(userId) ? 'suspended' : 'active';
+    },
     sessionsToOffer: async (_tx, caseId) => {
       calls.push(['sessionsToOffer', caseId]);
       return paused.find((one) => one.cases[0] === caseId)?.sessions ?? [];
@@ -281,6 +290,9 @@ describe('the reinstatement resumes the paused enrollments (FR-504; kernel.md, t
       ['pausedCaseOf', E1],
       ['enrollmentFor', E2],
       ['pausedCaseOf', E2],
+      // Q-B1 (a): each student's standing, under the accounts' locks, before any offer.
+      ['accountStatusOf', STUDENT_A],
+      ['accountStatusOf', STUDENT_B],
       ['sessionsToOffer', CASE_1],
       ['sessionsToOffer', CASE_2],
       ['lockSessions', [S11, S12, S21]],
@@ -385,6 +397,40 @@ describe('the reinstatement resumes the paused enrollments (FR-504; kernel.md, t
         'info',
         'A teacher’s reinstatement resumed the paused enrollments',
         { adminId: ADMIN, teacherUserId: TEACHER, enrollments: 0, offeredSessions: 0, closedCaseIds: [] },
+      ],
+    ]);
+  });
+});
+
+// T071 (Q-B1 (a), the review session's ruling of 2026-11-13; T036's `STUDENT_SUSPENDED` its
+// precedent): a reinstatement while a paused enrollment's student is suspended is refused
+// `STUDENT_SUSPENDED`, the student's standing read under the accounts' locks before any offer,
+// writing nothing, one info line of ids; it answered `no_free_week` before.
+describe('the reinstatement while a paused enrollment’s student is suspended (Q-B1 (a))', () => {
+  it('refuses STUDENT_SUSPENDED before any offer, writing nothing, one line of ids', async () => {
+    // T028's offer postpones every session of a suspended student (C3).
+    const { reinstatement, calls, lines } = reinstatementOver(TWO_PAUSED, [S21], [STUDENT_B]);
+    const refused = await refusalOf(
+      reinstatement.resume(tx, ADMIN, TEACHER, [STUDENT_A, STUDENT_B, TEACHER].sort()),
+    );
+    expect(refused.code).toBe('STUDENT_SUSPENDED');
+    expect(refused.details).toBeUndefined();
+    expect(isRefusalLogged(refused)).toBe(true);
+    expect(
+      calls.some(([name]) => ['lockSessions', 'offerLocked', 'closeCase'].includes(String(name))),
+    ).toBe(false);
+    expect(lines).toEqual([
+      [
+        'info',
+        'A teacher’s reinstatement was refused',
+        {
+          adminId: ADMIN,
+          teacherUserId: TEACHER,
+          enrollmentId: E2,
+          studentUserId: STUDENT_B,
+          errorCode: 'STUDENT_SUSPENDED',
+          reason: 'student_suspended',
+        },
       ],
     ]);
   });

@@ -573,3 +573,45 @@ describe('cases.resolve and cases.dismiss refuse a teacher_suspended case (T071)
     },
   );
 });
+
+// T071 (Q-B1 (a), the review session's ruling of 2026-11-13; T036's `STUDENT_SUSPENDED` its
+// precedent): an offer a party's suspension postpones refuses with that party's standing, read under
+// the locks before any offer, writing nothing; both answered `no_free_week` before.
+describe('a party still suspended refuses the closing’s offers truthfully (T071, Q-B1 (a))', () => {
+  it('cases.resolve of the student’s suspension case while the teacher is suspended refuses TEACHER_SUSPENDED, writing nothing', async () => {
+    const on = await confirmedWorld();
+    await database.$transaction((tx) => standing.suspendStudent(tx, admin, on.studentId));
+    await suspendTeacher(on);
+    await database.$transaction((tx) => standing.reinstateStudent(tx, admin, on.studentId));
+    const studentCase = await caseOf(on.enrollmentId, 'student_suspended');
+    const before = await snapshotOf(on);
+    const refusal = refusalOf(
+      database.$transaction((tx: Transaction) =>
+        closing.resolve(tx, admin, { caseId: studentCase.id, note: NOTE }),
+      ),
+    ).catch((error: unknown) => error);
+    await refusal;
+    // Nothing written, read before the answer is checked.
+    expect(await snapshotOf(on)).toEqual(before);
+    const refused = await refusal;
+    expect(refused).toBeInstanceOf(DomainError);
+    expect((refused as DomainError).code).toBe('TEACHER_SUSPENDED');
+    expect((refused as DomainError).details).toBeUndefined();
+  });
+
+  it('teachers.reinstate while a paused enrollment’s student is suspended refuses STUDENT_SUSPENDED, writing nothing', async () => {
+    const on = await confirmedWorld();
+    await suspendTeacher(on);
+    await database.$transaction((tx) => standing.suspendStudent(tx, admin, on.studentId));
+    const before = await snapshotOf(on);
+    const refusal = refusalOf(reinstateTeacher(on)).catch((error: unknown) => error);
+    await refusal;
+    // Nothing written, read before the answer is checked.
+    expect(await snapshotOf(on)).toEqual(before);
+    expect(before.teacher).toBe('suspended');
+    const refused = await refusal;
+    expect(refused).toBeInstanceOf(DomainError);
+    expect((refused as DomainError).code).toBe('STUDENT_SUSPENDED');
+    expect((refused as DomainError).details).toBeUndefined();
+  });
+});
