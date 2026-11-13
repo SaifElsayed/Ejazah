@@ -43,6 +43,12 @@ export type EnrollmentOutcome =
       readonly kind: 'completed' | 'terminated_no_show' | 'restored';
       readonly enrollmentId: string;
       readonly occurredAt: Date;
+    }
+  | {
+      // T069's two kinds (Q-69-2 (b)): a held slot's release (T070) and a hold's end (T074).
+      readonly kind: 'slot_released' | 'slot_hold_ended';
+      readonly enrollmentId: string;
+      readonly occurredAt: Date;
     };
 
 /** One outcome's row: its order on an order's outcome, its reason on a cancellation, else neither. */
