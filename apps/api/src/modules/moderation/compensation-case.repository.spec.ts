@@ -551,7 +551,9 @@ describe('caseQueuePage', () => {
 });
 
 describe('suspensionCasesCoveredBy', () => {
-  it('asks the student_suspended cases whose link names the case, oldest first, and answers them by case id', async () => {
+  // T071 of specs/004-sessions (rule d, an approved change: the note under T071, Q5 (a) widened):
+  // a `teacher_suspended` case an end closed is linked the same way.
+  it('asks the student_suspended and teacher_suspended cases whose link names the case, oldest first, and answers them by case id', async () => {
     const { tx, asked } = client({
       findMany: [
         [
@@ -571,7 +573,7 @@ describe('suspensionCasesCoveredBy', () => {
           where: {
             coveredByCaseId: CASE_3,
             kind: 'compensation_case',
-            reason: 'student_suspended',
+            reason: { in: ['student_suspended', 'teacher_suspended'] },
           },
           orderBy: { id: 'asc' },
           select: { id: true, status: true },

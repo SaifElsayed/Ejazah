@@ -225,6 +225,8 @@ export const compensationCaseReason = z.enum([
   'makeup_refused',
   'admin_opened_for_student',
   'admin_opened_for_teacher',
+  // T071 (FR-504): a teacher's suspension pauses the enrollment; added, additively (R-API-9).
+  'teacher_suspended',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */

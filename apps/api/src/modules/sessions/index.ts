@@ -569,3 +569,19 @@ export { lockForStanding, type StandingLockStore } from './standing-locks.js';
  * restore, keyed on the call's transaction, composed into the administrator surface's `restore`.
  */
 export { createRestore, type Restore, type RestoreStore, restoreStore } from './restore.service.js';
+/**
+ * T071 of specs/004-sessions (FR-504; research R-313; the notes under T071, Q5 (a) widened and
+ * Q6 (a)): a teacher's suspension that pauses. `closePausedCaseOnEnd` closes a paused enrollment's
+ * open `teacher_suspended` case on its end's transaction (booking's subscriber, a complaint decided
+ * (a), a fault confirmed), with the store over moderation's entry; `createTeacherReinstatement`
+ * resumes the paused enrollments at the teacher's reinstatement, handed to identity's
+ * `StandingService` by the admin module.
+ */
+export {
+  closePausedCaseOnEnd,
+  createTeacherReinstatement,
+  type PausedCaseStore,
+  pausedCaseStore,
+  type PausedEnd,
+  type TeacherReinstatement,
+} from './teacher-suspension.service.js';

@@ -62,9 +62,9 @@ export interface CaseClosingWrite {
   /** The database's clock, read under the enrollment's lock. */
   readonly resolvedAt: Date;
   /**
-   * On a `student_suspended` case only (ERD §15 rule 49): the case that owes the sessions its
-   * suspension cancelled, `covered_by_case_id` (the note under T036 of specs/004-sessions/tasks.md);
-   * absent, NULL.
+   * On a `student_suspended` case, or since T071 a `teacher_suspended` one (ERD §15 rule 49 as T069
+   * widened it): the case that owes the sessions its suspension cancelled, `covered_by_case_id`
+   * (the notes under T036 and T071 of specs/004-sessions/tasks.md); absent, NULL.
    */
   readonly coveredBy?: string;
 }
@@ -359,14 +359,19 @@ export interface SuspensionCase {
  * first, with no lock: what `cases.get`'s `covers` reads for a confirmed fault (U1) and an
  * enrollment's end (U2). The cases are linked by id, so no instant is compared (the note under
  * T036 of specs/004-sessions/tasks.md, the owner's decision (c) on PR #133's Major 1). Over
- * `disputes_covered_by_case_id_idx`.
+ * `disputes_covered_by_case_id_idx`. T071 (the note under T071, Q5 (a) widened; rule 49 as T069
+ * widened it): a `teacher_suspended` case an end closed too, its sessions the end case's.
  */
 export async function suspensionCasesCoveredBy(
   tx: Client,
   caseId: string,
 ): Promise<SuspensionCase[]> {
   const rows = await tx.dispute.findMany({
-    where: { coveredByCaseId: caseId, kind: 'compensation_case', reason: 'student_suspended' },
+    where: {
+      coveredByCaseId: caseId,
+      kind: 'compensation_case',
+      reason: { in: ['student_suspended', 'teacher_suspended'] },
+    },
     orderBy: { id: 'asc' },
     select: { id: true, status: true },
   });

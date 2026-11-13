@@ -32,7 +32,20 @@
 // consequences entry on the action's transaction; the reinstatement lands as a teacher's does. A
 // refusal names the account status (`details: [{ path: 'studentUserId', code }]`), or NOT_FOUND for a
 // person who is not a live student.
+//
+// T071 of specs/004-sessions (FR-504; SRS FR-SESS-16 as amended; the notes under T071, Q5.2 (a) and
+// Q6 (a)). `#end` passes the administrator to every consequence as its `actor` (booking's subscriber
+// closes a paused enrollment's `teacher_suspended` case in their name, rule 46). A teacher's
+// suspension pauses the teacher's confirmed enrollments (booking's subscriber), and the
+// reinstatement resumes them through `reinstatement`, handed in by the admin module (identity imports
+// no other module, docs/ARCHITECTURE.md §4): the paused enrollments' students read with no lock, then
+// `users`, the teacher and those students, in one call in id order in place of `lockAccount`
+// (`003:T005`'s rule 2; contracts/kernel.md, the reinstatement's row), the teacher's standing read
+// again under it and moved, then, on the same transaction, each session the suspension cancelled
+// offered and each `teacher_suspended` case closed; a refusal there (`no_free_week`) rolls the
+// whole reinstatement back. Without `reinstatement` the reinstatement moves the account only.
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { publisherOn } from '../../platform/live/live-publisher.js';
 import { lockApplication } from './application.repository.js';
@@ -55,6 +68,11 @@ import { type SessionRevokedReason, UserSessionsRepository } from './user-sessio
 export interface StandingStore {
   /** Locks the account's row until the transaction ends (T126). */
   lockAccount(tx: Transaction, userId: string): Promise<void>;
+  /**
+   * T071: locks the accounts' rows in one call, in id order, until the transaction ends (the
+   * reinstatement's teacher and the students of the paused enrollments).
+   */
+  lockAccounts(tx: Transaction, userIds: readonly string[]): Promise<void>;
   /** Locks the application's `teacher_profiles` row until the transaction ends (T164). */
   lockApplication(tx: Transaction, userId: string): Promise<void>;
   read(tx: Transaction, userId: string): Promise<Standing | null>;
@@ -85,6 +103,8 @@ export function standingStoreOver(database: Database): StandingStore {
   const accounts = new AccountsRepository(database);
   return {
     lockAccount,
+    // T071: `users`, identity's own table, in one statement in id order (the kernel's `lockRows`).
+    lockAccounts: (tx, userIds) => lockRows(tx, 'users', userIds),
     lockApplication,
     read: readStanding,
     // The live person (`readStanding` leaves a deleted one out) whose one role is `student`.
@@ -120,6 +140,26 @@ type VerificationMove = StandingMove<
   NonNullable<Standing['teacher']>['verificationStatus']
 >;
 
+/**
+ * T071 of specs/004-sessions (Q6 (a)): what a teacher's reinstatement needs from the modules that
+ * hold the paused enrollments, handed in by the admin module (sessions' `createTeacherReinstatement`).
+ */
+export interface ReinstatementDependency {
+  /** The students of the teacher's paused enrollments, read with no lock. */
+  studentsOf(tx: Transaction, teacherUserId: string): Promise<readonly string[]>;
+  /**
+   * On the reinstatement's transaction, the accounts `lockedUserIds` held and the teacher moved:
+   * each session the suspension cancelled offered and each `teacher_suspended` case closed; throws
+   * the refusal (`CONFLICT` `no_free_week`) that rolls the whole reinstatement back.
+   */
+  resume(
+    tx: Transaction,
+    adminId: string,
+    teacherUserId: string,
+    lockedUserIds: readonly string[],
+  ): Promise<void>;
+}
+
 export interface StandingDependencies {
   readonly store: StandingStore;
   readonly consequences: AccountConsequences;
@@ -127,6 +167,8 @@ export interface StandingDependencies {
   readonly revokeSubjects: (tx: Transaction, teacherUserId: string) => Promise<void>;
   /** Whether the person has an `open` identity request (verification's), on the action's transaction. */
   readonly hasOpenIdentityRequest: (tx: Transaction, userId: string) => Promise<boolean>;
+  /** T071: the paused enrollments resumed at a teacher's reinstatement; absent, none is. */
+  readonly reinstatement?: ReinstatementDependency;
   readonly now?: () => Date;
 }
 
@@ -135,6 +177,7 @@ export class StandingService {
   readonly #consequences: AccountConsequences;
   readonly #revokeSubjects: StandingDependencies['revokeSubjects'];
   readonly #hasOpenIdentityRequest: StandingDependencies['hasOpenIdentityRequest'];
+  readonly #reinstatement: ReinstatementDependency | undefined;
   readonly #now: () => Date;
 
   constructor(dependencies: StandingDependencies) {
@@ -142,6 +185,7 @@ export class StandingService {
     this.#consequences = dependencies.consequences;
     this.#revokeSubjects = dependencies.revokeSubjects;
     this.#hasOpenIdentityRequest = dependencies.hasOpenIdentityRequest;
+    this.#reinstatement = dependencies.reinstatement;
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -150,7 +194,7 @@ export class StandingService {
    * follow-up 2, owner's decision 2026-10-22); the request stays open, and its acceptance leaves
    * the suspension as it is.
    */
-  async suspend(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
+  async suspend(tx: Transaction, adminId: string, teacherUserId: string): Promise<AccountMove> {
     await this.#store.lockAccount(tx, teacherUserId);
     const standing = await this.#teacher(tx, teacherUserId);
     const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
@@ -163,7 +207,7 @@ export class StandingService {
     if (!(await this.#store.moveAccount(tx, teacherUserId, suspendable, 'suspended'))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
-    await this.#end(tx, teacherUserId, 'suspended');
+    await this.#end(tx, adminId, teacherUserId, 'suspended');
     return accountMove(standing.accountStatus, 'suspended');
   }
 
@@ -187,7 +231,7 @@ export class StandingService {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
     await this.#revokeSubjects(tx, teacherUserId);
-    await this.#end(tx, teacherUserId, 'approval_revoked');
+    await this.#end(tx, adminId, teacherUserId, 'approval_revoked');
     return {
       before: { verificationStatus: standing.teacher.verificationStatus },
       after: { verificationStatus: 'revoked' },
@@ -236,7 +280,7 @@ export class StandingService {
         'banned',
       ));
     if (!banned) throw conflict(await this.#teacher(tx, userId));
-    await this.#end(tx, userId, 'banned');
+    await this.#end(tx, adminId, userId, 'banned');
     return {
       ...accountMove(standing.accountStatus, 'banned'),
       applicationStatus: standing.teacher.applicationStatus,
@@ -245,12 +289,21 @@ export class StandingService {
 
   /**
    * `teachers.reinstate`: a suspended teacher back to `active`, or to `verification_required` while
-   * an identity request is open (T113, owner's decision 2026-10-28); no consequence is undone here.
+   * an identity request is open (T113, owner's decision 2026-10-28). T071: the paused enrollments
+   * resumed on the same transaction through `reinstatement` (this file's head).
    */
-  async reinstate(tx: Transaction, _adminId: string, teacherUserId: string): Promise<AccountMove> {
+  async reinstate(tx: Transaction, adminId: string, teacherUserId: string): Promise<AccountMove> {
     // Under the account's lock, an identity request opened meanwhile is committed before this reads
-    // it, so the account never lands `active` with a request open (T126).
-    await this.#store.lockAccount(tx, teacherUserId);
+    // it, so the account never lands `active` with a request open (T126). T071: the paused
+    // enrollments' students read first with no lock, then the teacher and they in one call, in id
+    // order; `resume` reads the paused enrollments again under their own locks.
+    const reinstatement = this.#reinstatement;
+    const locked =
+      reinstatement === undefined
+        ? [teacherUserId]
+        : [...new Set([teacherUserId, ...(await reinstatement.studentsOf(tx, teacherUserId))])].sort();
+    if (reinstatement === undefined) await this.#store.lockAccount(tx, teacherUserId);
+    else await this.#store.lockAccounts(tx, locked);
     const standing = await this.#teacher(tx, teacherUserId);
     if (standing.accountStatus !== 'suspended') throw conflict(standing);
     const to: AccountStatus = (await this.#hasOpenIdentityRequest(tx, teacherUserId))
@@ -259,6 +312,8 @@ export class StandingService {
     if (!(await this.#store.moveAccount(tx, teacherUserId, ['suspended'], to))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
+    // T071: after the move, so T028's offer reads the teacher no longer suspended.
+    await reinstatement?.resume(tx, adminId, teacherUserId, locked);
     return accountMove('suspended', to);
   }
 
@@ -269,7 +324,7 @@ export class StandingService {
    * one `student_suspended` case each, on this transaction. A dispute's `party_suspended` against a
    * student calls this on the resolution's transaction (T034).
    */
-  async suspendStudent(tx: Transaction, _adminId: string, userId: string): Promise<AccountMove> {
+  async suspendStudent(tx: Transaction, adminId: string, userId: string): Promise<AccountMove> {
     await this.#store.lockAccount(tx, userId);
     const accountStatus = await this.#student(tx, userId);
     const suspendable: readonly AccountStatus[] = ['active', 'verification_required'];
@@ -277,7 +332,7 @@ export class StandingService {
     if (!(await this.#store.moveAccount(tx, userId, suspendable, 'suspended'))) {
       throw studentConflict(await this.#student(tx, userId));
     }
-    await this.#end(tx, userId, 'suspended');
+    await this.#end(tx, adminId, userId, 'suspended');
     return accountMove(accountStatus, 'suspended');
   }
 
@@ -286,7 +341,7 @@ export class StandingService {
    * booking's subscriber cancels the confirmed enrollments `admin` at once, with one
    * `student_banned` case each. A dispute's `party_banned` against a student calls this (T034).
    */
-  async banStudent(tx: Transaction, _adminId: string, userId: string): Promise<AccountMove> {
+  async banStudent(tx: Transaction, adminId: string, userId: string): Promise<AccountMove> {
     await this.#store.lockAccount(tx, userId);
     const accountStatus = await this.#student(tx, userId);
     const bannable: readonly AccountStatus[] = ['active', 'suspended', 'verification_required'];
@@ -294,7 +349,7 @@ export class StandingService {
     if (!(await this.#store.moveAccount(tx, userId, bannable, 'banned'))) {
       throw studentConflict(await this.#student(tx, userId));
     }
-    await this.#end(tx, userId, 'banned');
+    await this.#end(tx, adminId, userId, 'banned');
     return accountMove(accountStatus, 'banned');
   }
 
@@ -333,10 +388,12 @@ export class StandingService {
    * Every session ended, then the one consequences entry; and the person's `account` event added to
    * the action's after-commit list (T063 of specs/004-sessions, FR-429; research R-324, item 6), so
    * once the transaction commits their live streams read `account.me` and end, and on a rollback
-   * nothing is sent. The list is the administrator kind's, bound to this transaction.
+   * nothing is sent. The list is the administrator kind's, bound to this transaction. T071: the
+   * administrator reaches every consequence as its `actor` (Q5.2 (a)).
    */
   async #end(
     tx: Transaction,
+    adminId: string,
     userId: string,
     cause: 'suspended' | 'approval_revoked' | 'banned',
   ): Promise<void> {
@@ -347,7 +404,7 @@ export class StandingService {
           ? 'account_banned'
           : 'admin_action';
     await this.#store.revokeSessions(tx, userId, reason, this.#now());
-    await this.#consequences.onAccountTerminated(tx, userId, cause);
+    await this.#consequences.onAccountTerminated(tx, userId, cause, { adminId });
     publisherOn(tx)?.afterCommit([userId], { type: 'account' });
   }
 

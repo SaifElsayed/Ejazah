@@ -75,6 +75,11 @@ export class MemoryStandingStore implements StandingStore {
     this.journal.push(`lock:${userId}`);
   }
 
+  /** T071 of specs/004-sessions: the reinstatement's accounts, in one call (`lock-accounts:<ids>`). */
+  async lockAccounts(_tx: Transaction, userIds: readonly string[]): Promise<void> {
+    this.journal.push(`lock-accounts:${userIds.join(',')}`);
+  }
+
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
     this.journal.push(`lock-application:${userId}`);
   }

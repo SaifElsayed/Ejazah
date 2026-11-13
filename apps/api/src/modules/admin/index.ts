@@ -62,6 +62,8 @@ import {
   type DisputeHeldFiles,
   type DisputeMatterReads,
 } from '../sessions/index.js';
+// T071 of specs/004-sessions: a teacher's reinstatement resumes the paused enrollments (Q6 (a)).
+import { createTeacherReinstatement } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
   createUserDirectory,
@@ -225,6 +227,18 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     revokeSubjects,
     // A reinstatement lands on `verification_required` while verification's request is open (T113).
     hasOpenIdentityRequest: async (tx, userId) => (await openRequestOf(tx, userId)) !== null,
+    // T071 of specs/004-sessions (Q6 (a); docs/ARCHITECTURE.md §4, a dependency handed in against
+    // the arrows): the paused enrollments' students, then the offers and the cases' closing, on the
+    // reinstatement's transaction; T028's offer writes its no-free-week warn line.
+    reinstatement: createTeacherReinstatement({
+      enrollments: dependencies.enrollmentSide,
+      offers: createRemedyOffer({
+        enrollments: dependencies.enrollmentSide,
+        settings: dependencies.settings,
+        log: dependencies.log,
+      }),
+      log: dependencies.log,
+    }),
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });
   return {

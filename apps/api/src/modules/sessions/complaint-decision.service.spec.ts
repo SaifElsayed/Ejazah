@@ -80,6 +80,8 @@ interface Given {
   /** The enrollment's status as each read answers it. */
   readonly statuses?: readonly EnrollmentStatus[];
   readonly suspendFails?: DomainError;
+  /** T071: the enrollment's open `teacher_suspended` case (a paused enrollment). */
+  readonly pausedCase?: string;
 }
 
 function world(given: Given = {}) {
@@ -123,6 +125,12 @@ function world(given: Given = {}) {
       return AT;
     },
     recordEvents: async (_tx, events) => void calls.push(['recordEvents', events]),
+    // T071: recorded only on a paused enrollment, so the journals before T071 hold as written.
+    pausedCaseOf: async (_tx, enrollmentId) => {
+      if (given.pausedCase === undefined) return null;
+      calls.push(['pausedCaseOf', enrollmentId]);
+      return given.pausedCase;
+    },
   };
   const decisions = createComplaintDecision({
     enrollments: {
@@ -459,5 +467,56 @@ describe('cases.decideComplaint: the live event (T066)', () => {
     const { decide } = world({ records: [record(), record({ status: 'resolved' })] });
     expect(await asAdministratorKind((tx) => decide('end_enrollment', tx))).toEqual([]);
     expect(added).toEqual([]);
+  });
+});
+
+// T071 of specs/004-sessions (the first note under T071, Q5 (a) widened, P6): a complaint decided
+// (a) on an enrollment paused by the teacher's suspension (`confirmed`, so it ends) closes the open
+// `teacher_suspended` case in the same transaction, after the complaint, covered by the new
+// `absence_termination` case: `resolved`, `compensation_ordered`, the note `ended_meanwhile`, by
+// the deciding administrator, with one info line of ids.
+describe('cases.decideComplaint (a) on a paused enrollment (T071, P6)', () => {
+  const PAUSED = '0199d0a0-0000-7000-8000-00000000a0c3';
+
+  it('closes its teacher_suspended case covered by the absence_termination case, after the complaint, before the event', async () => {
+    const one = world({ pausedCase: PAUSED });
+    await one.decide('end_enrollment');
+    const tail = one.calls.slice(one.calls.findIndex(([name]) => name === 'closeCase'));
+    expect(tail.slice(0, 4)).toEqual([
+      [
+        'closeCase',
+        COMPLAINT,
+        { status: 'resolved', resolution: 'enrollment_ended', note: NOTE, adminId: ADMIN },
+      ],
+      ['pausedCaseOf', ENROLLMENT],
+      [
+        'closeCase',
+        PAUSED,
+        {
+          status: 'resolved',
+          resolution: 'compensation_ordered',
+          note: 'ended_meanwhile',
+          adminId: ADMIN,
+          coveredBy: NEW_CASE,
+        },
+      ],
+      decided('end_enrollment').slice(0, 2),
+    ]);
+    expect(one.lines).toContainEqual({
+      adminId: ADMIN,
+      enrollmentId: ENROLLMENT,
+      caseId: PAUSED,
+      coveredByCaseId: NEW_CASE,
+      end: 'complaint_end_enrollment',
+      msg: 'A paused enrollment’s teacher_suspended case closed by its end',
+    });
+  });
+
+  it('(c) closes no teacher_suspended case', async () => {
+    const one = world({ pausedCase: PAUSED });
+    await one.decide('close');
+    expect(one.calls.some(([name, caseId]) => name === 'closeCase' && caseId === PAUSED)).toBe(
+      false,
+    );
   });
 });

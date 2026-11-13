@@ -56,6 +56,7 @@ function world({
   sessions = DELIVERED,
   suspendedCase = false,
   adminCancellationCase = false,
+  teacherSuspendedCase = false,
   at = CLOSES,
   moves = true,
 }: {
@@ -63,6 +64,8 @@ function world({
   sessions?: readonly CompletionSession[];
   suspendedCase?: boolean;
   adminCancellationCase?: boolean;
+  /** T071: a `teacher_suspended` case open on the enrollment. */
+  teacherSuspendedCase?: boolean;
   at?: Date;
   moves?: boolean;
 } = {}) {
@@ -83,6 +86,10 @@ function world({
     adminCancellationCaseOpen: async (_tx, id) => {
       expect(id).toBe(ENROLLMENT);
       return adminCancellationCase;
+    },
+    teacherSuspendedCaseOpen: async (_tx, id) => {
+      expect(id).toBe(ENROLLMENT);
+      return teacherSuspendedCase;
     },
   };
   const completion = createCompletion({
@@ -171,6 +178,13 @@ describe('completeIfDue (T015, FR-449)', () => {
 
   it('holds it while an admin_cancellation case is open on it (the decision under T023, Q3 (a)): a hold can be undone, a completion cannot', async () => {
     const { completion, completed } = world({ adminCancellationCase: true });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  // T071 (FR-504): a paused enrollment is not completed while its teacher is suspended.
+  it('holds it while a teacher_suspended case is open on it (T071)', async () => {
+    const { completion, completed } = world({ teacherSuspendedCase: true });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
   });
