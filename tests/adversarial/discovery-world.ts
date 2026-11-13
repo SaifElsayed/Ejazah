@@ -355,6 +355,9 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
   slot_release_buffer_weeks: 0,
+  // 004:T070: a closed enrollment's slot is held through its kind's window (the seed's values, T069).
+  enrollment_restore_window_days: 14,
+  ban_restore_window_days: 14,
   session_access_ttl_minutes: 15,
   session_refresh_ttl_days: 30,
   session_refresh_grace_seconds: 30,
