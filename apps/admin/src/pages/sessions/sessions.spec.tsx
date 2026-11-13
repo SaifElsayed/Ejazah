@@ -1061,7 +1061,7 @@ describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held 
     });
   });
 
-  it('names a cancellation `teacher_suspended` as the teacher’s ban or revocation', () => {
+  it('names a cancellation `teacher_suspended` as the teacher’s suspension, ban or revocation', () => {
     const event = {
       source: 'enrollment',
       kind: 'cancelled',
@@ -1069,8 +1069,8 @@ describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held 
       occurredAt,
     } as const;
     for (const [locale, reason] of [
-      ['ar', 'حظر المعلم أو سحب اعتماده'],
-      ['en', 'Teacher banned or approval revoked'],
+      ['ar', 'إيقاف المعلم أو حظره أو سحب اعتماده'],
+      ['en', 'Teacher suspended, banned or approval revoked'],
     ] as const) {
       expect(title(event, locale)).toBe(
         translate(locale, 'admin.sessions.event.kind.cancelled', { reason }),

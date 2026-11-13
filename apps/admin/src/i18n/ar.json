@@ -1889,7 +1889,7 @@
         "paymentExpired": "انتهت مهلة الدفع",
         "paymentFailed": "فشل الدفع",
         "slotUnavailable": "تعذّر حجز الموعد بعد الدفع",
-        "teacherSuspended": "حظر المعلم أو سحب اعتماده"
+        "teacherSuspended": "إيقاف المعلم أو حظره أو سحب اعتماده"
       },
       "enrollmentFilter": "طلبات اشتراك واحد",
       "holdReasons": {
@@ -1898,7 +1898,7 @@
         "checkoutAbandoned": "بدأ الطالب دفعًا جديدًا",
         "slotUnavailable": "تعذّر حجز الموعد",
         "admin": "قرار الإدارة",
-        "teacherSuspended": "إيقاف المعلم",
+        "teacherSuspended": "إيقاف المعلم أو حظره أو سحب اعتماده",
         "accountDeleted": "حُذف الحساب"
       }
     },

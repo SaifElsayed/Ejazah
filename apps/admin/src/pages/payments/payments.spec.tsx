@@ -516,7 +516,7 @@ describe('B42a Q-B2 (a): a teacher’s end and a held slot on the order’s hist
       .map((item) => item.querySelector('strong')?.textContent);
   }
 
-  it('names a cancellation `teacher_suspended` as the teacher’s ban or revocation', async () => {
+  it('names a cancellation `teacher_suspended` and a hold’s release as the teacher’s suspension, ban or revocation', async () => {
     const api = fakeApi();
     api.payments.get.query.mockResolvedValue({
       ...detail,
@@ -531,13 +531,16 @@ describe('B42a Q-B2 (a): a teacher’s end and a held slot on the order’s hist
     await inBothLocales(
       () => open(api, `/payments?payment=${P3}`),
       async (t, locale) => {
+        // PR #139 r1, Minor 1: `teacher_suspended` is a suspension's, a ban's or a revocation's
+        // (booking's `teacherReason`), on an enrollment's cancellation and on a hold's release alike.
         const reason = {
-          ar: 'حظر المعلم أو سحب اعتماده',
-          en: 'Teacher banned or approval revoked',
+          ar: 'إيقاف المعلم أو حظره أو سحب اعتماده',
+          en: 'Teacher suspended, banned or approval revoked',
         };
         expect((await titles(t)).at(-1)).toBe(
           t('admin.payments.detail.events.enrollmentCancelled', { reason: reason[locale] }),
         );
+        expect(t('admin.payments.holdReasons.teacherSuspended')).toBe(reason[locale]);
       },
     );
   });
