@@ -8,7 +8,12 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
-import { lockActiveHoldsOf } from '../booking/index.js';
+import {
+  // T070 of specs/004-sessions: an administrator releases a held slot.
+  createHeldSlotRelease,
+  type HeldSlotRelease,
+  lockActiveHoldsOf,
+} from '../booking/index.js';
 import {
   createCredentialReviewService,
   type CredentialReviewService,
@@ -175,6 +180,8 @@ export interface AdminServices {
   readonly restore: Restore;
   /** T058 of specs/004-sessions: the verification module's user directory (FR-481, SRS FR-ADMIN-4). */
   readonly users: UserDirectory;
+  /** T070 of specs/004-sessions: booking's release of a held slot (`enrollments.releaseSlot`). */
+  readonly enrollments: HeldSlotRelease;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -317,6 +324,12 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       database: dependencies.database,
       settings: dependencies.settings,
       enrollments: dependencies.enrollmentSide,
+      log: dependencies.log,
+    }),
+    // T070: the release of a held slot, keyed through `runOn` on the call's transaction.
+    enrollments: createHeldSlotRelease({
+      idempotency: dependencies.idempotency,
+      settings: dependencies.settings,
       log: dependencies.log,
     }),
   };

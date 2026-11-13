@@ -1394,6 +1394,20 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "enrollments.releaseSlot": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.slotReleasedAt": { "required": true, "type": "string" }
+        }
+      },
       "home.summary": {
         "input": { "$": { "type": "unknown" } },
         "kind": "query",
@@ -1682,6 +1696,8 @@
           "$.enrollment.repeatedAbsence": { "required": true, "type": "boolean" },
           "$.enrollment.restorableUntil": { "type": "string" },
           "$.enrollment.sessionCount": { "required": true, "type": "integer" },
+          "$.enrollment.slotHeldUntil": { "type": "string" },
+          "$.enrollment.slotReleasedAt": { "type": "string" },
           "$.enrollment.status": {
             "required": true,
             "type": "string",

@@ -146,6 +146,9 @@ import type {
   usersGetOutput,
   usersListInput,
   usersListOutput,
+  // T070.
+  enrollmentsReleaseSlotInput,
+  enrollmentsReleaseSlotOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -704,6 +707,17 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof usersGetInput>,
     ): Answer<typeof usersGetOutput>;
+  };
+  /** T070 of specs/004-sessions: an administrator releases a held slot (`enrollments.releaseSlot`). */
+  readonly enrollments: {
+    releaseSlot(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof enrollmentsReleaseSlotInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof enrollmentsReleaseSlotOutput>;
+      readonly replayed: boolean;
+    }>;
   };
 }
 
