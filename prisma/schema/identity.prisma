@@ -9,7 +9,8 @@
 // What the schema language cannot say lives in the migrations: the phone-or-email check (T064,
 // rewritten for deleted rows by the Phase 1 pass), the partial uniques on phone and email (T066),
 // the revoked DELETE (T065) and the live-row check of rule 32 (Phase 1, T009,
-// specs/002-identity/data-model.md §5).
+// specs/002-identity/data-model.md §5); `banned_at`'s check (rule 50) and the payout hash's partial
+// unique on the profiles not kept (rule 27 as widened) (T069 of specs/004-sessions/tasks.md).
 //
 // Phase 1 (T009): `user_sessions` and `auth_identities` join this domain; `display_name` and
 // `date_of_birth` become nullable so the one transaction of FR-141 can erase them, held NOT NULL for
@@ -42,6 +43,9 @@ model User {
   // reports on launch replaces it (`account.reportDeviceTimezone`, FR-AUTH-10, T049).
   timezoneOverriddenAt DateTime?     @map("timezone_overridden_at") @db.Timestamptz(6)
   accountStatus        AccountStatus @map("account_status")
+  // The instant of the ban in force, set only while `account_status` is `banned` (ERD §15 rule 50,
+  // a check in the migration); written by every ban, cleared by its lift (T069, T072; SRS DEC-66).
+  bannedAt             DateTime?     @map("banned_at") @db.Timestamptz(6)
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
   deletedAt            DateTime?     @map("deleted_at") @db.Timestamptz(6)
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -236,10 +240,22 @@ model TeacherProfile {
   // The once-only `ApplicationApproved` was shown (FR-152).
   approvedShownAt             DateTime?                 @map("approved_shown_at") @db.Timestamptz(6)
   // SHA-256 lookup hash of the recipient reference beside the encrypted column; routes recipient
-  // events (FR-109, R-114). Unique where present (rule 27): Postgres lets nulls repeat.
-  payoutAccountRefHash        String?                   @unique @map("payout_account_ref_hash")
+  // events (FR-109, R-114). Unique where present among the profiles not kept (rule 27 as widened by
+  // T069, Q-E (a)): a partial unique `WHERE kept_at IS NULL`, which the schema language cannot say,
+  // so it lives in the migration; Postgres lets nulls repeat.
+  payoutAccountRefHash        String?                   @map("payout_account_ref_hash")
   // The gateway's last rejection reason, shown on `PayoutRejected`; cleared on verification (FR-191).
   payoutRejectedReason        String?                   @map("payout_rejected_reason")
+  // T069 (SRS DEC-67, FR-AUTH-14; spec FR-508, FR-509): a deleted teacher ever approved keeps the
+  // identity and credential documents and the payout reference. `kept_at`: the deletion that kept
+  // them; `kept_erase_at`: the erasure date an administrator set; `kept_erased_at`: their erasure.
+  keptAt                      DateTime?                 @map("kept_at") @db.Timestamptz(6)
+  keptEraseAt                 DateTime?                 @map("kept_erase_at") @db.Timestamptz(6)
+  keptErasedAt                DateTime?                 @map("kept_erased_at") @db.Timestamptz(6)
+  // T069 (SRS DEC-66; spec FR-502): the two statuses the profile had before a ban, written by every
+  // ban and cleared by its lift, which returns the profile to them (T072).
+  verificationStatusBeforeBan TeacherVerificationStatus? @map("verification_status_before_ban")
+  applicationStatusBeforeBan  TeacherApplicationStatus?  @map("application_status_before_ban")
   createdAt                   DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
 

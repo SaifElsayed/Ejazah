@@ -4,7 +4,8 @@
 //
 // What the schema language cannot say lives in the migrations: the student-is-not-teacher check
 // (T064, ERD section 15.2), the two partial uniques on active holds (T066, section 15.17-18) and the
-// revoked DELETE on enrollments (T065, section 15.10).
+// revoked DELETE on enrollments (T065, section 15.10), and the partial index on the held closings
+// (T069 of specs/004-sessions/tasks.md, section 14).
 
 // A checkout reservation with a TTL (FR-BOOK-9). NULL `released_at` means active, even past
 // `expires_at`: at most one active hold per slot and per student (T066, ADR 0010 D1, D6).
@@ -76,6 +77,10 @@ model Enrollment {
   // The first session's local date the checkout showed, computed at Pay; compared with session 1
   // to say the first session moved (T004, data-model §2.3, R-209, FR-368, FR-386).
   quotedFirstSessionLocalDate DateTime            @map("quoted_first_session_local_date") @db.Date
+  // When an administrator released the slot of a closed enrollment before its hold ended (T069,
+  // T070; SRS FR-CANCEL-9, spec FR-503). The held closings carry a partial index in the migration,
+  // for the hourly sweep that records a hold's end (T074, spec FR-505).
+  slotReleasedAt              DateTime?           @map("slot_released_at") @db.Timestamptz(6)
   createdAt                   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 

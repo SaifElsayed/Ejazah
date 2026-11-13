@@ -265,6 +265,10 @@ enum EnrollmentEventKind {
   completed
   terminated_no_show
   restored
+  // T069 (SRS FR-CANCEL-9; spec FR-503, FR-505): an administrator's release of a held slot (T070),
+  // and a hold's end recorded by the hourly sweep (T074).
+  slot_released
+  slot_hold_ended
 
   @@map("enrollment_event_kind")
 }

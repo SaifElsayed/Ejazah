@@ -7,8 +7,10 @@
 // that give the administrator's sign-in and the provider nonce limits of their own (T133), the five
 // Phase 2 rows of specs/003-booking/data-model.md §4 (T002), the seventeen Phase 3 rows of
 // specs/004-sessions/data-model.md §4 (T001; `teacher_no_show_threshold` no longer planted), the
-// two rows of the room's close in the same table (T067), and one administrator, each with a fixed identifier and a fixed instant; every other table stays
-// empty.
+// two rows of the room's close in the same table (T067), the seven rows of a ban's lift, a held
+// slot's release, the kept data and an administrator's deletion (T069, with the restore window's
+// default 14, SRS DEC-66), and one administrator, each with a fixed identifier and a fixed instant;
+// every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
 // it stores the Argon2id hash of a random one it discards at once (T069) and a random MFA secret
@@ -22,6 +24,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { verifyPassword } from '../../apps/api/src/platform/crypto/hashing.js';
+import { rateLimitSetting } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { seed } from '../../prisma/seed';
 import {
   MIGRATE_TIMEOUT_MILLISECONDS,
@@ -113,7 +116,8 @@ const SETTINGS: Record<string, unknown> = {
   video_empty_timeout_seconds: 300,
   video_departure_timeout_seconds: 20,
   repeated_absence_flag_count: 5,
-  enrollment_restore_window_days: 7,
+  // T069 (SRS DEC-66): 14 on a new database (was 7); an existing one moves by the migration's step.
+  enrollment_restore_window_days: 14,
   rate_limit_absence_complaint: { limit: 5, window_seconds: 3600 },
   rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
   rate_limit_dispute_revision: { limit: 10, window_seconds: 60 },
@@ -126,7 +130,26 @@ const SETTINGS: Record<string, unknown> = {
   // DEC-64, DEC-65).
   room_close_grace_minutes: 0,
   room_close_retry_minutes: 10,
+  // T069 (SRS DEC-66, DEC-67, §3.14): the ban restore window and the six administrator limits.
+  ban_restore_window_days: 14,
+  rate_limit_ban_lift: { limit: 10, window_seconds: 60 },
+  rate_limit_slot_release: { limit: 10, window_seconds: 60 },
+  rate_limit_kept_data_erase_date: { limit: 10, window_seconds: 60 },
+  rate_limit_kept_data_erase_now: { limit: 10, window_seconds: 60 },
+  rate_limit_kept_document_link: { limit: 10, window_seconds: 60 },
+  rate_limit_admin_user_delete: { limit: 10, window_seconds: 60 },
 };
+
+/** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
+const T069_RATE_LIMITS = [
+  'rate_limit_admin_user_delete',
+  'rate_limit_ban_lift',
+  'rate_limit_kept_data_erase_date',
+  'rate_limit_kept_data_erase_now',
+  'rate_limit_kept_document_link',
+  'rate_limit_slot_release',
+] as const;
+const T069_WINDOWS = ['ban_restore_window_days', 'enrollment_restore_window_days'] as const;
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
 
@@ -212,6 +235,28 @@ describe('the seed (T074)', () => {
     ]);
   });
 
+  // T069 (SRS DEC-66, DEC-67): each new row parses as its reader will read it, a limit through the
+  // rate-limit guard's own schema (a malformed one fails the procedure closed) and a window as the
+  // positive whole number of days `restore-window.ts`' callers read (JSON 14, never "14" or 14.5).
+  it('plants the six T069 limits at 10 per 60 s and the two windows at 14 days, each parsing (T069)', async () => {
+    const { rows } = await db.query<{ key: string; value: unknown }>(
+      `SELECT key, value FROM settings WHERE key = ANY($1::text[]) ORDER BY key`,
+      [[...T069_RATE_LIMITS, ...T069_WINDOWS]],
+    );
+    const values = new Map(rows.map(({ key, value }) => [key, value]));
+    for (const key of T069_RATE_LIMITS) {
+      expect(rateLimitSetting.safeParse(values.get(key)), key).toEqual({
+        success: true,
+        data: { limit: 10, window_seconds: 60 },
+      });
+    }
+    for (const key of T069_WINDOWS) {
+      const value = values.get(key);
+      expect(Number.isInteger(value) && (value as number) > 0, key).toBe(true);
+      expect(value, key).toBe(14);
+    }
+  });
+
   it('plants one administrator, active, whose credential nobody holds', async () => {
     const admin = await administrator();
     expect(admin).toMatchObject({
@@ -276,6 +321,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '73', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '80', admins: '1' }]);
   });
 });
