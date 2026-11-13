@@ -166,7 +166,8 @@ describe('currentHoldOf: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)', ()
       sheet,
       student,
       { packageId: PACKAGE },
-      { ...RULE, bufferWeeks: async () => 0 },
+      // T070 (rule d): the windows a closing's hold reads.
+      { ...RULE, bufferWeeks: async () => 0, windowDays: async () => 14 },
     );
     const current = await currentHoldOf(tx, student, RULE, storeOf({}));
     expect(slots).toHaveLength(1);

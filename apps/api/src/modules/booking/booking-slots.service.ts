@@ -52,6 +52,7 @@ import {
   offeredSlotsOf,
 } from '../catalog/index.js';
 import { accountTimezone, visibleTeachers } from '../identity/index.js';
+import { windowDaysOf } from '../sessions/index.js';
 import {
   createEnrollmentListServices,
   type EnrollmentListServices,
@@ -72,6 +73,7 @@ import {
   type SessionsBetween,
 } from './session-overlap.service.js';
 import {
+  type OccupancyReads,
   occupancyOf,
   SLOT_RELEASE_BUFFER_SETTING,
   type SlotOccupancy,
@@ -93,7 +95,7 @@ export interface BookingSlotsStore {
   occupancyOf(
     tx: Transaction,
     slotIds: readonly string[],
-    bufferWeeks: () => Promise<number>,
+    reads: OccupancyReads,
   ): Promise<ReadonlyMap<string, SlotOccupancy>>;
   sessionsBetween: SessionsBetween;
   teacherTimezone(tx: Transaction, teacherUserId: string): Promise<string | null>;
@@ -197,7 +199,7 @@ export async function bookingSlotsOf(
   const occupancy = await store.occupancyOf(
     tx,
     slots.map(({ id }) => id),
-    clock.bufferWeeks,
+    clock,
   );
   const free = offerableOccurrences(slots, occupancy, clock);
   const runs = free.map((one) => ({
@@ -247,6 +249,8 @@ export function createBookingServices({
         now: now(),
         leadHours,
         bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
+        // T070 of specs/004-sessions: a closing's hold reads its window.
+        windowDays: windowDaysOf(settings),
       };
       return transactions.run((tx) => bookingSlotsOf(tx, store, student, input, clock));
     },

@@ -53,7 +53,7 @@ import {
   offeredSlotsOf,
 } from '../catalog/index.js';
 import { readStanding, type VisibilityPurpose, visibleTeachers } from '../identity/index.js';
-import type { SessionTime } from '../sessions/index.js';
+import { type SessionTime, windowDaysOf } from '../sessions/index.js';
 import {
   type EnrollmentCancellationReason,
   type EnrollmentOutcome,
@@ -86,6 +86,7 @@ import {
   type SessionParties,
 } from './session-overlap.service.js';
 import {
+  type OccupancyReads,
   occupancyOf,
   SLOT_RELEASE_BUFFER_SETTING,
   type SlotOccupancy,
@@ -157,7 +158,7 @@ export interface PlacementReads {
   occupancyOf(
     tx: Transaction,
     slotIds: readonly string[],
-    bufferWeeks: () => Promise<number>,
+    reads: OccupancyReads,
   ): Promise<ReadonlyMap<string, SlotOccupancy>>;
   sessionsBetween(
     tx: Transaction,
@@ -203,14 +204,16 @@ export const HOLD_GRACE_SETTING = 'slot_hold_grace_minutes';
 const holdTtlMinutes = z.int().positive();
 const holdGraceMinutes = z.int().nonnegative();
 
-/** When a hold is placed, how long it lasts, and FR-368's lead and R-205's buffer it previews with. */
-export interface HoldTerms {
+/**
+ * When a hold is placed, how long it lasts, and FR-368's lead and R-205's buffer it previews with;
+ * the buffer read only when a confirmed enrollment's release needs it (R-205), and (T070 of
+ * specs/004-sessions) a window only when a closing's hold on the slot needs it.
+ */
+export interface HoldTerms extends OccupancyReads {
   readonly now: Date;
   readonly ttlMinutes: number;
   readonly graceMinutes: number;
   readonly leadHours: number;
-  /** Read only when a confirmed enrollment's release needs it (R-205). */
-  readonly bufferWeeks: () => Promise<number>;
 }
 
 /** The hold's terms from settings, read before the caller's transaction (R-MONEY-12). */
@@ -226,6 +229,8 @@ export async function readHoldTerms(settings: SettingsReader, now: Date): Promis
     graceMinutes,
     leadHours,
     bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
+    // T070 of specs/004-sessions: a closing's hold reads its window.
+    windowDays: windowDaysOf(settings),
   };
 }
 
@@ -457,7 +462,7 @@ export async function placeHold(
     throw new DomainError('PREVIOUS_CHECKOUT');
   }
   if (active.length > 0) throw new DomainError('SLOT_TAKEN');
-  const occupancy = await store.occupancyOf(tx, [slot.id], terms.bufferWeeks);
+  const occupancy = await store.occupancyOf(tx, [slot.id], terms);
   const [free] = offerableOccurrences([slot], occupancy, terms);
   if (free === undefined) throw new DomainError('SLOT_TAKEN');
   const expiresAt = expiryOf(terms);

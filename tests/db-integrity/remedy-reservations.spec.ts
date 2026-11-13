@@ -184,6 +184,7 @@ const holdTerms = {
   graceMinutes: 5,
   leadHours: 24,
   bufferWeeks: async () => 0,
+  windowDays: async () => 14, // T070 (rule d)
 };
 
 /** A sentinel thrown to roll a placement back once it has been seen to succeed. */
@@ -243,7 +244,12 @@ describe('booking.slots and checkout.hold read the remedy’s status (the note u
             bookingSlotsStore,
             { userId: confirmed.studentId, gender: FEMALE },
             { packageId: elsewhere.packageId },
-            { now: BEFORE_PROPOSAL, leadHours: 24, bufferWeeks: async () => 0 },
+            {
+              now: BEFORE_PROPOSAL,
+              leadHours: 24,
+              bufferWeeks: async () => 0,
+              windowDays: async () => 14,
+            },
           ),
         )
       ).slots.map(({ slotId, firstSession }) => [slotId, firstSession.startsAt]);
@@ -283,7 +289,11 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
     const after = new Date('2026-12-20T08:00:00Z');
     const inUse = () =>
       database.$transaction((tx) =>
-        slotInUse(tx, confirmed.slotId, { now: () => after, bufferWeeks: async () => 0 }),
+        slotInUse(tx, confirmed.slotId, {
+          now: () => after,
+          bufferWeeks: async () => 0,
+          windowDays: async () => 14,
+        }),
       );
     const card = () =>
       database.$transaction((tx) =>
@@ -291,6 +301,7 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
           now: after,
           leadHours: 24,
           bufferWeeks: async () => 0,
+          windowDays: async () => 14, // T070 (rule d)
         }),
       );
 
@@ -324,7 +335,11 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
     const after = new Date('2026-12-20T08:00:00Z');
     const inUse = () =>
       database.$transaction((tx) =>
-        slotInUse(tx, confirmed.slotId, { now: () => after, bufferWeeks: async () => 0 }),
+        slotInUse(tx, confirmed.slotId, {
+          now: () => after,
+          bufferWeeks: async () => 0,
+          windowDays: async () => 14,
+        }),
       );
     const card = () =>
       database.$transaction((tx) =>
@@ -332,6 +347,7 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
           now: after,
           leadHours: 24,
           bufferWeeks: async () => 0,
+          windowDays: async () => 14, // T070 (rule d)
         }),
       );
 
@@ -354,6 +370,7 @@ describe('an open remedy keeps its enrollment’s slot in use until it settles (
         slotInUse(tx, confirmed.slotId, {
           now: () => new Date('2026-12-20T08:00:00Z'),
           bufferWeeks: async () => 0,
+          windowDays: async () => 14, // T070 (rule d)
         }),
       ),
     ).toBe(true);

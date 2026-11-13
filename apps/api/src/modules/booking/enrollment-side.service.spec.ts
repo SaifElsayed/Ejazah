@@ -84,8 +84,9 @@ function world(options: WorldOptions) {
       recorded.pages.push({ cursor, take });
       return (options.page ?? []).slice(0, take);
     },
-    occupancyOf: async (_tx, slotIds, bufferWeeks, except) => {
-      recorded.occupancy.push({ slotIds, except, bufferWeeks: await bufferWeeks() });
+    // T070 (rule d): the buffer read from the reads the service hands in.
+    occupancyOf: async (_tx, slotIds, reads, except) => {
+      recorded.occupancy.push({ slotIds, except, bufferWeeks: await reads.bufferWeeks() });
       const occupancy = new Map<string, SlotOccupancy>();
       for (const slotId of slotIds) {
         if (options.occupancy !== undefined) occupancy.set(slotId, options.occupancy);

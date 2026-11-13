@@ -405,6 +405,7 @@ describe('SC-416: a restore against another student’s hold on the same slot', 
               graceMinutes: 5,
               leadHours: 24,
               bufferWeeks: async () => 0,
+              windowDays: async () => 7, // T070 (rule d)
             },
             orders: orderStandingsOf,
             store: holdsStore,

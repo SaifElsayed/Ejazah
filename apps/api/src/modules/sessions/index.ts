@@ -176,6 +176,25 @@ export { answerClosesAt, bookingRetriedUntil } from './remedy-deadlines.js';
 export { isCorrectable } from './outcome-correction.js';
 export { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
 /**
+ * T070 (FR-503; SRS FR-CANCEL-9, DEC-69; the note under T070, Q4 (a)): the one closing rule beside
+ * the window's end, which booking's slot hold and release, the monitor and T073's restore read: an
+ * enrollment's closing (its status, its last cancellation's reason, its latest end case) to the
+ * closing's kind and its case; the window's setting of each kind, read through `windowDaysOf`.
+ */
+export {
+  BAN_RESTORE_WINDOW_SETTING,
+  type Closing,
+  type ClosingFacts,
+  type ClosingKind,
+  closingOf,
+  latestEndCaseOf,
+  type RestoreWindowSetting,
+  restoreWindowDays,
+  type WindowDays,
+  windowDaysOf,
+  windowSettingOf,
+} from './restore-window.js';
+/**
  * T008 (R-301): the `EnrollmentSide` port, what sessions needs of an enrollment that only booking
  * answers, bound by the composition root to booking's `createEnrollmentSide()`.
  */

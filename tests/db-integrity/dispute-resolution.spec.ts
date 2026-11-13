@@ -589,6 +589,7 @@ describe.each(STAGINGS)(
                 graceMinutes: 5,
                 leadHours: 24,
                 bufferWeeks: async () => 0,
+                windowDays: async () => 14, // T070 (rule d)
               },
               orders: orderStandingsOf,
               store: placing,

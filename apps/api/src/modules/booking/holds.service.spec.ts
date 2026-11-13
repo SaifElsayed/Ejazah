@@ -158,6 +158,8 @@ const terms: HoldTerms = {
   graceMinutes: 5,
   leadHours: 24,
   bufferWeeks: async () => 0,
+  // T070 (rule d): the windows a closing's hold reads; the fake occupancy reads none.
+  windowDays: async () => 14,
 };
 
 const hold = (

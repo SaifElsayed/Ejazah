@@ -151,6 +151,16 @@ export const monitorEnrollment = sessionsMonitorListItem.omit({ nextSession: tru
    * already have passed, the restore then refused `window_closed`.
    */
   restorableUntil: z.iso.datetime().optional(),
+  // T070 (FR-503; SRS FR-CANCEL-9, DEC-69): the hold of the enrollment's weekly slot.
+  /**
+   * The closing case's opening plus the window of the closing's kind (`enrollment_restore_window_days`,
+   * or `ban_restore_window_days` for a ban's or a revocation's), present while the closing is
+   * restorable by the one closing rule (its case open) and the slot was not released; it may already
+   * have passed, the slot then free.
+   */
+  slotHeldUntil: z.iso.datetime().optional(),
+  /** The instant an administrator released the held slot (`enrollments.releaseSlot`), if one did. */
+  slotReleasedAt: z.iso.datetime().optional(),
 });
 
 /** A time a remedy names, in its own zone (FR-494). */

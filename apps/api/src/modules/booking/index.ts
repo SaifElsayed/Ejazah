@@ -2,6 +2,8 @@
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse } from '../catalog/index.js';
+// T070 of specs/004-sessions: the window settings a closing's hold reads.
+import { windowDaysOf } from '../sessions/index.js';
 import { packageEnrollmentCounts, packageHasEnrollment } from './catalog-use.repository.js';
 import {
   type DiscoveryCatalog,
@@ -41,6 +43,8 @@ export function createCatalogUse({
   const release = {
     now,
     bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
+    // T070 of specs/004-sessions: a closing's hold keeps the slot in use; its window read when needed.
+    windowDays: windowDaysOf(settings),
   };
   return {
     slotInUse: (tx, slotId) => slotInUse(tx, slotId, release),
@@ -295,3 +299,15 @@ export {
   type OrderEnrollmentParty,
   orderEnrollmentPartiesAmong,
 } from './order-enrollments.service.js';
+/**
+ * T070 of specs/004-sessions (FR-503; SRS FR-CANCEL-9, DEC-69; contracts/admin-surface.md,
+ * `enrollments.releaseSlot`): the administrator surface's `enrollments` namespace, mounted by
+ * `admin.router.ts` (the integration's line, N9), and the release it calls on the administrator call's
+ * transaction, composed by the admin module.
+ */
+export { enrollmentsAdminRouter } from './enrollments-admin.router.js';
+export {
+  createHeldSlotRelease,
+  type HeldSlotRelease,
+  type SlotReleaseDependencies,
+} from './slot-release.service.js';

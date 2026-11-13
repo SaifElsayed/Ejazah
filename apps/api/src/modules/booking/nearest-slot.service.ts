@@ -25,9 +25,11 @@ import type { RequesterGender } from '../../platform/guards/requester-gender.js'
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { type OfferedSlot, offeredSlotsOf } from '../catalog/index.js';
 import { visibleTeachers } from '../identity/index.js';
+import { windowDaysOf } from '../sessions/index.js';
 import {
   occupancyOf,
   isFreeOn,
+  type OccupancyReads,
   SLOT_RELEASE_BUFFER_SETTING,
   type SlotOccupancy,
   slotReleaseBufferWeeks,
@@ -94,10 +96,11 @@ export function nearestFreeOf(
   return nearest;
 }
 
-/** The first-session rule with the buffer read only when a confirmed enrollment needs it. */
-export interface DiscoveryClock extends FirstSessionRule {
-  readonly bufferWeeks: () => Promise<number>;
-}
+/**
+ * The first-session rule with the buffer read only when a confirmed enrollment needs it, and (T070
+ * of specs/004-sessions) the window settings only when a closing's hold does.
+ */
+export interface DiscoveryClock extends FirstSessionRule, OccupancyReads {}
 
 /**
  * Of `teacherIds` (one page), the nearest free slot of each teacher the requester may book, on the
@@ -117,7 +120,7 @@ export async function nearestFreeSlots(
   const occupancy = await occupancyOf(
     tx,
     slots.map(({ id }) => id),
-    clock.bufferWeeks,
+    clock,
   );
   return nearestFreeOf(slots, occupancy, clock);
 }
@@ -152,6 +155,8 @@ export function createNearestSlots({
         now: now(),
         leadHours,
         bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
+        // T070 of specs/004-sessions: a closing's hold reads its window.
+        windowDays: windowDaysOf(settings),
       };
       return transactions.run((tx) => nearestFreeSlots(tx, requester, teacherIds, clock));
     },

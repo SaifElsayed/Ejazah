@@ -130,6 +130,7 @@ describe("booking's occupancy counts a completed enrollment under R-205's releas
         slotInUse(tx, offer.slotId, {
           now: () => noonOn(localDate),
           bufferWeeks: async () => BUFFER_WEEKS,
+          windowDays: async () => 14, // T070 (rule d)
         }),
       );
     expect(await inUse('2026-12-06')).toBe(true);
@@ -159,6 +160,7 @@ describe("booking's occupancy counts a completed enrollment under R-205's releas
       slotInUse(tx, offer.slotId, {
         now: () => noonOn('2026-12-06'),
         bufferWeeks: async () => BUFFER_WEEKS,
+        windowDays: async () => 14, // T070 (rule d)
       }),
     );
     expect(used).toBe(false);
@@ -261,6 +263,7 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
       const release = (localDate: string) => ({
         now: () => noonOn(localDate),
         bufferWeeks: async () => BUFFER_WEEKS,
+        windowDays: async () => 14, // T070 (rule d)
       });
       expect(await slotInUse(tx, offer.slotId, release('2026-10-17'))).toBe(true);
       expect(await slotInUse(tx, offer.slotId, release('2026-10-18'))).toBe(false);

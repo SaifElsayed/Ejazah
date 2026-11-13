@@ -18,3 +18,5 @@ export * from './teachers.js';
 export * from './disputes.js';
 // T058 of specs/004-sessions: the user directory, `users.list` and `users.get`.
 export * from './users.js';
+// T070 of specs/004-sessions: the `enrollments` namespace, `enrollments.releaseSlot`.
+export * from './enrollments.js';

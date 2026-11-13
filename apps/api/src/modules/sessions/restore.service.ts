@@ -123,7 +123,7 @@ import {
   reservedTimesOf,
 } from './reservations.service.js';
 import { type RestoreSession, restoreSessionsOf, sessionIdsFrom } from './restore.repository.js';
-import { ENROLLMENT_RESTORE_WINDOW_SETTING, restorableUntil } from './restore-window.js';
+import { restorableUntil, windowDaysOf } from './restore-window.js';
 import { partiesSessionsBetween, type SessionTime } from './sessions.repository.js';
 import type { PartyStanding } from './sessions.service.js';
 
@@ -268,7 +268,6 @@ function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
 const SCOPE = 'sessions.restore';
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
-const positiveWhole = z.int().positive();
 const wholeHours = z.int().nonnegative();
 
 const CONSUMED: ReadonlySet<string> = new Set(['done', 'student_no_show']);
@@ -411,12 +410,14 @@ export function createRestore({
     }
     if (closingCase.status !== 'open') throw refused(log, ids, 'case_closed');
     // Step 2: the window, against the database's clock.
-    const [now, windowDays, leadHours] = await Promise.all([
+    // T070: the one function, given the closing's kind (both of today's read
+    // `enrollment_restore_window_days`); T073 retires this step (DEC-69).
+    const [now, until, leadHours] = await Promise.all([
       clock(tx),
-      settings.read(ENROLLMENT_RESTORE_WINDOW_SETTING, positiveWhole),
+      restorableUntil(closingCase.createdAt, closing, windowDaysOf(settings)),
       settings.read(FIRST_SESSION_LEAD_SETTING, wholeHours),
     ]);
-    if (now.getTime() >= restorableUntil(closingCase.createdAt, windowDays).getTime()) {
+    if (now.getTime() >= until.getTime()) {
       throw refused(log, ids, 'window_closed');
     }
     // Step 3: both accounts active, the teacher's approval standing (FR-432).

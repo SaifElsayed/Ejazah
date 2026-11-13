@@ -865,7 +865,7 @@ describe("a student's suspension (T005, FR-486, R-313, plan.md decision 1 (b))",
         bookingSlotsStore,
         { userId: studentId, gender: FEMALE },
         { packageId: threeWeeks },
-        { now: NOW, leadHours: 24, bufferWeeks: async () => 0 },
+        { now: NOW, leadHours: 24, bufferWeeks: async () => 0, windowDays: async () => 14 },
       ),
     );
     const listed = slots.find(({ slotId }) => slotId === elsewhere.slotIds[0]);
