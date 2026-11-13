@@ -47,7 +47,8 @@ export const banLiftEnrollment = z.object({
 /**
  * Why a whole lift was refused, as `CONFLICT`'s `details.cause`: the person not banned, the teacher
  * not revoked, or (Q7 (a)) a restore refused after its first write (`no_free_week`, or the
- * database's exclusion at the insert), the refusal naming the enrollment.
+ * database's exclusion at the insert), the refusal naming the enrollment; or (Q-D2 (a)) a second
+ * deadlock, which names no enrollment.
  */
 export const banLiftRefusalCause = z.enum(['not_banned', 'not_revoked', 'restore_failed']);
 

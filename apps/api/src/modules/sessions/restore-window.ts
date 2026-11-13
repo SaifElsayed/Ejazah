@@ -2,8 +2,9 @@
 // enrollment's restore window, derived and never stored (R-DB-4): the closing case's `created_at`,
 // written in the closing's own transaction, plus `enrollment_restore_window_days`, each day 24 hours
 // of an instant (the owner's decision of 2026-11-10 on B37 lane B's Q7). `sessions.monitor.get`
-// shows it as `restorableUntil`; T061's `sessions.restore` refuses `window_closed` from it, through
-// this one function, so the panel's button and the procedure cannot disagree.
+// shows it as `restorableUntil`. Since T073 (DEC-69) it is only the end of the slot's hold: no restore
+// is refused for its time (`window_closed` is never produced), and the hold, the restore's step 1 and
+// the panel read it through this one function, so they cannot disagree.
 //
 // T070 (FR-503; SRS FR-CANCEL-9, DEC-69; the note under T070, Q4 (a), N4, N10, Q3 (a)): THE ONE
 // CLOSING RULE, beside it. An enrollment's closing is its status, its last cancellation's reason and
