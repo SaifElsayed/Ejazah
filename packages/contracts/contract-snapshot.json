@@ -106,6 +106,8 @@
         "confirmed",
         "order_failed",
         "restored",
+        "slot_hold_ended",
+        "slot_released",
         "terminated_no_show"
       ],
       "EnrollmentStatus": [
@@ -1547,6 +1549,8 @@
               "confirmed",
               "order_failed",
               "restored",
+              "slot_hold_ended",
+              "slot_released",
               "terminated_no_show"
             ]
           },
@@ -1753,6 +1757,8 @@
               "restored",
               "review_resolved",
               "settled",
+              "slot_hold_ended",
+              "slot_released",
               "terminated_no_show"
             ]
           },
