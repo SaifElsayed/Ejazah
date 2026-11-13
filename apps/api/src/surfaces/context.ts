@@ -149,6 +149,8 @@ import type {
   // T070.
   enrollmentsReleaseSlotInput,
   enrollmentsReleaseSlotOutput,
+  // T072.
+  banLiftEnrollment,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -344,6 +346,28 @@ type Answer<TSchema extends z.ZodType> = Promise<z.input<TSchema>>;
 type Move = Promise<{ readonly before: AuditSnapshot; readonly after: AuditSnapshot }>;
 
 /**
+ * T072 of specs/004-sessions: a ban's or a revocation's lift, keyed through `runOn` on the call's
+ * transaction; its move carries each enrollment's result for the audit entry and the answer.
+ */
+type KeyedLift = (
+  tx: Transaction,
+  actorId: string,
+  request: {
+    readonly scope: 'students.liftBan' | 'teachers.liftBan' | 'teachers.liftRevocation';
+    readonly userId: string;
+    readonly reason: string;
+    readonly idempotencyKey: string;
+  },
+) => Promise<{
+  readonly move: {
+    readonly before: AuditSnapshot;
+    readonly after: AuditSnapshot;
+    readonly enrollments: readonly z.input<typeof banLiftEnrollment>[];
+  };
+  readonly replayed: boolean;
+}>;
+
+/**
  * The admin module's services as the administrator surface's procedures call them (T067): the port
  * this file declares and `modules/admin` implements, bound once by `main.ts`. Each administrator
  * kind's call hands in its own transaction (`tx`) and, where the action is someone's, the acting
@@ -496,12 +520,16 @@ export interface AdminSurfaceServices {
     revokeApproval(tx: Transaction, actorId: string, teacherUserId: string, reason: string): Move;
     ban(tx: Transaction, actorId: string, teacherUserId: string): Move;
     reinstate(tx: Transaction, actorId: string, teacherUserId: string): Move;
+    /** T072: `teachers.liftBan` and `teachers.liftRevocation`. */
+    keyedLift: KeyedLift;
   };
   /** A student's standing (FR-421, FR-486; T005 of specs/004-sessions), the identity module's. */
   readonly students: {
     suspendStudent(tx: Transaction, actorId: string, userId: string): Move;
     banStudent(tx: Transaction, actorId: string, userId: string): Move;
     reinstateStudent(tx: Transaction, actorId: string, userId: string): Move;
+    /** T072: `students.liftBan`. */
+    keyedLift: KeyedLift;
   };
   /**
    * The provider outage windows (FR-445, R-307; T016 of specs/004-sessions), the sessions module's,

@@ -20,6 +20,8 @@ import {
   readCredentialQueue,
   revokeSubjects,
 } from '../catalog/index.js';
+// T072 of specs/004-sessions: a revocation's lift grants the approved credentials' subjects again.
+import { credentialsOfTeachers, grantSubjects } from '../catalog/index.js';
 import {
   AccountConsequences,
   readApplicationQueue,
@@ -71,6 +73,8 @@ import {
 } from '../sessions/index.js';
 // T071 of specs/004-sessions: a teacher's reinstatement resumes the paused enrollments (Q6 (a)).
 import { createTeacherReinstatement } from '../sessions/index.js';
+// T072 of specs/004-sessions: a ban's or a revocation's lift restores the enrollments it closed.
+import { createBanLift } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
   createUserDirectory,
@@ -134,9 +138,25 @@ export interface AdminServices {
     VerificationRequestService,
     'link' | 'requireIdentity' | 'accept' | 'requestAnother'
   >;
-  readonly teachers: Pick<StandingService, 'suspend' | 'revokeApproval' | 'ban' | 'reinstate'>;
+  readonly teachers: Pick<
+    StandingService,
+    | 'suspend'
+    | 'revokeApproval'
+    | 'ban'
+    | 'reinstate'
+    // T072 of specs/004-sessions: a teacher's or an applicant's ban lifted, and a revocation,
+    // keyed (`teachers.liftBan`, `teachers.liftRevocation`).
+    | 'keyedLift'
+  >;
   /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
-  readonly students: Pick<StandingService, 'suspendStudent' | 'banStudent' | 'reinstateStudent'>;
+  readonly students: Pick<
+    StandingService,
+    | 'suspendStudent'
+    | 'banStudent'
+    | 'reinstateStudent'
+    // T072 of specs/004-sessions: a student's ban lifted, keyed (`students.liftBan`).
+    | 'keyedLift'
+  >;
   /** The payments module's read-only monitor, composed here for the surface (T052, FR-400). */
   readonly payments: ReturnType<typeof createPaymentsMonitorService>;
   /**
@@ -235,6 +255,29 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
   const sessions = new AdminSessionService(dependencies);
   const audit = new AuditQueryService(dependencies);
+  // T061: the restore (R-322), keyed on the call's transaction, T028's offer widened for it; T072:
+  // the one instance, whose core (`restoreClosed`) the lift calls too.
+  const restore = createRestore({
+    enrollments: dependencies.enrollmentSide,
+    idempotency: dependencies.idempotency,
+    offers: createRemedyOffer({
+      enrollments: dependencies.enrollmentSide,
+      settings: dependencies.settings,
+      log: dependencies.log,
+    }),
+    settings: dependencies.settings,
+    log: dependencies.log,
+    // T073: a refund at the gateway refuses the restore (FR-507), payments' answer handed in.
+    payments: dependencies.enrollmentPayments,
+  });
+  // T072 of specs/004-sessions (Q6 (a), Q9 (a); docs/ARCHITECTURE.md §4, a dependency handed in
+  // against the arrows): the closed enrollments of a lift and `users.get`'s hold end.
+  const banLift = createBanLift({
+    enrollments: dependencies.enrollmentSide,
+    restore,
+    settings: dependencies.settings,
+    log: dependencies.log,
+  });
   // One registry for every action that ends an account (FR-142); Phase 2 and 3 subscribe to it.
   const standing = new StandingService({
     store: standingStoreOver(dependencies.database),
@@ -254,6 +297,21 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }),
       log: dependencies.log,
     }),
+    // T072 of specs/004-sessions (Q6 (a)): the closed enrollments restored at a lift, and a
+    // revocation's subjects granted again from the approved credentials (catalog's).
+    lift: {
+      counterpartiesOf: banLift.counterpartiesOf,
+      restoreClosed: banLift.restoreClosed,
+      grantApprovedSubjects: async (tx, teacherUserId) => {
+        const approved = (await credentialsOfTeachers(tx, [teacherUserId]))
+          .filter(({ status }) => status === 'approved')
+          .map(({ subjectId }) => subjectId);
+        await grantSubjects(tx, teacherUserId, [...new Set(approved)]);
+      },
+    },
+    log: dependencies.log,
+    // T072: a lift keyed on the call's transaction (`runOn`).
+    idempotency: dependencies.idempotency,
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   });
   return {
@@ -329,26 +387,16 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }),
     },
     ...adminSessionServices(dependencies, standing),
-    // T061: the restore (R-322), keyed on the call's transaction, T028's offer widened for it.
-    restore: createRestore({
-      enrollments: dependencies.enrollmentSide,
-      idempotency: dependencies.idempotency,
-      offers: createRemedyOffer({
-        enrollments: dependencies.enrollmentSide,
-        settings: dependencies.settings,
-        log: dependencies.log,
-      }),
-      settings: dependencies.settings,
-      log: dependencies.log,
-      // T073: a refund at the gateway refuses the restore (FR-507), payments' answer handed in.
-      payments: dependencies.enrollmentPayments,
-    }),
+    // T061: the restore, built above (T072: one instance with the lift's).
+    restore,
     // T058: the user directory over identity's readers and sessions' counts and marks.
     users: createUserDirectory({
       database: dependencies.database,
       settings: dependencies.settings,
       enrollments: dependencies.enrollmentSide,
       log: dependencies.log,
+      // T072 (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions' read.
+      slotHeldUntilOf: banLift.slotHeldUntilOf,
     }),
     // T070: the release of a held slot, keyed through `runOn` on the call's transaction.
     enrollments: createHeldSlotRelease({

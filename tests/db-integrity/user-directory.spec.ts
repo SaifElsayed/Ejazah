@@ -16,6 +16,7 @@ import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
+import { createBanLift } from '../../apps/api/src/modules/sessions/index.js';
 import { createUserDirectory } from '../../apps/api/src/modules/verification/index.js';
 import {
   closeDatabase,
@@ -60,11 +61,23 @@ beforeAll(async () => {
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 60_000,
   });
+  const enrollments = createEnrollmentSide({ settings });
   directory = createUserDirectory({
     database,
     settings,
-    enrollments: createEnrollmentSide({ settings }),
+    enrollments,
     log: { info: () => undefined },
+    // T072 of specs/004-sessions (rule d): `users.get`'s hold end, sessions' read; none held here.
+    slotHeldUntilOf: createBanLift({
+      enrollments,
+      restore: {
+        restoreClosed: async () => {
+          throw new Error('not used by the directory');
+        },
+      },
+      settings,
+      log: { info: () => undefined, warn: () => undefined },
+    }).slotHeldUntilOf,
   });
 });
 
@@ -263,6 +276,8 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
       verificationStatus: null,
       accountStatus: 'active',
       cancellationRequests: { total: 0, recent: 0 },
+      // T072 (rule d): no ban's closing holds a slot.
+      enrollmentsSlotHeldUntil: null,
     });
     expect(JSON.stringify(record)).not.toMatch(/birth|2012-06-01/);
   });

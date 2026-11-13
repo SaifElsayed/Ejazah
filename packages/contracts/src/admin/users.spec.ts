@@ -37,6 +37,8 @@ const TEACHER_RECORD = {
       teacherNoShows: 5,
     },
   ],
+  // T072 of specs/004-sessions (rule d): the hold's end, none held.
+  enrollmentsSlotHeldUntil: null,
 };
 
 describe('users.list', () => {

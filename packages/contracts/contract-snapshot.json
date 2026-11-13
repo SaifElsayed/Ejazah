@@ -2185,6 +2185,36 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "students.liftBan": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.studentUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.enrollments": { "required": true, "type": "array" },
+          "$.enrollments[]": { "type": "object" },
+          "$.enrollments[].cause": {
+            "type": "string",
+            "values": [
+              "case_closed",
+              "gender_mismatch",
+              "not_restorable",
+              "party_restricted",
+              "refunded",
+              "slot_changed",
+              "slot_inactive",
+              "slot_taken",
+              "time_taken"
+            ]
+          },
+          "$.enrollments[].enrollmentId": { "required": true, "type": "string" },
+          "$.enrollments[].restored": { "required": true, "type": "boolean" }
+        }
+      },
       "students.reinstate": {
         "input": {
           "$": { "type": "object" },
@@ -2211,6 +2241,66 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teachers.liftBan": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.enrollments": { "required": true, "type": "array" },
+          "$.enrollments[]": { "type": "object" },
+          "$.enrollments[].cause": {
+            "type": "string",
+            "values": [
+              "case_closed",
+              "gender_mismatch",
+              "not_restorable",
+              "party_restricted",
+              "refunded",
+              "slot_changed",
+              "slot_inactive",
+              "slot_taken",
+              "time_taken"
+            ]
+          },
+          "$.enrollments[].enrollmentId": { "required": true, "type": "string" },
+          "$.enrollments[].restored": { "required": true, "type": "boolean" }
+        }
+      },
+      "teachers.liftRevocation": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.enrollments": { "required": true, "type": "array" },
+          "$.enrollments[]": { "type": "object" },
+          "$.enrollments[].cause": {
+            "type": "string",
+            "values": [
+              "case_closed",
+              "gender_mismatch",
+              "not_restorable",
+              "party_restricted",
+              "refunded",
+              "slot_changed",
+              "slot_inactive",
+              "slot_taken",
+              "time_taken"
+            ]
+          },
+          "$.enrollments[].enrollmentId": { "required": true, "type": "string" },
+          "$.enrollments[].restored": { "required": true, "type": "boolean" }
+        }
       },
       "teachers.reinstate": {
         "input": {
@@ -2255,6 +2345,7 @@
           "$.cancellationRequests": { "required": true, "type": "object" },
           "$.cancellationRequests.recent": { "required": true, "type": "integer" },
           "$.cancellationRequests.total": { "required": true, "type": "integer" },
+          "$.enrollmentsSlotHeldUntil": { "required": true, "type": "null|string" },
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
           "$.isMinor": { "required": true, "type": "boolean" },
           "$.profile": { "required": true, "type": "object" },

@@ -41,6 +41,10 @@ function surface() {
     suspendStudent: record('suspendStudent', MOVES.suspendStudent),
     banStudent: record('banStudent', MOVES.banStudent),
     reinstateStudent: record('reinstateStudent', MOVES.reinstateStudent),
+    // T072: the lift has its own router spec.
+    keyedLift: async () => {
+      throw new Error('unused');
+    },
   };
   const contexts = adminContextsOver({ students });
   return {
