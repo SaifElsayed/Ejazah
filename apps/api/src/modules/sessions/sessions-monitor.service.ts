@@ -27,15 +27,20 @@
 // `EnrollmentSide.eventsOf` and its `session_events`, newest first; at one instant the session rows
 // before the enrollment's, each source keeping its own order), and `restorableUntil`
 // (`restore-window.ts`) for an enrollment `sessions.restore` could admit by its closing and its case
-// (R-322, step 1): `terminated_no_show` with an open `absence_termination` case, or `cancelled` whose
-// last cancellation's reason is `admin` with an open `student_fault_confirmed` case. Every instant
-// compared is the database's clock.
+// (R-322, step 1). Every instant compared is the database's clock.
 //
 // T070 (FR-503; SRS FR-CANCEL-9; the note under T070, Q4 (a)): `slotHeldUntil`, the hold's end
 // through `restorableUntil` with the closing's kind, for a closing the one closing rule
 // (`restore-window.ts`'s `closingOf`) admits with its case open and its slot not released, whether
 // or not it has passed; and `slotReleasedAt`, the instant of the `slot_released` row after the
-// closing. `restorableUntil` keeps today's two closings until T073 widens `closingCaseReason`.
+// closing.
+//
+// T073 (the note under T073, Q4 (a); PR #138's review, round 3, Major 1): `closingCaseReason` reads
+// the closing as step 1 does (`closingOf`: a complaint's, a fault's, a ban's, a teacher's ban's or
+// revocation's `teacher_ended`; never a deletion's or a gender correction's), so `restorableUntil`
+// and `slotHeldUntil` are answered for every closing step 1 admits with its case open. Step 2
+// retired (DEC-69): `restorableUntil` stays, `@deprecated`, answered with the hold's end; it may
+// have passed while the restore is still admitted, and a release leaves it.
 //
 // THE LOG (the owner's rule). An enrollment no read returns is refused NOT_FOUND through this file's
 // one `refusal`, one info line of ids and a reason code; a read writes no line.
@@ -212,35 +217,37 @@ function timeOn(localDate: string, localTime: string, timezone: string) {
   };
 }
 
-/** The reason of the case whose closing `sessions.restore` reverses, or none (R-322, step 1). */
+/**
+ * The closing `sessions.restore` reverses and its case, read as R-322's step 1 reads it (T073; the
+ * note under T073, Q4 (a); PR #138's review, round 3, Major 1): T070's one closing rule
+ * (`closingOf`) over the status, the last cancellation's reason read from the timeline (oldest
+ * first) and the latest end case from the cases (newest first); none for a closing step 1 never
+ * admits (a deletion's, a gender correction's, a completion, an enrollment not closed).
+ */
 function closingCaseReason(
   status: EnrollmentPageItem['status'],
   enrollmentEvents: readonly EnrollmentEventEntry[],
-): 'absence_termination' | 'student_fault_confirmed' | undefined {
-  if (status === 'terminated_no_show') return 'absence_termination';
-  if (status !== 'cancelled') return undefined;
+  cases: readonly EnrollmentCase[],
+): Closing | undefined {
   const lastCancellation = enrollmentEvents.filter(({ kind }) => kind === 'cancelled').at(-1);
-  return lastCancellation?.cancellationReason === 'admin' ? 'student_fault_confirmed' : undefined;
+  return closingOf({
+    status,
+    lastCancellationReason: lastCancellation?.cancellationReason ?? null,
+    endCase: latestEndCaseOf(cases),
+  });
 }
 
 /**
- * T070 (FR-503; the note under T070, Q4 (a)): the enrollment's closing by the one closing rule
- * (`closingOf`), its last cancellation's reason read from its timeline (oldest first) and its latest
- * end case from its cases (newest first); and an administrator's release of its slot, the
- * `slot_released` row after its last closing (`enrollments.releaseSlot` writes it with
- * `slot_released_at`, at one instant).
+ * T070 (FR-503; the note under T070, Q4 (a)): the enrollment's closing (`closingCaseReason`, the one
+ * closing rule); and an administrator's release of its slot, the `slot_released` row after its last
+ * closing (`enrollments.releaseSlot` writes it with `slot_released_at`, at one instant).
  */
 function slotHoldOf(
   status: EnrollmentPageItem['status'],
   enrollmentEvents: readonly EnrollmentEventEntry[],
   cases: readonly EnrollmentCase[],
 ): { readonly closing?: Closing; readonly releasedAt?: Date } {
-  const lastCancellation = enrollmentEvents.filter(({ kind }) => kind === 'cancelled').at(-1);
-  const closing = closingOf({
-    status,
-    lastCancellationReason: lastCancellation?.cancellationReason ?? null,
-    endCase: latestEndCaseOf(cases),
-  });
+  const closing = closingCaseReason(status, enrollmentEvents, cases);
   if (closing === undefined) return {};
   const closedAt = enrollmentEvents.findLastIndex(
     ({ kind }) => kind === 'cancelled' || kind === 'terminated_no_show',
@@ -505,23 +512,20 @@ export function createSessionsMonitor({
         settings.read(DISPUTE_WINDOW_SETTING, disputeWindowHours),
       ]);
       const { summary } = (await summariesOf(tx, [item], () => sessions, now))(item);
-      const closing = closingCaseReason(item.status, enrollmentEvents);
-      const closingCase =
-        closing === undefined
-          ? undefined
-          : cases.find(({ reason, status }) => reason === closing && status === 'open');
-      // T070: each window read only when a closing needs it, through the one function with the
-      // closing's kind; `restorableUntil` keeps today's two closings until T073 (Q4 (a)).
-      const windowDays = windowDaysOf(settings);
-      const until =
-        closing === undefined || closingCase === undefined
-          ? undefined
-          : await restorableUntil(closingCase.createdAt, closing, windowDays);
+      // T073 (Q4 (a)): one closing, read as step 1 reads it, for both fields. The window is read only
+      // when a closing needs it, through the one function with the closing's kind: the hold's end,
+      // `restorableUntil` (`@deprecated`, step 2 retired) for every closing step 1 admits with its
+      // case open, a release leaving it; `slotHeldUntil` while the slot was not released (T070).
       const hold = slotHoldOf(item.status, enrollmentEvents, cases);
-      const heldUntil =
-        hold.closing === undefined || !hold.closing.restorable || hold.releasedAt !== undefined
+      const until =
+        hold.closing === undefined || !hold.closing.restorable
           ? undefined
-          : await restorableUntil(hold.closing.closingCase.createdAt, hold.closing.kind, windowDays);
+          : await restorableUntil(
+              hold.closing.closingCase.createdAt,
+              hold.closing.kind,
+              windowDaysOf(settings),
+            );
+      const heldUntil = hold.releasedAt === undefined ? until : undefined;
       const proposalTime = { startTimeLocal: slot.startTimeLocal, timezone: terms.timezone };
       return {
         enrollment: {

@@ -149,6 +149,10 @@ export const monitorEnrollment = sessionsMonitorListItem.omit({ nextSession: tru
    * The closing case's opening plus `enrollment_restore_window_days`, present only for an
    * enrollment `sessions.restore` could admit by its closing and its case (FR-454, R-322); it may
    * already have passed, the restore then refused `window_closed`.
+   * @deprecated T073 (SRS DEC-69; R-322's step 2 retired): no restore is refused for its time. Kept
+   * (R-API-9), answered with the hold's end (`slotHeldUntil`'s instant, a release leaving it) for
+   * every closing R-322's step 1 admits with its case open, a ban's and a teacher's ban's or
+   * revocation's included; a past instant does not mean the restore is refused. Read `slotHeldUntil`.
    */
   restorableUntil: z.iso.datetime().optional(),
   // T070 (FR-503; SRS FR-CANCEL-9, DEC-69): the hold of the enrollment's weekly slot.
@@ -471,9 +475,14 @@ export type SessionsReviewReviseOutput = z.infer<typeof sessionsReviewReviseOutp
 // keyed under the administrator's idempotency key. Refused `RESTORE_REFUSED` with `details.cause`
 // one of eight causes, writing nothing. No amount crosses and `confirmed_at` is never written.
 
-/** Why a restore was refused (R-322, steps 1 to 6). */
+/**
+ * Why a restore was refused (R-322, steps 1 to 6). T073 (FR-507; SRS FR-CANCEL-8 as amended,
+ * DEC-66, DEC-69): `window_closed` is never produced since step 2 was retired, kept (R-API-9); the
+ * ninth cause, `refunded`, an order of the enrollment refunded at the gateway, added at the end.
+ */
 export const restoreRefusalCause = z.enum([
   'not_restorable',
+  /** @deprecated T073 (DEC-69): never produced; no restore is refused for its time (R-API-9). */
   'window_closed',
   'case_closed',
   'party_restricted',
@@ -481,6 +490,8 @@ export const restoreRefusalCause = z.enum([
   'slot_changed',
   'slot_taken',
   'time_taken',
+  // T073 (FR-507; the note under T073, Q4 (a)): any order of the enrollment refunded.
+  'refunded',
 ]);
 
 export const sessionsRestoreInput = z.object({

@@ -104,7 +104,10 @@ describe('moveEnrollment (T008)', () => {
 });
 
 describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
-  it('returns a once-confirmed terminated or admin-cancelled enrollment to confirmed, never writing confirmed_at', async () => {
+  // T073 (R-322's step 1 widened; T070's follow-up 2): a teacher's ban or revocation closing
+  // (`cancelled` `teacher_suspended`) is restored too, and the restore clears `slot_released_at`, so
+  // a later closing holds its slot again.
+  it('returns a once-confirmed terminated, admin-cancelled or teacher-ended enrollment to confirmed, clearing its release, never writing confirmed_at', async () => {
     const { client, calls } = recorded({ updateMany: 1 });
     expect(await restoreEnrollment(client, id(1))).toBe(true);
     expect(calls).toEqual([
@@ -116,10 +119,10 @@ describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
             confirmedAt: { not: null },
             OR: [
               { status: 'terminated_no_show' },
-              { status: 'cancelled', cancellationReason: 'admin' },
+              { status: 'cancelled', cancellationReason: { in: ['admin', 'teacher_suspended'] } },
             ],
           },
-          data: { status: 'confirmed', cancellationReason: null },
+          data: { status: 'confirmed', cancellationReason: null, slotReleasedAt: null },
         },
       },
     ]);

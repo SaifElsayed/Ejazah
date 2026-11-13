@@ -13,6 +13,18 @@
 // - causes on real rows, each writing nothing: `case_closed`, `slot_changed`, `slot_inactive`;
 // - SC-416: another student's hold on the slot and the restore, one winning and the other refused,
 //   nothing half-written, in each order and raced at once.
+//
+// T073 (FR-454 as amended, FR-507; SRS FR-CANCEL-8; research R-322, steps 1, 2 and 4 and the ninth
+// cause; T070's follow-up 2):
+// - a session `sessions.cancel` cancelled before the closing, owed through its `admin_cancellation`
+//   case, is not created again: K − 1 sessions;
+// - an order of the enrollment `refunded` refuses `refunded`, writing nothing;
+// - a ban's closing refused `party_restricted` while the ban stands, and restored once the student
+//   is active again (the lift itself is T072's);
+// - no restore refused for its time: after the hold, the slot free, restored; the slot taken by
+//   another student's hold, `slot_taken`;
+// - an enrollment released, restored and closed again holds its slot (the restore clears
+//   `slot_released_at`).
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -30,12 +42,13 @@ import {
   StandingService,
   standingStoreOver,
 } from '../../apps/api/src/modules/identity/index.js';
-import { orderStandingsOf } from '../../apps/api/src/modules/payments/index.js';
+import { orderStandingsOf, refundedOf } from '../../apps/api/src/modules/payments/index.js';
 import {
   createAbsenceComplaint,
   createComplaintDecision,
   createRemedyOffer,
   createRestore,
+  createSessionCancel,
 } from '../../apps/api/src/modules/sessions/index.js';
 import { openRequestOf } from '../../apps/api/src/modules/verification/index.js';
 import {
@@ -67,6 +80,7 @@ const SETTINGS: Record<string, number> = {
   makeup_counter_answer_hours: 72,
   first_session_lead_hours: 24,
   enrollment_restore_window_days: 7,
+  ban_restore_window_days: 14, // T073: a ban's closing's hold (T070), read by `slotWeekTaken`
   idempotency_key_ttl_hours: 24,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SETTINGS[key]) };
@@ -111,14 +125,8 @@ afterAll(async () => {
 
 const { world, order } = confirmationWorld(() => database);
 
-/**
- * A confirmed four-session enrollment whose first session was a Teacher-No-Show with a make-up
- * remedy open, ended on a complaint (decision (a)) at `DECIDED`: sessions 2 to 4 cancelled, the
- * remedy handed to the `absence_termination` case.
- */
-async function terminatedWorld(): Promise<
-  World & { readonly caseId: string; readonly remedyId: string }
-> {
+/** A four-session enrollment confirmed by the job, both parties' roles active. */
+async function confirmedWorld(): Promise<World> {
   const made = await world();
   await database.userRole.createMany({
     data: [
@@ -129,6 +137,33 @@ async function terminatedWorld(): Promise<
   await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
+  return made;
+}
+
+/**
+ * A confirmed four-session enrollment whose first session was a Teacher-No-Show with a make-up
+ * remedy open, ended on a complaint (decision (a)) at `DECIDED`: sessions 2 to 4 cancelled, the
+ * remedy handed to the `absence_termination` case.
+ */
+async function terminatedWorld({ cancelSecond = false } = {}): Promise<
+  World & { readonly caseId: string; readonly remedyId: string }
+> {
+  const made = await confirmedWorld();
+  // T073: session 2 cancelled through `sessions.cancel` before the closing, its row naming the
+  // enrollment's `admin_cancellation` case.
+  if (cancelSecond) {
+    const second = await database.session.findFirstOrThrow({
+      where: { enrollmentId: made.enrollmentId, sequenceNumber: 2 },
+      select: { id: true },
+    });
+    await database.$transaction((tx: Transaction) =>
+      createSessionCancel({ enrollments, log: SILENT, clock: async () => DECIDED }).cancel(
+        tx,
+        admin,
+        { sessionId: second.id, reason: 'إلغاء' },
+      ),
+    );
+  }
   const first = await database.session.findFirstOrThrow({
     where: { enrollmentId: made.enrollmentId, sequenceNumber: 1 },
     select: { id: true },
@@ -174,6 +209,7 @@ function restorer() {
     settings,
     log: SILENT,
     clock: async () => RESTORED,
+    payments: { refundedOf }, // T073
   });
 }
 
@@ -361,6 +397,7 @@ describe('sessions.restore: no free week for a held remedy (the note under T061)
       settings,
       log: SILENT,
       clock: async () => RESTORED,
+      payments: { refundedOf }, // T073
     });
     const thrown: unknown = await database
       .$transaction((tx: Transaction) =>
@@ -457,5 +494,140 @@ describe('SC-416: a restore against another student’s hold on the same slot', 
     const [first] = refused;
     expect(first?.status === 'rejected' ? first.reason : undefined).toBeInstanceOf(DomainError);
     await expectOneWinner(w, activeHolds);
+  });
+});
+
+describe('T073: the restore’s amendments (FR-454 as amended, FR-507; R-322 steps 1, 2, 4, the ninth cause)', () => {
+  /** Another student's hold on the world's slot, at `RESTORED`, through Phase 2's `placeHold`. */
+  async function otherStudentHold(w: World) {
+    const other = await makeUser(db, { gender: 'female' });
+    await database.userRole.create({ data: { userId: other, role: 'student', status: 'active' } });
+    return database.$transaction((tx: Transaction) =>
+      placeHold(
+        tx,
+        { userId: other, gender: 'female' as RequesterGender },
+        { packageId: w.packageId, slotId: w.slotId },
+        {
+          terms: {
+            now: RESTORED,
+            ttlMinutes: 10,
+            graceMinutes: 5,
+            leadHours: 24,
+            bufferWeeks: async () => 0,
+            windowDays: async (setting) => SETTINGS[setting] ?? 0,
+          },
+          orders: orderStandingsOf,
+          store: holdsStore,
+        },
+      ),
+    );
+  }
+
+  /** The closing's case opened long before the restore: its hold over against any clock. */
+  const openedLongAgo = (caseId: string) =>
+    database.dispute.update({
+      where: { id: caseId },
+      data: { createdAt: new Date('2026-10-01T08:00:00Z') },
+    });
+
+  /** The student banned through `StandingService.banStudent`: the enrollment cancelled `admin`. */
+  const banStudent = (studentId: string) =>
+    database.$transaction((tx: Transaction) => standing.banStudent(tx, admin, studentId));
+
+  it('red first: one sessions.cancel’d session, the enrollment ended and restored, K − 1 sessions created', async () => {
+    const w = await terminatedWorld({ cancelSecond: true });
+    const { answer } = await restore(w.enrollmentId);
+    // Owed: 4, less the Teacher-No-Show owed through the case's remedy, less session 2 owed through
+    // its `admin_cancellation` case: sessions 3 and 4 again.
+    expect(
+      answer.sessionsCreated.map(({ sequenceNumber, localDate }) => [sequenceNumber, localDate]),
+    ).toEqual([
+      [5, '2026-11-12'],
+      [6, '2026-11-19'],
+    ]);
+    const after = await stateOf(w.enrollmentId);
+    expect(after.sessions.map(({ sequenceNumber, status }) => [sequenceNumber, status])).toEqual([
+      [1, 'teacher_no_show'],
+      [2, 'cancelled_by_admin'],
+      [3, 'cancelled_by_admin'],
+      [4, 'cancelled_by_admin'],
+      [5, 'scheduled'],
+      [6, 'scheduled'],
+    ]);
+    // The `admin_cancellation` case is left as it is; only the closing's is closed `restored`.
+    expect(after.cases.toSorted((one, other) => one.reason.localeCompare(other.reason))).toEqual([
+      { reason: 'absence_termination', status: 'dismissed', resolutionNotes: 'restored' },
+      { reason: 'admin_cancellation', status: 'open', resolutionNotes: null },
+    ]);
+  });
+
+  it('refuses refunded when an order of the enrollment was refunded at the gateway, writing nothing', async () => {
+    const w = await terminatedWorld();
+    await database.payment.updateMany({
+      where: { enrollmentId: w.enrollmentId, status: 'paid' },
+      data: { status: 'refunded' },
+    });
+    const before = await stateOf(w.enrollmentId);
+    expect(await causeOf(restore(w.enrollmentId))).toBe('refunded');
+    expect(await stateOf(w.enrollmentId)).toEqual(before);
+  });
+
+  it('refuses a ban’s closing party_restricted while the ban stands, writing nothing, and restores it once the student is active again', async () => {
+    const w = await confirmedWorld();
+    await banStudent(w.studentId);
+    const banned = await stateOf(w.enrollmentId);
+    expect(banned.enrollment.status).toBe('cancelled');
+    expect(banned.cases).toEqual([
+      { reason: 'student_banned', status: 'open', resolutionNotes: null },
+    ]);
+    expect(await causeOf(restore(w.enrollmentId))).toBe('party_restricted');
+    expect(await stateOf(w.enrollmentId)).toEqual(banned);
+    // The ban lifted (T072's lift; here its account move alone).
+    await database.user.update({ where: { id: w.studentId }, data: { accountStatus: 'active' } });
+    const { answer } = await restore(w.enrollmentId, `restore-again-${w.enrollmentId}`);
+    expect(answer).toMatchObject({ status: 'confirmed', remediesOffered: 0 });
+    expect(answer.sessionsCreated).toHaveLength(4);
+    expect((await stateOf(w.enrollmentId)).cases).toEqual([
+      { reason: 'student_banned', status: 'dismissed', resolutionNotes: 'restored' },
+    ]);
+  });
+
+  it('restores after the hold while the slot is free: no restore refused for its time (DEC-69)', async () => {
+    const w = await terminatedWorld();
+    await openedLongAgo(w.caseId);
+    const { answer } = await restore(w.enrollmentId);
+    expect(answer).toMatchObject({ status: 'confirmed', caseId: w.caseId });
+    expect(answer.sessionsCreated).toHaveLength(3);
+  });
+
+  it('refuses slot_taken after the hold once another student took the slot, writing nothing', async () => {
+    const w = await terminatedWorld();
+    await openedLongAgo(w.caseId);
+    await otherStudentHold(w);
+    const before = await stateOf(w.enrollmentId);
+    expect(await causeOf(restore(w.enrollmentId))).toBe('slot_taken');
+    expect(await stateOf(w.enrollmentId)).toEqual(before);
+  });
+
+  it('an enrollment released, restored and closed again holds its slot (T070’s follow-up 2)', async () => {
+    const w = await terminatedWorld();
+    // An administrator's release (T070), as `enrollments.releaseSlot` writes the column.
+    await database.enrollment.update({
+      where: { id: w.enrollmentId },
+      data: { slotReleasedAt: new Date('2026-11-05T08:00:00Z') },
+    });
+    await restore(w.enrollmentId);
+    const restored = await database.enrollment.findUniqueOrThrow({
+      where: { id: w.enrollmentId },
+      select: { status: true, slotReleasedAt: true },
+    });
+    expect(restored).toEqual({ status: 'confirmed', slotReleasedAt: null });
+    // Closed again, by a ban: its case opened now, so its slot is held through the ban's window.
+    await banStudent(w.studentId);
+    const thrown: unknown = await otherStudentHold(w).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(DomainError);
   });
 });

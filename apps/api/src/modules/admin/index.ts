@@ -60,6 +60,8 @@ import {
   type SessionReview,
   type SessionsMonitor,
 } from '../sessions/index.js';
+// T073 of specs/004-sessions: the restore's port of a refund, payments' `refundedOf` handed in.
+import type { EnrollmentPayments } from '../sessions/index.js';
 // T040 of specs/004-sessions: the reads inside an open matter, over the held-files and chat ports.
 import {
   createDisputeMatterReads,
@@ -222,6 +224,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * `disputes.chat`.
    */
   readonly disputeChat: DisputeChat;
+  /**
+   * T073 of specs/004-sessions (FR-507; the note under T073, Q4 (a), Q6 (a), N3): sessions'
+   * `EnrollmentPayments` port, filled by `main.ts` with payments' `refundedOf`, for the restore's
+   * ninth cause `refunded` (docs/ARCHITECTURE.md §4, a dependency handed in against the arrows).
+   */
+  readonly enrollmentPayments: EnrollmentPayments;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -332,6 +340,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }),
       settings: dependencies.settings,
       log: dependencies.log,
+      // T073: a refund at the gateway refuses the restore (FR-507), payments' answer handed in.
+      payments: dependencies.enrollmentPayments,
     }),
     // T058: the user directory over identity's readers and sessions' counts and marks.
     users: createUserDirectory({

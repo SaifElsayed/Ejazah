@@ -589,6 +589,15 @@ export { lockForStanding, type StandingLockStore } from './standing-locks.js';
  */
 export { createRestore, type Restore, type RestoreStore, restoreStore } from './restore.service.js';
 /**
+ * T073 of specs/004-sessions (FR-454 as amended, FR-507; research R-322; the note under T073, Q6 (a),
+ * Q8 (a)): the restore's core, `restoreClosed(tx, adminId, enrollmentId, now)`, a member of what
+ * `createRestore` builds (`Restore`), answering `RestoredClosing` or throwing the refusal, which
+ * T072's lift calls with its locks held; and the `EnrollmentPayments` port it reads a refund through,
+ * implemented by payments (`refundedOf`) and handed in by the admin module (R-301).
+ */
+export type { RestoredClosing } from './restore.service.js';
+export type { EnrollmentPayments } from './enrollment-payments.port.js';
+/**
  * T071 of specs/004-sessions (FR-504; research R-313; the notes under T071, Q5 (a) widened and
  * Q6 (a)): a teacher's suspension that pauses. `closePausedCaseOnEnd` closes a paused enrollment's
  * open `teacher_suspended` case on its end's transaction (booking's subscriber, a complaint decided

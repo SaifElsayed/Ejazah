@@ -14,6 +14,15 @@
 // T066: `enrollment` to both parties, read under the locks, through the administrator kind's list
 // bound to the call's transaction, sent once it commits; nothing on a refusal, a rollback or a
 // replay; and inside the kind's declared deadlock retry, the committed attempt's event alone, once.
+//
+// T073 (FR-454 as amended, FR-507; SRS FR-CANCEL-8; research R-322, steps 1, 2 and 4 and the ninth
+// cause; the note under T073, Q4 (a), Q8 (a), N3): step 1 reads the one closing rule (`closingOf`)
+// over the enrollment's cases read through moderation's entry, a ban's and a teacher's ban or
+// revocation closing admitted, a deletion's and a gender correction's not; step 2 retired, no
+// restore refused for its time; step 4 counts as taken a session `sessions.cancel` cancelled (its
+// `cancelled_by_admin` row naming an `admin_cancellation` case), never one the closing or a
+// suspension before a fault cancelled; the ninth cause `refunded` through `EnrollmentPayments`,
+// writing nothing; and the core, `restoreClosed`, at the instant handed in, with no key.
 import { dateColumnOf } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -32,14 +41,14 @@ import { createLogger } from '../../platform/logging/logger.js';
 import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
 import { createAdminCallerFactory, createAdminRouter } from '../../surfaces/procedures.js';
 import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
-import type { CaseRecord } from '../moderation/index.js';
+import type { EnrollmentCase } from '../moderation/index.js';
 import type {
   EnrollmentEventEntry,
   EnrollmentStatus,
   EnrollmentTerms,
   HeldTime,
 } from './enrollment-side.port.js';
-import type { RestoreSession } from './restore.repository.js';
+import type { CancellationCase, RestoreSession } from './restore.repository.js';
 import { createRestore, type RestoreDependencies, type RestoreStore } from './restore.service.js';
 import { sessionsAdminRouter } from './sessions-admin.router.js';
 import type { PartyStanding } from './sessions.service.js';
@@ -52,6 +61,10 @@ const ENROLLMENT = '0199d0a0-0000-7000-8000-00000000b0e1';
 const SLOT = '0199d0a0-0000-7000-8000-00000000b051';
 const CASE = '0199d0a0-0000-7000-8000-00000000b0c1';
 const REMEDY = '0199d0a0-0000-7000-8000-00000000b0r1';
+/** T073: the `admin_cancellation` case `sessions.cancel` opened before the closing. */
+const CANCEL_CASE = '0199d0a0-0000-7000-8000-00000000b0c2';
+/** T073: the `student_suspended` case a suspension before the fault opened. */
+const SUSPENSION_CASE = '0199d0a0-0000-7000-8000-00000000b0c3';
 const KEY = 'restore-key-0000000001';
 const REASON = 'قرار الإنهاء كان خطأ';
 const CAIRO = 'Africa/Cairo';
@@ -113,16 +126,12 @@ const terms = (status: EnrollmentStatus = 'terminated_no_show'): EnrollmentTerms
   teacherUserId: TEACHER,
 });
 
-const record = (overrides: Partial<CaseRecord> = {}): CaseRecord => ({
+/** The closing's case, as moderation's `compensationCasesOf` answers it. */
+const closingCase = (overrides: Partial<EnrollmentCase> = {}): EnrollmentCase => ({
   caseId: CASE,
-  kind: 'compensation_case',
-  enrollmentId: ENROLLMENT,
   reason: 'absence_termination',
   status: 'open',
-  resolution: null,
-  resolutionNotes: null,
   createdAt: new Date('2026-11-06T08:00:00Z'),
-  resolvedAt: null,
   ...overrides,
 });
 
@@ -140,8 +149,12 @@ let given: {
   terms: EnrollmentTerms | null;
   events: EnrollmentEventEntry[];
   sessions: RestoreSession[];
-  endCase: string | null;
-  record: CaseRecord | null;
+  /** The enrollment's compensation cases, newest first (moderation's `compensationCasesOf`). */
+  cases: EnrollmentCase[];
+  /** T073: each `cancelled_by_admin` row's case, by session (sessions' own `session_events`). */
+  cancellations: CancellationCase[];
+  /** T073: whether an order of the enrollment is `refunded` (`EnrollmentPayments`). */
+  refunded: boolean;
   parties: Map<string, PartyStanding>;
   slot: { dayOfWeek: number; startTimeLocal: string; timezone: string; isActive: boolean } | null;
   takenDates: Set<string>;
@@ -161,8 +174,9 @@ beforeEach(() => {
     terms: terms(),
     events: [{ kind: 'terminated_no_show', occurredAt: new Date('2026-11-06T08:00:00Z') }],
     sessions: closedSessions(),
-    endCase: CASE,
-    record: record(),
+    cases: [closingCase()],
+    cancellations: [],
+    refunded: false,
     parties: new Map([
       [STUDENT, party()],
       [TEACHER, party({ teacherApproved: true })],
@@ -188,13 +202,13 @@ const store: RestoreStore = {
     calls.push(['sessionsOf']);
     return given.sessions;
   },
-  endCaseOf: async () => {
-    calls.push(['endCaseOf']);
-    return given.endCase;
+  casesOf: async () => {
+    calls.push(['casesOf']);
+    return given.cases;
   },
-  caseRecordOf: async () => {
-    calls.push(['caseRecordOf']);
-    return given.record;
+  cancellationCasesOf: async () => {
+    calls.push(['cancellationCasesOf']);
+    return given.cancellations;
   },
   partiesOf: async (_tx, ids) => {
     calls.push(['partiesOf', ids]);
@@ -265,7 +279,19 @@ function restoreOf(overrides: Partial<RestoreDependencies> = {}) {
     },
     settings: {
       read: async (key, schema) =>
-        schema.parse({ first_session_lead_hours: 24, enrollment_restore_window_days: 7 }[key]),
+        schema.parse(
+          {
+            first_session_lead_hours: 24,
+            enrollment_restore_window_days: 7,
+            ban_restore_window_days: 14,
+          }[key],
+        ),
+    },
+    payments: {
+      refundedOf: async (_tx, enrollmentId) => {
+        calls.push(['refundedOf', enrollmentId]);
+        return given.refunded;
+      },
     },
     log: {
       info: ((fields: object, msg: string) => void lines.push({ ...fields, msg })) as never,
@@ -360,8 +386,9 @@ describe('sessions.restore: the restore (FR-455)', () => {
       ['lockRemedies', [sid(52), REMEDY].sort()],
       ['enrollmentFor'],
       ['sessionsOf'],
-      ['endCaseOf'],
-      ['caseRecordOf'],
+      ['casesOf'],
+      ['cancellationCasesOf'],
+      ['refundedOf', ENROLLMENT],
       ['partiesOf', [STUDENT, TEACHER]],
       ['slotOf'],
       ['restore'],
@@ -391,7 +418,7 @@ describe('sessions.restore: the restore (FR-455)', () => {
     );
     given.terms = terms('cancelled');
     given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
-    given.record = record({ reason: 'student_fault_confirmed' });
+    given.cases = [closingCase({ reason: 'student_fault_confirmed' })];
     const { answer } = await restore();
     expect(answer.remediesOffered).toBe(0);
     expect(calls.find(([name]) => name === 'generate')).toEqual([
@@ -441,7 +468,7 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
     ['a confirmed enrollment', () => (given.terms = terms('confirmed'))],
     ['a completed enrollment', () => (given.terms = terms('completed'))],
     [
-      'a teacher’s end',
+      'a teacher’s end whose latest end case is of another closing',
       () => {
         given.terms = terms('cancelled');
         given.events = [
@@ -450,14 +477,28 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
       },
     ],
     [
-      'a ban (cancelled admin, its latest end case student_banned)',
+      // T073: a deletion's closing stays not restorable, its `teacher_ended` case open or not.
+      'a deletion’s closing (cancelled account_deleted, its teacher_ended case open)',
       () => {
         given.terms = terms('cancelled');
-        given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
-        given.record = record({ reason: 'student_banned' });
+        given.events = [
+          { kind: 'cancelled', cancellationReason: 'account_deleted', occurredAt: NOW },
+        ];
+        given.cases = [closingCase({ reason: 'teacher_ended' })];
       },
     ],
-    ['no end case', () => (given.endCase = null)],
+    [
+      // T073 (Q10 (a)): an enrollment a gender correction ended is never restored.
+      'a gender correction’s closing (cancelled gender_correction)',
+      () => {
+        given.terms = terms('cancelled');
+        given.events = [
+          { kind: 'cancelled', cancellationReason: 'gender_correction', occurredAt: NOW },
+        ];
+        given.cases = [closingCase({ reason: 'student_banned' })];
+      },
+    ],
+    ['no end case', () => (given.cases = [])],
     [
       'a refused move',
       () => {
@@ -475,13 +516,8 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
   });
 
   it('case_closed: the closing’s case resolved or dismissed', async () => {
-    given.record = record({ status: 'dismissed' });
+    given.cases = [closingCase({ status: 'dismissed' })];
     await expectRefused('case_closed');
-  });
-
-  it('window_closed: the case opened enrollment_restore_window_days or more before the database’s clock', async () => {
-    given.record = record({ createdAt: new Date('2026-11-03T08:00:00Z') });
-    await expectRefused('window_closed');
   });
 
   it.each([
@@ -568,6 +604,112 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
     };
     given.generateFails = deadlock;
     await expect(restore()).rejects.toBe(deadlock);
+  });
+});
+
+describe('T073: the restore’s amendments (FR-454 as amended, FR-507; R-322 steps 1, 2, 4, the ninth cause)', () => {
+  const generated = () => calls.find(([name]) => name === 'generate')?.[4];
+  const cancelledBy = (sessionId: string, caseId: string): CancellationCase => ({
+    sessionId,
+    caseId,
+  });
+
+  it('red first: one sessions.cancel’d session, the enrollment ended and restored, K − 1 sessions created', async () => {
+    // Session 4, cancelled through `sessions.cancel` before the closing: its row names the
+    // enrollment's `admin_cancellation` case, so it is owed through that case, not created again.
+    given.cancellations = [cancelledBy(sid(4), CANCEL_CASE)];
+    given.cases = [
+      closingCase(),
+      closingCase({ caseId: CANCEL_CASE, reason: 'admin_cancellation' }),
+    ];
+    const { answer } = await restore();
+    expect(generated()).toEqual({ count: 1, firstSequenceNumber: 6 });
+    expect(answer.sessionsCreated.map(({ sequenceNumber }) => sequenceNumber)).toEqual([6]);
+  });
+
+  it('never counts as taken a session the closing cancelled, nor one a suspension cancelled before a fault', async () => {
+    given.terms = terms('cancelled');
+    given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
+    given.cases = [
+      closingCase({ reason: 'student_fault_confirmed' }),
+      closingCase({ caseId: SUSPENSION_CASE, reason: 'student_suspended', status: 'resolved' }),
+    ];
+    given.cancellations = [cancelledBy(sid(4), SUSPENSION_CASE), cancelledBy(sid(5), CASE)];
+    await restore();
+    expect(generated()).toEqual({ count: 2, firstSequenceNumber: 6 });
+  });
+
+  it('step 1 admits a ban’s closing (cancelled admin, its student_banned case open) once both accounts are active', async () => {
+    given.terms = terms('cancelled');
+    given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
+    given.cases = [closingCase({ reason: 'student_banned' })];
+    const { answer } = await restore();
+    expect(answer).toMatchObject({ status: 'confirmed', caseId: CASE });
+    expect(calls).toContainEqual([
+      'closeCase',
+      CASE,
+      { status: 'dismissed', resolution: null, note: 'restored', adminId: ADMIN },
+    ]);
+  });
+
+  it('a ban’s closing is refused party_restricted while the ban stands, writing nothing', async () => {
+    given.terms = terms('cancelled');
+    given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
+    given.cases = [closingCase({ reason: 'student_banned' })];
+    given.parties.set(STUDENT, party({ accountStatus: 'banned' }));
+    await expectRefused('party_restricted');
+  });
+
+  it('step 1 admits a teacher’s ban or revocation closing (cancelled teacher_suspended, its teacher_ended case open)', async () => {
+    given.terms = terms('cancelled');
+    given.events = [
+      { kind: 'cancelled', cancellationReason: 'teacher_suspended', occurredAt: NOW },
+    ];
+    given.cases = [closingCase({ reason: 'teacher_ended' })];
+    const { answer } = await restore();
+    expect(answer).toMatchObject({ status: 'confirmed', caseId: CASE });
+  });
+
+  it('step 2 retired: no restore is refused for its time, window_closed never produced', async () => {
+    // Opened a year before the restore: past both windows, the restore still admitted (DEC-69).
+    given.cases = [closingCase({ createdAt: new Date('2025-11-06T08:00:00Z') })];
+    const { answer } = await restore();
+    expect(answer).toMatchObject({ status: 'confirmed', caseId: CASE });
+  });
+
+  it('refunded: an order of the enrollment refunded at the gateway, writing nothing', async () => {
+    given.refunded = true;
+    await expectRefused('refunded');
+    expect(calls).toContainEqual(['refundedOf', ENROLLMENT]);
+  });
+
+  it('restoreClosed: the core, at the instant handed in, with no key, answers restored', async () => {
+    const at = new Date('2026-11-10T09:30:00Z');
+    expect(await restoreOf().restoreClosed(tx, ADMIN, ENROLLMENT, at)).toEqual({ restored: true });
+    expect(calls.some(([name]) => name === 'runOn')).toBe(false);
+    expect(calls.find(([name]) => name === 'generate')?.[2]).toBe(at);
+    expect(calls).toContainEqual([
+      'closeCase',
+      CASE,
+      { status: 'dismissed', resolution: null, note: 'restored', adminId: ADMIN },
+    ]);
+  });
+
+  it('restoreClosed throws the refusal as sessions.restore does, logged, writing nothing', async () => {
+    given.refunded = true;
+    const thrown: unknown = await restoreOf()
+      .restoreClosed(tx, ADMIN, ENROLLMENT, NOW)
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect([
+      (thrown as DomainError).code,
+      (thrown as DomainError).details,
+      isRefusalLogged(thrown),
+    ]).toEqual(['RESTORE_REFUSED', [{ path: 'cause', code: 'refunded' }], true]);
+    expect(writes()).toEqual([]);
   });
 });
 
