@@ -103,7 +103,7 @@ const KEY = randomBytes(32).toString('base64');
 const PASSWORD = 'a long probe passphrase 41';
 const FEMALE = 'female' as RequesterGender;
 /** A logger that writes nothing: the line's fields are the subscriber's unit spec's. */
-const SILENT = { info: () => undefined };
+const SILENT = { info: () => undefined, warn: () => undefined };
 const identitySettings: SettingsReader = {
   read: async (key, schema) => schema.parse({ idempotency_key_ttl_hours: 24 }[key]),
 };

@@ -96,7 +96,7 @@ const SEEDED: Record<string, unknown> = {
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
-const SILENT = { info: () => undefined };
+const SILENT = { info: () => undefined, warn: () => undefined };
 
 beforeAll(async () => {
   [db, holder, watcher] = await Promise.all([

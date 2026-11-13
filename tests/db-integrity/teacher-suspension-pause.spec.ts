@@ -448,11 +448,10 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
     ['P2 a revocation', 'revokeApproval'],
   ] as const)('%s: covered by the teacher_ended case, whose covers hold the paused sessions', async (_, action) => {
     const { on, paused, cancelled } = await pausedWorld();
-    await database.$transaction((tx) =>
-      action === 'ban'
-        ? standing.ban(tx, admin, on.teacherId)
-        : standing.revokeApproval(tx, admin, on.teacherId, 'Probe revocation'),
-    );
+    await database.$transaction(async (tx) => {
+      if (action === 'ban') await standing.ban(tx, admin, on.teacherId);
+      else await standing.revokeApproval(tx, admin, on.teacherId, 'Probe revocation');
+    });
     expect(await enrollmentStatusOf(on.enrollmentId)).toBe('cancelled');
     const end = await caseOf(on.enrollmentId, 'teacher_ended');
     expect(end.status).toBe('open');
@@ -563,9 +562,9 @@ describe('cases.resolve and cases.dismiss refuse a teacher_suspended case (T071)
       const paused = await caseOf(on.enrollmentId, 'teacher_suspended');
       const before = await snapshotOf(on);
       const refused = await refusalOf(
-        database.$transaction((tx: Transaction) =>
-          closing[close](tx, admin, { caseId: paused.id, note: NOTE }),
-        ),
+        database.$transaction(async (tx: Transaction) => {
+          await closing[close](tx, admin, { caseId: paused.id, note: NOTE });
+        }),
       );
       expect(refused.code).toBe('CONFLICT');
       expect(refused.details).toEqual([{ path: 'cause', code: 'closed_by_reinstatement' }]);

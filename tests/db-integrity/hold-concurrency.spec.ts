@@ -327,7 +327,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
       terminationSubscriber({
         orders: orderStandingsOf,
         now: () => NOW,
-        log: { info: () => undefined },
+        log: { info: () => undefined, warn: () => undefined },
       }),
     );
     standing = new StandingService({

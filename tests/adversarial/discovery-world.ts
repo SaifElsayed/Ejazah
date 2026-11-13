@@ -682,7 +682,7 @@ async function build(): Promise<Built> {
   // The one registry of an account's end, booking's T041 subscriber bound as `main.ts` binds it.
   const consequences = new AccountConsequences();
   consequences.subscribe(
-    terminationSubscriber({ orders: orderStandingsOf, log: { info: () => undefined } }),
+    terminationSubscriber({ orders: orderStandingsOf, log: { info: () => undefined, warn: () => undefined } }),
   );
   const identity: IdentityServices = createIdentityServices({
     ...identityBase,
