@@ -11,8 +11,8 @@
 //   `cancelled_by_admin` naming the new `absence_termination` case, an open and a frozen remedy
 //   handed to it, the complaint `resolved` `enrollment_ended`, one `complaint_decided` event; on an
 //   enrollment no longer `confirmed`, refused CONFLICT with nothing written;
-// - (b) `suspend_teacher`: the teacher suspended, the enrollment ended by the subscriber
-//   (`teacher_suspended`, a `teacher_ended` case), the complaint `resolved` `party_suspended`;
+// - (b) `suspend_teacher`: the teacher suspended, the enrollment paused by the subscriber (T071,
+//   FR-504: kept `confirmed`, a `teacher_suspended` case), the complaint `resolved` `party_suspended`;
 // - (c) `close`: the complaint `dismissed` with the note, the enrollment `confirmed`, its sessions
 //   untouched.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
@@ -322,13 +322,15 @@ describe('cases.decideComplaint (FR-453, SC-415)', () => {
     );
   });
 
-  it('(b) suspends the teacher, whose end follows, and resolves the complaint party_suspended', async () => {
+  // T071 of specs/004-sessions (rule d, an approved change; FR-504): the suspension pauses the
+  // enrollment, kept `confirmed` with a `teacher_suspended` case, where it ended it before.
+  it('(b) suspends the teacher, whose pause follows, and resolves the complaint party_suspended', async () => {
     const made = await confirmedWorld();
     const { complaintId } = await raise(made);
     expect(await decide(complaintId, 'suspend_teacher')).toEqual({
       caseId: complaintId,
       status: 'resolved',
-      enrollmentStatus: 'cancelled',
+      enrollmentStatus: 'confirmed',
     });
     const teacher = await database.user.findUniqueOrThrow({
       where: { id: made.teacherId },
@@ -340,9 +342,9 @@ describe('cases.decideComplaint (FR-453, SC-415)', () => {
       status: 'resolved',
       resolution: 'party_suspended',
     });
-    expect(rows.some(({ reason, status }) => reason === 'teacher_ended' && status === 'open')).toBe(
-      true,
-    );
+    expect(
+      rows.some(({ reason, status }) => reason === 'teacher_suspended' && status === 'open'),
+    ).toBe(true);
     expect(await eventsOf(made.enrollmentId, 'complaint_decided')).toHaveLength(1);
   });
 

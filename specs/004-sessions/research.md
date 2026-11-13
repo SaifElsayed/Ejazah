@@ -520,7 +520,8 @@ confirmed part, on the action's transaction, after the account's lock the action
 |---|---|---|---|---|
 | `account_deleted` | student | remaining `cancelled_by_admin` | `cancelled`, `account_deleted`; open remedies `lapsed`, a chosen refund's case kept open (C2) | none (T059) |
 | `account_deleted` | teacher | remaining `cancelled_by_admin` | `cancelled`, `account_deleted` | one per enrollment, `teacher_ended` (T059) |
-| `suspended`, `approval_revoked`, `banned` | teacher | remaining `cancelled_by_admin` | `cancelled`, `teacher_suspended` | one per enrollment, `teacher_ended` (FR-483) |
+| `suspended` | teacher | remaining `cancelled_by_admin`, one in its join period included | stay `confirmed`, keep their slot, cannot complete while the case is open; open remedies `frozen` and not offered while the teacher is suspended; resumed at the reinstatement (T071, **Decided**, FR-504, SRS FR-SESS-16 as amended) | one per enrollment, `teacher_suspended` (T071) |
+| `approval_revoked`, `banned` | teacher | remaining `cancelled_by_admin` | `cancelled`, `teacher_suspended` | one per enrollment, `teacher_ended` (FR-483) |
 | `suspended` | student | upcoming `cancelled_by_admin` | stay `confirmed`, keep their slot, cannot complete while the case is open (**Decided**, the owner, 2026-11-05, plan.md decision 1 (b)); open remedies `frozen` (C3) | one per enrollment, `student_suspended` (FR-486) |
 | `banned` | student | upcoming `cancelled_by_admin` | `cancelled`, `admin`, at once (**Decided**, plan.md decision 1 (a)) | one per enrollment, `student_banned`, nothing owed by default (FR-486) |
 
@@ -563,6 +564,30 @@ under FR-422's lock rule:
   enrollment not being `confirmed`; those sessions join the case the first end opened, owed as refunds, which that
   case's `covers` lists (R-312). The fault confirmed (`cases.dismiss`): they are owed nothing, and the case closes with
   no further effect (no cancellation, no new case).
+
+A teacher's suspension pauses (T071; FR-504; SRS FR-SESS-16 as amended; the notes under T071 of
+`specs/004-sessions/tasks.md`): a student's suspension's path reused, the `teacher_suspended` case named by every
+session it cancelled. The case is closed two ways only, never by `cases.resolve` or `cases.dismiss` (`CONFLICT`
+`closed_by_reinstatement`, nothing written):
+
+- **The reinstatement** (`teachers.reinstate`, `StandingService.reinstate` with the `reinstatement` the admin module
+  hands in, sessions' `createTeacherReinstatement`): in its transaction, the paused enrollments' students read with
+  no lock, then `users` (the teacher and those students, one call, id order) in place of `lockAccount`, the teacher's
+  key, the paused enrollments, their cancelled sessions, their remedies, `disputes`; each session the suspension
+  cancelled offered through T028's `offerLocked` with `clearedSuspension` (recitation `awaiting_choice`, ijazah track
+  `proposed`), the case closed `resolved`, `compensation_ordered`, the note `reinstated`; the frozen remedies offered
+  by `advance-remedies`' next run. No free week refuses the whole reinstatement `CONFLICT` `no_free_week`, nothing
+  written (T036's precedent).
+- **An end of the paused enrollment meanwhile** (Q5 (a), widened by the review session): the case closed in the end's
+  transaction, `resolved`, `compensation_ordered`, the fixed note `ended_meanwhile`, `covered_by_case_id` the end's
+  case (rule 49 as T069 widened it), by the ending administrator (`AccountConsequence`'s `actor`), `disputes` last, so
+  the sessions it cancelled are that case's `covers` (U2, `suspensionCasesCoveredBy` widened). Covered: a teacher's
+  ban or revocation (`teacher_ended`), the student's ban (`student_banned`), a complaint decided (a)
+  (`absence_termination`), a `student_suspended` case's fault confirmed (`student_fault_confirmed`); T081's and T082's
+  ends by their tasks. A person's own deletion names no administrator, so the case is left open with one warn line of
+  ids until T080 refuses such a deletion. A completion cannot end it (held while the case is open), nor a payment's or
+  a hold's cancellation (`pending_payment` only). A student's suspension of a paused enrollment ends nothing: a second
+  case opens.
 
 A student's suspension and ban are new `StandingService` methods, `suspendStudent`, `banStudent` and
 `reinstateStudent` (a reinstatement restores the account only; nothing cancelled is restored, the case deciding),

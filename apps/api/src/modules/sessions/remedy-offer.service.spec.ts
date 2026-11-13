@@ -41,6 +41,9 @@ let session: OfferSession;
 let existing: ExistingRemedy | null;
 let terms: EnrollmentTerms | null;
 let suspended: boolean;
+/** T071: the teacher suspended, read under the locks (N2). */
+let teacherSuspended: boolean;
+let standingReads: string[];
 let lastReached: Date | null;
 let takenDates: Set<string>;
 /** Every week of the slot taken: the bug the search's bound guards against. */
@@ -62,6 +65,10 @@ const store: RemedyOfferStore = {
   lockSessions: async (_tx, ids) => void trace.push(`lock sessions ${ids.join(',')}`),
   lockRemedyOfSession: async (_tx, id) => void trace.push(`lock remedies of ${id}`),
   studentSuspended: async () => suspended,
+  teacherSuspended: async (_tx, userId) => {
+    standingReads.push(userId);
+    return teacherSuspended;
+  },
   // Thursday 09:00 Cairo.
   slotOf: async () => ({
     id: SLOT,
@@ -142,6 +149,8 @@ beforeEach(() => {
     teacherUserId: TEACHER,
   };
   suspended = false;
+  teacherSuspended = false;
+  standingReads = [];
   lastReached = new Date('2026-11-26T00:00:00Z');
   takenDates = new Set();
   everyWeekTaken = false;
@@ -194,6 +203,19 @@ describe('remedy offer: what is owed and when (FR-462, G1, A2, C1, C3)', () => {
     suspended = true;
     expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
     expect(inserted).toEqual([]);
+  });
+
+  // T071 (N2): a paused enrollment’s frozen remedy, or any session of it, waits for the teacher’s
+  // reinstatement; the sweep tries it again each run.
+  it('offers nothing while the teacher is suspended, reading the teacher’s standing, a frozen remedy included (T071, N2)', async () => {
+    teacherSuspended = true;
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    existing = { id: REMEDY, status: 'frozen', kind: 'makeup', caseId: null };
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    expect(standingReads).toEqual([TEACHER, TEACHER]);
+    expect(inserted).toEqual([]);
+    expect(reoffered).toEqual([]);
+    expect(warnings).toEqual([]);
   });
 
   it('offers nothing to a session that already has an open or settled remedy', async () => {

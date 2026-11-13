@@ -7,7 +7,10 @@
 //      acceptance before T028 landed, F8): offered through `RemedyOffer.offer`, which takes the offer
 //      row's locks and decides again under them.
 //   2. Each `frozen` remedy: offered again as a new offer once its student is no longer suspended
-//      (the offer reads the standing under the locks; a still-suspended student's is postponed).
+//      (the offer reads the standing under the locks; a still-suspended student's is postponed),
+//      nor (T071 of specs/004-sessions, N2; FR-504) its teacher, whose suspension froze it too: a
+//      paused enrollment's frozen remedy waits for the teacher's reinstatement, then the next run
+//      offers it, as after a student's.
 //   T032 (FR-465, FR-466, FR-467; research R-311, "Windows ending"; D1; H5; A3; Q4 (a), Q11 (a)):
 //   the windows' ends, after the offers and before the completion check, each remedy decided again
 //   under its own locks by `remedy.service.ts`' `RemedyWindows` (its head holds the rules):

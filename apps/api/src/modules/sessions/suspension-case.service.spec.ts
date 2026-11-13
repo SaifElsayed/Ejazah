@@ -63,6 +63,10 @@ interface World {
   readonly noFreeWeek?: readonly string[];
   /** The case of the enrollment's end; null for an end that opened none. */
   readonly endCase?: string | null;
+  /** T071: the enrollment's open `teacher_suspended` case (also paused by the teacher). */
+  readonly pausedCase?: string;
+  /** T071, Q-B1 (a): the teacher's account status, read under its lock; active unless given. */
+  readonly teacherStatus?: string;
 }
 
 function suspensionOver(world: World = {}) {
@@ -94,7 +98,7 @@ function suspensionOver(world: World = {}) {
     },
     accountStatusOf: async (_tx, userId) => {
       calls.push(['accountStatusOf', userId]);
-      return world.accountStatus ?? 'active';
+      return userId === TEACHER ? (world.teacherStatus ?? 'active') : (world.accountStatus ?? 'active');
     },
     sessionsToOffer: async (_tx, caseId) => {
       calls.push(['sessionsToOffer', caseId]);
@@ -121,6 +125,12 @@ function suspensionOver(world: World = {}) {
         lapsedRemedyIds: [],
         caseOf: new Map([[ENROLLMENT, caseId]]),
       };
+    },
+    // T071: recorded only on a paused enrollment, so the journals before T071 hold as written.
+    pausedCaseOf: async (_tx, enrollmentId) => {
+      if (world.pausedCase === undefined) return null;
+      calls.push(['pausedCaseOf', enrollmentId]);
+      return world.pausedCase;
     },
   };
   const enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'cancel'> = {
@@ -208,6 +218,8 @@ describe('cleared: cases.resolve on a student_suspended case (FR-486; R-313)', (
       ['caseRecordOf'],
       ['accountStatusOf', STUDENT],
       ['enrollmentFor', ENROLLMENT],
+      // T071, Q-B1 (a) (rule d): the teacher's standing, under the same locks, before any offer.
+      ['accountStatusOf', TEACHER],
       ['sessionsToOffer', CASE],
       ['lockSessions', [id(11), id(12)]],
       ['lockRemediesOfSessions', [id(11), id(12)]],
@@ -470,5 +482,83 @@ describe('the live event of a suspended student’s case closed (T066)', () => {
       await asAdministratorKind((call) => service.clear(call, ADMIN, TARGET, RESOLVED.note)),
     ).toEqual([]);
     expect(added).toEqual([]);
+  });
+});
+
+// T071 of specs/004-sessions (the first note under T071, Q5 (a) widened, P7): a `student_suspended`
+// case's fault confirmed on an enrollment also paused by the teacher's suspension (`confirmed`, so
+// it ends) closes the open `teacher_suspended` case in the same transaction, covered by the new
+// `student_fault_confirmed` case: `resolved`, `compensation_ordered`, `ended_meanwhile`, by the
+// administrator who dismissed, with one info line of ids. Cleared ends nothing and closes none.
+describe('the fault confirmed on an enrollment also paused (T071, P7)', () => {
+  const PAUSED = id(503);
+
+  it('closes the teacher_suspended case covered by the fault case, after the suspension case', async () => {
+    const { service, calls, lines } = suspensionOver({ pausedCase: PAUSED });
+    await service.confirmFault(tx, ADMIN, TARGET, DISMISSED.note);
+    expect(calls.filter(([name]) => name !== 'log').slice(-3)).toEqual([
+      ['closeCase', CASE, { ...DISMISSED, coveredBy: FAULT_CASE }],
+      ['pausedCaseOf', ENROLLMENT],
+      [
+        'closeCase',
+        PAUSED,
+        {
+          status: 'resolved',
+          resolution: 'compensation_ordered',
+          note: 'ended_meanwhile',
+          adminId: ADMIN,
+          coveredBy: FAULT_CASE,
+        },
+      ],
+    ]);
+    expect(lines).toContainEqual([
+      'A paused enrollment’s teacher_suspended case closed by its end',
+      {
+        adminId: ADMIN,
+        enrollmentId: ENROLLMENT,
+        caseId: PAUSED,
+        coveredByCaseId: FAULT_CASE,
+        end: 'student_fault_confirmed',
+      },
+    ]);
+  });
+
+  it('cleared closes no teacher_suspended case', async () => {
+    const { service, calls } = suspensionOver({ pausedCase: PAUSED });
+    await service.clear(tx, ADMIN, TARGET, RESOLVED.note);
+    expect(calls.some(([name, caseId]) => name === 'closeCase' && caseId === PAUSED)).toBe(false);
+  });
+});
+
+// T071 of specs/004-sessions (Q-B1 (a), the review session's ruling of 2026-11-13; T036's
+// `STUDENT_SUSPENDED` its precedent): cleared on an enrollment whose teacher is still suspended
+// (paused) is refused `TEACHER_SUSPENDED`, the teacher's standing read under the accounts' locks
+// before any offer, writing nothing, one info line of ids; it answered `no_free_week` before.
+describe('cleared while the teacher is still suspended (T071, Q-B1 (a))', () => {
+  it('refuses TEACHER_SUSPENDED before any offer, writing nothing, one line of ids', async () => {
+    // T028's offer postpones every session while the teacher is suspended (N2).
+    const { service, calls, lines } = suspensionOver({
+      teacherStatus: 'suspended',
+      noFreeWeek: [id(11), id(12)],
+    });
+    const refusal = await refusalOf(service.clear(tx, ADMIN, TARGET, RESOLVED.note));
+    expect(refusal.code).toBe('TEACHER_SUSPENDED');
+    expect(refusal.details).toBeUndefined();
+    expect(isRefusalLogged(refusal)).toBe(true);
+    expect(
+      calls.some(([name]) => ['lockSessions', 'offerLocked', 'closeCase'].includes(String(name))),
+    ).toBe(false);
+    expect(lines).toEqual([
+      [
+        'A suspension case closing was refused',
+        {
+          adminId: ADMIN,
+          caseId: CASE,
+          enrollmentId: ENROLLMENT,
+          errorCode: 'TEACHER_SUSPENDED',
+          reason: 'teacher_suspended',
+        },
+      ],
+    ]);
   });
 });

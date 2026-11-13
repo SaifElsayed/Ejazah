@@ -525,7 +525,9 @@ describe('the fault confirmed: suspend, reinstate, a make-up booked, and dismiss
     await suspend(on.studentId);
     const caseId = await suspensionCaseOf(on.enrollmentId);
     await reinstate(on.studentId);
-    await database.$transaction((tx) => standing.suspend(tx, admin, on.teacherId));
+    // T071 (rule d, an approved change): a teacher's suspension pauses now, so the teacher's end is
+    // a ban, which still cancels the enrollment.
+    await database.$transaction((tx) => standing.ban(tx, admin, on.teacherId));
     const before = await database.dispute.count({ where: { enrollmentId: on.enrollmentId } });
     const events = await database.enrollmentEvent.count({ where: { enrollmentId: on.enrollmentId } });
     expect(await dismiss(caseId)).toEqual({ caseId, status: 'dismissed' });

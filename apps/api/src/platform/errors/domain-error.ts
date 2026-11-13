@@ -120,6 +120,9 @@ export const errorCodes = {
   CHAT_CLOSED: { status: 409, message: 'This chat is closed.' },
   // A suspended student's case closed as cleared before the account is reinstated.
   STUDENT_SUSPENDED: { status: 409, message: 'The student is still suspended.' },
+  // T071 (Q-B1 (a)): a suspended student's case cleared while the enrollment's teacher is still
+  // suspended (the enrollment paused); STUDENT_SUSPENDED's mirror.
+  TEACHER_SUSPENDED: { status: 409, message: 'The teacher is still suspended.' },
   // A ruling's revision after the dispute window closed or once a remedy exists: `cause` in details.
   RULING_FINAL: { status: 409, message: 'This ruling can no longer be revised.' },
   // A ruling a later dispute's resolution replaced.

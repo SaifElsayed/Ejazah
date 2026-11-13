@@ -408,17 +408,19 @@ describe('disputes.resolve over the real tables (R-308, FR-422)', () => {
     },
   );
 
-  it('party_suspended against the teacher: the teacher suspended, their enrollment ended on the same transaction', async () => {
+  // T071 of specs/004-sessions (rule d, an approved change; FR-504): a teacher's suspension pauses
+  // the enrollment, kept `confirmed` with one `teacher_suspended` case, where it ended it before.
+  it('party_suspended against the teacher: the teacher suspended, their enrollment paused on the same transaction', async () => {
     const w = await world();
     await run('ruling', resolve(w, { resolution: 'party_suspended', party: 'teacher' }));
     expect(await left(w)).toMatchObject({
       session: { status: 'teacher_no_show', outcome: null, admin: w.adminId },
       dispute: { status: 'resolved', resolution: 'party_suspended' },
       events: ['dispute_resolved'],
-      enrollment: 'cancelled',
+      enrollment: 'confirmed',
       ahead: 'cancelled_by_admin',
       teacher: 'suspended',
-      cases: ['teacher_ended'],
+      cases: ['teacher_suspended'],
     });
   });
 

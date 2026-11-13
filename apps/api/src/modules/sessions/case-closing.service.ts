@@ -17,6 +17,12 @@
 // and `cases.dismiss` the fault confirmed, an enrollment's end; that service takes its own row's
 // locks, refuses its own causes and closes the case through `closeCase` itself.
 //
+// A PAUSED ENROLLMENT'S CASE (T071 of specs/004-sessions; the first note under T071, Q5 (a) widened).
+// A `teacher_suspended` case is closed only by the teacher's reinstatement or by an end of its
+// enrollment (`teacher-suspension.service.ts`), so a stray close cannot release the completion's
+// hold with nothing offered: `cases.resolve` and `cases.dismiss` refuse it `CONFLICT` with
+// `details.cause` `closed_by_reinstatement`, writing nothing, with one info line of ids.
+//
 // NO COMPLETION CHECK (the note under T035, F9). Closing a case that holds an enrollment's
 // completion (`student_suspended`, `admin_cancellation`) releases the hold, and `advance-remedies`'
 // completion step completes the enrollment on its next run, within a minute.
@@ -62,7 +68,7 @@ export interface CaseClosingService {
 }
 
 /** Why a closing was refused, as its one log line names it. */
-type RefusalReason = 'not_found' | 'complaint' | 'not_open';
+type RefusalReason = 'not_found' | 'complaint' | 'not_open' | 'closed_by_reinstatement';
 
 /** The ids a refusal's line names. */
 interface RefusalIds {
@@ -110,6 +116,16 @@ export function createCaseClosing({
     }
     if (found.kind === 'absence_complaint') {
       throw refusal(log, { adminId, caseId }, 'NOT_FOUND', 'complaint');
+    }
+    // T071: a paused enrollment's case, closed only by the reinstatement or an end (this file's head).
+    if (found.reason === 'teacher_suspended') {
+      throw refusal(
+        log,
+        { adminId, caseId, enrollmentId: found.enrollmentId },
+        'CONFLICT',
+        'closed_by_reinstatement',
+        [{ path: 'cause', code: 'closed_by_reinstatement' }],
+      );
     }
     return found;
   };

@@ -601,3 +601,107 @@ describe('the `account` event after a standing change (T063)', () => {
     });
   });
 });
+
+// T071 of specs/004-sessions (FR-504; the first note under T071, Q5.2 (a); the second, Q6 (a)): the
+// administrator who ended an account reaches every consequence as `actor`, the fourth argument; and a
+// teacher's reinstatement resumes the paused enrollments through the `reinstatement` handed in: the
+// paused enrollments' students read with no lock, then `users`, the teacher and those students, in
+// one call in id order in place of `lockAccount`, the standing read again under it, the move, then
+// the offers and the cases' closing on the same transaction.
+describe('the administrator reaches the consequences as actor (T071, Q5.2 (a))', () => {
+  let actors: unknown[];
+
+  beforeEach(() => {
+    actors = [];
+    const registry = new AccountConsequences();
+    registry.subscribe(async (_tx, _userId, _cause, actor) => {
+      actors.push(actor);
+    });
+    standing = new StandingService({
+      store,
+      consequences: registry,
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async () => false,
+      now: () => NOW,
+    });
+  });
+
+  it.each([
+    ['suspend', () => standing.suspend(TX, ADMIN, approvedTeacher())],
+    ['revokeApproval', () => standing.revokeApproval(TX, ADMIN, approvedTeacher(), 'شكوى')],
+    ['ban', () => standing.ban(TX, ADMIN, approvedTeacher())],
+    ['suspendStudent', () => standing.suspendStudent(TX, ADMIN, store.plant())],
+    ['banStudent', () => standing.banStudent(TX, ADMIN, store.plant())],
+  ] as const)('%s passes { adminId }', async (_, act) => {
+    await act();
+    expect(actors).toEqual([{ adminId: ADMIN }]);
+  });
+});
+
+describe('a teacher’s reinstatement resumes the paused enrollments (T071, Q6 (a))', () => {
+  const STUDENT_LOW = '0199d0a0-0000-7000-8000-000000000001';
+  const STUDENT_HIGH = 'ffffffff-0000-7000-8000-000000000001';
+  let resumed: unknown[][];
+  let fails: Error | undefined;
+
+  beforeEach(() => {
+    resumed = [];
+    fails = undefined;
+    standing = new StandingService({
+      store,
+      consequences: new AccountConsequences(),
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async (_tx, userId) => {
+        store.journal.push(`request:${userId}`);
+        return openIdentityRequests.has(userId);
+      },
+      now: () => NOW,
+      reinstatement: {
+        studentsOf: async (_tx, teacherUserId) => {
+          store.journal.push(`students-of:${teacherUserId}`);
+          return [STUDENT_HIGH, STUDENT_LOW, STUDENT_LOW];
+        },
+        resume: async (_tx, adminId, teacherUserId, lockedUserIds) => {
+          // The account has moved before the offers read its standing (T028's read).
+          store.journal.push(`resume:${store.person(teacherUserId).accountStatus}`);
+          resumed.push([adminId, teacherUserId, lockedUserIds]);
+          if (fails !== undefined) throw fails;
+        },
+      },
+    });
+  });
+
+  it('reads the students with no lock, locks the teacher and the students in one call in id order, reads again, moves, then resumes', async () => {
+    const teacher = approvedTeacher('suspended');
+    const locked = [teacher, STUDENT_LOW, STUDENT_HIGH].sort();
+    expect(await standing.reinstate(TX, ADMIN, teacher)).toEqual({
+      before: { accountStatus: 'suspended' },
+      after: { accountStatus: 'active' },
+    });
+    expect(store.journal).toEqual([
+      `students-of:${teacher}`,
+      `lock-accounts:${locked.join(',')}`,
+      `read:${teacher}`,
+      `request:${teacher}`,
+      'resume:active',
+    ]);
+    expect(resumed).toEqual([[ADMIN, teacher, locked]]);
+  });
+
+  it('resumes nothing for a teacher not suspended, refused CONFLICT as before', async () => {
+    const teacher = approvedTeacher('active');
+    expect((await refusal(standing.reinstate(TX, ADMIN, teacher))).code).toBe('CONFLICT');
+    expect(resumed).toEqual([]);
+  });
+
+  it('lets the resume’s refusal through, so the whole reinstatement rolls back', async () => {
+    const teacher = approvedTeacher('suspended');
+    fails = new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'no_free_week' }],
+    });
+    expect(await refusal(standing.reinstate(TX, ADMIN, teacher))).toEqual({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'no_free_week' }],
+    });
+  });
+});
