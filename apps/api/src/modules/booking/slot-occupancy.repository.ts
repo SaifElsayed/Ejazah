@@ -12,7 +12,7 @@
 // check, §3).
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { compensationCasesOf } from '../moderation/index.js';
+import { compensationCasesAmong } from '../moderation/index.js';
 import { closingOf, latestEndCaseOf, restorableUntil, type WindowDays } from '../sessions/index.js';
 import type { SlotUse } from './slot-occupancy.service.js';
 
@@ -44,8 +44,10 @@ interface Gathered {
  * (sessions' `closingOf`, its latest end case read through moderation's entry), and the hold of that
  * closing still running: the case's opening plus its kind's window (`restorableUntil`, the windows
  * read through `windowDays`), against the database's clock. A third statement over the same index,
- * bounded by the slots asked about, then one read of cases per such enrollment, in id order, until
- * its slot is found held; none when no closed enrollment is on a free slot.
+ * bounded by the slots asked about, then one read of every such enrollment's cases (T070 A1,
+ * moderation's `compensationCasesAmong`, one statement over `disputes_enrollment_id_idx`); none when
+ * no closed enrollment is on a free slot. Each closing is then judged in id order until its slot is
+ * found held.
  */
 export async function slotUses(
   tx: Transaction,
@@ -100,12 +102,14 @@ export async function slotUses(
   });
   if (closed.length === 0) return uses;
   const now = await clockTimestamp(tx);
+  // T070 A1: every candidate's cases in one statement, not one per enrollment.
+  const casesOf = await compensationCasesAmong(tx, closed.map(({ id }) => id));
   for (const { id, slotId, status, cancellationReason } of closed) {
     if (uses.get(slotId)?.taken === true) continue;
     const closing = closingOf({
       status,
       lastCancellationReason: cancellationReason,
-      endCase: latestEndCaseOf(await compensationCasesOf(tx, id)),
+      endCase: latestEndCaseOf(casesOf.get(id) ?? []),
     });
     if (closing === undefined || !closing.restorable) continue;
     const until = await restorableUntil(closing.closingCase.createdAt, closing.kind, windowDays);

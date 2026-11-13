@@ -191,6 +191,31 @@ export async function compensationCasesOf(
 }
 
 /**
+ * T070 A1 (the owner's approval of 2026-11-13; the first follow-up under T070 of
+ * specs/004-sessions, the speed): of `enrollmentIds`, each one's compensation cases as
+ * `compensationCasesOf` answers them, newest first by their time-ordered id, an enrollment with no
+ * case answering none; with no lock. One statement over `disputes_enrollment_id_idx`, bounded by the
+ * enrollments asked, in place of one per enrollment (booking's `slotUses` reads its held closings'
+ * cases so); none for no enrollment.
+ */
+export async function compensationCasesAmong(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, EnrollmentCase[]>> {
+  const cases = new Map<string, EnrollmentCase[]>(enrollmentIds.map((id) => [id, []]));
+  if (enrollmentIds.length === 0) return cases;
+  const rows = await tx.dispute.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, kind: 'compensation_case' },
+    orderBy: { id: 'desc' },
+    select: { enrollmentId: true, id: true, reason: true, status: true, createdAt: true },
+  });
+  for (const { enrollmentId, id, reason, status, createdAt } of rows) {
+    cases.get(enrollmentId)?.push({ caseId: id, reason, status, createdAt });
+  }
+  return cases;
+}
+
+/**
  * Of `sessionIds`, those with any session dispute, open, resolved or dismissed, with no lock (T024 of
  * specs/004-sessions, FR-439: an outcome ever disputed is not corrected, its ruling revised instead).
  * One statement over `disputes_session_id_idx`, bounded by the ids asked.
