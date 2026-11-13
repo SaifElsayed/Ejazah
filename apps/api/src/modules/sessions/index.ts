@@ -613,3 +613,19 @@ export {
   type PausedEnd,
   type TeacherReinstatement,
 } from './teacher-suspension.service.js';
+/**
+ * T072 of specs/004-sessions (FR-502, FR-503; the note under T072, Q6 (a), Q7 (a), Q9 (a), Q10 (a)):
+ * what a ban's or a revocation's lift owes the enrollments it closed (`createBanLift`), handed to
+ * identity's `StandingService` as its `lift` by the admin module, and the hold's end `users.get`
+ * answers (`slotHeldUntilOf`); `isRefusedAfterWrite`, the restore's mark on a refusal thrown after
+ * its first write, which the lift turns into its whole refusal `restore_failed`.
+ */
+export {
+  type BanLift,
+  type BanLiftResult,
+  type BanLiftSide,
+  type BanLiftStore,
+  banLiftStore,
+  createBanLift,
+} from './ban-lift.service.js';
+export { isRefusedAfterWrite } from './restore.service.js';

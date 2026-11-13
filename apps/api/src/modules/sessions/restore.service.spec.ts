@@ -49,7 +49,12 @@ import type {
   HeldTime,
 } from './enrollment-side.port.js';
 import type { CancellationCase, RestoreSession } from './restore.repository.js';
-import { createRestore, type RestoreDependencies, type RestoreStore } from './restore.service.js';
+import {
+  createRestore,
+  isRefusedAfterWrite,
+  type RestoreDependencies,
+  type RestoreStore,
+} from './restore.service.js';
 import { sessionsAdminRouter } from './sessions-admin.router.js';
 import type { PartyStanding } from './sessions.service.js';
 
@@ -856,5 +861,89 @@ describe('sessions.restore: the live event (T066)', () => {
     expect(answer.enrollmentId).toBe(ENROLLMENT);
     expect(attempts).toBe(2);
     expect(published).toEqual([restoredEvent]);
+  });
+});
+
+// T072 of specs/004-sessions (the note under T072, Q7 (a); the owner's word on lane D's Q-D1,
+// «موافق», 2026-11-13): a refusal thrown after `EnrollmentSide.restore` has landed carries the mark
+// «after a write» (`isRefusedAfterWrite`), so a lift refuses the whole lift `restore_failed`; every
+// cause found before the first write carries none. `sessions.restore`'s answers are unchanged.
+describe('T072: the mark «refused after a write»', () => {
+  async function thrownBy(): Promise<unknown> {
+    return restoreOf()
+      .restoreClosed(tx, ADMIN, ENROLLMENT, NOW)
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+  }
+
+  it.each([
+    ['not_restorable', () => (given.terms = terms('confirmed'))],
+    ['not_restorable (a refused move)', () => (given.restored = false)],
+    ['case_closed', () => (given.cases = [closingCase({ status: 'dismissed' })])],
+    ['refunded', () => (given.refunded = true)],
+    ['party_restricted', () => given.parties.set(STUDENT, party({ accountStatus: 'banned' }))],
+    [
+      'slot_inactive',
+      () =>
+        (given.slot = {
+          dayOfWeek: 4,
+          startTimeLocal: '09:00:00',
+          timezone: CAIRO,
+          isActive: false,
+        }),
+    ],
+    [
+      'slot_changed',
+      () =>
+        (given.slot = {
+          dayOfWeek: 3,
+          startTimeLocal: '09:00:00',
+          timezone: CAIRO,
+          isActive: true,
+        }),
+    ],
+    ['slot_taken', () => (given.takenDates = new Set(['2026-11-19']))],
+    [
+      'time_taken before the insert',
+      () =>
+        (given.own = [
+          { startsAt: new Date('2026-11-19T07:30:00Z'), endsAt: new Date('2026-11-19T08:30:00Z') },
+        ]),
+    ],
+  ])('%s carries no mark', async (_name, arrange) => {
+    arrange();
+    const thrown = await thrownBy();
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect(isRefusedAfterWrite(thrown)).toBe(false);
+  });
+
+  it.each([
+    ['no_free_week', 'CONFLICT', () => (given.offered = false)],
+    [
+      'time_taken from the database’s exclusion at the insert',
+      'RESTORE_REFUSED',
+      () =>
+        (given.generateFails = {
+          name: 'DriverAdapterError',
+          cause: {
+            originalCode: '23P01',
+            originalMessage:
+              'conflicting key value violates exclusion constraint "sessions_student_no_overlap"',
+          },
+        }),
+    ],
+  ])('%s, after the restore landed, carries the mark', async (_name, code, arrange) => {
+    arrange();
+    const thrown = await thrownBy();
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect([(thrown as DomainError).code, isRefusedAfterWrite(thrown)]).toEqual([code, true]);
+    expect(writes()).toContainEqual(['restore']);
+  });
+
+  it('marks nothing else: an error of any other kind, or none', () => {
+    expect(isRefusedAfterWrite(new DomainError('RESTORE_REFUSED'))).toBe(false);
+    expect(isRefusedAfterWrite(undefined)).toBe(false);
   });
 });

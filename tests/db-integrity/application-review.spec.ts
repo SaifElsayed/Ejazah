@@ -340,11 +340,21 @@ describe('the standing', () => {
     const [banned, moved, revoked, standing, again] = await rolledBack(
       async (tx) =>
         [
-          await store.banProfile(tx, userId, { kind: 'applicant', adminId, at, note: 'معدَّلة' }),
+          // T072 of specs/004-sessions: a ban keeps the statuses it moved from (rule d).
+          await store.banProfile(tx, userId, {
+            kind: 'applicant',
+            before: { verificationStatus: 'pending', applicationStatus: 'in_review' },
+            adminId,
+            at,
+            note: 'معدَّلة',
+          }),
           await store.moveAccount(tx, userId, ['active'], 'banned'),
           await store.revokeSessions(tx, userId, 'account_banned', at),
           await store.read(tx, userId),
-          await store.banProfile(tx, userId, { kind: 'teacher' }),
+          await store.banProfile(tx, userId, {
+            kind: 'teacher',
+            before: { verificationStatus: 'banned', applicationStatus: 'banned' },
+          }),
         ] as const,
     );
     expect([banned, moved, revoked, again]).toEqual([true, true, 1, false]);
@@ -372,7 +382,10 @@ describe('the standing', () => {
           await tx.teacherSubject.count({ where: { teacherUserId: userId } }),
           await readApplicant(tx, userId),
           // A revoked teacher can still be banned (B13b review, follow-up 3).
-          await store.banProfile(tx, userId, { kind: 'teacher' }),
+          await store.banProfile(tx, userId, {
+            kind: 'teacher',
+            before: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+          }),
           (await store.read(tx, userId))?.teacher?.verificationStatus,
         ] as const;
       },

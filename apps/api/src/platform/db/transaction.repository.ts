@@ -12,7 +12,7 @@
 // deferred overlap check at its commit. A deadlock rolled the transaction back, so the work runs
 // once more in a new one; a second deadlock is the caller's refusal, never a third attempt. Every
 // deadlock is logged with the operation and the closed ids only, never the error's text or the
-// statement (R-SEC-2).
+// statement (R-SEC-2): a remedy's, an enrollment's, or the account a lift names (T072).
 import { isDeadlock } from './db-errors.js';
 import type { Database, Transaction } from './prisma.repository.js';
 
@@ -26,8 +26,12 @@ export function transactionsOver(database: Database): Transactions {
   return { run: (work) => database.$transaction(work) };
 }
 
-/** The ids a deadlock's log line carries: a remedy's or an enrollment's, never a person's. */
-export type DeadlockIds = { readonly remedyId: string } | { readonly enrollmentId: string };
+/**
+ * The ids a deadlock's log line carries: a remedy's, an enrollment's, or the account a lift names
+ * (T072 of specs/004-sessions; the owner's word on B42a lane D's Q-D2, 2026-11-13).
+ */
+export type DeadlockIds =
+  { readonly remedyId: string } | { readonly enrollmentId: string } | { readonly userId: string };
 
 /** What a deadlock is logged with: the calling procedure's name and its closed ids. */
 export interface DeadlockTrace {
@@ -39,7 +43,8 @@ export interface DeadlockTrace {
 
 /** Only the closed ids, whatever else the object carries at run time. */
 function closedIds(ids: DeadlockIds): DeadlockIds {
-  return 'remedyId' in ids ? { remedyId: ids.remedyId } : { enrollmentId: ids.enrollmentId };
+  if ('remedyId' in ids) return { remedyId: ids.remedyId };
+  return 'enrollmentId' in ids ? { enrollmentId: ids.enrollmentId } : { userId: ids.userId };
 }
 
 /**

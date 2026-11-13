@@ -42,7 +42,12 @@ import {
   createRepeatedAbsence,
   type EnrollmentSide,
 } from '../sessions/index.js';
-import { createUserDirectoryService, type UserDirectory } from './user-directory.service.js';
+import {
+  createUserDirectoryService,
+  // T072 of specs/004-sessions: the hold's end, sessions' read handed in.
+  type SlotHolds,
+  type UserDirectory,
+} from './user-directory.service.js';
 
 export { DOCUMENTS_UPLOAD_PATH };
 export type { DocumentLink, DocumentViewer } from './verification.service.js';
@@ -237,11 +242,17 @@ export function createUserDirectory({
   settings,
   enrollments,
   log,
+  slotHeldUntilOf,
 }: {
   readonly database: Pick<Database, 'includeDeleted'>;
   readonly settings: SettingsReader;
   readonly enrollments: Pick<EnrollmentSide, 'enrollmentPage'>;
   readonly log: Pick<Logger, 'info'>;
+  /**
+   * T072 of specs/004-sessions (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions'
+   * `createBanLift`'s read, handed in by the admin module.
+   */
+  readonly slotHeldUntilOf: SlotHolds['slotHeldUntilOf'];
 }): UserDirectory {
   return createUserDirectoryService({
     store: {
@@ -257,6 +268,8 @@ export function createUserDirectory({
       enrollments,
     }),
     log,
+    // T072 (Q9 (a)).
+    held: { slotHeldUntilOf },
   });
 }
 export type { UserDirectory, UserDirectoryStore } from './user-directory.service.js';

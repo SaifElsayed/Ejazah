@@ -89,6 +89,14 @@
 // `{ restored: true }` or throws the refusal as `sessions.restore` does (the administrator's id
 // written by `closeCase` and logged on every refusal). `sessions.restore` wraps the same core
 // unchanged: keyed through `runOn`, the instant the database's clock read under the locks.
+//
+// THE MARK (T072; the note under T072, Q7 (a); the owner's word on B42a lane D's Q-D1, «موافق»,
+// 2026-11-13). The two refusals thrown after `EnrollmentSide.restore` has landed, `no_free_week`
+// from T028's offer and `time_taken` from the database's exclusion at the insert, carry the mark
+// «refused after a write» (`isRefusedAfterWrite`, held weakly, as the «logged» mark is); every cause
+// found before the first write carries none. A lift reads it: an unmarked refusal leaves that one
+// enrollment ended, a marked one refuses the whole lift (Prisma gives no savepoint). The answers of
+// `sessions.restore` are unchanged.
 import type { SessionsRestoreInput, SessionsRestoreOutput } from '@ijazah/contracts/admin';
 import { localTimeOf, type TimeZoneId } from '@ijazah/time';
 import { z } from 'zod';
@@ -307,6 +315,24 @@ function noFreeWeek(
   return markRefusalLogged(
     new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: 'no_free_week' }] }),
   );
+}
+
+/** T072: the refusals thrown after `EnrollmentSide.restore` landed (this file's head, «THE MARK»). */
+const refusedAfterWrite = new WeakSet<object>();
+
+/** T072: marks `error` «refused after a write» and answers it. */
+function afterWrite<TError extends object>(error: TError): TError {
+  refusedAfterWrite.add(error);
+  return error;
+}
+
+/**
+ * T072 (the note under T072, Q7 (a)): whether the restore refused `error` after its first write
+ * (`no_free_week`, or the database's exclusion at the insert), which a lift turns into its whole
+ * refusal `restore_failed`; false for every cause found before it.
+ */
+export function isRefusedAfterWrite(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && refusedAfterWrite.has(error);
 }
 
 function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
@@ -553,7 +579,7 @@ export function createRestore({
     try {
       await store.generate(tx, toSchedule, now, leadHours, plan);
     } catch (error: unknown) {
-      if (isOverlapRefusal(error)) throw refused(log, ids, 'time_taken');
+      if (isOverlapRefusal(error)) throw afterWrite(refused(log, ids, 'time_taken'));
       throw error;
     }
     const held = sessions
@@ -568,7 +594,7 @@ export function createRestore({
     for (const { id } of held) {
       const offer = await offers.offerLocked(tx, id, { restoredCase: closingCase.caseId });
       // The note under T061 (B39 Q5 (a)'s precedent): the offer wrote its warn line; nothing is kept.
-      if (offer === null) throw noFreeWeek(log, { ...ids, sessionId: id });
+      if (offer === null) throw afterWrite(noFreeWeek(log, { ...ids, sessionId: id }));
       offered.push(offer);
     }
     const closed = await store.closeCase(tx, closingCase.caseId, {

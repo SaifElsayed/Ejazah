@@ -193,4 +193,25 @@ describe('runRetryingDeadlockOnce (T002, L5)', () => {
     );
     expect(worked).toBe(2);
   });
+
+  // T072 of specs/004-sessions (the owner’s word on B42a lane D’s Q-D2, 2026-11-13): a lift names
+  // only the account it lifts, so its lines carry that `userId` and nothing else.
+  it('a lift’s lines carry the account it names, `userId`, and only it', async () => {
+    const { transactions } = transactionsAnswering([deadlock(), deadlock()]);
+    const ids = { userId: ENROLLMENT, statement: 'SELECT 1' };
+    const { trace, lines } = tracing(ids as unknown as DeadlockTrace['ids']);
+    await expect(
+      runRetryingDeadlockOnce(
+        transactions,
+        async () => 'unused',
+        () => new Refused(),
+        trace,
+      ),
+    ).rejects.toBeInstanceOf(Refused);
+    expect(lines.map(({ fields }) => fields)).toEqual([
+      { operation: 'sessions.remedy.accept', attempt: 1, userId: ENROLLMENT },
+      { operation: 'sessions.remedy.accept', attempt: 2, userId: ENROLLMENT },
+      { operation: 'sessions.remedy.accept', attempts: 2, userId: ENROLLMENT },
+    ]);
+  });
 });

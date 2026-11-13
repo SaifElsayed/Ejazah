@@ -13,9 +13,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { bindToTransaction } from '../../platform/live/live-publisher.js';
-import { MemoryStandingStore, TX } from './__fixtures__/standing-store.js';
+import { DB_NOW, MemoryStandingStore, TX } from './__fixtures__/standing-store.js';
 import { AccountConsequences, type TerminationCause } from './consequences.js';
-import { StandingService } from './standing.service.js';
+import { type LiftedEnrollment, type LiftSide, StandingService } from './standing.service.js';
 
 const ADMIN = '0199d0a0-0000-7000-8000-0000000000a1';
 const NOW = new Date('2026-10-22T10:00:00Z');
@@ -703,5 +703,468 @@ describe('a teacher’s reinstatement resumes the paused enrollments (T071, Q6 (
       code: 'CONFLICT',
       details: [{ path: 'cause', code: 'no_free_week' }],
     });
+  });
+});
+
+// T072 of specs/004-sessions (FR-502; SRS FR-ADMIN-5 as amended, DEC-66; the note under T072, N1,
+// Q6 (a), N12): every ban writes `banned_at` and, for a profile, its two statuses before the ban; the
+// three lifts: the closed enrollments' counterparties read with no lock, then `users`, the person and
+// those counterparties, in one call in id order, a teacher's profile after them (N1), the standing
+// read again, the account (`active`, or `verification_required` under an open identity request,
+// `banned_at` cleared) and the profile moved back, a revocation's subjects granted again, then the
+// closed enrollments restored through the `lift` handed in, on the same transaction. A refusal,
+// `not_banned`, `not_revoked` or `NOT_FOUND`, writes nothing, with one info line of ids and a reason.
+describe('T072: every ban writes its instant and the statuses before it', () => {
+  it('banStudent writes banned_at, the database’s instant', async () => {
+    const userId = student();
+    await standing.banStudent(TX, ADMIN, userId);
+    expect(store.person(userId)).toMatchObject({ accountStatus: 'banned', bannedAt: DB_NOW });
+  });
+
+  it.each([
+    [
+      'an approved teacher',
+      { verificationStatus: 'approved', applicationStatus: 'approved' },
+      undefined,
+    ],
+    [
+      'a revoked teacher',
+      { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+      undefined,
+    ],
+    [
+      'an applicant in review',
+      { verificationStatus: 'pending', applicationStatus: 'in_review' },
+      'سبب',
+    ],
+    [
+      'a rejected applicant',
+      { verificationStatus: 'rejected', applicationStatus: 'rejected' },
+      'سبب',
+    ],
+  ] as const)(
+    'ban of %s writes banned_at and keeps both statuses before it',
+    async (_, teacher, note) => {
+      const userId = store.plant({ teacher });
+      await standing.ban(
+        TX,
+        ADMIN,
+        userId,
+        note === undefined ? undefined : { applicantNote: note },
+      );
+      expect(store.person(userId)).toMatchObject({
+        accountStatus: 'banned',
+        bannedAt: DB_NOW,
+        teacher: { verificationStatus: 'banned', beforeBan: teacher },
+      });
+    },
+  );
+});
+
+describe('T072: the three lifts', () => {
+  const COUNTERPARTY_LOW = '0199d0a0-0000-7000-8000-000000000002';
+  const COUNTERPARTY_HIGH = 'ffffffff-0000-7000-8000-000000000002';
+  const RESTORED: readonly LiftedEnrollment[] = [
+    { enrollmentId: '0199d0a0-0000-7000-8000-0000000000e1', restored: true },
+    { enrollmentId: '0199d0a0-0000-7000-8000-0000000000e2', restored: false, cause: 'slot_taken' },
+  ];
+  let restoredCalls: unknown[][];
+  let lines: object[];
+  let fails: Error | undefined;
+
+  beforeEach(() => {
+    restoredCalls = [];
+    lines = [];
+    fails = undefined;
+    standing = new StandingService({
+      store,
+      consequences: new AccountConsequences(),
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async (_tx, userId) => {
+        store.journal.push(`request:${userId}`);
+        return openIdentityRequests.has(userId);
+      },
+      now: () => NOW,
+      log: { info: (fields: object) => void lines.push(fields) },
+      lift: {
+        counterpartiesOf: async (_tx, userId, side: LiftSide) => {
+          store.journal.push(`counterparties-of:${side}:${userId}`);
+          return [COUNTERPARTY_HIGH, COUNTERPARTY_LOW, COUNTERPARTY_LOW];
+        },
+        restoreClosed: async (_tx, adminId, userId, side, lockedUserIds) => {
+          // The person has moved before the restores read both accounts (R-322's step 3).
+          const { accountStatus, teacher } = store.person(userId);
+          store.journal.push(
+            `restore:${side}:${accountStatus}:${teacher?.verificationStatus ?? 'none'}`,
+          );
+          restoredCalls.push([adminId, userId, side, lockedUserIds]);
+          if (fails !== undefined) throw fails;
+          return RESTORED;
+        },
+        grantApprovedSubjects: async (_tx, teacherUserId) => {
+          store.journal.push(`grant:${teacherUserId}`);
+        },
+      },
+    });
+  });
+
+  const lockedWith = (userId: string) => [userId, COUNTERPARTY_LOW, COUNTERPARTY_HIGH].sort();
+
+  /** A student banned through the service, the journal cleared after it. */
+  async function bannedStudent(): Promise<string> {
+    const userId = student();
+    await standing.banStudent(TX, ADMIN, userId);
+    store.journal.length = 0;
+    return userId;
+  }
+
+  type Profile = {
+    readonly verificationStatus: 'approved' | 'revoked' | 'pending' | 'rejected';
+    readonly applicationStatus: 'approved' | 'rejected' | 'in_review' | 'needs_document';
+  };
+
+  /** A teacher or an applicant banned through the service, the journal cleared after it. */
+  async function bannedTeacher(
+    teacher: Profile,
+    accountStatus: 'active' | 'suspended' = 'active',
+  ): Promise<string> {
+    const userId = store.plant({ accountStatus, teacher });
+    const applies =
+      teacher.verificationStatus === 'pending' || teacher.verificationStatus === 'rejected';
+    await standing.ban(TX, ADMIN, userId, applies ? { applicantNote: 'وثائق مزوّرة' } : undefined);
+    store.journal.length = 0;
+    return userId;
+  }
+
+  describe('liftStudentBan', () => {
+    it('reads the counterparties with no lock, locks the student and them in one call in id order, reads again, moves the account, then restores', async () => {
+      const userId = await bannedStudent();
+      expect(await standing.liftStudentBan(TX, ADMIN, userId)).toEqual({
+        before: { accountStatus: 'banned' },
+        after: { accountStatus: 'active' },
+        enrollments: RESTORED,
+      });
+      expect(store.person(userId)).toMatchObject({ accountStatus: 'active', bannedAt: null });
+      expect(store.journal).toEqual([
+        `counterparties-of:student:${userId}`,
+        `lock-accounts:${lockedWith(userId).join(',')}`,
+        `read-student:${userId}`,
+        `request:${userId}`,
+        'restore:student:active:none',
+      ]);
+      expect(restoredCalls).toEqual([[ADMIN, userId, 'student', lockedWith(userId)]]);
+    });
+
+    it('lands on verification_required while an identity request is open', async () => {
+      const userId = await bannedStudent();
+      openIdentityRequests.add(userId);
+      expect((await standing.liftStudentBan(TX, ADMIN, userId)).after).toEqual({
+        accountStatus: 'verification_required',
+      });
+      expect(store.person(userId)).toMatchObject({
+        accountStatus: 'verification_required',
+        bannedAt: null,
+      });
+    });
+
+    it('refuses a student not banned CONFLICT not_banned, writing nothing, with one line of ids and the reason', async () => {
+      const userId = student('suspended');
+      expect(await refusal(standing.liftStudentBan(TX, ADMIN, userId))).toEqual({
+        code: 'CONFLICT',
+        details: [{ path: 'cause', code: 'not_banned' }],
+      });
+      expect(store.person(userId).accountStatus).toBe('suspended');
+      expect(restoredCalls).toEqual([]);
+      expect(lines).toEqual([{ userId, reason: 'not_banned' }]);
+    });
+
+    it('answers NOT_FOUND for a teacher and for no person, with one line each', async () => {
+      const teacher = await bannedTeacher({
+        verificationStatus: 'approved',
+        applicationStatus: 'approved',
+      });
+      for (const userId of [teacher, ADMIN]) {
+        expect((await refusal(standing.liftStudentBan(TX, ADMIN, userId))).code).toBe('NOT_FOUND');
+      }
+      expect(store.person(teacher).accountStatus).toBe('banned');
+      expect(restoredCalls).toEqual([]);
+      expect(lines).toEqual([
+        { userId: teacher, reason: 'not_found' },
+        { userId: ADMIN, reason: 'not_found' },
+      ]);
+    });
+
+    it('adds one `account` to the student’s streams', async () => {
+      const userId = await bannedStudent();
+      const added: Array<{ to: readonly string[]; event: unknown }> = [];
+      const tx = {} as typeof TX;
+      const unbind = bindToTransaction(tx, {
+        afterCommit: (to, event) => void added.push({ to, event }),
+      });
+      await standing.liftStudentBan(tx, ADMIN, userId);
+      unbind();
+      expect(added).toEqual([{ to: [userId], event: { type: 'account' } }]);
+    });
+
+    it('lets the whole lift’s refusal through, so it rolls back', async () => {
+      const userId = await bannedStudent();
+      fails = new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'restore_failed' }],
+      });
+      expect(await refusal(standing.liftStudentBan(TX, ADMIN, userId))).toEqual({
+        code: 'CONFLICT',
+        details: [{ path: 'cause', code: 'restore_failed' }],
+      });
+    });
+  });
+
+  describe('liftTeacherBan', () => {
+    it('locks the teacher and the counterparties in one call, then the application (N1), reads again, moves the profile and the account back, then restores', async () => {
+      const userId = await bannedTeacher({
+        verificationStatus: 'approved',
+        applicationStatus: 'approved',
+      });
+      expect(await standing.liftTeacherBan(TX, ADMIN, userId)).toEqual({
+        before: {
+          accountStatus: 'banned',
+          verificationStatus: 'banned',
+          applicationStatus: 'approved',
+        },
+        after: {
+          accountStatus: 'active',
+          verificationStatus: 'approved',
+          applicationStatus: 'approved',
+        },
+        enrollments: RESTORED,
+      });
+      expect(store.person(userId)).toMatchObject({
+        accountStatus: 'active',
+        bannedAt: null,
+        teacher: { verificationStatus: 'approved', applicationStatus: 'approved', beforeBan: null },
+      });
+      expect(store.journal).toEqual([
+        `counterparties-of:teacher:${userId}`,
+        `lock-accounts:${lockedWith(userId).join(',')}`,
+        `lock-application:${userId}`,
+        `read:${userId}`,
+        `request:${userId}`,
+        'restore:teacher:active:approved',
+      ]);
+      expect(restoredCalls).toEqual([[ADMIN, userId, 'teacher', lockedWith(userId)]]);
+    });
+
+    it('returns a teacher banned while suspended to active (N12)', async () => {
+      const userId = await bannedTeacher(
+        { verificationStatus: 'approved', applicationStatus: 'approved' },
+        'suspended',
+      );
+      expect((await standing.liftTeacherBan(TX, ADMIN, userId)).after).toMatchObject({
+        accountStatus: 'active',
+      });
+    });
+
+    it('returns a teacher banned after a revocation to revoked, granting nothing', async () => {
+      const userId = await bannedTeacher({
+        verificationStatus: 'revoked',
+        applicationStatus: 'rejected',
+      });
+      await standing.liftTeacherBan(TX, ADMIN, userId);
+      expect(store.person(userId).teacher).toMatchObject({
+        verificationStatus: 'revoked',
+        applicationStatus: 'rejected',
+        beforeBan: null,
+      });
+      expect(store.journal.filter((entry) => entry.startsWith('grant:'))).toEqual([]);
+    });
+
+    it.each([
+      [{ verificationStatus: 'pending', applicationStatus: 'in_review' }],
+      [{ verificationStatus: 'pending', applicationStatus: 'needs_document' }],
+      [{ verificationStatus: 'rejected', applicationStatus: 'rejected' }],
+    ] as const)(
+      'lifts an applicant’s ban back to %o, the note and decision left as history',
+      async (teacher) => {
+        const userId = await bannedTeacher(teacher);
+        await standing.liftTeacherBan(TX, ADMIN, userId);
+        expect(store.person(userId)).toMatchObject({
+          accountStatus: 'active',
+          bannedAt: null,
+          teacher: { ...teacher, beforeBan: null, applicationNote: 'وثائق مزوّرة', decidedAt: NOW },
+        });
+      },
+    );
+
+    it('refuses a teacher not banned CONFLICT not_banned, writing nothing, with one line', async () => {
+      const userId = approvedTeacher('suspended');
+      expect(await refusal(standing.liftTeacherBan(TX, ADMIN, userId))).toEqual({
+        code: 'CONFLICT',
+        details: [{ path: 'cause', code: 'not_banned' }],
+      });
+      expect(store.person(userId).accountStatus).toBe('suspended');
+      expect(restoredCalls).toEqual([]);
+      expect(lines).toEqual([{ userId, reason: 'not_banned' }]);
+    });
+
+    it('answers NOT_FOUND for a student and for no person, writing nothing', async () => {
+      const userId = await bannedStudent();
+      for (const id of [userId, ADMIN]) {
+        expect((await refusal(standing.liftTeacherBan(TX, ADMIN, id))).code).toBe('NOT_FOUND');
+      }
+      expect(store.person(userId).accountStatus).toBe('banned');
+      expect(restoredCalls).toEqual([]);
+    });
+  });
+
+  describe('liftRevocation', () => {
+    it('moves a revoked teacher and the application back to approved, grants the subjects, then restores; the account as it was', async () => {
+      const userId = store.plant({
+        teacher: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+      });
+      expect(await standing.liftRevocation(TX, ADMIN, userId)).toEqual({
+        before: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+        after: { verificationStatus: 'approved', applicationStatus: 'approved' },
+        enrollments: RESTORED,
+      });
+      expect(store.person(userId)).toMatchObject({
+        accountStatus: 'active',
+        teacher: { verificationStatus: 'approved', applicationStatus: 'approved' },
+      });
+      expect(store.journal).toEqual([
+        `counterparties-of:teacher:${userId}`,
+        `lock-accounts:${lockedWith(userId).join(',')}`,
+        `lock-application:${userId}`,
+        `read:${userId}`,
+        `grant:${userId}`,
+        'restore:teacher:active:approved',
+      ]);
+    });
+
+    it.each([
+      [
+        'an approved teacher',
+        { verificationStatus: 'approved', applicationStatus: 'approved' },
+        'active',
+      ],
+      [
+        'a revoked teacher who reapplied',
+        { verificationStatus: 'pending', applicationStatus: 'in_review' },
+        'active',
+      ],
+      [
+        'a revoked teacher banned',
+        { verificationStatus: 'banned', applicationStatus: 'rejected' },
+        'banned',
+      ],
+    ] as const)(
+      'refuses %s CONFLICT not_revoked, writing nothing',
+      async (_, teacher, accountStatus) => {
+        const userId = store.plant({ accountStatus, teacher });
+        expect(await refusal(standing.liftRevocation(TX, ADMIN, userId))).toEqual({
+          code: 'CONFLICT',
+          details: [{ path: 'cause', code: 'not_revoked' }],
+        });
+        expect(store.person(userId).teacher).toMatchObject(teacher);
+        expect(store.journal.filter((entry) => entry.startsWith('grant:'))).toEqual([]);
+        expect(restoredCalls).toEqual([]);
+        expect(lines).toEqual([{ userId, reason: 'not_revoked' }]);
+      },
+    );
+
+    it('answers NOT_FOUND for a student, writing nothing', async () => {
+      expect((await refusal(standing.liftRevocation(TX, ADMIN, student()))).code).toBe('NOT_FOUND');
+      expect(restoredCalls).toEqual([]);
+    });
+  });
+});
+
+// T072: a lift keyed through the kernel's `runOn` on the call's transaction (as `sessions.restore`
+// is): the scope the procedure's path, the administrator the actor, the person and the reason what
+// was asked; the effect the scope's lift; a replay answering the first move.
+describe('T072: keyedLift', () => {
+  let requests: unknown[];
+  let replay: { outcome: unknown } | undefined;
+
+  beforeEach(() => {
+    requests = [];
+    replay = undefined;
+    standing = new StandingService({
+      store,
+      consequences: new AccountConsequences(),
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async () => false,
+      now: () => NOW,
+      idempotency: {
+        runOn: async (tx, request, effect) => {
+          requests.push(request);
+          if (replay !== undefined) return { outcome: replay.outcome as never, replayed: true };
+          return { outcome: await effect(tx), replayed: false };
+        },
+      },
+    });
+  });
+
+  it.each([
+    ['students.liftBan', () => student('banned'), { accountStatus: 'active' }],
+    [
+      'teachers.liftBan',
+      () =>
+        store.plant({
+          accountStatus: 'banned',
+          teacher: { verificationStatus: 'banned', applicationStatus: 'approved' },
+          beforeBan: { verificationStatus: 'approved', applicationStatus: 'approved' },
+        }),
+      { accountStatus: 'active', verificationStatus: 'approved' },
+    ],
+    [
+      'teachers.liftRevocation',
+      () =>
+        store.plant({ teacher: { verificationStatus: 'revoked', applicationStatus: 'rejected' } }),
+      { accountStatus: 'active', teacher: { verificationStatus: 'approved' } },
+    ],
+  ] as const)(
+    '%s runs its lift keyed, the person and the reason what was asked',
+    async (scope, plant, landed) => {
+      const userId = plant();
+      const { move, replayed } = await standing.keyedLift(TX, ADMIN, {
+        scope,
+        userId,
+        reason: 'سبب',
+        idempotencyKey: 'lift-key-0000000000001',
+      });
+      expect(replayed).toBe(false);
+      expect(move.enrollments).toEqual([]);
+      expect(requests).toEqual([
+        { scope, key: 'lift-key-0000000000001', actorId: ADMIN, input: { userId, reason: 'سبب' } },
+      ]);
+      const person = store.person(userId);
+      expect({
+        accountStatus: person.accountStatus,
+        ...('verificationStatus' in landed
+          ? { verificationStatus: person.teacher?.verificationStatus }
+          : {}),
+        ...('teacher' in landed
+          ? { teacher: { verificationStatus: person.teacher?.verificationStatus } }
+          : {}),
+      }).toEqual(landed);
+    },
+  );
+
+  it('answers a replay the first move and runs no lift', async () => {
+    const userId = student('banned');
+    const first = {
+      before: { accountStatus: 'banned' },
+      after: { accountStatus: 'active' },
+      enrollments: [],
+    };
+    replay = { outcome: first };
+    expect(
+      await standing.keyedLift(TX, ADMIN, {
+        scope: 'students.liftBan',
+        userId,
+        reason: 'سبب',
+        idempotencyKey: 'lift-key-0000000000002',
+      }),
+    ).toEqual({ move: first, replayed: true });
+    expect(store.person(userId).accountStatus).toBe('banned');
   });
 });

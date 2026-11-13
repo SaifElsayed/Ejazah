@@ -87,6 +87,13 @@ export const usersGetOutput = z.object({
   }),
   /** A teacher's only (FR-451, SRS FR-ADMIN-4 as amended on 2026-11-05). */
   repeatedAbsences: z.array(userRepeatedAbsence).optional(),
+  /**
+   * T072 of specs/004-sessions (FR-502, FR-503; SRS DEC-69; the note under T072, Q9 (a)): the latest
+   * hold end among the enrollments the account's ban or revocation closed whose slot is still held
+   * (their case open, not released), each the closing case's opening plus `ban_restore_window_days`
+   * through the one closing rule; it may already have passed. Null for none.
+   */
+  enrollmentsSlotHeldUntil: z.iso.datetime().nullable(),
 });
 
 export type UsersListInput = z.infer<typeof usersListInput>;

@@ -582,8 +582,11 @@ describe('T073: the restore’s amendments (FR-454 as amended, FR-507; R-322 ste
     ]);
     expect(await causeOf(restore(w.enrollmentId))).toBe('party_restricted');
     expect(await stateOf(w.enrollmentId)).toEqual(banned);
-    // The ban lifted (T072's lift; here its account move alone).
-    await database.user.update({ where: { id: w.studentId }, data: { accountStatus: 'active' } });
+    // The ban lifted (T072's lift; here its account move alone, `banned_at` cleared with it, rule 50).
+    await database.user.update({
+      where: { id: w.studentId },
+      data: { accountStatus: 'active', bannedAt: null },
+    });
     const { answer } = await restore(w.enrollmentId, `restore-again-${w.enrollmentId}`);
     expect(answer).toMatchObject({ status: 'confirmed', remediesOffered: 0 });
     expect(answer.sessionsCreated).toHaveLength(4);
