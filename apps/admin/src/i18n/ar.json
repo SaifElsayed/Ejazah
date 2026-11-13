@@ -1843,8 +1843,8 @@
           "enrollmentCompleted": "اكتمل الاشتراك",
           "enrollmentTerminatedNoShow": "انتهى الاشتراك لغياب المعلم",
           "enrollmentRestored": "استُعيد الاشتراك",
-          "enrollmentSlotReleased": "تحرير موعد الاشتراك",
-          "enrollmentSlotHoldEnded": "انتهاء حجز موعد الاشتراك"
+          "enrollmentSlotReleased": "حُرّر موعد الاشتراك",
+          "enrollmentSlotHoldEnded": "انتهى حجز موعد الاشتراك"
         },
         "eventsTitle": "ما حدث للطلب",
         "footer": "لا توجد إجراءات مالية في لوحة الإدارة. إن قررت الإدارة تعويض الطالب يُنفَّذ ذلك خارج المنصة، وتظهر حالة الطلب «مُسترد» حين تُبلغ بها البوابة.",

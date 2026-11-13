@@ -556,7 +556,7 @@ describe('B42a Q-B2 (a): a teacher’s end and a held slot on the order’s hist
       async (t, locale) => {
         expect((await titles(t)).slice(-2)).toEqual(
           {
-            ar: ['تحرير موعد الاشتراك', 'انتهاء حجز موعد الاشتراك'],
+            ar: ['حُرّر موعد الاشتراك', 'انتهى حجز موعد الاشتراك'],
             en: ["The enrollment's slot was released", "The hold on the enrollment's slot ended"],
           }[locale],
         );
