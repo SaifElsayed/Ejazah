@@ -23,6 +23,7 @@ import {
   renderApp,
   type Translate,
 } from '../../test/app-harness';
+import { caseTitle, REASON } from './words';
 
 afterEach(() => setLocale('ar'));
 
@@ -41,7 +42,7 @@ const SESSION_2 = id(32);
 const REMEDY = id(41);
 const ADMIN = id(99);
 
-/** Every compensation reason of T004 and T064 and its words. */
+/** Every compensation reason of T004, T064 and T071 and its words. */
 const REASONS = [
   ['slot_unavailable', 'admin.cases.reason.slotUnavailable'],
   ['party_restricted', 'admin.cases.reason.partyRestricted'],
@@ -57,6 +58,7 @@ const REASONS = [
   ['makeup_refused', 'admin.cases.reason.makeupRefused'],
   ['admin_opened_for_student', 'admin.cases.reason.adminOpenedForStudent'],
   ['admin_opened_for_teacher', 'admin.cases.reason.adminOpenedForTeacher'],
+  ['teacher_suspended', 'admin.cases.reason.teacherSuspended'],
 ] as const satisfies readonly (readonly [string, MessageKey])[];
 
 /** The queue's first page, as the server orders it: the open `student_suspended` case first. */
@@ -711,5 +713,29 @@ describe('T058: RATE_LIMITED on /cases', () => {
     const panel = await panelOf();
     expect(await panel.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
     expect(panel.queryByText(ar('admin.common.loadError.text'))).toBeNull();
+  });
+});
+
+// B42a, Q-B2 (a) (the owner, 2026-11-13; the review session's wording): T071 made a teacher's
+// suspension pause the enrollment, with its own `teacher_suspended` case, so `teacher_ended` now
+// means only a revocation, a ban or a deletion. Each reason's words, in both languages.
+describe('B42a Q-B2 (a): a teacher’s suspension and a teacher’s end, in words', () => {
+  const words = (key: MessageKey | undefined) => ({
+    ar: key === undefined ? undefined : translate('ar', key),
+    en: key === undefined ? undefined : translate('en', key),
+  });
+
+  it('names a `teacher_suspended` case as an enrollment paused until the teacher returns', () => {
+    expect(words(caseTitle({ kind: 'compensation_case', reason: 'teacher_suspended' }))).toEqual({
+      ar: 'أُوقف المعلم، والاشتراك متوقف مؤقتًا حتى يعود',
+      en: 'The teacher was suspended; the enrollment is paused until they return',
+    });
+  });
+
+  it('names a `teacher_ended` case as a revocation, a ban or a deletion, never a suspension', () => {
+    expect(words(REASON.teacher_ended)).toEqual({
+      ar: 'سُحب اعتماد المعلم أو حُظر أو حُذف حسابه',
+      en: 'The teacher’s approval was revoked, or they were banned or their account deleted',
+    });
   });
 });

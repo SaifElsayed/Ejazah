@@ -88,6 +88,11 @@ function outcomeTitle(outcome: PaymentDetail['outcomes'][number], t: Translate):
       return t('admin.payments.detail.events.enrollmentTerminatedNoShow');
     case 'restored':
       return t('admin.payments.detail.events.enrollmentRestored');
+    // B42a, Q-B2 (a): T069's two outcomes, a held slot's release and a hold's end.
+    case 'slot_released':
+      return t('admin.payments.detail.events.enrollmentSlotReleased');
+    case 'slot_hold_ended':
+      return t('admin.payments.detail.events.enrollmentSlotHoldEnded');
   }
 }
 

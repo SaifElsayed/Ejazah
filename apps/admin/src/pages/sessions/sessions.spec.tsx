@@ -27,6 +27,8 @@ import {
   renderApp,
   type Translate,
 } from '../../test/app-harness';
+import type { MonitoredEvent } from './queries';
+import { CASE_REASON, eventWords } from './words';
 
 afterEach(() => {
   setLocale('ar');
@@ -999,5 +1001,80 @@ describe('T058: RATE_LIMITED on /sessions', () => {
     fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.restore.confirm') }));
     expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
     expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});
+
+// B42a, Q-B2 (a) (the owner, 2026-11-13; the review session's wording): T071 made a teacher's
+// suspension pause the enrollment, with its own `teacher_suspended` case, so `teacher_ended` and a
+// `cancelled` `teacher_suspended` now mean only a ban, a revocation or a deletion; T069 added two
+// timeline kinds, a held slot's release and a hold's end, told in the timeline's past tense.
+describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held slot, in words', () => {
+  const both = (key: MessageKey | undefined) => ({
+    ar: key === undefined ? undefined : translate('ar', key),
+    en: key === undefined ? undefined : translate('en', key),
+  });
+  const occurredAt = '2026-11-13T10:00:00.000Z';
+  const title = (event: MonitoredEvent, locale: 'ar' | 'en') =>
+    eventWords(
+      event,
+      new Map(),
+      (key, values) => translate(locale, key, values),
+      locale,
+      panelTimeZone(),
+    ).title;
+
+  it('names a `teacher_suspended` case as the teacher’s suspension, the enrollment paused', () => {
+    expect(both(CASE_REASON.teacher_suspended)).toEqual({
+      ar: 'إيقاف المعلم (الاشتراك متوقف مؤقتًا)',
+      en: 'The teacher suspended (the enrollment paused)',
+    });
+  });
+
+  it('names a `teacher_ended` case as a ban, a revocation or a deletion, never a suspension', () => {
+    expect(both(CASE_REASON.teacher_ended)).toEqual({
+      ar: 'حظر المعلم أو سحب اعتماده أو حذف حسابه',
+      en: 'The teacher banned, their approval revoked or their account deleted',
+    });
+  });
+
+  it('tells a held slot’s release in the past tense', () => {
+    const event = { source: 'enrollment', kind: 'slot_released', occurredAt } as const;
+    expect({
+      ar: arCatalogue.admin.sessions.event.kind.slotReleased,
+      en: enCatalogue.admin.sessions.event.kind.slotReleased,
+    }).toEqual({ ar: 'حُرّر موعد الاشتراك', en: "The enrollment's slot was released" });
+    expect({ ar: title(event, 'ar'), en: title(event, 'en') }).toEqual({
+      ar: 'حُرّر موعد الاشتراك',
+      en: "The enrollment's slot was released",
+    });
+  });
+
+  it('tells a hold’s end in the past tense', () => {
+    const event = { source: 'enrollment', kind: 'slot_hold_ended', occurredAt } as const;
+    expect({
+      ar: arCatalogue.admin.sessions.event.kind.slotHoldEnded,
+      en: enCatalogue.admin.sessions.event.kind.slotHoldEnded,
+    }).toEqual({ ar: 'انتهى حجز موعد الاشتراك', en: "The hold on the enrollment's slot ended" });
+    expect({ ar: title(event, 'ar'), en: title(event, 'en') }).toEqual({
+      ar: 'انتهى حجز موعد الاشتراك',
+      en: "The hold on the enrollment's slot ended",
+    });
+  });
+
+  it('names a cancellation `teacher_suspended` as the teacher’s ban or revocation', () => {
+    const event = {
+      source: 'enrollment',
+      kind: 'cancelled',
+      cancellationReason: 'teacher_suspended',
+      occurredAt,
+    } as const;
+    for (const [locale, reason] of [
+      ['ar', 'حظر المعلم أو سحب اعتماده'],
+      ['en', 'Teacher banned or approval revoked'],
+    ] as const) {
+      expect(title(event, locale)).toBe(
+        translate(locale, 'admin.sessions.event.kind.cancelled', { reason }),
+      );
+    }
   });
 });

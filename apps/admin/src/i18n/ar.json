@@ -423,7 +423,8 @@
         "studentBanned": "حُظر الطالب",
         "studentFaultConfirmed": "ثبت خطأ الطالب الموقوف",
         "studentSuspended": "أُوقف الطالب، والقضية بانتظار المراجعة",
-        "teacherEnded": "أُوقف حساب المعلم أو سُحب اعتماده أو حُظر أو حُذف"
+        "teacherEnded": "سُحب اعتماد المعلم أو حُظر أو حُذف حسابه",
+        "teacherSuspended": "أُوقف المعلم، والاشتراك متوقف مؤقتًا حتى يعود"
       },
       "status": {
         "dismissed": "مرفوضة",
@@ -1841,7 +1842,9 @@
           "transaction": "رقم المعاملة {id}",
           "enrollmentCompleted": "اكتمل الاشتراك",
           "enrollmentTerminatedNoShow": "انتهى الاشتراك لغياب المعلم",
-          "enrollmentRestored": "استُعيد الاشتراك"
+          "enrollmentRestored": "استُعيد الاشتراك",
+          "enrollmentSlotReleased": "تحرير موعد الاشتراك",
+          "enrollmentSlotHoldEnded": "انتهاء حجز موعد الاشتراك"
         },
         "eventsTitle": "ما حدث للطلب",
         "footer": "لا توجد إجراءات مالية في لوحة الإدارة. إن قررت الإدارة تعويض الطالب يُنفَّذ ذلك خارج المنصة، وتظهر حالة الطلب «مُسترد» حين تُبلغ بها البوابة.",
@@ -1886,7 +1889,7 @@
         "paymentExpired": "انتهت مهلة الدفع",
         "paymentFailed": "فشل الدفع",
         "slotUnavailable": "تعذّر حجز الموعد بعد الدفع",
-        "teacherSuspended": "إيقاف المعلم"
+        "teacherSuspended": "حظر المعلم أو سحب اعتماده"
       },
       "enrollmentFilter": "طلبات اشتراك واحد",
       "holdReasons": {
@@ -2659,7 +2662,7 @@
         "duplicatePayment": "دفعة مكررة",
         "absenceTermination": "إنهاء الاشتراك لغياب المعلم",
         "adminCancellation": "إلغاء الإدارة جلسة",
-        "teacherEnded": "إيقاف المعلم أو إنهاء حسابه",
+        "teacherEnded": "حظر المعلم أو سحب اعتماده أو حذف حسابه",
         "studentSuspended": "إيقاف الطالب",
         "studentBanned": "حظر الطالب",
         "studentFaultConfirmed": "ثبوت خطأ الطالب الموقوف",
@@ -2667,7 +2670,8 @@
         "counterUnanswered": "لم يرد المعلم على اقتراح الطالب",
         "makeupRefused": "تعذّر حجز الجلسة التعويضية",
         "adminOpenedForStudent": "فتحتها الإدارة للطالب",
-        "adminOpenedForTeacher": "فتحتها الإدارة للمعلم"
+        "adminOpenedForTeacher": "فتحتها الإدارة للمعلم",
+        "teacherSuspended": "إيقاف المعلم (الاشتراك متوقف مؤقتًا)"
       },
       "caseStatus": {
         "open": "مفتوحة",
@@ -2709,7 +2713,9 @@
           "complaintDecided": "حُسمت الشكوى",
           "outcomeCorrected": "صُحّحت النتيجة",
           "instantsReresolved": "أُعيد حساب توقيت الجلسة",
-          "counterBookingRefused": "تعذّر حجز اقتراح الطالب فأُلغي الاقتراح"
+          "counterBookingRefused": "تعذّر حجز اقتراح الطالب فأُلغي الاقتراح",
+          "slotReleased": "حُرّر موعد الاشتراك",
+          "slotHoldEnded": "انتهى حجز موعد الاشتراك"
         }
       },
       "cancel": {

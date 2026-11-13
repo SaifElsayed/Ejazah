@@ -423,7 +423,8 @@
         "studentBanned": "The student was banned",
         "studentFaultConfirmed": "A suspended student’s fault confirmed",
         "studentSuspended": "The student was suspended; the case awaits review",
-        "teacherEnded": "The teacher’s account was suspended, revoked, banned or deleted"
+        "teacherEnded": "The teacher’s approval was revoked, or they were banned or their account deleted",
+        "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return"
       },
       "status": {
         "dismissed": "Dismissed",
@@ -1841,7 +1842,9 @@
           "transaction": "Transaction number {id}",
           "enrollmentCompleted": "The enrollment was completed",
           "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
-          "enrollmentRestored": "The enrollment was restored"
+          "enrollmentRestored": "The enrollment was restored",
+          "enrollmentSlotReleased": "The enrollment's slot was released",
+          "enrollmentSlotHoldEnded": "The hold on the enrollment's slot ended"
         },
         "eventsTitle": "What happened to the order",
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
@@ -1886,7 +1889,7 @@
         "paymentExpired": "Payment time ran out",
         "paymentFailed": "Payment failed",
         "slotUnavailable": "Slot unavailable after payment",
-        "teacherSuspended": "Teacher suspended"
+        "teacherSuspended": "Teacher banned or approval revoked"
       },
       "enrollmentFilter": "One enrollment's orders",
       "holdReasons": {
@@ -2659,7 +2662,7 @@
         "duplicatePayment": "Duplicate payment",
         "absenceTermination": "Enrollment ended for the teacher's absence",
         "adminCancellation": "A session cancelled by the administration",
-        "teacherEnded": "The teacher suspended or their account ended",
+        "teacherEnded": "The teacher banned, their approval revoked or their account deleted",
         "studentSuspended": "The student suspended",
         "studentBanned": "The student banned",
         "studentFaultConfirmed": "A suspended student's fault confirmed",
@@ -2667,7 +2670,8 @@
         "counterUnanswered": "The teacher did not answer the student's proposal",
         "makeupRefused": "The make-up session could not be booked",
         "adminOpenedForStudent": "Opened by the administration for the student",
-        "adminOpenedForTeacher": "Opened by the administration for the teacher"
+        "adminOpenedForTeacher": "Opened by the administration for the teacher",
+        "teacherSuspended": "The teacher suspended (the enrollment paused)"
       },
       "caseStatus": {
         "open": "Open",
@@ -2709,7 +2713,9 @@
           "complaintDecided": "The complaint was decided",
           "outcomeCorrected": "The outcome was corrected",
           "instantsReresolved": "The session's time was recomputed",
-          "counterBookingRefused": "The student's proposal could not be booked and was released"
+          "counterBookingRefused": "The student's proposal could not be booked and was released",
+          "slotReleased": "The enrollment's slot was released",
+          "slotHoldEnded": "The hold on the enrollment's slot ended"
         }
       },
       "cancel": {
