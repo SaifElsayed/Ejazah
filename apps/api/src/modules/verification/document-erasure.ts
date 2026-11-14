@@ -7,6 +7,12 @@
 //   every key, so a rolled-back deletion leaves the documents as they were and a committed one has
 //   already made them unreadable (`readDocument` answers an erased document as none). The rows
 //   stay: profiles and credentials point at them (ON DELETE RESTRICT).
+//   T076 of specs/004-sessions (FR-508; SRS FR-AUTH-14 as amended, DEC-67; the note under T076, N1,
+//   N2): for a teacher ever approved (`approved_at` set, read through identity's entry after
+//   `eraseAccount`, on the same transaction), every `national_id`, `passport` and `credential`
+//   document is marked `kept_at` instead, its key kept, and every other one erased; for anyone else
+//   every document is erased. A kept document is no erased one, so no file erasure below touches it,
+//   and every ordinary reader answers it as none (`readDocument`).
 // - AFTER THE COMMIT. `eraseFilesOf(userId)` removes each erased document's file through the storage
 //   port and clears its key only once the removal succeeded, where the row still holds the key whose
 //   file was removed. A removal that fails throws, so the deletion reports it; the key stays.
@@ -18,11 +24,12 @@
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database } from '../../platform/db/prisma.repository.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
-import type { AccountConsequence } from '../identity/index.js';
+import { type AccountConsequence, everApprovedTeacher } from '../identity/index.js';
 import {
   DOCUMENT_STORAGE_KEY_COLUMN,
   type ErasedDocumentRow,
   markDocumentsErased,
+  markDocumentsKept,
   VerificationRepository,
 } from './verification.repository.js';
 
@@ -37,7 +44,9 @@ export interface ErasedFile {
 export function documentErasureConsequence(now: () => Date = () => new Date()): AccountConsequence {
   return async (tx, userId, cause) => {
     if (cause !== 'account_deleted') return;
-    await markDocumentsErased(tx, userId, now());
+    const at = now();
+    if (await everApprovedTeacher(tx, userId)) await markDocumentsKept(tx, userId, at);
+    await markDocumentsErased(tx, userId, at);
   };
 }
 

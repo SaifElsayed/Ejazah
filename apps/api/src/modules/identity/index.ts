@@ -3,6 +3,7 @@ import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryp
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { LiveBus } from '../../platform/live/live-bus.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
@@ -104,6 +105,13 @@ export interface IdentityServices {
   >;
 }
 
+/** T077: the logger's `info`, where the log handed in has one. */
+function infoLogOf(log: WarningLog): { readonly log?: Pick<Logger, 'info'> } {
+  return 'info' in log && typeof log.info === 'function'
+    ? { log: log as WarningLog & Pick<Logger, 'info'> }
+    : {};
+}
+
 /** What the module's services are built over, bound once by `main.ts`. */
 export interface IdentityServiceDependencies extends IdentityDependencies {
   /**
@@ -167,7 +175,9 @@ export function createIdentityServices({
     emailAuth: new EmailAuthService({ ...base, codes, onboarding, sessions }),
     onboarding,
     account: new AccountService({ ...base, storage }),
-    payout: new PayoutService({ ...base, payment, idempotency }),
+    // T077 of specs/004-sessions (Q-E (a)): the registration's `payout_kept_match` line, where the
+    // logger handed in answers `info` (the process's does; a spec's warning log may not).
+    payout: new PayoutService({ ...base, payment, idempotency, ...infoLogOf(log) }),
     deletion: new DeletionService({
       ...base,
       cipher,
@@ -286,6 +296,26 @@ export { studentsRouter } from './students.router.js';
 
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
+
+/**
+ * T076 of specs/004-sessions (FR-508): whether a teacher was ever approved, read by verification's
+ * `documentErasureConsequence` on the deletion's transaction (R-121).
+ */
+export { everApprovedTeacher } from './identity.repository.js';
+
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, Q-R3 (a)): a deleted
+ * teacher's kept profile, read, dated and erased by verification's kept-data service and the
+ * `erase-kept-data` sweep on their transaction (R-121), and the payout match `users.get` answers.
+ */
+export {
+  eraseKeptProfile,
+  type KeptProfile,
+  keptProfileOf,
+  keptProfilesDue,
+  setKeptEraseDate,
+} from './identity.repository.js';
+export { payoutKeptOnDeletedTeacher } from './payout.repository.js';
 
 /** The administrator's invite mail, which the admin module sends through its job (T066, R-110). */
 export { renderAdminInviteMail } from './mail/admin-invite-mail.js';

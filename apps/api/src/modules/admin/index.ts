@@ -85,6 +85,8 @@ import {
   type UserDirectory,
   type VerificationRequestService,
 } from '../verification/index.js';
+// T077 of specs/004-sessions: an administrator's control of a deleted teacher's kept data.
+import { createKeptData, type KeptData } from '../verification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -149,7 +151,13 @@ export interface AdminServices {
     // T072 of specs/004-sessions: a teacher's or an applicant's ban lifted, and a revocation,
     // keyed (`teachers.liftBan`, `teachers.liftRevocation`).
     | 'keyedLift'
-  >;
+  > & {
+    /**
+     * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; Q-R3 (a)): `teachers.keptData.*`,
+     * verification's kept-data service, keyed on the call's transaction (`runOn`).
+     */
+    readonly keptData: Pick<KeptData, 'documentLink' | 'setEraseDate' | 'eraseNow'>;
+  };
   /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
   readonly students: Pick<
     StandingService,
@@ -336,7 +344,21 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     }),
     credentials: createCredentialReviewService(dependencies),
     ...createVerificationAdminServices({ ...dependencies, standing }),
-    teachers: standing,
+    // T077 of specs/004-sessions (Q-R3 (a)): the standing's actions beside the kept data's three.
+    teachers: {
+      suspend: standing.suspend.bind(standing),
+      revokeApproval: standing.revokeApproval.bind(standing),
+      ban: standing.ban.bind(standing),
+      reinstate: standing.reinstate.bind(standing),
+      keyedLift: standing.keyedLift.bind(standing),
+      keptData: createKeptData({
+        storage: dependencies.storage,
+        cipher: dependencies.cipher,
+        settings: dependencies.settings,
+        log: dependencies.log,
+        idempotency: dependencies.idempotency,
+      }),
+    },
     students: standing,
     payments: createPaymentsMonitorService(dependencies),
     outages: createOutageServices({

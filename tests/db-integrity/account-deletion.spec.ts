@@ -11,12 +11,17 @@
 // - The photo follows the same rule through the identity module's store: a deleted person's photo
 //   key is held until its file is gone.
 // - The documents sweep (T093) passes over a row whose key is already gone.
+// - T076 of specs/004-sessions (PR #137's follow-up 5 under T058): a deleted account's whole record
+//   through `users.get`, over the real tables: no name, no address, no minor flag once the date of
+//   birth is erased, a teacher's bio and qualification summary erased.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
+import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
+import { createBanLift } from '../../apps/api/src/modules/sessions/index.js';
 import {
   AccountConsequences,
   createErasedPhotos,
@@ -25,6 +30,7 @@ import {
 import {
   createDocumentErasure,
   createUnreferencedDocuments,
+  createUserDirectory,
   documentErasureConsequence,
   VerificationService,
 } from '../../apps/api/src/modules/verification/index.js';
@@ -321,4 +327,97 @@ describe("a deleted person's photo", () => {
     const pending = await photos.pendingPage(undefined, 1000);
     expect(pending.map(({ id }) => id)).not.toContain(userId);
   });
+});
+
+/** T076 (follow-up 5): what `users.get` reads besides the person. */
+const DIRECTORY_SETTINGS: Readonly<Record<string, number>> = {
+  admin_list_page_size: 20,
+  repeated_absence_flag_count: 5,
+  cancellation_requests_recent_days: 30,
+  ban_restore_window_days: 14,
+};
+const directorySettings: SettingsReader = {
+  read: async (key, schema) => {
+    if (!Object.hasOwn(DIRECTORY_SETTINGS, key)) throw new SettingError(key, 'missing');
+    return schema.parse(DIRECTORY_SETTINGS[key]);
+  },
+};
+
+function userDirectory() {
+  const enrollments = createEnrollmentSide({ settings: directorySettings });
+  return createUserDirectory({
+    database,
+    settings: directorySettings,
+    enrollments,
+    log: { info: () => undefined },
+    slotHeldUntilOf: createBanLift({
+      enrollments,
+      restore: {
+        restoreClosed: async () => {
+          throw new Error('not used by the directory');
+        },
+      },
+      settings: directorySettings,
+      log: { info: () => undefined, warn: () => undefined },
+    }).slotHeldUntilOf,
+  });
+}
+
+const recordOf = (userId: string) =>
+  database.$transaction((tx) => userDirectory().get(tx, randomUUID(), { targetUserId: userId }));
+
+describe("a deleted account's whole record through users.get (T076; T058's follow-up 5)", () => {
+  it('a deleted student: no name, no address, not a minor once the date of birth is erased', async () => {
+    const userId = await makeUser(db, {
+      password_hash: await hashPassword(PASSWORD),
+      // A minor while live: only the erased date of birth makes the record say otherwise.
+      date_of_birth: '2016-01-01',
+      gender: 'female',
+    });
+    await insertRow(db, 'user_roles', { user_id: userId, role: 'student', status: 'active' });
+    await remove(userId);
+    expect(await recordOf(userId)).toEqual({
+      userId,
+      profile: { displayName: null, email: null, joinedAt: expect.any(String), deleted: true },
+      role: 'student',
+      gender: 'female',
+      isMinor: false,
+      verificationStatus: null,
+      accountStatus: 'active',
+      cancellationRequests: { total: 0, recent: 0 },
+      enrollmentsSlotHeldUntil: null,
+      banRestoreWindowDays: 14,
+    });
+  });
+
+  it.each([
+    ['never approved', null],
+    ['ever approved', '2026-11-01T09:00:00Z'],
+  ])(
+    'a deleted teacher %s: no name, no address, the bio and the qualification summary erased',
+    async (_label, approvedAt) => {
+      const userId = await makeUser(db, { password_hash: await hashPassword(PASSWORD) });
+      await insertRow(db, 'user_roles', { user_id: userId, role: 'teacher', status: 'active' });
+      await insertRow(db, 'teacher_profiles', {
+        user_id: userId,
+        bio: 'سيرة المعلّم',
+        qualification_summary: 'إجازة في حفص',
+        verification_status: approvedAt === null ? 'pending' : 'approved',
+        ...(approvedAt === null ? {} : { approved_at: approvedAt }),
+      });
+      await remove(userId);
+      expect(await recordOf(userId)).toMatchObject({
+        userId,
+        profile: {
+          displayName: null,
+          email: null,
+          deleted: true,
+          teacher: { bio: '', qualification: '' },
+        },
+        role: 'teacher',
+        isMinor: false,
+        verificationStatus: approvedAt === null ? 'pending' : 'approved',
+      });
+    },
+  );
 });

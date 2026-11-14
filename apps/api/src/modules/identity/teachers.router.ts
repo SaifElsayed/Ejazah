@@ -11,7 +11,25 @@
 // names the only id of its lines; a second deadlock `CONFLICT` `restore_failed`). Audited on the
 // person on its first run only, with the reason, the standing before and after, and each
 // enrollment's result; a replay records none (`ctx.audit.replayed()`).
-import { banLiftOutput, teachersActionInput, teachersLiftInput } from '@ijazah/contracts/admin';
+//
+// T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, Q-R3 (a)):
+// `teachers.keptData.*`, an administrator's control of a deleted teacher's kept data, served by
+// verification's kept-data service (composed into the surface's `teachers` by the admin module).
+// Each declares its own limit (T069's keys), the administrator as subject, checked before the
+// transaction opens. `documentLink` is audited `kept_document.view` on the document with the reason
+// (and the teacher in `after`); `setEraseDate` `teacher.kept_data.erase_date_set` (a date set or
+// changed) or `.erase_date_cleared` on the person, the date before and after; `eraseNow` ⚠️ final
+// `teacher.kept_data.erased` on the person, what it erased in `after` (a count and whether a payout
+// reference went, never a value). The two writes are keyed through `runOn`; a replay records none.
+import {
+  banLiftOutput,
+  teachersActionInput,
+  teachersKeptDocumentLinkInput,
+  teachersKeptDocumentLinkOutput,
+  teachersKeptEraseDateInput,
+  teachersKeptEraseNowInput,
+  teachersLiftInput,
+} from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -181,5 +199,78 @@ export const teachersRouter = createAdminRouter({
       after: { ...move.after, enrollments: answer.enrollments },
     });
     return answer;
+  }),
+
+  // T077 of specs/004-sessions (this file's head).
+  keptData: createAdminRouter({
+    documentLink: adminProcedure({
+      input: teachersKeptDocumentLinkInput,
+      output: teachersKeptDocumentLinkOutput,
+      rateLimit: { key: 'rate_limit_kept_document_link', subject: 'caller' },
+    }).mutation(async ({ ctx, input }) => {
+      const link = await ctx.services.teachers.keptData.documentLink(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      ctx.audit.record({
+        action: 'kept_document.view',
+        targetType: 'document',
+        targetId: input.documentId,
+        reason: input.reason,
+        after: { teacherUserId: input.teacherUserId },
+      });
+      return link;
+    }),
+
+    setEraseDate: adminProcedure({
+      input: teachersKeptEraseDateInput,
+      output: z.void(),
+      rateLimit: { key: 'rate_limit_kept_data_erase_date', subject: 'caller' },
+    }).mutation(async ({ ctx, input }) => {
+      const { before, after, replayed } = await ctx.services.teachers.keptData.setEraseDate(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      if (replayed) {
+        ctx.audit.replayed();
+        return;
+      }
+      ctx.audit.record({
+        action:
+          input.eraseAt === null
+            ? 'teacher.kept_data.erase_date_cleared'
+            : 'teacher.kept_data.erase_date_set',
+        targetType: 'user',
+        targetId: input.teacherUserId,
+        reason: input.reason,
+        before: { eraseAt: before },
+        after: { eraseAt: after },
+      });
+    }),
+
+    eraseNow: adminProcedure({
+      input: teachersKeptEraseNowInput,
+      output: z.void(),
+      rateLimit: { key: 'rate_limit_kept_data_erase_now', subject: 'caller' },
+    }).mutation(async ({ ctx, input }) => {
+      const { documents, payout, replayed } = await ctx.services.teachers.keptData.eraseNow(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      if (replayed) {
+        ctx.audit.replayed();
+        return;
+      }
+      ctx.audit.record({
+        action: 'teacher.kept_data.erased',
+        targetType: 'user',
+        targetId: input.teacherUserId,
+        reason: input.reason,
+        after: { documents, payout },
+      });
+    }),
   }),
 });

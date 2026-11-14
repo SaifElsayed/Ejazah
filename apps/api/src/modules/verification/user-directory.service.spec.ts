@@ -77,14 +77,32 @@ const MARKED: MarkedEnrollment[] = [
   },
 ];
 
+/** T077: a deleted teacher's kept data, as the kept-data reads answer it. */
+const KEPT_DATA = {
+  documents: [
+    {
+      id: '0199d0a0-0000-7000-8000-0000000000d1',
+      kind: 'national_id' as const,
+      uploadedAt: '2026-10-01T08:00:00.000Z',
+    },
+  ],
+  payoutKept: true,
+  eraseAt: null,
+  erasedAt: null,
+};
+
 function world({
   records = [TEACHER_ROW, STUDENT_ROW],
   heldUntil = new Map<string, Date>(),
+  payoutKept = new Set<string>(),
 }: {
   records?: UserRecordRow[];
   /** T072: the hold's end of each account's ban or revocation closings, sessions' read. */
   heldUntil?: Map<string, Date>;
+  /** T077: the live teachers whose payout account a deleted teacher's kept profile holds. */
+  payoutKept?: Set<string>;
 } = {}) {
+  const keptAsked: string[] = [];
   const pages: [string | undefined, number][] = [];
   const matched: string[][] = [];
   const settingsRead: string[] = [];
@@ -139,8 +157,19 @@ function world({
     clock: async () => NOW,
     // T072 (Q9 (a)): sessions' `slotHeldUntilOf`.
     held: { slotHeldUntilOf: async (_tx, userId) => heldUntil.get(userId) ?? null },
+    // T077 (N3): the kept-data reads.
+    kept: {
+      keptDataOf: async (_tx, userId) => {
+        keptAsked.push(`kept ${userId}`);
+        return KEPT_DATA;
+      },
+      payoutKeptOnDeletedTeacher: async (_tx, userId) => {
+        keptAsked.push(`payout ${userId}`);
+        return payoutKept.has(userId);
+      },
+    },
   });
-  return { directory, pages, matched, settingsRead, marksAsked, countsAsked, lines };
+  return { directory, pages, matched, settingsRead, marksAsked, countsAsked, lines, keptAsked };
 }
 
 const item = (user: DirectoryUser) => ({
@@ -227,6 +256,8 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
       ],
       enrollmentsSlotHeldUntil: null,
       banRestoreWindowDays: BAN_WINDOW_DAYS,
+      // T077 (rule d): a live teacher's payout match, additive.
+      payoutKeptOnDeletedTeacher: false,
     });
     expect(marksAsked).toEqual([TEACHER]);
     expect(countsAsked).toEqual([TEACHER]);
@@ -300,5 +331,46 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
     ]);
     expect(countsAsked).toEqual([]);
     expect(marksAsked).toEqual([]);
+  });
+});
+
+// T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, N3): `users.get` answers a
+// deleted teacher's kept data and a live teacher's payout match, both optional and additive; a
+// student answers neither, and neither read is asked for one.
+describe('users.get: the kept data (T077)', () => {
+  const DELETED_TEACHER: UserRecordRow = {
+    ...TEACHER_ROW,
+    displayName: null,
+    email: null,
+    deleted: true,
+    dateOfBirth: null,
+    teacherProfile: { bio: '', qualification: '', verificationStatus: 'approved' },
+  };
+
+  it("answers a deleted teacher's kept data, and no payout match", async () => {
+    const { directory, keptAsked } = world({ records: [DELETED_TEACHER] });
+    const record = await directory.get(tx, ADMIN, { targetUserId: TEACHER });
+    expect(record.keptData).toEqual(KEPT_DATA);
+    expect(record).not.toHaveProperty('payoutKeptOnDeletedTeacher');
+    expect(keptAsked).toEqual([`kept ${TEACHER}`]);
+  });
+
+  it("answers a live teacher's payout match, and no kept data", async () => {
+    const { directory, keptAsked } = world({ payoutKept: new Set([TEACHER]) });
+    const record = await directory.get(tx, ADMIN, { targetUserId: TEACHER });
+    expect(record.payoutKeptOnDeletedTeacher).toBe(true);
+    expect(record).not.toHaveProperty('keptData');
+    expect(keptAsked).toEqual([`payout ${TEACHER}`]);
+  });
+
+  it('answers a student, live or deleted, neither', async () => {
+    const deletedStudent = { ...STUDENT_ROW, deleted: true, displayName: null };
+    for (const records of [[STUDENT_ROW], [deletedStudent]]) {
+      const { directory, keptAsked } = world({ records });
+      const record = await directory.get(tx, ADMIN, { targetUserId: STUDENT });
+      expect(record).not.toHaveProperty('keptData');
+      expect(record).not.toHaveProperty('payoutKeptOnDeletedTeacher');
+      expect(keptAsked).toEqual([]);
+    }
   });
 });

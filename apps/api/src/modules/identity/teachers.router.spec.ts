@@ -408,3 +408,244 @@ describe('T072: the lifts', () => {
     },
   );
 });
+
+// T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, Q-R3 (a), Q-R5 (a)):
+// `teachers.keptData.documentLink`, `.setEraseDate` and `.eraseNow` as they are served, over a
+// recorded kept-data service. Each is the administrator kind with its own limit (T069's keys,
+// `subject: 'caller'`) checked before the transaction opens; the link is audited
+// `kept_document.view` on the document with the reason; the date `teacher.kept_data.erase_date_set`
+// or `.erase_date_cleared` on the person with the date before and after; the erasure
+// `teacher.kept_data.erased` on the person with what it erased; a keyed replay records no second
+// entry; a refusal keeps none. What each does is `verification/kept-data.service.spec.ts`'.
+describe('T077: teachers.keptData', () => {
+  const DOCUMENT = '0199d0a0-0000-7000-8000-0000000000d1';
+  const KEY = 'kept-data-attempt-000001';
+  const KEPT_REASON = 'شكوى احتيال موثّقة';
+  const LINK = { url: 'https://storage.invalid/k', expiresAt: '2026-11-14T10:05:00Z' };
+
+  type Answer = (procedure: string, input: unknown) => unknown;
+  type KeptCaller = {
+    teachers: { keptData: Record<string, (input: unknown) => Promise<unknown>> };
+  };
+
+  function keptSurface(answer: Answer) {
+    const reached: unknown[][] = [];
+    const recorded =
+      (procedure: string) =>
+      async (_tx: unknown, adminId: string, input: unknown): Promise<unknown> => {
+        reached.push([procedure, adminId, input]);
+        const outcome = answer(procedure, input);
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      };
+    const keptData = {
+      documentLink: recorded('documentLink'),
+      setEraseDate: recorded('setEraseDate'),
+      eraseNow: recorded('eraseNow'),
+    };
+    const contexts = adminContextsOver({ teachers: { keptData } as never });
+    return {
+      reached,
+      written: contexts.written,
+      as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+        callerFor(contexts.contextFor(session)) as unknown as KeptCaller,
+    };
+  }
+
+  const SET_AT = '2026-12-20T08:00:00.000Z';
+  const ANSWERS: Answer = (procedure, input) =>
+    procedure === 'documentLink'
+      ? LINK
+      : procedure === 'setEraseDate'
+        ? {
+            before: '2026-12-01T08:00:00.000Z',
+            // The service answers the instant it resolved (Q-K1 (a)).
+            after: (input as { eraseAt: object | null }).eraseAt === null ? null : SET_AT,
+            replayed: false,
+          }
+        : { documents: 2, payout: true, replayed: false };
+
+  it('documentLink answers one link, audited kept_document.view on the document with the reason', async () => {
+    const { as, written, reached } = keptSurface(ANSWERS);
+    const input = { teacherUserId: TEACHER, documentId: DOCUMENT, reason: KEPT_REASON };
+    expect(await as(VERIFIED).teachers.keptData['documentLink']?.(input)).toEqual(LINK);
+    expect(reached).toEqual([['documentLink', SPEC_ADMIN, input]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'kept_document.view',
+        targetType: 'document',
+        targetId: DOCUMENT,
+        reason: KEPT_REASON,
+        after: { teacherUserId: TEACHER },
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      'a wall clock',
+      'teacher.kept_data.erase_date_set',
+      { localDate: '2026-12-20', localTime: '10:00', timezone: 'Africa/Cairo' },
+      SET_AT,
+    ],
+    ['null', 'teacher.kept_data.erase_date_cleared', null, null],
+  ] as const)(
+    'setEraseDate to %s audits %s on the person with the instant before and after',
+    async (_name, action, eraseAt, after) => {
+      const { as, written } = keptSurface(ANSWERS);
+      await as(VERIFIED).teachers.keptData['setEraseDate']?.({
+        teacherUserId: TEACHER,
+        eraseAt,
+        reason: KEPT_REASON,
+        idempotencyKey: KEY,
+      });
+      expect(written).toEqual([
+        {
+          adminId: SPEC_ADMIN,
+          action,
+          targetType: 'user',
+          targetId: TEACHER,
+          reason: KEPT_REASON,
+          before: { eraseAt: '2026-12-01T08:00:00.000Z' },
+          after: { eraseAt: after },
+        },
+      ]);
+    },
+  );
+
+  it('eraseNow audits teacher.kept_data.erased on the person with what it erased', async () => {
+    const { as, written } = keptSurface(ANSWERS);
+    await as(VERIFIED).teachers.keptData['eraseNow']?.({
+      teacherUserId: TEACHER,
+      reason: KEPT_REASON,
+      idempotencyKey: KEY,
+    });
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'teacher.kept_data.erased',
+        targetType: 'user',
+        targetId: TEACHER,
+        reason: KEPT_REASON,
+        after: { documents: 2, payout: true },
+      },
+    ]);
+  });
+
+  it.each(['setEraseDate', 'eraseNow'])(
+    '%s records no second entry for a replay',
+    async (procedure) => {
+      const { as, written } = keptSurface((name, input) => ({
+        ...(ANSWERS(name, input) as object),
+        replayed: true,
+      }));
+      await as(VERIFIED).teachers.keptData[procedure]?.({
+        teacherUserId: TEACHER,
+        ...(procedure === 'setEraseDate' ? { eraseAt: null } : {}),
+        reason: KEPT_REASON,
+        idempotencyKey: KEY,
+      });
+      expect(written).toEqual([]);
+    },
+  );
+
+  const INPUTS = {
+    documentLink: { teacherUserId: TEACHER, documentId: DOCUMENT, reason: KEPT_REASON },
+    setEraseDate: {
+      teacherUserId: TEACHER,
+      eraseAt: null,
+      reason: KEPT_REASON,
+      idempotencyKey: KEY,
+    },
+    eraseNow: { teacherUserId: TEACHER, reason: KEPT_REASON, idempotencyKey: KEY },
+  } as const;
+  const PROCEDURES = ['documentLink', 'setEraseDate', 'eraseNow'] as const;
+
+  it.each(PROCEDURES)(
+    '%s refuses an anonymous caller and a blank reason, and keeps no entry for the service refusal',
+    async (procedure) => {
+      const refusal = new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'already_erased' }],
+      });
+      const { as, written, reached } = keptSurface(() => refusal);
+      const call = (caller: KeptCaller, input: unknown) =>
+        caller.teachers.keptData[procedure]?.(input) ?? Promise.resolve();
+      expect(await codeOf(call(as(null), INPUTS[procedure]))).toBe('UNAUTHENTICATED');
+      expect(await codeOf(call(as(VERIFIED), { ...INPUTS[procedure], reason: ' ' }))).toBe(
+        'VALIDATION_FAILED',
+      );
+      expect(reached).toEqual([]);
+      expect(await codeOf(call(as(VERIFIED), INPUTS[procedure]))).toBe('CONFLICT');
+      expect(written).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['documentLink', 'rate_limit_kept_document_link'],
+    ['setEraseDate', 'rate_limit_kept_data_erase_date'],
+    ['eraseNow', 'rate_limit_kept_data_erase_now'],
+  ] as const)(
+    '%s refuses a call over %s RATE_LIMITED before the transaction opens',
+    async (procedure, key) => {
+      const keysRead: string[] = [];
+      const counts = new Map<string, number>();
+      const rateLimiter = new RateLimiter({
+        settings: {
+          read: async (read, schema) => {
+            keysRead.push(read);
+            return schema.parse({ limit: 1, window_seconds: 60 });
+          },
+        },
+        counter: {
+          hit: async (counted) => {
+            const count = (counts.get(counted) ?? 0) + 1;
+            counts.set(counted, count);
+            return count;
+          },
+        },
+        subjectKey: Buffer.alloc(32, 3),
+      });
+      let transactions = 0;
+      const reached: string[] = [];
+      const answering = (name: string, outcome: unknown) => async (): Promise<unknown> => {
+        reached.push(name);
+        return outcome;
+      };
+      const keptData = {
+        documentLink: answering('documentLink', LINK),
+        setEraseDate: answering('setEraseDate', { before: null, after: null, replayed: false }),
+        eraseNow: answering('eraseNow', { documents: 0, payout: false, replayed: false }),
+      };
+      const context = () =>
+        createAdminContext({
+          session: VERIFIED,
+          log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+          administration: {
+            transactions: {
+              run: async <T>(work: (tx: Transaction) => Promise<T>): Promise<T> => {
+                transactions += 1;
+                return work({} as Transaction);
+              },
+            },
+            auditWriter: { write: async () => undefined },
+          },
+          services: new Proxy(unusedAdminServices, {
+            get: (target, name, receiver) =>
+              name === 'teachers' ? { keptData } : Reflect.get(target, name, receiver),
+          }),
+          rateLimiter,
+          clientAddress: '203.0.113.9',
+        });
+      const callOnce = () =>
+        (callerFor(context()) as unknown as KeptCaller).teachers.keptData[procedure]?.(
+          INPUTS[procedure],
+        ) ?? Promise.resolve();
+      await callOnce();
+      expect(await codeOf(callOnce())).toBe('RATE_LIMITED');
+      expect(keysRead).toContain(key);
+      expect(transactions).toBe(1);
+      expect(reached).toEqual([procedure]);
+    },
+  );
+});

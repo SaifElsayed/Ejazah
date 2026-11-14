@@ -19,7 +19,9 @@
 // rule 2's place (B29's conflict check, the owner's decision of 2026-11-03). Phase 3's T002
 // (`specs/004-sessions/contracts/kernel.md`, "Locks and refusals") adds `sessions`,
 // `session_remedies`, `cancellation_requests` and `disputes`, in data-model.md §5's one order, and
-// `keyShareRows`, the `FOR KEY SHARE` a foreign key's check would take, taken first.
+// `keyShareRows`, the `FOR KEY SHARE` a foreign key's check would take, taken first. T077 of
+// specs/004-sessions (Q-R4 (a)) adds `verification_documents` after `teacher_profiles`: an
+// administrator's action on a deleted teacher's kept data takes the profile, then its kept documents.
 //
 // THE TWO RULES OF PHASE 2 (the owner's decision of 2026-11-01, the note under T005). The lock stays
 // FOR UPDATE.
@@ -31,9 +33,10 @@
 // waits on its key-share check), since the waiting path then goes on with what it read before the
 // lock.
 //
-// (2) One lock order. `users`, then `teacher_profiles`, then the slot (`availability_slots`, or
-// `lockKey('teacher-slots', …)`), then the hold, the enrollment, and Phase 3's `sessions`,
-// `session_remedies`, `cancellation_requests` and `disputes`, then the payment. A path that inserts
+// (2) One lock order. `users`, then `teacher_profiles` (then, T077, `verification_documents`),
+// then the slot (`availability_slots`, or `lockKey('teacher-slots', …)`), then the hold, the
+// enrollment, and Phase 3's `sessions`, `session_remedies`, `cancellation_requests` and
+// `disputes`, then the payment. A path that inserts
 // a row referencing `users` (a hold, an enrollment) locks that account with identity's
 // `lockAccount` first; a row referencing several accounts (an enrollment: the student and the
 // teacher) locks every one of them first, in id order, in one `lockRows(tx, 'users', ids)` call.
@@ -64,6 +67,8 @@ import type { Transaction } from './prisma.repository.js';
 export type LockedTable =
   | 'users'
   | 'teacher_profiles'
+  // T077 of specs/004-sessions (Q-R4 (a)): a deleted teacher's kept documents, after the profile.
+  | 'verification_documents'
   | 'availability_slots'
   | 'slot_holds'
   | 'enrollments'
@@ -86,6 +91,9 @@ export async function lockRows(
       return;
     case 'teacher_profiles':
       await tx.$queryRaw`SELECT 1 FROM teacher_profiles WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'verification_documents':
+      await tx.$queryRaw`SELECT 1 FROM verification_documents WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       return;
     case 'availability_slots':
       await tx.$queryRaw`SELECT 1 FROM availability_slots WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
