@@ -77,6 +77,7 @@ function enrollment(of: Partial<TeacherStudentsGetOutput> = {}): TeacherStudents
     student: { displayName: 'يوسف أحمد', displayNameOrNull: 'يوسف أحمد', deleted: false },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 5, sessionDurationMinutes: 45 },
     status: 'confirmed',
+    paused: false,
     next: SESSIONS[0],
     last: SESSIONS[4],
     upcoming: 5,

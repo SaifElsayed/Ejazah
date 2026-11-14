@@ -67,6 +67,7 @@ function endedAs(status: EndedStatus, id = 'e1'): StudentEnrollmentItem {
       sessionDurationMinutes: 45,
     },
     status,
+    paused: false,
     upcoming: 0,
     completed: 3,
     remaining: 5,

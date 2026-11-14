@@ -13,6 +13,8 @@
 // Phase 3's parts are not drawn: the report, the no-show tile and banner, the
 // cancellation and every session's sub-line. 004:T044 (FR-495): a session owing a remedy says where
 // it stands under its row (`TeacherRemedyStatusLine`), the row its own (`session-rows.ts`).
+// 004:T074 (FR-506): a paused enrollment reads «متوقف مؤقتًا», with no reason, in place of its
+// status; the server answers it with no session, so none is drawn.
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -100,7 +102,11 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
               })}
             </Text>
           </View>
-          <EnrollmentBadges status={enrollment.status} track={enrollment.summary.track} />
+          <EnrollmentBadges
+            status={enrollment.status}
+            paused={enrollment.paused}
+            track={enrollment.summary.track}
+          />
         </View>
         <Stats
           tile

@@ -23,6 +23,15 @@ export const ENROLLMENT_STATUS: Readonly<
   cancelled: { label: 'status.enrollment.cancelled', tone: 'neutral' },
 };
 
+/**
+ * 004:T074 (FR-506): an enrollment the server answers `paused` reads «متوقف مؤقتًا» in place of its
+ * status's word, with no reason, whichever tab it sits in.
+ */
+export const PAUSED_ENROLLMENT: StatusBadge = {
+  label: 'status.enrollment.paused',
+  tone: 'warning',
+};
+
 export const SESSION_STATUS: Readonly<Record<SessionStatus, StatusBadge>> = {
   scheduled: { label: 'status.session.scheduled', tone: 'neutral' },
   done: { label: 'status.session.done', tone: 'success' },

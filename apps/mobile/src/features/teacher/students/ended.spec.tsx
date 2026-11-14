@@ -53,6 +53,7 @@ function endedAs(status: EndedStatus): TeacherStudentItem {
       sessionDurationMinutes: 45,
     },
     status,
+    paused: false,
     upcoming: 0,
     completed: 3,
     remaining: 5,

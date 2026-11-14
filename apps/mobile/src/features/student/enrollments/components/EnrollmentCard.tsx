@@ -14,7 +14,7 @@ import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
-import { ENROLLMENT_STATUS } from '../status';
+import { ENROLLMENT_STATUS, PAUSED_ENROLLMENT } from '../status';
 import { SessionWhen } from './SessionWhen';
 
 /** The active tab's statuses: an enrollment runs until its last session. */
@@ -60,12 +60,16 @@ export function PackageLine({ summary }: { readonly summary: StudentEnrollmentIt
  */
 export function EnrollmentStatusBadge({
   status,
+  paused,
   pending = null,
 }: {
   readonly status: StudentEnrollmentItem['status'];
+  /** 004:T074 (FR-506): «متوقف مؤقتًا» in place of the status's word. */
+  readonly paused: boolean;
   readonly pending?: ReactNode;
 }) {
   const t = useT();
+  if (paused) return <Badge label={t(PAUSED_ENROLLMENT.label)} tone={PAUSED_ENROLLMENT.tone} />;
   if (status === 'pending_payment') return pending;
   const badge = ENROLLMENT_STATUS[status];
   return <Badge label={t(badge.label)} tone={badge.tone} />;
@@ -124,7 +128,7 @@ export function EnrollmentCard({
         }}
       >
         <Text tone="muted">{completedOn ?? teacher}</Text>
-        <EnrollmentStatusBadge status={item.status} pending={pendingBadge} />
+        <EnrollmentStatusBadge status={item.status} paused={item.paused} pending={pendingBadge} />
       </View>
       {next === undefined ? null : (
         <View style={{ gap: tokens.space['1'] }}>

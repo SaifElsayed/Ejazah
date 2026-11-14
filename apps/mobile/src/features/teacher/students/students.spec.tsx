@@ -71,6 +71,7 @@ function item(
     enrollmentId: `0193a6f0-0000-7000-8000-0000000000${id}`,
     student: { displayName: student, displayNameOrNull: student, deleted: false },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
+    paused: false,
     upcoming: 5,
     completed: 3,
     remaining: 5,

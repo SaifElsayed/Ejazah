@@ -32,16 +32,27 @@ const SESSION: Readonly<Record<SessionStatus, { key: MessageKey; tone: StatusTon
   disputed: { key: 'status.session.disputed', tone: 'warning' },
 };
 
-/** The enrollment's status over its track, at the row's end. */
+/**
+ * 004:T074 (FR-506): an enrollment the server answers `paused` reads «متوقف مؤقتًا» in place of its
+ * status's word, with no reason, whichever tab it sits in.
+ */
+const PAUSED: { key: MessageKey; tone: StatusTone } = {
+  key: 'status.enrollment.paused',
+  tone: 'warning',
+};
+
+/** The enrollment's status, or «متوقف مؤقتًا» when paused, over its track, at the row's end. */
 export function EnrollmentBadges({
   status,
+  paused,
   track,
 }: {
   readonly status: EnrollmentStatus;
+  readonly paused: boolean;
   readonly track: PackageTrack;
 }) {
   const t = useT();
-  const { key, tone } = ENROLLMENT[status];
+  const { key, tone } = paused ? PAUSED : ENROLLMENT[status];
   return (
     <View style={{ alignItems: 'flex-end', gap: tokens.space['1'] }}>
       <Badge label={t(key)} tone={tone} />
