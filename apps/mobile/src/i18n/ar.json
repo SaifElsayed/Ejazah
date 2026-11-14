@@ -733,6 +733,7 @@
       "completed": "مكتمل",
       "confirmed": "جارٍ",
       "confirming": "قيد التأكيد",
+      "paused": "متوقف مؤقتًا",
       "pendingPayment": "بانتظار الدفع",
       "terminatedNoShow": "انتهى لغياب المعلم"
     },

@@ -58,6 +58,7 @@ const enrollment: TeacherStudentsGetOutput = {
     sessionDurationMinutes: 45,
   },
   status: 'confirmed',
+  paused: false,
   next: SESSIONS[0],
   last: SESSIONS[4],
   upcoming: 5,

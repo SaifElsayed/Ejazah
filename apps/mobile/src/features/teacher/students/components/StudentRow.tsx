@@ -65,7 +65,9 @@ export function StudentRow({
           )}
         </View>
       }
-      trailing={<EnrollmentBadges status={item.status} track={item.summary.track} />}
+      trailing={
+        <EnrollmentBadges status={item.status} paused={item.paused} track={item.summary.track} />
+      }
       onPress={onPress}
     />
   );

@@ -64,6 +64,7 @@ function detail(of: Partial<EnrollmentsGetOutput> = {}): EnrollmentsGetOutput {
       sessionDurationMinutes: 45,
     },
     status: 'confirmed',
+    paused: false,
     next: first,
     last: first,
     upcoming: 1,

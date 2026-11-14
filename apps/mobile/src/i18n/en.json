@@ -733,6 +733,7 @@
       "completed": "Completed",
       "confirmed": "Active",
       "confirming": "Confirming",
+      "paused": "Paused",
       "pendingPayment": "Awaiting payment",
       "terminatedNoShow": "Ended for teacher absence"
     },

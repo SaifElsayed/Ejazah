@@ -83,6 +83,7 @@ const ongoing: StudentEnrollmentItem = {
   },
   summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
   status: 'confirmed',
+  paused: false,
   next,
   last: { ...next, sequenceNumber: 8, localDate: '2026-12-31', startsAt: '2026-12-31T18:00:00Z' },
   upcoming: 6,
