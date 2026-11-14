@@ -17,6 +17,7 @@ import type { EnrollmentCase } from '../moderation/index.js';
 import { type BanLiftSide, type BanLiftStore, createBanLift } from './ban-lift.service.js';
 import type {
   EnrollmentEventEntry,
+  EnrollmentPageFilter,
   EnrollmentPageItem,
   EnrollmentTerms,
 } from './enrollment-side.port.js';
@@ -40,9 +41,14 @@ interface Row {
   events: EnrollmentEventEntry[];
   cases: EnrollmentCase[];
   sessions: RestoreSession[];
+  /** T074 FU4: `confirmed_at` set; false for a checkout abandoned before any payment. */
+  confirmed?: boolean;
 }
 
 let rows: Map<string, Row>;
+/** T074 FU4: each page's filter, and each read of the cases by the enrollments asked. */
+let pages: EnrollmentPageFilter[];
+let caseReads: (readonly string[])[];
 let genders: Map<string, 'male' | 'female'>;
 let journal: string[];
 let lines: { level: string; fields: Record<string, unknown> }[];
@@ -58,6 +64,9 @@ const banClosing = (n: number, teacher: string, extra: Partial<Row> = {}): Row =
     status: 'cancelled',
     track: 'recitation',
     sessionCount: 4,
+    // T074 FU4: the last cancellation's reason and the release, read from the columns.
+    cancellationReason: 'admin',
+    slotReleasedAt: null,
   },
   slotId: slotOf(n),
   events: [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: OPENED }],
@@ -79,7 +88,11 @@ const banClosing = (n: number, teacher: string, extra: Partial<Row> = {}): Row =
 
 const teacherClosing = (n: number, student: string): Row => ({
   ...banClosing(n, TEACHER_A),
-  item: { ...banClosing(n, TEACHER_A).item, studentUserId: student },
+  item: {
+    ...banClosing(n, TEACHER_A).item,
+    studentUserId: student,
+    cancellationReason: 'teacher_suspended',
+  },
   events: [{ kind: 'cancelled', cancellationReason: 'teacher_suspended', occurredAt: OPENED }],
   cases: [{ caseId: `case-${n}`, reason: 'teacher_ended', status: 'open', createdAt: OPENED }],
 });
@@ -95,6 +108,8 @@ beforeEach(() => {
   lines = [];
   refusals = new Map();
   closesUnderLock = undefined;
+  pages = [];
+  caseReads = [];
 });
 
 const plant = (...planted: Row[]) => {
@@ -107,7 +122,10 @@ const store: BanLiftStore = {
   lockSessions: async (_tx, ids) => void journal.push(`sessions:${ids.join(',')}`),
   lockRemedies: async (_tx, ids) => void journal.push(`remedies:${ids.join(',')}`),
   sessionsOf: async (_tx, id) => rows.get(id)?.sessions ?? [],
-  casesOf: async (_tx, id) => rows.get(id)?.cases ?? [],
+  casesAmong: async (_tx, ids) => {
+    caseReads.push(ids);
+    return new Map(ids.map((id) => [id, rows.get(id)?.cases ?? []]));
+  },
   partiesOf: async (_tx, ids) =>
     new Map(
       ids.map((id): [string, PartyStanding] => [
@@ -133,18 +151,22 @@ const afterWrite = new WeakSet<object>();
 function lift() {
   return createBanLift({
     enrollments: {
-      enrollmentPage: async (_tx, filter) => ({
-        items: [...rows.values()]
-          .map(({ item }) => item)
-          .filter(
-            (item) =>
-              item.status === filter.status &&
-              (filter.studentUserIds?.includes(item.studentUserId) ?? true) &&
-              (filter.teacherUserIds?.includes(item.teacherUserId) ?? true),
-          )
-          .sort((one, other) => (one.enrollmentId < other.enrollmentId ? 1 : -1)),
-      }),
-      eventsOf: async (_tx, id) => rows.get(id)?.events ?? [],
+      enrollmentPage: async (_tx, filter) => {
+        pages.push(filter);
+        return {
+          items: [...rows.values()]
+            .filter(
+              ({ item, confirmed }) =>
+                (filter.status === undefined || item.status === filter.status) &&
+                (filter.everConfirmed !== true || confirmed !== false) &&
+                (filter.enrollmentIds?.includes(item.enrollmentId) ?? true) &&
+                (filter.studentUserIds?.includes(item.studentUserId) ?? true) &&
+                (filter.teacherUserIds?.includes(item.teacherUserId) ?? true),
+            )
+            .map(({ item }) => item)
+            .sort((one, other) => (one.enrollmentId < other.enrollmentId ? 1 : -1)),
+        };
+      },
       enrollmentFor: async (_tx, id): Promise<EnrollmentTerms | null> => {
         const row = rows.get(id);
         if (row === undefined) return null;
@@ -250,6 +272,7 @@ describe('the closings a lift reads (the one closing rule)', () => {
   it('never a deletion’s closing, its teacher_ended case open', async () => {
     plant({
       ...teacherClosing(1, STUDENT),
+      item: { ...teacherClosing(1, STUDENT).item, cancellationReason: 'account_deleted' },
       events: [{ kind: 'cancelled', cancellationReason: 'account_deleted', occurredAt: OPENED }],
     });
     expect(await lift().counterpartiesOf(tx, TEACHER_A, 'teacher')).toEqual([]);
@@ -417,6 +440,7 @@ describe('slotHeldUntilOf: users.get’s enrollmentsSlotHeldUntil (Q9 (a))', () 
     plant(
       {
         ...banClosing(1, TEACHER_A),
+        item: { ...banClosing(1, TEACHER_A).item, slotReleasedAt: NOW },
         events: [
           { kind: 'cancelled', cancellationReason: 'admin', occurredAt: OPENED },
           { kind: 'slot_released', occurredAt: NOW },
@@ -431,5 +455,54 @@ describe('slotHeldUntilOf: users.get’s enrollmentsSlotHeldUntil (Q9 (a))', () 
     );
     expect(await lift().slotHeldUntilOf(tx, STUDENT)).toBeNull();
     expect(await lift().slotHeldUntilOf(tx, '0199d0a0-0000-7000-8000-00000000d0ff')).toBeNull();
+  });
+});
+
+// T074 FU4 (PR #139's review, round 1, follow-up 4; the note under T074, Q-O3 (a)): the closings are
+// read in pages of the enrollments confirmed at some point only (an abandoned or a failed checkout
+// is never one), each page's cases in one call of moderation's `compensationCasesAmong`, the last
+// cancellation's reason and the release from the enrollment's columns as `slotUses` reads them;
+// no enrollment's events read. The answers are unchanged.
+describe('the closings read in pages, the cases once per page (T074 FU4)', () => {
+  it('asks only the enrollments confirmed at some point; an abandoned checkout is never a closing', async () => {
+    plant(banClosing(1, TEACHER_A), {
+      ...banClosing(2, TEACHER_B),
+      confirmed: false,
+      item: { ...banClosing(2, TEACHER_B).item, cancellationReason: 'checkout_abandoned' },
+    });
+    expect(await lift().counterpartiesOf(tx, STUDENT, 'student')).toEqual([TEACHER_A]);
+    expect(pages).toEqual([
+      { status: 'cancelled', everConfirmed: true, studentUserIds: [STUDENT] },
+    ]);
+    expect(caseReads).toEqual([[eid(1)]]);
+  });
+
+  it('reads the cases of a page in one call, and the events of none', async () => {
+    plant(banClosing(1, TEACHER_A), banClosing(2, TEACHER_B), banClosing(3, TEACHER_A));
+    const counted = lift();
+    expect(await counted.counterpartiesOf(tx, STUDENT, 'student')).toEqual([TEACHER_A, TEACHER_B]);
+    expect(caseReads).toEqual([[eid(3), eid(2), eid(1)]]);
+    for (const row of rows.values()) row.events = [];
+    expect(await counted.slotHeldUntilOf(tx, STUDENT)).toEqual(new Date('2026-11-15T08:00:00Z'));
+  });
+
+  it('takes the last cancellation’s reason from the column: a ban’s closing with no event still read', async () => {
+    plant({ ...banClosing(1, TEACHER_A), events: [] });
+    expect(await lift().counterpartiesOf(tx, STUDENT, 'student')).toEqual([TEACHER_A]);
+  });
+
+  it('takes the release from slot_released_at: a released closing holds nothing, with or without its row', async () => {
+    plant({
+      ...banClosing(1, TEACHER_A),
+      item: { ...banClosing(1, TEACHER_A).item, slotReleasedAt: NOW },
+    });
+    expect(await lift().slotHeldUntilOf(tx, STUDENT)).toBeNull();
+  });
+
+  it('reads the closings again under the enrollments’ lock in one page of their ids and one read of their cases', async () => {
+    plant(banClosing(1, TEACHER_A), banClosing(2, TEACHER_B));
+    await restoredOf(STUDENT, 'student', [STUDENT, TEACHER_A, TEACHER_B].sort());
+    expect(pages.at(-1)).toEqual({ enrollmentIds: [eid(1), eid(2)] });
+    expect(caseReads.at(-1)).toEqual([eid(2), eid(1)]);
   });
 });

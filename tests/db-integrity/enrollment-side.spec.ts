@@ -351,6 +351,9 @@ describe('EnrollmentSide.enrollmentPage (T008, U3, R-API-6)', () => {
             status: 'confirmed',
             track: 'recitation',
             sessionCount: 4,
+            // T074 FU4 (rule d): the page's two new columns.
+            cancellationReason: null,
+            slotReleasedAt: null,
           },
         ],
       });

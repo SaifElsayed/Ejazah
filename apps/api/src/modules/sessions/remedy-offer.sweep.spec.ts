@@ -117,6 +117,8 @@ function advance() {
           status: 'confirmed' as const,
           track: 'recitation' as const,
           sessionCount: 4,
+          cancellationReason: null,
+          slotReleasedAt: null,
         }));
         const last = items.at(-1);
         return rest.length > items.length && last !== undefined
