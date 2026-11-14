@@ -42,7 +42,7 @@ const SESSION_2 = id(32);
 const REMEDY = id(41);
 const ADMIN = id(99);
 
-/** Every compensation reason of T004, T064 and T071 and its words. */
+/** Every compensation reason of T004, T064, T071 and T082 and its words. */
 const REASONS = [
   ['slot_unavailable', 'admin.cases.reason.slotUnavailable'],
   ['party_restricted', 'admin.cases.reason.partyRestricted'],
@@ -59,6 +59,8 @@ const REASONS = [
   ['admin_opened_for_student', 'admin.cases.reason.adminOpenedForStudent'],
   ['admin_opened_for_teacher', 'admin.cases.reason.adminOpenedForTeacher'],
   ['teacher_suspended', 'admin.cases.reason.teacherSuspended'],
+  // B42c, T083 (Q-R7 (a)): T082's case of an administrator's direct end.
+  ['admin_ended', 'admin.cases.reason.adminEnded'],
 ] as const satisfies readonly (readonly [string, MessageKey])[];
 
 /** The queue's first page, as the server orders it: the open `student_suspended` case first. */
@@ -736,6 +738,24 @@ describe('B42a Q-B2 (a): a teacher’s suspension and a teacher’s end, in word
     expect(words(REASON.teacher_ended)).toEqual({
       ar: 'سُحب اعتماد المعلم أو حُظر أو حُذف حسابه',
       en: 'The teacher’s approval was revoked, or they were banned or their account deleted',
+    });
+  });
+});
+
+// B42c, T083 of specs/004-sessions (Q-R7 (a)): T082 adds `admin_ended`, an administrator's direct
+// end of an enrollment (FR-513; SRS FR-CANCEL-10), to the closed list of case reasons.
+describe('T083: an administrator’s direct end, in words', () => {
+  it('names an `admin_ended` case as the administration ending the enrollment directly', () => {
+    const key: MessageKey | undefined = caseTitle({
+      kind: 'compensation_case',
+      reason: 'admin_ended',
+    });
+    expect({
+      ar: key === undefined ? undefined : translate('ar', key),
+      en: key === undefined ? undefined : translate('en', key),
+    }).toEqual({
+      ar: 'أنهت الإدارة الاشتراك مباشرة',
+      en: 'The administration ended the enrollment directly',
     });
   });
 });

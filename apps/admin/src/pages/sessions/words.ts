@@ -100,6 +100,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   admin_opened_for_teacher: 'admin.sessions.caseReason.adminOpenedForTeacher',
   // B42a, Q-B2 (a): T071's case of a teacher's suspension, which pauses the enrollment.
   teacher_suspended: 'admin.sessions.caseReason.teacherSuspended',
+  // B42c, T083 (Q-R7 (a)): T082's case of an administrator's direct end of the enrollment.
+  admin_ended: 'admin.sessions.caseReason.adminEnded',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {
@@ -293,6 +295,28 @@ export function releaseFailure(error: unknown): ErrorMessage {
     default:
       return errorMessageKey(error, 'admin.dialogs.submitError');
   }
+}
+
+/** A refused end's words, and the complaint `complaint_open` names, when it names one. */
+export interface EndFailure extends ErrorMessage {
+  readonly complaintId?: string;
+}
+
+/**
+ * B42c, T083 of specs/004-sessions (FR-513; SRS FR-CANCEL-10; T082's `sessions.endEnrollment`): the
+ * words of a refused end. `complaint_open` in plain words, naming the open complaint by its
+ * `caseId` detail (Q-R6 (a); T072's `restore_failed` naming its enrollment the precedent); every
+ * other failure, `enrollment_not_confirmed`, `NOT_FOUND` and `RATE_LIMITED` among them, through
+ * `errorMessageKey`.
+ */
+export function endFailure(error: unknown): EndFailure {
+  if (errorCodeOf(error) === 'CONFLICT' && detailOf(error, 'cause') === 'complaint_open') {
+    const complaintId = detailOf(error, 'caseId');
+    return complaintId === undefined
+      ? { key: 'admin.sessions.end.refused.complaintOpen' }
+      : { key: 'admin.sessions.end.refused.complaintOpen', complaintId };
+  }
+  return errorMessageKey(error, 'admin.dialogs.submitError');
 }
 
 /** The hold of a closed enrollment the monitor answered, for the restore's words. */

@@ -73,6 +73,14 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'student.ban_lifted': 'admin.audit.actions.studentBanLifted',
   'teacher.ban_lifted': 'admin.audit.actions.teacherBanLifted',
   'teacher.revocation_lifted': 'admin.audit.actions.teacherRevocationLifted',
+  // B42c, T083 of specs/004-sessions (Q-R7 (a)): T082's direct end, T077's kept document opened and
+  // its erase date set, cleared and carried out, and T081's deletion at the owner's request.
+  'enrollment.ended_by_admin': 'admin.audit.actions.enrollmentEndedByAdmin',
+  'kept_document.view': 'admin.audit.actions.keptDocumentView',
+  'teacher.kept_data.erase_date_set': 'admin.audit.actions.teacherKeptDataEraseDateSet',
+  'teacher.kept_data.erase_date_cleared': 'admin.audit.actions.teacherKeptDataEraseDateCleared',
+  'teacher.kept_data.erased': 'admin.audit.actions.teacherKeptDataErased',
+  'user.deleted_by_admin': 'admin.audit.actions.userDeletedByAdmin',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

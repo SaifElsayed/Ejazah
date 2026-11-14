@@ -454,6 +454,41 @@ describe('T075: the release’s and the lifts’ actions by name', () => {
   );
 });
 
+// B42c, T083 of specs/004-sessions (Q-R7 (a)): B42c's six new actions, T082's direct end, T077's
+// three on a deleted teacher's kept data and its document's opening, and T081's deletion at the
+// owner's request, named by the catalogue's text in Arabic and in English; admin-surface.md's rows
+// and count are the integration's.
+const B42C_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['enrollment.ended_by_admin', 'إنهاء اشتراك', 'End an enrollment'],
+  ['kept_document.view', 'عرض وثيقة محفوظة لمعلم محذوف', "View a deleted teacher's kept document"],
+  [
+    'teacher.kept_data.erase_date_set',
+    'تحديد موعد محو بيانات معلم محذوف',
+    "Set the erase date of a deleted teacher's kept data",
+  ],
+  [
+    'teacher.kept_data.erase_date_cleared',
+    'إلغاء موعد محو بيانات معلم محذوف',
+    "Clear the erase date of a deleted teacher's kept data",
+  ],
+  [
+    'teacher.kept_data.erased',
+    'محو البيانات المحفوظة لمعلم محذوف',
+    "Erase a deleted teacher's kept data",
+  ],
+  ['user.deleted_by_admin', 'حذف حساب بطلب صاحبه', "Delete an account at its owner's request"],
+];
+
+describe('T083: B42c’s six actions by name', () => {
+  it.each(B42C_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
 describe('T058: RATE_LIMITED on the audit log', () => {
   it('the list says when to try again', async () => {
     const api = fakeApi();
