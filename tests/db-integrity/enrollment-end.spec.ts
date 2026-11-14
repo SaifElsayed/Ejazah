@@ -19,9 +19,9 @@
 //   `CONFLICT`;
 // - the restore inside the hold, after it with the slot free, and refused `slot_taken` once another
 //   student holds it; the restore clears the reason;
-// - races: an end against a hold's confirmation; an end against `sessions.restore` on the same
-//   enrollment. The race of an end with `release` against another student's hold is withheld until
-//   Q-E1 is decided (the follow-up under T082).
+// - races: an end with `release` against another student's hold on the slot (Q-E1 (a): both accounts
+//   key-shared first); an end against a hold's confirmation; an end against `sessions.restore` on the
+//   same enrollment.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
@@ -605,9 +605,25 @@ describe('the restore of a direct end, at any time (DEC-69)', () => {
 });
 
 describe('races (kernel.md, the direct end’s row)', () => {
-  // The race of an end with `release` against another student's hold on the slot is withheld until
-  // Q-E1 (the follow-up under T082, B42c lane E) is decided: it deadlocks on the release path as the
-  // line words it (no `users` lock). Its text: ejazah-tools/b42c/runs/lane-e/race-release-vs-hold.case.ts.
+  // Q-E1 (a): the release path key-shares both accounts first, so a hold (accounts, then the slot)
+  // waits on it instead of closing a cycle.
+  it('an end with release against another student’s hold on the slot: the end kept, the hold placed only after it, never both held and placed', async () => {
+    const made = await confirmedWorld();
+    const [ended, placed] = await Promise.allSettled([
+      end(made.enrollmentId, { slot: 'release' }),
+      holdOn(made),
+    ]);
+    expect(ended.status).toBe('fulfilled');
+    expect(placed.status).toBe('fulfilled');
+    const outcome = placed.status === 'fulfilled' ? placed.value : undefined;
+    const state = await stateOf(made.enrollmentId);
+    expect(state.enrollment?.slotReleasedAt).not.toBeNull();
+    const activeHolds = await database.slotHold.count({
+      where: { slotId: made.slotId, releasedAt: null },
+    });
+    expect(activeHolds).toBe(outcome === 'SLOT_TAKEN' ? 0 : 1);
+  });
+
   it('an end against a hold’s confirmation: confirmed then ended, or refused enrollment_not_confirmed and confirmed', async () => {
     const made = await world();
     await database.userRole.createMany({

@@ -80,6 +80,7 @@ function world(given: Given = {}) {
   const lines: Record<string, unknown>[] = [];
   const reads = [...(given.reads ?? ['confirmed', 'confirmed'])];
   const store: EnrollmentEndStore = {
+    keyShareAccounts: async (_tx, userIds) => void calls.push(['keyShareAccounts', userIds]),
     lockTeacherSlots: async (_tx, userId) => void calls.push(['lockTeacherSlots', userId]),
     lockSlot: async (_tx, slotId) => void calls.push(['lockSlot', slotId]),
     openComplaintOf: async (_tx, enrollmentId) => {
@@ -245,7 +246,7 @@ describe('sessions.endEnrollment with slot hold (FR-513)', () => {
 });
 
 describe('sessions.endEnrollment with slot release (FR-513; T070’s release in the same transaction)', () => {
-  it('takes the teacher’s slots key and the slot before the enrollment, and releases through booking’s core after the hand-off', async () => {
+  it('takes both accounts’ key-share, the teacher’s slots key and the slot before the enrollment, and releases through booking’s core after the hand-off', async () => {
     const one = world();
     expect((await one.ask({ slot: 'release' })).answer).toEqual({
       enrollmentId: ENROLLMENT,
@@ -255,6 +256,8 @@ describe('sessions.endEnrollment with slot release (FR-513; T070’s release in 
     });
     expect(one.calls.slice(1)).toEqual([
       ['enrollmentFor', ENROLLMENT],
+      // Q-E1 (a): both accounts key-shared first, in id order.
+      ['keyShareAccounts', [STUDENT, TEACHER].sort()],
       ['lockTeacherSlots', TEACHER],
       ['lockSlot', SLOT],
       ['lockEnrollments', [ENROLLMENT]],

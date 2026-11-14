@@ -12,17 +12,22 @@
 //
 // THE ORDER (the note under T082, N7). The enrollment is read once with no lock for its teacher and
 // slot, which never change. With `release`, the teacher's `lockKey('teacher-slots', …)` and the
-// enrollment's slot (`availability_slots`), as T070's release takes them. Then the enrollment's row,
-// read again under it (rule 1); the refusals; `EnrollmentSide.cancel(…, 'admin', partyReason)`
-// (`cancelled` `admin`, `admin_end_reason` written, one `cancelled` row); T004's
+// enrollment's slot (`availability_slots`), as T070's release takes them, after both accounts'
+// `FOR KEY SHARE` (`keyShareRows`, one call in id order; Q-E1 (a), the review session, 2026-11-14):
+// the release writes the enrollment a second time in this transaction, so PostgreSQL checks its
+// foreign keys again and key-shares both accounts, which taken after the slot deadlocks with a hold
+// or a restore holding an account; the line's «no `users` lock» means no `FOR UPDATE`. Then the
+// enrollment's row, read again under it (rule 1); the refusals;
+// `EnrollmentSide.cancel(…, 'admin', partyReason)` (`cancelled` `admin`, `admin_end_reason` written,
+// one `cancelled` row); T004's
 // `cancelRemainingSessions`, which locks the remaining sessions (one call) and their open remedies,
 // `frozen` included, and whose `caseOf` opens the one `admin_ended` case (`disputes`, its enrollment
 // lock the one held) that every cancelled session's row names and every open remedy is handed to;
 // with `release`, booking's release core (`EnrollmentSide.releaseHeldSlot`: `slot_released_at` and
 // one `slot_released` row, its own locks all held, so it never waits); T071's
 // `closePausedCaseOnEnd(…, end: 'admin_ended')`, a paused enrollment's open `teacher_suspended` case
-// closed and covered by the new case, `disputes` last. No `users` lock: no row written references an
-// account. A student's suspension case open meanwhile stays open: its sessions join the new case
+// closed and covered by the new case, `disputes` last. No `users` `FOR UPDATE`: no row written
+// references an account. A student's suspension case open meanwhile stays open: its sessions join the new case
 // when it is closed (U2; `END_REASONS` names `admin_ended`).
 //
 // THE REFUSALS, each writing nothing, in one info line of ids and its cause marked «logged» (Q-R13
@@ -45,6 +50,7 @@ import type {
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { keyShareRows } from '../../platform/db/row-lock.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
@@ -71,6 +77,8 @@ import {
 
 /** What the end locks, reads and writes besides the enrollment side; faked in a spec. */
 export interface EnrollmentEndStore extends PausedCaseStore {
+  /** Q-E1 (a): the accounts, `FOR KEY SHARE`, one call in id order (`keyShareRows`). */
+  keyShareAccounts(tx: Transaction, userIds: readonly string[]): Promise<void>;
   lockTeacherSlots(tx: Transaction, teacherUserId: string): Promise<void>;
   lockSlot(tx: Transaction, slotId: string): Promise<void>;
   /** Moderation's: the enrollment's open complaint of the teacher's absence, null for none. */
@@ -88,6 +96,7 @@ export interface EnrollmentEndStore extends PausedCaseStore {
 
 /** The store over sessions' tables, the kernel's locks and moderation's entry (R-API-6). */
 export const enrollmentEndStore: EnrollmentEndStore = {
+  keyShareAccounts: (tx, userIds) => keyShareRows(tx, 'users', userIds),
   lockTeacherSlots,
   lockSlot: (tx, slotId) => lockSlots(tx, [slotId]),
   openComplaintOf,
@@ -120,6 +129,8 @@ export interface EnrollmentEnd {
 }
 
 const SCOPE = 'sessions.endEnrollment';
+
+const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();
 const REFUSED = 'An enrollment end was refused';
 
 interface RefusalIds {
@@ -169,6 +180,9 @@ export function createEnrollmentEnd({
     const seen = await enrollments.enrollmentFor(tx, enrollmentId);
     if (seen === null) throw notFound(log, ids);
     if (slot === 'release') {
+      // Q-E1 (a): the release writes the enrollment a second time, which checks both accounts' keys
+      // again; their key-share is taken first, in the accounts' place of the one order.
+      await store.keyShareAccounts(tx, sortedUnique([seen.studentUserId, seen.teacherUserId]));
       await store.lockTeacherSlots(tx, seen.teacherUserId);
       await store.lockSlot(tx, seen.slotId);
     }
