@@ -14,6 +14,8 @@
 // 004:T043 (FR-495): a session owing a remedy says where it stands under its time (`remedies/`).
 // 004:T074 (FR-506): a paused enrollment reads «متوقف مؤقتًا», with no reason, in place of its
 // status; the server answers it with no session, so none is drawn.
+// 004:T083 (FR-514): one an administrator ended says so under the teacher, followed by its reason
+// (`EndedByAdmin`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -45,6 +47,7 @@ import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { enrollmentQueryKey, isAwaitingPayment, useEnrollment } from '../api';
 import { ComplaintPanel } from '../components/ComplaintPanel';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
+import { EndedByAdmin } from '../components/EndedByAdmin';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
 import { PendingOrderBadge } from '../components/PendingOrderBadge';
 import { SessionWhen, zonesOf } from '../components/SessionWhen';
@@ -165,6 +168,7 @@ function Overview({
           pending={pendingBadge}
         />
       </View>
+      <EndedByAdmin endedByAdmin={enrollment.endedByAdmin} />
       <PackageLine summary={enrollment.summary} />
       {weekly === undefined ? null : (
         <View style={{ gap: tokens.space['1'] }}>

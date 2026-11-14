@@ -15,6 +15,8 @@
 // it stands under its row (`TeacherRemedyStatusLine`), the row its own (`session-rows.ts`).
 // 004:T074 (FR-506): a paused enrollment reads «متوقف مؤقتًا», with no reason, in place of its
 // status; the server answers it with no session, so none is drawn.
+// 004:T083 (FR-514): one an administrator ended says so under the student, followed by its reason
+// (`EndedByAdmin`).
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -45,6 +47,7 @@ import { TeacherRemedyStatusLine } from '../../sessions';
 import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
+import { EndedByAdmin } from '../components/EndedByAdmin';
 import { initialOf } from '../components/StudentRow';
 import { type SessionRow, sessionRows } from '../session-rows';
 import { useInViewerZone } from '../zone';
@@ -108,6 +111,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
             track={enrollment.summary.track}
           />
         </View>
+        <EndedByAdmin endedByAdmin={enrollment.endedByAdmin} />
         <Stats
           tile
           items={[
