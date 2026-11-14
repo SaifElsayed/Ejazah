@@ -41,6 +41,9 @@ jest.mock('../../shared/auth/dev-sign-in', () => ({
   devSignInEnabled: () => false,
 }));
 
+const mockOpen = jest.fn<(url: string) => Promise<true>>();
+jest.mock('expo-linking', () => ({ openURL: (url: string) => mockOpen(url) }));
+
 let mockKey = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `deletion-key-${++mockKey}` }));
 
@@ -96,6 +99,7 @@ beforeEach(async () => {
   await mockApi.sessions.store.write(tokens);
   mockNavigate.mockReset();
   mockIdentity.mockReset();
+  mockOpen.mockReset();
   mockKey = 0;
   mockApi.api.auth.providerNonce.mutate.mockResolvedValue({
     nonce: 'nonce-1',
@@ -110,7 +114,8 @@ describe('DeleteAccount', () => {
     await inBothDirections(withAccount(), (_rendered, direction) => {
       // The title and the danger button say the same words.
       expect(screen.getAllByText(said(direction, 'account.delete.title'))).toHaveLength(2);
-      expect(screen.getByText(said(direction, 'account.delete.honest.noEnrollments'))).toBeTruthy();
+      // T080 of specs/004-sessions (Q-O3 (a′), rule d): one neutral banner, saying nothing of enrollments.
+      expect(screen.getByText(said(direction, 'account.delete.honest.final'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.delete.deleted'))).toBeTruthy();
       expect(
         screen.getByText(said(direction, 'account.delete.deletedItems.personal')),
@@ -263,6 +268,45 @@ describe('DeleteAccountSheet', () => {
     await confirmWith('account.delete.sheet.confirmGoogle');
     expect(await screen.findByText(ar('account.delete.sheet.providerFailed'))).toBeTruthy();
     expect(getSession()).toEqual({ kind: 'signed-in', landing: 'student_home' });
+  });
+
+  // T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): a deletion refused for an
+  // ongoing enrollment says the line's sentence, naming no count, with the support link in place of
+  // the confirm button; nothing else changes and the device stays signed in.
+  it.each(['rtl', 'ltr'] as const)(
+    'says an ongoing enrollment’s refusal with the support link in place of the confirm button (%s)',
+    async (direction) => {
+      mockApi.api.account.delete.mutate.mockRejectedValueOnce(
+        apiError('CONFLICT', [{ path: 'cause', code: 'active_enrollments' }]),
+      );
+      await renderIn(direction, withAccount()());
+      await typeWord(direction === 'rtl' ? 'حذف' : 'delete', direction);
+      await fireEvent.press(submit(direction));
+      const confirm = said(direction, 'account.delete.sheet.confirmGoogle');
+      await fireEvent.press(await screen.findByRole('button', { name: confirm }));
+      expect(
+        await screen.findByText(said(direction, 'account.delete.refused.activeEnrollments')),
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: confirm })).toBeNull();
+      expect(screen.queryByText(said(direction, 'common.state.actionError'))).toBeNull();
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'account.restricted.contactSupport') }),
+      );
+      await waitFor(() => expect(mockOpen).toHaveBeenCalledWith('mailto:support@ijazah.test'));
+      expect(getSession()).toEqual({ kind: 'signed-in', landing: 'student_home' });
+      expect(mockApi.sessions.current()).toEqual(tokens);
+    },
+  );
+
+  it('keeps the confirm button for a conflict of another cause, said with the generic sentence (T080)', async () => {
+    mockApi.api.account.delete.mutate.mockRejectedValueOnce(apiError('CONFLICT'));
+    await renderIn('rtl', withAccount()());
+    await confirmWith('account.delete.sheet.confirmGoogle');
+    expect(await screen.findByText(ar('common.state.actionError'))).toBeTruthy();
+    expect(screen.queryByText(ar('account.delete.refused.activeEnrollments'))).toBeNull();
+    expect(
+      screen.getByRole('button', { name: ar('account.delete.sheet.confirmGoogle') }),
+    ).toBeTruthy();
   });
 
   it('says any other failure with the generic sentence', async () => {

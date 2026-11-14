@@ -31,9 +31,12 @@
       "warningMany": "You have {count, plural, one {# active enrollment} other {# active enrollments}}. All your upcoming sessions will be cancelled without compensation.",
       "warningShort": "You have {count, plural, one {# active enrollment} other {# active enrollments}} with {teacher}.",
       "honest": {
-        "noEnrollments": "You have no active enrollments.",
+        "final": "Deleting the account is final and cannot be undone.",
         "kept": "The log of actions on your account, without your personal data, because it is never altered",
         "sheetText": "Your personal data is deleted at once, and the account cannot be restored."
+      },
+      "refused": {
+        "activeEnrollments": "You cannot delete your account now because you have ongoing enrollments. You can delete it once they end, or contact support to end them."
       }
     },
     "deleteAccount": "Delete account",
@@ -66,7 +69,7 @@
       },
       "bannedTitle": "Your account is banned",
       "contactSupport": "Contact support",
-      "finalLede": "You will not return to the platform. The reason reached you in the notification.",
+      "finalLede": "The notification gave you the reason, and you can contact support.",
       "lede": "We suspended your account until the review of a report ends.",
       "signOut": "Sign out",
       "stopped": "Paused for now",
@@ -1562,11 +1565,7 @@
         "title": "Delete your account permanently?"
       },
       "title": "Delete account",
-      "warning": "Your students' upcoming sessions will be cancelled and the administration will contact them about compensation.",
-      "honest": {
-        "warning": "You have no enrolled students.",
-        "deletedDocuments": "Your application’s documents, your uploaded ijazahs and your payout account’s reference"
-      }
+      "warning": "Your students' upcoming sessions will be cancelled and the administration will contact them about compensation."
     },
     "enrollment": {
       "a11y": {
@@ -1803,7 +1802,7 @@
       "availableSupport": "Writing to support to ask or to object",
       "availableTitle": "Still available",
       "bannedTitle": "Your account is banned",
-      "finalLede": "You will not return to the platform. The reason reached you in the notification.",
+      "finalLede": "The notification gave you the reason, and you can contact support.",
       "lede": "The administration suspended your account until the review ends. The reason was sent to you in a notification.",
       "stoppedDiscovery": "Visibility to students and new bookings",
       "stoppedSessions": "Joining sessions, including those in progress now",
@@ -1949,6 +1948,9 @@
       },
       "info": "Your personal data is deleted and your upcoming sessions are cancelled. Your ijazahs stay valid, and payment records are kept without your data as the law requires.",
       "lede": "From the app: Account, then Delete account. If you no longer have the app, request the deletion here.",
+      "refused": {
+        "activeEnrollments": "You cannot delete your account now because you have ongoing enrollments. You can delete it once they end, or contact support to end them."
+      },
       "sendCode": "Send code",
       "steps": {
         "code": {

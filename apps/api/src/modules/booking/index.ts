@@ -277,6 +277,16 @@ export {
  */
 export { heldFileOwnersAmong } from './held-files.service.js';
 /**
+ * T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended, DEC-67; the note under T080,
+ * Q-R11 (a), N4): whether an account has an ongoing enrollment, on the deletion's transaction after
+ * the account's lock. Bound by `main.ts` to identity's `OngoingEnrollments` port, as `FileHold` is.
+ */
+export {
+  createOngoingEnrollments,
+  hasOngoingEnrollment,
+  type OngoingEnrollmentsCount,
+} from './ongoing-enrollments.repository.js';
+/**
  * T034 of specs/004-sessions (kernel.md's `party_*` row; the owner's decision of 2026-11-11 on
  * lane A's questions, item 3): the account's active holds, the ones this subscriber releases,
  * locked in one call, and the enrollments they were placed for; a dispute's `party_*` ruling takes

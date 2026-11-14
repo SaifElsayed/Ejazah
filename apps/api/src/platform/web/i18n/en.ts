@@ -42,6 +42,10 @@ export const en = {
       },
       info: 'Your personal data is deleted and your upcoming sessions are cancelled. Your ijazahs stay valid, and payment records are kept without your data as the law requires.',
       lede: 'From the app: Account, then Delete account. If you no longer have the app, request the deletion here.',
+      refused: {
+        activeEnrollments:
+          'You cannot delete your account now because you have ongoing enrollments. You can delete it once they end, or contact support to end them.',
+      },
       sendCode: 'Send code',
       steps: {
         code: {

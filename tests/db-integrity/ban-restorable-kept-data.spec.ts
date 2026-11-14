@@ -22,6 +22,7 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { createOngoingEnrollments } from '../../apps/api/src/modules/booking/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -451,7 +452,7 @@ describe('rule 34’s note: every document of a deleted person still holding its
       },
       email: { deliver: async () => undefined },
       storage,
-      log: { warn: () => undefined },
+      log: { warn: () => undefined, info: () => undefined },
       payment: { registerPayoutRecipient: unreachable },
       idempotency: new IdempotencyService<Transaction>({
         store: new IdempotencyRepository(database),
@@ -460,6 +461,8 @@ describe('rule 34’s note: every document of a deleted person still holding its
       consequences,
       fileErasures: [createDocumentErasure({ database, cipher, storage })],
       report: () => undefined,
+      // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+      ongoingEnrollments: createOngoingEnrollments({ settings }),
     }).deletion;
   });
 

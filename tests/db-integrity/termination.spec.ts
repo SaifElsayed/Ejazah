@@ -53,6 +53,7 @@ import { piasters } from '../../packages/money/src/index';
 import {
   bookingSlotsOf,
   bookingSlotsStore,
+  createOngoingEnrollments,
   enrollOnHold,
   payStoreOver,
   payTargetOf,
@@ -162,7 +163,7 @@ beforeAll(async () => {
       },
       email: { deliver: async () => undefined },
       storage: { temporaryLink: unreachable, remove: async () => undefined },
-      log: { warn: () => undefined },
+      log: { warn: () => undefined, info: () => undefined },
       payment: { registerPayoutRecipient: unreachable },
       idempotency: new IdempotencyService<Transaction>({
         store: new IdempotencyRepository(database),
@@ -170,6 +171,8 @@ beforeAll(async () => {
       }),
       consequences: registry,
       report: () => undefined,
+      // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+      ongoingEnrollments: createOngoingEnrollments({ settings: identitySettings }),
     }).deletion;
   deletion = deletionOver(consequences);
   webhook = await listenWebhook(database, {

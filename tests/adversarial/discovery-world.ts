@@ -75,6 +75,7 @@ import {
   createBookingServices,
   createDiscoveryServices,
   createEnrollmentSide,
+  createOngoingEnrollments,
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import {
@@ -685,7 +686,10 @@ async function build(): Promise<Built> {
   // The one registry of an account's end, booking's T041 subscriber bound as `main.ts` binds it.
   const consequences = new AccountConsequences();
   consequences.subscribe(
-    terminationSubscriber({ orders: orderStandingsOf, log: { info: () => undefined, warn: () => undefined } }),
+    terminationSubscriber({
+      orders: orderStandingsOf,
+      log: { info: () => undefined, warn: () => undefined },
+    }),
   );
   const identity: IdentityServices = createIdentityServices({
     ...identityBase,
@@ -698,7 +702,7 @@ async function build(): Promise<Built> {
     },
     email: { deliver: async () => undefined },
     storage,
-    log: { warn: () => undefined },
+    log: { warn: () => undefined, info: () => undefined },
     payment: {
       async registerPayoutRecipient(teacherUserId, details) {
         const recipientRef = await payment.registerPayoutRecipient(teacherUserId, details);
@@ -709,6 +713,8 @@ async function build(): Promise<Built> {
     idempotency,
     consequences,
     report: () => undefined,
+    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+    ongoingEnrollments: createOngoingEnrollments({ settings }),
   });
   // T043: the suspension as the panel's admin services build it, on the same registry (FR-165).
   const standing = new StandingService({

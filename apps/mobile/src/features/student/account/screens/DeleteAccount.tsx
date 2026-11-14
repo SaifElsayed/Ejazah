@@ -6,6 +6,11 @@
 // payment and session records, none of which exists yet, and says the activity log stays without the
 // personal data (R-HONEST, as in B14d-2 and B15; the board's lines stay in the catalogue for their
 // phases). The word, either language's, opens the last confirmation.
+//
+// T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended; the note under T080, Q-O3 (a′)):
+// the banner is one neutral sentence for both roles, that the deletion is final, saying nothing of
+// enrollments (the screen is the same for every account); a deletion refused for an ongoing
+// enrollment is said by the last confirmation (`DeletionSheet`).
 import { useT } from '../../../../i18n';
 import { DeletionScreen } from '../../../shared/deletion';
 import { DeleteAccountSheet } from '../components/DeleteAccountSheet';
@@ -18,7 +23,7 @@ export function DeleteAccount() {
       onLeave={leaveToAccount}
       copy={{
         title: t('account.delete.title'),
-        warning: t('account.delete.honest.noEnrollments'),
+        warning: t('account.delete.honest.final'),
         deletedTitle: t('account.delete.deleted'),
         deleted: [t('account.delete.deletedItems.personal')],
         keptTitle: t('account.delete.kept'),

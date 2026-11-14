@@ -48,6 +48,16 @@
 //   subscriber tells the other party of each enrollment the deletion ends. After the commit, the
 //   person's `account` is published and the list sent; on a rollback the list is dropped. A replay
 //   of the key runs no effect, so it adds and sends nothing.
+// - NO DELETION WITH AN ONGOING ENROLLMENT (T080 of specs/004-sessions; FR-511; SRS FR-AUTH-14 as
+//   amended, DEC-67; the note under T080, Q-R10 (a), Q-R11 (a), N4, N5). The person's own deletion,
+//   in the app and on the web, takes the account's lock first (`lockAccount`, the account's place in
+//   the one order, as `placeHold` and the restore take it), then asks the `OngoingEnrollments` port
+//   on its transaction (booking's count, bound in `main.ts` as `FileHold` is): while the person has
+//   an enrollment `pending_payment` or `confirmed`, or one closed by their own ban or revocation
+//   whose slot is still held, the deletion is refused `CONFLICT` `active_enrollments`, naming no
+//   count, with one info line of ids and the reason, and nothing is written (the key's claim rolls
+//   back with the transaction, so a retry after the enrollments end deletes). On the web the code
+//   was spent before the refusal (N5).
 import type { DeleteAccountInput } from '@ijazah/contracts';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
@@ -55,6 +65,7 @@ import { hashPassword, verifyPassword } from '../../platform/crypto/hashing.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
 import type { LiveBus } from '../../platform/live/live-bus.js';
@@ -80,6 +91,7 @@ import {
 import { renderDeletionMail } from './mail/deletion-mail.js';
 import { normalizeEmail, type OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import type { IdentityDependencies } from './session.service.js';
+import { lockAccount } from './standing.repository.js';
 import { UserSessionsRepository } from './user-sessions.repository.js';
 
 /** The column Apple's grant is encrypted under, bound to its identity row (R-DB-8). */
@@ -100,6 +112,21 @@ export interface FileHold {
   filesHeld(userId: string): Promise<boolean>;
 }
 
+/**
+ * Whether an account has an ongoing enrollment, asked on the deletion's transaction after the
+ * account's lock (T080 of specs/004-sessions, FR-511; the note under T080, Q-R11 (a), N4): booking's
+ * `createOngoingEnrollments`, bound in `main.ts` as `FileHold` is, since identity importing booking
+ * would close a cycle (ARCHITECTURE §4, the twelfth dependency handed in against the arrows).
+ */
+export interface OngoingEnrollments {
+  hasOngoing(tx: Transaction, userId: string): Promise<boolean>;
+}
+
+/** Where the deletion writes its lines: a refusal's at info, a mail it could not hand over at warn. */
+export interface DeletionLog extends WarningLog {
+  info(entry: object, message?: string): void;
+}
+
 /** What the deletion is built over, beside the module's own dependencies. */
 export interface DeletionDependencies extends IdentityDependencies {
   /** The process's column cipher: Apple's grant read under the previous key too while a rotation runs (T134). */
@@ -114,12 +141,17 @@ export interface DeletionDependencies extends IdentityDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   /** The web's `account_deletion` codes, shared with the email account's codes. */
   readonly codes: Pick<OneTimeCodes, 'send' | 'verify' | 'decoy'>;
-  /** Where a mail that could not be handed over is told, never naming the address. */
-  readonly log: WarningLog;
+  /**
+   * Where a mail that could not be handed over is told, never naming the address; and (T080) a
+   * refused deletion's one info line of ids and the reason.
+   */
+  readonly log: DeletionLog;
   /** The other modules' files of a deleted person, composed by `main.ts`. */
   readonly fileErasures?: readonly FileErasure[] | undefined;
   /** Asked before the files are removed; none held when absent. */
   readonly fileHold?: FileHold | undefined;
+  /** T080: asked after the account's lock, by the person's own deletion only. */
+  readonly ongoingEnrollments: OngoingEnrollments;
   /** Where a failure after the commit is reported; the error tracker unless a spec sets one. */
   readonly report?: ((error: unknown) => void) | undefined;
   /** Where the work after the commit is left to run; detached unless a spec collects it. */
@@ -185,7 +217,7 @@ export class DeletionService {
           input: { confirmation: input.confirmation, reauth: input.reauth.kind },
         },
         async (tx) => {
-          call.erased = await this.#erase(tx, userId, at, live);
+          call.erased = await this.#eraseOwn(tx, userId, at, live);
           return null;
         },
       );
@@ -222,7 +254,7 @@ export class DeletionService {
     const live = this.#liveList();
     let erased: ErasureSnapshot | null;
     try {
-      erased = await this.#transactions.run((tx) => this.#erase(tx, owner.userId, at, live));
+      erased = await this.#transactions.run((tx) => this.#eraseOwn(tx, owner.userId, at, live));
     } catch (error: unknown) {
       live.drop();
       throw error;
@@ -237,10 +269,11 @@ export class DeletionService {
   }
 
   /**
-   * The one transaction (ADR 0015 D3); null when the person was already deleted. `live` is bound to
-   * `tx` while it runs (T066), so a consequence reaches it through `publisherOn(tx)`.
+   * The person's own deletion's transaction (ADR 0015 D3); null when the person was already deleted.
+   * `live` is bound to `tx` while it runs (T066), so a consequence reaches it through
+   * `publisherOn(tx)`. T080: the account's lock first, then the count, then the erasure.
    */
-  async #erase(
+  async #eraseOwn(
     tx: Transaction,
     userId: string,
     at: Date,
@@ -248,19 +281,41 @@ export class DeletionService {
   ): Promise<ErasureSnapshot | null> {
     const unbind = bindToTransaction(tx, live);
     try {
-      const snapshot = await readErasureSnapshot(tx, userId);
-      if (snapshot === null) return null;
-      const banned = await readBannedSignIn(tx, userId);
-      // Before the erasure, which takes the address and the identities with it (T097). Of two
-      // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
-      if (banned !== null) await this.#banned.keep(tx, banned);
-      if (!(await eraseAccount(tx, userId, at))) return null;
-      await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
-      await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
-      return snapshot;
+      await lockAccount(tx, userId);
+      if (await this.#dependencies.ongoingEnrollments.hasOngoing(tx, userId)) {
+        throw this.#refusedOngoing(userId);
+      }
+      return await this.#eraseLocked(tx, userId, at);
     } finally {
       unbind();
     }
+  }
+
+  /** T080: the refusal, after its one info line of ids and the reason; no count (Q-J (a)). */
+  #refusedOngoing(userId: string): DomainError {
+    this.#dependencies.log.info(
+      { userId, reason: 'active_enrollments' },
+      'An account deletion was refused',
+    );
+    return markRefusalLogged(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'active_enrollments' }],
+      }),
+    );
+  }
+
+  /** The erasure under the account's lock (ADR 0015 D3); null when the person was already deleted. */
+  async #eraseLocked(tx: Transaction, userId: string, at: Date): Promise<ErasureSnapshot | null> {
+    const snapshot = await readErasureSnapshot(tx, userId);
+    if (snapshot === null) return null;
+    const banned = await readBannedSignIn(tx, userId);
+    // Before the erasure, which takes the address and the identities with it (T097). Of two
+    // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
+    if (banned !== null) await this.#banned.keep(tx, banned);
+    if (!(await eraseAccount(tx, userId, at))) return null;
+    await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
+    await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
+    return snapshot;
   }
 
   /** The proof, before any transaction (decision 5); SIGN_IN_FAILED for anything it refuses. */

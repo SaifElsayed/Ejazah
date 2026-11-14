@@ -2,5 +2,7 @@
 // screen's frame, the last confirmation, and the proof by the account's method. Its own entry, not
 // `shared/account`'s, since the proof loads the providers' native modules (`../auth/providers`).
 export { confirmationOf, type DeletionConfirmation, useAccountDeletion } from './api';
+// T080 of specs/004-sessions: the refusal of an ongoing enrollment, told apart from other failures.
+export { isOngoingRefusal } from './api';
 export { type DeletionCopy, DeletionScreen } from './components/DeletionScreen';
 export { DeletionSheet, type DeletionSheetCopy } from './components/DeletionSheet';
