@@ -60,6 +60,7 @@ const [
   { advanceRemedies },
   { purgeChat },
   { closeSlotHolds },
+  { eraseKeptData },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -97,6 +98,7 @@ const [
   import('./jobs/advance-remedies.js'),
   import('./jobs/purge-chat.js'),
   import('./jobs/close-slot-holds.js'),
+  import('./jobs/erase-kept-data.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -240,6 +242,10 @@ const jobs: readonly Job[] = [
   // closing whose hold ran out by its date gets one `slot_hold_ended` row, under its enrollment's lock;
   // nothing else changes.
   closeSlotHolds({ database, settings, log }),
+  // A deleted teacher's kept data erased on its date (T077 of specs/004-sessions, FR-509), daily at
+  // 04:25 ⚠️ automatic and final: each profile whose `kept_erase_at` passed, one per transaction, under
+  // its lock and its kept documents' locks; the files are left to `erase-deleted-files`.
+  eraseKeptData({ database, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);

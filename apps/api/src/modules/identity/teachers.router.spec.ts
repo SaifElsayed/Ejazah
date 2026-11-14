@@ -59,6 +59,18 @@ function surface() {
     keyedLift: async () => {
       throw new Error('unused');
     },
+    // T077: the kept data has its own cases (`teachers.keptData.*`), not this spec's.
+    keptData: {
+      documentLink: async () => {
+        throw new Error('unused');
+      },
+      setEraseDate: async () => {
+        throw new Error('unused');
+      },
+      eraseNow: async () => {
+        throw new Error('unused');
+      },
+    },
   };
   const contexts = adminContextsOver({ teachers });
   return {

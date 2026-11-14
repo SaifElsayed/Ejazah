@@ -4,7 +4,7 @@ Queued work executed by `src/worker.ts`. Arrives with the phase that needs it:
 `expire-idempotency-keys` (Phase 0, with T102), `reencrypt-columns` (Phase 0, with T155), `purge-otp-codes`,
 `purge-stale-push-tokens`, `purge-expired-sessions` (Phase 1, with T025; research R-118), `purge-unreferenced-documents` (Phase 1, T093), `erase-deleted-files` (Phase 1, B16: a deleted person's files whose removal after the deletion failed), `expire-holds`,
 `expire-pending-payments`, `confirm-enrollment` (Phase 2), `reresolve-session-instants` (Phase 2, T048: the time zone re-resolution of ADR 0009 D3, at worker start and daily), `evaluate-sessions`, `advance-remedies`,
-`expire-cancellation-requests` (every minute), `purge-chat` (daily), `close-slot-holds` (hourly, T074) (Phase 3, `specs/004-sessions/contracts/kernel.md`),
+`expire-cancellation-requests` (every minute), `purge-chat` (daily), `close-slot-holds` (hourly, T074), `erase-kept-data` (daily at 04:25, T077 ⚠️ automatic and final) (Phase 3, `specs/004-sessions/contracts/kernel.md`),
 `send-reminder`, `render-certificate`, `deliver-notification` (Phase 4; `send-reminder` moved from Phase 3 with the
 reminders, `specs/004-sessions/spec.md` Assumptions, amended 2026-11-05).
 

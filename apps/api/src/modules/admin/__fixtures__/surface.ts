@@ -111,6 +111,8 @@ export function surfaceOf(
     users: unusedAdminServices.users,
     // T070: the release of a held slot has its own router spec (`booking/enrollments-admin.router.spec.ts`).
     enrollments: unusedAdminServices.enrollments,
+    // T082: the direct end has its own router spec (`sessions/sessions-end-enrollment.router.spec.ts`).
+    enrollmentEnd: unusedAdminServices.enrollmentEnd,
   };
   const administration = {
     transactions: transactionsOver(database),
