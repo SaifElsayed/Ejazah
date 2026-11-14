@@ -69,32 +69,41 @@ export class PayoutRepository {
 }
 
 /**
+ * T076 of specs/004-sessions (FR-508; rule 27 as widened by T069, Q-E (a)): the hash is unique among
+ * the profiles not kept only, so a gateway verdict reads and writes only a live profile
+ * (`kept_at IS NULL`) and never a deleted teacher's kept one, which keeps its reference unchanged.
+ */
+const LIVE = { keptAt: null };
+
+/**
  * Sets the verified instant where the reference hashing to `refHash` is not verified yet, and clears
- * the last rejection. True when a teacher holds the hash, a verified one included (its first instant
- * is kept); false when none does.
+ * the last rejection. True when a live teacher holds the hash, a verified one included (its first
+ * instant is kept); false when none does.
  */
 export async function markVerified(tx: Writer, refHash: string, at: Date): Promise<boolean> {
   const { count } = await tx.teacherProfile.updateMany({
-    where: { payoutAccountRefHash: refHash, payoutVerifiedAt: null },
+    where: { payoutAccountRefHash: refHash, payoutVerifiedAt: null, ...LIVE },
     data: { payoutVerifiedAt: at, payoutRejectedReason: null },
   });
   if (count === 1) return true;
-  return (await tx.teacherProfile.count({ where: { payoutAccountRefHash: refHash } })) === 1;
+  return (
+    (await tx.teacherProfile.count({ where: { payoutAccountRefHash: refHash, ...LIVE } })) === 1
+  );
 }
 
-/** Keeps the rejection's reason and leaves the account unverified; false when no teacher holds the hash. */
+/** Keeps the rejection's reason and leaves the account unverified; false when no live teacher holds the hash. */
 export async function markRejected(tx: Writer, refHash: string, reason: string): Promise<boolean> {
   const { count } = await tx.teacherProfile.updateMany({
-    where: { payoutAccountRefHash: refHash },
+    where: { payoutAccountRefHash: refHash, ...LIVE },
     data: { payoutVerifiedAt: null, payoutRejectedReason: reason },
   });
   return count === 1;
 }
 
-/** The account of the teacher holding the reference hashing to `refHash`; null when none does. */
+/** The account of the live teacher holding the reference hashing to `refHash`; null when none does. */
 export async function payoutHolderOf(tx: Writer, refHash: string): Promise<string | null> {
   const row = await tx.teacherProfile.findFirst({
-    where: { payoutAccountRefHash: refHash },
+    where: { payoutAccountRefHash: refHash, ...LIVE },
     select: { userId: true },
   });
   return row?.userId ?? null;

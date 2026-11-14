@@ -18,15 +18,18 @@
 //   never awaited; the decoy hash otherwise. The second consumes the code (one Argon2id comparison
 //   on every path, `one-time-codes.ts`) and runs the same transaction; a wrong code answers false
 //   and deletes nothing. A right code whose account is gone meanwhile was another deletion's: true.
-// - THE TRANSACTION (ADR 0015 D3): the address and Apple's grants read; for a banned account, the
-//   keyed hashes of its address and provider identities kept in `banned_identifiers` before they
-//   are erased, so the ban outlives the account (T097, FR-155, `banned-identifiers.ts`); the row
-//   soft-deleted with its personal fields erased (conditional on the row still being live, so of two deletions racing
-//   on one person exactly one erases and only that one does the work after the commit), the
-//   identity rows deleted, every session revoked (`account_deleted`), the push tokens removed, a
-//   teacher's bio and payout columns erased, then the consequences registry with `account_deleted`
-//   (FR-142, decision 2): the verification module marks the documents erased there. A throw anywhere
-//   rolls all of it back.
+// - THE TRANSACTION (ADR 0015 D3 as amended): the address and Apple's grants read; for a banned
+//   account, the keyed hashes of its address and provider identities kept in `banned_identifiers`
+//   before they are erased, so the ban outlives the account (T097, FR-155, `banned-identifiers.ts`);
+//   the row soft-deleted with its personal fields erased (conditional on the row still being live,
+//   so of two deletions racing on one person exactly one erases and only that one does the work
+//   after the commit), the identity rows deleted, every session revoked (`account_deleted`), the
+//   push tokens removed, a teacher's bio, qualification summary and profile photo key erased; the
+//   payout columns erased for a teacher never approved and kept, the profile marked `kept_at`, for
+//   one ever approved (T076 of specs/004-sessions, FR-508; SRS FR-AUTH-14 as amended, DEC-67;
+//   `eraseAccount`); then the consequences registry with `account_deleted` (FR-142, decision 2):
+//   the verification module marks a teacher ever approved's identity and credential documents kept
+//   there and every other document erased. A throw anywhere rolls all of it back.
 // - AFTER THE COMMIT, outside the transaction and detached from the request: the photo's file
 //   removed and only then its key cleared; each other module's files handed over (the verification
 //   module's documents, decision 1); the Apple grant revoked through the port (decision 3); the

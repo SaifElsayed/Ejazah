@@ -415,9 +415,16 @@ export async function readBannedSignIn(
 
 /**
  * The one transaction's writes (ADR 0015 D3): the row soft-deleted with its personal fields erased,
- * the provider identities deleted outright, the push tokens removed, a teacher's bio and payout
- * columns erased. False, and nothing written, when the row is already deleted. The photo key stays
- * until its file is gone (`clearDeletedPhotoKey`); the role row, the terms and every history row stay.
+ * the provider identities deleted outright, the push tokens removed, a teacher's bio and
+ * qualification summary erased. False, and nothing written, when the row is already deleted. The
+ * photo key stays until its file is gone (`clearDeletedPhotoKey`); the role row, the terms and every
+ * history row stay.
+ *
+ * T076 of specs/004-sessions (FR-508; SRS FR-AUTH-14 as amended, DEC-67; the note under T076, N1):
+ * one profile write per branch. A teacher never approved (`approved_at` NULL) loses the payout
+ * columns; a teacher ever approved keeps them, the profile marked `kept_at`. `approved_at` is never
+ * cleared (its one write, `application.repository.ts`), so «ever approved» is `approved_at IS NOT
+ * NULL`, whatever the standing since.
  */
 export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date): Promise<boolean> {
   const { count } = await tx.user.updateMany({
@@ -435,11 +442,11 @@ export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date):
   if (count !== 1) return false;
   await tx.authIdentity.deleteMany({ where: { userId } });
   await tx.devicePushToken.deleteMany({ where: { userId } });
+  const erased = { bio: '', qualificationSummary: '', photoKey: null };
   await tx.teacherProfile.updateMany({
-    where: { userId },
+    where: { userId, approvedAt: null },
     data: {
-      bio: '',
-      photoKey: null,
+      ...erased,
       payoutAccountRefEncrypted: null,
       payoutAccountRefHash: null,
       payoutConfiguredAt: null,
@@ -447,7 +454,27 @@ export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date):
       payoutRejectedReason: null,
     },
   });
+  await tx.teacherProfile.updateMany({
+    where: { userId, approvedAt: { not: null } },
+    data: { ...erased, keptAt: at },
+  });
   return true;
+}
+
+/**
+ * T076 (FR-508; the note under T076, N1): whether the person's teacher profile was ever approved
+ * (`approved_at` set), on the caller's transaction; false for a person with no profile. The
+ * verification module reads it on the deletion's transaction, after `eraseAccount` (R-121).
+ */
+export async function everApprovedTeacher(
+  tx: Pick<Transaction, 'teacherProfile'>,
+  userId: string,
+): Promise<boolean> {
+  const profile = await tx.teacherProfile.findUnique({
+    where: { userId },
+    select: { approvedAt: true },
+  });
+  return profile?.approvedAt != null;
 }
 
 /** A deleted person whose photo file is still to be removed. */

@@ -287,6 +287,12 @@ export { studentsRouter } from './students.router.js';
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 
+/**
+ * T076 of specs/004-sessions (FR-508): whether a teacher was ever approved, read by verification's
+ * `documentErasureConsequence` on the deletion's transaction (R-121).
+ */
+export { everApprovedTeacher } from './identity.repository.js';
+
 /** The administrator's invite mail, which the admin module sends through its job (T066, R-110). */
 export { renderAdminInviteMail } from './mail/admin-invite-mail.js';
 
