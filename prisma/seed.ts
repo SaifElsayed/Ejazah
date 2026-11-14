@@ -196,6 +196,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_kept_data_erase_now', { limit: 10, window_seconds: 60 }],
   ['rate_limit_kept_document_link', { limit: 10, window_seconds: 60 }],
   ['rate_limit_admin_user_delete', { limit: 10, window_seconds: 60 }],
+  // T082 (SRS DEC-68, §3.14; specs/004-sessions/data-model.md §4): an administrator's direct end of
+  // an enrollment (`sessions.endEnrollment`), the administrator as subject.
+  ['rate_limit_enrollment_end', { limit: 10, window_seconds: 60 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
