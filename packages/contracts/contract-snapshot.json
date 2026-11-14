@@ -350,6 +350,7 @@
             "type": "string",
             "values": ["active", "banned", "suspended", "verification_required"]
           },
+          "$.banRestoreWindowDays": { "required": true, "type": "integer" },
           "$.call": { "required": true, "type": "object" },
           "$.call.completedOn": { "type": "string" },
           "$.call.notes": { "type": "string" },
@@ -2342,6 +2343,7 @@
             "type": "string",
             "values": ["active", "banned", "suspended", "verification_required"]
           },
+          "$.banRestoreWindowDays": { "required": true, "type": "integer" },
           "$.cancellationRequests": { "required": true, "type": "object" },
           "$.cancellationRequests.recent": { "required": true, "type": "integer" },
           "$.cancellationRequests.total": { "required": true, "type": "integer" },
@@ -3197,6 +3199,7 @@
             ]
           },
           "$.next.timezone": { "required": true, "type": "string" },
+          "$.paused": { "required": true, "type": "boolean" },
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
@@ -3359,6 +3362,7 @@
             ]
           },
           "$.items[].next.timezone": { "required": true, "type": "string" },
+          "$.items[].paused": { "required": true, "type": "boolean" },
           "$.items[].remaining": { "required": true, "type": "integer" },
           "$.items[].status": {
             "required": true,
@@ -4329,6 +4333,7 @@
             ]
           },
           "$.next.timezone": { "required": true, "type": "string" },
+          "$.paused": { "required": true, "type": "boolean" },
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
@@ -4491,6 +4496,7 @@
             ]
           },
           "$.items[].next.timezone": { "required": true, "type": "string" },
+          "$.items[].paused": { "required": true, "type": "boolean" },
           "$.items[].remaining": { "required": true, "type": "integer" },
           "$.items[].status": {
             "required": true,
