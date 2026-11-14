@@ -90,6 +90,11 @@ const closedItem = {
 } as const;
 
 const RESTORABLE_UNTIL = '2026-11-20T10:00:00.000Z';
+/**
+ * B42c, T083 (Q-O1 (a)): the monitor's `enrollmentRestoreWindowDays`, apart from the default 14 so
+ * the end's «احجز الموعد {days} يومًا» shows that it reads the field.
+ */
+const RESTORE_WINDOW_DAYS = 9;
 /** B42b, T075: T070's `slotHeldUntil`, apart from the deprecated `restorableUntil` so its read shows. */
 const SLOT_HELD_UNTIL = '2026-11-21T10:00:00.000Z';
 
@@ -126,7 +131,12 @@ const counter = {
 };
 
 const closedDetail = {
-  enrollment: { ...closedItem, restorableUntil: RESTORABLE_UNTIL, slotHeldUntil: SLOT_HELD_UNTIL },
+  enrollment: {
+    ...closedItem,
+    restorableUntil: RESTORABLE_UNTIL,
+    slotHeldUntil: SLOT_HELD_UNTIL,
+    enrollmentRestoreWindowDays: RESTORE_WINDOW_DAYS,
+  },
   sessions: [
     session(1, 'done', { correctable: true }),
     session(2, 'teacher_no_show', {
@@ -199,7 +209,10 @@ const closedDetail = {
 /** An enrollment with nothing restorable: no `restorableUntil`. */
 const confirmedDetail = {
   ...closedDetail,
-  enrollment: (({ nextSession: _next, ...rest }) => rest)(confirmedItem),
+  enrollment: {
+    ...(({ nextSession: _next, ...rest }) => rest)(confirmedItem),
+    enrollmentRestoreWindowDays: RESTORE_WINDOW_DAYS,
+  },
 };
 
 function fakeApi() {
@@ -208,6 +221,7 @@ function fakeApi() {
       monitor: { list: query(), get: query() },
       cancel: mutation(),
       restore: mutation(),
+      endEnrollment: mutation(),
       review: { revise: mutation() },
     },
     enrollments: { releaseSlot: mutation() },
@@ -1291,5 +1305,365 @@ describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held 
         translate(locale, 'admin.sessions.event.kind.cancelled', { reason }),
       );
     }
+  });
+});
+
+// B42c, T083 of specs/004-sessions (FR-513, FR-514; SRS FR-CANCEL-10, DEC-68; the note under T083):
+// «إنهاء الاشتراك» beside restore and cancel on a `confirmed` enrollment only (N9); its dialog says
+// what the end does and that a release cannot be undone, asks for the parties' reason (mandatory)
+// and an internal note (optional), offers the slot's choice with the monitor's
+// `enrollmentRestoreWindowDays` (Q-O1 (a)), held by default, and keeps the key minted when it opened
+// for its retry; `complaint_open` in plain words with a link to the complaint (Q-R6 (a)), every
+// other failure through `errorMessageKey`.
+describe('T083: an administrator’s direct end of an enrollment (FR-514; SRS FR-CANCEL-10)', () => {
+  const withStatus = (status: string) => {
+    const api = fakeApi();
+    api.sessions.monitor.get.query.mockResolvedValue({
+      ...confirmedDetail,
+      enrollment: { ...confirmedDetail.enrollment, status },
+    });
+    return api;
+  };
+
+  async function endDialog(api = fakeApi()) {
+    const { panel } = await openDetail(`/sessions?enrollment=${E1}`, api);
+    fireEvent.click(panel.getByRole('button', { name: ar('admin.sessions.detail.end') }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: ar('admin.sessions.end.title') }),
+    );
+    return { api, dialog };
+  }
+
+  it('offers «إنهاء الاشتراك» on a confirmed enrollment, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/sessions?enrollment=${E1}`),
+      async (t) => {
+        const panel = await panelOf(t);
+        expect(panel.getByRole('button', { name: t('admin.sessions.detail.end') })).toBeTruthy();
+      },
+    );
+  });
+
+  it('offers no end on an enrollment that is not confirmed (N9)', async () => {
+    for (const status of ['pending_payment', 'completed', 'terminated_no_show', 'cancelled']) {
+      const { view, panel } = await openDetail(`/sessions?enrollment=${E1}`, withStatus(status));
+      expect(panel.queryByRole('button', { name: ar('admin.sessions.detail.end') })).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('says what the end does, its two texts, the slot’s choice with the monitor’s days held by default, and that a release cannot be undone, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/sessions?enrollment=${E1}`),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.end') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.end.title') }),
+        );
+        const effect = dialog.getByText(t('admin.sessions.end.effect')).textContent ?? '';
+        for (const part of locale === 'ar'
+          ? [/الجلسات المتبقية/u, /قضية/u, /في أي وقت/u, /حرّر الموعد الآن/u, /خاليًا/u]
+          : [
+              /remaining sessions/u,
+              /case/u,
+              /at any time/u,
+              /Release the slot now/u,
+              /still free/u,
+            ]) {
+          expect(effect).toMatch(part);
+        }
+        expect(dialog.getByText(t('admin.sessions.end.releaseFinal')).textContent).toMatch(
+          locale === 'ar' ? /لا يمكن التراجع/u : /cannot be undone/u,
+        );
+        expect(dialog.getByLabelText(t('admin.sessions.end.reasonLabel'))).toBeTruthy();
+        expect(dialog.getByLabelText(t('admin.sessions.end.noteLabel'))).toBeTruthy();
+        const hold = dialog.getByRole('radio', {
+          name: t('admin.sessions.end.slot.hold', { days: RESTORE_WINDOW_DAYS }),
+        }) as HTMLInputElement;
+        const release = dialog.getByRole('radio', {
+          name: t('admin.sessions.end.slot.release'),
+        }) as HTMLInputElement;
+        expect([hold.checked, release.checked]).toEqual([true, false]);
+      },
+    );
+  });
+
+  it('holds the line’s words', () => {
+    const { detail, end } = arCatalogue.admin.sessions;
+    expect({
+      button: detail.end,
+      reason: end.reasonLabel,
+      note: end.noteLabel,
+      release: end.slot.release,
+    }).toEqual({
+      button: 'إنهاء الاشتراك',
+      reason: 'السبب (يظهر للطالب والمعلم)',
+      note: 'ملاحظة داخلية (للإدارة فقط)',
+      release: 'حرّر الموعد الآن',
+    });
+  });
+
+  // «احجز الموعد {days} يومًا» for the default 14, the number agreeing with any other count of
+  // days the setting holds (T075's `{days, plural, …}` precedent, the ban dialogs' words).
+  it('says «احجز الموعد {days} يومًا», the days agreeing with their number, in both languages', () => {
+    // The catalogue isolates each value it interpolates (FSI … PDI); the words are read without them.
+    const hold = (locale: 'ar' | 'en', days: number) =>
+      translate(locale, 'admin.sessions.end.slot.hold', { days }).replace(/[⁦-⁩]/gu, '');
+    expect(hold('ar', 14)).toMatch(/^احجز الموعد \S+ يومًا$/u);
+    expect(hold('ar', 7)).toMatch(/^احجز الموعد \S+ أيام$/u);
+    expect(hold('ar', 2)).toBe('احجز الموعد يومين');
+    expect(hold('ar', 1)).toBe('احجز الموعد يومًا واحدًا');
+    expect(hold('en', 14)).toBe('Hold the slot for 14 days');
+    expect(hold('en', 1)).toBe('Hold the slot for 1 day');
+  });
+
+  it('never says the end is final or never restorable, in either language', () => {
+    const final = /نهائ|أبد|final|never|permanent/iu;
+    for (const catalogue of [arCatalogue, enCatalogue]) {
+      const { end } = catalogue.admin.sessions;
+      for (const words of [end.effect, end.releaseFinal, end.slot.hold, end.slot.release]) {
+        expect(words).not.toMatch(final);
+      }
+    }
+  });
+
+  it('sends nothing until the parties’ reason is written; the internal note alone does not', async () => {
+    const { api, dialog } = await endDialog();
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.noteLabel')), {
+      target: { value: 'ملاحظة للإدارة' },
+    });
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.reasonLabel')), {
+      target: { value: '   ' },
+    });
+    const confirm = dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') });
+    expect(confirm.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(confirm);
+    expect(api.sessions.endEnrollment.mutate).not.toHaveBeenCalled();
+  });
+
+  it('ends with the trimmed reason, no note when none is written, the slot held, and the key minted when the dialog opened, the same key on a retry; then reads the enrollment again', async () => {
+    const api = fakeApi();
+    api.sessions.endEnrollment.mutate
+      .mockRejectedValueOnce(refusal('INTERNAL'))
+      .mockResolvedValue({ enrollmentId: E1, caseId: C1, slot: 'hold', cancelledSessions: 5 });
+    const { dialog } = await endDialog(api);
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.reasonLabel')), {
+      target: { value: ' طلب الطالب إنهاء الاشتراك ' },
+    });
+    const confirm = dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') });
+    fireEvent.click(confirm);
+    expect(await dialog.findByText(ar('admin.dialogs.submitError'))).toBeTruthy();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const [first, second] = api.sessions.endEnrollment.mutate.mock.calls.map(([input]) => input);
+    expect(first).toStrictEqual({
+      enrollmentId: E1,
+      partyReason: 'طلب الطالب إنهاء الاشتراك',
+      slot: 'hold',
+      idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
+    });
+    expect(second).toStrictEqual(first);
+    await waitFor(() => expect(api.sessions.monitor.get.query).toHaveBeenCalledTimes(2));
+  });
+
+  it('ends with «حرّر الموعد الآن» and the internal note, trimmed', async () => {
+    const api = fakeApi();
+    api.sessions.endEnrollment.mutate.mockResolvedValue({
+      enrollmentId: E1,
+      caseId: C1,
+      slot: 'release',
+      cancelledSessions: 5,
+    });
+    const { dialog } = await endDialog(api);
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.reasonLabel')), {
+      target: { value: 'انتقال الطالب' },
+    });
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.noteLabel')), {
+      target: { value: ' اتصل الطالب بالدعم ' },
+    });
+    fireEvent.click(dialog.getByRole('radio', { name: ar('admin.sessions.end.slot.release') }));
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.sessions.endEnrollment.mutate).toHaveBeenCalledWith({
+      enrollmentId: E1,
+      partyReason: 'انتقال الطالب',
+      internalNote: 'اتصل الطالب بالدعم',
+      slot: 'release',
+      idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
+    });
+  });
+
+  it('says `complaint_open` in plain words with a link to the complaint, in both languages', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        api.sessions.endEnrollment.mutate.mockRejectedValue(
+          refusal('CONFLICT', [
+            { path: 'cause', code: 'complaint_open' },
+            { path: 'caseId', code: C2 },
+          ]),
+        );
+        return open(api, `/sessions?enrollment=${E1}`);
+      },
+      async (t) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.end') }));
+        const dialog = within(await screen.findByRole('dialog'));
+        fireEvent.change(dialog.getByLabelText(t('admin.sessions.end.reasonLabel')), {
+          target: { value: 'سبب' },
+        });
+        fireEvent.click(dialog.getByRole('button', { name: t('admin.sessions.end.confirm') }));
+        expect(await dialog.findByText(t('admin.sessions.end.refused.complaintOpen'))).toBeTruthy();
+        const link = dialog.getByRole('link', {
+          name: t('admin.sessions.end.refused.openComplaint'),
+        });
+        expect(link.getAttribute('href')).toBe(`/cases?case=${C2}`);
+      },
+    );
+  });
+
+  it('the complaint’s link opens it on /cases', async () => {
+    const api = fakeApi();
+    api.sessions.endEnrollment.mutate.mockRejectedValue(
+      refusal('CONFLICT', [
+        { path: 'cause', code: 'complaint_open' },
+        { path: 'caseId', code: C2 },
+      ]),
+    );
+    const { dialog } = await endDialog(api);
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.reasonLabel')), {
+      target: { value: 'سبب' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') }));
+    fireEvent.click(
+      await dialog.findByRole('link', { name: ar('admin.sessions.end.refused.openComplaint') }),
+    );
+    await waitFor(() => expect(currentPath()).toBe(`/cases?case=${C2}`));
+  });
+
+  it('says `complaint_open` naming no complaint in the same words, with no link', async () => {
+    const api = fakeApi();
+    api.sessions.endEnrollment.mutate.mockRejectedValue(
+      refusal('CONFLICT', [{ path: 'cause', code: 'complaint_open' }]),
+    );
+    const { dialog } = await endDialog(api);
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.end.reasonLabel')), {
+      target: { value: 'سبب' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') }));
+    expect(await dialog.findByText(ar('admin.sessions.end.refused.complaintOpen'))).toBeTruthy();
+    expect(
+      dialog.queryByRole('link', { name: ar('admin.sessions.end.refused.openComplaint') }),
+    ).toBeNull();
+  });
+
+  it('says `enrollment_not_confirmed`, NOT_FOUND, a reused key and any other failure through `errorMessageKey`, RATE_LIMITED with when to try again, in both languages', async () => {
+    const refusals = [
+      refusal('CONFLICT', [{ path: 'cause', code: 'enrollment_not_confirmed' }]),
+      refusal('NOT_FOUND'),
+      refusal('CONFLICT'),
+      refusal('INTERNAL'),
+    ];
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        for (const error of refusals)
+          api.sessions.endEnrollment.mutate.mockRejectedValueOnce(error);
+        api.sessions.endEnrollment.mutate.mockRejectedValueOnce(
+          refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+        );
+        return open(api, `/sessions?enrollment=${E1}`);
+      },
+      async (t) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.end') }));
+        const dialog = within(await screen.findByRole('dialog'));
+        fireEvent.change(dialog.getByLabelText(t('admin.sessions.end.reasonLabel')), {
+          target: { value: 'سبب' },
+        });
+        const confirm = dialog.getByRole('button', { name: t('admin.sessions.end.confirm') });
+        for (const _refused of refusals) {
+          fireEvent.click(confirm);
+          expect(await dialog.findByText(t('admin.dialogs.submitError'))).toBeTruthy();
+          expect(dialog.queryByText(t('admin.sessions.end.refused.complaintOpen'))).toBeNull();
+        }
+        fireEvent.click(confirm);
+        expect(await dialog.findByText(t('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+      },
+    );
+  });
+});
+
+// B42c, T083 (N9; T073's `restorableUntil`): an enrollment an administrator ended directly is
+// `cancelled` with an `admin_ended` case, and the monitor answers `restorableUntil` for it, so the
+// restore stays offered inside the hold and after it; its case is named in plain words.
+describe('T083: the restore of an enrollment an administrator ended (T073; N9)', () => {
+  const PAST = '2026-10-01T10:00:00.000Z';
+  const ended = (more: Record<string, unknown>) => {
+    const api = fakeApi();
+    const { slotHeldUntil: _held, ...rest } = closedDetail.enrollment;
+    api.sessions.monitor.get.query.mockResolvedValue({
+      ...closedDetail,
+      enrollment: { ...rest, status: 'cancelled', ...more },
+      cases: [{ caseId: C1, reason: 'admin_ended', status: 'open' }],
+    });
+    return api;
+  };
+
+  it('offers the restore inside the hold, saying the slot is held until `slotHeldUntil`, and names the `admin_ended` case, in both languages', async () => {
+    await inBothLocales(
+      () =>
+        open(
+          ended({ restorableUntil: SLOT_HELD_UNTIL, slotHeldUntil: SLOT_HELD_UNTIL }),
+          `/sessions?enrollment=${E2}`,
+        ),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        expect(
+          panel.getByRole('button', { name: t('admin.sessions.detail.restore') }),
+        ).toBeTruthy();
+        expect(
+          panel.getByText(
+            t('admin.sessions.detail.restorableUntil', { when: at(t, locale, SLOT_HELD_UNTIL) }),
+          ),
+        ).toBeTruthy();
+        const cases = within(
+          panel.getByRole('region', { name: t('admin.sessions.detail.casesTitle') }),
+        );
+        expect(cases.getByText(t('admin.sessions.caseReason.adminEnded'))).toBeTruthy();
+        expect(panel.queryByRole('button', { name: t('admin.sessions.detail.end') })).toBeNull();
+      },
+    );
+  });
+
+  it('offers the restore after the hold (a past `restorableUntil`), in both languages', async () => {
+    await inBothLocales(
+      () =>
+        open(ended({ restorableUntil: PAST, slotHeldUntil: PAST }), `/sessions?enrollment=${E2}`),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        expect(
+          panel.getByRole('button', { name: t('admin.sessions.detail.restore') }),
+        ).toBeTruthy();
+        expect(
+          panel.getByText(
+            t('admin.sessions.detail.restorableUntil', { when: at(t, locale, PAST) }),
+          ),
+        ).toBeTruthy();
+        expect(panel.getByText(t('admin.sessions.caseReason.adminEnded'))).toBeTruthy();
+      },
+    );
+  });
+
+  it('names an `admin_ended` case as the administration’s end of the enrollment', () => {
+    const key: MessageKey | undefined = CASE_REASON.admin_ended;
+    expect({
+      ar: key === undefined ? undefined : translate('ar', key),
+      en: key === undefined ? undefined : translate('en', key),
+    }).toEqual({
+      ar: 'إنهاء الإدارة الاشتراك',
+      en: 'The administration ended the enrollment',
+    });
   });
 });
