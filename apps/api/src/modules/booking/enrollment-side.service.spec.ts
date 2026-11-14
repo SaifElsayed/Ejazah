@@ -16,6 +16,7 @@ import type { EnrollmentOutcome } from './enrollment-events.repository.js';
 import type { ActiveHold, MoveTarget } from './enrollment-side.repository.js';
 import { createEnrollmentSide, type EnrollmentSideStore } from './enrollment-side.service.js';
 import type { SlotOccupancy } from './slot-occupancy.service.js';
+import type { HeldRelease } from './slot-release.service.js';
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const AT = new Date('2026-11-08T09:00:00Z');
@@ -30,6 +31,8 @@ interface Recorded {
   readonly occupancy: { slotIds: readonly string[]; except: string; bufferWeeks: number }[];
   readonly holds: { studentUserIds: readonly string[]; slotIds: readonly string[] }[];
   readonly slotReads: string[];
+  /** T082: the release core's calls, with the enrollment window it read. */
+  readonly releases: { id: string; days: number }[];
 }
 
 interface WorldOptions {
@@ -40,6 +43,8 @@ interface WorldOptions {
   readonly holds?: readonly ActiveHold[];
   readonly teacherSlots?: Readonly<Record<string, readonly SlotRow[]>>;
   readonly slots?: Readonly<Record<string, SlotRow>>;
+  /** T082: what the release core answers. */
+  readonly release?: HeldRelease;
 }
 
 function world(options: WorldOptions) {
@@ -52,6 +57,7 @@ function world(options: WorldOptions) {
     occupancy: [],
     holds: [],
     slotReads: [],
+    releases: [],
   };
   const terms: EnrollmentTerms = {
     id: id(1),
@@ -104,11 +110,20 @@ function world(options: WorldOptions) {
       recorded.slotReads.push(slotId);
       return options.slots?.[slotId] ?? null;
     },
+    // T082 (rule d for the store's other cases): the release core.
+    releaseHeld: async (_tx, released, windowDays) => {
+      recorded.releases.push({
+        id: released,
+        days: await windowDays('enrollment_restore_window_days'),
+      });
+      return options.release ?? { released: true, at: AT, caseId: id(9), kind: 'admin_ended' };
+    },
   };
   const values: Record<string, unknown> = {
     admin_list_page_size: options.pageSize ?? 2,
     slot_release_buffer_weeks: 1,
     first_session_lead_hours: 24,
+    enrollment_restore_window_days: 14,
   };
   const settings: SettingsReader = {
     read: async <T>(key: string, schema: z.ZodType<T>) => {
@@ -166,6 +181,22 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
       name: "cancel 'admin': confirmed → cancelled admin (T036, R-313)",
       call: (side: ReturnType<typeof world>['side']) => side.cancel(tx, id(1), 'admin'),
       target: { status: 'cancelled', cancellationReason: 'admin' },
+      event: {
+        kind: 'cancelled',
+        enrollmentId: id(1),
+        cancellationReason: 'admin',
+        occurredAt: AT,
+      },
+    },
+    {
+      name: "cancel 'admin' with the party reason: confirmed → cancelled admin, admin_end_reason written (T082)",
+      call: (side: ReturnType<typeof world>['side']) =>
+        side.cancel(tx, id(1), 'admin', 'تعذر استمرار الاشتراك'),
+      target: {
+        status: 'cancelled',
+        cancellationReason: 'admin',
+        adminEndReason: 'تعذر استمرار الاشتراك',
+      },
       event: {
         kind: 'cancelled',
         enrollmentId: id(1),
@@ -403,5 +434,22 @@ describe("EnrollmentSide.heldTimesOf (T008, F5; the owner's decision of 2026-11-
       holds: [{ slotId: id(11), sessionCount: 1, expiresAt: at('2026-11-08T09:15:00Z') }],
     });
     await expect(side.heldTimesOf(tx, [id(101)], WIDE)).rejects.toThrow(/slot/);
+  });
+});
+
+// T082 of specs/004-sessions (the note under T082, Q-R15 (a)): booking's release core reached through
+// the port, for a direct end's `slot: 'release'` in the same transaction; the window read through the
+// side's own reads.
+describe('EnrollmentSide.releaseHeldSlot (T082, Q-R15 (a))', () => {
+  it('answers the release’s instant through booking’s core, the window read from the settings', async () => {
+    const { side, recorded } = world({});
+    expect(await side.releaseHeldSlot(tx, id(1))).toEqual(AT);
+    expect(recorded.releases).toEqual([{ id: id(1), days: 14 }]);
+  });
+
+  it('answers null when the core refused, writing nothing of its own', async () => {
+    const { side, recorded } = world({ release: { released: false, reason: 'already_released' } });
+    expect(await side.releaseHeldSlot(tx, id(1))).toBeNull();
+    expect(recorded.events).toEqual([]);
   });
 });

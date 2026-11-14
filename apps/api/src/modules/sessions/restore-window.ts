@@ -3,8 +3,12 @@
 // written in the closing's own transaction, plus `enrollment_restore_window_days`, each day 24 hours
 // of an instant (the owner's decision of 2026-11-10 on B37 lane B's Q7). `sessions.monitor.get`
 // shows it as `restorableUntil`. Since T073 (DEC-69) it is only the end of the slot's hold: no restore
-// is refused for its time (`window_closed` is never produced), and the hold, the restore's step 1 and
-// the panel read it through this one function, so they cannot disagree.
+// is refused for its time (`window_closed` is never produced). The restore's step 1 reads the closing
+// through `closingOf` below (`restore.service.ts`), and the hold's end is read through this one
+// function by the hold (`booking/slot-occupancy.repository.ts`), the release
+// (`booking/slot-release.service.ts`), the lift (`ban-lift.service.ts`), the monitor
+// (`sessions-monitor.service.ts`), the lists (`booking/enrollment-lists.service.ts`) and the sweep
+// (`booking/slot-hold-end.sweep.ts`), so they cannot disagree (T082, the follow-up under it, F2).
 //
 // T070 (FR-503; SRS FR-CANCEL-9, DEC-69; the note under T070, Q4 (a), N4, N10, Q3 (a)): THE ONE
 // CLOSING RULE, beside it. An enrollment's closing is its status, its last cancellation's reason and
@@ -14,21 +18,25 @@
 //
 //   - `terminated_no_show`, the case `absence_termination` (a complaint's decision (a));
 //   - `cancelled` with `admin`, the case `student_fault_confirmed` (a suspended student's fault
-//     confirmed) or `student_banned` (a student's ban);
+//     confirmed), `student_banned` (a student's ban) or (T082, N8) `admin_ended` (an administrator's
+//     direct end, `sessions.endEnrollment`);
 //   - `cancelled` with `teacher_suspended`, the case `teacher_ended` (a teacher's ban or revocation;
 //     T071 makes a suspension pause, so no suspension closes an enrollment this way any more).
 //
 // Never a deletion's closing (`account_deleted`, whatever its case) or a gender correction's
 // (`gender_correction`), nor any other status or pairing. The kind is restorable only while its case
 // is open (N10: step 1 only, never steps 3 to 6, so a ban's closing is held while the ban stands).
-// No `admin_ended` before T082 (Q3 (a)), which adds it here. Booking's slot hold (`slotUses`) and
-// release, the monitor's `slotHeldUntil`, and T073's step 1 and `closingCaseReason` read this rule,
-// so the hold, the restore and the panel cannot disagree (FR-503).
+// T082 adds `admin_ended` (N8): the hold, the sweep (`close-slot-holds` records its hold's end), the
+// monitor's `closingCaseReason` and the restore's step 1 read it with every other kind; it is never
+// paused (`enrollment-lists.service.ts`' `BAN_CLOSINGS`) and never lifted (`ban-lift.service.ts`'
+// `KIND_OF`). Booking's slot hold (`slotUses`) and release, the monitor's `slotHeldUntil`, and T073's
+// step 1 and `closingCaseReason` read this rule, so the hold, the restore and the panel cannot
+// disagree (FR-503).
 //
 // The window's setting follows the kind: `ban_restore_window_days` for a ban's or a revocation's
-// closing, `enrollment_restore_window_days` otherwise (SRS FR-CANCEL-9). The caller hands in how a
-// setting is read (`windowDaysOf` over the settings), so a setting is read only when a closing needs
-// it; every instant compared with the hold's end is the database's clock (`clockTimestamp`).
+// closing, `enrollment_restore_window_days` otherwise, a direct end's included (SRS FR-CANCEL-9).
+// The caller hands in how a setting is read (`windowDaysOf` over the settings), so a setting is read
+// only when a closing needs it; every instant compared with the hold's end is the database's clock (`clockTimestamp`).
 import { addDays } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -60,7 +68,12 @@ export function windowDaysOf(settings: Pick<SettingsReader, 'read'>): WindowDays
 
 /** T070: the closings an administrator started and can restore, by their case's reason. */
 export type ClosingKind =
-  'absence_termination' | 'student_fault_confirmed' | 'student_banned' | 'teacher_ended';
+  | 'absence_termination'
+  | 'student_fault_confirmed'
+  | 'student_banned'
+  | 'teacher_ended'
+  // T082 (N8): an administrator's direct end.
+  | 'admin_ended';
 
 /** T070: what the rule reads of an enrollment's closing. */
 export interface ClosingFacts {
@@ -82,7 +95,7 @@ export interface Closing {
 function kindsOf(status: EnrollmentStatus, reason: string | null): readonly ClosingKind[] {
   if (status === 'terminated_no_show') return ['absence_termination'];
   if (status !== 'cancelled') return [];
-  if (reason === 'admin') return ['student_fault_confirmed', 'student_banned'];
+  if (reason === 'admin') return ['student_fault_confirmed', 'student_banned', 'admin_ended'];
   if (reason === 'teacher_suspended') return ['teacher_ended'];
   return [];
 }

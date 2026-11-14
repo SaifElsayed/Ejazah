@@ -34,6 +34,13 @@
 // `time_taken` (T002's lines are the refusal's log, so the error is marked «logged»). Keyed on the
 // kind's transaction (`runOn`), it audits `enrollment.restored` on the enrollment with the reason on
 // its first run only. What it does is `restore.service.ts`'.
+//
+// T082 (FR-513; SRS FR-CANCEL-10, DEC-68): `sessions.endEnrollment` declares its own limit,
+// `rate_limit_enrollment_end`, the administrator as subject, checked before the transaction opens and
+// apart from the key; keyed on the kind's transaction (`runOn`), it audits `enrollment.ended_by_admin`
+// on the enrollment on its first run only, with the reason both parties are shown as the entry's
+// reason and the internal note and the slot's choice in `after` (the note is kept there only). What
+// it does is `enrollment-end.service.ts`'.
 import {
   outagesListInput,
   outagesListOutput,
@@ -56,6 +63,9 @@ import {
   // T061.
   sessionsRestoreInput,
   sessionsRestoreOutput,
+  // T082.
+  sessionsEndEnrollmentInput,
+  sessionsEndEnrollmentOutput,
 } from '@ijazah/contracts/admin';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -65,11 +75,7 @@ import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js'
 const outagesRouter = createAdminRouter({
   record: adminProcedure({ input: outagesRecordInput, output: outagesRecordOutput }).mutation(
     async ({ ctx, input }) => {
-      const recorded = await ctx.services.outages.record(
-        ctx.tx,
-        ctx.administrator.adminId,
-        input,
-      );
+      const recorded = await ctx.services.outages.record(ctx.tx, ctx.administrator.adminId, input);
       ctx.audit.record({
         action: 'provider_outage.recorded',
         targetType: 'provider_outage',
@@ -237,6 +243,30 @@ export const sessionsAdminRouter = createAdminRouter({
       targetType: 'enrollment',
       targetId: input.enrollmentId,
       reason: input.reason,
+    });
+    return answer;
+  }),
+  // T082.
+  endEnrollment: adminProcedure({
+    input: sessionsEndEnrollmentInput,
+    output: sessionsEndEnrollmentOutput,
+    rateLimit: { key: 'rate_limit_enrollment_end', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { answer, replayed } = await ctx.services.enrollmentEnd.endEnrollment(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return answer;
+    }
+    ctx.audit.record({
+      action: 'enrollment.ended_by_admin',
+      targetType: 'enrollment',
+      targetId: input.enrollmentId,
+      reason: input.partyReason,
+      after: { status: 'cancelled', slot: input.slot, internalNote: input.internalNote ?? null },
     });
     return answer;
   }),

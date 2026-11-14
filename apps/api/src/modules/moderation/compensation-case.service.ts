@@ -76,6 +76,9 @@ export const COMPENSATION_REASONS = [
   // enrollment, closed by the teacher's reinstatement or by an end of the enrollment (the note under
   // T071, Q5 (a) widened), never by `cases.resolve` or `cases.dismiss`.
   'teacher_suspended',
+  // T082 of specs/004-sessions (FR-513; SRS FR-CANCEL-10, DEC-68; the note under T082, Q2 (a)): an
+  // administrator's direct end of an enrollment, holding the sessions owed and every open remedy.
+  'admin_ended',
 ] as const;
 
 /**

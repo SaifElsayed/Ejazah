@@ -75,6 +75,8 @@ import {
 import { createTeacherReinstatement } from '../sessions/index.js';
 // T072 of specs/004-sessions: a ban's or a revocation's lift restores the enrollments it closed.
 import { createBanLift } from '../sessions/index.js';
+// T082 of specs/004-sessions: an administrator's direct end of an enrollment.
+import { createEnrollmentEnd, type EnrollmentEnd } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
   createUserDirectory,
@@ -206,6 +208,12 @@ export interface AdminServices {
   readonly users: UserDirectory;
   /** T070 of specs/004-sessions: booking's release of a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: HeldSlotRelease;
+  /**
+   * T082 of specs/004-sessions: the sessions module's direct end of an enrollment
+   * (`sessions.endEnrollment`), keyed on the call's transaction, booking's half through the bound
+   * `EnrollmentSide`.
+   */
+  readonly enrollmentEnd: EnrollmentEnd;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -402,6 +410,12 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     enrollments: createHeldSlotRelease({
       idempotency: dependencies.idempotency,
       settings: dependencies.settings,
+      log: dependencies.log,
+    }),
+    // T082: the direct end, keyed through `runOn` on the call's transaction.
+    enrollmentEnd: createEnrollmentEnd({
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
       log: dependencies.log,
     }),
   };
