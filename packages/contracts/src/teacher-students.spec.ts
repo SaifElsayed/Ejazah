@@ -59,6 +59,7 @@ const item = {
   upcoming: 6,
   completed: 2,
   remaining: 6,
+  paused: false,
 } as const;
 
 /** What R-HONEST-4 keeps from the teacher, as a leak would spell it. */
@@ -107,6 +108,19 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
     const detail = { ...item, sessions: [session] };
     expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
     expect(teacherStudentsListOutput.parse({ items: [item] })).toEqual({ items: [item] });
+  });
+
+  // 004:T074 (FR-506; DEC-69, Q11 (a); the note under T074, Q-R7 (a)): a paused enrollment is
+  // answered paused, with no reason and no session; its three counts kept. Additive (R-API-9).
+  it('carries paused, required: true for a paused enrollment with no next or last session (004:T074, FR-506)', () => {
+    const { paused: _paused, ...without } = item;
+    expect(teacherStudentItem.safeParse(without).success).toBe(false);
+    expect(teacherStudentItem.safeParse({ ...item, paused: 1 }).success).toBe(false);
+    const { next: _next, last: _last, ...bare } = item;
+    const paused = { ...bare, paused: true };
+    expect(teacherStudentItem.parse(paused)).toEqual(paused);
+    const detail = { ...paused, sessions: [] };
+    expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
   });
 
   it('names the student by display name alone, and whether the account was deleted (T007)', () => {

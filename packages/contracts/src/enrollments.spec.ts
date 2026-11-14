@@ -66,6 +66,7 @@ const item = {
   upcoming: 8,
   completed: 0,
   remaining: 8,
+  paused: false,
 } as const;
 
 describe('the tabs and the session statuses', () => {
@@ -187,6 +188,20 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
       teacher: { ...item.teacher, dateOfBirth: '1990-01-01', photoKey: 'photos/1' },
     });
     expect(answered).toEqual(item);
+  });
+
+  // 004:T074 (FR-506; DEC-69, Q11 (a); the note under T074, Q-R7 (a)): an enrollment paused by a
+  // teacher's suspension, or closed by a ban or a revocation while its slot is held, is answered
+  // paused, with no reason and no session; its three counts kept. Additive (R-API-9).
+  it('carries paused, required: true for a paused enrollment with no next or last session (004:T074, FR-506)', () => {
+    const { paused: _paused, ...without } = item;
+    expect(studentEnrollmentItem.safeParse(without).success).toBe(false);
+    expect(studentEnrollmentItem.safeParse({ ...item, paused: 'yes' }).success).toBe(false);
+    const { next: _next, last: _last, ...bare } = item;
+    const paused = { ...bare, paused: true };
+    expect(studentEnrollmentItem.parse(paused)).toEqual(paused);
+    const detail = { ...paused, sessions: [], complaintOpen: false };
+    expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
   });
 
   it('refuses a negative count', () => {

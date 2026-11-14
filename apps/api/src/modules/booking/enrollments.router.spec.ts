@@ -98,6 +98,8 @@ const item = {
   upcoming: 4,
   completed: 0,
   remaining: 4,
+  // 004:T074 (FR-506): additively, rule d.
+  paused: false,
 };
 
 let calls: unknown[][];

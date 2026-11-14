@@ -9,8 +9,12 @@
 // `teacher_ended` case (booking's subscriber). Which enrollments a lift reads is T070's one closing
 // rule (`closingOf`, `restore-window.ts`) over each of the person's `cancelled` enrollments, paged
 // through `EnrollmentSide` (sessions reads no booking table, R-301), its last cancellation's reason
-// (its events) and its latest end case (moderation's entry): the kind the lift's side names, its
-// case open. A deletion's or a gender correction's closing is never one (T073, Q10 (a)).
+// and its latest end case (moderation's entry): the kind the lift's side names, its case open. A
+// deletion's or a gender correction's closing is never one (T073, Q10 (a)). T074 FU4 (PR #139's
+// review, round 1, follow-up 4; the note under T074, Q-O3 (a)): the pages hold only the enrollments
+// a payment once confirmed (`everConfirmed`, never an abandoned or a failed checkout), each page's
+// cases read in one call of moderation's `compensationCasesAmong`, the last cancellation's reason
+// and the release from the enrollment's columns, as `slotUses` reads them; no event is read.
 //
 // `counterpartiesOf`: those enrollments' other parties, read with no lock, for identity's one
 // `users` call. `restoreClosed`, once identity holds `users` (the person and those counterparties,
@@ -36,8 +40,9 @@
 //
 // THE HOLD (`slotHeldUntilOf`, Q9 (a)): the latest hold end among the account's closings a ban or a
 // revocation made (the student's `student_banned`, the teacher's `teacher_ended`), each still held
-// (its case open, no `slot_released` row after the closing, as the monitor's `slotHeldUntil` reads
-// it), each through T070's `restorableUntil` (the closing case's opening plus
+// (its case open, `slot_released_at` NULL: a release writes it with its `slot_released` row and a
+// restore clears it, so it says what the monitor's `slotHeldUntil` reads from the row; T074 FU4),
+// each through T070's `restorableUntil` (the closing case's opening plus
 // `ban_restore_window_days`), never `banned_at` plus the setting; null for none. It may have passed.
 //
 // THE LOG (the owner's rule): `gender_mismatch` and `restore_failed` one info line of ids and the
@@ -52,9 +57,8 @@ import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { sessionPartiesOf } from '../identity/index.js';
-import { compensationCasesOf, type EnrollmentCase } from '../moderation/index.js';
+import { compensationCasesAmong, type EnrollmentCase } from '../moderation/index.js';
 import type {
-  EnrollmentEventEntry,
   EnrollmentPageFilter,
   EnrollmentPageItem,
   EnrollmentSide,
@@ -91,8 +95,11 @@ export interface BanLiftStore {
   lockSessions(tx: Transaction, ids: readonly string[]): Promise<void>;
   lockRemedies(tx: Transaction, ids: readonly string[]): Promise<void>;
   sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly RestoreSession[]>;
-  /** Moderation's: the enrollment's compensation cases, newest first. */
-  casesOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentCase[]>;
+  /** Moderation's: each enrollment's compensation cases, newest first, in one read (T074 FU4). */
+  casesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly EnrollmentCase[]>>;
   /** Identity's: each party's standing and gender. */
   partiesOf(
     tx: Transaction,
@@ -106,7 +113,7 @@ export const banLiftStore: BanLiftStore = {
   lockSessions,
   lockRemedies,
   sessionsOf: restoreSessionsOf,
-  casesOf: compensationCasesOf,
+  casesAmong: compensationCasesAmong,
   partiesOf: sessionPartiesOf,
 };
 
@@ -127,7 +134,7 @@ export interface BanLift {
 export interface BanLiftDependencies {
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentPage' | 'eventsOf' | 'enrollmentFor' | 'lockEnrollments'
+    'enrollmentPage' | 'enrollmentFor' | 'lockEnrollments'
   >;
   /** T073's core, its dependencies bound once (`createRestore`). */
   readonly restore: Pick<Restore, 'restoreClosed'>;
@@ -147,7 +154,8 @@ interface ClosedEnrollment {
   readonly studentUserId: string;
   readonly teacherUserId: string;
   readonly closing: Closing;
-  readonly events: readonly EnrollmentEventEntry[];
+  /** `slot_released_at` (T070), read from the page (T074 FU4). */
+  readonly slotReleasedAt: Date | null;
 }
 
 /** The enrollments a ban or a revocation closes are `cancelled`: a read filter, never a write. */
@@ -163,19 +171,6 @@ const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sor
 const byId = (one: { readonly enrollmentId: string }, other: { readonly enrollmentId: string }) =>
   one.enrollmentId < other.enrollmentId ? -1 : 1;
 
-/** The last cancellation's reason, from the events (oldest first); null for none. */
-function lastCancellationReasonOf(events: readonly EnrollmentEventEntry[]): string | null {
-  return events.filter(({ kind }) => kind === 'cancelled').at(-1)?.cancellationReason ?? null;
-}
-
-/** Whether a `slot_released` row follows the enrollment's last closing (the monitor's reading). */
-function releasedSinceClosing(events: readonly EnrollmentEventEntry[]): boolean {
-  const closedAt = events.findLastIndex(
-    ({ kind }) => kind === 'cancelled' || kind === 'terminated_no_show',
-  );
-  return events.slice(closedAt + 1).some(({ kind }) => kind === 'slot_released');
-}
-
 const LIFT_REFUSED = 'A lift was refused';
 
 export function createBanLift({
@@ -187,23 +182,37 @@ export function createBanLift({
   refusedAfterWrite = isRefusedAfterWrite,
   store = banLiftStore,
 }: BanLiftDependencies): BanLift {
-  /** The enrollment's closing as the one closing rule reads it, if the side's kind with its case open. */
-  const closedBy = async (
+  /**
+   * Of a page's items, those the side's ban or revocation closed by the one closing rule, its case
+   * open: the cases read in one call (T074 FU4), the last cancellation's reason from the column.
+   */
+  const closedAmong = async (
     tx: Transaction,
-    item: Pick<EnrollmentPageItem, 'enrollmentId' | 'status'>,
+    items: readonly EnrollmentPageItem[],
     side: BanLiftSide,
-  ): Promise<{ closing: Closing; events: readonly EnrollmentEventEntry[] } | null> => {
-    const [events, cases] = await Promise.all([
-      enrollments.eventsOf(tx, item.enrollmentId),
-      store.casesOf(tx, item.enrollmentId),
-    ]);
-    const closing = closingOf({
-      status: item.status,
-      lastCancellationReason: lastCancellationReasonOf(events),
-      endCase: latestEndCaseOf(cases),
+  ): Promise<ClosedEnrollment[]> => {
+    if (items.length === 0) return [];
+    const cases = await store.casesAmong(
+      tx,
+      items.map(({ enrollmentId }) => enrollmentId),
+    );
+    return items.flatMap((item) => {
+      const closing = closingOf({
+        status: item.status,
+        lastCancellationReason: item.cancellationReason,
+        endCase: latestEndCaseOf(cases.get(item.enrollmentId) ?? []),
+      });
+      if (closing?.kind !== KIND_OF[side] || !closing.restorable) return [];
+      return [
+        {
+          enrollmentId: item.enrollmentId,
+          studentUserId: item.studentUserId,
+          teacherUserId: item.teacherUserId,
+          closing,
+          slotReleasedAt: item.slotReleasedAt,
+        },
+      ];
     });
-    if (closing?.kind !== KIND_OF[side] || !closing.restorable) return null;
-    return { closing, events };
   };
 
   /** The person's enrollments the side's ban or revocation closed, read with no lock, in id order. */
@@ -214,22 +223,13 @@ export function createBanLift({
   ): Promise<ClosedEnrollment[]> => {
     const filter: EnrollmentPageFilter =
       side === 'student'
-        ? { status: CANCELLED, studentUserIds: [userId] }
-        : { status: CANCELLED, teacherUserIds: [userId] };
+        ? { status: CANCELLED, everConfirmed: true, studentUserIds: [userId] }
+        : { status: CANCELLED, everConfirmed: true, teacherUserIds: [userId] };
     const closed: ClosedEnrollment[] = [];
     let cursor: string | undefined;
     for (;;) {
       const page = await enrollments.enrollmentPage(tx, filter, cursor);
-      for (const item of page.items) {
-        const found = await closedBy(tx, item, side);
-        if (found === null) continue;
-        closed.push({
-          enrollmentId: item.enrollmentId,
-          studentUserId: item.studentUserId,
-          teacherUserId: item.teacherUserId,
-          ...found,
-        });
-      }
+      closed.push(...(await closedAmong(tx, page.items, side)));
       if (page.nextCursor === undefined) break;
       cursor = page.nextCursor;
     }
@@ -309,18 +309,16 @@ export function createBanLift({
         tx,
         seen.map(({ enrollmentId }) => enrollmentId),
       );
-      // Read again under the enrollments' locks, which every case closing and every restore take.
-      const closed: ClosedEnrollment[] = [];
-      for (const one of seen) {
-        const now = await enrollments.enrollmentFor(tx, one.enrollmentId);
-        if (now === null) continue;
-        const found = await closedBy(
-          tx,
-          { enrollmentId: one.enrollmentId, status: now.status },
-          side,
-        );
-        if (found !== null) closed.push({ ...one, ...found });
-      }
+      // Read again under the enrollments' locks, which every case closing and every restore take:
+      // one page of their ids and one read of their cases (T074 FU4).
+      const seenIds = seen.map(({ enrollmentId }) => enrollmentId);
+      const again = await enrollments.enrollmentPage(
+        tx,
+        { enrollmentIds: seenIds },
+        undefined,
+        seenIds.length,
+      );
+      const closed = (await closedAmong(tx, again.items, side)).sort(byId);
       const locked = new Set(lockedUserIds);
       for (const one of closed) {
         if (locked.has(otherParty(one, side))) continue;
@@ -365,8 +363,8 @@ export function createBanLift({
       const windowDays = windowDaysOf(settings);
       let latest: Date | null = null;
       for (const side of ['student', 'teacher'] as const) {
-        for (const { closing, events } of await closedOf(tx, userId, side)) {
-          if (releasedSinceClosing(events)) continue;
+        for (const { closing, slotReleasedAt } of await closedOf(tx, userId, side)) {
+          if (slotReleasedAt !== null) continue;
           const until = await restorableUntil(
             closing.closingCase.createdAt,
             closing.kind,

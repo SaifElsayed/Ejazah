@@ -50,6 +50,7 @@ import {
   createRemedyOffer,
   createRestore,
   restorableUntil,
+  restoreStore,
 } from '../../apps/api/src/modules/sessions/index.js';
 import {
   createIdentityRequestStore,
@@ -177,13 +178,14 @@ const confirmedWorld = async (): Promise<World> => confirmed(await world());
 
 /**
  * A second enrollment of the same student with another teacher, on Thursday 11:00 Cairo (so the
- * student's two sessions never overlap), confirmed by the job.
+ * student's two sessions never overlap), confirmed by the job; `startsAt` another local time (F3's
+ * case, T074).
  */
-async function secondOf(first: World): Promise<World> {
+async function secondOf(first: World, startsAt = new Date('1970-01-01T11:00:00Z')): Promise<World> {
   const made = await world();
   await database.availabilitySlot.update({
     where: { id: made.slotId },
-    data: { startTimeLocal: new Date('1970-01-01T11:00:00Z') },
+    data: { startTimeLocal: startsAt },
   });
   await database.enrollment.update({
     where: { id: made.enrollmentId },
@@ -800,5 +802,88 @@ describe('races (kernel.md, the lifts’ row)', () => {
     const after = (await stateOf(v.studentId)).enrollments[0];
     expect(after?.status).toBe('confirmed');
     expect(after?._count.sessions).toBe(8);
+  });
+});
+
+// PR #139's review, round 1, follow-up 6, carried by T074 (round 2, F3; B42b): a restore refused
+// after its first write refuses the whole lift `restore_failed`, and every enrollment the same lift
+// had already restored is rolled back with it (Prisma gives no savepoint; the note under T072,
+// Q7 (a)). Enrollment A (09:00) is restored first (id order); enrollment B (10:00, the same student
+// with another teacher) is then refused by the database's exclusion at its sessions' insert, A's
+// restored sessions having been widened to 90 minutes (a snapshot written so for the probe). The
+// restore's own pre-check of the parties' times is narrowed to see no session, as a writer racing
+// it past that check would leave it (`restore.service.ts`, `weeksFree`), so the refusal is the
+// insert's, marked «refused after a write» (`isRefusedAfterWrite`).
+describe('restore_failed rolls back what the lift already restored (PR #139 r1 follow-up 6, F3)', () => {
+  it('restores A, B refused after its write: the lift CONFLICT restore_failed naming B, A still ended with its case open, the student still banned', async () => {
+    const a = await confirmedWorld();
+    const b = await secondOf(a, new Date('1970-01-01T10:00:00Z'));
+    expect(a.enrollmentId < b.enrollmentId).toBe(true);
+    await banStudent(a.studentId);
+    // A's sessions, once restored, run 09:00 to 10:30 and overlap B's 10:00.
+    await database.enrollment.update({
+      where: { id: a.enrollmentId },
+      data: { snapshotDurationMinutes: 90 },
+    });
+    const blind = createRestore({
+      enrollments,
+      idempotency,
+      offers: createRemedyOffer({ enrollments, settings, log: SILENT }),
+      settings,
+      log: SILENT,
+      payments: { refundedOf },
+      store: { ...restoreStore, sessionsBetween: async () => [] },
+    });
+    const narrowedLift = createBanLift({ enrollments, restore: blind, settings, log: SILENT });
+    const consequences = new AccountConsequences();
+    consequences.subscribe(
+      terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+    );
+    const narrowed = new StandingService({
+      store: standingStoreOver(database),
+      consequences,
+      revokeSubjects,
+      hasOpenIdentityRequest: async (tx, userId) => (await openRequestOf(tx, userId)) !== null,
+      lift: {
+        counterpartiesOf: narrowedLift.counterpartiesOf,
+        restoreClosed: narrowedLift.restoreClosed,
+        grantApprovedSubjects: async () => undefined,
+      },
+      log: SILENT,
+      idempotency,
+    });
+    const before = await stateOf(a.studentId);
+    const thrown: unknown = await database
+      .$transaction(
+        (tx: Transaction) =>
+          narrowed.keyedLift(tx, admin, {
+            scope: 'students.liftBan',
+            userId: a.studentId,
+            reason: 'رفع',
+            idempotencyKey: `lift-f3-${a.enrollmentId.slice(-12)}`,
+          }),
+        OPTIONS,
+      )
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect([(thrown as DomainError).code, (thrown as DomainError).details]).toEqual([
+      'CONFLICT',
+      [
+        { path: 'cause', code: 'restore_failed' },
+        { path: 'enrollmentId', code: b.enrollmentId },
+      ],
+    ]);
+    const after = await stateOf(a.studentId);
+    expect(after).toEqual(before);
+    expect(after.user.accountStatus).toBe('banned');
+    const first = after.enrollments.find(({ id }) => id === a.enrollmentId);
+    expect(first).toMatchObject({ status: 'cancelled', cancellationReason: 'admin' });
+    expect(first?.disputes).toEqual([
+      { reason: 'student_banned', status: 'open', resolutionNotes: null },
+    ]);
+    expect(first?._count.sessions).toBe(4);
   });
 });

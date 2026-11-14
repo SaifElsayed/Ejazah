@@ -45,6 +45,8 @@ function world(marked: readonly { enrollmentId: string; teacherNoShows: number }
           status: 'cancelled',
           track: 'recitation',
           sessionCount: 4,
+          cancellationReason: null,
+          slotReleasedAt: null,
         },
         {
           enrollmentId: FIRST,
@@ -53,6 +55,8 @@ function world(marked: readonly { enrollmentId: string; teacherNoShows: number }
           status: 'confirmed',
           track: 'recitation',
           sessionCount: 4,
+          cancellationReason: null,
+          slotReleasedAt: null,
         },
       ];
       return {

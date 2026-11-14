@@ -41,6 +41,8 @@ export const teacherStudentItem = z.object({
   summary: enrollmentTerms,
   status: enrollmentStatus,
   ...enrollmentProgress.shape,
+  /** 004:T074 (FR-506): paused to the teacher, as `studentEnrollmentItem`'s `paused` reads. */
+  paused: z.boolean(),
 });
 
 export const teacherStudentsListOutput = z.object({

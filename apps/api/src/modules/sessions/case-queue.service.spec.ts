@@ -147,6 +147,8 @@ function queueOver(world: World) {
           status: 'confirmed',
           track: 'recitation',
           sessionCount: 8,
+          cancellationReason: null,
+          slotReleasedAt: null,
         }
       : world.enrollment;
   const enrollments: Pick<EnrollmentSide, 'enrollmentPage'> = {

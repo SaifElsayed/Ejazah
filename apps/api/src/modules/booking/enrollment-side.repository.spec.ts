@@ -162,6 +162,8 @@ describe('enrollmentsPage (T008, U3)', () => {
     status: 'completed',
     snapshotTrack: 'recitation',
     snapshotSessionCount: 4,
+    cancellationReason: null,
+    slotReleasedAt: null,
   };
 
   it('with no filter and no cursor: every enrollment, newest first, up to take', async () => {
@@ -174,9 +176,37 @@ describe('enrollmentsPage (T008, U3)', () => {
         status: 'completed',
         track: 'recitation',
         sessionCount: 4,
+        cancellationReason: null,
+        slotReleasedAt: null,
       },
     ]);
     expect(calls[0]?.args).toMatchObject({ where: { AND: [] }, orderBy: { id: 'desc' }, take: 3 });
+    expect((calls[0]?.args as { where: { confirmedAt?: unknown } }).where.confirmedAt).toEqual({});
+  });
+
+  // T074 FU4 (PR #139's review, round 1, follow-up 4; the note under T074, Q-O3 (a)): the page answers
+  // the last cancellation's reason and the slot's release, and `everConfirmed` narrows it to the
+  // enrollments a payment once confirmed (`confirmed_at` set), never an abandoned checkout.
+  it('answers the last cancellation’s reason and the release, and narrows to the enrollments once confirmed (T074 FU4)', async () => {
+    const released = new Date('2026-11-12T08:00:00Z');
+    const { client, calls } = recorded({
+      findMany: [
+        { ...row, status: 'cancelled', cancellationReason: 'admin', slotReleasedAt: released },
+      ],
+    });
+    expect(
+      await enrollmentsPage(client, { status: 'cancelled', everConfirmed: true }, undefined, 3),
+    ).toEqual([
+      expect.objectContaining({
+        status: 'cancelled',
+        cancellationReason: 'admin',
+        slotReleasedAt: released,
+      }),
+    ]);
+    expect(calls[0]?.args).toMatchObject({
+      where: { status: 'cancelled', confirmedAt: { not: null } },
+      select: { cancellationReason: true, slotReleasedAt: true },
+    });
   });
 
   it('every condition given at once, and the ids before the cursor', async () => {

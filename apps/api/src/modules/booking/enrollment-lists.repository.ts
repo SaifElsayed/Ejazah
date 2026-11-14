@@ -16,8 +16,13 @@ import type { EnrollmentStatus, PackageTrack } from '@ijazah/contracts';
 import type { Prisma } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { EnrollmentCancellationReason } from './enrollment-events.repository.js';
 
-/** One enrollment as the lists read it: its parties, its status and its snapshot's package line. */
+/**
+ * One enrollment as the lists read it: its parties, its status and its snapshot's package line; and
+ * (004:T074, FR-506) its last cancellation's reason and its slot's release, which «paused» reads by
+ * the one closing rule (`enrollment-lists.service.ts`, «PAUSED»), never shown.
+ */
 export interface ListedEnrollmentRow {
   readonly id: string;
   readonly studentUserId: string;
@@ -27,6 +32,10 @@ export interface ListedEnrollmentRow {
   readonly snapshotTrack: PackageTrack;
   readonly snapshotSessionCount: number;
   readonly snapshotDurationMinutes: number;
+  /** `enrollments.cancellation_reason`: the last cancellation's while `cancelled`, else null. */
+  readonly cancellationReason: EnrollmentCancellationReason | null;
+  /** `enrollments.slot_released_at` (T070): an administrator released the held slot. */
+  readonly slotReleasedAt: Date | null;
 }
 
 /** Whose lists: the student's own or the teacher's own. */
@@ -61,6 +70,8 @@ export function activeEnrollmentsOfStudent(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
 }
@@ -87,6 +98,8 @@ export function activeEnrollmentsOfTeacher(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
 }
@@ -132,6 +145,8 @@ export function endedEnrollmentPage(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
 }
@@ -188,6 +203,8 @@ export function listedEnrollmentOf(
         snapshotTrack: true,
         snapshotSessionCount: true,
         snapshotDurationMinutes: true,
+        cancellationReason: true,
+        slotReleasedAt: true,
       },
     });
   }
@@ -209,6 +226,8 @@ export function listedEnrollmentOf(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
 }
@@ -231,6 +250,8 @@ export function teacherEnrollmentsAmong(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
 }

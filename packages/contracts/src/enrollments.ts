@@ -123,6 +123,14 @@ export const studentEnrollmentItem = z.object({
   summary: enrollmentTerms,
   status: enrollmentStatus,
   ...enrollmentProgress.shape,
+  /**
+   * 004:T074 (FR-506; DEC-69, Q11 (a); the note under T074, Q-O1 (a), Q-R7 (a), N3, N4): the
+   * enrollment is paused to the other party: by a teacher's suspension (`confirmed`, its
+   * `teacher_suspended` case open), or closed by a ban or a revocation while its slot is held. A
+   * paused item carries no reason and no session (no `next`, no `last`, the detail's `sessions`
+   * empty), its three counts kept; its status and its tab are unchanged. Additive (R-API-9).
+   */
+  paused: z.boolean(),
 });
 
 /** The tab's items, active ones by next session; a cursor while more ended ones remain. */
