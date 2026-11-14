@@ -49,6 +49,8 @@ function surface() {
       },
       credentials: [],
       call: {},
+      // B42b, T075 of specs/004-sessions (rule d): the ban restore window's days (Q-O2 (a)).
+      banRestoreWindowDays: 14,
     }),
     recordCall: record('recordCall', {
       before: { completedOn: '2026-10-20', outcome: 'unsuitable' },

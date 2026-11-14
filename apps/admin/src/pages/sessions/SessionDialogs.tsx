@@ -7,6 +7,11 @@
 // - The restore (FR-454, FR-455, `sessions.restore`): until when the server says, what a restore
 //   does, its idempotency key minted when the dialog opens and reused on its retry, so a lost answer
 //   is never a second restore. No word says a closing is final (Q1 (a)).
+// - B42b, T075 (FR-503; SRS FR-CANCEL-9, DEC-69): the restore says the slot is held until T070's
+//   `slotHeldUntil`, or was released at `slotReleasedAt`, and that it succeeds afterwards while the
+//   slot is free; the release (`enrollments.releaseSlot`), shown on a held slot, says until when it
+//   is held and that the release cannot be undone (a restore after it succeeds only while the slot
+//   stays free), with its key minted when the dialog opens and reused on its retry.
 // Once the server answers, the monitor is read again and the dialog closes.
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -18,7 +23,7 @@ import type { ErrorMessage } from '../../lib/error-message';
 import { panelTimeZone } from '../../lib/zone';
 import { mintIdempotencyKey } from '../_shared/idempotency-key';
 import { useRereadMonitor } from './queries';
-import { cancelFailure, instant, restoreFailure } from './words';
+import { cancelFailure, instant, releaseFailure, restoreFailure, type SlotHold } from './words';
 
 interface DialogShellProps {
   readonly title: string;
@@ -140,11 +145,12 @@ export function CancelSessionDialog({
 
 export function RestoreDialog({
   enrollmentId,
-  restorableUntil,
+  hold,
   onClose,
 }: {
   readonly enrollmentId: string;
-  readonly restorableUntil: string;
+  /** T075: the slot held until when, or released when. */
+  readonly hold: SlotHold;
   readonly onClose: () => void;
 }) {
   const t = useT();
@@ -161,9 +167,15 @@ export function RestoreDialog({
     <ReasonDialog
       title={t('admin.sessions.restore.title')}
       icon="rotate-ccw"
-      lead={t('admin.sessions.restore.until', {
-        when: instant(restorableUntil, t, locale, panelTimeZone()),
-      })}
+      lead={
+        hold.state === 'held'
+          ? t('admin.sessions.restore.until', {
+              when: instant(hold.until, t, locale, panelTimeZone()),
+            })
+          : t('admin.sessions.restore.released', {
+              when: instant(hold.at, t, locale, panelTimeZone()),
+            })
+      }
       effect={t('admin.sessions.restore.effect')}
       reasonLabel={t('admin.sessions.restore.reasonLabel')}
       confirm={t('admin.sessions.restore.confirm')}
@@ -178,6 +190,53 @@ export function RestoreDialog({
             onClose();
           },
           onError: (error) => setFailure(restoreFailure(error)),
+        });
+      }}
+    />
+  );
+}
+
+/** T075 (FR-503): a held slot's release, its key minted when the dialog opens. */
+export function ReleaseSlotDialog({
+  enrollmentId,
+  slotHeldUntil,
+  onClose,
+}: {
+  readonly enrollmentId: string;
+  readonly slotHeldUntil: string;
+  readonly onClose: () => void;
+}) {
+  const t = useT();
+  const locale = useLocale();
+  const { client } = useAdmin();
+  const reread = useRereadMonitor();
+  const [idempotencyKey] = useState(mintIdempotencyKey);
+  const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
+  const release = useMutation({
+    mutationFn: (reason: string) =>
+      client.api.enrollments.releaseSlot.mutate({ enrollmentId, reason, idempotencyKey }),
+  });
+  return (
+    <ReasonDialog
+      title={t('admin.sessions.release.title')}
+      icon="calendar"
+      lead={t('admin.sessions.release.until', {
+        when: instant(slotHeldUntil, t, locale, panelTimeZone()),
+      })}
+      effect={t('admin.sessions.release.effect')}
+      reasonLabel={t('admin.sessions.release.reasonLabel')}
+      confirm={t('admin.sessions.release.confirm')}
+      pending={release.isPending}
+      failure={failure}
+      onClose={onClose}
+      onSend={(reason) => {
+        setFailure(undefined);
+        release.mutate(reason, {
+          onSuccess: () => {
+            void reread();
+            onClose();
+          },
+          onError: (error) => setFailure(releaseFailure(error)),
         });
       }}
     />

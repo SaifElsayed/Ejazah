@@ -58,6 +58,8 @@ const USER_RECORD: UsersGetOutput = {
   cancellationRequests: { total: 2, recent: 1 },
   // T072 of specs/004-sessions: the hold's end, none here (rule d).
   enrollmentsSlotHeldUntil: null,
+  // B42b, T075 of specs/004-sessions (rule d): the ban restore window's days (Q-O2 (a)).
+  banRestoreWindowDays: 14,
 };
 
 function surface() {

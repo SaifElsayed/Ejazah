@@ -90,6 +90,9 @@ function studentRecord(accountStatus: AccountStatus = 'active') {
     verificationStatus: null,
     accountStatus,
     cancellationRequests: { total: 4, recent: 1 },
+    // B42b, T075 (rule d): T072's hold's end and Q-O2 (a)'s days, as `users.get` answers them.
+    enrollmentsSlotHeldUntil: null,
+    banRestoreWindowDays: 14,
   } as const;
 }
 
@@ -109,6 +112,9 @@ const deletedStudentRecord = {
   verificationStatus: null,
   accountStatus: 'active',
   cancellationRequests: { total: 0, recent: 0 },
+  // B42b, T075 (rule d): T072's hold's end and Q-O2 (a)'s days, as `users.get` answers them.
+  enrollmentsSlotHeldUntil: null,
+  banRestoreWindowDays: 14,
 } as const;
 
 const teacherRecord = {
@@ -126,6 +132,9 @@ const teacherRecord = {
   verificationStatus: 'approved',
   accountStatus: 'suspended',
   cancellationRequests: { total: 2, recent: 0 },
+  // B42b, T075 (rule d): T072's hold's end and Q-O2 (a)'s days, as `users.get` answers them.
+  enrollmentsSlotHeldUntil: null,
+  banRestoreWindowDays: 14,
   repeatedAbsences: [
     {
       enrollmentId: E1,

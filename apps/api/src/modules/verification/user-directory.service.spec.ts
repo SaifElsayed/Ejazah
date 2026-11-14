@@ -26,6 +26,8 @@ const JOINED = new Date('2026-09-01T08:00:00Z');
 const MINOR_BIRTH = new Date('2012-03-04T00:00:00Z');
 const ADULT_BIRTH = new Date('1990-01-01T00:00:00Z');
 const PAGE_SIZE = 2;
+/** B42b, T075 (Q-O2 (a)): `ban_restore_window_days`, unlike the seed's 14 so its read shows. */
+const BAN_WINDOW_DAYS = 21;
 
 /** Ten users, newest first, `u9` … `u0`; the even ones named «سارة …», the odd ones «أحمد …». */
 const USERS: DirectoryUser[] = Array.from({ length: 10 }, (_unused, index) => {
@@ -108,6 +110,8 @@ function world({
   const settings: SettingsReader = {
     read: async (key, schema) => {
       settingsRead.push(key);
+      // B42b, T075 (Q-O2 (a)): `users.get` reads the ban restore window for the panel's words.
+      if (key === 'ban_restore_window_days') return schema.parse(BAN_WINDOW_DAYS);
       if (key !== 'admin_list_page_size') throw new Error(`unexpected setting ${key}`);
       return schema.parse(PAGE_SIZE);
     },
@@ -222,6 +226,7 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
         },
       ],
       enrollmentsSlotHeldUntil: null,
+      banRestoreWindowDays: BAN_WINDOW_DAYS,
     });
     expect(marksAsked).toEqual([TEACHER]);
     expect(countsAsked).toEqual([TEACHER]);
@@ -242,6 +247,7 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
       accountStatus: 'suspended',
       cancellationRequests: { total: 4, recent: 1 },
       enrollmentsSlotHeldUntil: null,
+      banRestoreWindowDays: BAN_WINDOW_DAYS,
     });
     expect(marksAsked).toEqual([]);
   });
@@ -256,6 +262,17 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
     expect(
       (await directory.get(tx, ADMIN, { targetUserId: TEACHER })).enrollmentsSlotHeldUntil,
     ).toBeNull();
+  });
+
+  // B42b, T075 of specs/004-sessions (Q-O2 (a)): the panel's `{days}` in the ban's and the lift's words.
+  it('answers banRestoreWindowDays, the ban_restore_window_days setting, for a student and a teacher', async () => {
+    const { directory, settingsRead } = world();
+    for (const targetUserId of [STUDENT, TEACHER]) {
+      expect((await directory.get(tx, ADMIN, { targetUserId })).banRestoreWindowDays).toBe(
+        BAN_WINDOW_DAYS,
+      );
+    }
+    expect(settingsRead).toEqual(['ban_restore_window_days', 'ban_restore_window_days']);
   });
 
   it('never answers or logs the date of birth (PDPL)', async () => {

@@ -44,6 +44,8 @@ const SETTINGS: Readonly<Record<string, number>> = {
   admin_list_page_size: 2,
   repeated_absence_flag_count: 5,
   cancellation_requests_recent_days: 30,
+  // B42b, T075 of specs/004-sessions (rule d): `users.get` reads the ban restore window (Q-O2 (a)).
+  ban_restore_window_days: 14,
 };
 const settings: SettingsReader = {
   read: async (key, schema) => {
@@ -278,6 +280,8 @@ describe('users.get (T058, SRS FR-ADMIN-4)', () => {
       cancellationRequests: { total: 0, recent: 0 },
       // T072 (rule d): no ban's closing holds a slot.
       enrollmentsSlotHeldUntil: null,
+      // B42b, T075 (rule d): the ban restore window's days (Q-O2 (a)).
+      banRestoreWindowDays: 14,
     });
     expect(JSON.stringify(record)).not.toMatch(/birth|2012-06-01/);
   });

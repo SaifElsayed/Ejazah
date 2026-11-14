@@ -4,13 +4,23 @@
 // board's sessions cancelled, students notified and compensation cases are a later phase's and are
 // not said (R-HONEST, the rule T072 set). A suspended teacher is reinstated with a reason
 // (`reactivateAccount`). A refusal is said in place; a decision reads the detail and the queue again.
+// B42b, T075 of specs/004-sessions (FR-502, FR-504; SRS FR-ADMIN-5 and FR-SESS-16 as amended,
+// DEC-66, DEC-69; the note under T075, Q-O2 (a) and Q-R6 (a); FU5): the ban says each enrollment's
+// slot is held for `{days}`, `applications.get`'s `banRestoreWindowDays`, and that the ban can be
+// lifted at any time; the suspension that the enrollments pause and what the reinstatement offers;
+// the reinstatement that the paused enrollments resume, and `STUDENT_SUSPENDED` what unblocks it.
+// `LiftBanDialog`, «رفع الحظر» on a banned account (`teachers.liftBan`, an applicant's or a teacher's
+// ban), promises nothing about enrollments and draws each result the answer returns, with a link to
+// the person's `/users` record.
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Banner, Dialog, Field, Icon, IconTile, Input, Segmented } from '../../design/components';
 import { type MessageKey, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
+import { errorCodeOf } from '../../lib/client';
 import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
+import { LiftDialog } from '../users/LiftDialogs';
 import type { ApplicationDetail } from './queries';
 
 type Kind = 'suspend' | 'revokeApproval' | 'ban';
@@ -121,7 +131,7 @@ export function StandingDialog({
         <h3 className="group-label">{t('admin.dialogs.suspendTeacher.effectsTitle')}</h3>
         <p className="row row--top gap-2 text-callout">
           <Icon name="info" size="sm" />
-          <span>{t(drawn.effect)}</span>
+          <span>{t(drawn.effect, { days: detail.banRestoreWindowDays })}</span>
         </p>
       </section>
       <Field label={t(drawn.reason)} hint={t('admin.dialogs.suspendTeacher.reasonHint')}>
@@ -176,7 +186,10 @@ export function ReinstateDialog({
                 kind: 'reinstate',
                 input: { teacherUserId: detail.teacherUserId, reason: reason.trim() },
               },
-              { onSuccess: onClose, onError: (error: unknown) => setFailed(errorMessageKey(error, 'admin.dialogs.submitError')) },
+              {
+                onSuccess: onClose,
+                onError: (error: unknown) => setFailed(reinstateFailure(error)),
+              },
             );
           },
         },
@@ -195,6 +208,10 @@ export function ReinstateDialog({
             )}
           </span>
         </p>
+        <p className="row row--top gap-2 text-callout">
+          <Icon name="info" size="sm" />
+          <span>{t('admin.dialogs.confirm.reactivateAccount.effects.resumed')}</span>
+        </p>
       </section>
       <Field label={t('admin.dialogs.confirm.reactivateAccount.reasonLabel')}>
         <Input
@@ -210,5 +227,53 @@ export function ReinstateDialog({
         </Banner>
       ) : null}
     </Dialog>
+  );
+}
+
+/** T075 (FU5): a reinstatement refused while a paused enrollment's student is suspended. */
+function reinstateFailure(error: unknown): ErrorMessage {
+  return errorCodeOf(error) === 'STUDENT_SUSPENDED'
+    ? { key: 'admin.dialogs.confirm.reactivateAccount.refused.studentSuspended' }
+    : errorMessageKey(error, 'admin.dialogs.submitError');
+}
+
+/** T075 (Q-R6 (a)): «رفع الحظر» on the application's page, an applicant's ban or a teacher's. */
+export function LiftBanDialog({
+  detail,
+  onClose,
+}: {
+  readonly detail: ApplicationDetail;
+  readonly onClose: () => void;
+}) {
+  const t = useT();
+  const { client } = useAdmin();
+  const queries = useQueryClient();
+  return (
+    <LiftDialog
+      title={t('admin.users.lift.banTitle', { name: detail.displayName })}
+      effects={[t('admin.applications.lift.effect')]}
+      reasonLabel="admin.users.lift.banReasonLabel"
+      confirm={t('admin.applications.detail.liftBan')}
+      done="admin.users.lift.doneBan"
+      send={(reason, idempotencyKey) =>
+        client.api.teachers.liftBan.mutate({
+          teacherUserId: detail.teacherUserId,
+          reason,
+          idempotencyKey,
+        })
+      }
+      record={{
+        href: `/users?user=${detail.teacherUserId}`,
+        label: 'admin.applications.lift.record',
+      }}
+      onLifted={() => {
+        void Promise.all([
+          queries.invalidateQueries({ queryKey: ['applications'] }),
+          queries.invalidateQueries({ queryKey: ['home', 'summary'] }),
+          queries.invalidateQueries({ queryKey: ['users'] }),
+        ]);
+      }}
+      onClose={onClose}
+    />
   );
 }

@@ -90,6 +90,8 @@ const closedItem = {
 } as const;
 
 const RESTORABLE_UNTIL = '2026-11-20T10:00:00.000Z';
+/** B42b, T075: T070's `slotHeldUntil`, apart from the deprecated `restorableUntil` so its read shows. */
+const SLOT_HELD_UNTIL = '2026-11-21T10:00:00.000Z';
 
 function session(n: number, status: string, extra: Record<string, unknown> = {}) {
   const day = String(2 + n).padStart(2, '0');
@@ -124,7 +126,7 @@ const counter = {
 };
 
 const closedDetail = {
-  enrollment: { ...closedItem, restorableUntil: RESTORABLE_UNTIL },
+  enrollment: { ...closedItem, restorableUntil: RESTORABLE_UNTIL, slotHeldUntil: SLOT_HELD_UNTIL },
   sessions: [
     session(1, 'done', { correctable: true }),
     session(2, 'teacher_no_show', {
@@ -208,6 +210,7 @@ function fakeApi() {
       restore: mutation(),
       review: { revise: mutation() },
     },
+    enrollments: { releaseSlot: mutation() },
     cases: { openManual: mutation() },
     payments: { list: query(), get: query() },
     home: { summary: query() },
@@ -698,7 +701,7 @@ describe('the cancellation (FR-460)', () => {
 });
 
 describe('the restore (FR-454; Q1 (a))', () => {
-  it('is offered only while the server answers `restorableUntil`, saying until when', async () => {
+  it('is offered only while the server answers `restorableUntil`, saying the slot is held until `slotHeldUntil`', async () => {
     await inBothLocales(
       () => open(fakeApi(), `/sessions?enrollment=${E2}`),
       async (t, locale) => {
@@ -708,7 +711,7 @@ describe('the restore (FR-454; Q1 (a))', () => {
         ).toBeTruthy();
         expect(
           panel.getByText(
-            t('admin.sessions.detail.restorableUntil', { when: at(t, locale, RESTORABLE_UNTIL) }),
+            t('admin.sessions.detail.restorableUntil', { when: at(t, locale, SLOT_HELD_UNTIL) }),
           ),
         ).toBeTruthy();
       },
@@ -766,7 +769,7 @@ describe('the restore (FR-454; Q1 (a))', () => {
     await waitFor(() => expect(api.sessions.monitor.get.query).toHaveBeenCalledTimes(2));
   });
 
-  it('says the eight causes, `no_free_week`, a reused key and a missing enrollment in plain words, in both languages, and any other failure in the generic words', async () => {
+  it('says the nine causes, `no_free_week`, a reused key and a missing enrollment in plain words, in both languages, and any other failure in the generic words', async () => {
     const refusals = [
       [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'not_restorable' }]), 'notRestorable'],
       [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'window_closed' }]), 'windowClosed'],
@@ -779,6 +782,8 @@ describe('the restore (FR-454; Q1 (a))', () => {
       [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'slot_changed' }]), 'slotChanged'],
       [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'slot_taken' }]), 'slotTaken'],
       [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'time_taken' }]), 'timeTaken'],
+      // B42b, T075 (N11): T073's ninth cause.
+      [refusal('RESTORE_REFUSED', [{ path: 'cause', code: 'refunded' }]), 'refunded'],
       [refusal('CONFLICT', [{ path: 'cause', code: 'no_free_week' }]), 'noFreeWeek'],
       [refusal('NOT_FOUND'), 'notFound'],
     ] as const;
@@ -823,7 +828,10 @@ describe('the restore (FR-454; Q1 (a))', () => {
         ...Object.values(sessions.restore.refused),
         sessions.restore.effect,
         sessions.restore.until,
+        sessions.restore.released,
         sessions.detail.restorableUntil,
+        sessions.detail.slotReleased,
+        sessions.lede,
       ]) {
         expect(words).not.toMatch(final);
       }
@@ -831,6 +839,213 @@ describe('the restore (FR-454; Q1 (a))', () => {
   });
 });
 
+// B42b, T075 of specs/004-sessions (FR-503, FR-454 as amended; SRS FR-CANCEL-9, DEC-69; N11): the
+// hold and the restore at any time. `restorableUntil` is the hold's end and may be past while the
+// restore stays possible, so the button never hides on it; the words read T070's `slotHeldUntil`, or
+// say the slot was released at `slotReleasedAt`.
+describe('T075: the hold and the restore at any time (N11)', () => {
+  const PAST = '2026-10-01T10:00:00.000Z';
+  const RELEASED_AT = '2026-11-15T09:00:00.000Z';
+  const withEnrollment = (more: Record<string, unknown>) => {
+    const api = fakeApi();
+    const { slotHeldUntil: _held, ...rest } = closedDetail.enrollment;
+    api.sessions.monitor.get.query.mockResolvedValue({
+      ...closedDetail,
+      enrollment: { ...rest, ...more },
+    });
+    return api;
+  };
+
+  it('offers the restore on a past `restorableUntil`, in both languages', async () => {
+    await inBothLocales(
+      () =>
+        open(
+          withEnrollment({ restorableUntil: PAST, slotHeldUntil: PAST }),
+          `/sessions?enrollment=${E2}`,
+        ),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        expect(
+          panel.getByRole('button', { name: t('admin.sessions.detail.restore') }),
+        ).toBeTruthy();
+        expect(
+          panel.getByText(
+            t('admin.sessions.detail.restorableUntil', { when: at(t, locale, PAST) }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('says a released slot and its instant, offering the restore and no release, in both languages', async () => {
+    await inBothLocales(
+      () =>
+        open(
+          withEnrollment({ restorableUntil: RESTORABLE_UNTIL, slotReleasedAt: RELEASED_AT }),
+          `/sessions?enrollment=${E2}`,
+        ),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        expect(
+          panel.getByText(
+            t('admin.sessions.detail.slotReleased', { when: at(t, locale, RELEASED_AT) }),
+          ),
+        ).toBeTruthy();
+        expect(
+          panel.queryByRole('button', { name: t('admin.sessions.detail.release') }),
+        ).toBeNull();
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.restore') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.restore.title') }),
+        );
+        expect(
+          dialog.getByText(
+            t('admin.sessions.restore.released', { when: at(t, locale, RELEASED_AT) }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('the restore dialog says the slot is held until `slotHeldUntil`, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/sessions?enrollment=${E2}`),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.restore') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.restore.title') }),
+        );
+        expect(
+          dialog.getByText(
+            t('admin.sessions.restore.until', { when: at(t, locale, SLOT_HELD_UNTIL) }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+});
+
+// B42b, T075 of specs/004-sessions (FR-503; SRS FR-CANCEL-9, DEC-69; T070's `enrollments.releaseSlot`):
+// «تحرير الموعد» on a held slot in the enrollment's detail, shown only while the server answers
+// `slotHeldUntil`; its dialog says until when the slot is held and that a release cannot be undone
+// (a restore after it succeeds only while the slot stays free); a mandatory reason; the key minted
+// when the dialog opens, the same on a retry; `slot_not_held` and the other refusals in plain words.
+describe('T075: the release of a held slot (FR-503)', () => {
+  async function releaseDialog(api = fakeApi()) {
+    const { panel } = await openDetail(`/sessions?enrollment=${E2}`, api);
+    fireEvent.click(panel.getByRole('button', { name: ar('admin.sessions.detail.release') }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: ar('admin.sessions.release.title') }),
+    );
+    return { api, dialog };
+  }
+
+  it('is offered only while the server answers `slotHeldUntil`', async () => {
+    const held = await openDetail(`/sessions?enrollment=${E2}`);
+    expect(
+      held.panel.getByRole('button', { name: ar('admin.sessions.detail.release') }),
+    ).toBeTruthy();
+    held.view.unmount();
+    const confirmed = await openDetail(`/sessions?enrollment=${E1}`);
+    expect(
+      confirmed.panel.queryByRole('button', { name: ar('admin.sessions.detail.release') }),
+    ).toBeNull();
+  });
+
+  it('says until when the slot is held and that the release cannot be undone, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/sessions?enrollment=${E2}`),
+      async (t, locale) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.release') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.release.title') }),
+        );
+        expect(
+          dialog.getByText(
+            t('admin.sessions.release.until', { when: at(t, locale, SLOT_HELD_UNTIL) }),
+          ),
+        ).toBeTruthy();
+        const effect = dialog.getByText(t('admin.sessions.release.effect'));
+        expect(effect.textContent).toMatch(
+          locale === 'ar' ? /لا يمكن التراجع عن التحرير/u : /cannot be undone/u,
+        );
+        expect(effect.textContent).toMatch(locale === 'ar' ? /خاليًا/u : /stays free/u);
+      },
+    );
+  });
+
+  it('sends nothing until a reason is written', async () => {
+    const { api, dialog } = await releaseDialog();
+    const confirm = dialog.getByRole('button', { name: ar('admin.sessions.release.confirm') });
+    expect(confirm.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(confirm);
+    expect(api.enrollments.releaseSlot.mutate).not.toHaveBeenCalled();
+  });
+
+  it('releases with its reason and the key minted when the dialog opened, the same key on a retry, then reads the enrollment again', async () => {
+    const api = fakeApi();
+    api.enrollments.releaseSlot.mutate
+      .mockRejectedValueOnce(refusal('INTERNAL'))
+      .mockResolvedValue({ enrollmentId: E2, slotReleasedAt: '2026-11-15T09:00:00.000Z' });
+    const { dialog } = await releaseDialog(api);
+    fireEvent.change(dialog.getByLabelText(ar('admin.sessions.release.reasonLabel')), {
+      target: { value: ' طلب الطالب الانتقال ' },
+    });
+    const confirm = dialog.getByRole('button', { name: ar('admin.sessions.release.confirm') });
+    fireEvent.click(confirm);
+    expect(await dialog.findByText(ar('admin.dialogs.submitError'))).toBeTruthy();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const [first, second] = api.enrollments.releaseSlot.mutate.mock.calls.map(([input]) => input);
+    expect(first).toEqual({
+      enrollmentId: E2,
+      reason: 'طلب الطالب الانتقال',
+      idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
+    });
+    expect(second).toEqual(first);
+    await waitFor(() => expect(api.sessions.monitor.get.query).toHaveBeenCalledTimes(2));
+  });
+
+  it('says `slot_not_held`, a missing enrollment, a reused key and RATE_LIMITED in plain words, in both languages, and any other failure in the generic words', async () => {
+    const refusals = [
+      [
+        refusal('CONFLICT', [{ path: 'cause', code: 'slot_not_held' }]),
+        'admin.sessions.release.refused.slotNotHeld',
+      ],
+      [refusal('NOT_FOUND'), 'admin.sessions.release.refused.notFound'],
+      [refusal('CONFLICT'), 'admin.shared.keyReused'],
+      [refusal('INTERNAL'), 'admin.dialogs.submitError'],
+    ] as const;
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        for (const [error] of refusals)
+          api.enrollments.releaseSlot.mutate.mockRejectedValueOnce(error);
+        api.enrollments.releaseSlot.mutate.mockRejectedValueOnce(
+          refusal('RATE_LIMITED', [{ path: 'retryAfterSeconds', code: '61' }]),
+        );
+        return open(api, `/sessions?enrollment=${E2}`);
+      },
+      async (t) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.release') }));
+        const dialog = within(await screen.findByRole('dialog'));
+        fireEvent.change(dialog.getByLabelText(t('admin.sessions.release.reasonLabel')), {
+          target: { value: 'سبب' },
+        });
+        const confirm = dialog.getByRole('button', { name: t('admin.sessions.release.confirm') });
+        for (const [, words] of refusals) {
+          fireEvent.click(confirm);
+          expect(await dialog.findByText(t(words))).toBeTruthy();
+        }
+        fireEvent.click(confirm);
+        expect(await dialog.findByText(t('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
+      },
+    );
+  });
+});
 describe('the correction (FR-439)', () => {
   it('is offered only on a session the server says is correctable', async () => {
     const { panel } = await openDetail();
