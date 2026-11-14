@@ -311,3 +311,17 @@ export {
   type HeldSlotRelease,
   type SlotReleaseDependencies,
 } from './slot-release.service.js';
+/**
+ * T074 of specs/004-sessions (FR-505; DEC-69; the note under T074, Q-R1 (a), N1, N2, Q-R4 (a)): the
+ * hourly sweep that records, once, the end of each held closing's hold (one `enrollment_events` row
+ * `slot_hold_ended`), each enrollment on its own transaction under its lock; built and scheduled by
+ * `jobs/close-slot-holds.ts`.
+ */
+export {
+  createSlotHoldEndSweep,
+  type SlotHoldEndDependencies,
+  type SlotHoldEndRun,
+  type SlotHoldEndStore,
+  slotHoldEndStore,
+  type SlotHoldEndSweep,
+} from './slot-hold-end.sweep.js';
