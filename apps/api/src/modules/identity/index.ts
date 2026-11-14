@@ -28,7 +28,7 @@ import {
   // T080 of specs/004-sessions: the count's port, bound by `main.ts`.
   type OngoingEnrollments,
 } from './deletion.service.js';
-import { OneTimeCodes } from './one-time-codes.js';
+import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {

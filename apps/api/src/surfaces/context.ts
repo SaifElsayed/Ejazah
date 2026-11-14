@@ -146,6 +146,8 @@ import type {
   usersGetOutput,
   usersListInput,
   usersListOutput,
+  // T081 of specs/004-sessions: an administrator's deletion at the owner's request.
+  usersDeleteInput,
   // T070.
   enrollmentsReleaseSlotInput,
   enrollmentsReleaseSlotOutput,
@@ -765,6 +767,12 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof usersGetInput>,
     ): Answer<typeof usersGetOutput>;
+    /** T081 (FR-512): `users.delete`, identity's deletion keyed on the call's transaction. ⚠️ Irreversible. */
+    delete(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof usersDeleteInput>,
+    ): Promise<{ readonly replayed: boolean }>;
   };
   /** T070 of specs/004-sessions: an administrator releases a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: {

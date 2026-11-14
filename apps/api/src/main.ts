@@ -204,6 +204,9 @@ const services = {
       filesHeld: async (userId) =>
         (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
     },
+    // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
+    // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
+    ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
   }),
   verification: verification.createVerificationServices({
     database,
@@ -380,6 +383,9 @@ const adminServices = createAdminServices({
   enrollmentSide,
   // T073 of specs/004-sessions: the restore's ninth cause `refunded`, payments' read handed in.
   enrollmentPayments: { refundedOf: payments.refundedOf },
+  // T081 of specs/004-sessions (FR-512): `users.delete`, identity's deletion without the
+  // re-authentication and without T080's check, on the administrator's transaction.
+  userDeletion: services.identity.deletion,
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,
