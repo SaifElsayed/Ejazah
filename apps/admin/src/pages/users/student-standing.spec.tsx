@@ -24,6 +24,13 @@ const STUDENT = {
 
 const KINDS: readonly StudentStandingKind[] = ['suspend', 'ban', 'reinstate'];
 
+/** B42b, T075 (Q-O2 (a)): `users.get`'s `banRestoreWindowDays`, unlike the seed's 14. */
+const DAYS = 21;
+
+/** The values a dialog's effect interpolates: the ban's `{days}` (T075). */
+const valuesOf = (key: MessageKey) =>
+  key === 'admin.dialogs.suspendStudent.honest.ban.sessions' ? { days: DAYS } : undefined;
+
 const DRAWN: Readonly<
   Record<
     StudentStandingKind,
@@ -112,7 +119,13 @@ function open(kind: StudentStandingKind, api: Api = fakeApi()) {
     <QueryClientProvider client={queries}>
       <AdminProvider services={{ client, sessions }}>
         <Console>
-          <StudentStandingDialog kind={kind} student={STUDENT} onClose={onClose} onDone={onDone} />
+          <StudentStandingDialog
+            kind={kind}
+            student={STUDENT}
+            banRestoreWindowDays={DAYS}
+            onClose={onClose}
+            onDone={onDone}
+          />
         </Console>
       </AdminProvider>
     </QueryClientProvider>,
@@ -192,9 +205,13 @@ describe('a student’s standing dialogs (T051, FR-486)', () => {
         () => open(kind),
         async (t) => {
           const dialog = await dialogOf(t, kind);
-          for (const key of DRAWN[kind].effects) expect(dialog.getByText(t(key))).toBeTruthy();
+          for (const key of DRAWN[kind].effects) {
+            expect(dialog.getByText(t(key, valuesOf(key)))).toBeTruthy();
+          }
           for (const other of KINDS.filter((each) => each !== kind)) {
-            for (const key of DRAWN[other].effects) expect(dialog.queryByText(t(key))).toBeNull();
+            for (const key of DRAWN[other].effects) {
+              expect(dialog.queryByText(t(key, valuesOf(key)))).toBeNull();
+            }
           }
           for (const key of BOARD_ONLY) expect(dialog.queryByText(t(key))).toBeNull();
           const section = dialog.getByRole('heading', { level: 2 }).closest('section.dialog');
@@ -229,6 +246,25 @@ describe('a student’s standing dialogs (T051, FR-486)', () => {
       );
     },
   );
+});
+
+// B42b, T075 of specs/004-sessions (DEC-66, DEC-69; the note under T075, Q-O2 (a)): the ban holds
+// each enrollment's slot for `ban_restore_window_days`, read from `users.get`, and can be lifted
+// at any time.
+describe('T075: the ban’s words', () => {
+  it('says each slot is held for the setting’s days and the ban can be lifted at any time, in both languages', async () => {
+    await inBothLocales(
+      () => open('ban'),
+      async (t, locale) => {
+        const dialog = await dialogOf(t, 'ban');
+        const words = dialog.getByText(
+          t('admin.dialogs.suspendStudent.honest.ban.sessions', { days: DAYS }),
+        );
+        expect(words.textContent).toContain('21');
+        expect(words.textContent).toMatch(locale === 'ar' ? /في أي وقت/u : /at any time/u);
+      },
+    );
+  });
 });
 
 describe('T058: RATE_LIMITED on a student’s standing', () => {

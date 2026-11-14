@@ -79,6 +79,8 @@ function item(n: number, overrides: Partial<EnrollmentPageItem> = {}): Enrollmen
     status: 'confirmed',
     track: 'recitation',
     sessionCount: 8,
+    cancellationReason: null,
+    slotReleasedAt: null,
     ...overrides,
   };
 }

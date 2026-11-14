@@ -6,6 +6,9 @@
 // confirmation are not drawn (the note under T051, Q2), and no word calls a ban final (Q1 (a)). A
 // refusal is said in place, `RATE_LIMITED` with when to try again (T058's `errorMessageKey`); after a
 // success `onDone` runs, and the caller reads again.
+// B42b, T075 of specs/004-sessions (DEC-66, DEC-69; the note under T075, Q-O2 (a)): the ban says each
+// enrollment's slot is held for `{days}`, `users.get`'s `banRestoreWindowDays`, and that the ban can
+// be lifted at any time (`honest.ban.sessions`).
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 
@@ -20,6 +23,8 @@ export type StudentStandingKind = 'suspend' | 'ban' | 'reinstate';
 export interface StudentStandingDialogProps {
   readonly kind: StudentStandingKind;
   readonly student: { readonly studentUserId: string; readonly displayName: string };
+  /** T075: `users.get`'s `banRestoreWindowDays`, the ban's `{days}`. */
+  readonly banRestoreWindowDays: number;
   /** The dialog closed with nothing sent. */
   readonly onClose: () => void;
   /** The action done: the caller closes the dialog and reads the student again. */
@@ -81,6 +86,7 @@ const DRAWN: Readonly<
 export function StudentStandingDialog({
   kind,
   student,
+  banRestoreWindowDays,
   onClose,
   onDone,
 }: StudentStandingDialogProps) {
@@ -126,7 +132,7 @@ export function StudentStandingDialog({
         {drawn.effects.map((effect) => (
           <p key={effect} className="row row--top gap-2 text-callout">
             <Icon name="info" size="sm" />
-            <span>{t(effect)}</span>
+            <span>{t(effect, { days: banRestoreWindowDays })}</span>
           </p>
         ))}
       </section>

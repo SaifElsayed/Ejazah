@@ -21,7 +21,8 @@
 // THE REINSTATEMENT (`createTeacherReinstatement`, handed to identity's `StandingService` as its
 // `reinstatement`, Q6 (a)). `studentsOf`: the teacher's `confirmed` enrollments, paged through
 // `EnrollmentSide` (sessions reads no booking table, R-301), those with an open `teacher_suspended`
-// case (moderation's entry), read with no lock, and their students. `resume`, once identity holds
+// case (moderation's entry; each page's cases in one read of `compensationCasesAmong`, T074 FU4),
+// read with no lock, and their students. `resume`, once identity holds
 // `users` (the teacher and those students, one call, id order) and has moved the teacher: the
 // teacher's `lockKey('teacher-slots')`, the paused enrollments in one call, each read again under
 // its lock (still `confirmed`, its case still open; one an end closed meanwhile is left out), the
@@ -52,7 +53,12 @@ import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { readStanding } from '../identity/index.js';
-import { type CaseClosing, closeCase, openCaseOf } from '../moderation/index.js';
+import {
+  type CaseClosing,
+  closeCase,
+  compensationCasesAmong,
+  openCaseOf,
+} from '../moderation/index.js';
 import type {
   EnrollmentPageFilter,
   EnrollmentSide,
@@ -139,10 +145,37 @@ export interface TeacherReinstatementStore extends PausedCaseStore {
   accountStatusOf(tx: Transaction, userId: string): Promise<string | null>;
   /** The sessions the case's suspension cancelled, owed an offer, in id order. */
   sessionsToOffer(tx: Transaction, caseId: string): Promise<readonly string[]>;
+  /**
+   * T074 FU4: of `enrollmentIds`, each one's open `teacher_suspended` case, as `pausedCaseOf`
+   * answers it (the oldest open), in one read with no lock; an enrollment with none is absent.
+   */
+  pausedCasesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, string>>;
+}
+
+/** T074 FU4: each enrollment's open `teacher_suspended` case, the oldest open as `openCaseOf`'s. */
+async function pausedCasesAmongOf(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const cases = await compensationCasesAmong(tx, enrollmentIds);
+  const paused = new Map<string, string>();
+  for (const [enrollmentId, all] of cases) {
+    // Newest first: the last open one is the oldest, the one `openCaseOf` answers.
+    const open = all.filter(
+      ({ reason, status }) => reason === PAUSED_CASE_REASON && status === 'open',
+    );
+    const oldest = open.at(-1);
+    if (oldest !== undefined) paused.set(enrollmentId, oldest.caseId);
+  }
+  return paused;
 }
 
 export const teacherReinstatementStore: TeacherReinstatementStore = {
   ...pausedCaseStore,
+  pausedCasesAmong: pausedCasesAmongOf,
   lockTeacherSlots,
   lockSessions,
   lockRemediesOfSessions,
@@ -191,9 +224,17 @@ export function createTeacherReinstatement({
     let cursor: string | undefined;
     for (;;) {
       const page = await enrollments.enrollmentPage(tx, filter, cursor);
+      // T074 FU4: the page's open cases in one read, none per enrollment.
+      const cases =
+        page.items.length === 0
+          ? new Map<string, string>()
+          : await store.pausedCasesAmong(
+              tx,
+              page.items.map(({ enrollmentId }) => enrollmentId),
+            );
       for (const { enrollmentId, studentUserId } of page.items) {
-        const caseId = await store.pausedCaseOf(tx, enrollmentId);
-        if (caseId !== null) paused.push({ enrollmentId, studentUserId, caseId });
+        const caseId = cases.get(enrollmentId);
+        if (caseId !== undefined) paused.push({ enrollmentId, studentUserId, caseId });
       }
       if (page.nextCursor === undefined) break;
       cursor = page.nextCursor;

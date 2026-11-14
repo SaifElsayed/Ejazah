@@ -166,11 +166,24 @@ function reinstatementOver(
     status: 'confirmed',
     track: 'recitation',
     sessionCount: 4,
+    // T074 FU4 (rule d): the page's two new columns.
+    cancellationReason: null,
+    slotReleasedAt: null,
   }));
   const store: TeacherReinstatementStore = {
     pausedCaseOf: async (_tx, enrollmentId) => {
       calls.push(['pausedCaseOf', enrollmentId]);
       return caseReads.get(enrollmentId)?.shift() ?? null;
+    },
+    // T074 FU4: a page's open teacher_suspended cases in one read.
+    pausedCasesAmong: async (_tx, enrollmentIds) => {
+      calls.push(['pausedCasesAmong', enrollmentIds]);
+      return new Map(
+        enrollmentIds.flatMap((enrollmentId) => {
+          const caseId = caseReads.get(enrollmentId)?.shift() ?? null;
+          return caseId === null ? [] : [[enrollmentId, caseId] as const];
+        }),
+      );
     },
     closeCase: async (_tx, caseId, closing: CaseClosing) => {
       calls.push(['closeCase', caseId, closing]);
@@ -273,6 +286,11 @@ describe('the reinstatement’s students, read with no lock (Q6 (a))', () => {
       ['enrollmentPage', { status: 'confirmed', teacherUserIds: [TEACHER] }, E2],
     ]);
     expect(calls.some(([name]) => /^lock/.test(String(name)))).toBe(false);
+    // T074 FU4: each page's cases in one read, none per enrollment.
+    expect(calls.filter(([name]) => String(name).startsWith('paused'))).toEqual([
+      ['pausedCasesAmong', [E2]],
+      ['pausedCasesAmong', [E1, E3]],
+    ]);
   });
 });
 
@@ -282,8 +300,9 @@ describe('the reinstatement resumes the paused enrollments (FR-504; kernel.md, t
     await reinstatement.resume(tx, ADMIN, TEACHER, [STUDENT_A, STUDENT_B, TEACHER].sort());
     const closing = { status: 'resolved', resolution: 'compensation_ordered', note: 'reinstated', adminId: ADMIN };
     expect(calls.filter(([name]) => name !== 'enrollmentPage')).toEqual([
-      ['pausedCaseOf', E2],
-      ['pausedCaseOf', E1],
+      // T074 FU4: each page's cases in one read.
+      ['pausedCasesAmong', [E2]],
+      ['pausedCasesAmong', [E1]],
       ['lockTeacherSlots', TEACHER],
       ['lockEnrollments', [E1, E2]],
       ['enrollmentFor', E1],

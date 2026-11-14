@@ -123,7 +123,9 @@ export async function enrollmentEventsOf(
 
 /**
  * Up to `take` enrollments matching `filter`, newest first by their time-ordered id, those before
- * `cursor` when it is given.
+ * `cursor` when it is given. T074 FU4: `everConfirmed` keeps the enrollments with `confirmed_at`
+ * set, a read clause the confirmation gate reads as a read; each item carries its last
+ * cancellation's reason and its release.
  */
 export async function enrollmentsPage(
   tx: Client,
@@ -145,6 +147,9 @@ export async function enrollmentsPage(
       ...(filter.teacherUserIds === undefined
         ? {}
         : { teacherUserId: { in: [...filter.teacherUserIds] } }),
+      // T074 FU4: written in the `where` itself, so the confirmation gate reads it as a read; an
+      // empty filter filters nothing.
+      confirmedAt: filter.everConfirmed === true ? { not: null } : {},
     },
     orderBy: { id: 'desc' },
     take,
@@ -155,6 +160,8 @@ export async function enrollmentsPage(
       status: true,
       snapshotTrack: true,
       snapshotSessionCount: true,
+      cancellationReason: true,
+      slotReleasedAt: true,
     },
   });
   return rows.map((row) => ({
@@ -164,6 +171,8 @@ export async function enrollmentsPage(
     status: row.status,
     track: row.snapshotTrack,
     sessionCount: row.snapshotSessionCount,
+    cancellationReason: row.cancellationReason,
+    slotReleasedAt: row.slotReleasedAt,
   }));
 }
 

@@ -103,9 +103,17 @@ export interface EnrollmentPageFilter {
   readonly studentUserIds?: readonly string[];
   readonly teacherUserIds?: readonly string[];
   readonly enrollmentIds?: readonly string[];
+  /**
+   * T074 FU4 (the note under T074, Q-O3 (a)): only an enrollment a payment once confirmed
+   * (`confirmed_at` set), never a checkout abandoned, expired, failed or refused before it.
+   */
+  readonly everConfirmed?: true;
 }
 
-/** One enrollment of a page: its parties, its status, its track and its snapshot count. */
+/**
+ * One enrollment of a page: its parties, its status, its track and its snapshot count; and (T074
+ * FU4) its last cancellation's reason and its slot's release, which the one closing rule reads.
+ */
 export interface EnrollmentPageItem {
   readonly enrollmentId: string;
   readonly studentUserId: string;
@@ -113,6 +121,10 @@ export interface EnrollmentPageItem {
   readonly status: EnrollmentStatus;
   readonly track: EnrollmentTrack;
   readonly sessionCount: number;
+  /** `cancellation_reason`: the last cancellation's while `cancelled`, else null. */
+  readonly cancellationReason: EnrollmentCancellationReason | null;
+  /** `slot_released_at` (T070): an administrator released the held slot; a restore clears it. */
+  readonly slotReleasedAt: Date | null;
 }
 
 /** A page of `admin_list_page_size` enrollments, newest first; `nextCursor` while more follow. */

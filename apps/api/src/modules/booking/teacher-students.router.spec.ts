@@ -102,6 +102,8 @@ const item = {
   upcoming: 3,
   completed: 1,
   remaining: 3,
+  // 004:T074 (FR-506): additively, rule d.
+  paused: false,
 };
 
 /** What R-HONEST-4 keeps from the teacher, as a careless service might add it. */

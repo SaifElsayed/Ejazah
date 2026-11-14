@@ -28,6 +28,7 @@ import {
   teacherStudentsOf,
   teacherTodayOf,
 } from '../../apps/api/src/modules/booking/index.js';
+import type { WindowDays } from '../../apps/api/src/modules/sessions/index.js';
 import {
   closeDatabase,
   type Database,
@@ -72,6 +73,8 @@ const CAIRO = 'Africa/Cairo';
 /** Tuesday 2026-11-10 14:00 in Cairo (+02:00). */
 const NOW = new Date('2026-11-10T12:00:00Z');
 const store = enrollmentListsStore;
+// 004:T074 (rule d): the restore windows the lists read for `paused`, the seed's 14 days.
+const WINDOWS: WindowDays = async () => 14;
 const clock = (pageSize = 20) => ({ now: NOW, pageSize });
 
 type EnrollmentState =
@@ -293,6 +296,7 @@ describe(
           students.yusra,
           { tab: 'active' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(active)).toEqual([
           enrollments.sooner,
@@ -331,6 +335,7 @@ describe(
           students.zainab,
           { tab: 'active' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(zainab).sort()).toEqual(
           [enrollments.zainabs, enrollments.zainabsElsewhere].sort(),
@@ -348,6 +353,7 @@ describe(
           students.yusra,
           { tab: 'ended' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(all)).toEqual(newestFirst(ended));
         expect(idsOf(all)).not.toContain(enrollments.abandoned);
@@ -358,6 +364,7 @@ describe(
           students.yusra,
           { tab: 'ended' },
           clock(1),
+          WINDOWS,
         );
         expect(idsOf(first)).toEqual(newestFirst(ended).slice(0, 1));
         expect(first.nextCursor).toBe(newestFirst(ended)[0]);
@@ -367,6 +374,7 @@ describe(
           students.yusra,
           { tab: 'ended', ...(first.nextCursor === undefined ? {} : { cursor: first.nextCursor }) },
           clock(1),
+          WINDOWS,
         );
         expect(idsOf(second)).toEqual(newestFirst(ended).slice(1));
         expect(second.nextCursor).toBeUndefined();
@@ -382,6 +390,7 @@ describe(
           students.yusra,
           { enrollmentId: enrollments.later },
           NOW,
+          WINDOWS,
         );
         expect(own.sessions.map(({ sequenceNumber, status }) => [sequenceNumber, status])).toEqual([
           [1, 'done'],
@@ -390,11 +399,18 @@ describe(
         ]);
         for (const enrollmentId of [enrollments.zainabs, enrollments.abandoned, randomUUID()]) {
           await expectNotFound(
-            studentEnrollmentOf(tx, store, students.yusra, { enrollmentId }, NOW),
+            studentEnrollmentOf(tx, store, students.yusra, { enrollmentId }, NOW, WINDOWS),
           );
         }
         await expectNotFound(
-          studentEnrollmentOf(tx, store, students.zainab, { enrollmentId: enrollments.later }, NOW),
+          studentEnrollmentOf(
+            tx,
+            store,
+            students.zainab,
+            { enrollmentId: enrollments.later },
+            NOW,
+            WINDOWS,
+          ),
         );
       });
     });
@@ -410,6 +426,7 @@ describe(
           students.yusra,
           { tab: 'active' },
           clock(),
+          WINDOWS,
         );
         expect(active.items.map(({ teacher }) => teacher)).toEqual([deleted, deleted, deleted]);
         const ended = await studentEnrollmentsOf(
@@ -418,6 +435,7 @@ describe(
           students.yusra,
           { tab: 'ended' },
           clock(),
+          WINDOWS,
         );
         expect(ended.items.map(({ teacher }) => teacher)).toEqual([deleted, deleted]);
         const own = await studentEnrollmentOf(
@@ -426,6 +444,7 @@ describe(
           students.yusra,
           { enrollmentId: enrollments.later },
           NOW,
+          WINDOWS,
         );
         expect(own.teacher).toEqual(deleted);
       });
@@ -440,14 +459,28 @@ describe(
     it('answers the teacher’s own confirmed students by next session, never one awaiting payment, nothing of another teacher’s', async () => {
       await rolledBack(async (tx) => {
         const { t1, t2, enrollments } = await world(tx);
-        const active = await teacherStudentsOf(tx, store, t1.id, { tab: 'active' }, clock());
+        const active = await teacherStudentsOf(
+          tx,
+          store,
+          t1.id,
+          { tab: 'active' },
+          clock(),
+          WINDOWS,
+        );
         expect(idsOf(active)).toEqual([enrollments.sooner, enrollments.later, enrollments.zainabs]);
         expect(active.items.map(({ student }) => student)).toEqual([
           named('يُسْرى عليّ'),
           named('يُسْرى عليّ'),
           named('زينب حسن'),
         ]);
-        const other = await teacherStudentsOf(tx, store, t2.id, { tab: 'active' }, clock());
+        const other = await teacherStudentsOf(
+          tx,
+          store,
+          t2.id,
+          { tab: 'active' },
+          clock(),
+          WINDOWS,
+        );
         expect(idsOf(other)).toEqual([enrollments.zainabsElsewhere]);
       });
     });
@@ -455,13 +488,13 @@ describe(
     it('answers the ended tab: completed, terminated and cancelled after confirmation', async () => {
       await rolledBack(async (tx) => {
         const { t1, t2, enrollments } = await world(tx);
-        const ended = await teacherStudentsOf(tx, store, t1.id, { tab: 'ended' }, clock());
+        const ended = await teacherStudentsOf(tx, store, t1.id, { tab: 'ended' }, clock(), WINDOWS);
         expect(idsOf(ended)).toEqual(
           newestFirst([enrollments.completed, enrollments.cancelledLater, enrollments.asmaas]),
         );
-        expect(idsOf(await teacherStudentsOf(tx, store, t2.id, { tab: 'ended' }, clock()))).toEqual(
-          [],
-        );
+        expect(
+          idsOf(await teacherStudentsOf(tx, store, t2.id, { tab: 'ended' }, clock(), WINDOWS)),
+        ).toEqual([]);
       });
     });
 
@@ -475,6 +508,7 @@ describe(
           t1.id,
           { tab: 'active', query: 'يسري' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(active)).toEqual([enrollments.sooner, enrollments.later]);
         const ended = await teacherStudentsOf(
@@ -483,6 +517,7 @@ describe(
           t1.id,
           { tab: 'ended', query: 'اسماء' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(ended)).toEqual([enrollments.asmaas]);
         // Zainab is the other teacher's student too: her name finds nothing of that teacher's here.
@@ -492,6 +527,7 @@ describe(
           t1.id,
           { tab: 'ended', query: 'زينب' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(zainabEnded)).toEqual([]);
         const elsewhere = await teacherStudentsOf(
@@ -500,6 +536,7 @@ describe(
           t2.id,
           { tab: 'active', query: 'يسري' },
           clock(),
+          WINDOWS,
         );
         expect(idsOf(elsewhere)).toEqual([]);
       });
@@ -514,6 +551,7 @@ describe(
           t1.id,
           { enrollmentId: enrollments.later },
           NOW,
+          WINDOWS,
         );
         expect(Object.keys(own.student).sort()).toEqual([
           'deleted',
@@ -527,10 +565,10 @@ describe(
           enrollments.abandoned,
           randomUUID(),
         ]) {
-          await expectNotFound(teacherStudentOf(tx, store, t1.id, { enrollmentId }, NOW));
+          await expectNotFound(teacherStudentOf(tx, store, t1.id, { enrollmentId }, NOW, WINDOWS));
         }
         await expectNotFound(
-          teacherStudentOf(tx, store, t2.id, { enrollmentId: enrollments.later }, NOW),
+          teacherStudentOf(tx, store, t2.id, { enrollmentId: enrollments.later }, NOW, WINDOWS),
         );
       });
     });
@@ -539,7 +577,7 @@ describe(
       await rolledBack(async (tx) => {
         const { t1, t2, enrollments } = await world(tx);
         const morning = new Date('2026-11-17T06:00:00Z');
-        const today = await teacherTodayOf(tx, store, t1.id, morning);
+        const today = await teacherTodayOf(tx, store, t1.id, morning, WINDOWS);
         expect(today.localDate).toBe('2026-11-17');
         expect(today.timezone).toBe(CAIRO);
         expect(
@@ -552,7 +590,7 @@ describe(
           [enrollments.later, 'يُسْرى عليّ', 2],
           [enrollments.zainabs, 'زينب حسن', 1],
         ]);
-        const other = await teacherTodayOf(tx, store, t2.id, morning);
+        const other = await teacherTodayOf(tx, store, t2.id, morning, WINDOWS);
         expect(other.sessions.map(({ enrollmentId }) => enrollmentId)).toEqual([
           enrollments.zainabsElsewhere,
         ]);
@@ -564,13 +602,20 @@ describe(
         const { t1, students, enrollments } = await world(tx);
         await deleteAccount(tx, students.zainab);
         await deleteAccount(tx, students.asmaa);
-        const active = await teacherStudentsOf(tx, store, t1.id, { tab: 'active' }, clock());
+        const active = await teacherStudentsOf(
+          tx,
+          store,
+          t1.id,
+          { tab: 'active' },
+          clock(),
+          WINDOWS,
+        );
         expect(active.items.map(({ student }) => student)).toEqual([
           named('يُسْرى عليّ'),
           named('يُسْرى عليّ'),
           DELETED,
         ]);
-        const ended = await teacherStudentsOf(tx, store, t1.id, { tab: 'ended' }, clock());
+        const ended = await teacherStudentsOf(tx, store, t1.id, { tab: 'ended' }, clock(), WINDOWS);
         expect(
           Object.fromEntries(
             ended.items.map(({ enrollmentId, student }) => [enrollmentId, student]),
@@ -586,15 +631,29 @@ describe(
           t1.id,
           { enrollmentId: enrollments.zainabs },
           NOW,
+          WINDOWS,
         );
         expect(detail.student).toEqual(DELETED);
-        const today = await teacherTodayOf(tx, store, t1.id, new Date('2026-11-17T06:00:00Z'));
+        const today = await teacherTodayOf(
+          tx,
+          store,
+          t1.id,
+          new Date('2026-11-17T06:00:00Z'),
+          WINDOWS,
+        );
         expect(today.sessions.map(({ student }) => student)).toEqual([
           named('يُسْرى عليّ'),
           DELETED,
         ]);
         for (const tab of ['active', 'ended'] as const) {
-          const found = await teacherStudentsOf(tx, store, t1.id, { tab, query: 'زينب' }, clock());
+          const found = await teacherStudentsOf(
+            tx,
+            store,
+            t1.id,
+            { tab, query: 'زينب' },
+            clock(),
+            WINDOWS,
+          );
           expect(idsOf(found), tab).toEqual([]);
         }
       });

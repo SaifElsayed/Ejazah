@@ -154,6 +154,8 @@ function world(given: Given = {}) {
               status: 'confirmed',
               track: 'recitation',
               sessionCount: 4,
+              cancellationReason: null,
+              slotReleasedAt: null,
             },
           ],
         };

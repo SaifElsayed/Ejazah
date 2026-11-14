@@ -23,6 +23,7 @@ import {
   studentEnrollmentsOf,
   teacherStudentsOf,
 } from '../../apps/api/src/modules/booking/index.js';
+import type { WindowDays } from '../../apps/api/src/modules/sessions/index.js';
 import {
   closeDatabase,
   type Database,
@@ -65,6 +66,8 @@ async function rolledBack(probe: (tx: Transaction) => Promise<void>): Promise<vo
 const CAIRO = 'Africa/Cairo';
 const NOW = new Date('2026-11-10T12:00:00Z');
 const store = enrollmentListsStore;
+// 004:T074 (rule d): the restore windows the lists read for `paused`, the seed's 14 days.
+const WINDOWS: WindowDays = async () => 14;
 const clock = { now: NOW, pageSize: 20 };
 
 type CancellationReason =
@@ -248,6 +251,7 @@ describe(
           studentUserId,
           { tab: 'ended' },
           clock,
+          WINDOWS,
         );
         expect(statusById(answer)).toEqual([[enrollmentId, one.status]]);
       });
@@ -257,7 +261,14 @@ describe(
       await rolledBack(async (tx) => {
         const made = await world(tx);
         const { enrollmentId } = endedOf(made, one.name);
-        const answer = await teacherStudentsOf(tx, store, made.teacherId, { tab: 'ended' }, clock);
+        const answer = await teacherStudentsOf(
+          tx,
+          store,
+          made.teacherId,
+          { tab: 'ended' },
+          clock,
+          WINDOWS,
+        );
         expect(statusById(answer)).toContainEqual([enrollmentId, one.status]);
       });
     });
@@ -274,6 +285,7 @@ describe(
             made.teacherId,
             { tab: 'ended', query: one.student },
             clock,
+            WINDOWS,
           );
           expect(statusById(answer)).toEqual([[enrollmentId, one.status]]);
         });
@@ -290,6 +302,7 @@ describe(
             studentUserId,
             { tab: 'ended' },
             clock,
+            WINDOWS,
           );
           expect(statusById(answer), student).toEqual([]);
         }
@@ -299,7 +312,14 @@ describe(
     it('the teacher’s ended tab holds no enrollment cancelled and never confirmed, whatever its reason', async () => {
       await rolledBack(async (tx) => {
         const made = await world(tx);
-        const answer = await teacherStudentsOf(tx, store, made.teacherId, { tab: 'ended' }, clock);
+        const answer = await teacherStudentsOf(
+          tx,
+          store,
+          made.teacherId,
+          { tab: 'ended' },
+          clock,
+          WINDOWS,
+        );
         expect(
           statusById(answer)
             .map(([enrollmentId]) => enrollmentId)
@@ -318,6 +338,7 @@ describe(
             made.teacherId,
             { tab: 'ended', query: student },
             clock,
+            WINDOWS,
           );
           expect(statusById(answer), student).toEqual([]);
         }

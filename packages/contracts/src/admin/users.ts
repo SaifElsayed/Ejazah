@@ -94,6 +94,12 @@ export const usersGetOutput = z.object({
    * through the one closing rule; it may already have passed. Null for none.
    */
   enrollmentsSlotHeldUntil: z.iso.datetime().nullable(),
+  /**
+   * B42b, T075 of specs/004-sessions (the note under T075, Q-O2 (a)): `ban_restore_window_days`,
+   * the days a ban's or a revocation's closing holds its slot (DEC-66, DEC-69), for the panel's
+   * `{days}` in the student's ban and the lifts. Additive (R-API-9).
+   */
+  banRestoreWindowDays: z.int().positive(),
 });
 
 export type UsersListInput = z.infer<typeof usersListInput>;

@@ -67,6 +67,12 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'student.suspend': 'admin.audit.actions.studentSuspend',
   'student.ban': 'admin.audit.actions.studentBan',
   'student.reinstate': 'admin.audit.actions.studentReinstate',
+  // B42b, T075 of specs/004-sessions (the follow-ups under T070 and T072): T070's release and
+  // T072's three lifts.
+  'enrollment.slot_released': 'admin.audit.actions.enrollmentSlotReleased',
+  'student.ban_lifted': 'admin.audit.actions.studentBanLifted',
+  'teacher.ban_lifted': 'admin.audit.actions.teacherBanLifted',
+  'teacher.revocation_lifted': 'admin.audit.actions.teacherRevocationLifted',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

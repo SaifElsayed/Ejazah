@@ -249,9 +249,11 @@ const RESTORE_CAUSES: Readonly<Record<string, MessageKey>> = {
   slot_changed: 'admin.sessions.restore.refused.slotChanged',
   slot_taken: 'admin.sessions.restore.refused.slotTaken',
   time_taken: 'admin.sessions.restore.refused.timeTaken',
+  // B42b, T075 (N11): T073's ninth cause, an order of the enrollment refunded at the gateway.
+  refunded: 'admin.sessions.restore.refused.refunded',
 };
 
-/** The words of a refused restore (FR-454): its eight causes, `no_free_week`, the key reused. */
+/** The words of a refused restore (FR-454): its nine causes, `no_free_week`, the key reused. */
 export function restoreFailure(error: unknown): ErrorMessage {
   const cause = detailOf(error, 'cause');
   switch (errorCodeOf(error)) {
@@ -271,4 +273,46 @@ export function restoreFailure(error: unknown): ErrorMessage {
     default:
       return errorMessageKey(error, 'admin.dialogs.submitError');
   }
+}
+
+/**
+ * B42b, T075 of specs/004-sessions (FR-503; T070's `enrollments.releaseSlot`): the words of a
+ * refused release, `slot_not_held` by its cause, a reused key, `NOT_FOUND`.
+ */
+export function releaseFailure(error: unknown): ErrorMessage {
+  switch (errorCodeOf(error)) {
+    case 'CONFLICT':
+      return {
+        key:
+          detailOf(error, 'cause') === 'slot_not_held'
+            ? 'admin.sessions.release.refused.slotNotHeld'
+            : 'admin.shared.keyReused',
+      };
+    case 'NOT_FOUND':
+      return { key: 'admin.sessions.release.refused.notFound' };
+    default:
+      return errorMessageKey(error, 'admin.dialogs.submitError');
+  }
+}
+
+/** The hold of a closed enrollment the monitor answered, for the restore's words. */
+export type SlotHold =
+  | { readonly state: 'held'; readonly until: string }
+  | { readonly state: 'released'; readonly at: string };
+
+/**
+ * B42b, T075 (DEC-69; N11): the hold of a restorable closing: released at `slotReleasedAt`, else
+ * held until T070's `slotHeldUntil`, else (an older answer) until the deprecated `restorableUntil`,
+ * the same instant; none when the closing is not restorable.
+ */
+export function slotHoldOf(enrollment: {
+  readonly restorableUntil?: string | undefined;
+  readonly slotHeldUntil?: string | undefined;
+  readonly slotReleasedAt?: string | undefined;
+}): SlotHold | undefined {
+  if (enrollment.slotReleasedAt !== undefined) {
+    return { state: 'released', at: enrollment.slotReleasedAt };
+  }
+  const until = enrollment.slotHeldUntil ?? enrollment.restorableUntil;
+  return until === undefined ? undefined : { state: 'held', until };
 }

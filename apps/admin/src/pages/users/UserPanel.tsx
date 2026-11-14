@@ -10,8 +10,12 @@
 // On a student's record, the suspend, ban and reinstate buttons open T051's dialogs; which show is the
 // account status the server answered, never a rule of the panel's, and the server's refusal is the
 // enforcement: suspend and ban while the account is neither suspended nor banned, reinstate while it
-// is suspended (lifting a ban is the pending formal change's, the note under T051, Q1 (a)). After one
-// is done the record and the list are read again. None of the board's date of birth, sign-in method,
+// is suspended. After one is done the record and the list are read again.
+// B42b, T075 of specs/004-sessions (FR-502; SRS FR-ADMIN-5 as amended, DEC-66, DEC-69): «رفع الحظر»
+// on a banned student's or teacher's record and «إلغاء سحب الاعتماد» on a revoked teacher's, at any
+// time, opening `UserLiftDialog` with the record's `enrollmentsSlotHeldUntil` and
+// `banRestoreWindowDays`; the student's ban says the days too (Q-O2 (a)). A deleted account offers
+// none, as the server answers it `NOT_FOUND`. None of the board's date of birth, sign-in method,
 // time zone, enrollments' summary, identity requests, «require an identity proof», «bar from
 // ijazahs» or a teacher's standing actions (the note under T058, Q2).
 import { useState } from 'react';
@@ -26,6 +30,7 @@ import { panelTimeZone } from '../../lib/zone';
 import { NoShowMark, PartyName } from '../_shared';
 import { ENROLLMENT_STATUS } from '../sessions/words';
 import { type UserRecord, useRereadUsers, useUserRecord } from './queries';
+import { UserLiftDialog, type UserLiftKind } from './LiftDialogs';
 import { StudentStandingDialog, type StudentStandingKind } from './StudentStandingDialogs';
 import { userLabel } from './UserName';
 import { ACCOUNT_STATUS, roleLabel, VERIFICATION_STATUS } from './words';
@@ -65,17 +70,42 @@ function standingActions(record: UserRecord): readonly StudentStandingKind[] {
   }
 }
 
+const LIFT_LABEL: Readonly<
+  Record<UserLiftKind, 'admin.users.detail.liftBan' | 'admin.users.detail.liftRevocation'>
+> = {
+  studentBan: 'admin.users.detail.liftBan',
+  teacherBan: 'admin.users.detail.liftBan',
+  revocation: 'admin.users.detail.liftRevocation',
+};
+
+/** T075: the lift a record's statuses offer: a banned student's or teacher's ban, a revoked teacher's
+ *  revocation (a banned one's ban is lifted first, then its revocation); none on a deleted account. */
+function liftActions(record: UserRecord): readonly UserLiftKind[] {
+  if (record.profile.deleted) return [];
+  if (record.accountStatus === 'banned') {
+    if (record.role === 'student') return ['studentBan'];
+    return record.role === 'teacher' ? ['teacherBan'] : [];
+  }
+  return record.role === 'teacher' && record.verificationStatus === 'revoked' ? ['revocation'] : [];
+}
+
+/** The dialog open on the record, if any. */
+type Opened =
+  | { readonly action: 'standing'; readonly kind: StudentStandingKind }
+  | { readonly action: 'lift'; readonly kind: UserLiftKind };
+
 function UserRecordPanel({ record }: { readonly record: UserRecord }) {
   const t = useT();
   const locale = useLocale();
   const navigate = useNavigate();
   const reread = useRereadUsers();
-  const [opened, setOpened] = useState<StudentStandingKind | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
   const { profile } = record;
   const name = userLabel({ userId: record.userId, ...profile }, record.role, t);
   const status = ACCOUNT_STATUS[record.accountStatus];
   const yesNo = (value: boolean) => t(value ? 'admin.common.yes' : 'admin.common.no');
   const actions = standingActions(record);
+  const lifts = liftActions(record);
 
   return (
     <>
@@ -99,7 +129,7 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
             </span>
           </span>
         }
-        {...(actions.length === 0
+        {...(actions.length === 0 && lifts.length === 0
           ? {}
           : {
               actions: (
@@ -109,7 +139,15 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
                       key={kind}
                       label={t(STANDING_LABEL[kind])}
                       variant={kind === 'reinstate' ? 'primary' : 'secondary'}
-                      onPress={() => setOpened(kind)}
+                      onPress={() => setOpened({ action: 'standing', kind })}
+                    />
+                  ))}
+                  {lifts.map((kind) => (
+                    <Button
+                      key={kind}
+                      label={t(LIFT_LABEL[kind])}
+                      variant="primary"
+                      onPress={() => setOpened({ action: 'lift', kind })}
                     />
                   ))}
                 </span>
@@ -220,10 +258,21 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
           </section>
         )}
       </Panel>
-      {opened === null ? null : (
+      {opened?.action === 'lift' ? (
+        <UserLiftDialog
+          kind={opened.kind}
+          person={{ userId: record.userId, displayName: name }}
+          heldUntil={record.enrollmentsSlotHeldUntil}
+          days={record.banRestoreWindowDays}
+          onLifted={() => void reread()}
+          onClose={() => setOpened(null)}
+        />
+      ) : null}
+      {opened?.action !== 'standing' ? null : (
         <StudentStandingDialog
-          kind={opened}
+          kind={opened.kind}
           student={{ studentUserId: record.userId, displayName: name }}
+          banRestoreWindowDays={record.banRestoreWindowDays}
           onClose={() => setOpened(null)}
           onDone={() => {
             setOpened(null);

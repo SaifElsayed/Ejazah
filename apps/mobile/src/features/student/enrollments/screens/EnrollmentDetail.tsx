@@ -12,6 +12,8 @@
 // with a pending cancellation request says so on its row (004:T041, FR-495). On a confirmed
 // enrollment, the complaint of the teacher's absence (004:T042, FR-452; `ComplaintPanel`).
 // 004:T043 (FR-495): a session owing a remedy says where it stands under its time (`remedies/`).
+// 004:T074 (FR-506): a paused enrollment reads «متوقف مؤقتًا», with no reason, in place of its
+// status; the server answers it with no session, so none is drawn.
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -157,7 +159,11 @@ function Overview({
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text variant="headline">{partyName(enrollment.teacher, 'teacher')}</Text>
         </View>
-        <EnrollmentStatusBadge status={enrollment.status} pending={pendingBadge} />
+        <EnrollmentStatusBadge
+          status={enrollment.status}
+          paused={enrollment.paused}
+          pending={pendingBadge}
+        />
       </View>
       <PackageLine summary={enrollment.summary} />
       {weekly === undefined ? null : (

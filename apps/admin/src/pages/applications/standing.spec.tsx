@@ -15,6 +15,8 @@ afterEach(() => setLocale('ar'));
 const A = '0193a6f0-0000-7000-8000-00000000000a';
 const QURAN = { id: '0193a6f0-0000-7000-8000-0000000000a1', nameAr: 'حفظ القرآن', nameEn: 'Quran' };
 
+const DAYS = 21;
+
 const row = {
   teacherUserId: A,
   displayName: 'الشيخ ياسر حمدي',
@@ -39,6 +41,8 @@ function detailOf(more: Record<string, unknown> = {}) {
     },
     credentials: [],
     call: { completedOn: '2026-10-13', outcome: 'suitable', notes: 'مناسب' },
+    // B42b, T075 (Q-O2 (a)): `applications.get`'s `banRestoreWindowDays`, unlike the seed's 14.
+    banRestoreWindowDays: DAYS,
     ...more,
   };
 }
@@ -59,6 +63,7 @@ function fakeApi(detail = detailOf()) {
       revokeApproval: mutation(),
       ban: mutation(),
       reinstate: mutation(),
+      liftBan: mutation(),
     },
     home: { summary: query() },
     auth: { me: query() },
@@ -333,5 +338,220 @@ describe('T058: RATE_LIMITED on a teacher’s standing', () => {
       await reinstating.findByText(ar('admin.common.rateLimitedIn', { count: 2 })),
     ).toBeTruthy();
     expect(reinstating.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});
+
+// B42b, T075 of specs/004-sessions (FR-502, FR-504; SRS FR-ADMIN-5 as amended, FR-SESS-16 as
+// amended, DEC-66, DEC-69; the note under T075, Q-O2 (a) and Q-R6 (a); FU5): an approved teacher's
+// ban holds each enrollment's slot for `{days}` and can be lifted at any time; a suspension pauses
+// the enrollments and the reinstatement offers what the cancelled sessions owe, refused
+// `STUDENT_SUSPENDED` while a paused enrollment's student is suspended; «رفع الحظر» on a banned
+// account promises nothing about enrollments and draws each result the answer returns, with a link
+// to the person's `/users` record.
+describe('T075: an approved teacher’s ban, suspension and reinstatement, in words', () => {
+  it('the ban says each slot is held for the setting’s days and the ban can be lifted at any time, in both languages', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t, locale) => {
+        const panel = await detail();
+        fireEvent.click(
+          panel.getByRole('button', { name: t('admin.dialogs.suspendTeacher.kinds.suspend') }),
+        );
+        await dialog(t('admin.dialogs.suspendTeacher.title', { name: row.displayName }));
+        const kinds = within(
+          screen.getByRole('group', { name: t('admin.applications.detail.standing') }),
+        );
+        fireEvent.click(
+          kinds.getByRole('button', { name: t('admin.dialogs.suspendTeacher.kinds.ban') }),
+        );
+        const words = await screen.findByText(
+          t('admin.dialogs.suspendTeacher.honest.ban', { days: DAYS }),
+        );
+        expect(words.textContent).toContain('21');
+        expect(words.textContent).toMatch(locale === 'ar' ? /في أي وقت/u : /at any time/u);
+        expect(words.textContent).not.toMatch(/نهائي|لا يُرفع|for good|not lifted|permanent/u);
+      },
+    );
+  });
+
+  it('the suspension says the enrollments pause and the reinstatement offers what is owed, in both languages', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t, locale) => {
+        const panel = await detail();
+        fireEvent.click(
+          panel.getByRole('button', { name: t('admin.dialogs.suspendTeacher.kinds.suspend') }),
+        );
+        const words = await screen.findByText(t('admin.dialogs.suspendTeacher.honest.suspend'));
+        expect(words.textContent).toMatch(locale === 'ar' ? /تتوقف اشتراكاته مؤقتًا/u : /paused/u);
+        expect(words.textContent).toMatch(locale === 'ar' ? /جلسة تعويضية/u : /make-up session/u);
+      },
+    );
+  });
+
+  it('the reinstatement says the paused enrollments resume, and STUDENT_SUSPENDED says what unblocks it, in both languages', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi(detailOf({ accountStatus: 'suspended' }));
+        api.teachers.reinstate.mutate.mockRejectedValue(refusal('STUDENT_SUSPENDED'));
+        return open(api);
+      },
+      async (t) => {
+        const panel = await detail();
+        fireEvent.click(
+          panel.getByRole('button', { name: t('admin.dialogs.confirm.reactivateAccount.confirm') }),
+        );
+        const reinstating = await dialog(
+          t('admin.dialogs.confirm.reactivateAccount.title', { name: row.displayName }),
+        );
+        expect(
+          reinstating.getByText(t('admin.dialogs.confirm.reactivateAccount.effects.resumed')),
+        ).toBeTruthy();
+        type(
+          reinstating.getByLabelText(t('admin.dialogs.confirm.reactivateAccount.reasonLabel')),
+          'انتهت المدة',
+        );
+        fireEvent.click(
+          reinstating.getByRole('button', {
+            name: t('admin.dialogs.confirm.reactivateAccount.confirm'),
+          }),
+        );
+        expect(
+          await reinstating.findByText(
+            t('admin.dialogs.confirm.reactivateAccount.refused.studentSuspended'),
+          ),
+        ).toBeTruthy();
+        expect(reinstating.queryByText(t('admin.dialogs.submitError'))).toBeNull();
+      },
+    );
+  });
+});
+
+describe('T075: «رفع الحظر» on the applicant’s page (Q-R6 (a))', () => {
+  const E1 = '0193a6f0-0000-7000-8000-0000000000e1';
+  const E2 = '0193a6f0-0000-7000-8000-0000000000e2';
+  const banned = () => detailOf({ status: 'banned', accountStatus: 'banned' });
+  type T = (key: MessageKey, values?: Record<string, string | number>) => string;
+
+  async function liftDialog(t: T) {
+    const panel = await detail();
+    fireEvent.click(panel.getByRole('button', { name: t('admin.applications.detail.liftBan') }));
+    return dialog(t('admin.users.lift.banTitle', { name: row.displayName }));
+  }
+
+  const confirmOf = (lifting: ReturnType<typeof within>, t: T) =>
+    lifting
+      .getAllByRole('button', { name: t('admin.applications.detail.liftBan') })
+      .find(
+        (button: HTMLElement) => button.closest('.dialog__actions') !== null,
+      ) as HTMLButtonElement;
+
+  it.each([
+    ['a banned applicant', { status: 'banned', accountStatus: 'banned' }, true],
+    ['an approved teacher banned', { status: 'approved', accountStatus: 'banned' }, true],
+    ['an active approved teacher', { status: 'approved', accountStatus: 'active' }, false],
+    ['an applicant in review', { status: 'in_review', accountStatus: 'active' }, false],
+  ] as const)('is offered on %s: %s', async (_name, more, shown) => {
+    open(fakeApi(detailOf(more)));
+    const panel = await detail();
+    const button = panel.queryByRole('button', { name: ar('admin.applications.detail.liftBan') });
+    if (shown) expect(button).toBeTruthy();
+    else expect(button).toBeNull();
+  });
+
+  it('promises nothing about enrollments, and links to the person’s record once lifted, in both languages', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi(banned());
+        api.teachers.liftBan.mutate.mockResolvedValue({ enrollments: [] });
+        return open(api);
+      },
+      async (t) => {
+        const lifting = await liftDialog(t);
+        const effect = lifting.getByText(t('admin.applications.lift.effect'));
+        expect(effect.closest('section.dialog')?.textContent ?? '').not.toMatch(
+          /اشتراك|enrollment|نهائي|لا يُرفع|permanent|for good|not lifted/iu,
+        );
+        expect(confirmOf(lifting, t).disabled).toBe(true);
+        type(lifting.getByLabelText(t('admin.users.lift.banReasonLabel')), 'سبب');
+        fireEvent.click(confirmOf(lifting, t));
+        expect(await lifting.findByText(t('admin.users.lift.doneBan'))).toBeTruthy();
+        expect(
+          lifting.queryByRole('list', { name: t('admin.users.lift.resultsTitle') }),
+        ).toBeNull();
+        expect(
+          lifting
+            .getByRole('link', { name: t('admin.applications.lift.record') })
+            .getAttribute('href'),
+        ).toBe(`/users?user=${A}`);
+      },
+    );
+  });
+
+  it('sends the trimmed reason with the key minted when it opened, the same on a retry, and reads the detail again once lifted', async () => {
+    const api = fakeApi(banned());
+    api.teachers.liftBan.mutate
+      .mockRejectedValueOnce(refusal('INTERNAL'))
+      .mockResolvedValueOnce({ enrollments: [] });
+    open(api);
+    const lifting = await liftDialog(ar);
+    type(lifting.getByLabelText(ar('admin.users.lift.banReasonLabel')), '  خطأ في القرار ');
+    fireEvent.click(confirmOf(lifting, ar));
+    await lifting.findByText(ar('admin.dialogs.submitError'));
+    fireEvent.click(confirmOf(lifting, ar));
+    await lifting.findByText(ar('admin.users.lift.doneBan'));
+    const [first, second] = api.teachers.liftBan.mutate.mock.calls.map(([input]) => input);
+    expect(first).toEqual({
+      teacherUserId: A,
+      reason: 'خطأ في القرار',
+      idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
+    });
+    expect(second).toEqual(first);
+    await waitFor(() => expect(api.applications.get.query).toHaveBeenCalledTimes(2));
+  });
+
+  it('draws each result the answer returns, for an approved teacher’s ban, in plain words', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi(detailOf({ status: 'approved', accountStatus: 'banned' }));
+        api.teachers.liftBan.mutate.mockResolvedValue({
+          enrollments: [
+            { enrollmentId: E1, restored: true },
+            { enrollmentId: E2, restored: false, cause: 'slot_taken' },
+          ],
+        });
+        return open(api);
+      },
+      async (t) => {
+        const lifting = await liftDialog(t);
+        type(lifting.getByLabelText(t('admin.users.lift.banReasonLabel')), 'سبب');
+        fireEvent.click(confirmOf(lifting, t));
+        const results = within(
+          await lifting.findByRole('list', { name: t('admin.users.lift.resultsTitle') }),
+        );
+        expect(results.getByText(t('admin.users.lift.result.restored'))).toBeTruthy();
+        expect(results.getByText(t('admin.users.lift.result.slotTaken'))).toBeTruthy();
+        expect(
+          results
+            .getAllByRole('link', { name: t('admin.users.record.openEnrollment') })
+            .map((link) => link.getAttribute('href')),
+        ).toEqual([`/sessions?enrollment=${E1}`, `/sessions?enrollment=${E2}`]);
+        expect(
+          lifting.getByRole('link', { name: t('admin.applications.lift.record') }),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('says not_banned in plain words', async () => {
+    const api = fakeApi(banned());
+    api.teachers.liftBan.mutate.mockRejectedValue(
+      refusal('CONFLICT', [{ path: 'cause', code: 'not_banned' }]),
+    );
+    open(api);
+    const lifting = await liftDialog(ar);
+    type(lifting.getByLabelText(ar('admin.users.lift.banReasonLabel')), 'سبب');
+    fireEvent.click(confirmOf(lifting, ar));
+    expect(await lifting.findByText(ar('admin.users.lift.refused.notBanned'))).toBeTruthy();
   });
 });

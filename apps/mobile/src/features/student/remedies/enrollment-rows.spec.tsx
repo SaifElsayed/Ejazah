@@ -70,6 +70,7 @@ const detail: EnrollmentsGetOutput = {
     sessionDurationMinutes: 45,
   },
   status: 'confirmed',
+  paused: false,
   next: sessions[6],
   last: sessions[7],
   upcoming: 2,

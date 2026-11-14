@@ -19,6 +19,7 @@ import {
   renderApp,
   type Translate,
 } from '../../test/app-harness';
+import { closingFailure } from './words';
 
 afterEach(() => setLocale('ar'));
 
@@ -514,5 +515,32 @@ describe('T058: RATE_LIMITED on a case’s decisions', () => {
     fireEvent.click(decideConfirm(dialog, ar));
     expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 2 }))).toBeTruthy();
     expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});
+
+// B42b, T075 of specs/004-sessions (Q-B1 (a), the review session's ruling of 2026-11-13; N11): a
+// student's suspension case cleared while the teacher is suspended is refused `TEACHER_SUSPENDED`,
+// and a `teacher_suspended` case resolved or dismissed `CONFLICT` `closed_by_reinstatement`; each
+// said in plain words, in Arabic and English, never the generic words.
+describe('T075: a teacher’s suspension refusing a closing, in plain words', () => {
+  it.each([
+    [
+      'TEACHER_SUSPENDED',
+      refusal('TEACHER_SUSPENDED'),
+      'admin.cases.close.refused.teacherSuspended',
+      { ar: /المعلم ما زال موقوفًا/u, en: /teacher’s account is still suspended/u },
+    ],
+    [
+      'CONFLICT closed_by_reinstatement',
+      refusal('CONFLICT', [{ path: 'cause', code: 'closed_by_reinstatement' }]),
+      'admin.cases.close.refused.closedByReinstatement',
+      { ar: /يُعاد تفعيل المعلم/u, en: /teacher is reinstated/u },
+    ],
+  ] as const)('%s says what unblocks it', (_name, error, key, words) => {
+    expect(closingFailure(error)).toEqual({ key });
+    for (const locale of ['ar', 'en'] as const) {
+      expect(translate(locale, key)).toMatch(words[locale]);
+      expect(translate(locale, key)).not.toBe(translate(locale, 'admin.dialogs.submitError'));
+    }
   });
 });

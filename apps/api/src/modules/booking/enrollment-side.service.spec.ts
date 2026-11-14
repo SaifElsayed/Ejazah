@@ -128,6 +128,8 @@ function item(n: number): EnrollmentPageItem {
     status: 'confirmed',
     track: 'ijazah_track',
     sessionCount: 8,
+    cancellationReason: null,
+    slotReleasedAt: null,
   };
 }
 

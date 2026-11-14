@@ -59,6 +59,7 @@ const [
   { expireCancellationRequests },
   { advanceRemedies },
   { purgeChat },
+  { closeSlotHolds },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -95,6 +96,7 @@ const [
   import('./jobs/expire-cancellation-requests.js'),
   import('./jobs/advance-remedies.js'),
   import('./jobs/purge-chat.js'),
+  import('./jobs/close-slot-holds.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -234,6 +236,10 @@ const jobs: readonly Job[] = [
   // last disputable session's window and `chat_retention_days` have passed and nothing is open on
   // it, under its lock; the files removed after the commit and retried by the next run.
   purgeChat({ database, settings, storage: ports.storage, log }),
+  // The held slots' hold ends (T074 of specs/004-sessions, FR-505), hourly at minute 35: each held
+  // closing whose hold ran out by its date gets one `slot_hold_ended` row, under its enrollment's lock;
+  // nothing else changes.
+  closeSlotHolds({ database, settings, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);
