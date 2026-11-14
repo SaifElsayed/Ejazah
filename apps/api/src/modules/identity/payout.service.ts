@@ -20,6 +20,11 @@
 //   rejection, and a second verification keeps the first instant. A reason is kept as plain text,
 //   control characters made spaces and cut to the contract's length; a rejection with no reason is
 //   kept as an empty one, so it still reads as a rejection.
+// - T077 of specs/004-sessions (SRS FR-ADMIN-21; Q-E (a)): a registration whose hash a deleted
+//   teacher's kept profile holds (rule 27 binds the live profiles only) is stored as any other and
+//   writes one info line `{ teacherUserId, reason: 'payout_kept_match' }`, ids and a reason only,
+//   on its transaction, so a replayed key writes none; the administrator reviewing the account reads
+//   it as `users.get`'s `payoutKeptOnDeletedTeacher`.
 // - `get` reads the four states; a verified instant reads as verified whatever else the row holds,
 //   as the standing the session resolves does (FR-192).
 import { createHash } from 'node:crypto';
@@ -34,8 +39,10 @@ import { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import {
+  keptProfileHolds,
   markRejected,
   markVerified,
   payoutHolderOf,
@@ -52,6 +59,8 @@ export const PAYOUT_ACCOUNT_REF_COLUMN = 'teacher_profiles.payout_account_ref_en
 export interface PayoutDependencies extends IdentityDependencies {
   readonly payment: Pick<PaymentPort, 'registerPayoutRecipient'>;
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** T077: the registration's `payout_kept_match` line; none written when absent. */
+  readonly log?: Pick<Logger, 'info'>;
 }
 
 /** The SHA-256 lookup hash of a gateway recipient reference, as stored beside it (R-114). */
@@ -84,6 +93,7 @@ export class PayoutService {
   readonly #cipher: ColumnCipher;
   readonly #payment: PayoutDependencies['payment'];
   readonly #idempotency: PayoutDependencies['idempotency'];
+  readonly #log: Pick<Logger, 'info'>;
   readonly #now: () => Date;
 
   constructor(dependencies: PayoutDependencies) {
@@ -91,6 +101,7 @@ export class PayoutService {
     this.#cipher = new ColumnCipher(dependencies.encryptionKey);
     this.#payment = dependencies.payment;
     this.#idempotency = dependencies.idempotency;
+    this.#log = dependencies.log ?? { info: () => undefined };
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -127,6 +138,12 @@ export class PayoutService {
         // A profile is never hard-deleted, so the row read above is still there.
         if (!(await this.#payouts.storeRecipient(tx, profileId, recipient))) {
           throw new Error('payout: the teacher profile disappeared during registration');
+        }
+        if (await keptProfileHolds(tx, recipient.refHash)) {
+          this.#log.info(
+            { teacherUserId, reason: 'payout_kept_match' },
+            'A payout account a deleted teacher’s kept profile holds was registered',
+          );
         }
         return null;
       },

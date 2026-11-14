@@ -45,6 +45,10 @@ export const idempotentProcedures = [
   'students.liftBan',
   'teachers.liftBan',
   'teachers.liftRevocation',
+  // T077 of specs/004-sessions (admin-surface.md, `teachers.keptData.setEraseDate` and
+  // `teachers.keptData.eraseNow`): keyed on the kind's transaction (runOn), as T072's lifts are.
+  'teachers.keptData.setEraseDate',
+  'teachers.keptData.eraseNow',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

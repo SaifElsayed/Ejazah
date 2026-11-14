@@ -13,6 +13,9 @@
 //
 // T033 widens the union to `slot_holds` and `payments` (B29's conflict check, the owner's decision
 // of 2026-11-03): their statements, and against Postgres that the application role may run them.
+//
+// T077 of specs/004-sessions (Q-R4 (a); contracts/kernel.md, the kept data's row) widens it to
+// `verification_documents`, after `teacher_profiles`: its statement, and that the role may run it.
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -55,6 +58,8 @@ describe('lockRows (T126, T005)', () => {
   it.each<LockedTable>([
     'users',
     'teacher_profiles',
+    // T077 of specs/004-sessions (Q-R4 (a)): a deleted teacher's kept documents, after the profile.
+    'verification_documents',
     'availability_slots',
     'slot_holds',
     'enrollments',
@@ -202,14 +207,18 @@ describe(
       return { pid, ended };
     }
 
-    it.each<LockedTable>(['availability_slots', 'slot_holds', 'enrollments', 'payments'])(
-      'lockRows on %s is a statement the application role may run',
-      async (table) => {
-        await expect(
-          database.$transaction((tx) => lockRows(tx, table, [randomUUID()]), OPTIONS),
-        ).resolves.toBeUndefined();
-      },
-    );
+    it.each<LockedTable>([
+      'availability_slots',
+      'slot_holds',
+      'enrollments',
+      'payments',
+      // T077 of specs/004-sessions (Q-R4 (a)).
+      'verification_documents',
+    ])('lockRows on %s is a statement the application role may run', async (table) => {
+      await expect(
+        database.$transaction((tx) => lockRows(tx, table, [randomUUID()]), OPTIONS),
+      ).resolves.toBeUndefined();
+    });
 
     it.each(['commit', 'rollback'] as const)(
       'a second caller of the same scope and id waits on the first, and goes on once it ends at %s',

@@ -69,6 +69,29 @@ export const userRepeatedAbsence = z.object({
   teacherNoShows: z.int().nonnegative(),
 });
 
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21, DEC-67): a document a deleted teacher once
+ * approved keeps, by its metadata only: never its key or a link (PDPL minimisation); the link is
+ * `teachers.keptData.documentLink`, one per press with a reason.
+ */
+export const userKeptDocument = z.object({
+  id: z.uuid(),
+  kind: z.enum(['national_id', 'passport', 'credential']),
+  uploadedAt: z.iso.datetime(),
+});
+
+/**
+ * T077: what a deleted teacher's profile keeps: the kept documents, whether the payout reference is
+ * kept (never its value), the erasure date an administrator set (null for none) and the erasure
+ * (null until it ran). A teacher never approved keeps nothing: no document, no payout.
+ */
+export const userKeptData = z.object({
+  documents: z.array(userKeptDocument),
+  payoutKept: z.boolean(),
+  eraseAt: z.iso.datetime().nullable(),
+  erasedAt: z.iso.datetime().nullable(),
+});
+
 export const usersGetOutput = z.object({
   userId: z.uuid(),
   profile: userProfile,
@@ -100,6 +123,16 @@ export const usersGetOutput = z.object({
    * `{days}` in the student's ban and the lifts. Additive (R-API-9).
    */
   banRestoreWindowDays: z.int().positive(),
+  /**
+   * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, N3): a deleted
+   * teacher's kept data (`userKeptData`); absent for anyone else. Additive (R-API-9).
+   */
+  keptData: userKeptData.optional(),
+  /**
+   * T077 (SRS FR-ADMIN-21, Q-E (a)): for a live teacher, whether a deleted teacher's kept profile
+   * holds the payout account this teacher registered; absent for anyone else. Additive (R-API-9).
+   */
+  payoutKeptOnDeletedTeacher: z.boolean().optional(),
 });
 
 export type UsersListInput = z.infer<typeof usersListInput>;
@@ -108,3 +141,4 @@ export type UsersListOutput = z.infer<typeof usersListOutput>;
 export type UsersGetInput = z.infer<typeof usersGetInput>;
 export type UsersGetOutput = z.infer<typeof usersGetOutput>;
 export type UserRepeatedAbsence = z.infer<typeof userRepeatedAbsence>;
+export type UserKeptData = z.infer<typeof userKeptData>;

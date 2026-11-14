@@ -108,3 +108,26 @@ export async function payoutHolderOf(tx: Writer, refHash: string): Promise<strin
   });
   return row?.userId ?? null;
 }
+
+/**
+ * T077 of specs/004-sessions (SRS FR-ADMIN-21; Q-E (a)): whether a deleted teacher's kept profile
+ * (`kept_at` set) holds the reference hashing to `refHash`, as a new registration is told.
+ */
+export async function keptProfileHolds(tx: Writer, refHash: string): Promise<boolean> {
+  const kept = await tx.teacherProfile.count({
+    where: { payoutAccountRefHash: refHash, keptAt: { not: null } },
+  });
+  return kept > 0;
+}
+
+/**
+ * T077 (`users.get`'s `payoutKeptOnDeletedTeacher`): whether a deleted teacher's kept profile holds
+ * the payout account the live teacher `userId`'s profile holds; false with no reference.
+ */
+export async function payoutKeptOnDeletedTeacher(tx: Writer, userId: string): Promise<boolean> {
+  const live = await tx.teacherProfile.findFirst({
+    where: { userId, ...LIVE },
+    select: { payoutAccountRefHash: true },
+  });
+  return live?.payoutAccountRefHash != null && keptProfileHolds(tx, live.payoutAccountRefHash);
+}

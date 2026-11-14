@@ -14,6 +14,14 @@
 // - The payout hash is unique among the live profiles only (rule 27 as widened): a gateway verdict
 //   and the rejection's lock reach the live profile only, the kept row unchanged, and a new account
 //   may register the payout account a kept profile holds (Q-E (a)).
+//
+// T077 (FR-509; SRS FR-ADMIN-21; the note under T077): the administrator's control of it on the
+// same tables, through verification's kept-data service and sweep with the kernel's real
+// idempotency and locks: a link to a kept document; an erasure date set, then reached by the daily
+// sweep, twice equal to once; a date cleared before the sweep ran; an erasure now during an open
+// matter (the files wait for `erase-deleted-files`, the payout reference goes at once); a replay and
+// `already_erased`; `users.get`'s kept data and payout match; the registration's
+// `payout_kept_match` line.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
@@ -49,6 +57,16 @@ import {
   SettingError,
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader.js';
+import { eraseDeletedFiles } from '../../apps/api/src/jobs/erase-deleted-files.js';
+import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
+import { createBanLift } from '../../apps/api/src/modules/sessions/index.js';
+import {
+  createKeptData,
+  createKeptDataErasureSweep,
+  createUserDirectory,
+} from '../../apps/api/src/modules/verification/index.js';
+import { transactionsOver } from '../../apps/api/src/platform/db/transaction.repository.js';
+import { addHours, addSeconds, resolveLocalDateTime } from '../../packages/time/src/index.js';
 import { connectAsApplication, type Db, insertRow, makeUser } from './harness';
 
 const KEY = Buffer.alloc(32, 7).toString('base64');
@@ -70,6 +88,11 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   provider_nonce_ttl_minutes: 10,
   idempotency_key_ttl_hours: 24,
   document_link_ttl_seconds: 300,
+  // T077: what `users.get` reads besides the person.
+  admin_list_page_size: 20,
+  repeated_absence_flag_count: 5,
+  cancellation_requests_recent_days: 30,
+  ban_restore_window_days: 14,
 };
 
 const settings: SettingsReader = {
@@ -91,6 +114,11 @@ const storage = {
     return `https://storage.invalid/${key}`;
   },
 };
+
+/** T077: every info line the services wrote, ids and a reason only. */
+const lines: Record<string, unknown>[] = [];
+const infoLog = { info: (entry: object) => void lines.push(entry as Record<string, unknown>) };
+const identityLog = { warn: () => undefined, ...infoLog };
 
 /** The recipient reference the next registration answers. */
 let nextRecipientRef = '';
@@ -124,7 +152,7 @@ beforeAll(async () => {
     },
     email: { deliver: async () => undefined },
     storage,
-    log: { warn: () => undefined },
+    log: identityLog,
     payment: { registerPayoutRecipient: async () => nextRecipientRef },
     idempotency: new IdempotencyService<Transaction>({
       store: new IdempotencyRepository(database),
@@ -150,7 +178,11 @@ interface Teacher {
 }
 
 /** A document of `userId`'s holding its key, encrypted under this probe's cipher. */
-async function documentOf(userId: string, type: DocumentType, values: Record<string, unknown> = {}) {
+async function documentOf(
+  userId: string,
+  type: DocumentType,
+  values: Record<string, unknown> = {},
+) {
   const id = randomUUID();
   const key = `documents/${id}.pdf`;
   await insertRow(db, 'verification_documents', {
@@ -425,10 +457,9 @@ async function payoutOf(userId: string) {
   const { rows } = await db.query<{
     payout_verified_at: Date | null;
     payout_rejected_reason: string | null;
-  }>(
-    'SELECT payout_verified_at, payout_rejected_reason FROM teacher_profiles WHERE user_id = $1',
-    [userId],
-  );
+  }>('SELECT payout_verified_at, payout_rejected_reason FROM teacher_profiles WHERE user_id = $1', [
+    userId,
+  ]);
   return rows[0];
 }
 
@@ -443,7 +474,10 @@ describe('the payout hash binds the live profiles only (T076; rule 27 as widened
 
     expect(await database.$transaction((tx) => markPayoutVerified(tx, hash, at))).toBe(true);
     expect(await payoutOf(live)).toEqual({ payout_verified_at: at, payout_rejected_reason: null });
-    expect(await payoutOf(kept)).toEqual({ payout_verified_at: null, payout_rejected_reason: null });
+    expect(await payoutOf(kept)).toEqual({
+      payout_verified_at: null,
+      payout_rejected_reason: null,
+    });
 
     expect(
       await database.$transaction((tx) => markPayoutRejected(tx, hash, 'Account closed')),
@@ -452,7 +486,10 @@ describe('the payout hash binds the live profiles only (T076; rule 27 as widened
       payout_verified_at: null,
       payout_rejected_reason: 'Account closed',
     });
-    expect(await payoutOf(kept)).toEqual({ payout_verified_at: null, payout_rejected_reason: null });
+    expect(await payoutOf(kept)).toEqual({
+      payout_verified_at: null,
+      payout_rejected_reason: null,
+    });
   });
 
   it('the rejection’s lock takes the live holder’s account, never the kept one’s', async () => {
@@ -528,5 +565,294 @@ describe('the payout hash binds the live profiles only (T076; rule 27 as widened
     });
     expect((await profileRow(newcomer))?.payout_account_ref_hash).toBe(keptHash);
     expect((await profileRow(person.userId))?.payout_account_ref_hash).toBe(keptHash);
+    // T077 (Q-E (a)): the registration's one line, and the reviewer told through `users.get`.
+    expect(lines.filter((line) => line['teacherUserId'] === newcomer)).toEqual([
+      { teacherUserId: newcomer, reason: 'payout_kept_match' },
+    ]);
+    expect(
+      await database.$transaction((tx) => keptData().payoutKeptOnDeletedTeacher(tx, newcomer)),
+    ).toBe(true);
+  });
+});
+
+// T077 of specs/004-sessions/tasks.md: the administrator's control of the kept data.
+const ADMIN = randomUUID();
+
+function keptData() {
+  return createKeptData({
+    storage,
+    cipher,
+    settings,
+    log: infoLog,
+    idempotency: new IdempotencyService<Transaction>({
+      store: new IdempotencyRepository(database),
+      settings,
+    }),
+  });
+}
+
+/** The daily sweep at `at`, the database's clock standing in for the day its date passed. */
+function sweepAt(at: Date) {
+  return createKeptDataErasureSweep({
+    transactions: transactionsOver(database),
+    log: { ...infoLog, error: () => undefined },
+    pageSize: 50,
+    report: () => undefined,
+    clock: async () => at,
+  });
+}
+
+/** A teacher ever approved, deleted: the three kinds and the payout reference kept. */
+async function keptTeacher(): Promise<Teacher> {
+  const person = await teacher(true, { accountStatus: 'active', verificationStatus: 'approved' });
+  await remove(person.userId);
+  await settled(person);
+  return person;
+}
+
+async function erasedRow(userId: string) {
+  const { rows } = await db.query<{
+    has_ref: boolean;
+    payout_account_ref_hash: string | null;
+    kept: boolean;
+    erase_at: Date | null;
+    erased: boolean;
+  }>(
+    `SELECT payout_account_ref_encrypted IS NOT NULL AS has_ref, payout_account_ref_hash,
+            kept_at IS NOT NULL AS kept, kept_erase_at AS erase_at,
+            kept_erased_at IS NOT NULL AS erased
+       FROM teacher_profiles WHERE user_id = $1`,
+    [userId],
+  );
+  return rows[0];
+}
+
+const ERASED_WITH_KEY = { kept: false, erased: true, has_key: true };
+const THREE = ['national_id', 'passport', 'credential'] as const;
+
+const linesOf = (userId: string) => lines.filter((line) => line['userId'] === userId);
+
+/** 26 hours from now, to the minute: an erasure date the 24-hour bound admits. */
+function aboutADayAhead(): Date {
+  const instant = addHours(new Date(), 26);
+  const { startsAt } = resolveLocalDateTime({
+    localDate: instant.slice(0, 10),
+    localTime: `${instant.slice(11, 16)}:00`,
+    timezone: 'Africa/Abidjan',
+  });
+  return new Date(startsAt);
+}
+
+/**
+ * The instant as Cairo's wall clock, as the panel sends it (Q-K1 (a), R-TIME-6): a zone that is
+ * not UTC, so the stored instant proves the server resolved it in that zone.
+ */
+function cairoWallClock(instant: Date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(instant)
+      .map(({ type, value }) => [type, value]),
+  );
+  return {
+    localDate: `${parts['year']}-${parts['month']}-${parts['day']}`,
+    localTime: `${parts['hour']}:${parts['minute']}`,
+    timezone: 'Africa/Cairo',
+  };
+}
+
+describe('teachers.keptData over the real tables (T077, FR-509)', () => {
+  it('documentLink mints one link to a kept document, and refuses an erased one and a live teacher', async () => {
+    const person = await keptTeacher();
+    const service = keptData();
+    const link = await database.$transaction((tx) =>
+      service.documentLink(tx, ADMIN, {
+        teacherUserId: person.userId,
+        documentId: person.documents.passport.id,
+      }),
+    );
+    expect(link.url).toBe(`https://storage.invalid/${person.documents.passport.key}`);
+    await expect(
+      database.$transaction((tx) =>
+        service.documentLink(tx, ADMIN, {
+          teacherUserId: person.userId,
+          documentId: person.documents.other.id,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const live = await teacher(true, { accountStatus: 'active', verificationStatus: 'approved' });
+    await expect(
+      database.$transaction((tx) =>
+        service.documentLink(tx, ADMIN, {
+          teacherUserId: live.userId,
+          documentId: live.documents.passport.id,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('an erasure date reached by the daily sweep erases once: run twice, it leaves what one run leaves ⚠️', async () => {
+    const person = await keptTeacher();
+    const service = keptData();
+    const eraseAt = aboutADayAhead();
+    await database.$transaction((tx) =>
+      service.setEraseDate(tx, ADMIN, {
+        teacherUserId: person.userId,
+        eraseAt: cairoWallClock(eraseAt),
+        reason: 'انتهت الحاجة',
+        idempotencyKey: randomUUID(),
+      }),
+    );
+    expect((await erasedRow(person.userId))?.erase_at).toEqual(eraseAt);
+
+    // The day before: nothing.
+    await sweepAt(new Date(addSeconds(eraseAt, -60))).run();
+    expect((await erasedRow(person.userId))?.erased).toBe(false);
+
+    const after = new Date(addSeconds(eraseAt, 60));
+    await sweepAt(after).run();
+    const once = {
+      profile: await erasedRow(person.userId),
+      documents: await Promise.all(THREE.map((type) => documentRow(person.documents[type].id))),
+      lines: linesOf(person.userId),
+    };
+    await sweepAt(after).run();
+    const twice = {
+      profile: await erasedRow(person.userId),
+      documents: await Promise.all(THREE.map((type) => documentRow(person.documents[type].id))),
+      lines: linesOf(person.userId),
+    };
+    expect(twice).toEqual(once);
+    expect(once.profile).toEqual({
+      has_ref: false,
+      payout_account_ref_hash: null,
+      kept: true,
+      erase_at: eraseAt,
+      erased: true,
+    });
+    expect(once.documents).toEqual([ERASED_WITH_KEY, ERASED_WITH_KEY, ERASED_WITH_KEY]);
+    expect(once.lines).toEqual([
+      { userId: person.userId, reason: 'erase_date_reached', documents: 3, payout: true },
+    ]);
+    // Their files go with `erase-deleted-files`, as every erased document's.
+    await erasure.eraseFilesOf(person.userId);
+  });
+
+  it('a date cleared before the sweep ran erases nothing', async () => {
+    const person = await keptTeacher();
+    const service = keptData();
+    const eraseAt = aboutADayAhead();
+    for (const at of [cairoWallClock(eraseAt), null]) {
+      await database.$transaction((tx) =>
+        service.setEraseDate(tx, ADMIN, {
+          teacherUserId: person.userId,
+          eraseAt: at,
+          reason: 'تغيّر القرار',
+          idempotencyKey: randomUUID(),
+        }),
+      );
+    }
+    await sweepAt(new Date(addSeconds(eraseAt, 60))).run();
+    expect(await erasedRow(person.userId)).toMatchObject({ has_ref: true, erased: false });
+    for (const type of THREE) expect(await documentRow(person.documents[type].id)).toEqual(KEPT);
+  });
+
+  it('eraseNow during an open matter: the payout reference goes at once, the files wait for the matter ⚠️', async () => {
+    const person = await keptTeacher();
+    const service = keptData();
+    const key = randomUUID();
+    const erase = (idempotencyKey: string) =>
+      database.$transaction((tx) =>
+        service.eraseNow(tx, ADMIN, {
+          teacherUserId: person.userId,
+          reason: 'طلب الجهات',
+          idempotencyKey,
+        }),
+      );
+    expect(await erase(key)).toEqual({ documents: 3, payout: true, replayed: false });
+    expect(await erasedRow(person.userId)).toMatchObject({ has_ref: false, erased: true });
+    expect(await erase(key)).toEqual({ documents: 3, payout: true, replayed: true });
+    await expect(erase(randomUUID())).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'already_erased' }],
+    });
+    expect(linesOf(person.userId)).toEqual([
+      { userId: person.userId, reason: 'erase_now', documents: 3, payout: true },
+      {
+        adminId: ADMIN,
+        userId: person.userId,
+        errorCode: 'CONFLICT',
+        cause: 'already_erased',
+      },
+    ]);
+
+    // `erase-deleted-files` over this person's files only, an open matter holding them, then none.
+    const mine = {
+      pendingPage: async (after: string | undefined, limit: number) =>
+        (await erasure.pendingPage(after, limit)).filter(
+          ({ ownerUserId }) => ownerUserId === person.userId,
+        ),
+      clearKey: (file: Parameters<typeof erasure.clearKey>[0]) => erasure.clearKey(file),
+    };
+    const job = (held: boolean) =>
+      eraseDeletedFiles({
+        stores: [mine],
+        storage,
+        held: async (owners) => new Set(held ? owners : []),
+        pageSize: 10_000,
+      });
+    await job(true).handle({});
+    for (const type of THREE) {
+      expect(await documentRow(person.documents[type].id)).toEqual(ERASED_WITH_KEY);
+      expect(storage.removed).not.toContain(person.documents[type].key);
+    }
+    await job(false).handle({});
+    for (const type of THREE) {
+      expect(await documentRow(person.documents[type].id)).toEqual(GONE);
+      expect(storage.removed).toContain(person.documents[type].key);
+    }
+  });
+
+  it("users.get answers a deleted teacher's kept data and a live teacher's payout match, never a value or a link", async () => {
+    const person = await keptTeacher();
+    const enrollments = createEnrollmentSide({ settings });
+    const directory = createUserDirectory({
+      database,
+      settings,
+      enrollments,
+      log: infoLog,
+      slotHeldUntilOf: createBanLift({
+        enrollments,
+        restore: {
+          restoreClosed: async () => {
+            throw new Error('not used by the directory');
+          },
+        },
+        settings,
+        log: { ...infoLog, warn: () => undefined },
+      }).slotHeldUntilOf,
+    });
+    const record = await database.$transaction((tx) =>
+      directory.get(tx, ADMIN, { targetUserId: person.userId }),
+    );
+    expect(record.keptData).toEqual({
+      documents: THREE.map((type) => ({
+        id: person.documents[type].id,
+        kind: type,
+        uploadedAt: expect.any(String),
+      })).sort((a, b) => a.id.localeCompare(b.id)),
+      payoutKept: true,
+      eraseAt: null,
+      erasedAt: null,
+    });
+    expect(JSON.stringify(record)).not.toMatch(/storage\.invalid|spec_rcp_|documents\//);
+    expect(record).not.toHaveProperty('payoutKeptOnDeletedTeacher');
   });
 });

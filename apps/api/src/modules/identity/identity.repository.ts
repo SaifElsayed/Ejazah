@@ -532,3 +532,112 @@ export class DeletedPhotosRepository {
     return count === 1;
   }
 }
+
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077): a deleted teacher's
+ * kept profile (`kept_at` set, only ever by `eraseAccount` for a teacher ever approved), as the
+ * verification module's kept-data service and sweep read it on their transaction (R-121). The
+ * payout reference's value never leaves this module: only whether one is kept.
+ */
+export interface KeptProfile {
+  readonly profileId: string;
+  readonly userId: string;
+  readonly keptAt: Date;
+  /** The erasure date an administrator set; null for none. */
+  readonly eraseAt: Date | null;
+  /** When the kept data was erased (now or by the daily job); null until then. */
+  readonly erasedAt: Date | null;
+  /** Whether the payout reference is still kept. */
+  readonly payoutKept: boolean;
+}
+
+/** The person's kept profile, on the caller's transaction; null for anyone else (no lock). */
+export async function keptProfileOf(
+  tx: Pick<Transaction, 'teacherProfile'>,
+  userId: string,
+): Promise<KeptProfile | null> {
+  const row = await tx.teacherProfile.findFirst({
+    where: { userId, keptAt: { not: null } },
+    select: {
+      id: true,
+      userId: true,
+      keptAt: true,
+      keptEraseAt: true,
+      keptErasedAt: true,
+      payoutAccountRefHash: true,
+    },
+  });
+  if (row?.keptAt == null) return null;
+  return {
+    profileId: row.id,
+    userId: row.userId,
+    keptAt: row.keptAt,
+    eraseAt: row.keptEraseAt,
+    erasedAt: row.keptErasedAt,
+    payoutKept: row.payoutAccountRefHash !== null,
+  };
+}
+
+/**
+ * Sets or clears the kept profile's erasure date, only while it is kept and not yet erased; whether
+ * it did. The caller holds the profile's lock and has read it again under it.
+ */
+export async function setKeptEraseDate(
+  tx: Pick<Transaction, 'teacherProfile'>,
+  profileId: string,
+  eraseAt: Date | null,
+): Promise<boolean> {
+  const { count } = await tx.teacherProfile.updateMany({
+    where: { id: profileId, keptAt: { not: null }, keptErasedAt: null },
+    data: { keptEraseAt: eraseAt },
+  });
+  return count === 1;
+}
+
+/**
+ * The kept profile's erasure (final): the payout columns blanked and `kept_erased_at` set, only
+ * while it is kept and not yet erased; whether it did. `kept_at` and `kept_erase_at` stay as the
+ * record. Blanking the hash frees nothing new: its unique index binds `kept_at IS NULL` only.
+ */
+export async function eraseKeptProfile(
+  tx: Pick<Transaction, 'teacherProfile'>,
+  profileId: string,
+  at: Date,
+): Promise<boolean> {
+  const { count } = await tx.teacherProfile.updateMany({
+    where: { id: profileId, keptAt: { not: null }, keptErasedAt: null },
+    data: {
+      payoutAccountRefEncrypted: null,
+      payoutAccountRefHash: null,
+      payoutConfiguredAt: null,
+      payoutVerifiedAt: null,
+      payoutRejectedReason: null,
+      keptErasedAt: at,
+    },
+  });
+  return count === 1;
+}
+
+/**
+ * A page of the kept profiles whose erasure date has passed at `now` and that are not yet erased, in
+ * id order after `after` (the daily sweep's candidates, read with no lock).
+ */
+export async function keptProfilesDue(
+  tx: Pick<Transaction, 'teacherProfile'>,
+  now: Date,
+  after: string | undefined,
+  limit: number,
+): Promise<{ readonly profileId: string; readonly userId: string }[]> {
+  const rows = await tx.teacherProfile.findMany({
+    where: {
+      keptAt: { not: null },
+      keptErasedAt: null,
+      keptEraseAt: { lte: now },
+      ...afterRow(after),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true, userId: true },
+  });
+  return rows.map(({ id, userId }) => ({ profileId: id, userId }));
+}

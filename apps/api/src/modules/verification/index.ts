@@ -32,6 +32,8 @@ import {
 import { VerificationRepository } from './verification.repository.js';
 import { VerificationService } from './verification.service.js';
 import { DocumentErasure, type DocumentErasureDependencies } from './document-erasure.js';
+// T077 of specs/004-sessions: the kept data's reads for `users.get`.
+import { keptDataReads } from './kept-data.service.js';
 // T058 of specs/004-sessions: the user directory's readers, through identity's and sessions' entries.
 import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
 import type { Logger } from '../../platform/logging/logger.js';
@@ -270,6 +272,30 @@ export function createUserDirectory({
     log,
     // T072 (Q9 (a)).
     held: { slotHeldUntilOf },
+    // T077 of specs/004-sessions (N3): a deleted teacher's kept data and a live teacher's payout
+    // match, read on the call's transaction through identity's entry and this module's rows.
+    kept: keptDataReads(),
   });
 }
 export type { UserDirectory, UserDirectoryStore } from './user-directory.service.js';
+
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21, DEC-67; the note under T077, Q-R3 (a)): an
+ * administrator's control of a deleted teacher's kept data, `teachers.keptData.*`, composed by the
+ * admin module into the surface's `teachers`; and the `erase-kept-data` sweep ⚠️, which
+ * `worker.ts` builds through the job (`jobs/erase-kept-data.ts`).
+ */
+export {
+  createKeptData,
+  type KeptData,
+  type KeptDataDependencies,
+  type KeptEraseDateChange,
+  type KeptEraseWallClock,
+  type KeptErasure,
+} from './kept-data.service.js';
+export {
+  createKeptDataErasureSweep,
+  type KeptDataErasureDependencies,
+  type KeptDataErasureRun,
+  type KeptDataErasureSweep,
+} from './kept-data.sweep.js';

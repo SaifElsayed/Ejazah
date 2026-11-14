@@ -22,6 +22,7 @@ import { Prisma } from '@prisma/client';
 
 import type { EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 const FOREIGN_KEY_VIOLATION = 'P2003';
 
@@ -225,6 +226,61 @@ export async function markDocumentsKept(
       keptAt: null,
     },
     data: { keptAt: at },
+  });
+  return count;
+}
+
+/** T077 of specs/004-sessions (FR-509): a document a deleted teacher once approved keeps. */
+export interface KeptDocument {
+  readonly id: string;
+  readonly documentType: (typeof KEPT_DOCUMENT_TYPES)[number];
+  readonly uploadedAt: Date;
+  /** Its key, held while it is kept (rule 34); decrypted only to mint a link. */
+  readonly storageKeyEncrypted: Uint8Array;
+}
+
+/**
+ * T077: the kept documents of `userId` (`kept_at` set), in id order, on the caller's transaction:
+ * `users.get`'s metadata, the link's document and the erasure's rows. No lock.
+ */
+export async function keptDocumentsOf(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  userId: string,
+): Promise<KeptDocument[]> {
+  const rows = await tx.verificationDocument.findMany({
+    where: { userId, keptAt: { not: null }, storageKeyEncrypted: { not: null } },
+    orderBy: { id: 'asc' },
+    select: { id: true, documentType: true, uploadedAt: true, storageKeyEncrypted: true },
+  });
+  return rows.flatMap(({ id, documentType, uploadedAt, storageKeyEncrypted }) =>
+    storageKeyEncrypted === null || documentType === 'other'
+      ? []
+      : [{ id, documentType, uploadedAt, storageKeyEncrypted }],
+  );
+}
+
+/**
+ * T077 (Q-R4 (a); contracts/kernel.md, the kept data's row): locks the kept documents `ids` FOR
+ * UPDATE, in id order, after their profile's lock (the one order of `platform/db/row-lock.ts`).
+ */
+export async function lockKeptDocuments(tx: Transaction, ids: readonly string[]): Promise<void> {
+  await lockRows(tx, 'verification_documents', ids);
+}
+
+/**
+ * T077 (FR-509; the note under T077, N3): the kept documents `ids` erased (final), each in one
+ * update, `kept_at` NULL and `erased_at` `at` together (rule 34: never both); the keys stay, so
+ * `erase-deleted-files` removes each file, waiting on an open matter as it does today. How many.
+ */
+export async function eraseKeptDocuments(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  ids: readonly string[],
+  at: Date,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { count } = await tx.verificationDocument.updateMany({
+    where: { id: { in: [...ids] }, keptAt: { not: null }, erasedAt: null },
+    data: { keptAt: null, erasedAt: at },
   });
   return count;
 }

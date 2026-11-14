@@ -134,3 +134,70 @@ describe('users.get', () => {
     expect(usersGetOutput.safeParse({ ...TEACHER_RECORD, ...change }).success).toBe(false);
   });
 });
+
+// T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, N3): `users.get` answers,
+// for a deleted teacher, what is kept (the kept documents' metadata, whether the payout reference is
+// kept, the erasure date and the erasure), never the payout reference's value and never a link
+// (PDPL minimisation); for a live teacher, whether a deleted teacher's kept profile holds the same
+// payout account. Both optional, so every record above still parses (additive, R-API-9).
+describe('users.get: the kept data (T077)', () => {
+  const DOCUMENT = '0199d0a0-0000-7000-8000-0000000000d1';
+  const KEPT = {
+    documents: [{ id: DOCUMENT, kind: 'national_id', uploadedAt: '2026-10-01T08:00:00.000Z' }],
+    payoutKept: true,
+    eraseAt: '2026-12-01T08:00:00.000Z',
+    erasedAt: null,
+  };
+  const DELETED = {
+    ...TEACHER_RECORD,
+    profile: { ...TEACHER_RECORD.profile, displayName: null, email: null, deleted: true },
+    keptData: KEPT,
+  };
+
+  it("answers a deleted teacher's kept data: each document's id, kind and upload, the payout kept, the two dates", () => {
+    expect(usersGetOutput.parse(DELETED)).toEqual(DELETED);
+    const erased = {
+      ...KEPT,
+      documents: [],
+      payoutKept: false,
+      erasedAt: '2026-12-01T08:00:00.000Z',
+    };
+    expect(usersGetOutput.parse({ ...DELETED, keptData: erased }).keptData).toEqual(erased);
+  });
+
+  it("answers a live teacher's payoutKeptOnDeletedTeacher", () => {
+    expect(
+      usersGetOutput.parse({ ...TEACHER_RECORD, payoutKeptOnDeletedTeacher: true })
+        .payoutKeptOnDeletedTeacher,
+    ).toBe(true);
+  });
+
+  it('never answers the payout reference, a key or a link: an extra field a service would add is dropped', () => {
+    const leaked = usersGetOutput.parse({
+      ...DELETED,
+      keptData: {
+        ...KEPT,
+        payoutAccountRef: 'spec_rcp_secret',
+        documents: [{ ...KEPT.documents[0], url: 'https://storage.invalid/x', storageKey: 'k' }],
+      },
+    });
+    const text = JSON.stringify(leaked);
+    expect(text).not.toContain('spec_rcp_secret');
+    expect(text).not.toContain('storage.invalid');
+    expect(Object.keys(usersGetOutput.shape.keptData.unwrap().shape)).toEqual([
+      'documents',
+      'payoutKept',
+      'eraseAt',
+      'erasedAt',
+    ]);
+  });
+
+  it.each([
+    ['a kept document of another kind', { documents: [{ ...KEPT.documents[0], kind: 'other' }] }],
+    ['an erasure date that is no instant', { eraseAt: 'soon' }],
+  ])('refuses %s', (_name, change) => {
+    expect(usersGetOutput.safeParse({ ...DELETED, keptData: { ...KEPT, ...change } }).success).toBe(
+      false,
+    );
+  });
+});
