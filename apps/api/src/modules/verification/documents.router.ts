@@ -3,13 +3,15 @@
 // a document is an action worth its entry (`document.view`, NFR-SEC-3), unlike a list read; the
 // identity request's three actions are audited on the person (`user.require_identity`, with the
 // reason) and on the request (`verification_request.accept`, `.request_another`, with the note; the
-// latter's entry names the document turned away and the request that replaces it).
+// latter's entry names the document turned away and the request that replaces it). T081 of
+// specs/004-sessions: `users.delete`, an administrator's deletion at the owner's request.
 // Mounted under `documents` and `users` by `admin.router.ts`.
 import {
   documentsAcceptInput,
   documentsLinkInput,
   documentsLinkOutput,
   documentsRequestAnotherInput,
+  usersDeleteInput,
   usersGetInput,
   usersGetOutput,
   usersListInput,
@@ -110,4 +112,28 @@ export const usersRouter = createAdminRouter({
       return record;
     },
   ),
+
+  // T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; the notes under T081): an administrator
+  // deletes an account at its owner's request through support ⚠️ irreversible. Its own limit,
+  // `rate_limit_admin_user_delete`, the administrator as subject, checked before the transaction;
+  // keyed by identity's deletion on the kind's transaction (`runOn`); audited
+  // `user.deleted_by_admin` on the person with the reason, which records the owner's request (the
+  // procedure cannot verify it), on its first run only. Answers nothing.
+  delete: adminProcedure({
+    input: usersDeleteInput,
+    output: z.void(),
+    rateLimit: { key: 'rate_limit_admin_user_delete', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { replayed } = await ctx.services.users.delete(ctx.tx, ctx.administrator.adminId, input);
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'user.deleted_by_admin',
+      targetType: 'user',
+      targetId: input.targetUserId,
+      reason: input.reason,
+    });
+  }),
 });

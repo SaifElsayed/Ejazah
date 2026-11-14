@@ -137,7 +137,8 @@ describe('the web deletion end to end (T081, FR-143)', () => {
         info: (entry: unknown) => void lines.push(JSON.stringify({ level: 'info', entry })),
       },
       payment: { registerPayoutRecipient: unexpected },
-      idempotency: { run: unexpected },
+      // T081 of specs/004-sessions (rule d): the administrator's deletion keys with `runOn`.
+      idempotency: { run: unexpected, runOn: unexpected },
       consequences: new AccountConsequences(),
       // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
       ongoingEnrollments: createOngoingEnrollments({ settings }),

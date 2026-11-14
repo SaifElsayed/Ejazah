@@ -24,6 +24,8 @@ import {
 import { credentialsOfTeachers, grantSubjects } from '../catalog/index.js';
 import {
   AccountConsequences,
+  // T081 of specs/004-sessions: the administrator's deletion, identity's, handed in by `main.ts`.
+  type AdministratorDeletion,
   readApplicationQueue,
   StandingService,
   standingStoreOver,
@@ -203,7 +205,10 @@ export interface AdminServices {
   /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
   readonly restore: Restore;
   /** T058 of specs/004-sessions: the verification module's user directory (FR-481, SRS FR-ADMIN-4). */
-  readonly users: UserDirectory;
+  readonly users: UserDirectory & {
+    /** T081 of specs/004-sessions (FR-512): identity's deletion at the owner's request ⚠️. */
+    readonly delete: AdministratorDeletion['deleteByAdministrator'];
+  };
   /** T070 of specs/004-sessions: booking's release of a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: HeldSlotRelease;
 }
@@ -250,6 +255,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * ninth cause `refunded` (docs/ARCHITECTURE.md §4, a dependency handed in against the arrows).
    */
   readonly enrollmentPayments: EnrollmentPayments;
+  /**
+   * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22): identity's deletion, its
+   * `deleteByAdministrator` keyed on the administrator kind's transaction, filled by `main.ts` with
+   * the identity services' `deletion` (the one `DeletionService`), for `users.delete`.
+   */
+  readonly userDeletion: AdministratorDeletion;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -390,14 +401,19 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     // T061: the restore, built above (T072: one instance with the lift's).
     restore,
     // T058: the user directory over identity's readers and sessions' counts and marks.
-    users: createUserDirectory({
-      database: dependencies.database,
-      settings: dependencies.settings,
-      enrollments: dependencies.enrollmentSide,
-      log: dependencies.log,
-      // T072 (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions' read.
-      slotHeldUntilOf: banLift.slotHeldUntilOf,
-    }),
+    users: {
+      ...createUserDirectory({
+        database: dependencies.database,
+        settings: dependencies.settings,
+        enrollments: dependencies.enrollmentSide,
+        log: dependencies.log,
+        // T072 (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions' read.
+        slotHeldUntilOf: banLift.slotHeldUntilOf,
+      }),
+      // T081: `users.delete`, identity's deletion on the call's transaction.
+      delete: (tx, adminId, input) =>
+        dependencies.userDeletion.deleteByAdministrator(tx, adminId, input),
+    },
     // T070: the release of a held slot, keyed through `runOn` on the call's transaction.
     enrollments: createHeldSlotRelease({
       idempotency: dependencies.idempotency,

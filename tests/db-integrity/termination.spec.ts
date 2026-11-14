@@ -84,6 +84,11 @@ import {
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import {
+  bindToTransaction,
+  RequestLive,
+  unboundBus,
+} from '../../apps/api/src/platform/live/live-publisher.js';
 import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository.js';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
@@ -409,11 +414,7 @@ describe("a student's end (R-219, FR-AUTH-14)", () => {
     const enrollmentId = await pay(on, studentId, holdId);
     await order(enrollmentId, 'created');
 
-    await deletion.deleteAccount(studentId, {
-      confirmation: 'DELETE',
-      reauth: { kind: 'password', password: PASSWORD },
-      idempotencyKey: randomUUID(),
-    });
+    await deleteByAdministrator(studentId);
 
     expect(await released(holdId)).toBe(true);
     expect(await enrollmentOf(enrollmentId)).toMatchObject({
@@ -427,6 +428,8 @@ describe("a student's end (R-219, FR-AUTH-14)", () => {
 // T004 of specs/004-sessions/tasks.md (`003:T059`, FR-AUTH-14's confirmed part; FR-420, FR-484,
 // FR-485, FR-495; R-313; SC-412): a deletion with confirmed enrollments, through identity's real
 // deletion and booking's subscriber, each change in the deletion's transaction.
+// T081 of specs/004-sessions (Q-R12 (a)): an administrator's deletion at the owner's request, the
+// only one that reaches confirmed enrollments since T080 (`deleteByAdministrator` below).
 
 /** A confirmed enrollment of `studentId` on the offer's slot: hold, Pay, a paid order, the job. */
 async function confirmed(on: Offer, slotId: string, studentId: string): Promise<string> {
@@ -438,20 +441,45 @@ async function confirmed(on: Offer, slotId: string, studentId: string): Promise<
   return enrollmentId;
 }
 
-/** Sets a password the deletion's proof checks, on a person made without one. */
-async function withPassword(userId: string): Promise<void> {
-  await database.user.update({
-    where: { id: userId },
-    data: { passwordHash: await hashPassword(PASSWORD) },
+/**
+ * T081 of specs/004-sessions (Q-R12 (a), an approved change): since T080 refuses a person's own
+ * deletion over an ongoing enrollment, a deletion over live enrollments is an administrator's at the
+ * owner's request, run as the administrator kind runs it: on its transaction, its request's list
+ * bound to it and flushed after the commit, dropped on a rollback.
+ */
+async function deleteByAdministrator(userId: string, over = deletion): Promise<void> {
+  const { id: adminId } = await database.adminUser.create({
+    data: {
+      email: `probe-admin-${randomUUID()}@example.invalid`,
+      passwordHash: 'probe-hash',
+      mfaSecretEncrypted: Buffer.from('probe'),
+      displayName: 'Probe administrator',
+      isActive: true,
+    },
+    select: { id: true },
   });
-}
-
-function deleteWithPassword(userId: string) {
-  return deletion.deleteAccount(userId, {
-    confirmation: 'DELETE',
-    reauth: { kind: 'password', password: PASSWORD },
-    idempotencyKey: randomUUID(),
-  });
+  const live = new RequestLive(unboundBus, SILENT);
+  try {
+    await database.$transaction(
+      async (tx) => {
+        const unbind = bindToTransaction(tx, live);
+        try {
+          await over.deleteByAdministrator(tx, adminId, {
+            targetUserId: userId,
+            reason: 'طلب صاحب الحساب الحذف عبر الدعم',
+            idempotencyKey: randomUUID(),
+          });
+        } finally {
+          unbind();
+        }
+      },
+      { timeout: 30_000 },
+    );
+  } catch (error: unknown) {
+    live.drop();
+    throw error;
+  }
+  live.flush();
 }
 
 /** The enrollment's sessions by sequence number, with their status. */
@@ -510,9 +538,7 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     const second = await confirmed(on, slotB, await person());
     const [missed] = await sessionStates(first);
     const remedyId = await owed(missed?.id ?? '', 'awaiting_choice');
-    await withPassword(on.teacherId);
-
-    await deleteWithPassword(on.teacherId);
+    await deleteByAdministrator(on.teacherId);
 
     for (const enrollmentId of [first, second]) {
       expect(await enrollmentOf(enrollmentId)).toMatchObject({
@@ -563,7 +589,7 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     );
     const keeping = await owed(refused?.id ?? '', 'refund_case', refundCase);
 
-    await deleteWithPassword(studentId);
+    await deleteByAdministrator(studentId);
 
     expect(await enrollmentOf(enrollmentId)).toMatchObject({
       status: 'cancelled',
@@ -606,7 +632,7 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
       data: { deletedAt: new Date('2026-11-03T08:00:00Z') },
     });
 
-    await deleteWithPassword(studentId);
+    await deleteByAdministrator(studentId);
 
     expect(await remedyOf(lapsing)).toMatchObject({ status: 'lapsed' });
     expect(await remedyOf(hidden)).toEqual({
@@ -624,7 +650,6 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', await person());
     const [missed] = await sessionStates(enrollmentId);
     const remedyId = await owed(missed?.id ?? '', 'awaiting_choice');
-    await withPassword(on.teacherId);
     const failing = new AccountConsequences();
     failing.subscribe(
       terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
@@ -634,13 +659,9 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     });
     const before = await sessionStates(enrollmentId);
 
-    await expect(
-      deletionOver(failing).deleteAccount(on.teacherId, {
-        confirmation: 'DELETE',
-        reauth: { kind: 'password', password: PASSWORD },
-        idempotencyKey: randomUUID(),
-      }),
-    ).rejects.toThrow();
+    await expect(deleteByAdministrator(on.teacherId, deletionOver(failing))).rejects.toThrow(
+      'probe: the deletion fails after the subscriber',
+    );
 
     expect(await enrollmentOf(enrollmentId)).toMatchObject({ status: 'confirmed' });
     expect(await sessionStates(enrollmentId)).toEqual(before);

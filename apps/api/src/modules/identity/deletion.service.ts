@@ -58,7 +58,19 @@
 //   count, with one info line of ids and the reason, and nothing is written (the key's claim rolls
 //   back with the transaction, so a retry after the enrollments end deletes). On the web the code
 //   was spent before the refusal (N5).
+// - AN ADMINISTRATOR'S DELETION (T081; FR-512; SRS FR-ADMIN-22; the notes under T081, Q-O2 (a),
+//   N6, Q-R13 (a)). `users.delete` runs the same erasure on the administrator kind's transaction,
+//   keyed there (`runOn`), without the re-authentication and without T080's count, the account's
+//   lock still first, so T004's ending of live enrollments is reached on this path only; the
+//   deleting administrator reaches the consequences as `actor`, so booking's subscriber closes a
+//   paused enrollment's `teacher_suspended` case. It binds no list of its own: the kind already
+//   bound its request's list to the transaction, so the consequences add their events there through
+//   `publisherOn(tx)`, and the work after the commit (the person's `account`, the files, the grant,
+//   the mail) is queued on it (`afterCommitDo`), run once the kind's transaction has committed and
+//   dropped on a rollback. One info line of ids for the deletion, one for its `NOT_FOUND` refusal
+//   (an unknown or already deleted account).
 import type { DeleteAccountInput } from '@ijazah/contracts';
+import type { UsersDeleteInput } from '@ijazah/contracts/admin';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import { hashPassword, verifyPassword } from '../../platform/crypto/hashing.js';
@@ -69,14 +81,19 @@ import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
 import type { LiveBus } from '../../platform/live/live-bus.js';
-import { bindToTransaction, RequestLive, unboundBus } from '../../platform/live/live-publisher.js';
+import {
+  bindToTransaction,
+  publisherOn,
+  RequestLive,
+  unboundBus,
+} from '../../platform/live/live-publisher.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import { IdentityTokenError, type SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { BannedIdentifiers } from './banned-identifiers.js';
-import type { AccountConsequences } from './consequences.js';
+import type { AccountConsequences, TerminationActor } from './consequences.js';
 import type { PasswordHashing } from './email-auth.service.js';
 import {
   AccountsRepository,
@@ -138,7 +155,7 @@ export interface DeletionDependencies extends IdentityDependencies {
   readonly email: EmailPort;
   readonly storage: Pick<StoragePort, 'remove'>;
   /** `account.delete` is keyed (FR-106). */
-  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run' | 'runOn'>;
   /** The web's `account_deletion` codes, shared with the email account's codes. */
   readonly codes: Pick<OneTimeCodes, 'send' | 'verify' | 'decoy'>;
   /**
@@ -225,7 +242,60 @@ export class DeletionService {
       live.drop();
       throw error;
     }
-    if (call.erased !== null) this.#afterCommit(userId, call.erased, live);
+    if (call.erased !== null) this.#afterCommitOwn(userId, call.erased, live);
+  }
+
+  /**
+   * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; the notes under T081): `users.delete`, on
+   * the administrator kind's transaction, keyed there (`runOn`), without the re-authentication and
+   * without T080's count. The account's lock first, then the erasure with the administrator as
+   * `actor` (N6). The kind's own list is reused (`publisherOn(tx)`), never a second one bound: the
+   * consequences add their events to it, and the work after the commit is queued on it (Q-O2 (a)).
+   */
+  async deleteByAdministrator(
+    tx: Transaction,
+    adminId: string,
+    { targetUserId, reason, idempotencyKey }: UsersDeleteInput,
+  ): Promise<{ readonly replayed: boolean }> {
+    const list = publisherOn(tx);
+    if (list?.afterCommitDo === undefined) {
+      throw new Error(
+        'An administrator deletion runs on a transaction its caller kind bound an after-commit list to (T081).',
+      );
+    }
+    const { replayed } = await this.#dependencies.idempotency.runOn(
+      tx,
+      {
+        scope: 'users.delete',
+        key: idempotencyKey,
+        actorId: adminId,
+        input: { targetUserId, reason },
+      },
+      async (keyed) => {
+        await lockAccount(keyed, targetUserId);
+        const erased = await this.#eraseLocked(keyed, targetUserId, this.#now(), { adminId });
+        if (erased === null) throw this.#notFound(adminId, targetUserId);
+        list.afterCommitDo?.(() => {
+          this.#endLiveStreams(targetUserId);
+          this.#afterCommit(targetUserId, erased);
+        });
+        this.#dependencies.log.info(
+          { adminId, userId: targetUserId },
+          'An administrator deleted an account',
+        );
+        return null;
+      },
+    );
+    return { replayed };
+  }
+
+  /** T081 (Q-R13 (a)): an unknown or already deleted account, after its one info line of ids. */
+  #notFound(adminId: string, userId: string): DomainError {
+    this.#dependencies.log.info(
+      { adminId, userId, reason: 'not_found' },
+      'An administrator deletion was refused',
+    );
+    return markRefusalLogged(new DomainError('NOT_FOUND'));
   }
 
   /** The web's email step: the same answer and work for every address (public-pages.md). */
@@ -259,7 +329,7 @@ export class DeletionService {
       live.drop();
       throw error;
     }
-    if (erased !== null) this.#afterCommit(owner.userId, erased, live);
+    if (erased !== null) this.#afterCommitOwn(owner.userId, erased, live);
     return true;
   }
 
@@ -304,8 +374,16 @@ export class DeletionService {
     );
   }
 
-  /** The erasure under the account's lock (ADR 0015 D3); null when the person was already deleted. */
-  async #eraseLocked(tx: Transaction, userId: string, at: Date): Promise<ErasureSnapshot | null> {
+  /**
+   * The erasure under the account's lock (ADR 0015 D3); null when the person was already deleted.
+   * `actor`, an administrator's deletion's (T081, N6), reaches every consequence.
+   */
+  async #eraseLocked(
+    tx: Transaction,
+    userId: string,
+    at: Date,
+    actor?: TerminationActor,
+  ): Promise<ErasureSnapshot | null> {
     const snapshot = await readErasureSnapshot(tx, userId);
     if (snapshot === null) return null;
     const banned = await readBannedSignIn(tx, userId);
@@ -314,7 +392,7 @@ export class DeletionService {
     if (banned !== null) await this.#banned.keep(tx, banned);
     if (!(await eraseAccount(tx, userId, at))) return null;
     await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
-    await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted');
+    await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted', actor);
     return snapshot;
   }
 
@@ -365,11 +443,22 @@ export class DeletionService {
     }
   }
 
-  /** The work after the commit, each part on its own, detached from the request. */
-  #afterCommit(userId: string, { email, grants }: ErasureSnapshot, live: RequestLive): void {
+  /**
+   * The person's own deletion's work after its commit: the person's `account`, then what the
+   * consequences added to the deletion's own list (T066), then the rest.
+   */
+  #afterCommitOwn(userId: string, erased: ErasureSnapshot, live: RequestLive): void {
     this.#endLiveStreams(userId);
     // T066: what the consequences added on the deletion's transaction, now that it has committed.
     live.flush();
+    this.#afterCommit(userId, erased);
+  }
+
+  /**
+   * The work after the commit, each part on its own, detached from the request; an administrator's
+   * deletion runs it from the kind's list (T081), the person's `account` first.
+   */
+  #afterCommit(userId: string, { email, grants }: ErasureSnapshot): void {
     // Through a resolved promise, so a part that throws before it returns one (the grant's
     // decryption) is reported like a rejection and never escapes into the answered request.
     const reported = (work: () => Promise<void>) =>

@@ -208,6 +208,8 @@ describe('account.delete', () => {
         },
         requestWebCode: unusedIdentityServices.deletion.requestWebCode,
         confirmWebDeletion: unusedIdentityServices.deletion.confirmWebDeletion,
+        // T081 of specs/004-sessions (rule d): the administrator's deletion, never reached here.
+        deleteByAdministrator: unusedIdentityServices.deletion.deleteByAdministrator,
       },
     };
   }

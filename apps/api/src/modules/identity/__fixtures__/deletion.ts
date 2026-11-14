@@ -144,6 +144,15 @@ export function buildDeletion(
       events.push('committed');
       return outcome;
     },
+    // T081 of specs/004-sessions: the administrator's deletion keys on the kind's transaction.
+    async runOn<TResult extends JsonValue>(
+      tx: Transaction,
+      request: IdempotentRequest,
+      effect: (tx: Transaction) => Promise<TResult>,
+    ): Promise<{ readonly outcome: TResult; readonly replayed: boolean }> {
+      keyed.push(request);
+      return kernel.runOn(tx, request, effect);
+    },
   };
   const reports: unknown[] = [];
   const pending: Promise<void>[] = [];

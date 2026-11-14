@@ -18,8 +18,9 @@ import { z } from 'zod';
 
 import { accountStatus, teacherVerificationStatus } from '../account.js';
 import { enrollmentStatus } from '../checkout.js';
+import { idempotencyKey } from '../idempotency-key.js';
 import { gender, role } from '../onboarding.js';
-import { adminSearch } from './admins.js';
+import { adminReason, adminSearch } from './admins.js';
 import { monitorParty } from './sessions.js';
 
 /** A page of the list starts after this user; users are listed newest first by their time-ordered id. */
@@ -102,6 +103,19 @@ export const usersGetOutput = z.object({
   banRestoreWindowDays: z.int().positive(),
 });
 
+// T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; contracts/admin-surface.md, `users.delete`):
+// an administrator deletes an account only at its owner's request through support ⚠️ irreversible.
+// The reason records that request (the procedure cannot verify it); the call is keyed under the
+// administrator's idempotency key and answers nothing. `NOT_FOUND` for an unknown or already deleted
+// account. It is the person's own deletion without the re-authentication and without T080's refusal
+// for an ongoing enrollment, so the enrollments end as FR-AUTH-14 says for this case.
+export const usersDeleteInput = z.object({
+  targetUserId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type UsersDeleteInput = z.infer<typeof usersDeleteInput>;
 export type UsersListInput = z.infer<typeof usersListInput>;
 export type UsersListItem = z.infer<typeof usersListItem>;
 export type UsersListOutput = z.infer<typeof usersListOutput>;
