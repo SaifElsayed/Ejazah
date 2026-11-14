@@ -96,17 +96,24 @@ function causeOf(error: unknown): string | undefined {
   return errorDetailsOf(error).find(({ path }) => path === 'cause')?.code;
 }
 
-/** The words of a refused resolve or dismiss (T035, T036): by its code and cause. */
+/** The words of a refused resolve or dismiss (T035, T036, T071): by its code and cause. */
 export function closingFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'STUDENT_SUSPENDED':
       return { key: 'admin.cases.close.refused.studentSuspended' };
+    // B42b, T075 (Q-B1 (a)): a student's suspension case cleared while the teacher is suspended.
+    case 'TEACHER_SUSPENDED':
+      return { key: 'admin.cases.close.refused.teacherSuspended' };
     case 'NOT_FOUND':
       return { key: 'admin.cases.close.refused.notFound' };
     case 'CONFLICT': {
       const cause = causeOf(error);
       if (cause === 'not_open') return { key: 'admin.cases.close.refused.notOpen' };
       if (cause === 'no_free_week') return { key: 'admin.cases.close.refused.noFreeWeek' };
+      // B42b, T075 (Q-B1 (a)): a `teacher_suspended` case closes only by the reinstatement or an end.
+      if (cause === 'closed_by_reinstatement') {
+        return { key: 'admin.cases.close.refused.closedByReinstatement' };
+      }
       return { key: 'admin.dialogs.submitError' };
     }
     default:

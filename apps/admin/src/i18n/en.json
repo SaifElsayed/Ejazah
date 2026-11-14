@@ -105,7 +105,8 @@
         "standing": "Account standing",
         "subjects": "Subjects and qualification",
         "suitable": "Suitable",
-        "unsuitable": "Unsuitable"
+        "unsuitable": "Unsuitable",
+        "liftBan": "Lift the ban"
       },
       "empty": {
         "decided": {
@@ -136,7 +137,11 @@
         "inReview": "In review",
         "waitingOnApplicant": "Waiting on applicant"
       },
-      "title": "Teacher applications"
+      "title": "Teacher applications",
+      "lift": {
+        "effect": "The account returns to active, or to awaiting proof of identity if an identity request is open, and the application and the teacher’s approval return to what they were before the ban.",
+        "record": "Open their record in users"
+      }
     },
     "audit": {
       "a11y": {
@@ -199,7 +204,11 @@
         "userViewed": "View a user",
         "usersListed": "View users",
         "verificationRequestAccept": "Accept identity document",
-        "verificationRequestRequestAnother": "Request another identity document"
+        "verificationRequestRequestAnother": "Request another identity document",
+        "enrollmentSlotReleased": "Release an enrollment's slot",
+        "studentBanLifted": "Lift a student's ban",
+        "teacherBanLifted": "Lift a teacher's or an applicant's ban",
+        "teacherRevocationLifted": "Lift a teacher's revocation"
       },
       "clearAll": "Clear all",
       "columns": {
@@ -307,7 +316,9 @@
           "noFreeWeek": "There is no free week for a make-up of one of the sessions the suspension cancelled, so the case was not resolved and stays open. Nothing changed.",
           "notFound": "This case was not found, or it is a complaint, decided from its own dialog. Nothing changed.",
           "notOpen": "This case is no longer open; it was closed meanwhile. Read the page again. Nothing changed.",
-          "studentSuspended": "The student’s account is still suspended. Reinstate the account from the users page first, then resolve the case. Nothing changed."
+          "studentSuspended": "The student’s account is still suspended. Reinstate the account from the users page first, then resolve the case. Nothing changed.",
+          "teacherSuspended": "The teacher’s account is still suspended, so nothing can be offered to the student now. Reinstate the teacher from their application’s page first, then resolve the case. Nothing changed.",
+          "closedByReinstatement": "A teacher’s suspension case is neither resolved nor dismissed here: it closes when the teacher is reinstated, or when the enrollment ends. Nothing changed."
         },
         "resolve": {
           "effect": "The case closes as resolved, compensation ordered, with your note. No money moves here: Platform Administration carries out the compensation outside the platform, and a refund is recorded when the payment gateway reports it.",
@@ -350,7 +361,7 @@
           "notFound": "This complaint was not found, or it was already decided. Nothing changed."
         },
         "suspendTeacher": {
-          "effect": "The teacher’s account is suspended now, so the teacher’s running enrollments end as a teacher’s suspension ends them: their upcoming sessions are cancelled and a compensation case is opened for each. The complaint closes as resolved.",
+          "effect": "The teacher’s account is suspended now, so the teacher’s running enrollments are paused as a teacher’s suspension pauses them: their upcoming sessions are cancelled, each enrollment keeps its slot and has a case opened, and on the teacher’s reinstatement each student is offered what the cancelled sessions owe. The complaint closes as resolved.",
           "label": "Suspend the teacher"
         },
         "title": "Decide the complaint of a teacher’s absence",
@@ -770,7 +781,7 @@
         "banDisputeParty": {
           "confirm": "Ban the account",
           "effects": {
-            "banned": "Their account is banned permanently with everything a {role} ban entails: all upcoming sessions cancelled, and no return to the platform.",
+            "banned": "Their account is banned with everything a {role} ban entails: all upcoming sessions cancelled, and each enrollment the ban ends keeps its slot held for {days, plural, one {# day} other {# days}}. The ban can be lifted at any time and their enrollments come back: surely within that time, and after it where their slot is still free.",
             "decision": "The ban is recorded as part of the dispute decision."
           },
           "reasonLabel": "Reason for the ban (required)",
@@ -847,7 +858,7 @@
         "genderBan": {
           "confirm": "Ban",
           "effects": {
-            "banned": "The account is banned permanently.",
+            "banned": "The account is banned. The ban can be lifted at any time and its enrollments come back once each pairing is checked: surely within {days, plural, one {# day} other {# days}}, and after that where their slot is still free.",
             "cases": "A compensation case opens for every counterparty in their enrollments.",
             "enrollments": "All their enrollments and upcoming sessions are cancelled as “cancelled by the administration”.",
             "notified": "Every affected party is notified."
@@ -918,10 +929,14 @@
             "notified": "{name} is notified.",
             "reinstated": "The account becomes active again, and its owner can sign in.",
             "reinstatedAwaitingIdentity": "The account returns to «Awaiting proof of identity», since its identity request is still open; its owner can sign in to send the document.",
-            "sessions": "Sessions cancelled during the suspension do not come back; their compensation is in the account’s case under Compensation."
+            "sessions": "Sessions cancelled during the suspension do not come back; their compensation is in the account’s case under Compensation.",
+            "resumed": "The enrollments the suspension paused resume, and each student is offered, for every session the suspension cancelled, on recitation a make-up session or a refund as the student chooses, and on the ijazah track a make-up session; the suspension’s cases close."
           },
           "reasonLabel": "Reason for reactivation (required)",
-          "title": "Reactivate {name}’s account"
+          "title": "Reactivate {name}’s account",
+          "refused": {
+            "studentSuspended": "A student of one of the paused enrollments is still suspended, so the teacher is not reinstated and none of their enrollments resumes. Reinstate that student’s account from the users page, or dismiss their suspension case as the student’s fault confirmed, then try again. Nothing changed."
+          }
         },
         "rejectCredential": {
           "confirm": "Reject the credential",
@@ -1000,7 +1015,7 @@
       "decision": {
         "a11yKind": "Decision type",
         "ban": {
-          "banner": "The account is banned permanently: no sign-in and no new application with the same email. The ban is not lifted from the panel.",
+          "banner": "The account is banned: no sign-in and no new application with the same email while the ban stands. The ban can be lifted at any time from the application’s page.",
           "confirm": "Ban the applicant",
           "legend": "Reason for the ban",
           "noteLabel": "Note to the applicant (required)",
@@ -1137,7 +1152,7 @@
             "noCompensationAfter": ".",
             "noCompensationBefore": "No compensation is owed; if the administration decides otherwise, it does so in a case opened under ",
             "noCompensationLink": "Compensation",
-            "noSignIn": "They cannot sign in to their account or book a new enrollment. The ban is permanent and is not lifted from the panel.",
+            "noSignIn": "They cannot sign in to their account or book a new enrollment while the ban stands. The ban can be lifted at any time from the panel.",
             "notified": "{teacher} is notified."
           },
           "kept": {
@@ -1170,7 +1185,7 @@
           "ban": {
             "account": "The account becomes banned and is signed out on every device.",
             "cases": "A case is opened on each cancelled enrollment and their open remedies are handed to it; nothing is owed unless the administration decides otherwise in the case.",
-            "sessions": "Every upcoming session of theirs is cancelled now, their confirmed enrollments are cancelled with them for the reason “admin”, and the freed times return to booking."
+            "sessions": "Every upcoming session of theirs is cancelled now, their confirmed enrollments are cancelled with them for the reason “admin”, and each one’s slot stays held for it for {days, plural, one {# day} other {# days}}. The ban can be lifted at any time and these enrollments come back: surely within that time, and after it where their slot is still free."
           },
           "reinstate": {
             "account": "Only the account is restored, and its owner can sign in again.",
@@ -1185,7 +1200,7 @@
           }
         },
         "kinds": {
-          "ban": "Ban account · permanent",
+          "ban": "Ban account · can be lifted at any time",
           "suspend": "Suspend account · temporary until review"
         },
         "reasonHint": "The reason is recorded with the action in the audit log.",
@@ -1198,7 +1213,7 @@
         "ban": {
           "confirm": "Ban and cancel {count, plural, one {# session} other {# sessions}}",
           "effects": {
-            "banned": "The account is banned permanently: no sign-in and no new application with the same email, and the ban is not lifted from the panel.",
+            "banned": "The account is banned: no sign-in and no new application with the same email while the ban stands. The ban can be lifted at any time and their enrollments come back: surely within {days, plural, one {# day} other {# days}}, and after that where their slot is still free.",
             "ijazahsKept": "Their students’ issued ijazahs stay valid; revoking a specific one is a separate action."
           },
           "reasonLabel": "Reason for the ban (required)",
@@ -1207,9 +1222,9 @@
         "cancel": "Cancel",
         "confirm": "Suspend and cancel {count, plural, one {# session} other {# sessions}}",
         "effects": {
-          "cancelled": "All their upcoming sessions are cancelled, and students see them as \"Cancelled by admin\".",
-          "casesAfter": " queue, and the admin decides it.",
-          "casesBefore": "A compensation case opens for each enrollment in the ",
+          "cancelled": "Their enrollments are paused: their upcoming sessions are cancelled, shown to students as \"Cancelled by admin\", and each enrollment keeps its slot.",
+          "casesAfter": " queue; on reinstatement each student is offered what every cancelled session owes, and the case closes.",
+          "casesBefore": "A case opens for each paused enrollment in the ",
           "casesLink": "Compensation",
           "hidden": "Disappears from search now, and no new booking is accepted for them.",
           "noJoin": "Cannot join any session, even one in progress now.",
@@ -1217,9 +1232,9 @@
         },
         "effectsTitle": "What happens on confirmation",
         "honest": {
-          "ban": "The account is banned for good and signed out on every device. A ban is not lifted from the panel.",
+          "ban": "The account becomes banned and is signed out on every device; their running enrollments end, and each one’s slot stays held for it for {days, plural, one {# day} other {# days}}. The ban can be lifted at any time and these enrollments come back: surely within that time, and after it where their slot is still free.",
           "revoke": "The approval is revoked and the subjects removed, the application is rejected with the reason you write, and the account is signed out on every device.",
-          "suspend": "The account becomes suspended and is signed out on every device; it sees only the suspension page until reinstated."
+          "suspend": "The account becomes suspended and is signed out on every device; it sees only the suspension page until reinstated. Their enrollments are paused: their upcoming sessions are cancelled, and each enrollment keeps its slot and an open case. On reinstatement each student is offered, for every cancelled session, on recitation a make-up session or a refund as the student chooses, and on the ijazah track a make-up session."
         },
         "kinds": {
           "ban": "Ban account",
@@ -1233,7 +1248,7 @@
           "confirm": "Revoke approval and cancel {count, plural, one {# session} other {# sessions}}",
           "effects": {
             "ijazahsKept": "Their students’ issued ijazahs stay valid; revoking a specific one is a separate action.",
-            "lost": "They lose approved-teacher status: hidden from search, no new bookings accepted, and no return except through a new application the administration reviews."
+            "lost": "They lose approved-teacher status: hidden from search and no new bookings accepted, until the revocation is lifted, which can be done at any time from the panel."
           },
           "reasonLabel": "Reason for revoking approval (required)",
           "title": "Revoke {name}’s approval"
@@ -2501,7 +2516,9 @@
         "requireId": "Require ID",
         "signInMethod": "Sign-in method",
         "suspend": "Suspend account",
-        "timeZone": "Time zone"
+        "timeZone": "Time zone",
+        "liftBan": "Lift the ban",
+        "liftRevocation": "Lift the revocation"
       },
       "directory": {
         "deletedAccount": "Deleted account",
@@ -2568,11 +2585,47 @@
         "text": "Try another name or email, or remove a filter.",
         "title": "No user matches the search"
       },
-      "title": "Users"
+      "title": "Users",
+      "lift": {
+        "banTitle": "Lift the ban on {name}",
+        "revocationTitle": "Lift the revocation of {name}’s approval",
+        "studentBan": "The account returns to active, or to awaiting proof of identity if an identity request is open, and its owner can sign in again.",
+        "teacherBan": "The account returns to active, or to awaiting proof of identity if an identity request is open, and the teacher’s approval and application return to what they were before the ban.",
+        "revocation": "The teacher is approved again and the application approved, and the subjects their approved credentials name are granted again. The account stays as it is.",
+        "enrollmentsHeld": "The enrollments the {kind, select, ban {ban} other {revocation}} ended come back: each one’s slot is held for it for {days, plural, one {# day} other {# days}} from its end, until {when}, and after that only those whose slot is still free come back.",
+        "enrollmentsNotHeld": "No slot is held now for an enrollment the {kind, select, ban {ban} other {revocation}} ended (a slot is held for {days, plural, one {# day} other {# days}} from the end), so only those whose slot is still free come back.",
+        "banReasonLabel": "Reason for lifting the ban (required)",
+        "revocationReasonLabel": "Reason for lifting the revocation (required)",
+        "doneBan": "The ban was lifted.",
+        "doneRevocation": "The revocation was lifted.",
+        "resultsTitle": "What happened to each enrollment",
+        "noEnrollments": "No enrollment this action ended could be restored.",
+        "close": "Close",
+        "result": {
+          "restored": "The enrollment was restored.",
+          "notRestorable": "Left ended: its closing cannot be restored from here.",
+          "caseClosed": "Left ended: its closing’s case was closed.",
+          "partyRestricted": "Left ended: the other party’s account is not active, or the teacher’s approval does not stand.",
+          "slotInactive": "Left ended: the teacher deactivated its weekly slot.",
+          "slotChanged": "Left ended: the teacher changed its weekly slot’s day, time or time zone.",
+          "slotTaken": "Left ended: another student took its weekly slot, so the student is settled through its case.",
+          "timeTaken": "Left ended: one of its sessions overlaps another time of either party.",
+          "refunded": "Left ended: its payment was refunded through the payment gateway.",
+          "genderMismatch": "Left ended: its student and teacher are not of the same gender."
+        },
+        "refused": {
+          "notBanned": "This account is no longer banned; its ban was lifted meanwhile. Read the page again. Nothing changed.",
+          "notRevoked": "This teacher’s approval is not revoked now: it was restored, they applied again, or they were banned, and the ban is lifted first. Nothing changed.",
+          "restoreFailed": "One enrollment could not be restored once its restore had begun, so the action did not go through. Nothing changed. Release that enrollment’s slot from its page if needed, then try again.",
+          "openFailed": "Open that enrollment",
+          "busy": "The action met another action on the same enrollments. Nothing changed; try again.",
+          "notFound": "This account was not found, or it was deleted. Nothing changed."
+        }
+      }
     },
     "sessions": {
       "title": "Enrollments and sessions",
-      "lede": "Every enrollment and its sessions as they stand. From here a session not yet settled is cancelled, an enrollment an administrator's decision closed is restored, an outcome nobody disputed is corrected, and a compensation case is opened. Payment status is on the payments page alone.",
+      "lede": "Every enrollment and its sessions as they stand. From here a session not yet settled is cancelled, an enrollment an administrator's decision closed is restored at any time (its slot held for it a while, after that while it stays free), a held slot is released, an outcome nobody disputed is corrected, and a compensation case is opened. Payment status is on the payments page alone.",
       "filters": {
         "student": "Student's name",
         "teacher": "Teacher's name",
@@ -2616,7 +2669,7 @@
         "payments": "Payment status on the payments page",
         "openCase": "Open a compensation case",
         "restore": "Restore the enrollment",
-        "restorableUntil": "This enrollment can be restored until {when}.",
+        "restorableUntil": "This enrollment's slot is held for it until {when}; it can be restored at any time, after that while the slot is still free.",
         "footer": "Every action here asks for a written reason; the action and its reason are logged under your name in the audit log.",
         "sessionsTitle": "Sessions",
         "sessionsEmpty": "This enrollment has no sessions.",
@@ -2630,7 +2683,9 @@
         "casesEmpty": "This enrollment has no compensation case.",
         "viewCase": "View the case",
         "timelineTitle": "What happened to the enrollment · newest first",
-        "timelineEmpty": "Nothing recorded yet."
+        "timelineEmpty": "Nothing recorded yet.",
+        "slotReleased": "This enrollment's slot was released on {when}; it can be restored while the slot is still free.",
+        "release": "Release the slot"
       },
       "remedy": {
         "title": "Remedy · {kind}",
@@ -2730,7 +2785,7 @@
       },
       "restore": {
         "title": "Restore the enrollment",
-        "until": "The restore is open until {when}.",
+        "until": "The slot is held for this enrollment until {when}; after that the restore succeeds while the slot is still free.",
         "effect": "The enrollment becomes active again, its remaining sessions are created from the nearest weekly time after the first-session lead, each remedy the closing's case held is offered again, and that case closes with the note «restored». The cancelled sessions stay as they are.",
         "reasonLabel": "Reason for restoring",
         "confirm": "Restore the enrollment",
@@ -2744,6 +2799,19 @@
           "slotTaken": "The weekly slot is taken by another student in a week the restore would fill. Nothing changed.",
           "timeTaken": "A session the restore would create overlaps a session, an open hold or a reserved make-up time of either party. Nothing changed.",
           "noFreeWeek": "No free week was found for a remedy the closing's case held, so the case stays open. Nothing changed.",
+          "notFound": "This enrollment was not found. Nothing changed.",
+          "refunded": "This enrollment's payment was refunded through the payment gateway, so it is not restored; the student books anew. Nothing changed."
+        },
+        "released": "This enrollment's slot was released on {when}, so the restore succeeds while the slot is still free."
+      },
+      "release": {
+        "title": "Release the enrollment's slot",
+        "until": "The weekly slot is held for this enrollment until {when}.",
+        "effect": "The weekly slot becomes bookable now, so another student may take it. The release cannot be undone: the enrollment can still be restored after it while the slot stays free, and is refused once someone else takes it.",
+        "reasonLabel": "Reason for releasing the slot",
+        "confirm": "Release the slot",
+        "refused": {
+          "slotNotHeld": "This enrollment's slot is no longer held for it: the hold ended, it was already released, or its closing can no longer be restored. Read the page again. Nothing changed.",
           "notFound": "This enrollment was not found. Nothing changed."
         }
       }

@@ -434,6 +434,26 @@ describe('the Phase 3 actions by name (T002 of specs/004-sessions, M3)', () => {
   });
 });
 
+// B42b, T075 of specs/004-sessions (the follow-ups under T070 and T072): B42a's four new actions,
+// T070's release and T072's three lifts, named by the catalogue's text in Arabic and in English, as
+// admin-surface.md's table names the lifts; the release's row is the integration's (Q-R9).
+const B42A_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['enrollment.slot_released', 'تحرير موعد اشتراك', "Release an enrollment's slot"],
+  ['student.ban_lifted', 'رفع حظر طالب', "Lift a student's ban"],
+  ['teacher.ban_lifted', 'رفع حظر معلم أو متقدم', "Lift a teacher's or an applicant's ban"],
+  ['teacher.revocation_lifted', 'إلغاء سحب اعتماد معلم', "Lift a teacher's revocation"],
+];
+
+describe('T075: the release’s and the lifts’ actions by name', () => {
+  it.each(B42A_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
 describe('T058: RATE_LIMITED on the audit log', () => {
   it('the list says when to try again', async () => {
     const api = fakeApi();

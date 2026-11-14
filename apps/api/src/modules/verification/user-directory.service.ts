@@ -25,6 +25,10 @@
 // or revocation closed whose slot is still held, sessions' read through its entry (`slotHeldUntilOf`,
 // T070's one closing rule and window), null for none.
 //
+// B42b, T075 of specs/004-sessions (the note under T075, Q-O2 (a)): the record also answers
+// `banRestoreWindowDays`, the `ban_restore_window_days` setting read through sessions' `windowDaysOf`
+// (R-MONEY-12: a number from `settings`), the panel's `{days}` in the student's ban and the lifts.
+//
 // THE DATE OF BIRTH (the reviewer's requirement; PDPL, a minor's data is sensitive): read only to
 // derive `isMinor`. It never leaves this file: not in the answer, a log line or an audit entry.
 //
@@ -49,6 +53,7 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { DirectoryUser, UserRecordRow } from '../identity/index.js';
 import type { CancellationRequestCountsReader, MarkedEnrollments } from '../sessions/index.js';
+import { BAN_RESTORE_WINDOW_SETTING, windowDaysOf } from '../sessions/index.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -195,12 +200,15 @@ export function createUserDirectoryService({
       if (record === null) {
         throw refusal(log, { adminId, userId: targetUserId }, 'NOT_FOUND', 'not_found');
       }
-      const [now, cancellationRequests, repeatedAbsences, heldUntil] = await Promise.all([
-        clock(tx),
-        counts.cancellationRequestCountsOf(tx, targetUserId),
-        record.role === 'teacher' ? repeatedAbsencesOf(tx, targetUserId) : undefined,
-        held.slotHeldUntilOf(tx, targetUserId),
-      ]);
+      const [now, cancellationRequests, repeatedAbsences, heldUntil, banRestoreWindowDays] =
+        await Promise.all([
+          clock(tx),
+          counts.cancellationRequestCountsOf(tx, targetUserId),
+          record.role === 'teacher' ? repeatedAbsencesOf(tx, targetUserId) : undefined,
+          held.slotHeldUntilOf(tx, targetUserId),
+          // B42b, T075 (Q-O2 (a)).
+          windowDaysOf(settings)(BAN_RESTORE_WINDOW_SETTING),
+        ]);
       // A live person's date of birth is set (ERD §15 rule 32); a deleted one's may be erased.
       const isMinor =
         record.dateOfBirth !== null &&
@@ -231,6 +239,7 @@ export function createUserDirectoryService({
         ...(repeatedAbsences === undefined ? {} : { repeatedAbsences }),
         // T072 (Q9 (a)).
         enrollmentsSlotHeldUntil: heldUntil === null ? null : heldUntil.toISOString(),
+        banRestoreWindowDays,
       };
     },
   };

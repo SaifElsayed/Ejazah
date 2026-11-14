@@ -39,6 +39,8 @@ const TEACHER_RECORD = {
   ],
   // T072 of specs/004-sessions (rule d): the hold's end, none held.
   enrollmentsSlotHeldUntil: null,
+  // B42b, T075 of specs/004-sessions (rule d): the ban restore window's days (Q-O2 (a)).
+  banRestoreWindowDays: 14,
 };
 
 describe('users.list', () => {

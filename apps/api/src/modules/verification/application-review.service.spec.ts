@@ -23,9 +23,13 @@ import {
 import { ApplicationReviewService } from './application-review.service.js';
 
 const NOW = new Date('2026-10-22T10:00:00Z');
+/** B42b, T075 (Q-O2 (a)): `ban_restore_window_days`, unlike the seed's 14 so its read shows. */
+const BAN_WINDOW_DAYS = 21;
 
 const settings: SettingsReader = {
   read: async <T>(key: string, schema: z.ZodType<T>) => {
+    // B42b, T075 (Q-O2 (a)): `applications.get` reads the ban restore window for the panel's words.
+    if (key === 'ban_restore_window_days') return schema.parse(BAN_WINDOW_DAYS);
     if (key !== 'admin_list_page_size') throw new Error(`unexpected setting ${key}`);
     return schema.parse(2);
   },
@@ -151,6 +155,12 @@ describe('get', () => {
 
   it('answers NOT_FOUND for no application', async () => {
     expect((await refusal(service.get(TX, ADMIN))).code).toBe('NOT_FOUND');
+  });
+
+  // B42b, T075 of specs/004-sessions (Q-O2 (a)): the panel's `{days}` in an approved teacher's ban.
+  it('answers banRestoreWindowDays, the ban_restore_window_days setting', async () => {
+    const userId = store.plant({ status: 'approved', callRecorded: true });
+    expect((await service.get(TX, userId)).banRestoreWindowDays).toBe(BAN_WINDOW_DAYS);
   });
 });
 

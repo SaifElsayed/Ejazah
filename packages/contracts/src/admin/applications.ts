@@ -106,6 +106,12 @@ export const applicationsGetOutput = applicationsListRow.extend({
   }),
   note: z.string().optional(),
   identityRequest: openIdentityRequest.optional(),
+  /**
+   * B42b, T075 of specs/004-sessions (the note under T075, Q-O2 (a)): `ban_restore_window_days`,
+   * the days a ban's closing holds its slot (DEC-66, DEC-69), for the panel's `{days}` in an approved
+   * teacher's ban. Additive (R-API-9).
+   */
+  banRestoreWindowDays: z.int().positive(),
 });
 
 export const applicationsRecordCallInput = z.object({

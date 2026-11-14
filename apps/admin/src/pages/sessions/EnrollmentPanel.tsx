@@ -15,6 +15,10 @@
 //   enrollment and beside each open remedy with its `remedyId`. A hidden button is never the
 //   enforcement: the server's refusal is.
 // - Payment status only as a link to `/payments?enrollment=`; no amount anywhere (FR-479).
+// - B42b, T075 (FR-503, FR-454 as amended; SRS FR-CANCEL-9, DEC-69; N11): the restore stays offered
+//   while `restorableUntil` is answered, past or not (a restore is possible at any time); its words
+//   say the slot is held until `slotHeldUntil` or was released at `slotReleasedAt`; «تحرير الموعد»
+//   on a held slot, while the server answers `slotHeldUntil`.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -38,7 +42,7 @@ import {
   useMonitoredEnrollment,
   useRereadMonitor,
 } from './queries';
-import { CancelSessionDialog, RestoreDialog } from './SessionDialogs';
+import { CancelSessionDialog, ReleaseSlotDialog, RestoreDialog } from './SessionDialogs';
 import {
   CASE_REASON,
   CASE_STATUS,
@@ -51,6 +55,8 @@ import {
   REMEDY_KIND,
   REMEDY_STATUS,
   SESSION_STATUS,
+  type SlotHold,
+  slotHoldOf,
   TRACK,
 } from './words';
 
@@ -73,7 +79,8 @@ export function EnrollmentPanel({ enrollmentId }: { readonly enrollmentId: strin
 type Opened =
   | { readonly action: 'cancel'; readonly session: MonitoredSession }
   | { readonly action: 'correct'; readonly sessionId: string }
-  | { readonly action: 'restore'; readonly until: string }
+  | { readonly action: 'restore'; readonly hold: SlotHold }
+  | { readonly action: 'release'; readonly until: string }
   | { readonly action: 'case'; readonly remedyId?: string };
 
 function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
@@ -89,7 +96,9 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
   const status = ENROLLMENT_STATUS[enrollment.status];
   const paymentsHref = `/payments?enrollment=${enrollment.enrollmentId}`;
   const link = (href: string) => () => void navigate(href);
-  const { restorableUntil } = enrollment;
+  const { restorableUntil, slotHeldUntil } = enrollment;
+  // T075 (N11): the hold's words; the restore's button reads `restorableUntil` alone.
+  const hold = slotHoldOf(enrollment);
 
   return (
     <>
@@ -123,10 +132,17 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
               variant="secondary"
               onPress={() => setOpened({ action: 'case' })}
             />
-            {restorableUntil === undefined ? null : (
+            {slotHeldUntil === undefined ? null : (
+              <Button
+                label={t('admin.sessions.detail.release')}
+                variant="secondary"
+                onPress={() => setOpened({ action: 'release', until: slotHeldUntil })}
+              />
+            )}
+            {restorableUntil === undefined || hold === undefined ? null : (
               <Button
                 label={t('admin.sessions.detail.restore')}
-                onPress={() => setOpened({ action: 'restore', until: restorableUntil })}
+                onPress={() => setOpened({ action: 'restore', hold })}
               />
             )}
           </span>
@@ -155,11 +171,15 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
               },
             ]}
           />
-          {restorableUntil === undefined ? null : (
+          {restorableUntil === undefined || hold === undefined ? null : (
             <p className="text-callout">
-              {t('admin.sessions.detail.restorableUntil', {
-                when: instant(restorableUntil, t, locale, zone),
-              })}
+              {hold.state === 'held'
+                ? t('admin.sessions.detail.restorableUntil', {
+                    when: instant(hold.until, t, locale, zone),
+                  })
+                : t('admin.sessions.detail.slotReleased', {
+                    when: instant(hold.at, t, locale, zone),
+                  })}
             </p>
           )}
         </section>
@@ -248,9 +268,12 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
         />
       ) : null}
       {opened?.action === 'restore' ? (
-        <RestoreDialog
+        <RestoreDialog enrollmentId={enrollment.enrollmentId} hold={opened.hold} onClose={close} />
+      ) : null}
+      {opened?.action === 'release' ? (
+        <ReleaseSlotDialog
           enrollmentId={enrollment.enrollmentId}
-          restorableUntil={opened.until}
+          slotHeldUntil={opened.until}
           onClose={close}
         />
       ) : null}

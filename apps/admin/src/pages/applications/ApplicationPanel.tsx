@@ -8,6 +8,8 @@
 // / month / year as the board draws it, T111; its latest day today in the panel's zone), its outcome
 // and its notes, while the application is open. The footer offers the actions the status admits;
 // «اعتماد» waits for the three conditions, each one said.
+// B42b, T075 of specs/004-sessions (FR-502; the note under T075, Q-R6 (a)): «رفع الحظر» on a banned
+// account, an applicant's or an approved teacher's, at any time (`StandingDialogs.tsx`).
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -38,7 +40,7 @@ import { ApproveDialog } from './ApproveDialog';
 import { DecisionDialog, type DecisionKind } from './DecisionDialog';
 import { allowedFor, BLOCKED_TEXT, blockedReasons, STATUS_TEXT } from './decisions';
 import { type ApplicationDetail, useApplication, useApplicationActions } from './queries';
-import { ReinstateDialog, StandingDialog } from './StandingDialogs';
+import { LiftBanDialog, ReinstateDialog, StandingDialog } from './StandingDialogs';
 
 const CREDENTIAL_TEXT: Readonly<
   Record<ApplicationDetail['credentials'][number]['status'], MessageKey>
@@ -98,11 +100,13 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
   const [approving, setApproving] = useState(false);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [requiring, setRequiring] = useState(false);
-  const [standing, setStanding] = useState<'change' | 'reinstate' | null>(null);
+  const [standing, setStanding] = useState<'change' | 'reinstate' | 'lift' | null>(null);
   // An approved teacher's standing (T073): suspended, reinstated; otherwise suspended, revoked or
-  // banned. A banned account has nothing left to change.
+  // banned. A banned account has nothing left to change but its ban lifted (T075).
   const approved = detail.status === 'approved';
   const reinstatable = approved && detail.accountStatus === 'suspended';
+  // T075: every ban can be lifted at any time, an applicant's included (DEC-66).
+  const liftable = detail.accountStatus === 'banned';
   const changeable =
     approved &&
     (detail.accountStatus === 'active' || detail.accountStatus === 'verification_required');
@@ -269,6 +273,13 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
                 onPress={() => setStanding('change')}
               />
             ) : null}
+            {liftable ? (
+              <Button
+                label={t('admin.applications.detail.liftBan')}
+                icon={{ name: 'rotate-ccw' }}
+                onPress={() => setStanding('lift')}
+              />
+            ) : null}
             {reinstatable ? (
               <Button
                 label={t('admin.dialogs.confirm.reactivateAccount.confirm')}
@@ -396,6 +407,8 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
         <StandingDialog detail={detail} onClose={() => setStanding(null)} />
       ) : standing === 'reinstate' ? (
         <ReinstateDialog detail={detail} onClose={() => setStanding(null)} />
+      ) : standing === 'lift' ? (
+        <LiftBanDialog detail={detail} onClose={() => setStanding(null)} />
       ) : null}
       {requiring ? (
         <AdminRequireIdDialog

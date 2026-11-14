@@ -51,6 +51,8 @@ import type {
 /** A rejected application's undecided credentials closed (T122), catalog's entry's shape. */
 export type { CredentialClosure } from '../catalog/index.js';
 import type { CredentialClosure } from '../catalog/index.js';
+// B42b, T075 of specs/004-sessions (Q-O2 (a)): the ban restore window's setting, read as sessions reads it.
+import { BAN_RESTORE_WINDOW_SETTING, windowDaysOf } from '../sessions/index.js';
 
 /** The admin lists' page size (the admin and catalog modules read the same key). */
 export const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -170,7 +172,11 @@ export class ApplicationReviewService {
     };
   }
 
-  /** `applications.get`: the detail; the decision history is `audit.list` on the target. */
+  /**
+   * `applications.get`: the detail; the decision history is `audit.list` on the target. B42b, T075
+   * (Q-O2 (a)): also `banRestoreWindowDays`, the `ban_restore_window_days` setting (R-MONEY-12), the
+   * panel's `{days}` in an approved teacher's ban.
+   */
   async get(tx: Transaction, userId: string): Promise<z.input<typeof applicationsGetOutput>> {
     const applicant = await this.#readOrRefuse(tx, userId);
     const credentials = ofApplication(applicant, await this.#store.credentialsOf(tx, [userId]));
@@ -178,6 +184,7 @@ export class ApplicationReviewService {
     const uploadedAt =
       documentId === null ? null : await this.#store.documentUploadedAt(tx, documentId);
     const request = await this.#store.openRequestOf(tx, userId);
+    const banRestoreWindowDays = await windowDaysOf(this.#settings)(BAN_RESTORE_WINDOW_SETTING);
     return {
       ...this.#rowOf(applicant, credentials),
       qualificationSummary: applicant.qualificationSummary,
@@ -204,6 +211,7 @@ export class ApplicationReviewService {
       },
       ...(applicant.note === null ? {} : { note: applicant.note }),
       ...(request === null ? {} : { identityRequest: request }),
+      banRestoreWindowDays,
     };
   }
 
