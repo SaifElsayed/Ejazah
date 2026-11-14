@@ -44,6 +44,19 @@
 // rule 32), while the enrollment's foreign key keeps the row: a party absent from the names is a
 // deleted one, answered `displayNameOrNull: null`, `deleted: true` and the deprecated `displayName`
 // `''` (the note under T007), so the phone draws its stand-in.
+//
+// PAUSED (004:T074; FR-506; DEC-69, Q11 (a); the note under T074, Q-O1 (a), Q-R7 (a), N3, N4). An
+// item answers `paused: true` when its enrollment is paused by a teacher's suspension (`confirmed`,
+// its `teacher_suspended` case open, T071) or closed by a ban or a revocation while its slot is held:
+// the one closing rule's (`closingOf`, sessions' `restore-window.ts`) `student_banned` or
+// `teacher_ended` closing, its case open, `slot_released_at` NULL and the read's instant before
+// `restorableUntil` (the window of the closing's kind, read through `windowDaysOf(settings)`). A
+// paused item carries no reason and no session: no `next`, no `last`, the detail's `sessions` empty;
+// its three counts kept, its status and its tab unchanged; «اليوم» leaves its sessions out. Every
+// other is `paused: false`, a complaint's or a fault's held closing and T082's `admin_ended` (N4)
+// included. The cases are read through moderation's `compensationCasesAmong` once per read, only for
+// the enrollments that could be paused. Only the other party ever reads one (FR-506): a suspended or
+// banned account is refused before any list, and a revoked teacher the teacher's lists.
 import type {
   EnrollmentsGetInput,
   EnrollmentsGetOutput,
@@ -72,16 +85,26 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
-import { openComplaintOf } from '../moderation/index.js';
 import {
+  compensationCasesAmong,
+  type EnrollmentCase,
+  openComplaintOf,
+} from '../moderation/index.js';
+import {
+  type ClosingKind,
+  closingOf,
   type DaySession,
   type EnrollmentSessionRow,
   isDisputed,
+  latestEndCaseOf,
   pendingCancellationsAmong,
   remedyStatusesAmong,
+  restorableUntil,
   sessionProgress,
   sessionsOfEnrollments,
   teacherSessionsBetween,
+  type WindowDays,
+  windowDaysOf,
 } from '../sessions/index.js';
 import {
   activeEnrollmentsOfStudent,
@@ -159,6 +182,11 @@ export interface EnrollmentListsStore {
   ): Promise<ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>>;
   /** 004:T060: whether the enrollment's complaint of the teacher's absence is open (moderation's). */
   complaintOpenOf(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  /** 004:T074: of `enrollmentIds`, each one's compensation cases, newest first (moderation's). */
+  casesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly EnrollmentCase[]>>;
 }
 
 /** The store over booking's own queries and the owners' entries (R-API-6). */
@@ -178,7 +206,61 @@ export const enrollmentListsStore: EnrollmentListsStore = {
   pendingCancellationsOf: pendingCancellationsAmong,
   remedyStatusesOf: remedyStatusesAmong,
   complaintOpenOf: async (tx, enrollmentId) => (await openComplaintOf(tx, enrollmentId)) !== null,
+  casesAmong: compensationCasesAmong,
 };
+
+/** 004:T074: the case a teacher's suspension opens on each enrollment it pauses (T071, R-313). */
+const SUSPENSION_CASE_REASON = 'teacher_suspended';
+
+/** 004:T074: the closings a ban or a revocation makes, paused while their slot is held (N3). */
+const BAN_CLOSINGS: ReadonlySet<ClosingKind> = new Set(['student_banned', 'teacher_ended']);
+
+/** 004:T074: an enrollment that could be paused: confirmed, or cancelled with its slot not released. */
+const mayBePaused = (row: ListedEnrollmentRow): boolean =>
+  row.status === 'confirmed' || (row.status === 'cancelled' && row.slotReleasedAt === null);
+
+/** 004:T074: whether the enrollment is paused, by its cases (this file's head, «PAUSED»). */
+async function isPaused(
+  row: ListedEnrollmentRow,
+  cases: readonly EnrollmentCase[],
+  now: Date,
+  windowDays: WindowDays,
+): Promise<boolean> {
+  if (row.status === 'confirmed') {
+    return cases.some(
+      ({ reason, status }) => reason === SUSPENSION_CASE_REASON && status === 'open',
+    );
+  }
+  const closing = closingOf({
+    status: row.status,
+    lastCancellationReason: row.cancellationReason,
+    endCase: latestEndCaseOf(cases),
+  });
+  if (closing === undefined || !closing.restorable || !BAN_CLOSINGS.has(closing.kind)) return false;
+  const until = await restorableUntil(closing.closingCase.createdAt, closing.kind, windowDays);
+  return now.getTime() < until.getTime();
+}
+
+/** 004:T074: of `rows`, the paused ones; the cases read once, for those that could be paused. */
+async function pausedAmong(
+  tx: Transaction,
+  store: EnrollmentListsStore,
+  rows: readonly ListedEnrollmentRow[],
+  now: Date,
+  windowDays: WindowDays,
+): Promise<ReadonlySet<string>> {
+  const candidates = rows.filter(mayBePaused);
+  if (candidates.length === 0) return new Set();
+  const cases = await store.casesAmong(
+    tx,
+    candidates.map(({ id }) => id),
+  );
+  const paused = new Set<string>();
+  for (const row of candidates) {
+    if (await isPaused(row, cases.get(row.id) ?? [], now, windowDays)) paused.add(row.id);
+  }
+  return paused;
+}
 
 /** The read's instant, and the ended tab's page size read before the transaction. */
 export interface ListClock {
@@ -240,7 +322,15 @@ function partyNameOf(names: ReadonlyMap<string, string>, userId: string): Listed
 /** An enrollment's status and progress, the part both sides' items share. */
 type ItemCore = Pick<
   StudentEnrollmentItem,
-  'enrollmentId' | 'summary' | 'status' | 'next' | 'last' | 'upcoming' | 'completed' | 'remaining'
+  | 'enrollmentId'
+  | 'summary'
+  | 'status'
+  | 'next'
+  | 'last'
+  | 'upcoming'
+  | 'completed'
+  | 'remaining'
+  | 'paused'
 >;
 
 /** What every item of some rows needs: their sessions, the other party's names, their subjects. */
@@ -253,6 +343,8 @@ interface ItemContext {
   /** 004:T028: the sessions' remedy statuses. */
   readonly remedies: ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>;
   readonly now: Date;
+  /** 004:T074: the paused enrollments, answered with no session. */
+  readonly paused: ReadonlySet<string>;
 }
 
 async function contextOf(
@@ -261,21 +353,23 @@ async function contextOf(
   rows: readonly ListedEnrollmentRow[],
   otherParty: (row: ListedEnrollmentRow) => string,
   now: Date,
+  windowDays: WindowDays,
 ): Promise<ItemContext> {
-  const [sessions, names, subjects] = await Promise.all([
+  const [sessions, names, subjects, paused] = await Promise.all([
     store.sessionsOf(
       tx,
       rows.map(({ id }) => id),
     ),
     store.namesOf(tx, [...new Set(rows.map(otherParty))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
+    pausedAmong(tx, store, rows, now, windowDays),
   ]);
   const sessionIds = [...sessions.values()].flatMap((rows) => rows.map(({ id }) => id));
   const [pending, remedies] = await Promise.all([
     store.pendingCancellationsOf(tx, sessionIds, now),
     store.remedyStatusesOf(tx, sessionIds),
   ]);
-  return { sessions, names, subjects, pending, remedies, now };
+  return { sessions, names, subjects, pending, remedies, now, paused };
 }
 
 function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
@@ -283,20 +377,31 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     sessionCount: row.snapshotSessionCount,
     now: context.now,
   });
+  // 004:T074: a paused enrollment shows no session (this file's head, «PAUSED»).
+  const paused = context.paused.has(row.id);
   return {
     enrollmentId: row.id,
     summary: termsOf(row, context.subjects),
     status: row.status,
-    ...(progress.next === undefined
+    ...(paused || progress.next === undefined
       ? {}
       : { next: listedSessionOf(progress.next, context.pending, context.remedies) }),
-    ...(progress.last === undefined
+    ...(paused || progress.last === undefined
       ? {}
       : { last: listedSessionOf(progress.last, context.pending, context.remedies) }),
     upcoming: progress.upcoming,
     completed: progress.completed,
     remaining: progress.remaining,
+    paused,
   };
+}
+
+/** The detail's sessions, none for a paused enrollment (004:T074). */
+function detailSessionsOf(row: ListedEnrollmentRow, context: ItemContext): ListedSession[] {
+  if (context.paused.has(row.id)) return [];
+  return (context.sessions.get(row.id) ?? []).map((one) =>
+    listedSessionOf(one, context.pending, context.remedies),
+  );
 }
 
 function studentItemOf(row: ListedEnrollmentRow, context: ItemContext): StudentEnrollmentItem {
@@ -347,15 +452,16 @@ export async function studentEnrollmentsOf(
   studentUserId: string,
   input: EnrollmentsListInput,
   clock: ListClock,
+  windowDays: WindowDays,
 ): Promise<EnrollmentsListOutput> {
   const party = { studentUserId };
   if (input.tab === 'active') {
     const rows = await store.activeOfStudent(tx, studentUserId);
-    const context = await contextOf(tx, store, rows, ofTeacher, clock.now);
+    const context = await contextOf(tx, store, rows, ofTeacher, clock.now, windowDays);
     return { items: rows.map((row) => studentItemOf(row, context)).sort(byNextSession) };
   }
   const rows = await store.endedPage(tx, party, endedPageOf(input.cursor, clock));
-  const context = await contextOf(tx, store, rows, ofTeacher, clock.now);
+  const context = await contextOf(tx, store, rows, ofTeacher, clock.now, windowDays);
   return cutPage(
     rows.map((row) => studentItemOf(row, context)),
     clock.pageSize,
@@ -373,18 +479,17 @@ export async function studentEnrollmentOf(
   studentUserId: string,
   { enrollmentId }: EnrollmentsGetInput,
   now: Date,
+  windowDays: WindowDays,
 ): Promise<EnrollmentsGetOutput> {
   const row = await store.listedOf(tx, enrollmentId, { studentUserId });
   if (row === null) throw new DomainError('NOT_FOUND');
   const [context, complaintOpen] = await Promise.all([
-    contextOf(tx, store, [row], ofTeacher, now),
+    contextOf(tx, store, [row], ofTeacher, now, windowDays),
     store.complaintOpenOf(tx, row.id),
   ]);
   return {
     ...studentItemOf(row, context),
-    sessions: (context.sessions.get(row.id) ?? []).map((one) =>
-      listedSessionOf(one, context.pending, context.remedies),
-    ),
+    sessions: detailSessionsOf(row, context),
     complaintOpen,
   };
 }
@@ -407,10 +512,11 @@ export async function teacherStudentsOf(
   teacherUserId: string,
   input: TeacherStudentsListInput,
   clock: ListClock,
+  windowDays: WindowDays,
 ): Promise<TeacherStudentsListOutput> {
   return input.tab === 'active'
-    ? teacherActiveTab(tx, store, teacherUserId, input.query, clock)
-    : teacherEndedTab(tx, store, teacherUserId, input, clock);
+    ? teacherActiveTab(tx, store, teacherUserId, input.query, clock, windowDays)
+    : teacherEndedTab(tx, store, teacherUserId, input, clock, windowDays);
 }
 
 async function teacherActiveTab(
@@ -419,11 +525,12 @@ async function teacherActiveTab(
   teacherUserId: string,
   query: string | undefined,
   clock: ListClock,
+  windowDays: WindowDays,
 ): Promise<TeacherStudentsListOutput> {
   const active = await store.activeOfTeacher(tx, teacherUserId);
   const matched = await matchingStudents(tx, store, [...new Set(active.map(ofStudent))], query);
   const rows = matched === null ? active : active.filter((row) => matched.has(row.studentUserId));
-  const context = await contextOf(tx, store, rows, ofStudent, clock.now);
+  const context = await contextOf(tx, store, rows, ofStudent, clock.now, windowDays);
   return { items: rows.map((row) => teacherItemOf(row, context)).sort(byNextSession) };
 }
 
@@ -433,6 +540,7 @@ async function teacherEndedTab(
   teacherUserId: string,
   input: TeacherStudentsListInput,
   clock: ListClock,
+  windowDays: WindowDays,
 ): Promise<TeacherStudentsListOutput> {
   const matched =
     input.query === undefined
@@ -452,7 +560,7 @@ async function teacherEndedTab(
       ...(matched === null ? {} : { studentUserIds: [...matched] }),
     },
   );
-  const context = await contextOf(tx, store, rows, ofStudent, clock.now);
+  const context = await contextOf(tx, store, rows, ofStudent, clock.now, windowDays);
   return cutPage(
     rows.map((row) => teacherItemOf(row, context)),
     clock.pageSize,
@@ -466,15 +574,14 @@ export async function teacherStudentOf(
   teacherUserId: string,
   { enrollmentId }: TeacherStudentsGetInput,
   now: Date,
+  windowDays: WindowDays,
 ): Promise<TeacherStudentsGetOutput> {
   const row = await store.listedOf(tx, enrollmentId, { teacherUserId });
   if (row === null) throw new DomainError('NOT_FOUND');
-  const context = await contextOf(tx, store, [row], ofStudent, now);
+  const context = await contextOf(tx, store, [row], ofStudent, now, windowDays);
   return {
     ...teacherItemOf(row, context),
-    sessions: (context.sessions.get(row.id) ?? []).map((one) =>
-      listedSessionOf(one, context.pending, context.remedies),
-    ),
+    sessions: detailSessionsOf(row, context),
   };
 }
 
@@ -484,6 +591,7 @@ export async function teacherTodayOf(
   store: EnrollmentListsStore,
   teacherUserId: string,
   now: Date,
+  windowDays: WindowDays,
 ): Promise<TeacherTodayOutput> {
   const timezone = await store.timezoneOf(tx, teacherUserId);
   // A signed-in teacher's account is live (the caller kind read it on this request).
@@ -498,7 +606,7 @@ export async function teacherTodayOf(
     ...new Set(day.map(({ enrollmentId }) => enrollmentId)),
   ]);
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const [names, subjects, pending, remedies] = await Promise.all([
+  const [names, subjects, pending, remedies, paused] = await Promise.all([
     store.namesOf(tx, [...new Set(rows.map(ofStudent))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
     store.pendingCancellationsOf(
@@ -510,13 +618,15 @@ export async function teacherTodayOf(
       tx,
       day.map(({ id }) => id),
     ),
+    pausedAmong(tx, store, rows, now, windowDays),
   ]);
   return {
     localDate,
     timezone,
     sessions: day.flatMap((session) => {
       const row = byId.get(session.enrollmentId);
-      if (row === undefined) return [];
+      // 004:T074: a paused enrollment's sessions are left out of the day (this file's head).
+      if (row === undefined || paused.has(row.id)) return [];
       return [
         {
           ...listedSessionOf(session, pending, remedies),
@@ -562,34 +672,46 @@ export function createEnrollmentListServices({
 }): EnrollmentListServices {
   const transactions = transactionsOver(database);
   const pageSize = () => settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+  // 004:T074: the two restore windows, each read when a held closing needs it (R-MONEY-12).
+  const windowDays = windowDaysOf(settings);
   return {
     enrollments: async (studentUserId, input) => {
       const size = await pageSize();
       return transactions.run(async (tx) =>
-        studentEnrollmentsOf(tx, store, studentUserId, input, {
-          now: await clock(tx),
-          pageSize: size,
-        }),
+        studentEnrollmentsOf(
+          tx,
+          store,
+          studentUserId,
+          input,
+          { now: await clock(tx), pageSize: size },
+          windowDays,
+        ),
       );
     },
     enrollment: (studentUserId, input) =>
       transactions.run(async (tx) =>
-        studentEnrollmentOf(tx, store, studentUserId, input, await clock(tx)),
+        studentEnrollmentOf(tx, store, studentUserId, input, await clock(tx), windowDays),
       ),
     students: async (teacherUserId, input) => {
       const size = await pageSize();
       return transactions.run(async (tx) =>
-        teacherStudentsOf(tx, store, teacherUserId, input, {
-          now: await clock(tx),
-          pageSize: size,
-        }),
+        teacherStudentsOf(
+          tx,
+          store,
+          teacherUserId,
+          input,
+          { now: await clock(tx), pageSize: size },
+          windowDays,
+        ),
       );
     },
     student: (teacherUserId, input) =>
       transactions.run(async (tx) =>
-        teacherStudentOf(tx, store, teacherUserId, input, await clock(tx)),
+        teacherStudentOf(tx, store, teacherUserId, input, await clock(tx), windowDays),
       ),
     today: (teacherUserId) =>
-      transactions.run(async (tx) => teacherTodayOf(tx, store, teacherUserId, await clock(tx))),
+      transactions.run(async (tx) =>
+        teacherTodayOf(tx, store, teacherUserId, await clock(tx), windowDays),
+      ),
   };
 }

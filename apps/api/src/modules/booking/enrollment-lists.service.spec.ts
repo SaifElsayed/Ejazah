@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import type { EnrollmentSessionRow, DaySession } from '../sessions/index.js';
+import type { EnrollmentCase } from '../moderation/index.js';
+import type { DaySession, EnrollmentSessionRow, WindowDays } from '../sessions/index.js';
 import {
   createEnrollmentListServices,
   type EnrollmentListsStore,
@@ -38,6 +39,8 @@ import {
 const tx = {} as Transaction;
 const NOW = new Date('2026-11-10T12:00:00Z');
 const CLOCK = { now: NOW, pageSize: 2 };
+/** 004:T074: both restore windows, 14 days, as the seed holds them (T069). */
+const WINDOWS: WindowDays = async () => 14;
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000000a1';
 const OTHER_STUDENT = '0199d0a0-0000-7000-8000-0000000000a2';
@@ -60,6 +63,9 @@ function row(id: string, overrides: Partial<ListedEnrollmentRow> = {}): ListedEn
     snapshotTrack: 'recitation',
     snapshotSessionCount: 4,
     snapshotDurationMinutes: 60,
+    // 004:T074: the closing's reason and its release, read for `paused`.
+    cancellationReason: null,
+    slotReleasedAt: null,
     ...overrides,
   };
 }
@@ -113,6 +119,8 @@ interface Asked {
   readonly day: { teacherUserId: string; from: string; to: string }[];
   /** 004:T021: the sessions and the instant `pendingCancellation` was read for. */
   readonly pending: { sessionIds: readonly string[]; at: string }[];
+  /** 004:T074: each read of the cases, by the enrollments asked. */
+  readonly cases: (readonly string[])[];
 }
 
 function storeOf(
@@ -132,9 +140,11 @@ function storeOf(
     remedies?: Record<string, 'awaiting_choice' | 'proposed' | 'frozen' | 'booked'>;
     /** 004:T060: the enrollments whose complaint is open. */
     complaints?: readonly string[];
+    /** 004:T074: each enrollment's compensation cases, newest first (moderation's). */
+    cases?: Record<string, readonly EnrollmentCase[]>;
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
-  const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [] };
+  const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [], cases: [] };
   const store: EnrollmentListsStore = {
     activeOfStudent: async () => data.active ?? [],
     activeOfTeacher: async () => data.active ?? [],
@@ -180,6 +190,11 @@ function storeOf(
       ),
     // 004:T060.
     complaintOpenOf: async (_tx, enrollmentId) => (data.complaints ?? []).includes(enrollmentId),
+    // 004:T074.
+    casesAmong: async (_tx, enrollmentIds) => {
+      asked.cases.push(enrollmentIds);
+      return new Map(enrollmentIds.map((id) => [id, [...(data.cases?.[id] ?? [])]]));
+    },
   };
   return { store, asked };
 }
@@ -199,7 +214,14 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       },
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const answer = await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK);
+    const answer = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
     expect(answer.items.map(({ enrollmentId }) => enrollmentId)).toEqual([E3, E1, E4, E2]);
     expect(answer.nextCursor).toBeUndefined();
     expect(asked.ended).toEqual([]);
@@ -218,7 +240,9 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       },
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(item).toEqual({
       enrollmentId: E1,
       teacher: { teacherId: TEACHER, ...named('أحمد سالم') },
@@ -236,6 +260,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       upcoming: 3,
       completed: 1,
       remaining: 3,
+      paused: false,
     });
   });
 
@@ -244,7 +269,9 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       active: [row(E1, { status: 'pending_payment' })],
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(item).toMatchObject({
       status: 'pending_payment',
       upcoming: 0,
@@ -265,6 +292,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       STUDENT,
       { tab: 'ended', cursor: E1 },
       CLOCK,
+      WINDOWS,
     );
     expect(asked.ended).toEqual([
       { party: { studentUserId: STUDENT }, page: { after: E1, limit: 3 } },
@@ -275,7 +303,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
 
   it('writes no cursor on the last page of the ended tab', async () => {
     const { store } = storeOf({ ended: [row(E4, { status: 'terminated_no_show' })] });
-    const answer = await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK);
+    const answer = await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS);
     expect(answer.items).toHaveLength(1);
     expect(answer.nextCursor).toBeUndefined();
   });
@@ -284,16 +312,26 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
   // left out by the client's extension), and the item says so, for the phone's stand-in.
   it('answers a deleted teacher deleted, with no name, the deprecated name empty, in both tabs', async () => {
     const { store } = storeOf({ active: [row(E1)], ended: [row(E2, { status: 'completed' })] });
-    const [active] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK))
-      .items;
+    const [active] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(active?.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
-    const [ended] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK)).items;
+    const [ended] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS)
+    ).items;
     expect(ended?.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
   });
 
   it('answers a deleted teacher deleted on the enrollment’s detail', async () => {
     const { store } = storeOf({ listed: row(E1) });
-    const answer = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const answer = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(answer.teacher).toEqual({ teacherId: TEACHER, ...DELETED });
   });
 
@@ -307,7 +345,14 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       sessions: { [E1]: sessions },
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const answer = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const answer = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(asked.listed).toEqual([{ enrollmentId: E1, party: { studentUserId: STUDENT } }]);
     expect(answer.sessions.map(({ sequenceNumber, status }) => [sequenceNumber, status])).toEqual([
       [1, 'done'],
@@ -329,13 +374,20 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
       },
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const answer = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const answer = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(answer.sessions.map(({ sessionId, status }) => [sessionId, status])).toEqual([
       [sessionIdOf('2026-11-03T09:00:00Z'), 'disputed'],
       [sessionIdOf('2026-11-10T09:00:00Z'), 'teacher_no_show'],
     ]);
     expect(answer.sessions[0]).not.toHaveProperty('outcomeUnderDispute');
-    const teacher = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    const teacher = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(teacher.sessions.map(({ sessionId }) => sessionId)).toEqual(
       answer.sessions.map(({ sessionId }) => sessionId),
     );
@@ -345,7 +397,7 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
   it('answers NOT_FOUND for an enrollment that is not the student’s, or none', async () => {
     const { store } = storeOf({ listed: null });
     await expect(
-      studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E2 }, NOW),
+      studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E2 }, NOW, WINDOWS),
     ).rejects.toEqual(new DomainError('NOT_FOUND'));
   });
 });
@@ -362,7 +414,7 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
       },
       names: NAMES,
     });
-    const answer = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK);
+    const answer = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS);
     expect(answer.items.map(({ enrollmentId, student }) => [enrollmentId, student])).toEqual([
       [E2, named('زياد حسن')],
       [E1, named('يوسف علي')],
@@ -383,6 +435,7 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
       TEACHER,
       { tab: 'active', query: 'يوس' },
       CLOCK,
+      WINDOWS,
     );
     expect(asked.prefix).toEqual([{ candidates: [STUDENT, OTHER_STUDENT], typed: 'يوس' }]);
     expect(answer.items.map(({ enrollmentId }) => enrollmentId).sort()).toEqual([E1, E3]);
@@ -401,6 +454,7 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
       TEACHER,
       { tab: 'ended', query: 'زي', cursor: E4 },
       CLOCK,
+      WINDOWS,
     );
     expect(asked.prefix).toEqual([{ candidates: [STUDENT, OTHER_STUDENT], typed: 'زي' }]);
     expect(asked.ended).toEqual([
@@ -414,7 +468,14 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
 
   it('answers an empty ended tab, reading no page, when no student’s name matches', async () => {
     const { store, asked } = storeOf({ endedStudents: [STUDENT], matches: [] });
-    const answer = await teacherStudentsOf(tx, store, TEACHER, { tab: 'ended', query: 'س' }, CLOCK);
+    const answer = await teacherStudentsOf(
+      tx,
+      store,
+      TEACHER,
+      { tab: 'ended', query: 'س' },
+      CLOCK,
+      WINDOWS,
+    );
     expect(answer).toEqual({ items: [] });
     expect(asked.ended).toEqual([]);
   });
@@ -425,7 +486,7 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
       sessions: { [E1]: [session(1, '2026-11-17T12:00:00Z')] },
       names: NAMES,
     });
-    const answer = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    const answer = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(asked.listed).toEqual([{ enrollmentId: E1, party: { teacherUserId: TEACHER } }]);
     expect(answer.student).toEqual(named('يوسف علي'));
     expect(answer.sessions).toHaveLength(1);
@@ -439,21 +500,21 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
       listed: row(E2, { studentUserId: OTHER_STUDENT }),
       names: { [STUDENT]: 'يوسف علي' },
     });
-    const active = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK);
+    const active = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS);
     expect(
       Object.fromEntries(active.items.map(({ enrollmentId, student }) => [enrollmentId, student])),
     ).toEqual({ [E1]: named('يوسف علي'), [E2]: DELETED });
-    const ended = await teacherStudentsOf(tx, store, TEACHER, { tab: 'ended' }, CLOCK);
+    const ended = await teacherStudentsOf(tx, store, TEACHER, { tab: 'ended' }, CLOCK, WINDOWS);
     expect(ended.items.map(({ student }) => student)).toEqual([DELETED]);
-    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW);
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS);
     expect(detail.student).toEqual(DELETED);
   });
 
   it('answers NOT_FOUND for an enrollment that is not the teacher’s', async () => {
     const { store } = storeOf({ listed: null });
-    await expect(teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW)).rejects.toEqual(
-      new DomainError('NOT_FOUND'),
-    );
+    await expect(
+      teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS),
+    ).rejects.toEqual(new DomainError('NOT_FOUND'));
   });
 });
 
@@ -469,7 +530,7 @@ describe('«اليوم» (FR-391, FR-393)', () => {
       day,
       names: { [STUDENT]: 'يوسف علي', [OTHER_STUDENT]: 'زياد حسن' },
     });
-    const answer = await teacherTodayOf(tx, store, TEACHER, lateEvening);
+    const answer = await teacherTodayOf(tx, store, TEACHER, lateEvening, WINDOWS);
     expect(asked.day).toEqual([
       { teacherUserId: TEACHER, from: '2026-11-08T22:00:00.000Z', to: '2026-11-09T22:00:00.000Z' },
     ]);
@@ -498,13 +559,25 @@ describe('«اليوم» (FR-391, FR-393)', () => {
       active: [row(E1, { studentUserId: OTHER_STUDENT })],
       day: [{ enrollmentId: E1, ...session(3, '2026-11-09T07:00:00Z') }],
     });
-    const answer = await teacherTodayOf(tx, store, TEACHER, new Date('2026-11-09T06:00:00Z'));
+    const answer = await teacherTodayOf(
+      tx,
+      store,
+      TEACHER,
+      new Date('2026-11-09T06:00:00Z'),
+      WINDOWS,
+    );
     expect(answer.sessions.map(({ student }) => student)).toEqual([DELETED]);
   });
 
   it('reads the day in another zone the teacher lives by', async () => {
     const { store, asked } = storeOf({ timezone: 'America/New_York' });
-    const answer = await teacherTodayOf(tx, store, TEACHER, new Date('2026-11-09T03:00:00Z'));
+    const answer = await teacherTodayOf(
+      tx,
+      store,
+      TEACHER,
+      new Date('2026-11-09T03:00:00Z'),
+      WINDOWS,
+    );
     expect(answer.localDate).toBe('2026-11-08');
     expect(asked.day[0]).toMatchObject({ from: '2026-11-08T05:00:00.000Z' });
   });
@@ -526,10 +599,19 @@ describe('pendingCancellation (004:T021)', () => {
       names: { [TEACHER]: 'أحمد سالم' },
       pending: [NEXT.id],
     });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(item?.next).toEqual({ ...LISTED, pendingCancellation: true });
     expect(item?.last?.pendingCancellation).toBe(false);
-    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(detail.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([
       false,
       true,
@@ -556,14 +638,15 @@ describe('pendingCancellation (004:T021)', () => {
       names: { [STUDENT]: 'يوسف علي' },
       pending: [NEXT.id],
     });
-    const [item] = (await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK)).items;
+    const [item] = (await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS))
+      .items;
     expect(item?.next?.pendingCancellation).toBe(true);
-    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(detail.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([
       true,
       false,
     ]);
-    const today = await teacherTodayOf(tx, store, TEACHER, NOW);
+    const today = await teacherTodayOf(tx, store, TEACHER, NOW, WINDOWS);
     expect(today.sessions.map(({ pendingCancellation }) => pendingCancellation)).toEqual([true]);
   });
 
@@ -573,7 +656,14 @@ describe('pendingCancellation (004:T021)', () => {
       sessions: { [E1]: [NEXT, LATER] },
       names: { [TEACHER]: 'أحمد سالم' },
     });
-    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(detail.sessions.every(({ pendingCancellation }) => !pendingCancellation)).toBe(true);
   });
 });
@@ -590,11 +680,20 @@ describe('disputed (004:T026)', () => {
       sessions: { [E1]: [DISPUTED, NEXT] },
       names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
     });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(item?.next).toEqual(LISTED);
-    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(detail.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
-    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(taught.sessions.map(({ disputed }) => disputed)).toEqual([true, false]);
   });
 });
@@ -668,17 +767,26 @@ describe('remedyStatus (004:T028)', () => {
       names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
       remedies: { [OWED.id]: 'awaiting_choice' },
     });
-    const [item] = (await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK)).items;
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
     expect(item?.last?.remedyStatus).toBe('awaiting_choice');
     expect(item?.next).toEqual(LISTED);
-    const detail = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW);
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
     expect(detail.sessions.map(({ remedyStatus }) => remedyStatus)).toEqual([
       'awaiting_choice',
       undefined,
     ]);
-    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(taught.sessions[0]?.remedyStatus).toBe('awaiting_choice');
-    const today = await teacherTodayOf(tx, store, TEACHER, NOW);
+    const today = await teacherTodayOf(tx, store, TEACHER, NOW, WINDOWS);
     expect(today.sessions[0]?.remedyStatus).toBe('awaiting_choice');
   });
 });
@@ -687,11 +795,308 @@ describe('complaintOpen (004:T060, FR-452)', () => {
   it('answers the enrollment’s detail complaintOpen while its complaint is open, read through moderation’s entry', async () => {
     const open = storeOf({ listed: row(E1), names: { [TEACHER]: 'أحمد سالم' }, complaints: [E1] });
     expect(
-      (await studentEnrollmentOf(tx, open.store, STUDENT, { enrollmentId: E1 }, NOW)).complaintOpen,
+      (await studentEnrollmentOf(tx, open.store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS))
+        .complaintOpen,
     ).toBe(true);
     const none = storeOf({ listed: row(E1), names: { [TEACHER]: 'أحمد سالم' }, complaints: [E2] });
     expect(
-      (await studentEnrollmentOf(tx, none.store, STUDENT, { enrollmentId: E1 }, NOW)).complaintOpen,
+      (await studentEnrollmentOf(tx, none.store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS))
+        .complaintOpen,
     ).toBe(false);
+  });
+});
+
+// 004:T074 (FR-506; DEC-69, Q11 (a); the note under T074, Q-O1 (a), Q-R7 (a), N3, N4): an enrollment
+// paused by a teacher's suspension (`confirmed`, its `teacher_suspended` case open), or closed by a
+// ban or a revocation while its slot is held (the one closing rule's `student_banned` or
+// `teacher_ended` closing, its case open, `slot_released_at` NULL, the read's instant before
+// `restorableUntil`), is answered `paused: true` with no session: no `next`, no `last`, the detail's
+// `sessions` empty, the three counts kept, the tab and the status unchanged. Every other enrollment
+// is `paused: false`. The cases are read through moderation's `compensationCasesAmong` once per read;
+// «اليوم» leaves a paused enrollment's sessions out.
+describe('paused (004:T074, FR-506)', () => {
+  /** A case opened five days before NOW: its ban window (14 days) still running. */
+  const OPENED = new Date('2026-11-05T12:00:00Z');
+  /** A case opened 20 days before NOW: its window over. */
+  const LONG_AGO = new Date('2026-10-21T12:00:00Z');
+  const caseOf = (
+    caseId: string,
+    reason: string,
+    status: EnrollmentCase['status'] = 'open',
+    createdAt = OPENED,
+  ): EnrollmentCase => ({ caseId, reason, status, createdAt });
+  const C1 = '0199d0a0-0000-7000-8000-0000000000f1';
+  const C2 = '0199d0a0-0000-7000-8000-0000000000f2';
+  const C3 = '0199d0a0-0000-7000-8000-0000000000f3';
+  const C4 = '0199d0a0-0000-7000-8000-0000000000f4';
+  const DONE = session(1, '2026-11-03T12:00:00Z', 'done');
+  const CANCELLED = session(2, '2026-11-17T12:00:00Z', 'cancelled_by_admin');
+  const LATER = session(3, '2026-11-24T12:00:00Z', 'cancelled_by_admin');
+  const SESSIONS = [DONE, CANCELLED, LATER];
+  // Sessions still scheduled, so a paused item's missing next and last are the rule's, not the data's.
+  const AHEAD = [DONE, session(2, '2026-11-17T12:00:00Z'), session(3, '2026-11-24T12:00:00Z')];
+  const banned = (id: string, values: Partial<ListedEnrollmentRow> = {}) =>
+    row(id, { status: 'cancelled', cancellationReason: 'admin', ...values });
+
+  it('answers a confirmed enrollment with an open teacher_suspended case paused, no next or last, its counts kept; another not paused; the cases read once', async () => {
+    const { store, asked } = storeOf({
+      active: [row(E1), row(E2)],
+      sessions: { [E1]: AHEAD, [E2]: [session(1, '2026-11-17T12:00:00Z')] },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'teacher_suspended')] },
+    });
+    const { items } = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
+    const byId = new Map(items.map((item) => [item.enrollmentId, item]));
+    const paused = byId.get(E1);
+    expect(paused).toMatchObject({ status: 'confirmed', paused: true, completed: 1 });
+    expect(paused).not.toHaveProperty('next');
+    expect(paused).not.toHaveProperty('last');
+    expect(paused?.upcoming).toBe(2);
+    expect(paused?.remaining).toBe(3);
+    expect(byId.get(E2)).toMatchObject({ paused: false, next: { sequenceNumber: 1 } });
+    expect(asked.cases).toEqual([[E1, E2]]);
+  });
+
+  it('answers a closed teacher_suspended case, or another open case, not paused', async () => {
+    const { store } = storeOf({
+      active: [row(E1), row(E2)],
+      sessions: { [E1]: SESSIONS, [E2]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: {
+        [E1]: [caseOf(C1, 'teacher_suspended', 'resolved')],
+        [E2]: [caseOf(C2, 'student_suspended')],
+      },
+    });
+    const { items } = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
+    expect(items.map(({ paused }) => paused)).toEqual([false, false]);
+    expect(items.every((item) => item.last !== undefined)).toBe(true);
+  });
+
+  it('on the ended tab: a ban’s held closing paused; its window over, its slot released or an absence’s held closing not paused', async () => {
+    const { store, asked } = storeOf({
+      ended: [
+        banned(E4),
+        banned(E3, { slotReleasedAt: new Date('2026-11-06T12:00:00Z') }),
+        banned(E2),
+        row(E1, { status: 'terminated_no_show' }),
+      ],
+      sessions: { [E1]: SESSIONS, [E2]: SESSIONS, [E3]: SESSIONS, [E4]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: {
+        [E4]: [caseOf(C4, 'student_banned')],
+        [E3]: [caseOf(C3, 'student_banned')],
+        [E2]: [caseOf(C2, 'student_banned', 'open', LONG_AGO)],
+        [E1]: [caseOf(C1, 'absence_termination')],
+      },
+    });
+    const { items } = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'ended' },
+      { now: NOW, pageSize: 4 },
+      WINDOWS,
+    );
+    expect(items.map(({ enrollmentId, status, paused }) => [enrollmentId, status, paused])).toEqual(
+      [
+        [E4, 'cancelled', true],
+        [E3, 'cancelled', false],
+        [E2, 'cancelled', false],
+        [E1, 'terminated_no_show', false],
+      ],
+    );
+    expect(items[0]).not.toHaveProperty('last');
+    expect(items[1]).toHaveProperty('last');
+    expect(asked.cases).toEqual([[E4, E2]]);
+  });
+
+  it('answers a ban’s closing whose case was closed not paused', async () => {
+    const { store } = storeOf({
+      ended: [banned(E1)],
+      sessions: { [E1]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'student_banned', 'resolved')] },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item).toMatchObject({ paused: false, last: { sequenceNumber: 3 } });
+  });
+
+  it('answers a fault’s held closing (cancelled admin, student_fault_confirmed open) not paused: only a ban’s or a revocation’s', async () => {
+    const { store } = storeOf({
+      ended: [banned(E1)],
+      sessions: { [E1]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'student_fault_confirmed')] },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item).toMatchObject({ paused: false, last: { sequenceNumber: 3 } });
+  });
+
+  it('reads the window of the closing’s kind: a ban’s held closing paused until the case’s opening plus ban_restore_window_days, then not', async () => {
+    const settingsAsked: string[] = [];
+    const windows: WindowDays = async (setting) => {
+      settingsAsked.push(setting);
+      return 3;
+    };
+    const { store } = storeOf({
+      ended: [banned(E1)],
+      sessions: { [E1]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'student_banned')] },
+    });
+    // Opened 5 days before NOW: a 3 days' window over, a 14 days' still running.
+    const [over] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, windows)
+    ).items;
+    expect(over?.paused).toBe(false);
+    expect(settingsAsked).toEqual(['ban_restore_window_days']);
+    const [held] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS)
+    ).items;
+    expect(held?.paused).toBe(true);
+  });
+
+  it('after a lift: the enrollment confirmed again, its ban case dismissed, not paused', async () => {
+    const { store } = storeOf({
+      active: [row(E1)],
+      sessions: { [E1]: [...SESSIONS, session(4, '2026-12-01T12:00:00Z')] },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'student_banned', 'dismissed')] },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item).toMatchObject({ paused: false, next: { sequenceNumber: 4 } });
+  });
+
+  it('answers the student’s detail of a paused enrollment with no session, its complaint still read', async () => {
+    const { store } = storeOf({
+      listed: banned(E1),
+      sessions: { [E1]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      complaints: [E1],
+      cases: { [E1]: [caseOf(C1, 'student_banned')] },
+    });
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
+    expect(detail).toMatchObject({ paused: true, sessions: [], complaintOpen: true, completed: 1 });
+    expect(detail).not.toHaveProperty('next');
+  });
+
+  it('answers the teacher a student’s ban held paused in the ended tab and the detail, and a teacher’s ban or revocation (teacher_ended) the same way', async () => {
+    const { store, asked } = storeOf({
+      ended: [
+        banned(E2),
+        row(E1, { status: 'cancelled', cancellationReason: 'teacher_suspended' }),
+      ],
+      listed: banned(E2),
+      sessions: { [E1]: SESSIONS, [E2]: AHEAD },
+      names: { [STUDENT]: 'يوسف علي' },
+      cases: {
+        [E2]: [caseOf(C2, 'student_banned')],
+        [E1]: [caseOf(C1, 'teacher_ended')],
+      },
+    });
+    const ended = await teacherStudentsOf(
+      tx,
+      store,
+      TEACHER,
+      { tab: 'ended' },
+      { now: NOW, pageSize: 4 },
+      WINDOWS,
+    );
+    expect(ended.items.map(({ enrollmentId, paused }) => [enrollmentId, paused])).toEqual([
+      [E2, true],
+      [E1, true],
+    ]);
+    expect(ended.items.every((item) => item.last === undefined)).toBe(true);
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS);
+    expect(detail).toMatchObject({ paused: true, sessions: [], upcoming: 2 });
+    expect(asked.cases).toEqual([[E2, E1], [E2]]);
+  });
+
+  it('answers the teacher’s active tab with a paused enrollment paused, and every other not', async () => {
+    const { store } = storeOf({
+      active: [row(E1), row(E2, { studentUserId: OTHER_STUDENT })],
+      sessions: { [E1]: SESSIONS, [E2]: SESSIONS },
+      names: { [STUDENT]: 'يوسف علي', [OTHER_STUDENT]: 'زياد حسن' },
+      cases: { [E1]: [caseOf(C1, 'teacher_suspended')] },
+    });
+    const { items } = await teacherStudentsOf(
+      tx,
+      store,
+      TEACHER,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
+    expect(
+      Object.fromEntries(items.map(({ enrollmentId, paused }) => [enrollmentId, paused])),
+    ).toEqual({ [E1]: true, [E2]: false });
+  });
+
+  it('leaves a paused enrollment’s sessions out of «اليوم», reading the cases once', async () => {
+    const day: DaySession[] = [
+      { enrollmentId: E1, ...session(3, '2026-11-09T07:00:00Z', 'cancelled_by_admin') },
+      { enrollmentId: E2, ...session(1, '2026-11-09T09:00:00Z') },
+    ];
+    const { store, asked } = storeOf({
+      active: [row(E1), row(E2, { studentUserId: OTHER_STUDENT })],
+      day,
+      names: { [STUDENT]: 'يوسف علي', [OTHER_STUDENT]: 'زياد حسن' },
+      cases: { [E1]: [caseOf(C1, 'teacher_suspended')] },
+    });
+    const answer = await teacherTodayOf(
+      tx,
+      store,
+      TEACHER,
+      new Date('2026-11-09T06:00:00Z'),
+      WINDOWS,
+    );
+    expect(answer.sessions.map(({ enrollmentId }) => enrollmentId)).toEqual([E2]);
+    expect(asked.cases).toEqual([[E1, E2]]);
+  });
+
+  it('reads no case when no enrollment of the read could be paused (awaiting payment, completed)', async () => {
+    const { store, asked } = storeOf({
+      active: [row(E1, { status: 'pending_payment' })],
+      ended: [row(E2, { status: 'completed' })],
+      names: { [TEACHER]: 'أحمد سالم' },
+    });
+    const active = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
+    const ended = await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS);
+    expect([...active.items, ...ended.items].map(({ paused }) => paused)).toEqual([false, false]);
+    expect(asked.cases).toEqual([]);
   });
 });
