@@ -90,6 +90,12 @@ ended tab. *(B42c, T082; FR-513, SRS FR-CANCEL-10, DEC-68:)* an enrollment an ad
 declared none, so the default would have counted it and failed open (R-SEC-6; the owner's decision of 2026-11-06 on the
 fourth analysis, C2; kernel.md, "Rate limits").
 
+## `account.delete` — B42c's amendment of `002-identity`'s row (T080; FR-511, SRS FR-AUTH-14 as amended, DEC-67)
+
+| Procedure | Change | Notes |
+|---|---|---|
+| `account.delete` (and the web deletion pages, `002-identity`'s `public-pages.md`) | Refused `CONFLICT` with `details.cause` `active_enrollments`, naming no count, while the account has an ongoing enrollment as student or teacher: `pending_payment` or `confirmed` (a paused one included), or closed by its own ban or revocation while its slot is held (DEC-69); the innocent counterparty of a ban-closed enrollment is never refused | Checked in the deletion's transaction after the account's lock, through booking's count bound in `main.ts`; nothing written, the key's claim rolled back with the transaction, so a retry after the enrollments end deletes; one info line `{ userId, reason: 'active_enrollments' }`. The web confirm step renders a refusal page after the right code (the code then spent), with the same words and the support address. The phone draws the refusal with the support link in place of the confirm button. `002-identity`'s `app-surface.md:69` and `public-pages.md` stay as history (Q-R17 (a)). Rate limit unchanged (`rate_limit_authentication`) |
+
 ## The public configuration
 
 No addition: the video server's address comes with each token (`serverUrl`), so it is never built into the app.
