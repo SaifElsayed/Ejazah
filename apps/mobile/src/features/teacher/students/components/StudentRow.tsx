@@ -2,7 +2,8 @@
 // sees no photo, FR-395), the name, then on the active tab the next session, «الجلسة n من N» with
 // its date and time in its own zone and, when the teacher is elsewhere now, in the teacher's (D5);
 // on the ended tab what was done of the package. The status over the track at the end. The row opens
-// the enrollment.
+// the enrollment. 004:T083 (FR-514): one an administrator ended says so under its line, followed by
+// its reason (`EndedByAdmin`).
 import type { TeacherStudentItem } from '@ijazah/contracts';
 import { View } from 'react-native';
 
@@ -13,6 +14,7 @@ import { useFormatters } from '../../../../lib/formatters';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useInViewerZone } from '../zone';
 import { EnrollmentBadges } from './Badges';
+import { EndedByAdmin } from './EndedByAdmin';
 
 /** The avatar's letter: the name's first (the board's «ن» for «نور سمير»). */
 export function initialOf(name: string): string {
@@ -63,6 +65,7 @@ export function StudentRow({
               {elsewhere}
             </Text>
           )}
+          <EndedByAdmin endedByAdmin={item.endedByAdmin} />
         </View>
       }
       trailing={
