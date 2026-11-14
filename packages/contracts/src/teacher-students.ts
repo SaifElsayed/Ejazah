@@ -43,6 +43,11 @@ export const teacherStudentItem = z.object({
   ...enrollmentProgress.shape,
   /** 004:T074 (FR-506): paused to the teacher, as `studentEnrollmentItem`'s `paused` reads. */
   paused: z.boolean(),
+  /**
+   * 004:T082 (FR-513): an administrator's direct end, as `studentEnrollmentItem`'s `endedByAdmin`
+   * reads: the reason both parties are shown, never the internal note. Additive (R-API-9).
+   */
+  endedByAdmin: z.object({ reason: z.string() }).optional(),
 });
 
 export const teacherStudentsListOutput = z.object({

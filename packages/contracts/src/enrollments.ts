@@ -131,6 +131,11 @@ export const studentEnrollmentItem = z.object({
    * empty), its three counts kept; its status and its tab are unchanged. Additive (R-API-9).
    */
   paused: z.boolean(),
+  /**
+   * 004:T082 (FR-513; SRS FR-CANCEL-10, DEC-68): present on an enrollment an administrator ended
+   * directly, with the reason both parties are shown; never the internal note. Additive (R-API-9).
+   */
+  endedByAdmin: z.object({ reason: z.string() }).optional(),
 });
 
 /** The tab's items, active ones by next session; a cursor while more ended ones remain. */

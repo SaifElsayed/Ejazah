@@ -204,6 +204,24 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
     expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
   });
 
+  // 004:T082 (FR-513; SRS FR-CANCEL-10, DEC-68): an enrollment an administrator ended directly
+  // carries the reason both parties are shown, never the internal note. Additive (R-API-9).
+  it('carries endedByAdmin with the party reason only, optional (004:T082, FR-513)', () => {
+    const { next: _next, last: _last, ...bare } = item;
+    const ended = { ...bare, status: 'cancelled', endedByAdmin: { reason: 'انتهى الاشتراك' } };
+    expect(studentEnrollmentItem.parse(ended)).toEqual(ended);
+    expect(
+      studentEnrollmentItem.parse({
+        ...ended,
+        endedByAdmin: { reason: 'انتهى الاشتراك', internalNote: 'ملاحظة داخلية' },
+      }),
+    ).toEqual(ended);
+    expect(studentEnrollmentItem.parse(item)).toEqual(item);
+    expect(studentEnrollmentItem.safeParse({ ...ended, endedByAdmin: {} }).success).toBe(false);
+    const detail = { ...ended, sessions: [], complaintOpen: false };
+    expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
+  });
+
   it('refuses a negative count', () => {
     for (const field of ['upcoming', 'completed', 'remaining'] as const) {
       expect(studentEnrollmentItem.safeParse({ ...item, [field]: -1 }).success, field).toBe(false);
