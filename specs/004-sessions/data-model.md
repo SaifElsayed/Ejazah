@@ -267,6 +267,17 @@ the app has never launched.
 | `enrollments` (booking) | `enrollments_held_closing_idx` | partial index on `(id)` | `WHERE confirmed_at IS NOT NULL AND (status = 'terminated_no_show' OR (status = 'cancelled' AND cancellation_reason IN ('admin', 'teacher_suspended')))`: every held closing, none a deletion or a gender correction ended (DEC-69). The hourly sweep (T074) reads it a page at a time in id order. It keeps every held closing after its hold too, so the sweep's read grows with history: accepted, re-checked at Phase 6's load pass (Q11 (a)) |
 | `disputes` (moderation) | rule 49 | check | Widened: `covered_by_case_id IS NULL OR (kind = 'compensation_case' AND reason IN ('student_suspended', 'teacher_suspended') AND status <> 'open' AND covered_by_case_id <> id)`: the link also on a closed `teacher_suspended` case (T071) |
 
+### 2.14 An administrator's direct end of an enrollment (T082; SRS FR-CANCEL-10, DEC-68)
+
+The owner's decisions of 2026-11-12 (SRS DEC-68; spec FR-513) and of 2026-11-14 on B42c's conflict check (the note
+under T082 in tasks.md, Q-R14 (a)). One additive migration, `20261114120000_enrollment_admin_end_reason` (§6). The
+column is NULL on every existing row, which the check admits.
+
+| Table | Column or object | Type | Notes |
+|---|---|---|---|
+| `enrollments` (booking) | `admin_end_reason` | text, nullable | The reason both parties are shown of an administrator's direct end (`sessions.endEnrollment`, T082), written with the end and cleared by the restore; the internal note is in the audit entry only, never here. Check (rule 51, `enrollments_admin_end_reason_check`): `admin_end_reason IS NULL OR (char_length(admin_end_reason) BETWEEN 1 AND 500 AND status = 'cancelled' AND cancellation_reason = 'admin')` |
+| `disputes` (moderation) | `reason` `admin_ended` | a value of the closed list in code (no column, no check; the ERD's changelog row 25) | The case a direct end opens, holding the sessions owed and every open remedy; restorable at any time while open (DEC-69), its slot held through `enrollment_restore_window_days` unless released |
+
 ## 3. State machines
 
 ### Session (`sessions.status`)
@@ -367,6 +378,7 @@ clock_timestamp()` in the same update (FR-422). A student's complaint (`absence_
 | `rate_limit_kept_data_erase_now` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `teachers.keptData.eraseNow`'s own limit, the administrator as subject (FR-509; T077) |
 | `rate_limit_kept_document_link` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | `teachers.keptData.documentLink`'s own limit, the administrator as subject (FR-509; T077) |
 | `rate_limit_admin_user_delete` | `{ limit: 10, window_seconds: 60 }` (the same; T069) | an administrator's deletion of an account at its owner's request, its own limit, the administrator as subject (SRS FR-ADMIN-22; T081) |
+| `rate_limit_enrollment_end` | `{ limit: 10, window_seconds: 60 }` (the owner's decisions of 2026-11-12, SRS DEC-68, §3.14; T082) | `sessions.endEnrollment`'s own limit, the administrator as subject (FR-513; SRS FR-CANCEL-10) |
 
 Removed: `teacher_no_show_threshold` (2), deleted by the migration and no longer seeded (the same decision; R-322).
 
@@ -455,6 +467,11 @@ first form in `sessions-pass.spec.ts`), and the step's in `tests/seed/restore-wi
 `ijazah` (Q1 (a): at the next device run, on the owner's word, after B39's migration): count the rows each new check
 would refuse (0 on 2026-11-13: no user banned or deleted, no document erased, no duplicate payout hash, no dispute).
 
+B42c adds a fourth, additive migration, `20261114120000_enrollment_admin_end_reason` (T082): §2.14's column and rule 51.
+Every existing row is NULL in it, which the check admits. Probes in `tests/db-integrity/enrollment-admin-end-reason.spec.ts`,
+red before the migration and under a mutant without the check. Applied to `ijazah_integrity` on 2026-11-14; before it runs
+on `ijazah`, count the rows rule 51 would refuse (0 expected: a new nullable column).
+
 ## 7. ERD amendments (v1.14 → v1.15)
 
 Applied to `docs/ERD.md` on 2026-11-05 with the owner's decisions (plan.md, "Decisions recorded"), ahead of the first
@@ -522,3 +539,5 @@ batch's migration, which builds them.
     `teacher_profiles` columns; `verification_documents.kept_at` and rule 34 widened; rule 27 widened;
     `enrollment_event_kind`'s `slot_released` and `slot_hold_ended`; `enrollments_held_closing_idx` (§14); rule 49
     widened; the seven settings rows and `enrollment_restore_window_days` at 14 (§2.13, §4, §6).
+22. On the owner's decisions of 2026-11-12 (SRS DEC-68) and of 2026-11-14 on B42c's conflict check (T082; the ERD's
+    changelog row 45): `enrollments.admin_end_reason` and rule 51; `rate_limit_enrollment_end` (§2.14, §4, §6).

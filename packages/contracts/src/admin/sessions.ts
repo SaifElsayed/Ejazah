@@ -165,6 +165,12 @@ export const monitorEnrollment = sessionsMonitorListItem.omit({ nextSession: tru
   slotHeldUntil: z.iso.datetime().optional(),
   /** The instant an administrator released the held slot (`enrollments.releaseSlot`), if one did. */
   slotReleasedAt: z.iso.datetime().optional(),
+  /**
+   * T082 of specs/004-sessions (the note under T082, Q-O1 (a)): `enrollment_restore_window_days`,
+   * the days a direct end's closing holds its slot (DEC-69), for the panel's `{days}` in the end's
+   * dialog. Additive (R-API-9).
+   */
+  enrollmentRestoreWindowDays: z.int().positive(),
 });
 
 /** A time a remedy names, in its own zone (FR-494). */
@@ -241,6 +247,8 @@ export const compensationCaseReason = z.enum([
   'admin_opened_for_teacher',
   // T071 (FR-504): a teacher's suspension pauses the enrollment; added, additively (R-API-9).
   'teacher_suspended',
+  // T082 (FR-513; SRS FR-CANCEL-10): an administrator's direct end; added, additively (R-API-9).
+  'admin_ended',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
@@ -525,3 +533,49 @@ export const sessionsRestoreOutput = z.object({
 export type RestoreRefusalCause = z.infer<typeof restoreRefusalCause>;
 export type SessionsRestoreInput = z.infer<typeof sessionsRestoreInput>;
 export type SessionsRestoreOutput = z.infer<typeof sessionsRestoreOutput>;
+
+// T082 of specs/004-sessions (FR-513; SRS FR-CANCEL-10, DEC-68; admin-surface.md,
+// `sessions.endEnrollment`): an administrator ends a `confirmed` enrollment directly, with a reason
+// both parties are shown and an optional internal note kept in the audit entry only, the slot held
+// through the restore window or released at once, keyed under the administrator's idempotency key.
+// Refused `CONFLICT` with `details.cause` `enrollment_not_confirmed` or `complaint_open` (the open
+// complaint named beside it, `{ path: 'caseId', code: <id> }`, Q-R6 (a)), `NOT_FOUND` and
+// `RATE_LIMITED`, each writing nothing. No amount crosses (R-MONEY-6); restorable at any time
+// through `sessions.restore` (DEC-69).
+
+/** What the end does with the enrollment's weekly slot: held through the window, or released. */
+export const enrollmentEndSlot = z.enum(['hold', 'release']);
+
+/**
+ * Why an end was refused, as `CONFLICT`'s `details.cause`: the enrollment not `confirmed`, or a
+ * complaint of the teacher's absence open on it (decided through `cases.decideComplaint`, Q5 (a)),
+ * which the refusal names beside its cause (`{ path: 'caseId', code: <the complaint's id> }`).
+ */
+export const enrollmentEndRefusalCause = z.enum(['enrollment_not_confirmed', 'complaint_open']);
+
+/** The reason both parties are shown, and the internal note: each at most 500 characters. */
+export const ENROLLMENT_END_TEXT_MAX_LENGTH = 500;
+
+export const sessionsEndEnrollmentInput = z.object({
+  enrollmentId: z.uuid(),
+  /** Shown to both parties (`endedByAdmin.reason`); 1 to 500 characters, not blank. */
+  partyReason: z.string().trim().min(1).max(ENROLLMENT_END_TEXT_MAX_LENGTH),
+  /** Kept in the audit entry only, never shown to a party nor logged. */
+  internalNote: z.string().trim().max(ENROLLMENT_END_TEXT_MAX_LENGTH).optional(),
+  slot: enrollmentEndSlot.default('hold'),
+  idempotencyKey,
+});
+
+export const sessionsEndEnrollmentOutput = z.object({
+  enrollmentId: z.uuid(),
+  /** The `admin_ended` case opened (or joined), holding the sessions owed and every open remedy. */
+  caseId: z.uuid(),
+  slot: enrollmentEndSlot,
+  /** The remaining `scheduled` sessions the end cancelled (`cancelled_by_admin`). */
+  cancelledSessions: z.int().nonnegative(),
+});
+
+export type EnrollmentEndSlot = z.infer<typeof enrollmentEndSlot>;
+export type EnrollmentEndRefusalCause = z.infer<typeof enrollmentEndRefusalCause>;
+export type SessionsEndEnrollmentInput = z.infer<typeof sessionsEndEnrollmentInput>;
+export type SessionsEndEnrollmentOutput = z.infer<typeof sessionsEndEnrollmentOutput>;

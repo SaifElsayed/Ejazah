@@ -19,6 +19,7 @@ import type { EnrollmentCase } from '../moderation/index.js';
 import {
   createHeldSlotRelease,
   type HeldEnrollment,
+  releaseHeldSlot,
   type SlotReleaseStore,
 } from './slot-release.service.js';
 
@@ -129,6 +130,7 @@ function world(options: WorldOptions = {}) {
     lines,
     keyed,
     settingsRead,
+    store,
     releaseSlot: () =>
       release.releaseSlot(tx, ADMIN, {
         enrollmentId: ENROLLMENT,
@@ -313,5 +315,68 @@ describe('each refusal writes nothing (CONFLICT slot_not_held, NOT_FOUND)', () =
         msg: 'A held slot release was refused',
       },
     ]);
+  });
+});
+
+// T082 of specs/004-sessions (the note under T082, Q-R15 (a)): the release's core, exported for a
+// direct end's `slot: 'release'` in the same transaction, with no key, audit, limit or log of its
+// own, as `restoreClosed` is to `sessions.restore`: the same locks (all held by its caller), the same
+// checks and the same writes; a refusal answered as its reason, nothing written.
+describe('releaseHeldSlot, the release’s core (T082, Q-R15 (a))', () => {
+  const windowDays = async (setting: string) => SETTINGS[setting] ?? 0;
+
+  it('releases a direct end’s admin_ended closing at the database’s instant, keying and logging nothing', async () => {
+    const one = world({ cases: [endCase('admin_ended', NOW)] });
+    expect(
+      await releaseHeldSlot(tx, ENROLLMENT, {
+        windowDays,
+        clock: async () => NOW,
+        store: one.store,
+      }),
+    ).toEqual({ released: true, at: NOW, caseId: CASE, kind: 'admin_ended' });
+    expect(one.calls).toEqual([
+      `read ${ENROLLMENT}`,
+      `key ${TEACHER}`,
+      `slot ${SLOT}`,
+      `enrollment ${ENROLLMENT}`,
+      `read ${ENROLLMENT}`,
+      `cases ${ENROLLMENT}`,
+    ]);
+    expect(one.writes).toEqual([
+      ['markReleased', ENROLLMENT, NOW],
+      ['recordEvents', [{ kind: 'slot_released', enrollmentId: ENROLLMENT, occurredAt: NOW }]],
+    ]);
+    expect(one.keyed).toEqual([]);
+    expect(one.lines).toEqual([]);
+  });
+
+  it.each<[string, WorldOptions, string]>([
+    ['an enrollment that does not exist', { seen: null }, 'not_found'],
+    [
+      'an enrollment not closed',
+      { seen: enrollment({ status: 'confirmed', cancellationReason: null }) },
+      'not_closed',
+    ],
+    [
+      'a closing whose case is closed',
+      { cases: [endCase('admin_ended', NOW, 'dismissed')] },
+      'not_restorable',
+    ],
+    [
+      'a slot already released',
+      { seen: enrollment({ slotReleasedAt: NOW }), cases: [endCase('admin_ended', NOW)] },
+      'already_released',
+    ],
+  ])('answers %s as its reason, writing nothing', async (_name, options, reason) => {
+    const one = world(options);
+    expect(
+      await releaseHeldSlot(tx, ENROLLMENT, {
+        windowDays,
+        clock: async () => NOW,
+        store: one.store,
+      }),
+    ).toEqual({ released: false, reason });
+    expect(one.writes).toEqual([]);
+    expect(one.lines).toEqual([]);
   });
 });

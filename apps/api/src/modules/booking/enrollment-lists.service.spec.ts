@@ -66,6 +66,8 @@ function row(id: string, overrides: Partial<ListedEnrollmentRow> = {}): ListedEn
     // 004:T074: the closing's reason and its release, read for `paused`.
     cancellationReason: null,
     slotReleasedAt: null,
+    // 004:T082: a direct end's reason, answered as `endedByAdmin`.
+    adminEndReason: null,
     ...overrides,
   };
 }
@@ -1098,5 +1100,69 @@ describe('paused (004:T074, FR-506)', () => {
     const ended = await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS);
     expect([...active.items, ...ended.items].map(({ paused }) => paused)).toEqual([false, false]);
     expect(asked.cases).toEqual([]);
+  });
+});
+
+// 004:T082 (FR-513; SRS FR-CANCEL-10, DEC-68): an enrollment an administrator ended directly answers
+// `endedByAdmin` with the reason both parties are shown (`admin_end_reason`), to the student and the
+// teacher, in the lists and the details; never paused (N4); any other enrollment answers none.
+describe('endedByAdmin (004:T082, FR-513)', () => {
+  const REASON = 'تعذر استمرار الاشتراك';
+  const ended = (id: string) =>
+    row(id, { status: 'cancelled', cancellationReason: 'admin', adminEndReason: REASON });
+  const C1 = '0199d0a0-0000-7000-8000-0000000000f1';
+  const directEnd: EnrollmentCase = {
+    caseId: C1,
+    reason: 'admin_ended',
+    status: 'open',
+    createdAt: new Date('2026-11-09T12:00:00Z'),
+  };
+
+  it('answers the student the reason in the ended tab and the detail, not paused; another enrollment none', async () => {
+    const { store } = storeOf({
+      ended: [ended(E2), row(E1, { status: 'cancelled', cancellationReason: 'admin' })],
+      listed: ended(E2),
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E2]: [directEnd] },
+    });
+    const { items } = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'ended' },
+      CLOCK,
+      WINDOWS,
+    );
+    expect(items[0]).toMatchObject({ endedByAdmin: { reason: REASON }, paused: false });
+    expect(items[1]).not.toHaveProperty('endedByAdmin');
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E2 },
+      NOW,
+      WINDOWS,
+    );
+    expect(detail.endedByAdmin).toEqual({ reason: REASON });
+  });
+
+  it('answers the teacher the same reason in the ended tab and the detail', async () => {
+    const { store } = storeOf({
+      ended: [ended(E2)],
+      listed: ended(E2),
+      names: { [STUDENT]: 'يوسف علي' },
+      cases: { [E2]: [directEnd] },
+    });
+    const { items } = await teacherStudentsOf(
+      tx,
+      store,
+      TEACHER,
+      { tab: 'ended' },
+      { now: NOW, pageSize: 4 },
+      WINDOWS,
+    );
+    expect(items[0]).toMatchObject({ endedByAdmin: { reason: REASON }, paused: false });
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS);
+    expect(detail.endedByAdmin).toEqual({ reason: REASON });
   });
 });

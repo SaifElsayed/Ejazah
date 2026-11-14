@@ -42,6 +42,11 @@
 // retired (DEC-69): `restorableUntil` stays, `@deprecated`, answered with the hold's end; it may
 // have passed while the restore is still admitted, and a release leaves it.
 //
+// T082 (FR-513; the note under T082, Q-O1 (a), N8): `enrollmentRestoreWindowDays`, the
+// `enrollment_restore_window_days` setting read through `windowDaysOf(settings)`, the days a direct
+// end's closing holds its slot, for the panel's `{days}`; and `closingCaseReason` admits a direct
+// end's `admin_ended` closing through the one closing rule, so the panel offers its restore.
+//
 // THE LOG (the owner's rule). An enrollment no read returns is refused NOT_FOUND through this file's
 // one `refusal`, one info line of ids and a reason code; a read writes no line.
 import type {
@@ -86,6 +91,7 @@ import { REPEATED_ABSENCE_FLAG_SETTING, repeatedAbsenceFlagCount } from './repea
 import {
   type Closing,
   closingOf,
+  ENROLLMENT_RESTORE_WINDOW_SETTING,
   latestEndCaseOf,
   restorableUntil,
   windowDaysOf,
@@ -503,13 +509,16 @@ export function createSessionsMonitor({
       ]);
       // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).
       if (slot === null) throw new Error('sessions monitor: an enrollment without its slot');
-      const [disputed, now, windowHours] = await Promise.all([
+      const windowDays = windowDaysOf(settings);
+      const [disputed, now, windowHours, enrollmentRestoreWindowDays] = await Promise.all([
         store.sessionsEverDisputedAmong(
           tx,
           sessions.map(({ id }) => id),
         ),
         clock(tx),
         settings.read(DISPUTE_WINDOW_SETTING, disputeWindowHours),
+        // T082 (Q-O1 (a)): the panel's `{days}` for a direct end's hold.
+        windowDays(ENROLLMENT_RESTORE_WINDOW_SETTING),
       ]);
       const { summary } = (await summariesOf(tx, [item], () => sessions, now))(item);
       // T073 (Q4 (a)): one closing, read as step 1 reads it, for both fields. The window is read only
@@ -523,7 +532,7 @@ export function createSessionsMonitor({
           : await restorableUntil(
               hold.closing.closingCase.createdAt,
               hold.closing.kind,
-              windowDaysOf(settings),
+              windowDays,
             );
       const heldUntil = hold.releasedAt === undefined ? until : undefined;
       const proposalTime = { startTimeLocal: slot.startTimeLocal, timezone: terms.timezone };
@@ -536,6 +545,7 @@ export function createSessionsMonitor({
           ...(hold.releasedAt === undefined
             ? {}
             : { slotReleasedAt: hold.releasedAt.toISOString() }),
+          enrollmentRestoreWindowDays,
         },
         sessions: sessions.map(
           (session): MonitorSession => ({

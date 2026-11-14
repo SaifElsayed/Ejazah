@@ -629,3 +629,14 @@ export {
   createBanLift,
 } from './ban-lift.service.js';
 export { isRefusedAfterWrite } from './restore.service.js';
+/**
+ * T082 of specs/004-sessions (FR-513; SRS FR-CANCEL-10, DEC-68; the note under T082, N7, Q-R15 (a)):
+ * an administrator's direct end of an enrollment, keyed on the call's transaction, composed into the
+ * administrator surface's `enrollmentEnd`; booking's half through the `EnrollmentSide` port.
+ */
+export {
+  createEnrollmentEnd,
+  type EnrollmentEnd,
+  type EnrollmentEndStore,
+  enrollmentEndStore,
+} from './enrollment-end.service.js';

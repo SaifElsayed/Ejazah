@@ -386,6 +386,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`). `admin` also for a student's ban (at once) and for a suspended student's fault confirmed (SRS FR-ADMIN-5 as amended on 2026-11-05, the owner's decision of 2026-11-05). Returned to NULL by an administrator's restore, as by ADR 0010 D5's late confirmation (SRS FR-CANCEL-8, ADR 0023) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | slot_released_at | timestamptz, nullable | An administrator's release of the weekly slot of a closed enrollment before its hold ended, with a reason, audited, one `enrollment_events` row `slot_released`; the slot is free from then on (SRS FR-CANCEL-9, DEC-66, DEC-69; T069, T070; changelog row 37). The held closings carry a partial index (§14) |
+| admin_end_reason | text, nullable | The reason both parties are shown of an Administrator's direct end of the enrollment (`sessions.endEnrollment`), written with the end and cleared by the restore; the internal note is kept in the audit entry only, never here (SRS FR-CANCEL-10, DEC-68; T082; changelog row 45). Only on an enrollment `cancelled` with the reason `admin`, 1 to 500 characters (§15 rule 51) |
 | purchased_at | timestamptz | |
 | quoted_first_session_local_date | date | The first session's local date the checkout showed, computed at Pay; compared with session 1 to say the first session moved (FR-368, FR-386; `specs/003-booking/` R-209, v1.12). A local calendar date in the zone the row already holds, `snapshot_slot_timezone` |
 
@@ -977,6 +978,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 50. `users`: `banned_at IS NULL OR account_status = 'banned'` — check constraint `users_banned_at_check`: a ban's instant only on a banned account, so a lift that forgets to clear it is refused (SRS FR-ADMIN-5 as amended on 2026-11-12, DEC-66; T069, changelog row 36).
 
+51. `enrollments`: `admin_end_reason IS NULL OR (char_length(admin_end_reason) BETWEEN 1 AND 500 AND status = 'cancelled' AND cancellation_reason = 'admin')` — check constraint `enrollments_admin_end_reason_check`: the direct end's reason only on an enrollment an Administrator cancelled, so a restore that forgets to clear it is refused (SRS FR-CANCEL-10, DEC-68; T082, changelog row 45).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1291,3 +1294,9 @@ Amended on 2026-11-13 by T069 of `specs/004-sessions/tasks.md` (B42a), on the ow
 | 44 | §12 `settings`: `enrollment_restore_window_days` 14 (was 7; the migration moves a row only while it holds 7, Q6 (b)), `ban_restore_window_days` (14), and `rate_limit_ban_lift`, `rate_limit_slot_release`, `rate_limit_kept_data_erase_date`, `rate_limit_kept_data_erase_now`, `rate_limit_kept_document_link` and `rate_limit_admin_user_delete` (10 per 60 s each) (SRS §3.14 as amended) | the same, and the seed |
 
 Two tables are added: 44 tables.
+
+Amended on 2026-11-14 by T082 of `specs/004-sessions/tasks.md` (B42c), on the owner's decisions of 2026-11-12 (SRS DEC-68: an Administrator ends an Enrollment directly) and of 2026-11-14 on B42c's conflict check (the note under T082, Q-R14 (a)); `specs/004-sessions/data-model.md` §2.14. No table is added:
+
+| # | Change | Migration |
+|---|---|---|
+| 45 | §5 `enrollments.admin_end_reason` (text, nullable) and §15 rule 51, check `enrollments_admin_end_reason_check`: the reason both parties are shown of a direct end, 1 to 500 characters, only on a `cancelled` `admin` enrollment; and §12 `settings`: `rate_limit_enrollment_end` (10 per 60 s) (SRS FR-CANCEL-10, §3.14) | `20261114120000_enrollment_admin_end_reason` (B42c), and the seed |

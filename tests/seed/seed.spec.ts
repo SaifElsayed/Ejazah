@@ -138,6 +138,8 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_kept_data_erase_now: { limit: 10, window_seconds: 60 },
   rate_limit_kept_document_link: { limit: 10, window_seconds: 60 },
   rate_limit_admin_user_delete: { limit: 10, window_seconds: 60 },
+  // 004:T082 (SRS DEC-68, §3.14): an administrator's direct end of an enrollment.
+  rate_limit_enrollment_end: { limit: 10, window_seconds: 60 },
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -321,6 +323,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '80', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '81', admins: '1' }]);
   });
 });

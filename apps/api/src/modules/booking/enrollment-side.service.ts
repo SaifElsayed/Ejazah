@@ -13,6 +13,7 @@
 //                    → confirmed `restored` (`cancellation_reason` and `slot_released_at`
 //                    cleared, `confirmed_at` untouched and required, R-322)
 //   cancel 'admin'   confirmed → cancelled `admin`                      `cancelled` with `admin`
+//                    (T082: with a direct end's reason, `admin_end_reason` written too)
 // Each is one conditional update from its source states: the row the caller read under its lock is
 // still in one of them, or the move changes nothing, writes no row and answers `false` for the
 // caller to refuse and log. A row's `occurred_at` is this side's clock at the move.
@@ -56,6 +57,7 @@ import {
   type EnrollmentSide,
   type EnrollmentTerms,
   type HeldTime,
+  type WindowDays,
   windowDaysOf,
 } from '../sessions/index.js';
 import { type EnrollmentOutcome, recordEnrollmentEvents } from './enrollment-events.repository.js';
@@ -80,6 +82,7 @@ import {
   type SlotOccupancy,
   slotReleaseBufferWeeks,
 } from './slot-occupancy.service.js';
+import { type HeldRelease, releaseHeldSlot } from './slot-release.service.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 export const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -110,6 +113,11 @@ export interface EnrollmentSideStore {
     tx: Transaction,
     scope: { readonly studentUserIds: readonly string[]; readonly slotIds: readonly string[] },
   ): Promise<ActiveHold[]>;
+  /**
+   * T082 (Q-R15 (a)): the release's core (`slot-release.service.ts`), its window read through the
+   * reads handed in.
+   */
+  releaseHeld(tx: Transaction, enrollmentId: string, windowDays: WindowDays): Promise<HeldRelease>;
   /** Every slot of the teacher, active or not (catalog's entry); none for a student. */
   teacherSlotsOf(tx: Transaction, teacherUserId: string): Promise<SlotRow[]>;
   /** A slot by its id, active or not (catalog's entry). */
@@ -128,6 +136,7 @@ export const enrollmentSideStore: EnrollmentSideStore = {
   activeHoldsAmong,
   teacherSlotsOf,
   readSlot,
+  releaseHeld: (tx, enrollmentId, windowDays) => releaseHeldSlot(tx, enrollmentId, { windowDays }),
 };
 
 /** `userIds` once each, in id order. */
@@ -213,13 +222,22 @@ export function createEnrollmentSide({
         occurredAt,
       })),
     restore,
-    cancel: (tx, id, reason) =>
-      move(tx, id, { status: 'cancelled', cancellationReason: reason }, (occurredAt) => ({
-        kind: 'cancelled',
-        enrollmentId: id,
-        cancellationReason: reason,
-        occurredAt,
-      })),
+    cancel: (tx, id, reason, partyReason) =>
+      move(
+        tx,
+        id,
+        {
+          status: 'cancelled',
+          cancellationReason: reason,
+          ...(partyReason === undefined ? {} : { adminEndReason: partyReason }),
+        },
+        (occurredAt) => ({
+          kind: 'cancelled',
+          enrollmentId: id,
+          cancellationReason: reason,
+          occurredAt,
+        }),
+      ),
     slotWeekTaken: async (tx, slotId, localDate: LocalDate, enrollmentId) => {
       const occupancy = await store.occupancyOf(tx, [slotId], reads, enrollmentId);
       return !isFreeOn(occupancy.get(slotId), localDate);
@@ -261,6 +279,11 @@ export function createEnrollmentSide({
       return [...times.values()].sort(
         (one, other) => one.startsAt.getTime() - other.startsAt.getTime(),
       );
+    },
+    // T082 (Q-R15 (a)): the release's core for a direct end, its instant or null when not held.
+    releaseHeldSlot: async (tx, id) => {
+      const outcome = await store.releaseHeld(tx, id, reads.windowDays);
+      return outcome.released ? outcome.at : null;
     },
     eventsOf: (tx, enrollmentId) => store.enrollmentEventsOf(tx, enrollmentId),
     enrollmentPage: async (tx, filter, cursor, batchSize) => {

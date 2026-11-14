@@ -78,12 +78,16 @@ const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
 
 const positiveWhole = z.int().positive();
 
-/** The reasons of the case an enrollment's end opens (R-312, as T004 lists them). */
+/**
+ * The reasons of the case an enrollment's end opens (R-312, as T004 lists them); and (T082, Q2 (a))
+ * `admin_ended`, an administrator's direct end.
+ */
 export const END_REASONS: ReadonlySet<string> = new Set([
   'absence_termination',
   'teacher_ended',
   'student_banned',
   'student_fault_confirmed',
+  'admin_ended',
 ]);
 
 /** What the queue reads, each through its owner on the caller's transaction; faked in a spec. */

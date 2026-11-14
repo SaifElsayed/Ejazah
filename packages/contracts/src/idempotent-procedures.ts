@@ -45,6 +45,9 @@ export const idempotentProcedures = [
   'students.liftBan',
   'teachers.liftBan',
   'teachers.liftRevocation',
+  // T082 of specs/004-sessions (admin-surface.md, `sessions.endEnrollment`): keyed on the kind's
+  // transaction (runOn), as `sessions.restore` is.
+  'sessions.endEnrollment',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

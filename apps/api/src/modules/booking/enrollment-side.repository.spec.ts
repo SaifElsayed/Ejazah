@@ -89,6 +89,28 @@ describe('moveEnrollment (T008)', () => {
     ]);
   });
 
+  it('writes a direct end’s reason with the move when the target carries one (T082)', async () => {
+    const { client, calls } = recorded({ updateMany: 1 });
+    await moveEnrollment(client, id(1), {
+      status: 'cancelled',
+      cancellationReason: 'admin',
+      adminEndReason: 'تعذر استمرار الاشتراك',
+    });
+    expect(calls).toEqual([
+      {
+        method: 'enrollment.updateMany',
+        args: {
+          where: { id: id(1), status: 'confirmed' },
+          data: {
+            status: 'cancelled',
+            cancellationReason: 'admin',
+            adminEndReason: 'تعذر استمرار الاشتراك',
+          },
+        },
+      },
+    ]);
+  });
+
   it('answers false when the row was not confirmed', async () => {
     const { client } = recorded({ updateMany: 0 });
     expect(
@@ -122,7 +144,13 @@ describe('restoreEnrollment (T008, FR-455, R-322, ADR 0023)', () => {
               { status: 'cancelled', cancellationReason: { in: ['admin', 'teacher_suspended'] } },
             ],
           },
-          data: { status: 'confirmed', cancellationReason: null, slotReleasedAt: null },
+          data: {
+            status: 'confirmed',
+            cancellationReason: null,
+            slotReleasedAt: null,
+            // T082: a direct end's reason cleared with the reason (rule 51).
+            adminEndReason: null,
+          },
         },
       },
     ]);

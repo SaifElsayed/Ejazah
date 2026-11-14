@@ -162,9 +162,19 @@ export interface EnrollmentSide {
   restore(tx: Transaction, id: string): Promise<boolean>;
   /**
    * `confirmed` → `cancelled` with the reason `admin`, with one `cancelled` row naming it: a
-   * suspended student's fault confirmed (T036, R-313).
+   * suspended student's fault confirmed (T036, R-313); and (T082, Q-R15 (a)) an administrator's
+   * direct end, `partyReason` written as `admin_end_reason`, the reason both parties are shown (rule
+   * 51). A restore clears it.
    */
-  cancel(tx: Transaction, id: string, reason: 'admin'): Promise<boolean>;
+  cancel(tx: Transaction, id: string, reason: 'admin', partyReason?: string): Promise<boolean>;
+  /**
+   * T082 (the note under T082, Q-R15 (a)): booking's release core (`slot-release.service.ts`'
+   * `releaseHeldSlot`), with no key, audit, limit or log: T070's locks (`lockKey('teacher-slots')`,
+   * the slot, the enrollment; a direct end holds them all already), the enrollment read again, and
+   * for a closing the one closing rule holds `slot_released_at` and one `slot_released` row at the
+   * database's instant, which it answers; null when the slot is not held, nothing written.
+   */
+  releaseHeldSlot(tx: Transaction, id: string): Promise<Date | null>;
   /**
    * Whether the slot is taken on `localDate` (a date in the slot's zone) for `enrollmentId`'s
    * make-up or restore (T028, T061): held by any active hold (`released_at` NULL, even past
