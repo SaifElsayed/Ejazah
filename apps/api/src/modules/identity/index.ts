@@ -20,8 +20,15 @@ import {
 } from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
 import type { AccountConsequences } from './consequences.js';
-import { DeletionService, type FileErasure, type FileHold } from './deletion.service.js';
-import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
+import {
+  type DeletionLog,
+  DeletionService,
+  type FileErasure,
+  type FileHold,
+  // T080 of specs/004-sessions: the count's port, bound by `main.ts`.
+  type OngoingEnrollments,
+} from './deletion.service.js';
+import { OneTimeCodes } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {
@@ -101,7 +108,8 @@ export interface IdentityServices {
   /** `account.delete` and the web deletion pages (T082, T083). */
   readonly deletion: Pick<
     DeletionService,
-    'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion'
+    // T081 of specs/004-sessions: `users.delete`, handed to the admin services by `main.ts`.
+    'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion' | 'deleteByAdministrator'
   >;
 }
 
@@ -125,12 +133,18 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly email: EmailPort;
   /** Photo links (T049) and, after a deletion's commit, the photo's removal (T082). */
   readonly storage: Pick<StoragePort, 'temporaryLink' | 'remove'>;
-  /** Where a mail that could not be handed over is reported, never awaited by the request. */
-  readonly log: WarningLog;
+  /**
+   * Where a mail that could not be handed over is reported, never awaited by the request; and
+   * (T080 of specs/004-sessions) a refused deletion's one info line.
+   */
+  readonly log: DeletionLog;
   /** Payout setup registers the recipient through the port (T077). */
   readonly payment: Pick<PaymentPort, 'registerPayoutRecipient'>;
-  /** `teacher.payout.register` and `account.delete` are keyed (FR-106). */
-  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /**
+   * `teacher.payout.register` and `account.delete` are keyed (FR-106); T081's `users.delete` on
+   * the administrator kind's transaction (`runOn`).
+   */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run' | 'runOn'>;
   /** The one registry of an account's end, shared with the admin module (FR-142, B16). */
   readonly consequences: AccountConsequences;
   /** The other modules' files of a deleted person, removed after the commit (B16, decision 1). */
@@ -140,6 +154,12 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
    * booking's `heldFileOwnersAmong`, bound by `main.ts`; none held when absent.
    */
   readonly fileHold?: FileHold;
+  /**
+   * T080 of specs/004-sessions (FR-511; the note under T080, Q-R11 (a)): whether an account has an
+   * ongoing enrollment, on the deletion's transaction: booking's `createOngoingEnrollments`, bound
+   * by `main.ts` as `fileHold` is.
+   */
+  readonly ongoingEnrollments: OngoingEnrollments;
   /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
   readonly report?: (error: unknown) => void;
   /**
@@ -162,6 +182,7 @@ export function createIdentityServices({
   consequences,
   fileErasures,
   fileHold,
+  ongoingEnrollments,
   report,
   live,
   ...base
@@ -191,6 +212,7 @@ export function createIdentityServices({
       log,
       fileErasures,
       fileHold,
+      ongoingEnrollments,
       report,
       ...(live === undefined ? {} : { live }),
     }),
@@ -388,6 +410,16 @@ export function createDocumentReferences(database: Database): {
 
 /** A file the deletion leaves to the `erase-deleted-files` sweep, and the deletion's file erasure (B16). */
 export type { FileErasure, FileHold, HeldPhoto };
+/**
+ * T080 of specs/004-sessions (FR-511; the note under T080, Q-R11 (a)): the port booking's count is
+ * bound to in `main.ts`, and the deletion's log (a refusal's info line).
+ */
+export type { DeletionLog, OngoingEnrollments };
+/**
+ * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22): the administrator's deletion the admin
+ * module composes into `users.delete`, filled by `main.ts` with the identity services' `deletion`.
+ */
+export type AdministratorDeletion = Pick<DeletionService, 'deleteByAdministrator'>;
 
 /**
  * Deleted people's photo keys still held, for the `erase-deleted-files` sweep (B16, decision 1): a

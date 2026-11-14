@@ -20,7 +20,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
-import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
+import {
+  createEnrollmentSide,
+  createOngoingEnrollments,
+} from '../../apps/api/src/modules/booking/index.js';
 import { createBanLift } from '../../apps/api/src/modules/sessions/index.js';
 import {
   AccountConsequences,
@@ -134,7 +137,7 @@ beforeAll(async () => {
     },
     email: { deliver: async () => undefined },
     storage,
-    log: { warn: () => undefined },
+    log: { warn: () => undefined, info: () => undefined },
     payment: { registerPayoutRecipient: unreachable },
     idempotency: new IdempotencyService<Transaction>({
       store: new IdempotencyRepository(database),
@@ -143,6 +146,8 @@ beforeAll(async () => {
     consequences,
     fileErasures: [erasure],
     report: () => undefined,
+    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+    ongoingEnrollments: createOngoingEnrollments({ settings }),
   }).deletion;
 });
 

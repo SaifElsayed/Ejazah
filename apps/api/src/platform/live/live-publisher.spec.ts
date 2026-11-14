@@ -77,3 +77,61 @@ describe('the unbound bus (B40a, nit 8)', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+// T081 of specs/004-sessions (the note under T081, Q-O2 (a); tasks.md's Not-scheduled item (13)'s
+// `afterCommitDo`): a request's list also takes work, run once its work has committed, after its
+// events, each failure caught and reported; dropped with the events on a rollback; run once.
+describe('the work after the commit (T081)', () => {
+  it('runs each action once, after the events, when the list is flushed', () => {
+    const { bus, live } = request();
+    const order: string[] = [];
+    vi.spyOn(bus, 'publish').mockImplementation(() => void order.push('event'));
+    live.afterCommitDo(() => void order.push('first'));
+    live.afterCommit([USER], { type: 'account' });
+    live.afterCommitDo(() => void order.push('second'));
+
+    expect(order).toEqual([]);
+    live.flush();
+    live.flush();
+
+    expect(order).toEqual(['event', 'first', 'second']);
+  });
+
+  it('drops every action with the events on a rollback', () => {
+    const { live } = request();
+    const action = vi.fn();
+    live.afterCommitDo(action);
+    live.drop();
+    live.flush();
+
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('reports an action that throws and still runs the next one', () => {
+    const bus = new InProcessLiveBus();
+    const report = vi.fn();
+    const live = new RequestLive(bus, { warn: vi.fn() }, report);
+    const failure = new Error('the work failed');
+    const next = vi.fn();
+    live.afterCommitDo(() => {
+      throw failure;
+    });
+    live.afterCommitDo(next);
+
+    expect(() => live.flush()).not.toThrow();
+    expect(report).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('is reached through the transaction the list is bound to (publisherOn)', () => {
+    const { live } = request();
+    const tx = {};
+    const action = vi.fn();
+    const unbind = bindToTransaction(tx, live);
+    publisherOn(tx)?.afterCommitDo?.(action);
+    unbind();
+    live.flush();
+
+    expect(action).toHaveBeenCalledOnce();
+  });
+});

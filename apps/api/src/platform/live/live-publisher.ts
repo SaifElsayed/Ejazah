@@ -26,8 +26,18 @@
 // deletion binds its own transaction to its own list the same way (T066), so booking's subscriber
 // reaches the list of every account's end through the transaction. The binding is held weakly, by
 // the transaction object, and removed when the transaction ends.
+//
+// WORK AFTER THE COMMIT (T081 of specs/004-sessions; the note under T081, Q-O2 (a); tasks.md's
+// Not-scheduled item (13)'s `afterCommitDo`). A request's list also takes work: `afterCommitDo(action)`
+// queues a function the list runs when it is flushed, after its events, and forgets when it is
+// dropped, so the work runs only once the caller kind's transaction has committed, never after a
+// rollback, and never twice. Each action's failure is caught and reported (the error tracker), and
+// the next one still runs. A service handed only the administrator kind's transaction reaches it
+// through `publisherOn(tx)`: an administrator's deletion (`users.delete`) queues its own work after
+// the commit there. A spec's stand-in publisher may lack it, so it is optional on `LivePublisher`.
 import type { LiveEvent } from '@ijazah/contracts';
 
+import { reportError } from '../errors/reporting.js';
 import type { LiveBus, LiveMessage } from './live-bus.js';
 
 /** What a producer is handed: an event to send once the request's work has committed. */
@@ -37,6 +47,11 @@ export interface LivePublisher {
    * sign-in session's streams (a sign-out's `account`).
    */
   afterCommit(to: readonly string[], event: LiveEvent, scope?: { readonly session: string }): void;
+  /**
+   * T081: queues `action`, run once the request's work has committed, after its events; dropped on
+   * a rollback. The request's own list (`RequestLive`) has it; a spec's stand-in may not.
+   */
+  afterCommitDo?(action: () => void): void;
 }
 
 /** Where a publish that failed is told: the event's type, never its payload. */
@@ -57,11 +72,19 @@ export const unboundBus: LiveBus = {
 export class RequestLive implements LivePublisher {
   readonly #bus: Pick<LiveBus, 'publish'>;
   readonly #log: LivePublishLog;
+  readonly #report: (error: unknown) => void;
   #pending: LiveMessage[] = [];
+  /** T081: the work queued after the commit, run after the events. */
+  #actions: (() => void)[] = [];
 
-  constructor(bus: Pick<LiveBus, 'publish'>, log: LivePublishLog) {
+  constructor(
+    bus: Pick<LiveBus, 'publish'>,
+    log: LivePublishLog,
+    report: (error: unknown) => void = reportError,
+  ) {
     this.#bus = bus;
     this.#log = log;
+    this.#report = report;
   }
 
   afterCommit(to: readonly string[], event: LiveEvent, scope?: { readonly session: string }): void {
@@ -73,10 +96,20 @@ export class RequestLive implements LivePublisher {
     });
   }
 
-  /** Sends every event the request added, once its work has committed; the list is then empty. */
+  /** T081: queues `action` for the flush, after the events; a drop forgets it. */
+  afterCommitDo(action: () => void): void {
+    this.#actions.push(action);
+  }
+
+  /**
+   * Sends every event the request added, once its work has committed, then runs the work it queued
+   * (T081), each failure reported; the list is then empty.
+   */
   flush(): void {
     const pending = this.#pending;
+    const actions = this.#actions;
     this.#pending = [];
+    this.#actions = [];
     for (const message of pending) {
       try {
         this.#bus.publish(message);
@@ -91,11 +124,19 @@ export class RequestLive implements LivePublisher {
         );
       }
     }
+    for (const action of actions) {
+      try {
+        action();
+      } catch (error: unknown) {
+        this.#report(error);
+      }
+    }
   }
 
-  /** Forgets every event the request added: its work rolled back or threw. */
+  /** Forgets every event and every action the request added: its work rolled back or threw. */
   drop(): void {
     this.#pending = [];
+    this.#actions = [];
   }
 }
 

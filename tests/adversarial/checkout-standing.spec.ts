@@ -204,6 +204,8 @@ describe.each(directions)(
       const before = await statusOf(caller, enrollmentId);
       expect(before.summary.teacher.displayName).toBe(teacher.displayName);
 
+      // T081 of specs/004-sessions (Q-R12 (a)): an administrator's deletion at the owner's request,
+      // since T080 refuses the teacher's own over an enrollment awaiting payment.
       await surface.deleteAccount(teacher.id);
       // FR-141 erases the display name; the enrollment keeps the teacher's id and its snapshot, and
       // T041's subscriber cancels it while it awaits payment (R-219).

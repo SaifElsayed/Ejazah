@@ -749,7 +749,10 @@ export function adminProcedure<TIn, TInOut, TOutIn, TOutOut>({
       throw error;
     });
     // THE ADMINISTRATOR KIND'S AFTER-COMMIT POINT (T063; contracts/kernel.md, `LivePublisher`):
-    // `transactions.run` has committed, so the request's live events go out now, and only now.
+    // `transactions.run` has committed, so the request's live events go out now, and only now. T081
+    // of specs/004-sessions (the note under T081, Q-O2 (a)): the list also runs, after its events,
+    // the work a service queued on it through `publisherOn(tx)`'s `afterCommitDo` (an administrator's
+    // deletion's files, grant and mail); a rollback above dropped it with the events.
     ctx.live.flush();
     return result;
   });

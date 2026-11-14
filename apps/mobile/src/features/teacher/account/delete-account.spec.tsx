@@ -39,6 +39,9 @@ jest.mock('../../shared/auth/dev-sign-in', () => ({
   devSignInEnabled: () => false,
 }));
 
+const mockOpen = jest.fn<(url: string) => Promise<true>>();
+jest.mock('expo-linking', () => ({ openURL: (url: string) => mockOpen(url) }));
+
 let mockKey = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `deletion-key-${++mockKey}` }));
 
@@ -66,6 +69,12 @@ const said = (direction: 'rtl' | 'ltr', key: MessageKey) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key);
 const ar = (key: MessageKey) => translate('ar', key);
 
+/** T080: the line the screen drew before (`teacher.deleteAccount.honest.deletedDocuments`, removed). */
+const DELETED_DOCUMENTS = {
+  rtl: 'وثائق طلبك وإجازاتك المرفوعة ومرجع حساب الاستلام',
+  ltr: 'Your application’s documents, your uploaded ijazahs and your payout account’s reference',
+} as const;
+
 function withAccount(account: MeOutput = me) {
   const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queries.setQueryData(ME_QUERY_KEY, account);
@@ -85,6 +94,7 @@ beforeEach(async () => {
   await mockApi.sessions.store.write(tokens);
   mockNavigate.mockReset();
   mockIdentity.mockReset();
+  mockOpen.mockReset();
   mockKey = 0;
   mockApi.api.auth.providerNonce.mutate.mockResolvedValue({
     nonce: 'nonce-7',
@@ -99,16 +109,16 @@ describe('DeleteAccountTeacher', () => {
     await inBothDirections(withAccount(), (_rendered, direction) => {
       // The title and the danger button say the same words.
       expect(screen.getAllByText(said(direction, 'teacher.deleteAccount.title'))).toHaveLength(2);
-      expect(
-        screen.getByText(said(direction, 'teacher.deleteAccount.honest.warning')),
-      ).toBeTruthy();
+      // T080 of specs/004-sessions (Q-O3 (a′), rule d): one neutral banner, saying nothing of students.
+      expect(screen.getByText(said(direction, 'account.delete.honest.final'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'teacher.deleteAccount.deletedTitle'))).toBeTruthy();
       expect(
         screen.getByText(said(direction, 'account.delete.deletedItems.personal')),
       ).toBeTruthy();
-      expect(
-        screen.getByText(said(direction, 'teacher.deleteAccount.honest.deletedDocuments')),
-      ).toBeTruthy();
+      // T080 of specs/004-sessions (Q-F; an approved change): no «deleted documents» line for any
+      // teacher, since an approved teacher's documents are kept (T076).
+      expect(screen.queryByText(DELETED_DOCUMENTS[direction])).toBeNull();
+      expect(screen.queryByText(/وثائق طلبك|application’s documents/)).toBeNull();
       expect(screen.getByText(said(direction, 'teacher.deleteAccount.keptTitle'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.delete.honest.kept'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'teacher.deleteAccount.confirmHint'))).toBeTruthy();
@@ -176,6 +186,34 @@ describe('DeleteAccountTeacherSheet', () => {
     });
     expect(mockApi.sessions.current()).toBeNull();
   });
+
+  // T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): the teacher's refusal for an
+  // ongoing enrollment, with the support link in place of the confirm button.
+  it.each(['rtl', 'ltr'] as const)(
+    'says an ongoing enrollment’s refusal with the support link in place of the confirm button (%s)',
+    async (direction) => {
+      mockApi.api.account.delete.mutate.mockRejectedValueOnce(
+        apiError('CONFLICT', [{ path: 'cause', code: 'active_enrollments' }]),
+      );
+      await renderIn(direction, withAccount()());
+      await fireEvent.changeText(
+        screen.getByLabelText(said(direction, 'teacher.deleteAccount.confirmLabel')),
+        direction === 'rtl' ? 'حذف' : 'delete',
+      );
+      await fireEvent.press(submit(direction));
+      const confirm = said(direction, 'teacher.deleteAccount.sheet.confirmGoogle');
+      await fireEvent.press(await screen.findByRole('button', { name: confirm }));
+      expect(
+        await screen.findByText(said(direction, 'account.delete.refused.activeEnrollments')),
+      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: confirm })).toBeNull();
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'account.restricted.contactSupport') }),
+      );
+      await waitFor(() => expect(mockOpen).toHaveBeenCalledWith('mailto:support@ijazah.test'));
+      expect(getSession()).toEqual({ kind: 'signed-in', landing: 'teacher_home' });
+    },
+  );
 
   it('proves an email teacher by the password and says a wrong one in place', async () => {
     mockApi.api.account.delete.mutate.mockRejectedValueOnce(apiError('SIGN_IN_FAILED'));

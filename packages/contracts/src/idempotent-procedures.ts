@@ -52,6 +52,9 @@ export const idempotentProcedures = [
   // T082 of specs/004-sessions (admin-surface.md, `sessions.endEnrollment`): keyed on the kind's
   // transaction (runOn), as `sessions.restore` is.
   'sessions.endEnrollment',
+  // T081 of specs/004-sessions (admin-surface.md, `users.delete`): keyed on the kind's transaction
+  // (runOn), as `sessions.restore` is.
+  'users.delete',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

@@ -68,7 +68,12 @@ async function disputed(): Promise<{ disputeId: string; studentId: string; teach
   return { disputeId, studentId, teacherId };
 }
 
-/** The account deleted as the deletion leaves it: soft-deleted, its name erased. */
+/**
+ * The account deleted as the deletion leaves it: soft-deleted, its name erased. T081 of
+ * specs/004-sessions (Q-R12 (a)): a party of an ongoing enrollment is deleted only by an
+ * administrator at the owner's request (`users.delete`), since T080 refuses the person's own; the
+ * rows are written here as that deletion leaves the party's account.
+ */
 async function deleteAccount(userId: string): Promise<void> {
   await db.query(
     `UPDATE users SET deleted_at = now(), display_name = NULL, updated_at = now() WHERE id = $1`,

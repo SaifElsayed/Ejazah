@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
+import { publisherOn } from '../../platform/live/live-publisher.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import { adminContextsOver, SPEC_ADMIN, VERIFIED } from '../../surfaces/admin-surface.fixtures.js';
 import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
@@ -27,6 +28,12 @@ const callerFor = createAdminCallerFactory(
 const DOCUMENT = '0199d0a0-0000-7000-8000-0000000000d1';
 const REQUEST = '0199d0a0-0000-7000-8000-0000000000e1';
 const PERSON = '0199d0a0-0000-7000-8000-0000000000c1';
+/** T081 of specs/004-sessions: an administrator's deletion at the owner's request. */
+const DELETION = {
+  targetUserId: PERSON,
+  reason: 'طلب صاحب الحساب الحذف عبر الدعم',
+  idempotencyKey: 'users-delete-key-0001',
+};
 const NEXT_REQUEST = '0199d0a0-0000-7000-8000-0000000000e2';
 
 // T058 of specs/004-sessions: what the user directory's stand-in answers.
@@ -87,6 +94,8 @@ function surface() {
   const users: AdminSurfaceServices['users'] = {
     list: record('users.list', USERS_PAGE),
     get: record('users.get', USER_RECORD),
+    // T081 of specs/004-sessions: the administrator's deletion, its first run.
+    delete: record('users.delete', { replayed: false }),
   };
   const contexts = adminContextsOver({ documents, users });
   return {
@@ -108,6 +117,11 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
 
 type Caller = ReturnType<typeof callerFor>;
 
+/** T081 of specs/004-sessions: a deletion no case of the directory reaches. */
+const unusedDeletion = async (): Promise<never> => {
+  throw new Error('users.delete is not reached here');
+};
+
 const CALLS: Record<string, (caller: Caller) => Promise<unknown>> = {
   'documents.link': (caller) => caller.documents.link({ documentId: DOCUMENT }),
   'users.requireIdentity': (caller) =>
@@ -117,6 +131,8 @@ const CALLS: Record<string, (caller: Caller) => Promise<unknown>> = {
     caller.documents.requestAnother({ requestId: REQUEST, note: 'الوجه الخلفي غير واضح' }),
   'users.list': (caller) => caller.users.list({ name: 'مر' }),
   'users.get': (caller) => caller.users.get({ targetUserId: PERSON }),
+  // T081 of specs/004-sessions.
+  'users.delete': (caller) => caller.users.delete(DELETION),
 };
 
 describe('the administrator kind', () => {
@@ -228,7 +244,8 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
   it('users.get answers no date of birth, even one a service leaked, and its audit entry carries none (PDPL)', async () => {
     const leaked = { ...USER_RECORD, dateOfBirth: '2012-03-04' } as UsersGetOutput;
     const contexts = adminContextsOver({
-      users: { list: async () => USERS_PAGE, get: async () => leaked },
+      // T081 (rule d): the deletion, never reached here.
+      users: { list: async () => USERS_PAGE, get: async () => leaked, delete: unusedDeletion },
     });
     const answer = await callerFor(contexts.contextFor(VERIFIED)).users.get({
       targetUserId: PERSON,
@@ -247,6 +264,8 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
         get: async () => {
           throw new DomainError('NOT_FOUND');
         },
+        // T081 (rule d): the deletion, never reached here.
+        delete: unusedDeletion,
       },
     });
     expect(
@@ -302,5 +321,118 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
     ]);
     expect(opened).toBe(0);
     expect(written).toEqual([]);
+  });
+});
+
+// T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; the notes under T081, Q-O2 (a), Q-R13 (a)):
+// `users.delete` beside `users.get`, an administrator kind keyed by its service on the kind's
+// transaction, with its own limit, `rate_limit_admin_user_delete`, checked before the transaction;
+// audited `user.deleted_by_admin` on the person with the reason on its first run only. The work the
+// deletion queues on the transaction's list (`publisherOn(tx)`'s `afterCommitDo`) runs once the
+// kind's transaction has committed, and never after a rollback. What the deletion does is
+// `deletion.service.spec.ts`' and the db-integrity specs'.
+describe('the administrator’s deletion (T081 of specs/004-sessions)', () => {
+  function deletingWith(remove: AdminSurfaceServices['users']['delete']) {
+    return adminContextsOver({
+      users: { list: async () => USERS_PAGE, get: async () => USER_RECORD, delete: remove },
+    });
+  }
+
+  it('users.delete hands the reader and the input to the deletion and audits user.deleted_by_admin on the person, with the reason', async () => {
+    const { as, written, reached } = surface();
+    expect(await CALLS['users.delete']!(as(VERIFIED))).toBeUndefined();
+    expect(reached).toEqual([['users.delete', SPEC_ADMIN, DELETION]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'user.deleted_by_admin',
+        targetType: 'user',
+        targetId: PERSON,
+        reason: DELETION.reason,
+      },
+    ]);
+  });
+
+  it('a replay of the key records no second entry', async () => {
+    const contexts = deletingWith(async () => ({ replayed: true }));
+    await callerFor(contexts.contextFor(VERIFIED)).users.delete(DELETION);
+    expect(contexts.written).toEqual([]);
+  });
+
+  it('answers the deletion’s NOT_FOUND, writing nothing', async () => {
+    const contexts = deletingWith(async () => {
+      throw new DomainError('NOT_FOUND');
+    });
+    expect(await codeOf(callerFor(contexts.contextFor(VERIFIED)).users.delete(DELETION))).toBe(
+      'NOT_FOUND',
+    );
+    expect(contexts.written).toEqual([]);
+  });
+
+  it('runs the work the deletion queued on the transaction once the call has committed, and never after a rollback', async () => {
+    const done: string[] = [];
+    const queueing = deletingWith(async (tx) => {
+      publisherOn(tx)?.afterCommitDo?.(() => void done.push('after the commit'));
+      done.push('in the transaction');
+      return { replayed: false };
+    });
+    await callerFor(queueing.contextFor(VERIFIED)).users.delete(DELETION);
+    expect(done).toEqual(['in the transaction', 'after the commit']);
+
+    const rolledBack: string[] = [];
+    const refusing = deletingWith(async (tx) => {
+      publisherOn(tx)?.afterCommitDo?.(() => void rolledBack.push('after the commit'));
+      throw new DomainError('NOT_FOUND');
+    });
+    await codeOf(callerFor(refusing.contextFor(VERIFIED)).users.delete(DELETION));
+    expect(rolledBack).toEqual([]);
+  });
+
+  it.each([
+    ['a blank reason', { ...DELETION, reason: '  ' }],
+    ['no idempotency key', { targetUserId: PERSON, reason: DELETION.reason }],
+    ['a person who is no id', { ...DELETION, targetUserId: 'x' }],
+  ])('refuses %s as VALIDATION_FAILED, reaching nothing', async (_case, input) => {
+    const { as, written, reached } = surface();
+    expect(
+      await codeOf(as(VERIFIED).users.delete(input as Parameters<Caller['users']['delete']>[0])),
+    ).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('over rate_limit_admin_user_delete is refused RATE_LIMITED, opening no transaction and writing nothing', async () => {
+    const counted: unknown[][] = [];
+    let opened = 0;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: { write: async () => undefined },
+      },
+      services: unusedAdminServices,
+      rateLimiter: {
+        check: async (key: string, subject: unknown, procedure: string) => {
+          counted.push([key, subject, procedure]);
+          throw new DomainError('RATE_LIMITED');
+        },
+      } as unknown as RateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).users.delete(DELETION))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      [
+        'rate_limit_admin_user_delete',
+        { kind: 'administrator', adminId: SPEC_ADMIN },
+        'users.delete',
+      ],
+    ]);
+    expect(opened).toBe(0);
   });
 });

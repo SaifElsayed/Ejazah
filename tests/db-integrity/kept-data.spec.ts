@@ -27,6 +27,7 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { createOngoingEnrollments } from '../../apps/api/src/modules/booking/index.js';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -161,6 +162,8 @@ beforeAll(async () => {
     consequences,
     fileErasures: [erasure],
     report: () => undefined,
+    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+    ongoingEnrollments: createOngoingEnrollments({ settings }),
   });
 });
 

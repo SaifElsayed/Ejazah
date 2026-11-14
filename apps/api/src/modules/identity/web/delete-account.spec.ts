@@ -95,7 +95,8 @@ const procedures: string[] = [];
 const refusedSubjects = new Set<string>();
 const addressLimiter = {
   check: vi.fn(async (key: RateLimitKey, subject: RateLimitSubject, procedure: string) => {
-    const text = subject.kind === 'identifier' ? subject.value : subject.kind === 'budget' ? '*' : '';
+    const text =
+      subject.kind === 'identifier' ? subject.value : subject.kind === 'budget' ? '*' : '';
     counted.push([key, text]);
     procedures.push(procedure);
     if (refusedSubjects.has(text)) throw new DomainError('RATE_LIMITED');
@@ -376,6 +377,58 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     expect(page).toContain('<html lang="en" dir="ltr">');
     expect(page).toContain(en.done.title);
     expect(page).toContain(en.honest.doneLede);
+  });
+
+  // T080 of specs/004-sessions (FR-511; the note under T080, N5): the deletion refused for an
+  // ongoing enrollment, after the right code was spent, renders the refusal: the line's words and
+  // the support address, no count, neither the done page nor the code step.
+  const activeEnrollments = () =>
+    new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'active_enrollments' }],
+    });
+
+  it('renders the refusal of an ongoing enrollment: the words and the support address, no count (T080)', async () => {
+    deletion.confirmWebDeletion.mockRejectedValueOnce(activeEnrollments());
+    const response = await submit(DELETE_ACCOUNT_CONFIRM_PATH, {
+      email: 'someone@example.com',
+      code: digits('123456'),
+    });
+    expect(response.status).toBe(409);
+    expectPublicHeaders(response);
+    const page = await response.text();
+    expect(page).toContain('<html lang="ar" dir="rtl">');
+    expect(page).toContain(ar.refused.activeEnrollments);
+    expect(page).toContain(`href="mailto:${SUPPORT}"`);
+    expect(page).toContain(`<span class="ltr">${SUPPORT}</span>`);
+    expect(page).not.toContain(ar.done.title);
+    expect(page).not.toContain(ar.code.title);
+    expect(page).not.toContain('otp__cell');
+    expect(page).not.toContain('someone@example.com');
+  });
+
+  it('renders the refusal in English for ?lang=en (T080)', async () => {
+    deletion.confirmWebDeletion.mockRejectedValueOnce(activeEnrollments());
+    const response = await submit(`${DELETE_ACCOUNT_CONFIRM_PATH}?lang=en`, {
+      email: 'a@example.com',
+      code: '123456',
+    });
+    expect(response.status).toBe(409);
+    const page = await response.text();
+    expect(page).toContain('<html lang="en" dir="ltr">');
+    expect(page).toContain(en.refused.activeEnrollments);
+    expect(page).toContain(`href="mailto:${SUPPORT}"`);
+  });
+
+  it('answers the error page for any other conflict, never the refusal (T080)', async () => {
+    deletion.confirmWebDeletion.mockRejectedValueOnce(new DomainError('CONFLICT'));
+    const response = await submit(DELETE_ACCOUNT_CONFIRM_PATH, {
+      email: 'a@example.com',
+      code: '123456',
+    });
+    const page = await response.text();
+    expect(response.status).not.toBe(200);
+    expect(page).not.toContain(ar.refused.activeEnrollments);
+    expect(page).not.toContain(ar.done.title);
   });
 
   it('takes no GET: the confirm step is a form POST only', async () => {
