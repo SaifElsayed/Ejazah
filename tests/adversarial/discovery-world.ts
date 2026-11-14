@@ -43,8 +43,10 @@
 // already serves, so `checkout.hold`, `checkout.retry` and `checkout.pay` are attacked in the same world
 // (`checkout.attacks.ts`).
 // T043: a refusal is read back for "nothing written" (`checkoutRows`), a teacher's standing is
-// changed in place as the world seeds every state (`setAccountStatus`), and a teacher deletes the
-// account through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`;
+// changed in place as the world seeds every state (`setAccountStatus`), and a teacher's account is
+// deleted through identity's real deletion (`deleteAccount`, FR-141), for `checkout-standing.spec.ts`
+// (since T080 of specs/004-sessions refuses the person's own deletion over an ongoing enrollment, an
+// administrator's at the owner's request, T081, as the administrator kind runs it);
 // an administrator suspends a teacher through identity's real `StandingService` (`suspend`), and both
 // reach booking's T041 subscriber on the one `AccountConsequences`, bound as `main.ts` binds it.
 // T049: the surface's `booking` services carry the lists, so `enrollments.list` and
@@ -75,6 +77,7 @@ import {
   createBookingServices,
   createDiscoveryServices,
   createEnrollmentSide,
+  createOngoingEnrollments,
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import {
@@ -118,6 +121,11 @@ import { transactionsOver } from '../../apps/api/src/platform/db/transaction.rep
 import { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository.js';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
+import {
+  bindToTransaction,
+  RequestLive,
+  unboundBus,
+} from '../../apps/api/src/platform/live/live-publisher.js';
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
 import {
   createPaymentPort,
@@ -550,7 +558,10 @@ export interface DiscoverySurface {
   checkoutRows(gender: Gender, slotIds: readonly string[]): Promise<CheckoutRows>;
   /** T043: the teacher's account standing changed in place, as the world seeds every state. */
   setAccountStatus(teacherId: string, status: AccountStatus): Promise<void>;
-  /** T043: the teacher deletes the account through identity's real deletion (FR-141). */
+  /**
+   * T043: the teacher's account deleted through identity's real deletion (FR-141); since T080 of
+   * specs/004-sessions, an administrator's at the owner's request (T081, Q-R12 (a)).
+   */
   deleteAccount(teacherId: string): Promise<void>;
   /** T043: an administrator suspends the teacher through identity's real `StandingService` (FR-165). */
   suspend(teacherId: string): Promise<void>;
@@ -685,7 +696,10 @@ async function build(): Promise<Built> {
   // The one registry of an account's end, booking's T041 subscriber bound as `main.ts` binds it.
   const consequences = new AccountConsequences();
   consequences.subscribe(
-    terminationSubscriber({ orders: orderStandingsOf, log: { info: () => undefined, warn: () => undefined } }),
+    terminationSubscriber({
+      orders: orderStandingsOf,
+      log: { info: () => undefined, warn: () => undefined },
+    }),
   );
   const identity: IdentityServices = createIdentityServices({
     ...identityBase,
@@ -698,7 +712,7 @@ async function build(): Promise<Built> {
     },
     email: { deliver: async () => undefined },
     storage,
-    log: { warn: () => undefined },
+    log: { warn: () => undefined, info: () => undefined },
     payment: {
       async registerPayoutRecipient(teacherUserId, details) {
         const recipientRef = await payment.registerPayoutRecipient(teacherUserId, details);
@@ -709,6 +723,8 @@ async function build(): Promise<Built> {
     idempotency,
     consequences,
     report: () => undefined,
+    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+    ongoingEnrollments: createOngoingEnrollments({ settings }),
   });
   // T043: the suspension as the panel's admin services build it, on the same registry (FR-165).
   const standing = new StandingService({
@@ -1077,16 +1093,22 @@ async function build(): Promise<Built> {
       await database.user.update({ where: { id: teacherId }, data: { accountStatus: status } });
     },
     async deleteAccount(teacherId) {
-      // A world teacher has no password; one is set so the deletion's own proof holds (FR-140).
-      await database.user.update({
-        where: { id: teacherId },
-        data: { passwordHash: await hashPassword(PASSWORD) },
+      // T081 of specs/004-sessions: as the administrator kind runs `users.delete`, on its
+      // transaction with its request's list bound, flushed after the commit.
+      const live = new RequestLive(unboundBus, { warn: () => undefined });
+      await database.$transaction(async (tx) => {
+        const unbind = bindToTransaction(tx, live);
+        try {
+          await identity.deletion.deleteByAdministrator(tx, admin, {
+            targetUserId: teacherId,
+            reason: 'طلب صاحب الحساب الحذف عبر الدعم',
+            idempotencyKey: randomUUID(),
+          });
+        } finally {
+          unbind();
+        }
       });
-      await identity.deletion.deleteAccount(teacherId, {
-        confirmation: 'DELETE',
-        reauth: { kind: 'password', password: PASSWORD },
-        idempotencyKey: randomUUID(),
-      });
+      live.flush();
     },
     async suspend(teacherId) {
       await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));

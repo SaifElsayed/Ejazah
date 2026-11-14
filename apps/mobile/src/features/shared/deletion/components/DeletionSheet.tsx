@@ -5,6 +5,10 @@
 // the password's buttons are catalogued beside it); an email account types its password here first.
 // A closed provider sheet changes nothing; a refused proof is said in place under the field or as a
 // banner, and the person tries again with a new attempt.
+//
+// T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): a deletion refused for an ongoing
+// enrollment says the line's sentence, naming no count, and offers «تواصل مع الدعم» (a mail to the
+// support address) in place of the confirm button; the password field goes with the button.
 import type { SignInMethod } from '@ijazah/contracts';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -22,7 +26,12 @@ import { tokens } from '../../../../design/tokens';
 import { useT } from '../../../../i18n';
 import { errorCodeOf } from '../../../../lib/client';
 import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
-import { type DeletionConfirmation, type DeletionProof, useAccountDeletion } from '../api';
+import {
+  type DeletionConfirmation,
+  type DeletionProof,
+  isOngoingRefusal,
+  useAccountDeletion,
+} from '../api';
 
 export interface DeletionSheetCopy {
   readonly title: string;
@@ -50,7 +59,9 @@ export function DeletionSheet({
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'proof' | ErrorMessage | null>(null);
+  const [error, setError] = useState<'proof' | 'ongoing' | ErrorMessage | null>(null);
+  const [supportFailure, setSupportFailure] = useState<ErrorMessage | null>(null);
+  const ongoing = error === 'ongoing';
 
   const proof: DeletionProof =
     method === 'email' ? { kind: 'password', password } : { kind: 'provider', provider: method };
@@ -64,10 +75,21 @@ export function DeletionSheet({
       setError(
         errorCodeOf(caught) === PROOF_REFUSED
           ? 'proof'
-          : genericErrorKey(caught, 'common.state.actionError'),
+          : isOngoingRefusal(caught)
+            ? 'ongoing'
+            : genericErrorKey(caught, 'common.state.actionError'),
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function writeToSupport(): Promise<void> {
+    setSupportFailure(null);
+    try {
+      await deletion.contactSupport();
+    } catch (caught: unknown) {
+      setSupportFailure(genericErrorKey(caught, 'common.state.actionError'));
     }
   }
 
@@ -78,7 +100,17 @@ export function DeletionSheet({
         <Text variant="title-3">{copy.title}</Text>
         <Text tone="muted">{copy.text}</Text>
       </View>
-      {error !== null && error !== 'proof' ? (
+      {ongoing ? (
+        <Banner icon={{ name: 'triangle-alert' }} tone="warning">
+          {t('account.delete.refused.activeEnrollments')}
+        </Banner>
+      ) : null}
+      {supportFailure === null ? null : (
+        <Banner icon={{ name: 'alert-circle' }} tone="danger">
+          {t(supportFailure.key, supportFailure.values)}
+        </Banner>
+      )}
+      {error !== null && error !== 'proof' && !ongoing ? (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           {t(error.key, error.values)}
         </Banner>
@@ -88,7 +120,7 @@ export function DeletionSheet({
           {t('account.delete.sheet.providerFailed')}
         </Banner>
       ) : null}
-      {method === 'email' ? (
+      {method === 'email' && !ongoing ? (
         <Field
           label={t('auth.field.password')}
           {...(error === 'proof' ? { error: t('account.delete.sheet.passwordFailed') } : {})}
@@ -108,14 +140,23 @@ export function DeletionSheet({
         </Field>
       ) : null}
       <View style={{ gap: tokens.space['2'] }}>
-        <Button
-          label={copy.confirm[method]}
-          variant="danger"
-          layout="block"
-          loading={busy}
-          disabled={busy || (method === 'email' && password === '')}
-          onPress={() => void confirm()}
-        />
+        {ongoing ? (
+          <Button
+            label={t('account.restricted.contactSupport')}
+            icon={{ name: 'mail' }}
+            layout="block"
+            onPress={() => void writeToSupport()}
+          />
+        ) : (
+          <Button
+            label={copy.confirm[method]}
+            variant="danger"
+            layout="block"
+            loading={busy}
+            disabled={busy || (method === 'email' && password === '')}
+            onPress={() => void confirm()}
+          />
+        )}
         <Button
           label={copy.cancel}
           variant="ghost"

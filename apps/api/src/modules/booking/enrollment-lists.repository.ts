@@ -21,7 +21,8 @@ import type { EnrollmentCancellationReason } from './enrollment-events.repositor
 /**
  * One enrollment as the lists read it: its parties, its status and its snapshot's package line; and
  * (004:T074, FR-506) its last cancellation's reason and its slot's release, which «paused» reads by
- * the one closing rule (`enrollment-lists.service.ts`, «PAUSED»), never shown.
+ * the one closing rule (`enrollment-lists.service.ts`, «PAUSED»), never shown; and (004:T082) a direct
+ * end's reason, shown to both parties.
  */
 export interface ListedEnrollmentRow {
   readonly id: string;
@@ -36,6 +37,11 @@ export interface ListedEnrollmentRow {
   readonly cancellationReason: EnrollmentCancellationReason | null;
   /** `enrollments.slot_released_at` (T070): an administrator released the held slot. */
   readonly slotReleasedAt: Date | null;
+  /**
+   * 004:T082: `enrollments.admin_end_reason`, the reason both parties are shown of an administrator's
+   * direct end, answered as `endedByAdmin`; null otherwise (rule 51).
+   */
+  readonly adminEndReason: string | null;
 }
 
 /** Whose lists: the student's own or the teacher's own. */
@@ -72,6 +78,7 @@ export function activeEnrollmentsOfStudent(
       snapshotDurationMinutes: true,
       cancellationReason: true,
       slotReleasedAt: true,
+      adminEndReason: true,
     },
   });
 }
@@ -100,6 +107,7 @@ export function activeEnrollmentsOfTeacher(
       snapshotDurationMinutes: true,
       cancellationReason: true,
       slotReleasedAt: true,
+      adminEndReason: true,
     },
   });
 }
@@ -147,6 +155,7 @@ export function endedEnrollmentPage(
       snapshotDurationMinutes: true,
       cancellationReason: true,
       slotReleasedAt: true,
+      adminEndReason: true,
     },
   });
 }
@@ -205,6 +214,7 @@ export function listedEnrollmentOf(
         snapshotDurationMinutes: true,
         cancellationReason: true,
         slotReleasedAt: true,
+        adminEndReason: true,
       },
     });
   }
@@ -228,6 +238,7 @@ export function listedEnrollmentOf(
       snapshotDurationMinutes: true,
       cancellationReason: true,
       slotReleasedAt: true,
+      adminEndReason: true,
     },
   });
 }
@@ -252,6 +263,7 @@ export function teacherEnrollmentsAmong(
       snapshotDurationMinutes: true,
       cancellationReason: true,
       slotReleasedAt: true,
+      adminEndReason: true,
     },
   });
 }

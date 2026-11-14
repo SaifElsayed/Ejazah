@@ -181,6 +181,18 @@ const liftOf = (tx: Transaction, studentId: string) =>
   });
 const lift = (studentId: string) =>
   database.$transaction((tx: Transaction) => liftOf(tx, studentId), OPTIONS);
+/** PR #140's review, round 1, Minor 1: a teacher's ban lifted through `teachers.liftBan`. */
+const liftTeacher = (teacherId: string) =>
+  database.$transaction(
+    (tx: Transaction) =>
+      standing.keyedLift(tx, admin, {
+        scope: 'teachers.liftBan',
+        userId: teacherId,
+        reason: 'رفع',
+        idempotencyKey: `t074-tlift-${String(++keys).padStart(12, '0')}-${teacherId.slice(-8)}`,
+      }),
+    OPTIONS,
+  );
 
 /** The enrollment's closing cases opened long ago: its hold over. */
 const holdOver = (enrollmentId: string) =>
@@ -307,7 +319,7 @@ describe('the lists answer paused (FR-506), both roles', () => {
     });
   });
 
-  it('a teacher’s ban held: paused to the student (ended tab and detail, no session); after the window not paused', async () => {
+  it('a teacher’s ban held: paused to the student (ended tab and detail, no session); after the window not paused; after a lift confirmed and not paused', async () => {
     const w = await confirmedWorld();
     await banTeacher(w.teacherId);
     const held = await lists.enrollments(w.studentId, { tab: 'ended' });
@@ -322,6 +334,15 @@ describe('the lists answer paused (FR-506), both roles', () => {
     await holdOver(w.enrollmentId);
     const [over] = (await lists.enrollments(w.studentId, { tab: 'ended' })).items;
     expect(over).toMatchObject({ paused: false, last: { sequenceNumber: 4 } });
+
+    const { move } = await liftTeacher(w.teacherId);
+    expect(move.enrollments).toEqual([{ enrollmentId: w.enrollmentId, restored: true }]);
+    const active = await lists.enrollments(w.studentId, { tab: 'active' });
+    expect(active.items.find(({ enrollmentId }) => enrollmentId === w.enrollmentId)).toMatchObject({
+      status: 'confirmed',
+      paused: false,
+      next: { status: 'scheduled' },
+    });
   });
 
   it('a teacher’s suspension: the enrollment confirmed and paused to the student, on the active tab, with no session', async () => {

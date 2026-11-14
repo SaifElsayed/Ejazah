@@ -19,6 +19,10 @@
 //   while `restorableUntil` is answered, past or not (a restore is possible at any time); its words
 //   say the slot is held until `slotHeldUntil` or was released at `slotReleasedAt`; «تحرير الموعد»
 //   on a held slot, while the server answers `slotHeldUntil`.
+// - B42c, T083 (FR-513, FR-514; SRS FR-CANCEL-10; N9): «إنهاء الاشتراك» beside restore and cancel on
+//   a `confirmed` enrollment only (a paused one is `confirmed`), its dialog's `{days}` the monitor's
+//   `enrollmentRestoreWindowDays`. An end's closing is restorable at any time: the restore's button
+//   reads `restorableUntil`, which the monitor answers for an `admin_ended` closing too.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -42,7 +46,12 @@ import {
   useMonitoredEnrollment,
   useRereadMonitor,
 } from './queries';
-import { CancelSessionDialog, ReleaseSlotDialog, RestoreDialog } from './SessionDialogs';
+import {
+  CancelSessionDialog,
+  EndEnrollmentDialog,
+  ReleaseSlotDialog,
+  RestoreDialog,
+} from './SessionDialogs';
 import {
   CASE_REASON,
   CASE_STATUS,
@@ -81,7 +90,8 @@ type Opened =
   | { readonly action: 'correct'; readonly sessionId: string }
   | { readonly action: 'restore'; readonly hold: SlotHold }
   | { readonly action: 'release'; readonly until: string }
-  | { readonly action: 'case'; readonly remedyId?: string };
+  | { readonly action: 'case'; readonly remedyId?: string }
+  | { readonly action: 'end' };
 
 function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
   const t = useT();
@@ -145,6 +155,13 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
                 onPress={() => setOpened({ action: 'restore', hold })}
               />
             )}
+            {enrollment.status === 'confirmed' ? (
+              <Button
+                label={t('admin.sessions.detail.end')}
+                variant="danger"
+                onPress={() => setOpened({ action: 'end' })}
+              />
+            ) : null}
           </span>
         }
         note={t('admin.sessions.detail.footer')}
@@ -282,6 +299,13 @@ function EnrollmentDetail({ detail }: { readonly detail: MonitorDetail }) {
           enrollmentId={enrollment.enrollmentId}
           {...(opened.remedyId === undefined ? {} : { remedyId: opened.remedyId })}
           onDone={() => void reread()}
+          onClose={close}
+        />
+      ) : null}
+      {opened?.action === 'end' ? (
+        <EndEnrollmentDialog
+          enrollmentId={enrollment.enrollmentId}
+          days={enrollment.enrollmentRestoreWindowDays}
           onClose={close}
         />
       ) : null}

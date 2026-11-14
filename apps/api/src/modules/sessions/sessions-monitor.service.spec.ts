@@ -500,6 +500,8 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
       remaining: 4,
       teacherNoShows: 2,
       repeatedAbsence: false,
+      // T082 (Q-O1 (a)): `enrollment_restore_window_days`, for the panel's `{days}`.
+      enrollmentRestoreWindowDays: 7,
     });
     expect(answer.cases).toEqual([{ caseId: id(61), reason: 'refund_choice', status: 'open' }]);
     expect(answer.cancellationRequests).toEqual([
@@ -812,6 +814,23 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
       // `ban_restore_window_days` is 3 here: the hold's end.
       expect(answer.enrollment.restorableUntil).toBe('2026-11-09T09:00:00.000Z');
       expect(answer.enrollment.slotHeldUntil).toBe('2026-11-09T09:00:00.000Z');
+      expect(sessionsMonitorGetOutput.safeParse(answer).success).toBe(true);
+    });
+
+    // T082 (FR-513; N8): a direct end's closing, its `admin_ended` case open, holds its slot through
+    // the enrollment window, and the panel's `{days}` is that window (Q-O1 (a)).
+    it('answers a direct end’s admin_ended closing its hold through the enrollment window, and the window’s days (T082)', async () => {
+      const { monitor } = world({
+        pages: [item(1, { status: 'cancelled' })],
+        enrollmentEvents: [cancelled('admin')],
+        cases: [open('admin_ended')],
+      });
+      const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+      // `enrollment_restore_window_days` is 7 here.
+      expect(answer.enrollment.slotHeldUntil).toBe('2026-11-13T09:00:00.000Z');
+      expect(answer.enrollment.restorableUntil).toBe('2026-11-13T09:00:00.000Z');
+      expect(answer.enrollment.enrollmentRestoreWindowDays).toBe(7);
+      expect(answer.cases).toEqual([{ caseId: id(60), reason: 'admin_ended', status: 'open' }]);
       expect(sessionsMonitorGetOutput.safeParse(answer).success).toBe(true);
     });
 

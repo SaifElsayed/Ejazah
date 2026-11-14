@@ -144,6 +144,15 @@ export function buildDeletion(
       events.push('committed');
       return outcome;
     },
+    // T081 of specs/004-sessions: the administrator's deletion keys on the kind's transaction.
+    async runOn<TResult extends JsonValue>(
+      tx: Transaction,
+      request: IdempotentRequest,
+      effect: (tx: Transaction) => Promise<TResult>,
+    ): Promise<{ readonly outcome: TResult; readonly replayed: boolean }> {
+      keyed.push(request);
+      return kernel.runOn(tx, request, effect);
+    },
   };
   const reports: unknown[] = [];
   const pending: Promise<void>[] = [];
@@ -151,6 +160,14 @@ export function buildDeletion(
   // T004 of specs/004-sessions (FR-487): the people whose files an open matter holds, as booking's
   // `heldFileOwnersAmong` answers through the `FileHold` port.
   const held = new Set<string>();
+  // T080 of specs/004-sessions (FR-511): whether the person has an ongoing enrollment, as booking's
+  // count answers through the `OngoingEnrollments` port; a spec may replace the answer.
+  const ongoing = {
+    people: new Set<string>(),
+    answer: async (_tx: Transaction, userId: string): Promise<boolean> =>
+      ongoing.people.has(userId),
+  };
+  const infos: object[] = [];
   const dependencies = {
     database,
     settings: identity.settings,
@@ -164,12 +181,22 @@ export function buildDeletion(
     storage,
     idempotency,
     codes: identity.codes,
-    log: { warn: (entry: object) => void identity.warnings.push(entry) },
+    log: {
+      warn: (entry: object) => void identity.warnings.push(entry),
+      // T080: the deletion's info lines (a refusal's), kept apart from the warnings.
+      info: (entry: object) => void infos.push(entry),
+    },
     fileErasures: [files],
     fileHold: {
       filesHeld: async (userId) => {
         events.push('files-held');
         return held.has(userId);
+      },
+    },
+    ongoingEnrollments: {
+      hasOngoing: async (tx: Transaction, userId: string) => {
+        events.push('ongoing-asked');
+        return ongoing.answer(tx, userId);
       },
     },
     report: (error) => void reports.push(error),
@@ -200,6 +227,10 @@ export function buildDeletion(
     storage,
     files,
     held,
+    /** T080: the people booking's count answers as having an ongoing enrollment, and the answer. */
+    ongoing,
+    /** T080: the deletion's info lines. */
+    infos,
     consequences,
     terminations,
     keyed,

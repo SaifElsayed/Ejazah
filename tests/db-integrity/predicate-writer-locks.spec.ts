@@ -31,6 +31,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { piasters } from '../../packages/money/src/index';
 import {
+  createOngoingEnrollments,
   enrollOnHold,
   payStoreOver,
   type PayTarget,
@@ -151,7 +152,7 @@ beforeAll(async () => {
     },
     email: { deliver: async () => undefined },
     storage: { temporaryLink: unreachable, remove: unreachable },
-    log: { warn: () => undefined },
+    log: { warn: () => undefined, info: () => undefined },
     payment: { registerPayoutRecipient: async () => nextRecipientRef },
     idempotency: new IdempotencyService<Transaction>({
       store: new IdempotencyRepository(holdable),
@@ -159,6 +160,8 @@ beforeAll(async () => {
     }),
     consequences: new AccountConsequences(),
     report: () => undefined,
+    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+    ongoingEnrollments: createOngoingEnrollments({ settings }),
   }).payout;
   webhook = await listenWebhook(holdable, { enqueue: async () => undefined });
 }, 60_000);

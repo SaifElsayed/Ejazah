@@ -20,6 +20,11 @@
 // again with the one generic line. A code is counted under the one-time-code limit by the address,
 // as `auth.email.verifySignUpCode` counts it.
 //
+// T080 of specs/004-sessions (FR-511; the note under T080, N5): when the right code's deletion is
+// refused for an ongoing enrollment (`CONFLICT` `active_enrollments`), the confirm step renders the
+// refusal page: the line's words and the support address, no count. The code was spent, so a later
+// try asks for a new one. Any other failure goes to the error page as before.
+//
 // THE ADDRESS NEVER TRAVELS IN A URL: both steps are form POSTs, the code step carries it in a
 // hidden field, and the only link, «change email», goes back to the first step bare.
 //
@@ -29,7 +34,7 @@
 // lines stay in the catalogue for the phase that makes them true.
 import { emailAddress, oneTimeCode } from '@ijazah/contracts';
 
-import { errorCodes } from '../../../platform/errors/domain-error.js';
+import { DomainError, errorCodes } from '../../../platform/errors/domain-error.js';
 import { defaultRateLimits, type RateLimiter } from '../../../platform/guards/rate-limit.guard.js';
 import type { Locale } from '../../../platform/http/locale.js';
 import { copyOf, fill } from '../../../platform/web/copy.js';
@@ -59,6 +64,9 @@ const { oneTimeCode: ONE_TIME_CODE_LIMIT, oneTimeCodeBudget: ONE_TIME_CODE_BUDGE
 
 /** The status of a step rendered again because what was sent cannot be used. */
 const UNUSABLE_FORM = errorCodes.VALIDATION_FAILED.status;
+
+/** T080: the status of the refusal page, the deletion's own `CONFLICT`. */
+const REFUSED = errorCodes.CONFLICT.status;
 
 /** Where a form posts or a link points, keeping the page's language. */
 function hrefOf(path: string, lang: Locale): string {
@@ -345,6 +353,44 @@ function doneStep(lang: Locale, email: string, supportEmail: string): WebRespons
   };
 }
 
+/** T080: the deletion's refusal of an ongoing enrollment (`CONFLICT` `active_enrollments`). */
+function isOngoingRefusal(error: unknown): boolean {
+  return (
+    error instanceof DomainError &&
+    error.code === 'CONFLICT' &&
+    (error.details ?? []).some(
+      ({ path, code }) => path === 'cause' && code === 'active_enrollments',
+    )
+  );
+}
+
+/**
+ * T080 (FR-511; the note under T080, N5): the deletion refused for an ongoing enrollment, after
+ * the right code was spent. The line's words and the support address as its own link, no count
+ * and nothing beyond them: the heading is the email step's title.
+ */
+function refusedStep(lang: Locale, supportEmail: string): WebResponse {
+  const text = copyOf(lang).web.deleteAccount;
+  return {
+    status: REFUSED,
+    page: screen(
+      lang,
+      text.title,
+      html`${brandLine(lang)}
+        <div class="page-intro">
+          <h1 class="page-intro__title">${text.title}</h1>
+        </div>
+        <div class="banner banner--warning" role="alert">
+          ${alertIcon}
+          <p class="grow">${text.refused.activeEnrollments}</p>
+        </div>
+        <a href="mailto:${supportEmail}" class="btn btn--secondary btn--block push"
+          ><span class="ltr">${supportEmail}</span></a
+        >`,
+    ),
+  };
+}
+
 /** The address a form carries, as typed but for surrounding spaces. */
 function emailOf(form: URLSearchParams): string {
   return (form.get('email') ?? '').trim();
@@ -382,7 +428,13 @@ export function deleteAccountRoutes({
       { kind: 'identifier', value: normalizeEmail(email) },
       DELETE_ACCOUNT_CONFIRM_PATH,
     );
-    const deleted = await deletion.confirmWebDeletion(email, code);
+    let deleted: boolean;
+    try {
+      deleted = await deletion.confirmWebDeletion(email, code);
+    } catch (error: unknown) {
+      if (isOngoingRefusal(error)) return refusedStep(lang, supportEmail);
+      throw error;
+    }
     return deleted ? doneStep(lang, email, supportEmail) : codeStep(lang, email, true);
   };
 

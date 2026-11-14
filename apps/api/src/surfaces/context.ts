@@ -146,11 +146,21 @@ import type {
   usersGetOutput,
   usersListInput,
   usersListOutput,
+  // T081 of specs/004-sessions: an administrator's deletion at the owner's request.
+  usersDeleteInput,
   // T070.
   enrollmentsReleaseSlotInput,
   enrollmentsReleaseSlotOutput,
   // T072.
   banLiftEnrollment,
+  // T077 of specs/004-sessions: a deleted teacher's kept data.
+  teachersKeptDocumentLinkInput,
+  teachersKeptDocumentLinkOutput,
+  teachersKeptEraseDateInput,
+  teachersKeptEraseNowInput,
+  // T082 of specs/004-sessions: an administrator's direct end of an enrollment.
+  sessionsEndEnrollmentInput,
+  sessionsEndEnrollmentOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -522,6 +532,28 @@ export interface AdminSurfaceServices {
     reinstate(tx: Transaction, actorId: string, teacherUserId: string): Move;
     /** T072: `teachers.liftBan` and `teachers.liftRevocation`. */
     keyedLift: KeyedLift;
+    /** T077: `teachers.keptData.*`, verification's kept-data service. */
+    keptData: {
+      documentLink(
+        tx: Transaction,
+        actorId: string,
+        input: z.output<typeof teachersKeptDocumentLinkInput>,
+      ): Answer<typeof teachersKeptDocumentLinkOutput>;
+      setEraseDate(
+        tx: Transaction,
+        actorId: string,
+        input: z.output<typeof teachersKeptEraseDateInput>,
+      ): Promise<{
+        readonly before: string | null;
+        readonly after: string | null;
+        readonly replayed: boolean;
+      }>;
+      eraseNow(
+        tx: Transaction,
+        actorId: string,
+        input: z.output<typeof teachersKeptEraseNowInput>,
+      ): Promise<{ readonly documents: number; readonly payout: boolean; readonly replayed: boolean }>;
+    };
   };
   /** A student's standing (FR-421, FR-486; T005 of specs/004-sessions), the identity module's. */
   readonly students: {
@@ -735,6 +767,12 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof usersGetInput>,
     ): Answer<typeof usersGetOutput>;
+    /** T081 (FR-512): `users.delete`, identity's deletion keyed on the call's transaction. ⚠️ Irreversible. */
+    delete(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof usersDeleteInput>,
+    ): Promise<{ readonly replayed: boolean }>;
   };
   /** T070 of specs/004-sessions: an administrator releases a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: {
@@ -744,6 +782,17 @@ export interface AdminSurfaceServices {
       input: z.output<typeof enrollmentsReleaseSlotInput>,
     ): Promise<{
       readonly answer: z.input<typeof enrollmentsReleaseSlotOutput>;
+      readonly replayed: boolean;
+    }>;
+  };
+  /** T082 of specs/004-sessions (FR-513): an administrator's direct end, keyed on the call's transaction. */
+  readonly enrollmentEnd: {
+    endEnrollment(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof sessionsEndEnrollmentInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof sessionsEndEnrollmentOutput>;
       readonly replayed: boolean;
     }>;
   };

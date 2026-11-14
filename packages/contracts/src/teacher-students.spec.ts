@@ -123,6 +123,24 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
     expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
   });
 
+  // 004:T082 (FR-513; SRS FR-CANCEL-10, DEC-68): an enrollment an administrator ended directly
+  // carries the reason both parties are shown, never the internal note. Additive (R-API-9).
+  it('carries endedByAdmin with the party reason only, optional (004:T082, FR-513)', () => {
+    const { next: _next, last: _last, ...bare } = item;
+    const ended = { ...bare, status: 'cancelled', endedByAdmin: { reason: 'انتهى الاشتراك' } };
+    expect(teacherStudentItem.parse(ended)).toEqual(ended);
+    expect(
+      teacherStudentItem.parse({
+        ...ended,
+        endedByAdmin: { reason: 'انتهى الاشتراك', internalNote: 'ملاحظة داخلية' },
+      }),
+    ).toEqual(ended);
+    expect(teacherStudentItem.parse(item)).toEqual(item);
+    expect(teacherStudentItem.safeParse({ ...ended, endedByAdmin: {} }).success).toBe(false);
+    const detail = { ...ended, sessions: [] };
+    expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
+  });
+
   it('names the student by display name alone, and whether the account was deleted (T007)', () => {
     expect(Object.keys(teacherStudentItem.shape.student.shape)).toEqual([
       'displayName',

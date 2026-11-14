@@ -3,6 +3,7 @@ import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryp
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { LiveBus } from '../../platform/live/live-bus.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
@@ -19,7 +20,14 @@ import {
 } from './identity.repository.js';
 import { OnboardingService } from './onboarding.service.js';
 import type { AccountConsequences } from './consequences.js';
-import { DeletionService, type FileErasure, type FileHold } from './deletion.service.js';
+import {
+  type DeletionLog,
+  DeletionService,
+  type FileErasure,
+  type FileHold,
+  // T080 of specs/004-sessions: the count's port, bound by `main.ts`.
+  type OngoingEnrollments,
+} from './deletion.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
@@ -100,8 +108,16 @@ export interface IdentityServices {
   /** `account.delete` and the web deletion pages (T082, T083). */
   readonly deletion: Pick<
     DeletionService,
-    'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion'
+    // T081 of specs/004-sessions: `users.delete`, handed to the admin services by `main.ts`.
+    'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion' | 'deleteByAdministrator'
   >;
+}
+
+/** T077: the logger's `info`, where the log handed in has one. */
+function infoLogOf(log: WarningLog): { readonly log?: Pick<Logger, 'info'> } {
+  return 'info' in log && typeof log.info === 'function'
+    ? { log: log as WarningLog & Pick<Logger, 'info'> }
+    : {};
 }
 
 /** What the module's services are built over, bound once by `main.ts`. */
@@ -117,12 +133,18 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
   readonly email: EmailPort;
   /** Photo links (T049) and, after a deletion's commit, the photo's removal (T082). */
   readonly storage: Pick<StoragePort, 'temporaryLink' | 'remove'>;
-  /** Where a mail that could not be handed over is reported, never awaited by the request. */
-  readonly log: WarningLog;
+  /**
+   * Where a mail that could not be handed over is reported, never awaited by the request; and
+   * (T080 of specs/004-sessions) a refused deletion's one info line.
+   */
+  readonly log: DeletionLog;
   /** Payout setup registers the recipient through the port (T077). */
   readonly payment: Pick<PaymentPort, 'registerPayoutRecipient'>;
-  /** `teacher.payout.register` and `account.delete` are keyed (FR-106). */
-  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /**
+   * `teacher.payout.register` and `account.delete` are keyed (FR-106); T081's `users.delete` on
+   * the administrator kind's transaction (`runOn`).
+   */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'run' | 'runOn'>;
   /** The one registry of an account's end, shared with the admin module (FR-142, B16). */
   readonly consequences: AccountConsequences;
   /** The other modules' files of a deleted person, removed after the commit (B16, decision 1). */
@@ -132,6 +154,12 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
    * booking's `heldFileOwnersAmong`, bound by `main.ts`; none held when absent.
    */
   readonly fileHold?: FileHold;
+  /**
+   * T080 of specs/004-sessions (FR-511; the note under T080, Q-R11 (a)): whether an account has an
+   * ongoing enrollment, on the deletion's transaction: booking's `createOngoingEnrollments`, bound
+   * by `main.ts` as `fileHold` is.
+   */
+  readonly ongoingEnrollments: OngoingEnrollments;
   /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
   readonly report?: (error: unknown) => void;
   /**
@@ -154,6 +182,7 @@ export function createIdentityServices({
   consequences,
   fileErasures,
   fileHold,
+  ongoingEnrollments,
   report,
   live,
   ...base
@@ -167,7 +196,9 @@ export function createIdentityServices({
     emailAuth: new EmailAuthService({ ...base, codes, onboarding, sessions }),
     onboarding,
     account: new AccountService({ ...base, storage }),
-    payout: new PayoutService({ ...base, payment, idempotency }),
+    // T077 of specs/004-sessions (Q-E (a)): the registration's `payout_kept_match` line, where the
+    // logger handed in answers `info` (the process's does; a spec's warning log may not).
+    payout: new PayoutService({ ...base, payment, idempotency, ...infoLogOf(log) }),
     deletion: new DeletionService({
       ...base,
       cipher,
@@ -181,6 +212,7 @@ export function createIdentityServices({
       log,
       fileErasures,
       fileHold,
+      ongoingEnrollments,
       report,
       ...(live === undefined ? {} : { live }),
     }),
@@ -287,6 +319,26 @@ export { studentsRouter } from './students.router.js';
 /** The person an audit target names, for the admin module's read-time name (T021, R-108). */
 export { readTargetPerson, type TargetPerson } from './identity.repository.js';
 
+/**
+ * T076 of specs/004-sessions (FR-508): whether a teacher was ever approved, read by verification's
+ * `documentErasureConsequence` on the deletion's transaction (R-121).
+ */
+export { everApprovedTeacher } from './identity.repository.js';
+
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, Q-R3 (a)): a deleted
+ * teacher's kept profile, read, dated and erased by verification's kept-data service and the
+ * `erase-kept-data` sweep on their transaction (R-121), and the payout match `users.get` answers.
+ */
+export {
+  eraseKeptProfile,
+  type KeptProfile,
+  keptProfileOf,
+  keptProfilesDue,
+  setKeptEraseDate,
+} from './identity.repository.js';
+export { payoutKeptOnDeletedTeacher } from './payout.repository.js';
+
 /** The administrator's invite mail, which the admin module sends through its job (T066, R-110). */
 export { renderAdminInviteMail } from './mail/admin-invite-mail.js';
 
@@ -358,6 +410,16 @@ export function createDocumentReferences(database: Database): {
 
 /** A file the deletion leaves to the `erase-deleted-files` sweep, and the deletion's file erasure (B16). */
 export type { FileErasure, FileHold, HeldPhoto };
+/**
+ * T080 of specs/004-sessions (FR-511; the note under T080, Q-R11 (a)): the port booking's count is
+ * bound to in `main.ts`, and the deletion's log (a refusal's info line).
+ */
+export type { DeletionLog, OngoingEnrollments };
+/**
+ * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22): the administrator's deletion the admin
+ * module composes into `users.delete`, filled by `main.ts` with the identity services' `deletion`.
+ */
+export type AdministratorDeletion = Pick<DeletionService, 'deleteByAdministrator'>;
 
 /**
  * Deleted people's photo keys still held, for the `erase-deleted-files` sweep (B16, decision 1): a

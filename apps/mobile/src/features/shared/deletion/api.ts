@@ -8,11 +8,17 @@
 // revoked every session, and the guard lands on the welcome screen. The providers' native modules
 // load with this folder, which is why it is not part of `shared/account`'s entry: the screens that
 // read that entry (the homes, the application, the payout) never load the providers.
+//
+// T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): the deletion refused for an
+// ongoing enrollment (`CONFLICT` `active_enrollments`) is told apart here, and the support address
+// the public configuration serves (FR-145) is written to from here, so the sheet only draws them.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import * as Crypto from 'expo-crypto';
+import * as Linking from 'expo-linking';
 import { useMemo } from 'react';
 
 import { useApi } from '../../../lib/api';
+import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
 import { setSession } from '../../../lib/session';
 import { DEV_EMAIL, devIdentityToken, devSignInEnabled } from '../auth/dev-sign-in';
 import { nativeIdentity } from '../auth/providers';
@@ -29,6 +35,16 @@ export type DeletionOutcome = 'deleted' | 'cancelled';
 
 const ARABIC_WORD: DeletionConfirmation = 'حذف';
 const LATIN_WORD: DeletionConfirmation = 'DELETE';
+
+/** T080: whether a failed attempt is the refusal of an ongoing enrollment; it names no count. */
+export function isOngoingRefusal(error: unknown): boolean {
+  return (
+    errorCodeOf(error) === 'CONFLICT' &&
+    errorDetailsOf(error).some(
+      ({ path, code }) => path === 'cause' && code === 'active_enrollments',
+    )
+  );
+}
 
 /** The contract's word for what the person typed, or null while it is not one. */
 export function confirmationOf(typed: string): DeletionConfirmation | null {
@@ -69,6 +85,12 @@ export function useAccountDeletion() {
         await sessions.clear();
         setSession({ kind: 'signed-out' });
         return 'deleted';
+      },
+
+      /** T080: a mail to the support address the public configuration serves (FR-145). */
+      async contactSupport(): Promise<void> {
+        const { supportEmail } = await client.publicConfig();
+        await Linking.openURL(`mailto:${supportEmail}`);
       },
     };
   }, [client, sessions]);

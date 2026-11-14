@@ -175,6 +175,8 @@ const VIEWED = {
     remaining: 7,
     teacherNoShows: 0,
     repeatedAbsence: false,
+    // T082 (rule d): the monitor's window days (Q-O1 (a)).
+    enrollmentRestoreWindowDays: 14,
   },
   sessions: [],
   cases: [],

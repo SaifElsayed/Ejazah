@@ -57,6 +57,11 @@
 // included. The cases are read through moderation's `compensationCasesAmong` once per read, only for
 // the enrollments that could be paused. Only the other party ever reads one (FR-506): a suspended or
 // banned account is refused before any list, and a revoked teacher the teacher's lists.
+//
+// A DIRECT END (004:T082; FR-513; SRS FR-CANCEL-10, DEC-68). An enrollment an administrator ended
+// directly answers `endedByAdmin: { reason }`, its `admin_end_reason`, to both parties, in the lists
+// and the details; the internal note is in the audit entry only and never read here. It is never
+// paused (`BAN_CLOSINGS` leaves `admin_ended` out, N4); a restore clears the reason.
 import type {
   EnrollmentsGetInput,
   EnrollmentsGetOutput,
@@ -331,6 +336,7 @@ type ItemCore = Pick<
   | 'completed'
   | 'remaining'
   | 'paused'
+  | 'endedByAdmin'
 >;
 
 /** What every item of some rows needs: their sessions, the other party's names, their subjects. */
@@ -393,6 +399,8 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     completed: progress.completed,
     remaining: progress.remaining,
     paused,
+    // 004:T082: a direct end's reason, never the internal note (this file's head, «A DIRECT END»).
+    ...(row.adminEndReason === null ? {} : { endedByAdmin: { reason: row.adminEndReason } }),
   };
 }
 

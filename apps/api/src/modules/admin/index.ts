@@ -24,6 +24,8 @@ import {
 import { credentialsOfTeachers, grantSubjects } from '../catalog/index.js';
 import {
   AccountConsequences,
+  // T081 of specs/004-sessions: the administrator's deletion, identity's, handed in by `main.ts`.
+  type AdministratorDeletion,
   readApplicationQueue,
   StandingService,
   standingStoreOver,
@@ -75,6 +77,8 @@ import {
 import { createTeacherReinstatement } from '../sessions/index.js';
 // T072 of specs/004-sessions: a ban's or a revocation's lift restores the enrollments it closed.
 import { createBanLift } from '../sessions/index.js';
+// T082 of specs/004-sessions: an administrator's direct end of an enrollment.
+import { createEnrollmentEnd, type EnrollmentEnd } from '../sessions/index.js';
 import {
   type ApplicationReviewService,
   createUserDirectory,
@@ -83,6 +87,8 @@ import {
   type UserDirectory,
   type VerificationRequestService,
 } from '../verification/index.js';
+// T077 of specs/004-sessions: an administrator's control of a deleted teacher's kept data.
+import { createKeptData, type KeptData } from '../verification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -147,7 +153,13 @@ export interface AdminServices {
     // T072 of specs/004-sessions: a teacher's or an applicant's ban lifted, and a revocation,
     // keyed (`teachers.liftBan`, `teachers.liftRevocation`).
     | 'keyedLift'
-  >;
+  > & {
+    /**
+     * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; Q-R3 (a)): `teachers.keptData.*`,
+     * verification's kept-data service, keyed on the call's transaction (`runOn`).
+     */
+    readonly keptData: Pick<KeptData, 'documentLink' | 'setEraseDate' | 'eraseNow'>;
+  };
   /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
   readonly students: Pick<
     StandingService,
@@ -203,9 +215,18 @@ export interface AdminServices {
   /** T061 of specs/004-sessions: the sessions module's restore, keyed on the call's transaction. */
   readonly restore: Restore;
   /** T058 of specs/004-sessions: the verification module's user directory (FR-481, SRS FR-ADMIN-4). */
-  readonly users: UserDirectory;
+  readonly users: UserDirectory & {
+    /** T081 of specs/004-sessions (FR-512): identity's deletion at the owner's request ⚠️. */
+    readonly delete: AdministratorDeletion['deleteByAdministrator'];
+  };
   /** T070 of specs/004-sessions: booking's release of a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: HeldSlotRelease;
+  /**
+   * T082 of specs/004-sessions: the sessions module's direct end of an enrollment
+   * (`sessions.endEnrollment`), keyed on the call's transaction, booking's half through the bound
+   * `EnrollmentSide`.
+   */
+  readonly enrollmentEnd: EnrollmentEnd;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -250,6 +271,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * ninth cause `refunded` (docs/ARCHITECTURE.md §4, a dependency handed in against the arrows).
    */
   readonly enrollmentPayments: EnrollmentPayments;
+  /**
+   * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22): identity's deletion, its
+   * `deleteByAdministrator` keyed on the administrator kind's transaction, filled by `main.ts` with
+   * the identity services' `deletion` (the one `DeletionService`), for `users.delete`.
+   */
+  readonly userDeletion: AdministratorDeletion;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -328,7 +355,21 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     }),
     credentials: createCredentialReviewService(dependencies),
     ...createVerificationAdminServices({ ...dependencies, standing }),
-    teachers: standing,
+    // T077 of specs/004-sessions (Q-R3 (a)): the standing's actions beside the kept data's three.
+    teachers: {
+      suspend: standing.suspend.bind(standing),
+      revokeApproval: standing.revokeApproval.bind(standing),
+      ban: standing.ban.bind(standing),
+      reinstate: standing.reinstate.bind(standing),
+      keyedLift: standing.keyedLift.bind(standing),
+      keptData: createKeptData({
+        storage: dependencies.storage,
+        cipher: dependencies.cipher,
+        settings: dependencies.settings,
+        log: dependencies.log,
+        idempotency: dependencies.idempotency,
+      }),
+    },
     students: standing,
     payments: createPaymentsMonitorService(dependencies),
     outages: createOutageServices({
@@ -390,18 +431,29 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
     // T061: the restore, built above (T072: one instance with the lift's).
     restore,
     // T058: the user directory over identity's readers and sessions' counts and marks.
-    users: createUserDirectory({
-      database: dependencies.database,
-      settings: dependencies.settings,
-      enrollments: dependencies.enrollmentSide,
-      log: dependencies.log,
-      // T072 (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions' read.
-      slotHeldUntilOf: banLift.slotHeldUntilOf,
-    }),
+    users: {
+      ...createUserDirectory({
+        database: dependencies.database,
+        settings: dependencies.settings,
+        enrollments: dependencies.enrollmentSide,
+        log: dependencies.log,
+        // T072 (Q9 (a)): `users.get`'s `enrollmentsSlotHeldUntil`, sessions' read.
+        slotHeldUntilOf: banLift.slotHeldUntilOf,
+      }),
+      // T081: `users.delete`, identity's deletion on the call's transaction.
+      delete: (tx, adminId, input) =>
+        dependencies.userDeletion.deleteByAdministrator(tx, adminId, input),
+    },
     // T070: the release of a held slot, keyed through `runOn` on the call's transaction.
     enrollments: createHeldSlotRelease({
       idempotency: dependencies.idempotency,
       settings: dependencies.settings,
+      log: dependencies.log,
+    }),
+    // T082: the direct end, keyed through `runOn` on the call's transaction.
+    enrollmentEnd: createEnrollmentEnd({
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
       log: dependencies.log,
     }),
   };

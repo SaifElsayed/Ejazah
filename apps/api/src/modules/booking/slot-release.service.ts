@@ -28,6 +28,13 @@
 //
 // THE WRITES, in the same transaction: `slot_released_at` and one `slot_released` row, both the
 // database's instant (`clockTimestamp`); then one info line of ids, never the reason.
+//
+// THE CORE (T082 of specs/004-sessions; the note under T082, Q-R15 (a)): `releaseHeldSlot(tx,
+// enrollmentId, reads)`, the locks, the read again, the refusals (answered as their reason) and the
+// writes above, with no key, audit, limit or log of its own, as `restoreClosed` is to
+// `sessions.restore`. A direct end with `slot: 'release'` calls it through sessions' `EnrollmentSide`
+// port (`releaseHeldSlot`), on its own transaction, every lock already held. `releaseSlot` wraps the
+// same core unchanged: keyed through `runOn`, a refusal thrown with its one line.
 import type {
   EnrollmentsReleaseSlotInput,
   EnrollmentsReleaseSlotOutput,
@@ -42,7 +49,14 @@ import type { IdempotencyService } from '../../platform/idempotency/idempotency.
 import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { compensationCasesOf, type EnrollmentCase } from '../moderation/index.js';
-import { closingOf, latestEndCaseOf, restorableUntil, windowDaysOf } from '../sessions/index.js';
+import {
+  type ClosingKind,
+  closingOf,
+  latestEndCaseOf,
+  restorableUntil,
+  type WindowDays,
+  windowDaysOf,
+} from '../sessions/index.js';
 import { type EnrollmentOutcome, recordEnrollmentEvents } from './enrollment-events.repository.js';
 import {
   type HeldEnrollment,
@@ -95,9 +109,6 @@ export interface HeldSlotRelease {
   ): Promise<{ readonly answer: EnrollmentsReleaseSlotOutput; readonly replayed: boolean }>;
 }
 
-/** Why a release was refused, as its one log line names it. */
-type NotHeld = 'not_closed' | 'not_restorable' | 'hold_over' | 'already_released';
-
 interface RefusalIds {
   readonly adminId: string;
   readonly enrollmentId: string;
@@ -123,6 +134,72 @@ function notFound(log: Pick<Logger, 'info'>, ids: RefusalIds): DomainError {
 const isClosed = ({ status, confirmedAt }: HeldEnrollment): boolean =>
   status === 'terminated_no_show' || (status === 'cancelled' && confirmedAt !== null);
 
+/** Why a release was refused, as its one log line names it. */
+type NotHeld = 'not_closed' | 'not_restorable' | 'hold_over' | 'already_released';
+
+/**
+ * T082 (the note under T082, Q-R15 (a)): what the release's core answers: the slot released at the
+ * database's instant with its closing's case and kind, or why it was not, nothing written.
+ */
+export type HeldRelease =
+  | {
+      readonly released: true;
+      readonly at: Date;
+      readonly caseId: string;
+      readonly kind: ClosingKind;
+    }
+  | { readonly released: false; readonly reason: NotHeld | 'not_found' };
+
+/** T082: what the core reads its window and its instant through, and its store. */
+export interface HeldReleaseReads {
+  /** The two window settings, read when the closing needs one (sessions' `windowDaysOf`). */
+  readonly windowDays: WindowDays;
+  /** The database's clock on the call's transaction (`clockTimestamp`). */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
+  readonly store?: SlotReleaseStore;
+}
+
+/**
+ * T082 (Q-R15 (a)): the release's core, on the caller's transaction, with no key, audit, limit or log
+ * of its own, as `restoreClosed` is to `sessions.restore`: this file's locks, in its order (a direct
+ * end holds them all already, so it never waits), the enrollment read again under them, the checks
+ * and the writes of this file's head. `enrollments.releaseSlot` wraps it, keyed, with its lines.
+ */
+export async function releaseHeldSlot(
+  tx: Transaction,
+  enrollmentId: string,
+  { windowDays, clock = clockTimestamp, store = slotReleaseStore }: HeldReleaseReads,
+): Promise<HeldRelease> {
+  const seen = await store.enrollmentOf(tx, enrollmentId);
+  if (seen === null) return { released: false, reason: 'not_found' };
+  await store.lockTeacherSlots(tx, seen.teacherUserId);
+  await store.lockSlot(tx, seen.slotId);
+  await store.lockEnrollment(tx, enrollmentId);
+  const enrollment = await store.enrollmentOf(tx, enrollmentId);
+  if (enrollment === null) return { released: false, reason: 'not_found' };
+  if (!isClosed(enrollment)) return { released: false, reason: 'not_closed' };
+  const closing = closingOf({
+    status: enrollment.status,
+    lastCancellationReason: enrollment.cancellationReason,
+    endCase: latestEndCaseOf(await store.casesOf(tx, enrollmentId)),
+  });
+  if (closing === undefined || !closing.restorable) {
+    return { released: false, reason: 'not_restorable' };
+  }
+  const [now, until] = await Promise.all([
+    clock(tx),
+    restorableUntil(closing.closingCase.createdAt, closing.kind, windowDays),
+  ]);
+  if (now.getTime() >= until.getTime()) return { released: false, reason: 'hold_over' };
+  if (enrollment.slotReleasedAt !== null) return { released: false, reason: 'already_released' };
+
+  if (!(await store.markReleased(tx, enrollmentId, now))) {
+    throw new Error('releaseSlot: the enrollment, read unreleased under its lock, did not update');
+  }
+  await store.recordEvents(tx, [{ kind: 'slot_released', enrollmentId, occurredAt: now }]);
+  return { released: true, at: now, caseId: closing.closingCase.caseId, kind: closing.kind };
+}
+
 export function createHeldSlotRelease({
   idempotency,
   settings,
@@ -138,38 +215,15 @@ export function createHeldSlotRelease({
     enrollmentId: string,
   ): Promise<EnrollmentsReleaseSlotOutput> => {
     const ids = { adminId, enrollmentId };
-    const seen = await store.enrollmentOf(tx, enrollmentId);
-    if (seen === null) throw notFound(log, ids);
-    await store.lockTeacherSlots(tx, seen.teacherUserId);
-    await store.lockSlot(tx, seen.slotId);
-    await store.lockEnrollment(tx, enrollmentId);
-    const enrollment = await store.enrollmentOf(tx, enrollmentId);
-    if (enrollment === null) throw notFound(log, ids);
-    if (!isClosed(enrollment)) throw notHeld(log, ids, 'not_closed');
-    const closing = closingOf({
-      status: enrollment.status,
-      lastCancellationReason: enrollment.cancellationReason,
-      endCase: latestEndCaseOf(await store.casesOf(tx, enrollmentId)),
-    });
-    if (closing === undefined || !closing.restorable) throw notHeld(log, ids, 'not_restorable');
-    const [now, until] = await Promise.all([
-      clock(tx),
-      restorableUntil(closing.closingCase.createdAt, closing.kind, windowDays),
-    ]);
-    if (now.getTime() >= until.getTime()) throw notHeld(log, ids, 'hold_over');
-    if (enrollment.slotReleasedAt !== null) throw notHeld(log, ids, 'already_released');
-
-    if (!(await store.markReleased(tx, enrollmentId, now))) {
-      throw new Error(
-        'releaseSlot: the enrollment, read unreleased under its lock, did not update',
-      );
+    const outcome = await releaseHeldSlot(tx, enrollmentId, { windowDays, clock, store });
+    if (!outcome.released) {
+      throw outcome.reason === 'not_found' ? notFound(log, ids) : notHeld(log, ids, outcome.reason);
     }
-    await store.recordEvents(tx, [{ kind: 'slot_released', enrollmentId, occurredAt: now }]);
     log.info(
-      { adminId, enrollmentId, caseId: closing.closingCase.caseId, kind: closing.kind },
+      { adminId, enrollmentId, caseId: outcome.caseId, kind: outcome.kind },
       'A held slot was released',
     );
-    return { enrollmentId, slotReleasedAt: now.toISOString() };
+    return { enrollmentId, slotReleasedAt: outcome.at.toISOString() };
   };
 
   return {

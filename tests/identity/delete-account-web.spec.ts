@@ -36,6 +36,7 @@ import {
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader';
 import { webRoute } from '../../apps/api/src/platform/web/route';
+import { createOngoingEnrollments } from '../../apps/api/src/modules/booking/index';
 import {
   AccountConsequences,
   createIdentityServices,
@@ -131,10 +132,16 @@ describe('the web deletion end to end (T081, FR-143)', () => {
       },
       email: mailbox,
       storage: { temporaryLink: unexpected, remove: unexpected },
-      log: { warn: (entry: unknown) => void lines.push(JSON.stringify({ level: 'warn', entry })) },
+      log: {
+        warn: (entry: unknown) => void lines.push(JSON.stringify({ level: 'warn', entry })),
+        info: (entry: unknown) => void lines.push(JSON.stringify({ level: 'info', entry })),
+      },
       payment: { registerPayoutRecipient: unexpected },
-      idempotency: { run: unexpected },
+      // T081 of specs/004-sessions (rule d): the administrator's deletion keys with `runOn`.
+      idempotency: { run: unexpected, runOn: unexpected },
       consequences: new AccountConsequences(),
+      // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+      ongoingEnrollments: createOngoingEnrollments({ settings }),
     });
     const routes = deleteAccountRoutes({
       deletion: services.deletion,

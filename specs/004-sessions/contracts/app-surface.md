@@ -83,12 +83,18 @@ boolean`, `remedyStatus?`, `disputed: boolean`; per enrollment its `status` with
 which the enum already holds, and, on `enrollments.get`, `complaintOpen: boolean`, so the student's complaint button
 reads «شكوتك قيد المراجعة» while their complaint is open (FR-452; booking reads it through moderation's entry). A
 restored enrollment (FR-455) is `confirmed` again and returns to the active tab. *(B42b, T074; FR-506; the note under T074, Q-O1 (a), Q-R7 (a):)* every item gains `paused: boolean`, additively: true for an enrollment paused by a teacher's suspension (`confirmed`, its `teacher_suspended` case open) or closed by a ban or a revocation while its slot is held (DEC-69); a paused item carries no reason and no session (no `next`, no `last`, the detail's `sessions` empty), its counts kept, its status and its tab unchanged, and `teacher.today` leaves its sessions out. Only the other party reads one: the restricted party is refused the lists. The tabs place `completed`, `terminated_no_show` and the new `cancelled` reasons in the
-ended tab.
+ended tab. *(B42c, T082; FR-513, SRS FR-CANCEL-10, DEC-68:)* an enrollment an administrator ended directly (`sessions.endEnrollment`) answers, on `enrollments.list/get` and `teacher.students.list/get`, `endedByAdmin?: { reason }`, additively: the party reason both parties are shown (`enrollments.admin_end_reason`), never the internal note; absent on every other enrollment, and cleared by a restore. The phone draws «أنهت الإدارة هذا الاشتراك» followed by it (T083).
 
 `teacher.students.list`, the teacher's search of their students by name, declares Phase 1's `rate_limit_search` (60 per
 60 s, no budget, as `booking.slots` does), the teacher as subject, failing closed; over it `RATE_LIMITED`. Phase 2
 declared none, so the default would have counted it and failed open (R-SEC-6; the owner's decision of 2026-11-06 on the
 fourth analysis, C2; kernel.md, "Rate limits").
+
+## `account.delete` — B42c's amendment of `002-identity`'s row (T080; FR-511, SRS FR-AUTH-14 as amended, DEC-67)
+
+| Procedure | Change | Notes |
+|---|---|---|
+| `account.delete` (and the web deletion pages, `002-identity`'s `public-pages.md`) | Refused `CONFLICT` with `details.cause` `active_enrollments`, naming no count, while the account has an ongoing enrollment as student or teacher: `pending_payment` or `confirmed` (a paused one included), or closed by its own ban or revocation while its slot is held (DEC-69); the innocent counterparty of a ban-closed enrollment is never refused | Checked in the deletion's transaction after the account's lock, through booking's count bound in `main.ts`; nothing written, the key's claim rolled back with the transaction, so a retry after the enrollments end deletes; one info line `{ userId, reason: 'active_enrollments' }`. The web confirm step renders a refusal page after the right code (the code then spent), with the same words and the support address. The phone draws the refusal with the support link in place of the confirm button. `002-identity`'s `app-surface.md:69` and `public-pages.md` stay as history (Q-R17 (a)). Rate limit unchanged (`rate_limit_authentication`) |
 
 ## The public configuration
 

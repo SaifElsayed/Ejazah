@@ -22,12 +22,14 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomInt, randomUUID } from 'node:crypto';
 
+import pg from 'pg';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hashPassword, OtpHasher } from '../../platform/crypto/hashing.js';
-import { closeDatabase } from '../../platform/db/prisma.repository.js';
+import { closeDatabase, type Transaction } from '../../platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../platform/db/spec-database.fixtures.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { publisherOn } from '../../platform/live/live-publisher.js';
+import { bindToTransaction, publisherOn, RequestLive } from '../../platform/live/live-publisher.js';
 
 import {
   auditEntriesAbout,
@@ -194,7 +196,14 @@ describe('account.delete: the typed word and the proof', () => {
   it('checks the proof before the transaction opens (B16 check, decision 5)', async () => {
     const caller = await providerAccount('google');
     await deleteWith(caller.userId, await providerProof('google', caller.subject));
-    expect(spec.events.slice(0, 4)).toEqual(['verify', 'transaction', 'consequence', 'committed']);
+    // T080 of specs/004-sessions (rule d): the count is asked inside the transaction, before the erasure.
+    expect(spec.events.slice(0, 5)).toEqual([
+      'verify',
+      'transaction',
+      'ongoing-asked',
+      'consequence',
+      'committed',
+    ]);
   });
 
   it('is keyed under account.delete for the caller, and the stored input carries no password or token', async () => {
@@ -497,11 +506,15 @@ describe('account.delete: after the commit (B16 check, decisions 1 and 3)', () =
   ])(
     'a publish that fails with %s writes one warning of eventType and errorName only, and the deletion goes on (T063)',
     async (_case, thrown, errorName) => {
-      spec = buildDeletion(database, {}, {
-        publish: () => {
-          throw thrown;
+      spec = buildDeletion(
+        database,
+        {},
+        {
+          publish: () => {
+            throw thrown;
+          },
         },
-      });
+      );
       const caller = await emailAccount();
 
       await deleteWith(caller.userId, byPassword());
@@ -674,6 +687,279 @@ describe('the web: confirmWebDeletion (FR-143)', () => {
     await expect(spec.deletion.confirmWebDeletion(caller.email, '123456')).rejects.toEqual(
       refused('RATE_LIMITED'),
     );
+  });
+});
+
+// T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended, DEC-67; the note under T080,
+// Q-R10 (a), Q-R11 (a), N4, N5): the person's own deletion, in the app and on the web, takes the
+// account's lock first, then asks booking's count through the `OngoingEnrollments` port on its own
+// transaction; while it answers an ongoing enrollment the deletion is refused `CONFLICT`
+// `active_enrollments`, naming no count, with one info line of ids and the reason, and nothing is
+// written: the key's claim rolls back with it, so the same key deletes once the enrollments end.
+// What the count counts is the db-integrity probe's (`tests/db-integrity/deletion-ongoing.spec.ts`).
+describe('a deletion refused with an ongoing enrollment (T080, FR-511)', () => {
+  const ongoingRefusal = expect.objectContaining({
+    code: 'CONFLICT',
+    details: [{ path: 'cause', code: 'active_enrollments' }],
+  });
+
+  it('account.delete: refused CONFLICT active_enrollments, nothing written, no work after the commit, one info line', async () => {
+    const caller = await emailAccount('teacher');
+    spec.ongoing.people.add(caller.userId);
+    await expect(deleteWith(caller.userId, byPassword())).rejects.toEqual(ongoingRefusal);
+    await spec.settle();
+
+    await expectUntouched(caller.userId, caller.email);
+    expect(spec.terminations).toEqual([]);
+    expect(spec.published).toEqual([]);
+    expect(spec.events).not.toContain('files-held');
+    expect(spec.identity.mails().filter(({ to }) => to === caller.email)).toEqual([]);
+    expect(spec.infos).toEqual([{ userId: caller.userId, reason: 'active_enrollments' }]);
+  });
+
+  it('account.delete: the refusal rolls the key’s claim back, so the same key deletes once the enrollments end', async () => {
+    const caller = await emailAccount();
+    spec.ongoing.people.add(caller.userId);
+    const idempotencyKey = key();
+    const input = { confirmation: 'حذف' as const, reauth: byPassword(), idempotencyKey };
+    await expect(spec.deletion.deleteAccount(caller.userId, input)).rejects.toEqual(ongoingRefusal);
+    spec.ongoing.people.delete(caller.userId);
+    await spec.deletion.deleteAccount(caller.userId, input);
+
+    expect(await rows().deletedUser(caller.userId)).toMatchObject({ email: null });
+    expect(spec.terminations).toEqual([{ userId: caller.userId, cause: 'account_deleted' }]);
+  });
+
+  it('asks the count on the deletion’s own transaction, holding the account’s lock, and deletes when there is none', async () => {
+    const caller = await emailAccount();
+    const asked: unknown[] = [];
+    const lockedWhenAsked: boolean[] = [];
+    spec.ongoing.answer = async (tx, userId) => {
+      asked.push(tx);
+      lockedWhenAsked.push(await rowLockedElsewhere(userId));
+      return false;
+    };
+    let erasedOn: unknown;
+    spec.consequences.subscribe(async (tx) => {
+      erasedOn = tx;
+    });
+    await deleteWith(caller.userId, byPassword());
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toBe(erasedOn);
+    expect(lockedWhenAsked).toEqual([true]);
+    expect(spec.infos).toEqual([]);
+    expect(await rows().deletedUser(caller.userId)).toMatchObject({ email: null });
+  });
+
+  it('the web: the right code is spent, the deletion refused with the same error, nothing written', async () => {
+    const caller = await emailAccount();
+    spec.ongoing.people.add(caller.userId);
+    await spec.deletion.requestWebCode(caller.email);
+    await vi.waitFor(() =>
+      expect(codeMailedTo(spec.identity.mails(), caller.email)).toMatch(/^\d{6}$/),
+    );
+    const code = codeMailedTo(spec.identity.mails(), caller.email);
+
+    await expect(spec.deletion.confirmWebDeletion(caller.email, code)).rejects.toEqual(
+      ongoingRefusal,
+    );
+    await spec.settle();
+    await expectUntouched(caller.userId, caller.email);
+    expect(spec.terminations).toEqual([]);
+    expect(spec.published).toEqual([]);
+    expect(spec.infos).toEqual([{ userId: caller.userId, reason: 'active_enrollments' }]);
+    // N5: the code was consumed before the refusal; a later try asks for a new one.
+    spec.ongoing.people.delete(caller.userId);
+    await expect(spec.deletion.confirmWebDeletion(caller.email, code)).resolves.toBe(false);
+  });
+});
+
+/**
+ * T080: whether another connection finds the account's row locked (`FOR UPDATE NOWAIT` refused with
+ * 55P03), asked while the deletion's transaction runs.
+ */
+async function rowLockedElsewhere(userId: string): Promise<boolean> {
+  const other = new pg.Client({ connectionString: specDatabaseUrl('DATABASE_URL') });
+  await other.connect();
+  try {
+    await other.query('BEGIN');
+    await other.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE NOWAIT', [userId]);
+    return false;
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code === '55P03') return true;
+    throw error;
+  } finally {
+    await other.query('ROLLBACK').catch(() => undefined);
+    await other.end();
+  }
+}
+
+// T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; the notes under T081, Q-O2 (a), N6,
+// Q-R13 (a)): an administrator's deletion at the owner's request, on the administrator kind's
+// transaction (its request's list bound to it, as `adminProcedure` binds it), keyed there, without
+// the re-authentication and without T080's count; the account's lock first; the administrator
+// passed to the consequences as `actor`; the kind's list reused, never a second one bound; the work
+// after the commit queued on that list, so it runs after the kind's commit and never after its
+// rollback. `NOT_FOUND` for an unknown or already deleted account, one info line of ids each way.
+describe('an administrator’s deletion (T081, FR-512)', () => {
+  const ADMIN = '0199d0a0-0000-7000-8000-0000000ad081';
+  const reason = 'طلب صاحب الحساب الحذف عبر الدعم';
+
+  /** The administrator kind's transaction: its request's list bound to it, flushed after the commit. */
+  async function asAdministrator<T>(work: (tx: Transaction) => Promise<T>) {
+    const sent: unknown[] = [];
+    const live = new RequestLive(
+      { publish: (message) => void sent.push(message) },
+      { warn: () => undefined },
+    );
+    try {
+      const answer = await database.$transaction(async (tx) => {
+        const unbind = bindToTransaction(tx, live);
+        try {
+          return await work(tx);
+        } finally {
+          unbind();
+        }
+      });
+      live.flush();
+      return { answer, sent, live };
+    } catch (error: unknown) {
+      live.drop();
+      throw error;
+    }
+  }
+
+  const removal = (targetUserId: string, idempotencyKey = key()) => ({
+    targetUserId,
+    reason,
+    idempotencyKey,
+  });
+
+  it('deletes over an ongoing enrollment, with no proof and no count, passing the administrator to the consequences', async () => {
+    const caller = await emailAccount('teacher');
+    spec.ongoing.people.add(caller.userId);
+    const actors: unknown[] = [];
+    spec.consequences.subscribe(async (_tx, _userId, _cause, actor) => void actors.push(actor));
+    const { answer } = await asAdministrator((tx) =>
+      spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId)),
+    );
+    await spec.settle();
+
+    expect(answer).toEqual({ replayed: false });
+    expect(await rows().deletedUser(caller.userId)).toMatchObject({ email: null });
+    expect(spec.terminations).toEqual([{ userId: caller.userId, cause: 'account_deleted' }]);
+    expect(actors).toEqual([{ adminId: ADMIN }]);
+    expect(spec.events).not.toContain('ongoing-asked');
+    expect(spec.events).not.toContain('verify');
+    expect(spec.keyed.at(-1)).toMatchObject({ scope: 'users.delete', actorId: ADMIN });
+    expect(spec.infos).toEqual([{ adminId: ADMIN, userId: caller.userId }]);
+  });
+
+  it('holds the account’s lock when the consequences run', async () => {
+    const caller = await emailAccount();
+    const locked: boolean[] = [];
+    spec.consequences.subscribe(
+      async (_tx, userId) => void locked.push(await rowLockedElsewhere(userId)),
+    );
+    await asAdministrator((tx) =>
+      spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId)),
+    );
+    expect(locked).toEqual([true]);
+  });
+
+  it('reuses the kind’s list: a consequence reaches it, and it stays bound for the rest of the call', async () => {
+    const caller = await emailAccount();
+    const seen: unknown[] = [];
+    spec.consequences.subscribe(async (tx) => void seen.push(publisherOn(tx)));
+    const after: unknown[] = [];
+    const { live } = await asAdministrator(async (tx) => {
+      await spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId));
+      after.push(publisherOn(tx));
+    });
+    // The same list, not an equal one: a second list bound would replace the kind's (T081's note).
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBe(live);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toBe(live);
+  });
+
+  it('runs the work after the commit only once the kind’s transaction has committed: the account, the files, the grant, the mail', async () => {
+    const caller = await providerAccount('apple', 'apple-grant-admin');
+    let inside: { readonly filesAsked: boolean; readonly published: number } | undefined;
+    await asAdministrator(async (tx) => {
+      await spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId));
+      inside = { filesAsked: spec.events.includes('files-held'), published: spec.published.length };
+    });
+    await spec.settle();
+
+    expect(inside).toEqual({ filesAsked: false, published: 0 });
+    expect(spec.published).toEqual([{ to: [caller.userId], event: { type: 'account' } }]);
+    expect(spec.events).toContain('files-held');
+    expect(spec.files.erased).toEqual([caller.userId]);
+    expect(spec.signInPort.calls.filter(({ operation }) => operation === 'revoke')).toHaveLength(1);
+    const mails = spec.identity.mails().filter(({ to }) => to === caller.email);
+    expect(mails.at(-1)?.text).toContain('Your Ijazah account has been deleted');
+  });
+
+  it('runs no work after the commit when the kind’s transaction rolls back, and erases nothing', async () => {
+    const caller = await emailAccount();
+    await expect(
+      asAdministrator(async (tx) => {
+        await spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId));
+        throw new Error('the audit entry could not be written');
+      }),
+    ).rejects.toThrow('the audit entry could not be written');
+    await spec.settle();
+
+    await expectUntouched(caller.userId, caller.email);
+    expect(spec.published).toEqual([]);
+    expect(spec.events).not.toContain('files-held');
+  });
+
+  it('a replay of the key answers replayed and does nothing more', async () => {
+    const caller = await emailAccount();
+    const input = removal(caller.userId);
+    await asAdministrator((tx) => spec.deletion.deleteByAdministrator(tx, ADMIN, input));
+    await spec.settle();
+    const { answer } = await asAdministrator((tx) =>
+      spec.deletion.deleteByAdministrator(tx, ADMIN, input),
+    );
+    await spec.settle();
+
+    expect(answer).toEqual({ replayed: true });
+    expect(spec.terminations).toHaveLength(1);
+    expect(spec.published).toHaveLength(1);
+  });
+
+  it.each([
+    ['an unknown account', async () => randomUUID()],
+    [
+      'an account already deleted',
+      async () => {
+        const caller = await emailAccount();
+        await deleteWith(caller.userId, byPassword());
+        spec.terminations.length = 0;
+        return caller.userId;
+      },
+    ],
+  ])('refuses %s NOT_FOUND, writing nothing, with one info line of ids', async (_case, target) => {
+    const userId = await target();
+    await expect(
+      asAdministrator((tx) => spec.deletion.deleteByAdministrator(tx, ADMIN, removal(userId))),
+    ).rejects.toEqual(refused('NOT_FOUND'));
+    expect(spec.terminations).toEqual([]);
+    expect(spec.infos).toEqual([{ adminId: ADMIN, userId, reason: 'not_found' }]);
+  });
+
+  it('refuses to run on a transaction no caller kind bound a list to, before anything is written', async () => {
+    const caller = await emailAccount();
+    await expect(
+      database.$transaction((tx) =>
+        spec.deletion.deleteByAdministrator(tx, ADMIN, removal(caller.userId)),
+      ),
+    ).rejects.toThrow(/after-commit list/);
+    await expectUntouched(caller.userId, caller.email);
   });
 });
 

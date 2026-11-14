@@ -18,8 +18,9 @@ import { z } from 'zod';
 
 import { accountStatus, teacherVerificationStatus } from '../account.js';
 import { enrollmentStatus } from '../checkout.js';
+import { idempotencyKey } from '../idempotency-key.js';
 import { gender, role } from '../onboarding.js';
-import { adminSearch } from './admins.js';
+import { adminReason, adminSearch } from './admins.js';
 import { monitorParty } from './sessions.js';
 
 /** A page of the list starts after this user; users are listed newest first by their time-ordered id. */
@@ -69,6 +70,29 @@ export const userRepeatedAbsence = z.object({
   teacherNoShows: z.int().nonnegative(),
 });
 
+/**
+ * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21, DEC-67): a document a deleted teacher once
+ * approved keeps, by its metadata only: never its key or a link (PDPL minimisation); the link is
+ * `teachers.keptData.documentLink`, one per press with a reason.
+ */
+export const userKeptDocument = z.object({
+  id: z.uuid(),
+  kind: z.enum(['national_id', 'passport', 'credential']),
+  uploadedAt: z.iso.datetime(),
+});
+
+/**
+ * T077: what a deleted teacher's profile keeps: the kept documents, whether the payout reference is
+ * kept (never its value), the erasure date an administrator set (null for none) and the erasure
+ * (null until it ran). A teacher never approved keeps nothing: no document, no payout.
+ */
+export const userKeptData = z.object({
+  documents: z.array(userKeptDocument),
+  payoutKept: z.boolean(),
+  eraseAt: z.iso.datetime().nullable(),
+  erasedAt: z.iso.datetime().nullable(),
+});
+
 export const usersGetOutput = z.object({
   userId: z.uuid(),
   profile: userProfile,
@@ -100,11 +124,35 @@ export const usersGetOutput = z.object({
    * `{days}` in the student's ban and the lifts. Additive (R-API-9).
    */
   banRestoreWindowDays: z.int().positive(),
+  /**
+   * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, N3): a deleted
+   * teacher's kept data (`userKeptData`); absent for anyone else. Additive (R-API-9).
+   */
+  keptData: userKeptData.optional(),
+  /**
+   * T077 (SRS FR-ADMIN-21, Q-E (a)): for a live teacher, whether a deleted teacher's kept profile
+   * holds the payout account this teacher registered; absent for anyone else. Additive (R-API-9).
+   */
+  payoutKeptOnDeletedTeacher: z.boolean().optional(),
 });
 
+// T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22; contracts/admin-surface.md, `users.delete`):
+// an administrator deletes an account only at its owner's request through support ⚠️ irreversible.
+// The reason records that request (the procedure cannot verify it); the call is keyed under the
+// administrator's idempotency key and answers nothing. `NOT_FOUND` for an unknown or already deleted
+// account. It is the person's own deletion without the re-authentication and without T080's refusal
+// for an ongoing enrollment, so the enrollments end as FR-AUTH-14 says for this case.
+export const usersDeleteInput = z.object({
+  targetUserId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type UsersDeleteInput = z.infer<typeof usersDeleteInput>;
 export type UsersListInput = z.infer<typeof usersListInput>;
 export type UsersListItem = z.infer<typeof usersListItem>;
 export type UsersListOutput = z.infer<typeof usersListOutput>;
 export type UsersGetInput = z.infer<typeof usersGetInput>;
 export type UsersGetOutput = z.infer<typeof usersGetOutput>;
 export type UserRepeatedAbsence = z.infer<typeof userRepeatedAbsence>;
+export type UserKeptData = z.infer<typeof userKeptData>;

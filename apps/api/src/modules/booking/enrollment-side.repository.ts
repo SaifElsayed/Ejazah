@@ -65,6 +65,8 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
 export interface MoveTarget {
   readonly status: Exclude<$Enums.EnrollmentStatus, 'confirmed'>;
   readonly cancellationReason: $Enums.CancellationReason | null;
+  /** T082: a direct end's reason both parties are shown (`admin_end_reason`, rule 51); else unwritten. */
+  readonly adminEndReason?: string;
 }
 
 /**
@@ -74,7 +76,11 @@ export interface MoveTarget {
 export async function moveEnrollment(tx: Client, id: string, target: MoveTarget): Promise<boolean> {
   const { count } = await tx.enrollment.updateMany({
     where: { id, status: 'confirmed' },
-    data: { status: target.status, cancellationReason: target.cancellationReason },
+    data: {
+      status: target.status,
+      cancellationReason: target.cancellationReason,
+      ...(target.adminEndReason === undefined ? {} : { adminEndReason: target.adminEndReason }),
+    },
   });
   return count === 1;
 }
@@ -89,7 +95,9 @@ export async function moveEnrollment(tx: Client, id: string, target: MoveTarget)
  * T073 of specs/004-sessions (R-322's step 1 widened, DEC-66): also `cancelled` with the reason
  * `teacher_suspended`, a teacher's ban's or revocation's closing (a student's ban's is `admin`).
  * Which closing may be restored stays the caller's (sessions' one closing rule, `closingOf`). And
- * (T070's follow-up 2) `slot_released_at` is cleared, so a later closing holds the slot again.
+ * (T070's follow-up 2) `slot_released_at` is cleared, so a later closing holds the slot again; and
+ * (T082) `admin_end_reason`, a direct end's reason, as `cancellation_reason` is (rule 51 refuses it
+ * on a confirmed row).
  */
 export async function restoreEnrollment(tx: Client, id: string): Promise<boolean> {
   const { count } = await tx.enrollment.updateMany({
@@ -101,7 +109,12 @@ export async function restoreEnrollment(tx: Client, id: string): Promise<boolean
         { status: 'cancelled', cancellationReason: { in: ['admin', 'teacher_suspended'] } },
       ],
     },
-    data: { status: 'confirmed', cancellationReason: null, slotReleasedAt: null },
+    data: {
+      status: 'confirmed',
+      cancellationReason: null,
+      slotReleasedAt: null,
+      adminEndReason: null,
+    },
   });
   return count === 1;
 }

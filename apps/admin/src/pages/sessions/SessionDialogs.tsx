@@ -12,18 +12,43 @@
 //   slot is free; the release (`enrollments.releaseSlot`), shown on a held slot, says until when it
 //   is held and that the release cannot be undone (a restore after it succeeds only while the slot
 //   stays free), with its key minted when the dialog opens and reused on its retry.
+// - B42c, T083 (FR-513, FR-514; SRS FR-CANCEL-10, DEC-68; T082's `sessions.endEnrollment`): the
+//   end of a confirmed enrollment says what it does and that a release cannot be undone, asks for
+//   the parties' reason (mandatory) and an internal note (optional), and offers the slot held for
+//   the monitor's `enrollmentRestoreWindowDays` (the default) or released now; its key minted when
+//   the dialog opens and reused on its retry; `complaint_open` links to the complaint.
 // Once the server answers, the monitor is read again and the dialog closes.
+import type { EnrollmentEndSlot } from '@ijazah/contracts/admin';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { Banner, Dialog, Field, Icon, IconTile, Input } from '../../design/components';
+import {
+  Banner,
+  Choice,
+  ChoiceGroup,
+  Dialog,
+  Field,
+  Icon,
+  IconTile,
+  Input,
+  TextLink,
+} from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { useAdmin } from '../../lib/admin-context';
 import type { ErrorMessage } from '../../lib/error-message';
 import { panelTimeZone } from '../../lib/zone';
 import { mintIdempotencyKey } from '../_shared/idempotency-key';
 import { useRereadMonitor } from './queries';
-import { cancelFailure, instant, releaseFailure, restoreFailure, type SlotHold } from './words';
+import {
+  cancelFailure,
+  type EndFailure,
+  endFailure,
+  instant,
+  releaseFailure,
+  restoreFailure,
+  type SlotHold,
+} from './words';
 
 interface DialogShellProps {
   readonly title: string;
@@ -240,5 +265,136 @@ export function ReleaseSlotDialog({
         });
       }}
     />
+  );
+}
+
+/** What the end sends: the parties' reason, the note when written, and the slot's choice. */
+interface EndInput {
+  readonly partyReason: string;
+  readonly internalNote: string;
+  readonly slot: EnrollmentEndSlot;
+}
+
+/** T083 (FR-513): a confirmed enrollment's end, its key minted when the dialog opens. */
+export function EndEnrollmentDialog({
+  enrollmentId,
+  days,
+  onClose,
+}: {
+  readonly enrollmentId: string;
+  /** `sessions.monitor.get`'s `enrollmentRestoreWindowDays` (Q-O1 (a)). */
+  readonly days: number;
+  readonly onClose: () => void;
+}) {
+  const t = useT();
+  const navigate = useNavigate();
+  const { client } = useAdmin();
+  const reread = useRereadMonitor();
+  const [idempotencyKey] = useState(mintIdempotencyKey);
+  const [partyReason, setPartyReason] = useState('');
+  const [internalNote, setInternalNote] = useState('');
+  const [slot, setSlot] = useState<EnrollmentEndSlot>('hold');
+  const [failure, setFailure] = useState<EndFailure | undefined>(undefined);
+  const end = useMutation({
+    mutationFn: (input: EndInput) =>
+      client.api.sessions.endEnrollment.mutate({
+        enrollmentId,
+        partyReason: input.partyReason,
+        ...(input.internalNote === '' ? {} : { internalNote: input.internalNote }),
+        slot: input.slot,
+        idempotencyKey,
+      }),
+  });
+  const reason = partyReason.trim();
+  const complaintHref =
+    failure?.complaintId === undefined ? undefined : `/cases?case=${failure.complaintId}`;
+
+  const send = () => {
+    if (reason === '') return;
+    setFailure(undefined);
+    end.mutate(
+      { partyReason: reason, internalNote: internalNote.trim(), slot },
+      {
+        onSuccess: () => {
+          void reread();
+          onClose();
+        },
+        onError: (error) => setFailure(endFailure(error)),
+      },
+    );
+  };
+
+  return (
+    <Dialog
+      open
+      title={t('admin.sessions.end.title')}
+      leading={<IconTile icon={{ name: 'circle-x' }} tone="danger" />}
+      note={t('admin.dialogs.confirm.common.footer')}
+      actions={[
+        {
+          label: t('admin.dialogs.confirm.common.cancel'),
+          variant: 'secondary',
+          disabled: end.isPending,
+          onPress: onClose,
+        },
+        {
+          label: t('admin.sessions.end.confirm'),
+          variant: 'danger',
+          disabled: reason === '',
+          loading: end.isPending,
+          onPress: send,
+        },
+      ]}
+    >
+      <section className="section">
+        <h3 className="group-label">{t('admin.dialogs.confirm.common.effectsTitle')}</h3>
+        {[t('admin.sessions.end.effect'), t('admin.sessions.end.releaseFinal')].map((effect) => (
+          <p key={effect} className="row row--top gap-2 text-callout">
+            <Icon name="info" size="sm" />
+            <span>{effect}</span>
+          </p>
+        ))}
+      </section>
+      <Field label={t('admin.sessions.end.reasonLabel')}>
+        <Input
+          value={partyReason}
+          onChangeText={setPartyReason}
+          multiline
+          placeholder={t('admin.dialogs.confirm.common.reasonPlaceholder')}
+        />
+      </Field>
+      <Field label={t('admin.sessions.end.noteLabel')}>
+        <Input value={internalNote} onChangeText={setInternalNote} multiline />
+      </Field>
+      <ChoiceGroup legend={t('admin.sessions.end.slotLegend')}>
+        <Choice
+          label={t('admin.sessions.end.slot.hold', { days })}
+          selected={slot === 'hold'}
+          onPress={() => setSlot('hold')}
+        />
+        <Choice
+          label={t('admin.sessions.end.slot.release')}
+          selected={slot === 'release'}
+          danger
+          onPress={() => setSlot('release')}
+        />
+      </ChoiceGroup>
+      {failure === undefined ? null : (
+        <Banner icon={{ name: 'alert-circle' }} tone="danger">
+          <span className="stack gap-2">
+            <span>{t(failure.key, failure.values)}</span>
+            {complaintHref === undefined ? null : (
+              <span className="self-start">
+                <TextLink
+                  label={t('admin.sessions.end.refused.openComplaint')}
+                  href={complaintHref}
+                  onPress={() => void navigate(complaintHref)}
+                />
+              </span>
+            )}
+          </span>
+        </Banner>
+      )}
+    </Dialog>
   );
 }

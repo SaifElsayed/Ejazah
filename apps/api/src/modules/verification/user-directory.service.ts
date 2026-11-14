@@ -29,6 +29,12 @@
 // `banRestoreWindowDays`, the `ban_restore_window_days` setting read through sessions' `windowDaysOf`
 // (R-MONEY-12: a number from `settings`), the panel's `{days}` in the student's ban and the lifts.
 //
+// T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; the note under T077, N3): for a deleted
+// teacher, `keptData` (the kept documents by metadata, whether the payout reference is kept, the
+// erasure date and the erasure), never the payout reference's value and never a link (PDPL
+// minimisation); for a live teacher, `payoutKeptOnDeletedTeacher`; a student neither. Both through
+// the kept-data reads (`kept-data.service.ts`), on the call's transaction, with no lock.
+//
 // THE DATE OF BIRTH (the reviewer's requirement; PDPL, a minor's data is sensitive): read only to
 // derive `isMinor`. It never leaves this file: not in the answer, a log line or an audit entry.
 //
@@ -54,6 +60,7 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { DirectoryUser, UserRecordRow } from '../identity/index.js';
 import type { CancellationRequestCountsReader, MarkedEnrollments } from '../sessions/index.js';
 import { BAN_RESTORE_WINDOW_SETTING, windowDaysOf } from '../sessions/index.js';
+import type { KeptDataReads } from './kept-data.service.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -129,6 +136,7 @@ export function createUserDirectoryService({
   log,
   clock = clockTimestamp,
   held,
+  kept,
 }: {
   readonly store: UserDirectoryStore;
   readonly settings: SettingsReader;
@@ -139,6 +147,8 @@ export function createUserDirectoryService({
   readonly clock?: (tx: Transaction) => Promise<Date>;
   /** T072 (Q9 (a)): the hold's end of the account's ban or revocation closings. */
   readonly held: SlotHolds;
+  /** T077 (N3): a deleted teacher's kept data and a live teacher's payout match. */
+  readonly kept: KeptDataReads;
 }): UserDirectory {
   /** Of a batch, the users whose name begins with `name`, folded, in the batch's order. */
   const matching = async (
@@ -154,6 +164,17 @@ export function createUserDirectoryService({
       ),
     );
     return batch.filter(({ id }) => found.has(id));
+  };
+
+  /** T077: a teacher's kept data (deleted) or payout match (live); nothing for anyone else. */
+  const keptOf = async (
+    tx: Transaction,
+    record: UserRecordRow,
+  ): Promise<Pick<UsersGetOutput, 'keptData' | 'payoutKeptOnDeletedTeacher'>> => {
+    if (record.role !== 'teacher') return {};
+    return record.deleted
+      ? { keptData: await kept.keptDataOf(tx, record.id) }
+      : { payoutKeptOnDeletedTeacher: await kept.payoutKeptOnDeletedTeacher(tx, record.id) };
   };
 
   const repeatedAbsencesOf = async (
@@ -200,15 +221,23 @@ export function createUserDirectoryService({
       if (record === null) {
         throw refusal(log, { adminId, userId: targetUserId }, 'NOT_FOUND', 'not_found');
       }
-      const [now, cancellationRequests, repeatedAbsences, heldUntil, banRestoreWindowDays] =
-        await Promise.all([
-          clock(tx),
-          counts.cancellationRequestCountsOf(tx, targetUserId),
-          record.role === 'teacher' ? repeatedAbsencesOf(tx, targetUserId) : undefined,
-          held.slotHeldUntilOf(tx, targetUserId),
-          // B42b, T075 (Q-O2 (a)).
-          windowDaysOf(settings)(BAN_RESTORE_WINDOW_SETTING),
-        ]);
+      const [
+        now,
+        cancellationRequests,
+        repeatedAbsences,
+        heldUntil,
+        banRestoreWindowDays,
+        keptData,
+      ] = await Promise.all([
+        clock(tx),
+        counts.cancellationRequestCountsOf(tx, targetUserId),
+        record.role === 'teacher' ? repeatedAbsencesOf(tx, targetUserId) : undefined,
+        held.slotHeldUntilOf(tx, targetUserId),
+        // B42b, T075 (Q-O2 (a)).
+        windowDaysOf(settings)(BAN_RESTORE_WINDOW_SETTING),
+        // T077 (N3).
+        keptOf(tx, record),
+      ]);
       // A live person's date of birth is set (ERD §15 rule 32); a deleted one's may be erased.
       const isMinor =
         record.dateOfBirth !== null &&
@@ -240,6 +269,7 @@ export function createUserDirectoryService({
         // T072 (Q9 (a)).
         enrollmentsSlotHeldUntil: heldUntil === null ? null : heldUntil.toISOString(),
         banRestoreWindowDays,
+        ...keptData,
       };
     },
   };

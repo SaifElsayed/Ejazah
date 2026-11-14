@@ -8,8 +8,12 @@
 // latest end case) gives the closing's kind and its case: a complaint's (`absence_termination`), a
 // fault confirmed (`student_fault_confirmed`), a ban's (`student_banned`) and a teacher's ban or
 // revocation (`teacher_ended` on `cancelled` `teacher_suspended`) restorable while the case is open;
-// never a deletion's or a gender correction's, nor any other; no `admin_ended` before T082. The
-// window's setting follows the kind: `ban_restore_window_days` for a ban's or a revocation's.
+// never a deletion's or a gender correction's, nor any other. The window's setting follows the kind:
+// `ban_restore_window_days` for a ban's or a revocation's.
+//
+// T082 (FR-513; SRS FR-CANCEL-10; the note under T082, N8): an administrator's direct end
+// (`admin_ended` on `cancelled` `admin`) joins the rule, restorable while its case is open, its slot
+// held through `enrollment_restore_window_days`.
 import { describe, expect, it } from 'vitest';
 
 import type { EnrollmentCase } from '../moderation/index.js';
@@ -88,6 +92,8 @@ describe('windowSettingOf (FR-503; SRS FR-CANCEL-9)', () => {
     ['student_fault_confirmed', ENROLLMENT_RESTORE_WINDOW_SETTING],
     ['student_banned', BAN_RESTORE_WINDOW_SETTING],
     ['teacher_ended', BAN_RESTORE_WINDOW_SETTING],
+    // T082: a direct end holds its slot through the enrollment window.
+    ['admin_ended', ENROLLMENT_RESTORE_WINDOW_SETTING],
   ] as const)('a %s closing reads %s', (kind, setting) => {
     expect(windowSettingOf(kind)).toBe(setting);
   });
@@ -99,6 +105,11 @@ describe('latestEndCaseOf (R-322, step 1)', () => {
     const end = endCase('student_banned', 'open', 2);
     const older = endCase('student_fault_confirmed', 'dismissed', 1);
     expect(latestEndCaseOf([newest, end, older])).toEqual(end);
+  });
+
+  it('counts a direct end’s `admin_ended` case as an end’s (T082)', () => {
+    const end = endCase('admin_ended', 'open', 2);
+    expect(latestEndCaseOf([endCase('refund_choice', 'open', 3), end])).toEqual(end);
   });
 
   it('is none when no case is an end’s', () => {
@@ -125,6 +136,8 @@ describe('closingOf, the one closing rule (Q4 (a), N4)', () => {
       facts('cancelled', 'teacher_suspended', endCase('teacher_ended')),
       'teacher_ended',
     ],
+    // T082 (N8): an administrator's direct end.
+    ['a direct end', facts('cancelled', 'admin', endCase('admin_ended')), 'admin_ended'],
   ])('admits %s while its case is open', (_name, closing, kind) => {
     expect(closingOf(closing)).toEqual({ kind, closingCase: closing.endCase, restorable: true });
   });
@@ -161,7 +174,19 @@ describe('closingOf, the one closing rule (Q4 (a), N4)', () => {
       'a teacher’s end whose case is a student’s',
       facts('cancelled', 'teacher_suspended', endCase('student_banned')),
     ],
-    ['an `admin_ended` case (Q3 (a): T082’s)', facts('cancelled', 'admin', endCase('admin_ended'))],
+    // T082: a direct end's case only on its own closing, `cancelled` `admin`.
+    [
+      'an `admin_ended` case on a teacher’s end',
+      facts('cancelled', 'teacher_suspended', endCase('admin_ended')),
+    ],
+    [
+      'an `admin_ended` case on a termination',
+      facts('terminated_no_show', null, endCase('admin_ended')),
+    ],
+    [
+      'an `admin_ended` case on a deletion',
+      facts('cancelled', 'account_deleted', endCase('admin_ended')),
+    ],
   ])('never admits %s', (_name, closing) => {
     expect(closingOf(closing)).toBeUndefined();
   });

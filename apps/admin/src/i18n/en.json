@@ -208,7 +208,13 @@
         "enrollmentSlotReleased": "Release an enrollment's slot",
         "studentBanLifted": "Lift a student's ban",
         "teacherBanLifted": "Lift a teacher's or an applicant's ban",
-        "teacherRevocationLifted": "Lift a teacher's revocation"
+        "teacherRevocationLifted": "Lift a teacher's revocation",
+        "enrollmentEndedByAdmin": "End an enrollment",
+        "keptDocumentView": "View a deleted teacher's kept document",
+        "teacherKeptDataEraseDateSet": "Set the erase date of a deleted teacher's kept data",
+        "teacherKeptDataEraseDateCleared": "Clear the erase date of a deleted teacher's kept data",
+        "teacherKeptDataErased": "Erase a deleted teacher's kept data",
+        "userDeletedByAdmin": "Delete an account at its owner's request"
       },
       "clearAll": "Clear all",
       "columns": {
@@ -435,7 +441,8 @@
         "studentFaultConfirmed": "A suspended student’s fault confirmed",
         "studentSuspended": "The student was suspended; the case awaits review",
         "teacherEnded": "The teacher’s approval was revoked, or they were banned or their account deleted",
-        "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return"
+        "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return",
+        "adminEnded": "The administration ended the enrollment directly"
       },
       "status": {
         "dismissed": "Dismissed",
@@ -2685,7 +2692,8 @@
         "timelineTitle": "What happened to the enrollment · newest first",
         "timelineEmpty": "Nothing recorded yet.",
         "slotReleased": "This enrollment's slot was released on {when}; it can be restored while the slot is still free.",
-        "release": "Release the slot"
+        "release": "Release the slot",
+        "end": "End the enrollment"
       },
       "remedy": {
         "title": "Remedy · {kind}",
@@ -2726,7 +2734,8 @@
         "makeupRefused": "The make-up session could not be booked",
         "adminOpenedForStudent": "Opened by the administration for the student",
         "adminOpenedForTeacher": "Opened by the administration for the teacher",
-        "teacherSuspended": "The teacher suspended (the enrollment paused)"
+        "teacherSuspended": "The teacher suspended (the enrollment paused)",
+        "adminEnded": "The administration ended the enrollment"
       },
       "caseStatus": {
         "open": "Open",
@@ -2813,6 +2822,23 @@
         "refused": {
           "slotNotHeld": "This enrollment's slot is no longer held for it: the hold ended, it was already released, or its closing can no longer be restored. Read the page again. Nothing changed.",
           "notFound": "This enrollment was not found. Nothing changed."
+        }
+      },
+      "end": {
+        "title": "End the enrollment",
+        "effect": "The remaining sessions are cancelled, a compensation case opens for what the student is owed, and the enrollment stays restorable at any time while the case is open; with «Release the slot now», or after the hold, the restore succeeds only while the slot is still free.",
+        "releaseFinal": "A release of the slot cannot be undone: another student may take it, and the restore is refused once someone else has it.",
+        "reasonLabel": "Reason (shown to the student and the teacher)",
+        "noteLabel": "Internal note (administration only)",
+        "slotLegend": "The enrollment's weekly slot",
+        "slot": {
+          "hold": "Hold the slot for {days, plural, one {# day} other {# days}}",
+          "release": "Release the slot now"
+        },
+        "confirm": "End the enrollment",
+        "refused": {
+          "complaintOpen": "A complaint of the teacher's absence is open on this enrollment, so it is not ended directly: decide the complaint on its page. Nothing changed.",
+          "openComplaint": "Open the complaint"
         }
       }
     }
