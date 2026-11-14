@@ -403,6 +403,23 @@ describe('every ordinary reader answers a kept document as none (T076; Q-O8 (a),
     expect(listed.map(({ id }) => id)).not.toContain(document.id);
   });
 
+  it('the purge never deletes it either, kept after the list was read (Q-O8 (a), the delete’s own `where`)', async () => {
+    // The race the list cannot close: listed while live, kept by a deletion before the purge's
+    // delete runs. The delete reads `kept_at` itself, so nothing kept disappears automatically.
+    const { document } = await keptDocument();
+    const purge = createUnreferencedDocuments({ database, cipher, references: [] });
+    const removeObject = vi.fn(async () => undefined);
+    expect(
+      await purge.removeUnreferenced({ id: document.id, storageKey: document.key }, removeObject),
+    ).toBe(false);
+    expect(removeObject).not.toHaveBeenCalled();
+    const { rows } = await db.query<{ kept: boolean }>(
+      'SELECT kept_at IS NOT NULL AS kept FROM verification_documents WHERE id = $1',
+      [document.id],
+    );
+    expect(rows).toEqual([{ kept: true }]);
+  });
+
   it('the held-files read lists it inside an open matter and opens it there (Q-R9 (i))', async () => {
     const { userId, document } = await keptDocument();
     const held = createDisputeHeldFiles({ database, storage, cipher, settings });

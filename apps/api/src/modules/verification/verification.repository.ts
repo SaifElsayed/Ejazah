@@ -57,14 +57,15 @@ export interface StoredDocument {
 
 /**
  * Deletes the document on `tx` while no verification request points at it (T093); whether it did.
- * A row another module points at is refused by its foreign key, which fails the transaction.
+ * A row another module points at is refused by its foreign key, which fails the transaction. A kept
+ * document (T076) is never deleted, even one kept after the purge listed it (Q-O8 (a)).
  */
 export async function deleteDocumentWithoutRequest(
   tx: Pick<Transaction, 'verificationDocument'>,
   id: string,
 ): Promise<boolean> {
   const { count } = await tx.verificationDocument.deleteMany({
-    where: { id, verificationRequests: { none: {} } },
+    where: { id, keptAt: null, verificationRequests: { none: {} } },
   });
   return count === 1;
 }
