@@ -1137,6 +1137,48 @@ describe("a teacher's suspension pauses (T071, FR-504, R-313)", () => {
       (await sessionEventsOf(one)).filter(({ kind }) => kind === 'remedy_handed_to_case'),
     ).toEqual([]);
   });
+
+  // T081's note (B42a; the review session's ruling of 2026-11-14 on lane D's report): an
+  // administrator's deletion of a party of a paused enrollment (T080's check skipped) closes its open
+  // `teacher_suspended` case as a ban does, the deleting administrator its closer through
+  // `AccountConsequence`'s `actor`; a student's deletion has no end case, so nothing covers it.
+  it('an administrator deletes a paused enrollment’s student: its teacher_suspended case closed resolved, compensation_ordered, ended_meanwhile, by the deleting administrator', async () => {
+    const { on, one, two } = await teacherWithTwo();
+    const adminId = await makeAdmin(watcher);
+    await database.$transaction((tx) => standing.suspend(tx, adminId, on.teacherId));
+    const { studentUserId } = await database.enrollment.findUniqueOrThrow({
+      where: { id: one },
+      select: { studentUserId: true },
+    });
+
+    await deleteByAdministrator(studentUserId);
+
+    const [closed] = await database.dispute.findMany({
+      where: { enrollmentId: one, reason: 'teacher_suspended' },
+      select: {
+        status: true,
+        resolution: true,
+        resolutionNotes: true,
+        resolvedByAdminId: true,
+        coveredByCaseId: true,
+      },
+    });
+    expect(closed).toMatchObject({
+      status: 'resolved',
+      resolution: 'compensation_ordered',
+      resolutionNotes: 'ended_meanwhile',
+      coveredByCaseId: null,
+    });
+    const closer = await database.adminUser.findUnique({
+      where: { id: closed?.resolvedByAdminId ?? randomUUID() },
+      select: { displayName: true },
+    });
+    expect(closer).toEqual({ displayName: 'Probe administrator' });
+    // The other student's paused enrollment is untouched: its case still open.
+    expect((await casesOf(two)).map(({ reason, status }) => [reason, status])).toEqual([
+      ['teacher_suspended', 'open'],
+    ]);
+  });
 });
 
 describe("a teacher's end (T006, FR-483, R-313)", () => {

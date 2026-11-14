@@ -33,6 +33,7 @@ import {
   bookingSlotsStore,
   createBookingServices,
   createEnrollmentSide,
+  createOngoingEnrollments,
   holdsStore,
   placeHold,
   terminationSubscriber,
@@ -601,6 +602,26 @@ describe('the restore of a direct end, at any time (DEC-69)', () => {
       [{ path: 'cause', code: 'slot_taken' }],
     ]);
     expect(await stateOf(made.enrollmentId)).toEqual(before);
+  });
+});
+
+// Q-R2 (a), the integration's (B42c): «T080's deletion allowed after the end». T080's count (booking's
+// `OngoingEnrollments`, the port the deletion asks on its own transaction) is read on T082's real end:
+// an `admin_ended` closing is never counted (FR-511), so neither party is refused while its slot is held.
+describe('T080’s deletion allowed after the end (Q-R2 (a); FR-511, FR-513)', () => {
+  it('the count the deletion asks answers none for either party once an administrator ended the enrollment, its slot held', async () => {
+    const made = await confirmedWorld();
+    const count = createOngoingEnrollments({ settings });
+    const ongoing = (userId: string) =>
+      database.$transaction((tx: Transaction) => count.hasOngoing(tx, userId));
+    expect(await ongoing(made.studentId)).toBe(true);
+    expect(await ongoing(made.teacherId)).toBe(true);
+
+    await end(made.enrollmentId);
+
+    expect(await weekTaken(made)).toBe(true);
+    expect(await ongoing(made.studentId)).toBe(false);
+    expect(await ongoing(made.teacherId)).toBe(false);
   });
 });
 
