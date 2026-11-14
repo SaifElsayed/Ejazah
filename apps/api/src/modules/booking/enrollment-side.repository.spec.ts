@@ -181,7 +181,7 @@ describe('enrollmentsPage (T008, U3)', () => {
       },
     ]);
     expect(calls[0]?.args).toMatchObject({ where: { AND: [] }, orderBy: { id: 'desc' }, take: 3 });
-    expect(calls[0]?.args).not.toHaveProperty('where.confirmedAt');
+    expect((calls[0]?.args as { where: { confirmedAt?: unknown } }).where.confirmedAt).toEqual({});
   });
 
   // T074 FU4 (PR #139's review, round 1, follow-up 4; the note under T074, Q-O3 (a)): the page answers

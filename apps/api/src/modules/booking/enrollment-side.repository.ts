@@ -147,7 +147,9 @@ export async function enrollmentsPage(
       ...(filter.teacherUserIds === undefined
         ? {}
         : { teacherUserId: { in: [...filter.teacherUserIds] } }),
-      ...(filter.everConfirmed === true ? { confirmedAt: { not: null } } : {}),
+      // T074 FU4: written in the `where` itself, so the confirmation gate reads it as a read; an
+      // empty filter filters nothing.
+      confirmedAt: filter.everConfirmed === true ? { not: null } : {},
     },
     orderBy: { id: 'desc' },
     take,
