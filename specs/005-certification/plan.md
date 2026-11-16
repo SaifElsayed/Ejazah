@@ -7,7 +7,8 @@
 ## Summary
 
 v1.0's Phase 4, as SRS DEC-70 and DEC-71 cut it:
-- the ijazah request, its review and issue, with the certificate rendered by Typst in the worker;
+- the ijazah request, its review and issue, with the certificate rendered by Typst in the worker and signed off by an
+  administrator before the parties see it (DEC-72);
 - revocation and the bar;
 - user reports;
 - gender flags, the correction and the fraud ban;
@@ -18,14 +19,14 @@ The schema already holds most tables (init migration). This phase adds `ijazah_r
 columns on `ijazahs` and two compensation reasons. It writes the code that the empty `certification` and
 `notifications` modules, and moderation's `gender_flags` and `user_reports`, have waited for.
 
-Every decision is in [research.md](research.md) (R-401 to R-413). Four wait for the owner (P1–P4,
-`ejazah-tools\b43\t057-plan-questions.md`), with the recommended option written in place.
+Every decision is in [research.md](research.md) (R-401 to R-414). The owner answered P1–P4 and D1 on 2026-11-16
+(`ejazah-tools\b43\t057-plan-questions.md`, SRS DEC-72).
 
 ## Technical Context
 
 - **Language and dependencies:** TypeScript (strict). NestJS API with tRPC; Prisma 7 on PostgreSQL; BullMQ on Redis;
   Expo SDK 58 phone app; React (Vite) admin panel; zod contracts; vitest and jest. All as in Phases 1 to 3.
-- **New dependencies (Open).** Nothing is added without the owner's word typed in the implementing session:
+- **New dependencies (chosen; installed only on the owner's word typed in the implementing session):**
   - the Typst CLI 0.15.1 binary (P1 (a));
   - `expo-notifications` in `apps/mobile`, with FCM credentials in EAS (P2 (a)).
 - **Storage:**
@@ -59,12 +60,11 @@ Every decision is in [research.md](research.md) (R-401 to R-413). Four wait for 
 | R-API-13, 15 | `render-certificate` and `deliver-notification` are jobs. The push port is used only in the delivery job (lint `no-push-outside-job`) |
 | R-API-14 | Each job has its double-run spec |
 | R-SEC-3, 4 | Certificates, signatures and the request's copy only by signed link. The signature upload is sniffed |
-| R-HONEST-5, 6 | The push payload holds UUIDs only (`assertPushPayload`). A revoked ijazah is never shown as valid (list, link, record) |
+| R-HONEST-5, 6 | The push payload holds UUIDs only (`assertPushPayload`). A revoked ijazah is never shown as valid (list, record) and its PDF is served to nobody (DEC-72) |
 | R-DB-6, 7 | The certificate number and token come from `platform/guards/identifiers.ts` (crypto randomness). The token is stored only hashed |
 | R-PROC-1 | This spec folder; batch branches named `Ejazah_app/005-certification/<ids>` |
 
-**Gate: passes.** The two open dependency questions are recorded (P1, P2): neither breaks a rule, and both need the
-owner's word to install.
+**Gate: passes.** The two dependencies (P1, P2) break no rule, and both need the owner's word to install.
 
 ## Project Structure
 
@@ -109,8 +109,8 @@ tests/                       # adversarial registrations, db-integrity probes, j
 | Batch | When | Tasks (summary) |
 |---|---|---|
 | B45 | 11/17 | Migration and seed; settings registry; signature upload; certificate name; notifications writer and `deliver-notification` with the Expo adapter (stand-in until P2's acts); push-token procedures |
-| B46 | 11/17–11/18 | Requests (send, preview, freeze); the admin queue (approve, reject); `render-certificate` and the template; certificates reads and links; revoke and bar |
-| B47 | 11/18 | Reports (create, queue, resolve, chat retention); gender flags (raise, queue, dismiss, correct, fraud ban) with their locks and cases |
+| B46 | 11/17–11/18 | Requests (send, preview, freeze); the admin queue (approve, reject); `render-certificate` and the template; the sign-off and re-render; certificates reads and links; revoke and bar |
+| B47 | 11/18 | Reports (create, queue, resolve, chat retention); gender flags (raise, queue, dismiss, correct, fraud ban) with their locks and cases; a teacher's deletion refusals and the kept signature |
 | B48 | 11/18–11/19 | Push producers (cancellation request and answer, payment results); the `send-reminder` sweep; phone screens (request, status, signature, certificate name, certificates, report, flag, push permission) |
 | B49 | 11/19 | Panel pages (ijazah requests, ijazahs, reports, gender, settings); adversarial registrations for every new procedure; quickstart run |
 
@@ -118,4 +118,4 @@ The settings page (R-410) is a light item: if track 2 frees first, the owner may
 
 ## Complexity Tracking
 
-None: no constitution rule is broken. Two new dependencies wait for the owner's word (P1, P2).
+None: no constitution rule is broken. Two new dependencies wait for the owner's word to install (P1, P2).

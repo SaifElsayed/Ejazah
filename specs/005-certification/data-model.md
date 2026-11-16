@@ -28,7 +28,10 @@ New columns (ERD :582, ADR 0019 D1):
 - `issued_by_admin_id` FK → `admin_users`;
 - `student_name_printed` and `teacher_name_printed` text NOT NULL;
 - `completion_date` date;
-- `rendered_at` timestamptz NULL (R-402).
+- `rendered_at` timestamptz NULL (R-402);
+- `render_generation` int NOT NULL DEFAULT 0, raised by each re-render (R-402);
+- `signed_off_at` timestamptz NULL and `signed_off_by_admin_id` FK → `admin_users`, set together (a check), never
+  before `rendered_at` (DEC-72).
 
 The table holds no row today, so the NOT NULLs need no backfill (to be verified by a SELECT before the migration,
 B26's lesson). `mode` stays and the service refuses `uploaded` (ADR 0013). `verification_token_hash` is minted at
@@ -39,8 +42,8 @@ No change. The snapshot is built from the rows at send and re-built on a correct
 
 ## Unchanged, now written
 - **`teacher_signatures` (catalog):** written by the signature upload (R-411), its `storage_key` as the init
-  migration holds it (as `users.photo_key` is), served only by signed link (R-SEC-3). Erased at a teacher's deletion
-  (R-403).
+  migration holds it (as `users.photo_key` is), served only by signed link (R-SEC-3). Kept at the deletion of a teacher
+  once approved and erased with the kept documents (DEC-72, R-411).
 - **`ijazah_bars` (certification), `gender_flags`, `user_reports` (moderation), `device_push_tokens` (identity):** as
   in the init migration.
 - **`notifications`:** as in the init migration. No enum member is added in v1.0 (R-406).
@@ -72,7 +75,7 @@ Checks: `reporter_user_id <> reported_user_id`; a `user_reports` row with `conte
 | `rate_limit_user_report` | 5 per 86400 s (DEC-71) |
 | `rate_limit_gender_flag` | 3 per 86400 s (DEC-71) |
 | `rate_limit_ijazah_request` | 10 per 3600 s (per teacher) |
-| `rate_limit_ijazah_decision` | 10 per 60 s (per administrator: approve, reject, revoke, bar) |
+| `rate_limit_ijazah_decision` | 10 per 60 s (per administrator: approve, reject, sign off, re-render, revoke, bar) |
 | `rate_limit_gender_decision` | 10 per 60 s (per administrator) |
 | `rate_limit_settings_update` | 10 per 60 s (per administrator) |
 
@@ -83,6 +86,7 @@ batch that seeds them.
 ## State transitions
 - **Request.** Sent → `awaiting_student_name` (no certificate name) or `pending`; the name entered → `pending`;
   approved → `approved` (+ an `ijazahs` row); rejected → `rejected`; the student deleted → `closed`.
-- **Ijazah.** Issued → rendered (`rendered_at`) → revoked (`revoked_at`), never deleted.
+- **Ijazah.** Issued → rendered (`rendered_at`) → signed off (`signed_off_at`); before the sign-off, a re-render or a
+  correction goes back to issued (`rendered_at` cleared); revoked (`revoked_at`) at any point; never deleted.
 - **Report.** `open` → `actioned` | `dismissed`.
 - **Gender flag.** `open` → `dismissed` | `corrected` | `fraud_ban`.

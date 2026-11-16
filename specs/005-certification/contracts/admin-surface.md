@@ -12,6 +12,8 @@ never a name (FR-ADMIN-17).
 | `ijazahRequests.approve` | `{ requestId, idempotencyKey }` | `{ ijazahId, certificateNumber }` | `rate_limit_ijazah_decision` | `ijazah.issued` |
 | `ijazahRequests.reject` | `{ requestId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah_request.rejected` |
 | `ijazahs.list` / `ijazahs.get` | filters / `{ ijazahId }` | the record, `revoked`, `rendered` | default | `ijazahs.listed` / `ijazah.viewed` |
+| `ijazahs.signOff` | `{ ijazahId, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.signed_off`; refused `not_rendered`, `revoked`, `already_signed_off` (DEC-72) |
+| `ijazahs.rerender` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.rerendered`; refused once signed off or revoked |
 | `ijazahs.revoke` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.revoked` |
 | `ijazahs.bar` / `ijazahs.liftBar` | `{ userId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah_bar.set` / `ijazah_bar.lifted` |
 | `users.setCertificateName` | `{ userId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |

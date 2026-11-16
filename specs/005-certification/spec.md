@@ -88,9 +88,31 @@ and relayed; recorded in SRS DEC-71 where they change the SRS.
   An administrator may still issue it, seeing the teacher's standing and its reason beside it, or reject it with a
   reason (for example a ban for fraud in the teacher's own credentials, which makes the chain doubtful). The teacher's
   signature, printed name and chain are frozen onto the request when it is sent, so the issue never depends on a
-  deleted teacher's erased data. A teacher who is not active cannot send a new request. (FR-627, FR-628)
+  deleted teacher's erased data. A teacher who is not active cannot send a new request. (FR-627, FR-628) _(The
+  deletion part was replaced by the owner's P3 answer below: a teacher with an undecided request cannot be deleted.)_
 - Q: Limits on reports and gender flags? → A: (a) reports 5 per 24 hours and gender flags 3 per 24 hours, per user, two
   new §3.14 settings (DEC-71). (FR-613)
+
+### Session 2026-11-16 (the plan's and the analysis's questions)
+
+The owner's answers, typed in the implementing session (`ejazah-tools\b43\t057-plan-questions.md`, P1–P4;
+`ejazah-tools\b43\t057-analyze.md`, D1); recorded in SRS DEC-72.
+
+- Q: What does a revoked ijazah's PDF link do? → A: (a) nothing: after a revocation the PDF is served to nobody, the
+  parties included; the list shows it revoked. (FR-609)
+- Q: How is the certificate rendered? → A: (a) the Typst CLI 0.15.1 in the worker, and the owner's own addition:
+  «بعد ما يتحفظ في التخزين لازم الادمن يعتمدها الاول قبل ما تظهر للطالب والمدرس». An administrator signs off on the
+  rendered PDF, or has it rendered again, before either party sees it. (FR-605, FR-629)
+- Q: Which push provider? → A: (a) Expo's push service, with `expo-notifications` and FCM credentials in EAS. (FR-619)
+- Q: A teacher deleted while a request is pending? → A: the owner's own: «طلب الاجازة اللي ما اتحسمش زيه زي الباقة
+  اللي شغالة فمينفعش يمسح حسابه». An undecided request blocks the teacher's deletion as an ongoing enrollment does. An
+  administrator's deletion of a teacher: «مينفعش الادمن يمسح حساب مدرس عليه باقات شغاله او خلي الموضوع صعب جدا يعني بس
+  ممكن», then «تمام بترشيحك» for (a): refused until the administrator has ended each ongoing enrollment and decided
+  each request. (FR-630)
+- Q: Is a deleted teacher's signature erased? → A: «خليها متتمسحش»: it is kept with the documents DEC-67 keeps.
+  (FR-631)
+- Q: A chain correction while a request is open? → A: (a) it re-freezes the open request, and an approved certificate
+  not yet signed off, so the issued chain is the chain at the sign-off. (FR-627, FR-629)
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -114,9 +136,10 @@ a second request and read the reason as the teacher.
 1. **Given** a teacher with no signature image, **When** they try to request an ijazah, **Then** the request is refused and they are sent to upload one.
 2. **Given** a teacher without an approved credential for the enrollment's subject, or a recitation enrollment, or a barred student, **When** they request, **Then** it is refused with its cause and nothing is written.
 3. **Given** a student with no certificate name, **When** the teacher requests, **Then** the request waits as «awaiting the student's name», the student is asked for the name once, and the request goes on to the administrators once it is entered.
-4. **Given** a pending request, **When** an administrator approves it, **Then** one ijazah is issued with a unique certificate number, the chain snapshot with the teacher appended, the printed names and both dates in Hijri and Gregorian; the request is approved and audited; the PDF follows from the worker, shown as being prepared until it exists.
+4. **Given** a pending request, **When** an administrator approves it, **Then** one ijazah is issued with a unique certificate number, the chain snapshot with the teacher appended, the printed names and both dates in Hijri and Gregorian; the request is approved and audited; the PDF follows from the worker, and the parties see it as being prepared until an administrator signs off on it.
 5. **Given** a pending request, **When** an administrator rejects it with a reason, **Then** no ijazah exists and the teacher sees the reason.
-6. **Given** an issued ijazah, **When** the student or the granting teacher opens it, **Then** the PDF opens through a link that expires; nobody else can open it.
+6. **Given** a signed-off ijazah, **When** the student or the granting teacher opens it, **Then** the PDF opens through a link that expires; nobody else can open it.
+7. **Given** a rendered certificate not yet signed off, **When** an administrator opens it, **Then** they sign it off and both parties can open it, or they have it rendered again (after a correction of the chain or the name, which re-freezes it), and nobody else sees it meanwhile.
 
 ---
 
@@ -152,7 +175,7 @@ requests refused), lift the bar (allowed again).
 
 **Acceptance Scenarios**:
 
-1. **Given** an issued ijazah, **When** revoked with a reason, **Then** both parties see it revoked, the audit records the reason, and no PDF shows it as valid (R-HONEST-6; whether the PDF stops being served or is re-rendered with a revoked mark is open with the owner, D1 of `ejazah-tools43	057-analyze.md`).
+1. **Given** an issued ijazah, **When** revoked with a reason, **Then** both parties see it marked revoked, the audit records the reason, and its PDF is served to nobody, the parties included (R-HONEST-6; the owner's answer D1 (a), SRS DEC-72).
 2. **Given** a revoked ijazah, **When** the teacher requests again for that student, **Then** the request is accepted.
 3. **Given** a barred student, **When** any teacher requests for them, **Then** the request is refused; **When** the bar is lifted, **Then** requests are accepted again.
 
@@ -242,7 +265,7 @@ effect without a deployment.
 ### Edge Cases
 
 - A teacher sends a second request for the same enrollment while one is pending: refused.
-- The teacher is suspended, revoked, banned or deleted while a request is pending: the request stays pending; an administrator may issue it from what was frozen at the request, or reject it with a reason (FR-627, FR-628).
+- The teacher is suspended, revoked or banned while a request is pending: the request stays pending; an administrator may issue it from what was frozen at the request, or reject it with a reason (FR-627, FR-628). The teacher cannot delete their account, and an administrator cannot delete it, while the request is undecided (FR-630).
 - The student deletes their account while a request is pending: the request closes, nothing is issued (a pending request does not block the student's deletion, since its enrollment is no longer ongoing); an issued certificate keeps its printed names after a deletion (ADR 0019 D1).
 - The credential's chain is corrected after issue: the issued certificate keeps its snapshot (FR-ISNAD-7).
 - An administrator corrects a certificate name on the student's request: future certificates print the new name; issued ones keep theirs.
@@ -264,14 +287,14 @@ effect without a deployment.
 
 - **FR-603**: A teacher MUST be able to request an ijazah from an ijazah-track enrollment of theirs in a subject they hold an approved credential for, giving the completion date and the certificate language (Arabic by default, FR-LOC-4), after seeing the certificate as it will be filled (FR-IJAZAH-1, FR-IJAZAH-15). A request MUST be refused for a teacher who is not active, a recitation enrollment, a barred student, a missing signature or credential, or while another request of that enrollment is pending; each refusal is logged with ids and its reason.
 - **FR-604**: An administrator MUST see each pending request with the same filled certificate and MUST approve it or reject it with a mandatory reason the teacher sees; no administrator action MAY start a grant or change a chain (FR-IJAZAH-7, FR-ADMIN-12). Both are audited (FR-ADMIN-17).
-- **FR-605**: Approving MUST issue exactly one ijazah per request, idempotently: a unique, non-guessable certificate number (16 Crockford base32 symbols, shown 4-4-4-4), a verification token stored only as its hash (minted now so v1.1's page can verify every certificate), the chain snapshot with the granting teacher appended (FR-ISNAD-7), the printed student and teacher names (ADR 0019 D1), the completion and issue dates in Hijri and Gregorian, and the teacher's signature; the PDF follows from the worker, and until it exists the parties see the certificate as being prepared (R-API-13); mode is always platform-generated (FR-IJAZAH-2, ADR 0013).
+- **FR-605**: Approving MUST issue exactly one ijazah per request, idempotently: a unique, non-guessable certificate number (16 Crockford base32 symbols, shown 4-4-4-4), a verification token stored only as its hash (minted now so v1.1's page can verify every certificate), the chain snapshot with the granting teacher appended (FR-ISNAD-7), the printed student and teacher names (ADR 0019 D1), the completion and issue dates in Hijri and Gregorian, and the teacher's signature; the PDF follows from the worker, and until an administrator signs it off (FR-629) the parties see the certificate as being prepared (R-API-13); mode is always platform-generated (FR-IJAZAH-2, ADR 0013).
 - **FR-606**: The certificate MUST render correct Arabic and English, a chain of any length (one A4 page up to 60 generations, a following page beyond), multi-name generations as one row, and every name as text, never markup (FR-IJAZAH-11; ADR 0004 D1–D3; ADR 0017 D4). It is rendered outside the request, in the worker.
-- **FR-607**: The student and the granting teacher MUST be able to view and download an issued certificate at any time through an expiring signed link; nobody else (FR-IJAZAH-3, FR-IJAZAH-10's link rule). Every issued ijazah MUST appear on the student's record as a permanent credential (FR-IJAZAH-4).
+- **FR-607**: The student and the granting teacher MUST be able to view and download a signed-off certificate at any time through an expiring signed link; nobody else (FR-IJAZAH-3, FR-IJAZAH-10's link rule). Every signed-off ijazah MUST appear on the student's record as a permanent credential (FR-IJAZAH-4).
 - **FR-608**: In v1.0 the parties MUST learn of an issue or a rejection on screen: the request's status on the enrollment for the teacher and the student (pending; issued, with the certificate; rejected, with the reason, to the teacher), refreshed by the live channel while the app is open (FR-427). The issue's and the rejection's push arrive in v1.1 (FR-IJAZAH-15's «notifying both parties», SRS DEC-70; the owner's answer of 2026-11-16).
 
 **Revocation and the bar**
 
-- **FR-609**: An administrator MUST be able to revoke an issued ijazah with a mandatory reason; it is never deleted, both parties see it revoked, the student's profile stops showing it, and the audit records the reason (FR-IJAZAH-8). Revocation MUST NOT bar future requests (FR-IJAZAH-9).
+- **FR-609**: An administrator MUST be able to revoke an issued ijazah with a mandatory reason; it is never deleted, both parties see it revoked, the student's profile stops showing it, its PDF is served to nobody, the parties included, and the audit records the reason (FR-IJAZAH-8, R-HONEST-6, SRS DEC-72). Revocation MUST NOT bar future requests (FR-IJAZAH-9).
 - **FR-610**: An administrator MUST be able to bar a user from receiving ijazahs, and lift the bar, each with a reason, with history kept; a barred student's requests are refused (FR-IJAZAH-9, FR-ADMIN-12).
 
 **Reports**
@@ -299,7 +322,13 @@ effect without a deployment.
 **A request outlives the teacher's standing (the owner's answer of 2026-11-16, C3)**
 
 - **FR-627**: When a request is sent, the teacher's signature image, printed name (the credential's holder name) and the credential's chain MUST be frozen onto the request; the certificate is issued from what the request froze, never from the teacher's live data. A request MAY be sent only by a teacher who is active.
-- **FR-628**: A request sent while the teacher was active MUST stay pending whatever happens to the teacher afterwards (a suspension, a ban, a revocation or a deletion; a deletion does not close it). An administrator MAY issue it or reject it with a reason, and MUST see the teacher's current standing and its reason beside it.
+- **FR-628**: A request sent while the teacher was active MUST stay pending whatever happens to the teacher afterwards (a suspension, a ban or a revocation). An administrator MAY issue it or reject it with a reason, and MUST see the teacher's current standing and its reason beside it. A teacher's deletion cannot happen while it is undecided (FR-630).
+
+**The sign-off, the deletion and the signature (the owner's answers of 2026-11-16, SRS DEC-72)**
+
+- **FR-629**: A rendered certificate MUST NOT be shown to either party until an administrator has opened the rendered PDF and signed it off; the administrator MAY instead have it rendered again. Until the sign-off, an administrator's correction of the credential's chain or of the student's certificate name MUST re-freeze the issued record and render it again. The sign-off and each re-render are audited and idempotent.
+- **FR-630**: A teacher's own deletion (in the app and on the web) MUST be refused while one of their ijazah requests is undecided (awaiting the student's name, pending, or approved and not yet signed off), as an ongoing enrollment refuses it. An administrator's deletion of a teacher MUST be refused while the teacher has an enrollment awaiting payment or confirmed (one paused by a suspension included) or such a request; the administrator first ends each enrollment with the direct end and decides each request. Each refusal writes nothing and is logged with ids and its cause. An administrator's deletion of a student is unchanged.
+- **FR-631**: A deleted teacher who was ever approved MUST keep their signature image with the documents SRS DEC-67 keeps, read and erased under the same rules (FR-ADMIN-21).
 
 **The settings page**
 
@@ -314,7 +343,7 @@ effect without a deployment.
 
 - **Teacher signature**: one current image per teacher, replaceable; the certificate uses the one current at issue.
 - **Ijazah request**: enrollment, teacher, student, subject, completion date, language, status (awaiting the student's name, pending, approved, rejected, closed), reason, deciding administrator and time; the frozen signature, teacher's printed name and chain (FR-627); points to its ijazah (ADR 0017 D5).
-- **Ijazah**: certificate number, request, issuing administrator, chain snapshot, printed names, language, dates, PDF, verification token hash, revocation (time, reason, administrator); never deleted.
+- **Ijazah**: certificate number, request, issuing administrator, chain snapshot, printed names, language, dates, PDF, sign-off (time, administrator), verification token hash, revocation (time, reason, administrator); never deleted.
 - **Ijazah bar**: user, reason, who and when, lifted (who and when).
 - **User report**: reporter, reported user, context (session, chat, profile), session, reason, status, deciding administrator, note.
 - **Gender flag**: flagged user, raiser (a user or an administrator), status (open, corrected, fraud ban, dismissed), reason, deciding administrator.
@@ -333,14 +362,15 @@ effect without a deployment.
 - **SC-606**: Each v1.0 push kind reaches the push provider within two minutes of its cause (reminders within two minutes of their offset: a sweep each minute, then the queue) in 99% of attempts on the stand-in, measured in T026, and a provider outage loses none.
 - **SC-607**: No user can open another's certificate, report, flag or notification, in both gender directions, in 100% of the adversarial suite's attempts.
 - **SC-608**: Every setting of §3.14 is changeable from the panel, and every change has one audit entry.
+- **SC-609**: In 100% of attempts, neither party can open a certificate that is not yet signed off or is revoked, and a teacher with an undecided request cannot be deleted by any path.
 
 ## Assumptions
 
 - The cycle runs on 2026-11-16 in the implementing session of B43; Phase 4's batches run 11/16–11/19 in track 1, on `ijazah_integrity`; the 11/20 phone run covers its screens.
-- Typst renders the certificate in the worker (ADR 0004 D1); how it is run (the binary or a binding) is the plan's decision, without a package added unless the owner approves it.
+- Typst renders the certificate in the worker (ADR 0004 D1), as the CLI 0.15.1 (the owner's answer P1 (a)), installed only on the owner's word.
 - The v2 layout is the working template; the certificate's look is redesigned in the design week (11/21–25), which changes the drawing only (ADR 0004 D2).
 - v1.0's certificate carries its number and no QR code; the verification token is minted and hashed at issue so v1.1's page verifies certificates issued before it (DEC-70).
-- Push uses the provider the plan chooses behind a port with a stand-in for tests; the phone's permission prompt is asked when the user first needs a push, not at sign-in.
+- Push uses Expo's push service (the owner's answer P2 (a)) behind a port with a stand-in for tests; the phone's permission prompt is asked when the user first needs a push, not at sign-in.
 - The settings page edits the rows the settings table holds; their ranges come from each setting's declared bounds.
 - Reviews, the verification page and QR, the notification centre and the other push kinds are v1.1 (DEC-70); their tasks are listed, untimed, under «v1.1» in this phase's tasks.md.
 - Gender decisions reuse Phase 3's closings and compensation cases; no new money behaviour exists.

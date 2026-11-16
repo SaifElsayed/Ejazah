@@ -11,7 +11,8 @@ description: 'Task list for Phase 4 — Certification, reports and notifications
 **Tests**: Included. The owner's lighter gates of 2026-11-15 (PLAN.md, «How a phase is run», as amended on
 2026-11-16) set the rigour:
 - **Full TDD** (each spec red first on its own, negatives red under a named mutant, every mutant restored and
-  `cmp`-checked) for gender, security and time: T004, T006, T007, T009, T010, T011, T013, T014, T015, T016, T018.
+  `cmp`-checked) for gender, security and time: T004, T006, T007, T009, T010, T011, T013, T014, T015, T016, T018,
+  T031, T032.
 - **Lighter specs** (a render or behaviour spec per screen, in Arabic and English) for T019 to T024.
 - Every job has its double-run spec (R-API-14). Every new user procedure is in the adversarial harness both ways, or
   exempt with its reason (T025).
@@ -21,12 +22,10 @@ description: 'Task list for Phase 4 — Certification, reports and notifications
 in the batches B45 to B49 (B44 is `004:T068`'s logo build). Then «v1.1, the first update»: tasks listed and untimed
 (SRS DEC-70).
 
-**Open owner questions** (`ejazah-tools\b43\t057-plan-questions.md`):
-- P1 (the renderer) blocks T008;
-- P2 (push) blocks T005's real adapter and T020's push permission (both build on the stand-in until then);
-- P3 and P4 (DEC-72) block T006's freeze and T007's erasure.
-
-The recommended options are written in place.
+**The owner's answers** (2026-11-16; `ejazah-tools\b43\t057-plan-questions.md`, P1–P4, and D1; SRS DEC-72): D1 (a),
+P1 (a) with the administrator's sign-off, P2 (a), P3 the owner's own (no deletion while a request is undecided, the
+signature kept), P4 (a). Installing the Typst binary (T008) and `expo-notifications` (T005, T020) each still waits for
+the owner's word typed in the implementing session; until then T005 and T020 build on the stand-in.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -49,7 +48,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - a forward migration (timestamp of the real time of writing) adding:
     - `ijazah_requests`, with `ijazah_request_status`, its checks and the partial unique on open requests;
     - on `ijazahs`: `request_id` (unique FK), `issued_by_admin_id`, `student_name_printed`, `teacher_name_printed`,
-      `completion_date`, `rendered_at`;
+      `completion_date`, `rendered_at`, `render_generation`, `signed_off_at`, `signed_off_by_admin_id` (DEC-72);
     - `session_reminders`;
     - the partial uniques on open `user_reports` and open `gender_flags`, and `user_reports`' two checks;
     - `compensation_case_reason` members `gender_correction` and `gender_fraud`, at the enum's end.
@@ -58,8 +57,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - `prisma/seed.ts`: a new block at the settings list's end with the six rate limits of data-model.md.
   - `tests/seed/seed.spec.ts` (rule d).
   - `docs/ERD.md`: a dated block at its end, and the notifications note re-pointed to v1.1 (R-406).
-  - The SRS's §3.14 rows for the four limits beyond DEC-71's two, in the next free track 1 DEC (DEC-73 if P3 takes
-    DEC-72), placed after DEC-71's rows.
+  - The SRS's §3.14 rows for the four limits beyond DEC-71's two, in the next free track 1 DEC (DEC-73), placed after
+    DEC-71's rows.
   - A migration spec red under a mutant migration.
 - [ ] T002 [P] The settings registry (R-410; FR-626: every number a setting with its bounds): `apps/api/src/platform/settings/registry.ts`, every §3.14 key with its
   zod schema, bounds, unit, group and SRS row. A CI spec asserts registry keys = seed keys, both ways, and every
@@ -89,14 +88,14 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 ## Phase 2: US1 and US2 — the ijazah request, its issue and its rendering (B46)
 
-- [ ] T006 [US1] The request (FR-603, FR-608, FR-627, FR-628; R-403, R-404; P3 (a), P4 (a)):
+- [ ] T006 [US1] The request (FR-603, FR-608, FR-627, FR-628; R-403, R-404; P4 (a), DEC-72):
   - `modules/certification/` `ijazah-request.service.ts` and `.repository.ts`;
   - `teacher.ijazahRequests.preview`, `.send` (idempotent), `.get`;
   - every refusal of FR-603, each red first and logged with ids and its reason;
   - the freeze at send: the chain from catalog's entry (generations, origin first, the teacher appended), the holder
     name, a copy of the signature under `ijazah-requests/<id>/`;
-  - an administrator's correction of an approved credential (`credentials.correct`, `modules/catalog/credentials-admin.router.ts:93`, writing at `credential-review.repository.ts:170-180`) re-freezes the chain and the holder name of that credential's open requests on the same transaction (P4 (a)). Certification imports catalog, so catalog never imports certification: catalog's correction service takes a port `OpenRequestsRefreeze` (`refreeze(tx, credentialId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`);
-  - the request stays open through any later change of the teacher's standing;
+  - an administrator's correction of an approved credential (`credentials.correct`, `modules/catalog/credentials-admin.router.ts:93`, writing at `credential-review.repository.ts:170-180`) re-freezes the chain and the holder name of that credential's open requests on the same transaction (P4 (a)), and the snapshot of its approved ijazahs not yet signed off, each re-rendered (DEC-72, T032). Certification imports catalog, so catalog never imports certification: catalog's correction service takes a port `OpenRequestsRefreeze` (`refreeze(tx, credentialId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`);
+  - the request stays open through any later change of the teacher's standing (a deletion cannot happen meanwhile, T031);
   - a student's deletion closes it and erases its copy;
   - the enrollment reads gain `ijazahRequest`;
   - live event `ijazahRequest`;
@@ -111,23 +110,33 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - audited;
   - `rate_limit_ijazah_decision`;
   - idempotent under a replay.
-  - With P3 (a): identity's deletion erases the live `teacher_signatures` row and file (closing the gap at
-    `identity/identity.repository.ts:428-462`; a request's own copy untouched), with its spec.
 - [ ] T008 [US2] The certificate's rendering (FR-606; R-401; P1 (a)):
   - `modules/certification/template/` (the v2 Typst template of ADR 0004 D2, Amiri 1.003 vendored, the case as a JSON
     data file, never `eval`);
-  - `jobs/render-certificate.ts` (the CLI from `TYPST_BIN`; the PDF to storage; `rendered_at`; double-run spec);
+  - `jobs/render-certificate.ts` (the CLI from `TYPST_BIN`; the PDF to storage; `rendered_at` for the payload's
+    `render_generation`, an older generation writing nothing; double-run spec);
   - a template spec over chains of 1, 25, 60 (one page) and 61 (two pages) generations, a multi-name generation, both
     languages, a name holding Typst markup printed as text;
   - CI installs the pinned binary in a step (`.github/workflows/ci.yml`, on the owner's word).
-- [ ] T009 [P] [US1] The parties' certificates (FR-607; R-412):
-  - `certificates.list` and `.link` (the two parties only, else NOT_FOUND; `not_ready` until rendered; a revoked one per
-    the owner's answer to D1, never the original PDF as it is, R-HONEST-6);
-  - the student's public credentials list only the unrevoked (FR-IJAZAH-4);
+- [ ] T009 [P] [US1] The parties' certificates (FR-607, FR-609; R-412; D1 (a)):
+  - `certificates.list` and `.link` (the two parties only, else NOT_FOUND; `not_ready` until signed off; `revoked`
+    after a revocation, with no link, R-HONEST-6);
+  - the student's public credentials list only the signed-off and unrevoked (FR-IJAZAH-4);
   - adversarial registrations.
 - [ ] T010 [P] [US3] Revocation and the bar (FR-609, FR-610; R-412): `ijazahs.list`, `.get`, `.revoke`, `.bar`,
   `.liftBar`, audited, idempotent, `rate_limit_ijazah_decision`. A revoked ijazah never deleted (the init migration's
-  revoked DELETE) and never shown valid (R-HONEST-6, a spec on each surface).
+  revoked DELETE) and never shown valid (R-HONEST-6, a spec on each surface). `ijazahs.get` gives the administrator a
+  signed link to the PDF, each opening audited.
+- [ ] T032 [US1] The certificate's sign-off (FR-629; R-402, R-403; the owner's addition to P1, DEC-72):
+  - `ijazahs.signOff` (`signed_off_at`, `signed_off_by_admin_id`; refused `not_rendered`, `revoked`,
+    `already_signed_off`) and `ijazahs.rerender` (a reason; `render_generation` + 1, `rendered_at` cleared, the job
+    enqueued after commit; refused once signed off or revoked), audited, idempotent, `rate_limit_ijazah_decision`;
+  - before the sign-off, T006's chain re-freeze and T004's certificate-name change re-freeze the ijazah's snapshot or
+    printed student name and re-render it, on their transactions (through `OpenRequestsRefreeze` and
+    `AwaitingNameRelease`);
+  - the live event `ijazahRequest` at the sign-off;
+  - specs: the parties' `not_ready` until the sign-off (red first), a re-render's older job writing nothing, a
+    correction after the sign-off changing nothing (SC-604).
 
 ## Phase 3: US4 and US5 — reports and gender (B47)
 
@@ -157,6 +166,21 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - the live `account` and `enrollment` events;
   - one transaction, idempotent, audited;
   - a db-integrity race probe against `sessions.restore`.
+- [ ] T031 [US1] A teacher's deletion waits for their requests and enrollments, and keeps the signature (FR-630,
+  FR-631; R-411, R-414; DEC-72):
+  - identity's own deletion (`modules/identity/deletion.service.ts`, app and web) asks a port `OpenIjazahRequests`
+    (`count(tx, teacherUserId)`), handed in by `main.ts` and bound to certification's entry as `OngoingEnrollments` is
+    bound to booking; a count above zero refuses `CONFLICT` `pending_ijazah_requests`, writing nothing, one info line
+    of ids;
+  - `users.delete` of a teacher asks booking's count of enrollments `pending_payment` or `confirmed` (paused included)
+    and the same request count, refusing `active_enrollments` or `pending_ijazah_requests`; a student's unchanged;
+    `004:T081`'s ending of a teacher's live enrollments is reached only by the held ones R-414 names;
+  - the kept signature: `modules/verification/kept-data.service.ts` lists it, opens it by a signed link with a reason,
+    and removes its file at the erasure (date or now); a teacher never approved has it erased at deletion; the head
+    comment of `kept-data.service.ts` corrected with it (`004:T077`'s follow-up);
+  - the phone's deletion refusal text for the new cause (`ar.json`, `en.json`, `002:T123`'s marks);
+  - specs red first: each refusal on each path, a student's administrator deletion unchanged, the signature kept and
+    then erased.
 - [ ] T015 [US5] The fraud ban (FR-617, FR-GENDER-6; R-409):
   - `genderFlags.fraudBan`: `StandingService`'s ban (teacher or student), its existing closings;
   - the counterparties' cases under `gender_fraud`;
@@ -201,10 +225,10 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - specs.
 - [ ] T021 [P] [US4] [US5] The report and flag sheets (FR-611, FR-614): from a session, the chat and a profile, both
   roles; the reason field; «received» only; specs.
-- [ ] T022 [P] [US1] [US3] The panel's ijazah pages (FR-604, FR-609, FR-610):
+- [ ] T022 [P] [US1] [US3] The panel's ijazah pages (FR-604, FR-609, FR-610, FR-629):
   - `apps/admin/src/pages/ijazah-requests/` (queue, detail with the frozen certificate preview and the teacher's
     standing, approve and reject dialogs);
-  - `pages/ijazahs/` (list, revoke, bar);
+  - `pages/ijazahs/` (list with «waiting for sign-off» first, the rendered PDF, sign-off and re-render, revoke, bar);
   - nav entries; the existing i18n sections (`ijazahRequests`, `ijazahs`);
   - specs.
 - [ ] T023 [P] [US4] [US5] The panel's reports and gender pages (FR-612, FR-615 to FR-617): `pages/reports/` and
@@ -242,8 +266,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 - **B45:** T001 first (the schema). T002, T003 and T004 in parallel lanes. T005 after T001.
 - **B46:** T006 after T003 and T004. T007 after T006. T008 after T007's enqueue; it can be written in parallel on its
-  own files. T009 and T010 after T007.
-- **B47:** T011, then T012. T013, then T014 and T015 (shared flag service).
+  own files. T009 and T010 after T007. T032 after T007 and T008.
+- **B47:** T011, then T012. T013, then T014 and T015 (shared flag service). T031 after T006 (its request count).
 - **B48:** T016 and T017 after T005. T018 with T017. T019 to T021 after their procedures.
 - **B49:** T022 to T024 after their procedures. T025 after every procedure. T026 last.
 - **Two tracks:** this file is track 1's (`tracks-coordination.md` §2). T024 is a light item.
@@ -253,8 +277,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 | Day | Batch | Tasks | What |
 |---|---|---|---|
 | Mon 11/17 | B45 | T001, T002, T003, T004, T005 | Migration and seed, settings registry, signature, certificate name, notifications writer and delivery |
-| Mon–Tue 11/17–18 | B46 | T006, T007, T008, T009, T010 | The request and its freeze, the review and issue, the rendering, the parties' certificates, revocation and the bar |
-| Tue 11/18 | B47 | T011, T012, T013, T014, T015 | Reports, chat retention, gender flags, the correction, the fraud ban |
+| Mon–Tue 11/17–18 | B46 | T006, T007, T008, T009, T010, T032 | The request and its freeze, the review and issue, the rendering, the parties' certificates, revocation and the bar, the sign-off |
+| Tue 11/18 | B47 | T011, T012, T013, T014, T015, T031 | Reports, chat retention, gender flags, the correction, the fraud ban, a teacher's deletion refusals and the kept signature |
 | Tue–Wed 11/18–19 | B48 | T016, T017, T018, T019, T020, T021 | Push producers, reminders, their time spec, the phone screens |
 | Wed 11/19 | B49 | T022, T023, T024, T025, T026 | The panel's pages, the adversarial reach, the close |
 | v1.1 | — | T027 to T030 | The first update (DEC-70) |

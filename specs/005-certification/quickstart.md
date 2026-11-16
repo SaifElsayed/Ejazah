@@ -16,9 +16,13 @@ Run on `ijazah_integrity` only (`. ejazah-tools/test-env.sh`, `IJAZAH_DB_SPECS=1
    it; the request becomes `pending`.
 3. Ban the teacher; the request stays `pending`, and `ijazahRequests.get` shows the standing (FR-628).
 4. Approve as an administrator. The ijazah row exists with its number, frozen chain and names; `render-certificate`
-   runs, and `certificates.link` opens the PDF for both parties. A third user gets NOT_FOUND.
-5. Revoke it: both parties see `revoked: true`, the student's public credentials no longer list it.
-6. Bar the student: a new request answers `student_barred`; lift the bar: accepted.
+   runs, and `certificates.link` answers `not_ready` to both parties. Delete the teacher as an administrator: refused
+   `pending_ijazah_requests` (FR-630).
+5. As the administrator, open the PDF from `ijazahs.get` and call `ijazahs.signOff`: `certificates.link` now opens the
+   PDF for both parties. A third user gets NOT_FOUND.
+6. Revoke it: both parties see `revoked: true`, `certificates.link` answers `revoked`, and the student's public
+   credentials no longer list it.
+7. Bar the student: a new request answers `student_barred`; lift the bar: accepted.
 
 ## 3. Reports and gender
 1. Report from a session, a chat and a visible profile; a sixth report within a day answers `RATE_LIMITED`.
