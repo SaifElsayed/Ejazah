@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): chat reading the `PaymentEvent` model. Refused: a model access.
+export async function lastSignedEvent(tx, eventId) {
+  return tx.paymentEvent.findFirst({ where: { id: eventId } });
+}

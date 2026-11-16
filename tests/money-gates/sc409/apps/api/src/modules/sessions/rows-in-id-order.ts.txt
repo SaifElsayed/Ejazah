@@ -1,0 +1,13 @@
+// T053 fixture (SC-409), CLEAN: what sessions and chat legitimately write. Rows read in id order, an
+// `orderBy`, a name with «order» in it, the allowed port (T073), a price and an orderId in comments
+// and prose. Nothing here is refused.
+import type { EnrollmentPayments } from './enrollment-payments.port.js';
+
+export async function lockInIdOrder(tx, ids, payments: EnrollmentPayments) {
+  const rows = await tx.session.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
+  const partiesInOrder = rows.map(({ id }) => id);
+  const note = 'the price is the teacher’s; rows are locked in id order, never by orderId';
+  const status = 'order_failed';
+  await tx.$queryRaw`SELECT id FROM sessions WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
+  return { partiesInOrder, note, status, refunded: await payments.refundedOf(tx, ids[0]) };
+}

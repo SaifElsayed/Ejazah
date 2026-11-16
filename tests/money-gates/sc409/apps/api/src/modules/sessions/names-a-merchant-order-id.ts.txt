@@ -1,0 +1,3 @@
+// T053 fixture (SC-409): sessions naming `merchantOrderId`. Refused: an order reference.
+export const merchantOrderIdOf = (session: { readonly merchantOrderId: string }) =>
+  session.merchantOrderId;

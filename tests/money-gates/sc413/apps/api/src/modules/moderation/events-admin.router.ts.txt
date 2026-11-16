@@ -1,0 +1,6 @@
+// T053 fixture (SC-413): an administrator router recording a gateway event by hand. Refused: a
+// `PaymentEvent` write outside `modules/payments`.
+export const recordEvent = (tx, paymentId, at) =>
+  tx.paymentEvent.create({
+    data: { paymentId, providerEventId: 'manual', eventType: 'refunded', signatureVerifiedAt: at, payloadHash: 'none', receivedAt: at },
+  });

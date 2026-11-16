@@ -1,0 +1,16 @@
+// T053 fixture (SC-413), CLEAN: what an administrator router may do with payments, amounts and the
+// confirmation: read them, show them, and write other columns. Nothing here is a refused write.
+export async function show(tx, id, at) {
+  const enrollment = await tx.enrollment.findFirst({
+    where: { id, confirmedAt: { not: null }, snapshotPricePiasters: { gt: 0n } },
+    select: { confirmedAt: true, snapshotPricePiasters: true, payments: { select: { grossPiasters: true } } },
+    orderBy: { confirmedAt: 'desc' },
+  });
+  const orders = await tx.payment.findMany({ where: { enrollmentId: id }, select: { netPiasters: true } });
+  const counted = await tx.payment.count({ where: { enrollmentId: id, status: 'refunded' } });
+  await tx.enrollment.updateMany({ where: { id, confirmedAt: { not: null } }, data: { status: 'completed', completedAt: at } });
+  await tx.$queryRaw`SELECT gross_piasters, confirmed_at FROM payments JOIN enrollments ON true WHERE enrollments.id = ${id}::uuid`;
+  const shown = { price_piasters: enrollment?.snapshotPricePiasters ?? null, confirmed_at: enrollment?.confirmedAt ?? null };
+  // A comment is never read: UPDATE payments SET status = 'refunded'; data: { confirmedAt: at }.
+  return { enrollment, orders, counted, shown };
+}

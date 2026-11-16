@@ -1,0 +1,6 @@
+// T053 fixture (SC-413): the enrollment's snapshot file writing what it does not own. Refused: the
+// package's `pricePiasters` and the enrollment's `confirmedAt`; its own `snapshotPricePiasters` is allowed.
+export async function insertEnrollment(tx, enrollment, price) {
+  await tx.enrollment.create({ data: { ...enrollment, snapshotPricePiasters: price, confirmedAt: new Date() } });
+  await tx.package.update({ where: { id: enrollment.packageId }, data: { pricePiasters: price } });
+}
