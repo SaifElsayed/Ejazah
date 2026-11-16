@@ -21,8 +21,13 @@
 //   tamperedToken         the caller's genuine bearer with its signature or its session changed:
 //                         refused as unauthenticated before any service is reached.
 //   clientSuppliedGender  the input carrying the other gender: ignored, the server's records decide;
-//                         after an administrator's correction of the counterparty's gender (K2), the
-//                         own remedy answers as a nonexistent one, and again once restored.
+//                         the caller's own remedy answered.
+// T052 (FR-496's three kinds, Q2 (a)): otherSessionToken and replayedToken not applicable (no token
+// issued or taken);
+//   afterGenderCorrection after an administrator's correction of the counterparty's gender (K2), the
+//                         own remedy answers as a nonexistent one, and again once restored (moved
+//                         from clientSuppliedGender unchanged; clientSuppliedGender keeps a call of
+//                         `ownAnswered`, which the moved block had ended with).
 //
 // Each procedure's own answer, for the caller's own remedy:
 //   choose          `CHOICE_NOT_ALLOWED` (the remedy is `proposed`, no longer awaiting a choice);
@@ -40,7 +45,8 @@ import { type AppCaller, discoverySurface, type SessionPair } from './discovery-
 import {
   type Direction,
   expectAnswersAsNonexistent,
-  type ProcedureAttacks,
+  notApplicable,
+  type SessionProcedureAttacks,
 } from './procedure-harness.js';
 
 const HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, FR-463, FR-465, FR-496, SC-407';
@@ -160,7 +166,7 @@ const procedures: readonly Procedure[] = [
 ];
 
 /** The five attack kinds of one procedure, as its caller's role makes them (the header). */
-function attacksOn(procedure: Procedure): ProcedureAttacks {
+function attacksOn(procedure: Procedure): SessionProcedureAttacks {
   const { call, ownAnswered, role } = procedure;
   /** The caller of the procedure's role in `pair`. */
   const callerIn = (pair: SessionPair) => (role === 'student' ? pair.student : pair.teacher);
@@ -223,14 +229,28 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
         }
       },
       async clientSuppliedGender(direction) {
-        const { surface, own, ownRemedy, theirRemedy } = await remediesFor(direction);
+        const { own, ownRemedy, theirRemedy } = await remediesFor(direction);
         const mine = callerIn(own);
-        const counterpart = counterpartIn(own);
         const gendered = { gender: direction.other };
         await expectAnswersAsNonexistent(
           () => call(mine.caller, theirRemedy, gendered),
           () => call(mine.caller, randomUUID(), gendered),
         );
+        // T052: the caller's own remedy answered, which ended the correction's block before the
+        // correction moved to its own kind, so this kind never passes on a refusal of everything.
+        await ownAnswered(own, ownRemedy, direction.requester);
+      },
+      otherSessionToken: notApplicable(
+        `${procedure.path} issues no token and takes none: it names a remedy’s session by id (forgedId, guessedId) and its caller by the bearer (tamperedToken)`,
+      ),
+      replayedToken: notApplicable(
+        `${procedure.path} issues no token, so the other participant has none of the caller’s to replay; the pair’s other party calling it on the caller’s remedy answers as a nonexistent one (directCall)`,
+      ),
+      async afterGenderCorrection(direction) {
+        const { surface, own, ownRemedy } = await remediesFor(direction);
+        const mine = callerIn(own);
+        const counterpart = counterpartIn(own);
+        const gendered = { gender: direction.other };
         // After an administrator's correction of the counterparty's gender (K2): the server's record.
         await surface.setGender(counterpart.userId, direction.other);
         try {
@@ -247,4 +267,4 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
   };
 }
 
-export const sessionsRemedyAttacks: readonly ProcedureAttacks[] = procedures.map(attacksOn);
+export const sessionsRemedyAttacks: readonly SessionProcedureAttacks[] = procedures.map(attacksOn);

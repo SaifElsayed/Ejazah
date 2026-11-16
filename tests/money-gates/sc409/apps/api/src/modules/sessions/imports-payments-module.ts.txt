@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): sessions importing the payments module. Refused: an import.
+import { refundedOf } from '../payments/index.js';
+
+export const refundedBeforeRestore = refundedOf;

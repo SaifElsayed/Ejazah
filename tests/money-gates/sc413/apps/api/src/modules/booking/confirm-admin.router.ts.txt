@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router confirming an enrollment by hand. Refused: a
+// `confirmedAt` write outside `booking/confirmation.repository.ts` (R-HONEST-1).
+export const confirmByHand = (tx, id) =>
+  tx.enrollment.update({ where: { id }, data: { status: 'confirmed', confirmedAt: new Date() } });

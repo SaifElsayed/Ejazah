@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router marking a gateway order refunded. Refused: a
+// `Payment` write outside `modules/payments`.
+export const markRefunded = (tx, id) =>
+  tx.payment.update({ where: { id }, data: { status: 'refunded' } });

@@ -1,0 +1,5 @@
+// T053 fixture (SC-409): chat naming a `_piasters` column. Refused: an amount.
+export interface ChatQuote {
+  readonly enrollment_id: string;
+  readonly amount_piasters: bigint;
+}

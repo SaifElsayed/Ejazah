@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router rewriting an enrollment's price snapshot through an
+// upsert. Refused: an amount (`snapshotPricePiasters`) written outside `booking/pay.repository.ts`.
+export const resnapshot = (tx, id, enrollment, snapshotPricePiasters) =>
+  tx.enrollment.upsert({ where: { id }, create: enrollment, update: { snapshotPricePiasters } });

@@ -1,0 +1,7 @@
+// T053 fixture (SC-413): an administrator router building the write aside and handing it in, then a
+// createMany of several. Refused: amounts written outside their owning path.
+export async function discount(tx, id, lowered) {
+  const data = { pricePiasters: lowered };
+  await tx.package.updateMany({ where: { id }, data });
+  await tx.package.createMany({ data: [{ ...(lowered === null ? {} : { pricePiasters: lowered }) }] });
+}

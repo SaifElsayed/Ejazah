@@ -221,6 +221,24 @@ describe('which files are read', () => {
     expect(output).toEqual({ out: '', err: '' });
   });
 
+  // T053 (FR-497; the note under T053, B43): Phase 3's two modules are under the default root, so a
+  // narrowed `DEFAULT_ROOT` turns this case red before any module could carry a number unseen.
+  it('reads modules/sessions and modules/chat by default (T053)', () => {
+    const cwd = repository({
+      'apps/api/src/modules/sessions/evaluation.service.ts': 'export const graceMinutes = 2;\n',
+      'apps/api/src/modules/chat/chat.service.ts': 'export const maxFiles = 3;\n',
+    });
+    expect(main([], cwd, streams)).toBe(1);
+    const files = output.err
+      .trim()
+      .split('\n')
+      .map((line) => /(apps\/\S+):\d+:\d+/.exec(line)?.[1]);
+    expect(files).toEqual([
+      'apps/api/src/modules/chat/chat.service.ts',
+      'apps/api/src/modules/sessions/evaluation.service.ts',
+    ]);
+  });
+
   it('reads the tree --root names instead of the default', () => {
     const cwd = repository({
       [`${MODULES}/booking/index.ts`]: 'export {};\n',
