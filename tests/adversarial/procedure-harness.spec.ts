@@ -382,6 +382,32 @@ describe('a procedure of sessions, chat or live is registered and never exempt (
       ]);
     },
   );
+
+  /** One teacher-kind procedure, `teacherReads`, under each of the three routers (#142 r1, Major 1). */
+  const teacherReads = () =>
+    teacherProcedure({ admits: 'approved', input: emptyInput, output: subjectsListOutput }).query(
+      () => [],
+    );
+  const teacherKindNamespaces: Readonly<Record<string, ReturnType<typeof createAppRouter>>> = {
+    sessions: createAppRouter({ sessions: createAppRouter({ teacherReads: teacherReads() }) }),
+    chat: createAppRouter({ chat: createAppRouter({ teacherReads: teacherReads() }) }),
+    live: createAppRouter({ live: createAppRouter({ teacherReads: teacherReads() }) }),
+  };
+
+  it.each(Object.keys(teacherKindNamespaces))(
+    'reads a teacher-kind procedure under %s and fails it while it is not registered',
+    (namespace) => {
+      const path = `${namespace}.teacherReads`;
+      const surface = teacherKindNamespaces[namespace];
+      expect(surface).toBeDefined();
+      expect(studentFacingProcedures(surface!)).toEqual([path]);
+      expect(coverageFailures(studentFacingProcedures(surface!), [], [])).toEqual([
+        expect.stringMatching(
+          new RegExp(`^${path.replaceAll('.', '\\.')}: .*never exempt.*FR-496`),
+        ),
+      ]);
+    },
+  );
 });
 
 /** The three kinds FR-496 names beyond FR-410's five, as T052's note writes them. */

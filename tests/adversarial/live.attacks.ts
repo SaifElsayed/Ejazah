@@ -520,20 +520,34 @@ async function sendBetween(own: Gender, enrollmentId: string, sessionId: string)
   });
 }
 
-/** A mutation of the user surface over HTTP, refused as a nonexistent id: 404, `NOT_FOUND`. */
+/**
+ * A mutation of the user surface over HTTP, refused as a nonexistent id: 404, `NOT_FOUND`, and the
+ * same body as the same call with `idField` set to an id that never existed (R-GENDER-2's one shape).
+ */
 async function expectRefusedAsNonexistent(
   bearer: string,
   path: string,
-  input: unknown,
+  input: Readonly<Record<string, unknown>> & { readonly idempotencyKey: string },
+  idField: 'enrollmentId' | 'sessionId',
 ): Promise<void> {
   const { origin } = await liveWorld();
-  const response = await fetch(`${origin}/trpc/${path}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
-    body: JSON.stringify(input),
+  const call = (body: unknown) =>
+    fetch(`${origin}/trpc/${path}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const refused = await call(input);
+  expect(refused.status, `${path} refused`).toBe(404);
+  const refusedBody: unknown = await refused.json();
+  expect(refusedBody).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  const absent = await call({
+    ...input,
+    [idField]: randomUUID(),
+    idempotencyKey: `${input.idempotencyKey}-absent`,
   });
-  expect(response.status, `${path} refused`).toBe(404);
-  expect(await response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  expect(absent.status, `${path} with an id that never existed`).toBe(404);
+  expect(refusedBody, `${path} answers as a nonexistent id`).toEqual(await absent.json());
 }
 
 /**
@@ -555,17 +569,17 @@ async function nothingReachesTheOldPairing(direction: Direction): Promise<void> 
         enrollmentId,
         body: 'السلام عليكم',
         idempotencyKey: key('a'),
-      });
+      }, 'enrollmentId');
       await expectRefusedAsNonexistent(`teacher-${own}`, 'chat.send', {
         enrollmentId,
         body: 'وعليكم السلام',
         idempotencyKey: key('b'),
-      });
+      }, 'enrollmentId');
       await expectRefusedAsNonexistent(`student-${own}`, 'sessions.cancellation.request', {
         sessionId: SESSION_OF[own],
         reason: 'سفر',
         idempotencyKey: key('cancel'),
-      });
+      }, 'sessionId');
     });
     await mutate(`student-${own}`, 'chat.send', {
       enrollmentId,

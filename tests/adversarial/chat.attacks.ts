@@ -18,7 +18,9 @@
 //   tamperedToken         a tampered bearer token: unauthenticated before any service.
 //   clientSuppliedGender  the input carrying the other gender is ignored.
 // T052 (FR-496's three kinds, Q2 (a)): otherSessionToken and replayedToken not applicable (no token
-// issued or taken; the link of `attachmentLink` names the document, which both parties read);
+// is taken; `attachmentLink` issues a signed link that names the document, not a party, and both
+// parties are answered one, so the other participant replaying it reaches nothing they could not
+// ask for; a link issued before a gender correction lives until R-SEC-3's short expiry);
 //   afterGenderCorrection after an administrator's correction of the teacher's gender (`users.gender`
 //                         changed in the world, as the server's record), the own enrollment answers as
 //                         a nonexistent one, from either party, and again as theirs once restored

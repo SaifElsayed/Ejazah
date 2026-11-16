@@ -296,10 +296,19 @@ function callerOf(procedure: unknown): unknown {
   return metaField(procedure, 'caller');
 }
 
-/** The paths of the procedures a student can reach, sorted. */
+function isSessionRouterPath(path: string): boolean {
+  return (SESSION_ROUTERS as readonly string[]).includes(path.split('.')[0] ?? '');
+}
+
+/**
+ * The paths of the procedures a student can reach, and every procedure of `sessions`, `chat` and
+ * `live` whatever its caller kind, sorted. FR-496 protects both directions, so a teacher-kind
+ * procedure there must be registered too (#142 r1, Major 1).
+ */
 export function studentFacingProcedures(router: RouterLike): string[] {
   return Object.entries(router._def.procedures)
-    .filter(([, procedure]) => {
+    .filter(([path, procedure]) => {
+      if (isSessionRouterPath(path)) return true;
       const caller = callerOf(procedure);
       return typeof caller !== 'string' || !NOT_STUDENT_FACING.has(caller);
     })

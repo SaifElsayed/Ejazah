@@ -241,7 +241,9 @@ async function replayedByTheOtherParticipant(direction: Direction): Promise<void
  * T052 (FR-496): another session's token. The other gender's student's token for their own session,
  * sent by the requester beside that session's id, answers as a nonexistent session, and beside the
  * requester's own session's id is ignored: the requester is minted a token of their own, bound to
- * their own session; no token is ever minted for the other session to the requester.
+ * their own session; no token is ever minted for the other session to the requester. The join's
+ * input (`sessionsJoinInput`) strips unknown keys, so the smuggled `token` never reaches the
+ * service: in substance the case is another session's id plus the mint's binding.
  */
 async function anotherSessionsToken(direction: Direction): Promise<void> {
   const { surface, own, theirs } = await pairsFor(direction);
