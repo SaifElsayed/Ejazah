@@ -416,16 +416,21 @@ describe('creating a checkout (the Intention API, Unified Checkout)', () => {
     expect(checkout.expiresAt.getTime()).toBeLessThanOrEqual(PAY_BY.getTime());
   });
 
-  it("splits the whole gross to the teacher's recipient, on the auth integration, when a recipient is named", async () => {
+  it("splits the teacher's share, not the gross, to the teacher's recipient, on the auth integration (T104)", async () => {
     const recorder = recordingFetch(intentionAnswer);
 
     await adapter({
       fetch: recorder.fetch,
       splitIntegrationId: SPLIT_INTEGRATION_ID,
-    }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, { recipientRef: '600001' });
+    }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, {
+      recipientRef: '600001',
+      share_piasters: piasters(17_500),
+    });
 
     expect(recorder.requests[0]?.body).toMatchObject({
-      split_amounts: [{ mid: '600001', amount_cents: 25_000, description: 'Package' }],
+      amount: 25_000,
+      items: [{ name: 'Package', amount: 25_000, quantity: 1 }],
+      split_amounts: [{ mid: '600001', amount_cents: 17_500, description: 'Package' }],
       split_payment_methods: [SPLIT_INTEGRATION_ID],
     });
   });
@@ -436,6 +441,7 @@ describe('creating a checkout (the Intention API, Unified Checkout)', () => {
     await expect(
       adapter({ fetch: recorder.fetch }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, {
         recipientRef: '600001',
+        share_piasters: piasters(17_500),
       }),
     ).rejects.toThrow(/PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID/);
     expect(recorder.requests).toEqual([]);

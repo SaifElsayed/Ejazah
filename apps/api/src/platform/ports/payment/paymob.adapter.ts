@@ -14,9 +14,10 @@
 // payment token and is stored encrypted only (R-DB-8). The expiry answered is the latest expiry's
 // whole second, never after it (FR-355): Paymob counts its lifetime from when the request arrives,
 // so its own expiry falls at most the request's travel after that, inside the hold's grace (ADR 0010
-// D4). With a recipient named, the whole gross is split to the teacher's account
-// (`split_amounts`, Paymob's "Split Features Implementation") on the auth integration: 0% commission
-// (ADR 0007), no share computed here.
+// D4). With a recipient named, the teacher's share the payee carries is split to the teacher's
+// account (`split_amounts`, Paymob's "Split Features Implementation") on the auth integration; the
+// rest of the gross stays with the platform's merchant account (T104, ADR 0025 D1). The share is
+// computed by `packages/money` before the port, never here.
 //
 // THE CALLBACK. Paymob signs a processed callback ("HMAC Transaction Callback") with HMAC-SHA512 under
 // the HMAC secret over twenty fields of the transaction, concatenated in a documented order, and
@@ -228,7 +229,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
         },
         expiration: lifetimeSeconds,
         notification_url: this.#options.notificationUrl,
-        ...this.#split(payee, amount),
+        ...this.#split(payee),
       }),
     );
     if (!answer.success) throw new GatewayRequestError('unreadable');
@@ -276,14 +277,21 @@ export class PaymobPaymentAdapter implements PaymentPort {
     return splitIntegrationId === undefined ? [integrationId] : [integrationId, splitIntegrationId];
   }
 
-  #split(payee: CheckoutPayee | undefined, amount: number): Record<string, unknown> {
+  /** The teacher's share to the teacher's recipient (T104): the payee's share, never the gross. */
+  #split(payee: CheckoutPayee | undefined): Record<string, unknown> {
     if (payee === undefined) return {};
     const { splitIntegrationId } = this.#options;
     if (splitIntegrationId === undefined) {
       throw new Error('A split needs PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID, which is not set.');
     }
     return {
-      split_amounts: [{ mid: payee.recipientRef, amount_cents: amount, description: ITEM_NAME }],
+      split_amounts: [
+        {
+          mid: payee.recipientRef,
+          amount_cents: toPlainNumber(payee.share_piasters),
+          description: ITEM_NAME,
+        },
+      ],
       split_payment_methods: [splitIntegrationId],
     };
   }
