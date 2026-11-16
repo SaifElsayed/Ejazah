@@ -84,7 +84,7 @@ specs/005-certification/
 apps/api/src/
 ├── modules/certification/   # requests, issue, revoke, bar, certificates reads; template/ (Typst, Amiri)
 ├── modules/notifications/   # NotificationWriter, delivery, reminders' store
-├── modules/moderation/      # + user reports, gender flags (rows and the visibility check; imports identity only)
+├── modules/moderation/      # + user reports, gender flags (rows and the visibility check; imports identity only; the Pairings port)
 ├── modules/catalog/         # + teacher signatures
 ├── modules/identity/        # + certificate name, push-token register/remove, gender change (admin path only)
 ├── modules/admin/           # + settings writer; settings.list/update; the gender decisions (correct, fraud ban), composed here
@@ -100,12 +100,14 @@ tests/                       # adversarial registrations, db-integrity probes, j
 
 **The module graph this phase adds** (to ARCHITECTURE §4 in T026):
 - certification imports identity, catalog and booking;
-- moderation imports identity (the visibility predicate), and no other module;
-- the gender decisions are composed in the admin module, which imports identity, booking, sessions and moderation, and
-  which no module imports;
+- moderation imports identity (the visibility predicate), and no other module; it reads sessions' and booking's rows
+  only through the `Pairings` port below;
+- the gender decisions (`genderFlags.get`'s list of the enrollments a correction would end, `.correct` and `.fraudBan`)
+  are composed in the admin module, which imports identity, booking, sessions and moderation, and which no module
+  imports;
 - sessions and payments import notifications.
 
-Four ports run against the arrows, each declared by the module below and bound by `main.ts`
+Five ports run against the arrows, each declared by the module below and bound by `main.ts`
 (`docs/ARCHITECTURE.md:195-197`'s pattern):
 
 | Port | Declared in | Bound to | Task |
@@ -114,6 +116,7 @@ Four ports run against the arrows, each declared by the module below and bound b
 | `OpenRequestsRefreeze` | catalog (chain correction) | certification | T006, T032 |
 | `OpenIjazahRequests` | identity (deletion) | certification | T031 |
 | `OpenCases` | identity (`users.delete`) | moderation | T031 |
+| `Pairings` (`partyOfSession`, `partyOfEnrollment`, `paired`) | moderation (reports, flags) | sessions (`partyOfSession`), booking (`partyOfEnrollment`, `paired`) | T011, T013 |
 
 Identity's existing `OngoingEnrollments` port (bound to booking) gains a method `live` for T031.
 

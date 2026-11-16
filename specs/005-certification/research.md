@@ -13,8 +13,10 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - The PDF goes to storage under `certificates/<ijazahId>.pdf`, the key in `ijazahs.certificate_storage_key` as text
     (it holds no secret: the file is served only by signed link, R-SEC-3).
   - The binary's path comes from configuration (`TYPST_BIN`); a missing binary fails the job, never the request.
-  - The child process runs under a timeout, the named constant `CERTIFICATE_RENDER_TIMEOUT_MS` in the job (R-MONEY-12's
-    kernel exception); a render past it is killed and the job fails into its retries.
+  - The child process runs under a timeout: a small helper `apps/api/src/platform/typst/run-typst.ts` spawns the CLI
+    and names `CERTIFICATE_RENDER_TIMEOUT_MS` once, with its reason beside it (a protection number that keeps a stuck
+    render from holding a worker slot; R-MONEY-12's exception for constants named once in `apps/api/src/platform/**`).
+    A render past it is killed and the job fails into its retries.
   - CI and the production image download the pinned 0.15.1 release and check its SHA-256 against a value kept in the
     repository before using it.
 - **Rationale.** ADR 0004 D1 chose Typst and measured this exact version, from 25 to 60 generations, Arabic shaping
@@ -132,9 +134,13 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   `scheduled` sessions with `scheduled_start_at - offset <= now < scheduled_start_at` and no reminder row for
   (session, offset, user). It records one notification each; the primary key (session, user, offset) makes a rerun
   write nothing. No last run is kept, so a worker that was down catches up on its next run, for every session that has
-  not started yet.
-  - **Index.** A partial index `sessions (scheduled_start_at) WHERE status = 'scheduled'` serves the read (T001, ERD
-    §14).
+  not started yet. A session booked inside an offset's window gets that offset's reminder on the next run (a make-up
+  booked three hours ahead gets the 24-hour one); this is the intended catch-up.
+  - **The read.** No new index (R-DB-9). The sweep reads through ERD §14's existing partial index
+    `sessions (scheduled_end_at) WHERE status = 'scheduled'`, bounded by `now < scheduled_end_at <= now + maxOffset +
+    maxLength` (maxOffset the largest of `reminder_offsets_minutes`, maxLength the largest of `SESSION_LENGTHS_MINUTES`,
+    `packages/contracts/src/packages.ts:17`), then filters on the start instant. An index on `scheduled_start_at` is
+    added only after a measured slow query.
   - Recomputed instants (`reresolve-session-instants`, the hook at `jobs/reresolve-session-instants.ts:181-182`) need
     no rescheduling: the sweep reads the committed instants.
   - A session no longer scheduled is skipped.
@@ -148,21 +154,29 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 ## R-408 — Reports
 - **Decision.**
   - `reports.create` (user kind, `rate_limit_user_report`, 5 per 86400 s) writes an `open` row, with:
-    - a context of session (the caller a party), chat (the caller a party of the enrollment, whose id the report
-      stores in `user_reports.enrollment_id`) or profile (visible to the caller by the visibility predicate, else
-      NOT_FOUND, R-GENDER-2);
+    - a context of session (the caller a party, through `Pairings.partyOfSession`, which also answers the session's
+      enrollment), chat (the caller a party of the enrollment, through `Pairings.partyOfEnrollment`) or profile
+      (visible to the caller by the visibility predicate, else NOT_FOUND, R-GENDER-2); a session or chat that is not
+      the caller's answers NOT_FOUND;
+    - every session and chat report stores its enrollment in `user_reports.enrollment_id`, set by the server (for a
+      session report, from the session);
     - one open report per reporter, reported user and context (a partial unique);
     - no report on oneself.
   - Admin queue: `reports.list`, `reports.get`, `reports.resolve` (actioned or dismissed, with a note; audited).
   - The chat purge also holds an enrollment with an open report on one of its sessions or on its chat (FR-492,
-    FR-SESS-13): moderation's `enrollmentsWithOpenMatterAmong` gains open `user_reports`, through `session_id` or
-    `enrollment_id`.
+    FR-SESS-13): moderation's `enrollmentsWithOpenMatterAmong` gains open `user_reports`, through
+    `user_reports.enrollment_id`, moderation's own table.
+- **`Pairings` (R-API-3/4, R-API-6).** Booking and sessions import moderation, so moderation reads their rows only
+  through a port it declares, bound by `main.ts` as identity's `OngoingEnrollments` is bound to booking:
+  - `partyOfSession(tx, sessionId, userId)` → `{ enrollmentId, counterpartUserId } | null` (sessions' entry);
+  - `partyOfEnrollment(tx, enrollmentId, userId)` → `{ counterpartUserId } | null` (booking's entry);
+  - `paired(tx, userId, otherUserId)` → whether an enrollment, whatever its status, joins the two (booking's entry).
 - **Code.** No code reads `user_reports` yet; `chat/purge.service.ts:10-12` reads disputes only.
 
 ## R-409 — Gender flags, the correction and the fraud ban
 - **Raising a flag:**
-  - `genderFlags.raise` (user kind, `rate_limit_gender_flag`, 3 per 86400 s), on a user the caller is paired with or
-    can see; one open flag per flagged user;
+  - `genderFlags.raise` (user kind, `rate_limit_gender_flag`, 3 per 86400 s), on a user the caller is paired with
+    (`Pairings.paired`) or can see (the visibility predicate), else NOT_FOUND; one open flag per flagged user;
   - `genderFlags.raise` (admin) from a report or on the administrator's own initiative (`raised_by_user_id` null).
   - The flag stores its `reason` and, when raised from a report, its `report_id`.
 - **The queue:** `genderFlags.list`, `.get`, `.dismiss`, `.correct`, `.fraudBan`. Each takes a mandatory reason, is
@@ -191,10 +205,11 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   `gender_mismatch`, as the lift does, whatever closed the enrollment (T014, red first, with an adversarial case). The
   restore never puts a mixed pairing back, even after a later correction of either party.
 - **Where the decisions run (R-API-3/4).** Booking and sessions import moderation, so moderation never imports them.
-  `genderFlags.correct` and `.fraudBan` are composed in the admin module (`modules/admin/gender-decisions.service.ts`),
-  which no module imports. It calls identity's, booking's, sessions' and moderation's entries. Moderation keeps the
-  flag and report rows and imports identity only, for the visibility predicate of `reports.create` and
-  `genderFlags.raise`.
+  `genderFlags.get`'s list of the enrollments a correction would end, `genderFlags.correct` and `.fraudBan` are
+  composed in the admin module (`modules/admin/gender-decisions.service.ts`), which no module imports. It calls
+  identity's, booking's, sessions' and moderation's entries. Moderation keeps the flag and report rows and imports
+  identity only, for the visibility predicate of `reports.create` and `genderFlags.raise`; its party and pairing checks
+  go through `Pairings` (R-408).
 - **Locks:** the user first, then the enrollments in id order, as the ban path takes them
   (`specs/004-sessions/contracts/kernel.md`, a row added).
 - **No self-service path** exists or is added (R-GENDER-6).

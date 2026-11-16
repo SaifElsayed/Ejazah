@@ -19,7 +19,7 @@ never a name (FR-ADMIN-17).
 | `users.setCertificateName` | `{ userId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |
 | `reports.list` / `reports.get` | `{ status?, cursor? }` / `{ reportId }` | queue and detail, links to the session or enrollment | default | `reports.listed` / `report.viewed` |
 | `reports.resolve` | `{ reportId, outcome: 'actioned' \| 'dismissed', note, idempotencyKey }` | void | default | `report.resolved` |
-| `genderFlags.list` / `genderFlags.get` | queue / `{ flagId }` | the flag; on `get`, the enrollments a correction would end (a preview count and ids) | default | `gender_flags.listed` / `gender_flag.viewed` |
+| `genderFlags.list` / `genderFlags.get` | queue / `{ flagId }` | the flag; on `get`, the enrollments a correction would end (a preview count and ids), composed in the admin module (R-409) | default | `gender_flags.listed` / `gender_flag.viewed` |
 | `genderFlags.raise` | `{ userId, reason, reportId?, idempotencyKey }` | `{ flagId }` | `rate_limit_gender_decision` | `gender_flag.raised` |
 | `genderFlags.dismiss` | `{ flagId, reason, idempotencyKey }` | void | `rate_limit_gender_decision` | `gender_flag.dismissed` |
 | `genderFlags.correct` | `{ flagId, reason, idempotencyKey }` | `{ endedEnrollments: number }` | `rate_limit_gender_decision` | `gender.corrected` ⚠️ irreversible ends |

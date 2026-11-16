@@ -64,16 +64,14 @@ Partial uniques:
 - `gender_flags`: (`flagged_user_id`) WHERE `status = 'open'`.
 
 Checks: `reporter_user_id <> reported_user_id`; a `user_reports` row with `context = 'session'` has a `session_id`,
-and one with `context = 'chat'` has an `enrollment_id`.
+and one with `context <> 'profile'` has an `enrollment_id`.
 
 ## Changed: `user_reports` and `gender_flags` (moderation)
-- `user_reports.enrollment_id` uuid FK → `enrollments`, nullable; required for a chat report (the check above); the
-  chat purge reads it (R-408).
+- `user_reports.enrollment_id` uuid FK → `enrollments`, nullable; required for a session or chat report (the check
+  above), set by the server (for a session report, from the session through `Pairings.partyOfSession`); the chat purge
+  reads it (R-408).
 - `gender_flags.reason` text NOT NULL (the raiser's reason) and `gender_flags.report_id` uuid FK → `user_reports`,
   nullable (an administrator's flag raised from a report).
-
-## Changed: `sessions` (an index only)
-- A partial index on `scheduled_start_at` WHERE `status = 'scheduled'`, for the reminder sweep (R-407).
 
 ## Enum members added (additive, R-API-9)
 - `ijazah_request_status` (new enum, above).

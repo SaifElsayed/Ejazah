@@ -51,9 +51,9 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
       `completion_date`, `rendered_at`, `render_generation`, `signed_off_at`, `signed_off_by_admin_id` (DEC-72);
     - `session_reminders`;
     - the partial uniques on open `user_reports` and open `gender_flags`, and `user_reports`' two checks;
-    - `user_reports.enrollment_id` (required for a chat report by a check), `gender_flags.reason` and
-      `gender_flags.report_id` (data-model.md);
-    - the partial index `sessions (scheduled_start_at) WHERE status = 'scheduled'` (R-407).
+    - `user_reports.enrollment_id` (required for a session or chat report by a check), `gender_flags.reason` and
+      `gender_flags.report_id` (data-model.md); no new index (R-407 reads through ERD §14's
+      `sessions (scheduled_end_at)` index).
   - Before it runs, a SELECT shows `ijazahs`, `user_reports` and `gender_flags` hold no row (the NOT NULLs need none).
   - `prisma/schema/{certification,notifications,moderation,base}.prisma`.
   - `prisma/seed.ts`: a new block at the settings list's end with the six rate limits of data-model.md.
@@ -122,7 +122,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     `render_generation`, an older generation writing nothing; double-run spec);
   - a template spec over chains of 1, 25, 60 (one page) and 61 (two pages) generations, a multi-name generation, both
     languages, a name holding Typst markup printed as text;
-  - the render runs under `CERTIFICATE_RENDER_TIMEOUT_MS` (a named constant), killed past it, with a spec;
+  - the render runs through `apps/api/src/platform/typst/run-typst.ts`, which names `CERTIFICATE_RENDER_TIMEOUT_MS`
+    once with its reason (R-MONEY-12's exception) and kills a render past it, with a spec;
   - CI installs the pinned binary in a step that checks its SHA-256 (`.github/workflows/ci.yml`, on the owner's word);
     the production image does the same.
 - [ ] T009 [P] [US1] The parties' certificates (FR-607, FR-609; R-412; D1 (a)):
@@ -150,17 +151,23 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T011 [US4] Reports (FR-611, FR-612, FR-613; R-408):
   - `modules/moderation/` `user-report.service.ts` and `.repository.ts`;
   - `reports.create` (user; contexts session, chat (with its `enrollmentId`), profile; NOT_FOUND for a profile not
-    visible, R-GENDER-2; `self`, `open_exists`; `rate_limit_user_report`);
+    visible, R-GENDER-2, and for a session or chat that is not the caller's; `self`, `open_exists`;
+    `rate_limit_user_report`); every session and chat report stores `enrollment_id`, set by the server;
+  - the `Pairings` port (R-408): declared in `modules/moderation/`, bound in `main.ts` to sessions' entry
+    (`partyOfSession`) and booking's (`partyOfEnrollment`, `paired`); moderation imports neither;
   - `reports.list`, `.get`, `.resolve` (admin, audited);
   - adversarial registrations.
 - [ ] T012 [P] [US4] Chat retention honours an open report (FR-492, FR-SESS-13): moderation's
   `enrollmentsWithOpenMatterAmong` (`modules/moderation/open-matters.repository.ts`) also answers an enrollment with an
-  open `user_reports` row on one of its sessions or its chat; `purge-chat`'s spec gains the case, its double-run kept.
+  open `user_reports` row on one of its sessions or its chat, read through `user_reports.enrollment_id` (moderation's
+  own table); `purge-chat`'s spec gains the case, its double-run kept.
 - [ ] T013 [US5] Gender flags and their queue (FR-613, FR-614, FR-615, FR-618; R-409):
-  - `genderFlags.raise` (user: a user the caller is paired with or can see, else NOT_FOUND; `open_exists`;
+  - `genderFlags.raise` (user: a user the caller is paired with (`Pairings.paired`) or can see, else NOT_FOUND;
+    `open_exists`;
     `rate_limit_gender_flag`; the reason stored);
-  - admin `genderFlags.raise` (from a report, its `report_id` stored, or alone), `.list`, `.get` (the enrollments a
-    correction would end), `.dismiss`, each administrator mutation under `rate_limit_gender_decision`;
+  - admin `genderFlags.raise` (from a report, its `report_id` stored, or alone), `.list`, `.get`, `.dismiss`, each
+    administrator mutation under `rate_limit_gender_decision`; `.get`'s list of the enrollments a correction would
+    end is composed in `modules/admin/gender-decisions.service.ts` from booking's entry (R-409);
   - a CI test asserting no procedure on either router changes one's own gender (R-GENDER-6);
   - adversarial registrations.
 - [ ] T014 [US5] The correction (FR-616, FR-617, FR-GENDER-7; R-409):
@@ -169,10 +176,13 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - booking cancels each enrollment that now pairs two genders with `gender_correction`, its remaining sessions
     `cancelled_by_admin` (through `EnrollmentSide`);
   - moderation opens one `gender_correction` case per enrollment, the reason added to `COMPENSATION_REASONS` with an
-    ERD changelog line;
+    ERD changelog line, and to the contract enum `compensationCaseReason`
+    (`packages/contracts/src/admin/sessions.ts`) at its end (R-API-9);
   - the restore refuses them (DEC-69);
   - `sessions.restore` gains a step-3 cause: a pairing whose two declared genders differ is refused `gender_mismatch`,
     whatever closed it (`sessions/restore.service.ts:528-537`), red first, with an adversarial case;
+    `gender_mismatch` joins the contract enum `restoreRefusalCause` (`packages/contracts/src/admin/sessions.ts`) at its
+    end (R-API-9), the contract snapshot regenerated;
   - locks: the user, then the enrollments in id order, a `specs/004-sessions/contracts/kernel.md` row;
   - the live `account` and `enrollment` events;
   - one transaction, idempotent, audited, `rate_limit_gender_decision`;
@@ -273,7 +283,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T025 The adversarial suite's reach for Phase 4 (FR-625): `certificates`, `reports` and `genderFlags` join
   `ATTACKED_ROUTERS` (`tests/adversarial/procedure-harness.ts`), so none can be exempt. Every new user procedure is
   registered in both directions. The declared limits of T001's six keys join T052's check.
-- [ ] T026 The close (FR-619, FR-625; SC-601, SC-606): `docs/ARCHITECTURE.md` §4 gains plan.md's Phase 4 graph and its four ports with their bindings; quickstart.md §1 to §5 on the last batch's commit, each output in its own file; SC-606 measured on the stand-in (from cause to the provider, 100 attempts) and SC-601 timed by hand on the phone run; the phone steps
+- [ ] T026 The close (FR-619, FR-625; SC-601, SC-606): `docs/ARCHITECTURE.md` §4 gains plan.md's Phase 4 graph and its five ports with their bindings; quickstart.md §1 to §5 on the last batch's commit, each output in its own file; SC-606 measured on the stand-in (from cause to the provider, 100 attempts) and SC-601 timed by hand on the phone run; the phone steps
   joined to the next phone run; `PLAN.md`'s Phase 4 section given its close date.
 
 ---
