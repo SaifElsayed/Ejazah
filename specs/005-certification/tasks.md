@@ -166,6 +166,13 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - the live `account` and `enrollment` events;
   - one transaction, idempotent, audited;
   - a db-integrity race probe against `sessions.restore`.
+- [ ] T015 [US5] The fraud ban (FR-617, FR-GENDER-6; R-409):
+  - `genderFlags.fraudBan`: `StandingService`'s ban (teacher or student), its existing closings;
+  - the counterparties' cases under `gender_fraud`;
+  - the flag `fraud_ban`;
+  - the ban's lift (`students.liftBan`, `teachers.liftBan`) checks each pairing when the ban came from a flag
+    (DEC-69), red first;
+  - audited, idempotent.
 - [ ] T031 [US1] A teacher's deletion waits for their requests and enrollments, and keeps the signature (FR-630,
   FR-631; R-411, R-414; DEC-72):
   - identity's own deletion (`modules/identity/deletion.service.ts`, app and web) asks a port `OpenIjazahRequests`
@@ -181,13 +188,9 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - the phone's deletion refusal text for the new cause (`ar.json`, `en.json`, `002:T123`'s marks);
   - specs red first: each refusal on each path, a student's administrator deletion unchanged, the signature kept and
     then erased.
-- [ ] T015 [US5] The fraud ban (FR-617, FR-GENDER-6; R-409):
-  - `genderFlags.fraudBan`: `StandingService`'s ban (teacher or student), its existing closings;
-  - the counterparties' cases under `gender_fraud`;
-  - the flag `fraud_ban`;
-  - the ban's lift (`students.liftBan`, `teachers.liftBan`) checks each pairing when the ban came from a flag
-    (DEC-69), red first;
-  - audited, idempotent.
+  - Its Done line says it carried `004:T077`'s follow-up (the head comment).
+  - v1.0 note, the privacy policy: `004:T078`'s line (Phase 6, counsel, OPEN-05) names the kept signature beside the
+    identity, credential and payout documents (DEC-72 (5); NFR-COMP-2 as amended).
 
 ## Phase 4: US6 — push producers and reminders (B48)
 
