@@ -85,7 +85,7 @@ model Enrollment {
   // spec FR-513), cleared by the restore; only on a `cancelled` `admin` enrollment, 1 to 500
   // characters (rule 51, a check in the migration). The internal note is in the audit entry only.
   adminEndReason              String?             @map("admin_end_reason")
-  createdAt                  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt                   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   student         User             @relation("EnrollmentStudent", fields: [studentUserId], references: [id])

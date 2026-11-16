@@ -266,7 +266,7 @@ export const sessionsAdminRouter = createAdminRouter({
       targetType: 'enrollment',
       targetId: input.enrollmentId,
       reason: input.partyReason,
-      after: { status: 'cancelled', slot: input.slot, internalNote: input.internalNote ?? null },
+      after: { status: 'cancelled', slot: input.slot, internalNote: input.internalNote || null },
     });
     return answer;
   }),

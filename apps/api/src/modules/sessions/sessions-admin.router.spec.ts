@@ -663,3 +663,44 @@ describe('sessions.review.revise (T059)', () => {
     expect(opened).toBe(0);
   });
 });
+
+// T082's follow-up (PR #141's review, round 1, nit 3): `internalNote` is trimmed by the contract, so a
+// note of blanks arrives as `''`; the audit entry keeps none for it, as for a note left out. The rest of
+// `sessions.endEnrollment` is `sessions-end-enrollment.router.spec.ts`'.
+function endSurface() {
+  const contexts = adminContextsOver({
+    enrollmentEnd: {
+      endEnrollment: async () => ({
+        answer: { enrollmentId: ENROLLMENT, caseId: CASE, slot: 'hold', cancelledSessions: 3 },
+        replayed: false,
+      }),
+    },
+  } as never);
+  return {
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('sessions.endEnrollment’s internal note (T082, nit 3)', () => {
+  it('audits a note of blanks, trimmed to nothing, as none', async () => {
+    const { as, written } = endSurface();
+    await as(VERIFIED).sessions.endEnrollment({
+      enrollmentId: ENROLLMENT,
+      partyReason: 'تعذر استمرار الاشتراك',
+      internalNote: '   ',
+      idempotencyKey: 'spec-end-key-0001',
+    });
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'enrollment.ended_by_admin',
+        targetType: 'enrollment',
+        targetId: ENROLLMENT,
+        reason: 'تعذر استمرار الاشتراك',
+        after: { status: 'cancelled', slot: 'hold', internalNote: null },
+      },
+    ]);
+  });
+});

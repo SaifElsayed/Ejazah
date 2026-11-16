@@ -21,7 +21,7 @@
 //   student holds it; the restore clears the reason;
 // - races: an end with `release` against another student's hold on the slot (Q-E1 (a): both accounts
 //   key-shared first); an end against a hold's confirmation; an end against `sessions.restore` on the
-//   same enrollment.
+//   same enrollment, on both tracks, `hold` and `release` (PR #141's review, round 1, Minor 1).
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
@@ -678,38 +678,51 @@ describe('races (kernel.md, the direct end’s row)', () => {
     }
   });
 
-  it('an end against sessions.restore on the same enrollment: one valid outcome, no deadlock, nothing half-written', async () => {
-    const made = await confirmedWorld();
-    await end(made.enrollmentId, { key: `end-a-${made.enrollmentId}` });
-    const [restored, ended] = await Promise.allSettled([
-      restore(made.enrollmentId),
-      end(made.enrollmentId, { key: `end-b-${made.enrollmentId}` }),
-    ]);
-    expect(restored.status).toBe('fulfilled');
-    const state = await stateOf(made.enrollmentId);
-    const directEnds = state.cases.filter(({ reason }) => reason === 'admin_ended');
-    if (ended.status === 'fulfilled') {
-      // The restore first: confirmed again, then ended again.
-      expect(state.enrollment).toEqual({
-        status: 'cancelled',
-        cancellationReason: 'admin',
-        adminEndReason: PARTY_REASON,
-        slotReleasedAt: null,
-      });
-      expect(directEnds.map(({ status }) => status).sort()).toEqual(['dismissed', 'open']);
-    } else {
-      // The second end first: refused, the enrollment still closed; then restored.
-      const reason: unknown = ended.reason;
-      expect((reason as DomainError).details).toEqual([
-        { path: 'cause', code: 'enrollment_not_confirmed' },
+  // PR #141's review, round 1, Minor 1: on both tracks. With `release` the end key-shares both
+  // accounts first (Q-E1 (a)) while the restore takes them `FOR UPDATE` first, so neither waits on
+  // the other holding what the other needs.
+  it.each(['hold', 'release'] as const)(
+    'an end (%s) against sessions.restore on the same enrollment: one valid outcome, no deadlock, nothing half-written',
+    async (slot) => {
+      const made = await confirmedWorld();
+      await end(made.enrollmentId, { slot, key: `end-a-${made.enrollmentId}` });
+      const [restored, ended] = await Promise.allSettled([
+        restore(made.enrollmentId),
+        end(made.enrollmentId, { slot, key: `end-b-${made.enrollmentId}` }),
       ]);
-      expect(state.enrollment).toEqual({
-        status: 'confirmed',
-        cancellationReason: null,
-        adminEndReason: null,
-        slotReleasedAt: null,
-      });
-      expect(directEnds.map(({ status }) => status)).toEqual(['dismissed']);
-    }
-  });
+      expect(restored.status).toBe('fulfilled');
+      const state = await stateOf(made.enrollmentId);
+      const directEnds = state.cases.filter(({ reason }) => reason === 'admin_ended');
+      if (ended.status === 'fulfilled') {
+        // The restore first: confirmed again, then ended again, the slot released again on `release`.
+        const { slotReleasedAt, ...closed } = state.enrollment ?? {};
+        expect(closed).toEqual({
+          status: 'cancelled',
+          cancellationReason: 'admin',
+          adminEndReason: PARTY_REASON,
+        });
+        expect(slotReleasedAt === null).toBe(slot === 'hold');
+        expect(state.events.filter(({ kind }) => kind === 'slot_released')).toHaveLength(
+          slot === 'release' ? 2 : 0,
+        );
+        expect(directEnds.map(({ status }) => status).sort()).toEqual(['dismissed', 'open']);
+      } else {
+        // The second end first: refused, the enrollment still closed; then restored.
+        const reason: unknown = ended.reason;
+        expect((reason as DomainError).details).toEqual([
+          { path: 'cause', code: 'enrollment_not_confirmed' },
+        ]);
+        expect(state.enrollment).toEqual({
+          status: 'confirmed',
+          cancellationReason: null,
+          adminEndReason: null,
+          slotReleasedAt: null,
+        });
+        expect(state.events.filter(({ kind }) => kind === 'slot_released')).toHaveLength(
+          slot === 'release' ? 1 : 0,
+        );
+        expect(directEnds.map(({ status }) => status)).toEqual(['dismissed']);
+      }
+    },
+  );
 });
