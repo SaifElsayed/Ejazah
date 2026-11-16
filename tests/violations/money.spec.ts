@@ -57,6 +57,14 @@ const moneyViolations: readonly ViolationCase[] = [
     fixture: 'apps/api/src/modules/sessions/gateway-settlement.ts',
     refuses: "the gateway's gross, fee and net read by a module other than payments",
   },
+  {
+    // T053 (FR-498, SC-409): the rule covers `modules/chat` as it covers `modules/sessions`.
+    constitutionId: 'R-MONEY-6',
+    ruleId: 'boundaries/no-money-vocabulary',
+    ruleSet: 'fast',
+    fixture: 'apps/api/src/modules/chat/paid-amount-notice.ts',
+    refuses: "the gateway's gross and net read by modules/chat",
+  },
 ];
 
 describeViolations('T023 money violations', moneyViolations);

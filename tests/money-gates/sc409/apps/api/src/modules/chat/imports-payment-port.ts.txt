@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): chat importing the payment port. Refused: an import.
+import type * as port from '../../platform/ports/payment/payment.port.js';
+
+export type CheckoutSide = typeof port;

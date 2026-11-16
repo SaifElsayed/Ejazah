@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router changing a teacher's price. Refused: an amount
+// (`pricePiasters`) written outside its owning path, `catalog/packages.repository.ts`.
+export const setPrice = (tx, id, pricePiasters) =>
+  tx.package.update({ where: { id }, data: { pricePiasters } });

@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): chat naming a `gatewayOrder`. Refused: an order reference.
+export interface GatewayOrderNotice {
+  readonly gatewayOrderRef: string;
+}

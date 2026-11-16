@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): chat naming the generated `Payment` type. Refused: a model access.
+import type { Payment } from '@prisma/client';
+
+export type ChatReceipt = Pick<Payment, 'status'>;

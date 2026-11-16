@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): sessions naming the `Piasters` brand. Refused: an amount.
+import type { Piasters } from '@ijazah/money';
+
+export type SessionValue = Piasters;
