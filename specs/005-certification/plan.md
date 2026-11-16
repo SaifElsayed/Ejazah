@@ -84,10 +84,10 @@ specs/005-certification/
 apps/api/src/
 ├── modules/certification/   # requests, issue, revoke, bar, certificates reads; template/ (Typst, Amiri)
 ├── modules/notifications/   # NotificationWriter, delivery, reminders' store
-├── modules/moderation/      # + user reports, gender flags (decisions call identity, booking, sessions entries)
+├── modules/moderation/      # + user reports, gender flags (rows and the visibility check; imports identity only)
 ├── modules/catalog/         # + teacher signatures
 ├── modules/identity/        # + certificate name, push-token register/remove, gender change (admin path only)
-├── modules/admin/           # + settings writer; settings.list/update
+├── modules/admin/           # + settings writer; settings.list/update; the gender decisions (correct, fraud ban), composed here
 ├── platform/settings/registry.ts
 ├── platform/ports/push/expo.adapter.ts
 └── jobs/                    # render-certificate, deliver-notification, send-reminder
@@ -98,7 +98,24 @@ apps/admin/src/pages/        # ijazah-requests, ijazahs, reports, gender, settin
 tests/                       # adversarial registrations, db-integrity probes, job double-runs, template spec
 ```
 
-**The module graph this phase adds** (to ARCHITECTURE §4 in T026): certification imports identity, catalog and booking; moderation's gender decisions import identity, booking and sessions' entries; sessions and payments import notifications; two ports run against the arrows (`AwaitingNameRelease` in identity, `OpenRequestsRefreeze` in catalog), bound by `main.ts` to certification, as `docs/ARCHITECTURE.md:195` does.
+**The module graph this phase adds** (to ARCHITECTURE §4 in T026):
+- certification imports identity, catalog and booking;
+- moderation imports identity (the visibility predicate), and no other module;
+- the gender decisions are composed in the admin module, which imports identity, booking, sessions and moderation, and
+  which no module imports;
+- sessions and payments import notifications.
+
+Four ports run against the arrows, each declared by the module below and bound by `main.ts`
+(`docs/ARCHITECTURE.md:195-197`'s pattern):
+
+| Port | Declared in | Bound to | Task |
+|---|---|---|---|
+| `AwaitingNameRelease` | identity (certificate name) | certification | T004, T032 |
+| `OpenRequestsRefreeze` | catalog (chain correction) | certification | T006, T032 |
+| `OpenIjazahRequests` | identity (deletion) | certification | T031 |
+| `OpenCases` | identity (`users.delete`) | moderation | T031 |
+
+Identity's existing `OngoingEnrollments` port (bound to booking) gains a method `live` for T031.
 
 **Structure decision.** The existing monorepo layout: each feature lives in the module that owns its table
 (`module-tables.json`). The integration wires them in `surfaces/context.ts`, `admin.router.ts`, `app.router.ts`,

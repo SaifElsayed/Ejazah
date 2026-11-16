@@ -7,7 +7,7 @@ every run; a double-run spec through `runOnceAndTwice` (R-API-14).
 |---|---|---|---|---|
 | `render-certificate` | on demand | `{ ijazahId, generation }`, `jobId` = ijazah id and generation | renders the PDF with the Typst CLI (R-401), puts it in storage, sets `ijazahs.rendered_at` for that generation (the administrators' queue shows it ready to sign off) | `rendered_at` set, or a newer generation → no write |
 | `deliver-notification` | on demand | `{ notificationId }` | sends to each of the user's device tokens through `PushPort`, sets `pushed_at`, removes stale tokens | `pushed_at` set → skip |
-| `send-reminder` | sweep, every minute | none | records `session_reminder` for each (session, user, offset) due since the last run; skips sessions no longer scheduled | `session_reminders` primary key |
+| `send-reminder` | sweep, every minute | none | records `session_reminder` for each (session, user, offset) whose `scheduled_start_at - offset <= now < scheduled_start_at` and that has no row yet, so a run after downtime catches up; skips sessions no longer scheduled; read through the partial index on `scheduled_start_at` (R-407) | `session_reminders` primary key |
 
 `reresolve-session-instants`' hook (`:181-182`) is reworded to point here: the sweep reads the committed instants, so
 nothing is rescheduled (R-407).

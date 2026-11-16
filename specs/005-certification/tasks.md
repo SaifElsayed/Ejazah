@@ -44,26 +44,30 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 ## Phase 1: Foundations (B45)
 
-- [ ] T001 The migration and the seed (data-model.md):
+- [ ] T001 The migration and the seed (data-model.md; FR-626):
   - a forward migration (timestamp of the real time of writing) adding:
     - `ijazah_requests`, with `ijazah_request_status`, its checks and the partial unique on open requests;
     - on `ijazahs`: `request_id` (unique FK), `issued_by_admin_id`, `student_name_printed`, `teacher_name_printed`,
       `completion_date`, `rendered_at`, `render_generation`, `signed_off_at`, `signed_off_by_admin_id` (DEC-72);
     - `session_reminders`;
     - the partial uniques on open `user_reports` and open `gender_flags`, and `user_reports`' two checks;
-    - `compensation_case_reason` members `gender_correction` and `gender_fraud`, at the enum's end.
+    - `user_reports.enrollment_id` (required for a chat report by a check), `gender_flags.reason` and
+      `gender_flags.report_id` (data-model.md);
+    - the partial index `sessions (scheduled_start_at) WHERE status = 'scheduled'` (R-407).
   - Before it runs, a SELECT shows `ijazahs`, `user_reports` and `gender_flags` hold no row (the NOT NULLs need none).
   - `prisma/schema/{certification,notifications,moderation,base}.prisma`.
   - `prisma/seed.ts`: a new block at the settings list's end with the six rate limits of data-model.md.
   - `tests/seed/seed.spec.ts` (rule d).
-  - `docs/ERD.md`: a dated block at its end, and the notifications note re-pointed to v1.1 (R-406).
+  - `docs/ERD.md`: a dated block at its end, and the notifications note re-pointed to v1.1 (R-406). The block also
+    amends `ijazahs.chain_snapshot`'s «Immutable» to «immutable from the sign-off» (DEC-72), and ADR 0019 D1 gains a
+    dated note: an issued certificate keeps the names it printed from its sign-off.
   - The SRS's §3.14 rows for the four limits beyond DEC-71's two, in the next free track 1 DEC (DEC-73), placed after
     DEC-71's rows.
   - A migration spec red under a mutant migration.
 - [ ] T002 [P] The settings registry (R-410; FR-626: every number a setting with its bounds): `apps/api/src/platform/settings/registry.ts`, every §3.14 key with its
   zod schema, bounds, unit, group and SRS row. A CI spec asserts registry keys = seed keys, both ways, and every
   default is inside its bounds. The admin module's settings repository gains its one writer (`update(key, value)`,
-  R-PROC-11 as amended here).
+  the panel's writer R-PROC-11 allows).
 - [ ] T003 [P] [US1] The teacher's signature (FR-601, FR-IJAZAH-12; R-411):
   - upload kind `signature` (PNG or JPEG) in `platform/guards/upload.middleware.ts`;
   - `POST /uploads/signature` (teacher, `approved`) on `surfaces/upload-route.ts`;
@@ -74,7 +78,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T004 [P] [US1] The certificate name (FR-602; ADR 0019 D1):
   - `account.certificateName.set` (student, once; `already_set` after), in identity;
   - `users.setCertificateName` (admin, a reason, audited with no name in the entry);
-  - setting it (by the student or an administrator) moves the student's `awaiting_student_name` requests to `pending` on the same transaction. Identity imports no module (`docs/ARCHITECTURE.md:183`) and certification imports identity, so identity's certificate-name service takes a port `AwaitingNameRelease` (`release(tx, studentUserId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`); until T006 lands the port is bound to a no-op;
+  - setting it (by the student or an administrator) moves the student's `awaiting_student_name` requests to `pending` on the same transaction. Identity imports no module (`docs/ARCHITECTURE.md:183`) and certification imports identity, so identity's certificate-name service takes a port `AwaitingNameRelease` (`release(tx, studentUserId)`), handed in by `main.ts` and bound to certification's entry, as the dependencies against the arrows are (`docs/ARCHITECTURE.md:197`); until T006 lands the port is bound to a no-op;
   - specs, including an admin change never rewriting an issued certificate.
 - [ ] T005 [US6] Notifications' writer and delivery (FR-619, FR-620, FR-621, FR-623; R-405, R-406):
   - `modules/notifications/` `NotificationWriter.record(tx, …)` (the seven v1.0 kinds only; any other kind refused by
@@ -82,7 +86,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - the job `jobs/deliver-notification.ts` (`pushed_at`, retries, stale tokens removed, double-run spec);
   - `account.pushToken.register` and `.remove` (identity, upsert by hash);
   - `platform/ports/push/expo.adapter.ts` with `PUSH_PROVIDER` gaining `expo` (P2 (a); built against Expo's documented
-    request shape, tried on the stand-in until the owner's P2 acts);
+    request shape, tried on the stand-in until the owner's P2 acts), its call under `PUSH_REQUEST_TIMEOUT_MS` (a named
+    constant), and `EXPO_ACCESS_TOKEN` optional in `env.schema.ts` and `.env.example` if the project turns it on;
   - the lint rule's allowed file becomes `deliver-notification.ts`;
   - i18n keys for the seven kinds' titles and bodies (phone `ar.json`/`en.json`, group `notifications`), reaching the API's generated copy through `pnpm web-copy:build` (`scripts/build-web-copy.ts`) so the server renders them in the user's language at send time, `pnpm check:generated` green.
 
@@ -90,17 +95,17 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 - [ ] T006 [US1] The request (FR-603, FR-608, FR-627, FR-628; R-403, R-404; P4 (a), DEC-72):
   - `modules/certification/` `ijazah-request.service.ts` and `.repository.ts`;
-  - `teacher.ijazahRequests.preview`, `.send` (idempotent), `.get`;
-  - every refusal of FR-603, each red first and logged with ids and its reason;
+  - `teacher.ijazahRequests.preview`, `.send` (idempotent, `rate_limit_ijazah_request`), `.get`;
+  - every refusal of FR-603, `already_issued` included (one ijazah per enrollment until a revocation, read under the
+    enrollment's lock), each red first and logged with ids and its reason;
   - the freeze at send: the chain from catalog's entry (generations, origin first, the teacher appended), the holder
     name, a copy of the signature under `ijazah-requests/<id>/`;
-  - an administrator's correction of an approved credential (`credentials.correct`, `modules/catalog/credentials-admin.router.ts:93`, writing at `credential-review.repository.ts:170-180`) re-freezes the chain and the holder name of that credential's open requests on the same transaction (P4 (a)), and the snapshot of its approved ijazahs not yet signed off, each re-rendered (DEC-72, T032). Certification imports catalog, so catalog never imports certification: catalog's correction service takes a port `OpenRequestsRefreeze` (`refreeze(tx, credentialId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`);
+  - an administrator's correction of an approved credential (`credentials.correct`, `modules/catalog/credentials-admin.router.ts:93`, writing at `credential-review.repository.ts:170-180`) re-freezes the chain and the holder name of that credential's open requests on the same transaction (P4 (a)), and the snapshot of its approved ijazahs not yet signed off, each re-rendered (DEC-72, T032). Certification imports catalog, so catalog never imports certification: catalog's correction service takes a port `OpenRequestsRefreeze` (`refreeze(tx, credentialId)`), handed in by `main.ts` and bound to certification's entry, as the dependencies against the arrows are (`docs/ARCHITECTURE.md:197`);
   - the request stays open through any later change of the teacher's standing (a deletion cannot happen meanwhile, T031);
   - a student's deletion closes it and erases its copy;
   - the enrollment reads gain `ijazahRequest`;
   - live event `ijazahRequest`;
-  - a lock row in `specs/004-sessions/contracts/kernel.md`'s successor for this phase (the enrollment, then the
-    request);
+  - a lock row in `specs/004-sessions/contracts/kernel.md` (the enrollment, then the request);
   - adversarial registrations.
 - [ ] T007 [US1] The administrators' review (FR-604, FR-605; R-402):
   - `ijazahRequests.list`, `.get` (with the teacher's current standing and its reason, FR-628), `.approve` (one
@@ -117,7 +122,9 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     `render_generation`, an older generation writing nothing; double-run spec);
   - a template spec over chains of 1, 25, 60 (one page) and 61 (two pages) generations, a multi-name generation, both
     languages, a name holding Typst markup printed as text;
-  - CI installs the pinned binary in a step (`.github/workflows/ci.yml`, on the owner's word).
+  - the render runs under `CERTIFICATE_RENDER_TIMEOUT_MS` (a named constant), killed past it, with a spec;
+  - CI installs the pinned binary in a step that checks its SHA-256 (`.github/workflows/ci.yml`, on the owner's word);
+    the production image does the same.
 - [ ] T009 [P] [US1] The parties' certificates (FR-607, FR-609; R-412; D1 (a)):
   - `certificates.list` and `.link` (the two parties only, else NOT_FOUND; `not_ready` until signed off; `revoked`
     after a revocation, with no link, R-HONEST-6);
@@ -142,48 +149,61 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 - [ ] T011 [US4] Reports (FR-611, FR-612, FR-613; R-408):
   - `modules/moderation/` `user-report.service.ts` and `.repository.ts`;
-  - `reports.create` (user; contexts session, chat, profile; NOT_FOUND for a profile not visible, R-GENDER-2; `self`,
-    `open_exists`; `rate_limit_user_report`);
+  - `reports.create` (user; contexts session, chat (with its `enrollmentId`), profile; NOT_FOUND for a profile not
+    visible, R-GENDER-2; `self`, `open_exists`; `rate_limit_user_report`);
   - `reports.list`, `.get`, `.resolve` (admin, audited);
   - adversarial registrations.
 - [ ] T012 [P] [US4] Chat retention honours an open report (FR-492, FR-SESS-13): moderation's
   `enrollmentsWithOpenMatterAmong` (`modules/moderation/open-matters.repository.ts`) also answers an enrollment with an
   open `user_reports` row on one of its sessions or its chat; `purge-chat`'s spec gains the case, its double-run kept.
-- [ ] T013 [US5] Gender flags and their queue (FR-614, FR-615, FR-618; R-409):
+- [ ] T013 [US5] Gender flags and their queue (FR-613, FR-614, FR-615, FR-618; R-409):
   - `genderFlags.raise` (user: a user the caller is paired with or can see, else NOT_FOUND; `open_exists`;
-    `rate_limit_gender_flag`);
-  - admin `genderFlags.raise` (from a report or alone), `.list`, `.get` (the enrollments a correction would end),
-    `.dismiss`;
+    `rate_limit_gender_flag`; the reason stored);
+  - admin `genderFlags.raise` (from a report, its `report_id` stored, or alone), `.list`, `.get` (the enrollments a
+    correction would end), `.dismiss`, each administrator mutation under `rate_limit_gender_decision`;
   - a CI test asserting no procedure on either router changes one's own gender (R-GENDER-6);
   - adversarial registrations.
-- [ ] T014 [US5] The correction (FR-616, FR-GENDER-7; R-409):
-  - `genderFlags.correct`: identity changes `users.gender` (the admin path only);
+- [ ] T014 [US5] The correction (FR-616, FR-617, FR-GENDER-7; R-409):
+  - `genderFlags.correct`, composed in `modules/admin/gender-decisions.service.ts` (R-409; moderation imports neither
+    booking nor sessions): identity changes `users.gender` (the admin path only);
   - booking cancels each enrollment that now pairs two genders with `gender_correction`, its remaining sessions
     `cancelled_by_admin` (through `EnrollmentSide`);
-  - moderation opens one `gender_correction` case per enrollment;
+  - moderation opens one `gender_correction` case per enrollment, the reason added to `COMPENSATION_REASONS` with an
+    ERD changelog line;
   - the restore refuses them (DEC-69);
-  - locks: the user, then the enrollments in id order, a `kernel.md` row;
+  - `sessions.restore` gains a step-3 cause: a pairing whose two declared genders differ is refused `gender_mismatch`,
+    whatever closed it (`sessions/restore.service.ts:528-537`), red first, with an adversarial case;
+  - locks: the user, then the enrollments in id order, a `specs/004-sessions/contracts/kernel.md` row;
   - the live `account` and `enrollment` events;
-  - one transaction, idempotent, audited;
+  - one transaction, idempotent, audited, `rate_limit_gender_decision`;
   - a db-integrity race probe against `sessions.restore`.
+  > **Follow-up (T057 r1, Saif, 2026-11-16): a correction of an enrollment awaiting payment.** «One compensation case
+  > per enrollment» would open a case where nothing was paid, and FR-DISPUTE-5's late-paid list does not name
+  > `gender_correction`, so a payment landing after the cancellation follows no named path. To settle when T014 is
+  > built: which statuses T014 ends; a `pending_payment` hold released with no case, and a late paid event taking the
+  > existing `party_restricted` case.
 - [ ] T015 [US5] The fraud ban (FR-617, FR-GENDER-6; R-409):
-  - `genderFlags.fraudBan`: `StandingService`'s ban (teacher or student), its existing closings;
-  - the counterparties' cases under `gender_fraud`;
-  - the flag `fraud_ban`;
-  - the ban's lift (`students.liftBan`, `teachers.liftBan`) checks each pairing when the ban came from a flag
-    (DEC-69), red first;
-  - audited, idempotent.
+  - `genderFlags.fraudBan`, composed in `modules/admin/gender-decisions.service.ts`: identity sets `users.gender` to the
+    established gender (the correction's administrators' path, without its closings), then `StandingService`'s ban
+    (teacher or student) with its existing closings, on one transaction;
+  - the counterparties' cases keep the ban's own reasons (`student_banned`, `teacher_ended`), so `kindsOf`
+    (`sessions/restore-window.ts`), `END_REASONS` (`sessions/case-queue.service.ts`) and `KIND_OF`
+    (`sessions/ban-lift.service.ts`) stay unchanged; the fraud is recorded on the flag (`fraud_ban`) and in the audit;
+  - the ban's lift (`students.liftBan`, `teachers.liftBan`) refuses each pairing the corrected genders forbid (DEC-69),
+    red first: before the correction step the check passes vacuously, which is the mutant;
+  - audited, idempotent, `rate_limit_gender_decision`.
 - [ ] T031 [US1] A teacher's deletion waits for their requests and enrollments, and keeps the signature (FR-630,
   FR-631; R-411, R-414; DEC-72):
   - identity's own deletion (`modules/identity/deletion.service.ts`, app and web) asks a port `OpenIjazahRequests`
     (`count(tx, teacherUserId)`), handed in by `main.ts` and bound to certification's entry as `OngoingEnrollments` is
     bound to booking; a count above zero refuses `CONFLICT` `pending_ijazah_requests`, writing nothing, one info line
     of ids;
-  - `users.delete` of a teacher asks booking's count of enrollments `pending_payment` or `confirmed` (paused included)
-    and the same request count, and moderation's count of open compensation cases on the teacher's enrollments
-    (through moderation's entry), refusing `active_enrollments`, `pending_ijazah_requests` or `open_cases`; a
-    student's unchanged; `004:T081`'s ending of a teacher's enrollments is then reached only by held ones whose case
-    is already closed;
+  - `users.delete` of a teacher asks the count of enrollments `pending_payment` or `confirmed` (paused included)
+    through a new method `live(tx, userId)` of identity's `OngoingEnrollments` port (bound to booking), the same request
+    count, and the count of open compensation cases on the teacher's enrollments through a new identity port
+    `OpenCases` (`count(tx, teacherUserId)`), bound by `main.ts` to moderation's entry (identity imports no module),
+    refusing `active_enrollments`, `pending_ijazah_requests` or `open_cases`; a student's unchanged; `004:T081`'s
+    ending of a teacher's enrollments is then reached only by held ones whose case is already closed;
   - the kept signature: `modules/verification/kept-data.service.ts` lists it, opens it by a signed link with a reason,
     and removes its file at the erasure (date or now); a teacher never approved has it erased at deletion; the head
     comment of `kept-data.service.ts` corrected with it (`004:T077`'s follow-up);
@@ -193,6 +213,10 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - Its Done line says it carried `004:T077`'s follow-up (the head comment).
   - v1.0 note, the privacy policy: `004:T078`'s line (Phase 6, counsel, OPEN-05) names the kept signature beside the
     identity, credential and payout documents (DEC-72 (5); NFR-COMP-2 as amended).
+  > **Follow-up (T057 r1, Saif, 2026-11-16): a teacher stays bookable while an administrator works towards a
+  > deletion.** While the administrator ends a teacher's enrollments and resolves their cases before a deletion (R-414),
+  > nothing stops new bookings of that teacher. To settle when T031 is built: how the teacher stops being bookable
+  > meanwhile (for example a suspension first, which pauses and hides).
 
 ## Phase 4: US6 — push producers and reminders (B48)
 
@@ -200,7 +224,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - sessions' cancellation request service records `cancellation_requested` to the other party, and the answer
     service `cancellation_request_accepted` or `_declined` to the requester, on their transactions;
   - payments' order-events record `payment_confirmed`, `payment_failed`, `payment_expired` to the student from
-    Phase 2's durable records, one per order outcome;
+    Phase 2's durable records, one per order outcome; on the confirmation's transaction the writer never refuses (no
+    limit, the kind fixed by its type), so a paid confirmation never rolls back because of a notification;
   - specs: no notification for an expired request, none twice for one order.
 - [ ] T017 [P] [US6] Reminders (FR-619, FR-622, FR-BOOK-8; R-407):
   - `jobs/send-reminder.ts`, a sweep each minute over `reminder_offsets_minutes`;
@@ -209,7 +234,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - a recomputed start honoured (a spec moving a session's instants, the hook comment at
     `jobs/reresolve-session-instants.ts:181-182` reworded);
   - double-run spec.
-- [ ] T018 [US6] Time (R-TIME): the reminder's window computed from instants, never wall-clock local times; a spec
+- [ ] T018 [US6] Time (FR-622; R-TIME): the reminder's window computed from instants, never wall-clock local times; a spec
   across Cairo's DST change for each offset.
 
 ## Phase 5: Screens (B48, B49)
@@ -248,7 +273,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T025 The adversarial suite's reach for Phase 4 (FR-625): `certificates`, `reports` and `genderFlags` join
   `ATTACKED_ROUTERS` (`tests/adversarial/procedure-harness.ts`), so none can be exempt. Every new user procedure is
   registered in both directions. The declared limits of T001's six keys join T052's check.
-- [ ] T026 The close: quickstart.md §1 to §5 on the last batch's commit, each output in its own file; SC-606 measured on the stand-in (from cause to the provider, 100 attempts) and SC-601 timed by hand on the phone run; the phone steps
+- [ ] T026 The close (FR-619, FR-625; SC-601, SC-606): `docs/ARCHITECTURE.md` §4 gains plan.md's Phase 4 graph and its four ports with their bindings; quickstart.md §1 to §5 on the last batch's commit, each output in its own file; SC-606 measured on the stand-in (from cause to the provider, 100 attempts) and SC-601 timed by hand on the phone run; the phone steps
   joined to the next phone run; `PLAN.md`'s Phase 4 section given its close date.
 
 ---
@@ -269,10 +294,13 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 ## Dependencies and Execution Order
 
-- **B45:** T001 first (the schema). T002, T003 and T004 in parallel lanes. T005 after T001.
+- **B45:** T001 first (the schema). T002, T003 and T004 in parallel lanes. T005 after T001 and T004 (both write
+  `identity/account.router.ts` and `packages/contracts/src/account.ts`).
 - **B46:** T006 after T003 and T004. T007 after T006. T008 after T007's enqueue; it can be written in parallel on its
-  own files. T009 and T010 after T007. T032 after T007 and T008.
-- **B47:** T011, then T012. T013, then T014 and T015 (shared flag service). T031 after T006 (its request count).
+  own files. T009 and T010 after T007. T032 after T007, T008 and T010 (T010 and T032 write the same `ijazahs.*` router
+  and contracts).
+- **B47:** T011, then T012. T013, then T014, then T015 (the shared flag service and the admin module's gender
+  decisions). T031 after T006 (its request count).
 - **B48:** T016 and T017 after T005. T018 with T017. T019 to T021 after their procedures.
 - **B49:** T022 to T024 after their procedures. T025 after every procedure. T026 last.
 - **Two tracks:** this file is track 1's (`tracks-coordination.md` §2). T024 is a light item.

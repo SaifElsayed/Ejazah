@@ -44,7 +44,7 @@ No change. The snapshot is built from the rows at send and re-built on a correct
 - **`teacher_signatures` (catalog):** written by the signature upload (R-411), its `storage_key` as the init
   migration holds it (as `users.photo_key` is), served only by signed link (R-SEC-3). Kept at the deletion of a teacher
   once approved and erased with the kept documents (DEC-72, R-411).
-- **`ijazah_bars` (certification), `gender_flags`, `user_reports` (moderation), `device_push_tokens` (identity):** as
+- **`ijazah_bars` (certification), `device_push_tokens` (identity):** as
   in the init migration.
 - **`notifications`:** as in the init migration. No enum member is added in v1.0 (R-406).
 
@@ -63,11 +63,23 @@ Partial uniques:
 - `user_reports`: (`reporter_user_id`, `reported_user_id`, `context`) WHERE `status = 'open'`;
 - `gender_flags`: (`flagged_user_id`) WHERE `status = 'open'`.
 
-Checks: `reporter_user_id <> reported_user_id`; a `user_reports` row with `context = 'session'` has a `session_id`.
+Checks: `reporter_user_id <> reported_user_id`; a `user_reports` row with `context = 'session'` has a `session_id`,
+and one with `context = 'chat'` has an `enrollment_id`.
+
+## Changed: `user_reports` and `gender_flags` (moderation)
+- `user_reports.enrollment_id` uuid FK → `enrollments`, nullable; required for a chat report (the check above); the
+  chat purge reads it (R-408).
+- `gender_flags.reason` text NOT NULL (the raiser's reason) and `gender_flags.report_id` uuid FK → `user_reports`,
+  nullable (an administrator's flag raised from a report).
+
+## Changed: `sessions` (an index only)
+- A partial index on `scheduled_start_at` WHERE `status = 'scheduled'`, for the reminder sweep (R-407).
 
 ## Enum members added (additive, R-API-9)
-- `compensation_case_reason`: `gender_correction`, `gender_fraud` (R-409).
 - `ijazah_request_status` (new enum, above).
+
+A compensation case's reason is a `String` column with a closed list in code (`COMPENSATION_REASONS`), so no enum
+changes: T014 adds `gender_correction` to the list, with an ERD changelog line. The fraud ban adds no reason (R-409).
 
 ## Settings (seed: a new block at the settings list's end, `tracks-coordination.md` §1)
 | Key | Default |

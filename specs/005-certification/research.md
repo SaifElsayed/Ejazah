@@ -10,8 +10,13 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - It renders a template in `apps/api/src/modules/certification/template/` (the v2 layout of ADR 0004 D2) with Amiri
     1.003 vendored beside it.
   - The case goes in as a JSON data file; the template never calls `eval` on it.
-  - The PDF goes to storage under `certificates/<ijazahId>.pdf`, its key stored encrypted.
+  - The PDF goes to storage under `certificates/<ijazahId>.pdf`, the key in `ijazahs.certificate_storage_key` as text
+    (it holds no secret: the file is served only by signed link, R-SEC-3).
   - The binary's path comes from configuration (`TYPST_BIN`); a missing binary fails the job, never the request.
+  - The child process runs under a timeout, the named constant `CERTIFICATE_RENDER_TIMEOUT_MS` in the job (R-MONEY-12's
+    kernel exception); a render past it is killed and the job fails into its retries.
+  - CI and the production image download the pinned 0.15.1 release and check its SHA-256 against a value kept in the
+    repository before using it.
 - **Rationale.** ADR 0004 D1 chose Typst and measured this exact version, from 25 to 60 generations, Arabic shaping
   included. R-API-13 forbids rendering in a request. ADR 0004's Consequences require pinning, vendored fonts and no
   `eval`.
@@ -75,7 +80,9 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - the student is not barred (`ijazah_bars` with no `lifted_at`);
   - an approved credential exists for the enrollment's subject;
   - the signature exists;
-  - no other open request (`awaiting_student_name` or `pending`) exists for the enrollment: a partial unique index.
+  - no other open request (`awaiting_student_name` or `pending`) exists for the enrollment: a partial unique index;
+  - the enrollment has no unrevoked ijazah (`already_issued`), read under the enrollment's lock; a revocation allows a
+    new request (FR-IJAZAH-9).
 - **After sending:** a request stays open through any change of the teacher's standing (FR-628).
 - **Rationale.** ADR 0017 D3 and D5, ERD :582 («at most one pending request per enrollment»), widened to both open
   states.
@@ -91,6 +98,10 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
     (`account.pushToken.remove`).
   - The permission is asked the first time a push could matter: after the first booking is confirmed, or on the
     enrollment screen.
+  - The call to Expo runs under a timeout, the named constant `PUSH_REQUEST_TIMEOUT_MS` in the adapter; a timeout fails
+    the delivery into its retries.
+  - If Expo's access token is turned on for the project, `EXPO_ACCESS_TOKEN` is an optional variable in
+    `env.schema.ts` and `.env.example`.
 - **Rationale.** The port and stand-in already exist (`push/fake.adapter.ts`, `push/index.ts`'s comment «The real
   provider's member … the Phase 4 adapter task»), and `findStaleTargets` maps to Expo's receipts.
 - **Owner acts (P2).** `expo-notifications` added, a Firebase project with FCM v1 credentials in EAS, a new dev build.
@@ -117,10 +128,13 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 - **Rationale.** FR-NOTIF-4 and R-API-15. The lint rule `no-push-outside-job` already allows the port only in jobs.
 
 ## R-407 — Reminders: a sweep, not delayed jobs
-- **Decision.** A sweep `send-reminder` runs every minute. For each offset in `reminder_offsets_minutes` it finds the
-  scheduled sessions whose `start - offset` fell in the last run's window and that have no reminder row for
-  (session, offset, user). It records one notification each; a unique (session, offset, user) key makes a rerun write
-  nothing.
+- **Decision.** A sweep `send-reminder` runs every minute. For each offset in `reminder_offsets_minutes` it selects the
+  `scheduled` sessions with `scheduled_start_at - offset <= now < scheduled_start_at` and no reminder row for
+  (session, offset, user). It records one notification each; the primary key (session, user, offset) makes a rerun
+  write nothing. No last run is kept, so a worker that was down catches up on its next run, for every session that has
+  not started yet.
+  - **Index.** A partial index `sessions (scheduled_start_at) WHERE status = 'scheduled'` serves the read (T001, ERD
+    §14).
   - Recomputed instants (`reresolve-session-instants`, the hook at `jobs/reresolve-session-instants.ts:181-182`) need
     no rescheduling: the sweep reads the committed instants.
   - A session no longer scheduled is skipped.
@@ -134,13 +148,15 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 ## R-408 — Reports
 - **Decision.**
   - `reports.create` (user kind, `rate_limit_user_report`, 5 per 86400 s) writes an `open` row, with:
-    - a context of session (the caller a party), chat (the caller a party of the enrollment) or profile (visible to
-      the caller by the visibility predicate, else NOT_FOUND, R-GENDER-2);
+    - a context of session (the caller a party), chat (the caller a party of the enrollment, whose id the report
+      stores in `user_reports.enrollment_id`) or profile (visible to the caller by the visibility predicate, else
+      NOT_FOUND, R-GENDER-2);
     - one open report per reporter, reported user and context (a partial unique);
     - no report on oneself.
   - Admin queue: `reports.list`, `reports.get`, `reports.resolve` (actioned or dismissed, with a note; audited).
-  - The chat purge also holds an enrollment with an open report on one of its sessions (FR-492, FR-SESS-13):
-    moderation's `enrollmentsWithOpenMatterAmong` gains open `user_reports`.
+  - The chat purge also holds an enrollment with an open report on one of its sessions or on its chat (FR-492,
+    FR-SESS-13): moderation's `enrollmentsWithOpenMatterAmong` gains open `user_reports`, through `session_id` or
+    `enrollment_id`.
 - **Code.** No code reads `user_reports` yet; `chat/purge.service.ts:10-12` reads disputes only.
 
 ## R-409 — Gender flags, the correction and the fraud ban
@@ -148,6 +164,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - `genderFlags.raise` (user kind, `rate_limit_gender_flag`, 3 per 86400 s), on a user the caller is paired with or
     can see; one open flag per flagged user;
   - `genderFlags.raise` (admin) from a report or on the administrator's own initiative (`raised_by_user_id` null).
+  - The flag stores its `reason` and, when raised from a report, its `report_id`.
 - **The queue:** `genderFlags.list`, `.get`, `.dismiss`, `.correct`, `.fraudBan`. Each takes a mandatory reason, is
   audited and keyed by an idempotency key.
 - **Correct (FR-GENDER-7):**
@@ -155,14 +172,31 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - for each enrollment of the user that now pairs two genders, booking cancels it with `gender_correction` (the
     reason exists, `base.prisma:229`, and is never restorable, `restore-window.ts:27`), its remaining sessions
     `cancelled_by_admin`;
-  - one compensation case per enrollment, under a new reason `gender_correction`.
+  - one compensation case per enrollment, under a new reason `gender_correction`, added to the code list
+    `COMPENSATION_REASONS` (`moderation/compensation-case.service.ts:47-89`; the reason is a `String` column, so no
+    migration), with an ERD changelog line.
 - **Fraud (FR-GENDER-6):**
+  - identity sets `users.gender` to the established gender through the same administrators' path as the correction,
+    but without the correction's closings, on the fraud's own transaction and before the ban;
   - `StandingService` bans the account (`ban` / `banStudent`, `standing.service.ts:368-473`);
-  - the closings it already does cancel the enrollments;
-  - the counterparties' cases open under a new reason `gender_fraud` in place of the ban's own reason, so a case says
-    why;
-  - the lift's pairing check (DEC-69) reads the flag's `fraud_ban` status.
-- **Locks:** the user first, then the enrollments in id order, as the ban path takes them (`kernel.md`).
+  - the closings it already does cancel the enrollments, and the counterparties' cases keep the ban's own reasons
+    (`student_banned`, `teacher_ended`). So `kindsOf` (`sessions/restore-window.ts:95-101`), `END_REASONS`
+    (`sessions/case-queue.service.ts:85-91`) and `KIND_OF` (`sessions/ban-lift.service.ts:165`) stay unchanged, and the
+    lift and the restore find these closings as they find any ban's. The fraud is recorded on the flag (`fraud_ban`)
+    and in the audit entry. No `gender_fraud` reason is added.
+  - The lift's pairing check (`ban-lift.service.ts:242-259`) compares `users.gender`, which is now corrected, so it
+    refuses each pairing the corrected genders forbid.
+- **The restore's pairing check (DEC-69, Phase 4's declarations).** `sessions.restore`'s step 3
+  (`sessions/restore.service.ts:528-537`) also compares the two parties' declared genders and refuses a mismatch
+  `gender_mismatch`, as the lift does, whatever closed the enrollment (T014, red first, with an adversarial case). The
+  restore never puts a mixed pairing back, even after a later correction of either party.
+- **Where the decisions run (R-API-3/4).** Booking and sessions import moderation, so moderation never imports them.
+  `genderFlags.correct` and `.fraudBan` are composed in the admin module (`modules/admin/gender-decisions.service.ts`),
+  which no module imports. It calls identity's, booking's, sessions' and moderation's entries. Moderation keeps the
+  flag and report rows and imports identity only, for the visibility predicate of `reports.create` and
+  `genderFlags.raise`.
+- **Locks:** the user first, then the enrollments in id order, as the ban path takes them
+  (`specs/004-sessions/contracts/kernel.md`, a row added).
 - **No self-service path** exists or is added (R-GENDER-6).
 
 ## R-410 — The settings page and its registry
@@ -213,12 +247,14 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
     ones whose ijazah is not signed off), bound by `main.ts` to certification as `OngoingEnrollments` is bound to
     booking. A count above zero refuses `CONFLICT` with the cause `pending_ijazah_requests`, writing nothing, with one
     info line of ids.
-  - `users.delete` (T081) asks, for a teacher only: booking's count of enrollments `pending_payment` or `confirmed`
-    (paused included) and the same request count. Either refuses with its cause (`active_enrollments`,
+  - `users.delete` (T081) asks, for a teacher only: the count of enrollments `pending_payment` or `confirmed`
+    (paused included), through a second method `live(tx, userId)` of the existing `OngoingEnrollments` port (bound to
+    booking in `main.ts`), and the same request count. Either refuses with its cause (`active_enrollments`,
     `pending_ijazah_requests`), writing nothing. The administrator ends each confirmed enrollment with the direct end
     (`004:T082`), lets one awaiting payment lapse, and decides each request. A student's `users.delete` is unchanged.
-  - `users.delete` of a teacher also asks moderation's count of open compensation cases on the teacher's enrollments,
-    refusing `open_cases` (the owner's answer on held enrollments: «بيتمنع المسح لحد متتحل قضية الطالب»). This
+  - `users.delete` of a teacher also asks the count of open compensation cases on the teacher's enrollments, through a
+    port identity declares, `OpenCases` (`count(tx, teacherUserId)`), bound by `main.ts` to moderation's entry
+    (identity imports no module, `docs/ARCHITECTURE.md:183`), refusing `open_cases` (the owner's answer on held enrollments: «بيتمنع المسح لحد متتحل قضية الطالب»). This
     covers the enrollments closed by the teacher's own ban or revocation while their slot is held, and those the
     direct end has just ended. Each case then goes one of two ways:
     - closed with the amount compensated (`compensation_ordered`): the restore is refused from then on

@@ -28,5 +28,5 @@ never a name (FR-ADMIN-17).
 | `settings.update` | `{ key, value, reason, idempotencyKey }` | `{ key, value }` | `rate_limit_settings_update` | `setting.changed` (before and after) |
 
 `ijazahRequests.approve` writes the ijazah and enqueues `render-certificate` after commit (R-402).
-`genderFlags.correct` and `.fraudBan` run on one transaction with the lock order of R-409, and record one row in
-`kernel.md`.
+`genderFlags.correct` and `.fraudBan` are composed in the admin module (R-409), run on one transaction with the lock
+order of R-409, and record one row in `specs/004-sessions/contracts/kernel.md`.
