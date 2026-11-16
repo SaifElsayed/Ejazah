@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): chat selecting a `_piasters` column through raw SQL. Refused: an amount.
+export async function quoted(tx, enrollmentId) {
+  return tx.$queryRaw`SELECT amount_piasters FROM quotes WHERE enrollment_id = ${enrollmentId}::uuid`;
+}

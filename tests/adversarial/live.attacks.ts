@@ -22,6 +22,15 @@
 //                         tRPC, and a bearer with its signature changed refused UNAUTHENTICATED.
 //   clientSuppliedGender  an input carrying the other gender refused as an input; the events are the
 //                         server's to address.
+// T052 (FR-496's three kinds, Q2 (a)): otherSessionToken and replayedToken not applicable (the
+// channel issues no token and takes no input);
+//   afterGenderCorrection after an administrator's correction of B's gender, a chat either way and
+//                         a cancellation between A and B are refused as nonexistent and neither
+//                         stream, B's above all, carries an event; once restored, A's message is the
+//                         first and only event of both. The world holds no row: the correction is the
+//                         fixture's gender record changed in place (`withCorrectedGender`).
+import { randomUUID } from 'node:crypto';
+
 import { expect, vi } from 'vitest';
 
 import { addHours } from '../../packages/time/src/index.js';
@@ -59,7 +68,11 @@ import {
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
-import { type Direction, notApplicable, type ProcedureAttacks } from './procedure-harness.js';
+import {
+  type Direction,
+  notApplicable,
+  type SessionProcedureAttacks,
+} from './procedure-harness.js';
 
 const HOLDS = 'FR-428, FR-496, R-SEC-2, R-324';
 
@@ -123,10 +136,30 @@ const bearers: Readonly<Record<string, UserSession>> = {
   'stranger-female': sessionOf(STRANGER.female, 'female'),
 };
 
-/** Every fixture account's gender, as identity's records hold it. */
-const GENDER_OF: ReadonlyMap<string, Gender> = new Map(
+/**
+ * Every fixture account's gender, as identity's records hold it; T052's correction changes one in
+ * place for the length of its attack (`withCorrectedGender`), as `setGender` does in the database
+ * worlds (the note under T011, K2).
+ */
+const GENDER_OF = new Map<string, Gender>(
   Object.values(bearers).map(({ userId, gender }) => [userId, gender]),
 );
+
+/** `userId`'s recorded gender corrected to `gender` while `during` runs, then restored. */
+async function withCorrectedGender(
+  userId: string,
+  gender: Gender,
+  during: () => Promise<void>,
+): Promise<void> {
+  const recorded = GENDER_OF.get(userId);
+  if (recorded === undefined) throw new Error(`${userId} is not a fixture account`);
+  GENDER_OF.set(userId, gender);
+  try {
+    await during();
+  } finally {
+    GENDER_OF.set(userId, recorded);
+  }
+}
 
 const transactions: Transactions = { run: (work) => work({} as Transaction) };
 
@@ -487,6 +520,92 @@ async function sendBetween(own: Gender, enrollmentId: string, sessionId: string)
   });
 }
 
+/**
+ * A mutation of the user surface over HTTP, refused as a nonexistent id: 404, `NOT_FOUND`, and the
+ * same body as the same call with `idField` set to an id that never existed (R-GENDER-2's one shape).
+ */
+async function expectRefusedAsNonexistent(
+  bearer: string,
+  path: string,
+  input: Readonly<Record<string, unknown>> & { readonly idempotencyKey: string },
+  idField: 'enrollmentId' | 'sessionId',
+): Promise<void> {
+  const { origin } = await liveWorld();
+  const call = (body: unknown) =>
+    fetch(`${origin}/trpc/${path}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const refused = await call(input);
+  expect(refused.status, `${path} refused`).toBe(404);
+  const refusedBody: unknown = await refused.json();
+  expect(refusedBody).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  const absent = await call({
+    ...input,
+    [idField]: randomUUID(),
+    idempotencyKey: `${input.idempotencyKey}-absent`,
+  });
+  expect(absent.status, `${path} with an id that never existed`).toBe(404);
+  expect(refusedBody, `${path} answers as a nonexistent id`).toEqual(await absent.json());
+}
+
+/**
+ * T052 (FR-496): after an administrator's correction of B's gender (the requester's teacher), the
+ * old pairing of A and B sends nothing: a chat either way and a cancellation are refused as a
+ * nonexistent enrollment or session, and neither stream, the corrected user's above all, carries
+ * an event; once the record is restored, a message of A's is the first and only event of both.
+ */
+async function nothingReachesTheOldPairing(direction: Direction): Promise<void> {
+  const { registry } = await liveWorld();
+  const own = direction.requester;
+  const enrollmentId = ENROLLMENT_OF[own];
+  const a = await open(`student-${own}`);
+  const b = await open(`teacher-${own}`);
+  const key = (who: string) => `live-attack-correction-${who}-${own}-${randomUUID()}`;
+  try {
+    await withCorrectedGender(TEACHER[own], direction.other, async () => {
+      await expectRefusedAsNonexistent(`student-${own}`, 'chat.send', {
+        enrollmentId,
+        body: 'السلام عليكم',
+        idempotencyKey: key('a'),
+      }, 'enrollmentId');
+      await expectRefusedAsNonexistent(`teacher-${own}`, 'chat.send', {
+        enrollmentId,
+        body: 'وعليكم السلام',
+        idempotencyKey: key('b'),
+      }, 'enrollmentId');
+      await expectRefusedAsNonexistent(`student-${own}`, 'sessions.cancellation.request', {
+        sessionId: SESSION_OF[own],
+        reason: 'سفر',
+        idempotencyKey: key('cancel'),
+      }, 'sessionId');
+    });
+    await mutate(`student-${own}`, 'chat.send', {
+      enrollmentId,
+      body: 'بعد التصحيح',
+      idempotencyKey: key('restored'),
+    });
+    const restored = (mine: boolean) =>
+      expect.objectContaining({
+        type: 'chat',
+        enrollmentId,
+        message: expect.objectContaining({ body: 'بعد التصحيح', mine }),
+      });
+    await vi.waitFor(() => {
+      expect(eventsOf(b)).toEqual([restored(false)]);
+      expect(eventsOf(a)).toEqual([restored(true)]);
+    });
+  } finally {
+    a.close();
+    b.close();
+  }
+  await vi.waitFor(() => {
+    expect(registry.count(STUDENT[own])).toBe(0);
+    expect(registry.count(TEACHER[own])).toBe(0);
+  });
+}
+
 /** Opens with an input, which the channel refuses: it takes none. */
 async function expectInputRefused(bearer: string, input: unknown, userId: string): Promise<void> {
   const { registry } = await liveWorld();
@@ -499,7 +618,7 @@ async function expectInputRefused(bearer: string, input: unknown, userId: string
   expect(registry.count(userId)).toBe(0);
 }
 
-export const liveAttacks: readonly ProcedureAttacks[] = [
+export const liveAttacks: readonly SessionProcedureAttacks[] = [
   {
     path: 'live.events',
     holds: HOLDS,
@@ -556,6 +675,13 @@ export const liveAttacks: readonly ProcedureAttacks[] = [
           STUDENT[direction.requester],
         );
       },
+      otherSessionToken: notApplicable(
+        'live.events issues no token and takes no input: the stream is the bearer’s own, and an input naming another user or sign-in session is refused (forgedId)',
+      ),
+      replayedToken: notApplicable(
+        'live.events issues no token, so the other participant has none of the caller’s to replay; each event is addressed by the server to the user ids its own transaction read (directCall)',
+      ),
+      afterGenderCorrection: nothingReachesTheOldPairing,
     },
   },
 ];

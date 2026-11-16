@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router updating a gateway order in raw SQL. Refused: a
+// `payments` write outside `modules/payments`.
+export const markRefundedInSql = (tx, id) =>
+  tx.$executeRaw`UPDATE payments SET status = 'refunded' WHERE id = ${id}::uuid`;

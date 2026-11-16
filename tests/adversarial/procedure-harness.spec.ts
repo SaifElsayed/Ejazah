@@ -28,8 +28,11 @@ import {
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
 import { appRouter } from '../../apps/api/src/surfaces/app.router.js';
+import { adminRouter } from '../../apps/api/src/surfaces/admin.router.js';
 import { createAppContext, type UserSession } from '../../apps/api/src/surfaces/context.js';
 import {
+  adminProcedure,
+  createAdminRouter,
   createAppCallerFactory,
   createAppRouter,
   publicProcedure,
@@ -54,6 +57,8 @@ import {
   type AttackKind,
   attackCases,
   coverageFailures,
+  DECLARED_LIMITS,
+  declaredLimitFailures,
   describeProcedureAttacks,
   directions,
   type Exemption,
@@ -61,6 +66,10 @@ import {
   expectAnswersAsNonexistent,
   notApplicable,
   type ProcedureAttacks,
+  SESSION_ATTACK_KINDS,
+  type SessionAttackKind,
+  sessionKindFailures,
+  type SessionProcedureAttacks,
   studentFacingProcedures,
 } from './procedure-harness.js';
 import { registeredAttacks } from './registered-attacks.js';
@@ -318,6 +327,252 @@ describe('each attack runs in both directions (FR-410, FR-064)', () => {
         },
       ]),
     ).toThrow(/discovery\.filters.*forgedId.*reason/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T052 of specs/004-sessions: Phase 3's routers, FR-496's three kinds and the declared limits
+// ---------------------------------------------------------------------------------------------
+
+const anyQuery = () => query().query(() => []);
+
+/** One procedure, `any`, under each namespace T052's line names, as the surface would mount it. */
+const phaseThreeNamespaces: Readonly<Record<string, ReturnType<typeof createAppRouter>>> = {
+  sessions: createAppRouter({ sessions: createAppRouter({ any: anyQuery() }) }),
+  'sessions.cancellation': createAppRouter({
+    sessions: createAppRouter({ cancellation: createAppRouter({ any: anyQuery() }) }),
+  }),
+  'sessions.remedy': createAppRouter({
+    sessions: createAppRouter({ remedy: createAppRouter({ any: anyQuery() }) }),
+  }),
+  'sessions.dispute': createAppRouter({
+    sessions: createAppRouter({ dispute: createAppRouter({ any: anyQuery() }) }),
+  }),
+  'sessions.complaint': createAppRouter({
+    sessions: createAppRouter({ complaint: createAppRouter({ any: anyQuery() }) }),
+  }),
+  chat: createAppRouter({ chat: createAppRouter({ any: anyQuery() }) }),
+  live: createAppRouter({ live: createAppRouter({ any: anyQuery() }) }),
+};
+
+describe('a procedure of sessions, chat or live is registered and never exempt (T052, FR-496)', () => {
+  it.each(Object.keys(phaseThreeNamespaces))(
+    'fails a procedure under %s that is exempt with a reason',
+    (namespace) => {
+      const path = `${namespace}.any`;
+      const surface = phaseThreeNamespaces[namespace];
+      expect(surface).toBeDefined();
+      expect(studentFacingProcedures(surface!)).toEqual([path]);
+      expect(coverageFailures([path], [], [{ path, reason: 'names no one' }])).toEqual([
+        expect.stringMatching(
+          new RegExp(`^${path.replaceAll('.', '\\.')}: .*never exempt.*FR-496`),
+        ),
+      ]);
+    },
+  );
+
+  it.each(Object.keys(phaseThreeNamespaces))(
+    'fails a procedure under %s that is not registered',
+    (namespace) => {
+      const path = `${namespace}.any`;
+      expect(coverageFailures([path], [], [])).toEqual([
+        expect.stringMatching(
+          new RegExp(`^${path.replaceAll('.', '\\.')}: .*never exempt.*FR-496`),
+        ),
+      ]);
+    },
+  );
+
+  /** One teacher-kind procedure, `teacherReads`, under each of the three routers (#142 r1, Major 1). */
+  const teacherReads = () =>
+    teacherProcedure({ admits: 'approved', input: emptyInput, output: subjectsListOutput }).query(
+      () => [],
+    );
+  const teacherKindNamespaces: Readonly<Record<string, ReturnType<typeof createAppRouter>>> = {
+    sessions: createAppRouter({ sessions: createAppRouter({ teacherReads: teacherReads() }) }),
+    chat: createAppRouter({ chat: createAppRouter({ teacherReads: teacherReads() }) }),
+    live: createAppRouter({ live: createAppRouter({ teacherReads: teacherReads() }) }),
+  };
+
+  it.each(Object.keys(teacherKindNamespaces))(
+    'reads a teacher-kind procedure under %s and fails it while it is not registered',
+    (namespace) => {
+      const path = `${namespace}.teacherReads`;
+      const surface = teacherKindNamespaces[namespace];
+      expect(surface).toBeDefined();
+      expect(studentFacingProcedures(surface!)).toEqual([path]);
+      expect(coverageFailures(studentFacingProcedures(surface!), [], [])).toEqual([
+        expect.stringMatching(
+          new RegExp(`^${path.replaceAll('.', '\\.')}: .*never exempt.*FR-496`),
+        ),
+      ]);
+    },
+  );
+});
+
+/** The three kinds FR-496 names beyond FR-410's five, as T052's note writes them. */
+const FR_496_KINDS = ['otherSessionToken', 'replayedToken', 'afterGenderCorrection'] as const;
+
+/** A registration of `path` with every kind passing, but `omitted`. */
+function registrationWithout(path: string, omitted?: SessionAttackKind): ProcedureAttacks {
+  const attacks = Object.fromEntries(
+    [...ATTACK_KINDS, ...FR_496_KINDS]
+      .filter((kind) => kind !== omitted)
+      .map((kind) => [kind, passing]),
+  );
+  return { path, holds: 'FR-496', attacks } as unknown as ProcedureAttacks;
+}
+
+const missingACorrection: SessionProcedureAttacks = {
+  path: 'sessions.get',
+  holds: 'FR-496',
+  // @ts-expect-error -- T052: a Phase 3 registration names FR-496's three kinds, and `afterGenderCorrection` is missing
+  attacks: {
+    directCall: passing,
+    forgedId: passing,
+    guessedId: passing,
+    tamperedToken: passing,
+    clientSuppliedGender: passing,
+    otherSessionToken: passing,
+    replayedToken: passing,
+  },
+};
+
+describe('a registration of sessions, chat or live gives FR-496’s three kinds (T052, Q2 (a))', () => {
+  it('names the three kinds FR-496 adds to FR-410’s five', () => {
+    expect([...SESSION_ATTACK_KINDS].sort()).toEqual([...FR_496_KINDS].sort());
+    expect(Object.keys(missingACorrection.attacks)).not.toContain('afterGenderCorrection');
+  });
+
+  it('passes every registration of the user surface today', () => {
+    expect(sessionKindFailures(registeredAttacks)).toEqual([]);
+  });
+
+  it.each(FR_496_KINDS)('fails a registration of sessions, chat or live missing %s', (kind) => {
+    const paths = ['chat.send', 'live.events', 'sessions.get', 'sessions.remedy.accept'];
+    expect(sessionKindFailures(paths.map((path) => registrationWithout(path, kind)))).toEqual(
+      paths.map((path) =>
+        expect.stringMatching(new RegExp(`^${path.replaceAll('.', '\\.')}: .*${kind}.*FR-496`)),
+      ),
+    );
+  });
+
+  it('fails one of the three marked not applicable without a reason', () => {
+    const registration = {
+      ...registrationWithout('chat.list'),
+      attacks: { ...registrationWithout('chat.list').attacks, replayedToken: notApplicable(' ') },
+    } as ProcedureAttacks;
+    expect(sessionKindFailures([registration])).toEqual([
+      expect.stringMatching(/^chat\.list: .*replayedToken.*reason/),
+    ]);
+    expect(() => attackCases([registration])).toThrow(/chat\.list.*replayedToken.*reason/);
+  });
+
+  it('leaves Phase 2’s registrations with FR-410’s five', () => {
+    const phaseTwo = registrationWithout('discovery.browse');
+    const five = Object.fromEntries(ATTACK_KINDS.map((kind) => [kind, passing]));
+    const registration = { ...phaseTwo, attacks: five } as unknown as ProcedureAttacks;
+    expect(sessionKindFailures([registration])).toEqual([]);
+    expect(attackCases([registration])).toHaveLength(ATTACK_KINDS.length * 2);
+  });
+
+  it('runs each of the three once per direction', async () => {
+    const ran: string[] = [];
+    const recording = (kind: string) => async (direction: { requester: string }) => {
+      ran.push(`${kind}:${direction.requester}`);
+    };
+    const registration = {
+      path: 'sessions.join',
+      holds: 'FR-496',
+      attacks: Object.fromEntries(
+        [...ATTACK_KINDS, ...FR_496_KINDS].map((kind) => [kind, recording(kind)]),
+      ),
+    } as unknown as SessionProcedureAttacks;
+    const cases = attackCases([registration]);
+    expect(cases).toHaveLength((ATTACK_KINDS.length + FR_496_KINDS.length) * 2);
+    for (const attackCase of cases) await attackCase.run();
+    for (const kind of FR_496_KINDS) {
+      expect(ran.filter((entry) => entry.startsWith(`${kind}:`)).sort()).toEqual([
+        `${kind}:female`,
+        `${kind}:male`,
+      ]);
+    }
+  });
+});
+
+/** A user-kind and an administrator-kind fixture, each stamped (or not) as named. */
+const limitFixture = createAppRouter({
+  stamped: userProcedure({
+    input: emptyInput,
+    output: subjectsListOutput,
+    rateLimit: { key: 'rate_limit_live_channel', subject: 'caller' },
+  }).query(() => []),
+  unstamped: userProcedure({ input: emptyInput, output: subjectsListOutput }).query(() => []),
+});
+
+const adminLimitFixture = createAdminRouter({
+  stamped: adminProcedure({
+    input: emptyInput,
+    output: subjectsListOutput,
+    rateLimit: { key: 'rate_limit_enrollment_restore', subject: 'caller' },
+  }).query(() => []),
+});
+
+describe('every limit T052 names is stamped in the real routers’ meta (T052, G1, G4, Q-R16 (a))', () => {
+  it('reads each user kind’s declared key from `appRouter`', () => {
+    expect(declaredLimitFailures(appRouter, DECLARED_LIMITS.app)).toEqual([]);
+  });
+
+  it('reads each administrator kind’s declared key from `adminRouter` (`AdminMeta.rateLimit`)', () => {
+    expect(declaredLimitFailures(adminRouter, DECLARED_LIMITS.admin)).toEqual([]);
+  });
+
+  it('fails a procedure that lost its key', () => {
+    expect(
+      declaredLimitFailures(limitFixture, [
+        { path: 'unstamped', key: 'rate_limit_live_channel', source: 'a fixture' },
+      ]),
+    ).toEqual([expect.stringMatching(/^unstamped: declares no limit.*rate_limit_live_channel/)]);
+  });
+
+  it('fails a procedure stamped with another key', () => {
+    expect(
+      declaredLimitFailures(limitFixture, [
+        { path: 'stamped', key: 'rate_limit_absence_complaint', source: 'a fixture' },
+      ]),
+    ).toEqual([
+      expect.stringMatching(
+        /^stamped: declares rate_limit_live_channel.*rate_limit_absence_complaint/,
+      ),
+    ]);
+  });
+
+  it('fails an administrator procedure stamped with another key', () => {
+    expect(
+      declaredLimitFailures(adminLimitFixture, [
+        { path: 'stamped', key: 'rate_limit_enrollment_end', source: 'a fixture' },
+      ]),
+    ).toEqual([
+      expect.stringMatching(
+        /^stamped: declares rate_limit_enrollment_restore.*rate_limit_enrollment_end/,
+      ),
+    ]);
+  });
+
+  it('fails a named procedure the surface does not have', () => {
+    expect(
+      declaredLimitFailures(limitFixture, [
+        { path: 'gone', key: 'rate_limit_live_channel', source: 'a fixture' },
+      ]),
+    ).toEqual([expect.stringMatching(/^gone: not a procedure of the surface/)]);
+  });
+
+  it('passes the fixture’s stamped procedure', () => {
+    expect(
+      declaredLimitFailures(limitFixture, [
+        { path: 'stamped', key: 'rate_limit_live_channel', source: 'a fixture' },
+      ]),
+    ).toEqual([]);
   });
 });
 

@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router changing a price in raw SQL. Refused: an amount
+// (`price_piasters`) written outside its owning path.
+export const setPriceInSql = (tx, id, price) =>
+  tx.$executeRawUnsafe('UPDATE packages SET price_piasters = $1 WHERE id = $2::uuid', price, id);
