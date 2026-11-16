@@ -44,7 +44,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 |---|---|
 | 11/10 | B37's tasks commit records this road, the programme's rules (ADR 0024, SRS §3.5.1) and Android first |
 | to 11/16 | The rest of Phase 3, B37 to B43 (`specs/004-sessions/tasks.md`, «Batches»); Phase 4's Spec Kit cycle (T057) on 11/16 |
-| 11/16–11/19 | Two tracks at once («How a phase is run», as amended on 2026-11-16). Track 1: Phase 4, lightened (below). Track 2: the assessment and the ijazah programme by instalments (ADR 0024), and `specs/003-booking/tasks.md` T104 (the commission: the teacher's 70% net), T101, T102 and T105 (a monthly payout with its deductions, on the assumption noted under T105). The light items, all required, to whichever track frees first: the administrator's settings page (SRS §3.14), `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server) |
+| 11/16–11/19 | Two tracks at once («How a phase is run», as amended on 2026-11-16). Track 1: Phase 4, lightened (below). Track 2: the assessment and the ijazah programme by instalments (ADR 0024), and `specs/003-booking/tasks.md` T104 (the commission: the teacher's 70% net), T101, T102 and T105 (a monthly payout with its deductions, on the owner's assumption of 2026-11-15, recorded under T105 by track 2's first tasks commit). The light items, all required, to whichever track frees first: the administrator's settings page (SRS §3.14), `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server) |
 | 11/20 | One phone run on both Android phones, the owner driving from a written checklist (`specs/004-sessions/tasks.md` T056's device run and the trials noted under it; system font and display size at default, large and largest); then T056's close |
 | 11/20–11/21 | The full-codebase review, in two waves (moved here from Phase 6) |
 | 11/21–11/25 | The design week: the screens, the room made like a call (the share for the teacher only), the certificate's look, large system fonts; the ADR that open point 6 below asks for first |
@@ -64,7 +64,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 | 11/10 | Send the gateway's questions (the owner's paper of 2026-11-09: ten questions, four confirmations) to the account manager |
 | 11/12 | Decide whose name, and open the Google Play account |
 | 11/16 | Decide the commission — decided: the teacher receives 70% net (T104) |
-| 11/23 | The sheikh's view on returning after a close (SRS OPEN-12) |
+| Before the programme's Spec Kit cycle (track 2, 11/16–11/19) | The sheikh's view on returning after a close (SRS OPEN-12) |
 | 11/24 | Submit the gateway's contract request |
 | 11/26 | The lawyer's answer on the server's region (PDPL), and the video's routing (`specs/004-sessions/tasks.md`, Not scheduled, item 8) |
 | 11/29 | Buy the server, 4 GB (Phase 6's estimates below) |
@@ -81,12 +81,12 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 
 **Open points, not decided** (the owner's decision of 2026-11-10: written as open points, never as rules).
 
-1. **Returning after a close** of the programme (SRS OPEN-12; ADR 0024 D4): the owner reviews it with their sheikh and answers before 11/23.
+1. **Returning after a close** of the programme (SRS OPEN-12; ADR 0024 D4): the owner reviews it with their sheikh and answers before the programme's Spec Kit cycle (track 2, 11/16–11/19).
 2. **The 66 old open tasks**: their triage into security, money and launch is proposed and not confirmed.
-3. **The gateway's answers**: everything the gateway said about the split, holding a share and subscriptions is verbal so far; the SRS requires it in writing (OPEN-11). T105 is not built 11/24–11/30 without a written answer (the note under T105).
+3. **The gateway's answers**: everything the gateway said about the split, holding a share and subscriptions is verbal so far; the SRS requires it in writing (OPEN-11). T105 is built on the owner's assumption of 2026-11-15 («افترض ان الاسئلة دي نقدر»): a monthly payout with its deductions, the teacher's share held at the gateway until a monthly payout day the platform sets; the written answers are asked at contracting, and if any is no, the fallback is custody, with the lawyer and the accountant. The ADR and the note under T105 are track 2's (ADRs 0025 to 0029).
 4. **The room's quality**: after B36's trial the owner heard the sound and saw the picture late, with few frames (the follow-up under `specs/004-sessions/tasks.md` T019, 2026-11-09). Proposed as its own task, not approved: the room made with no options (dynacast and adaptive stream off), the screen captured at full size, and SRS NFR-PERF-3's audio-only fallback named nowhere in `specs/004-sessions`; measured on real 4G without adb first.
 5. **The owner's requests for the room**, not decided in detail: a mute button (SRS FR-SESS-4 gives every participant audio, so the SRS decides first); the video like a phone call, one large picture and one small movable one, a tap swapping them; the camera, the share, leaving and mute as icons side by side.
-6. **The design days against ADR 0020**: ADR 0020 says the design in the repository is implemented and none redesigns (`docs/adr/0020-design-files-in-the-repository.md:102`), and 12/1–12/5 redesigns screens. The ADR that allows it is written after the review of the design directions and before any code (the owner's decision of 2026-11-10 on B37's conflict check, Q4).
+6. **The design days against ADR 0020**: ADR 0020 says the design in the repository is implemented and none redesigns (`docs/adr/0020-design-files-in-the-repository.md:102`), and the design week (11/21–11/25) redesigns screens. The ADR that allows it is written after the review of the design directions and before any code (the owner's decision of 2026-11-10 on B37's conflict check, Q4).
 
 ---
 
