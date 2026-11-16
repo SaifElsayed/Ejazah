@@ -37,7 +37,7 @@ build on them: «افترض ان الاسئلة دي نقدر».
   share it gave, so a change reaches new orders only.
 - Each order sends the share to the gateway as the split to the teacher's payout account (`split_amounts`). The share is
   computed in `packages/money` (R-MONEY-5) by `modules/payments` and recorded in `payments` (R-MONEY-6).
-- The teacher sees the share beside the price: in the package editor and on each order. The Terms state the commission.
+- The teacher sees the share beside the price in the package editor, when setting the price; nothing is shown per order. What the teacher is owed shows with each release due and done (D2, SRS DEC-81). The owner, 2026-11-17: «ويعرف ليه كام وعليه كام هو وقت ميحط السعر بس ساعتها بيعرف». The Terms state the commission.
 
 ### D2 — The teacher's share is held at the gateway and released at milestones
 
