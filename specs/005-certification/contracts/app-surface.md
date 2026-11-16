@@ -13,7 +13,7 @@ is required where noted, with the scope listed in `idempotent-procedures.ts`.
 | `teacher.ijazahRequests.get` | teacher | `{ enrollmentId }` | `{ request \| null }` | default | status, reason when rejected, `ijazahId` when issued |
 | `account.certificateName.set` | student | `{ name, idempotencyKey }` | `{ name }` | default | once; `already_set` after; moves the waiting request to `pending` |
 | `certificates.list` | participant | void | `{ items: [{ ijazahId, subject, teacherName, issuedAt, revoked, ready }] }` | default | the caller's as student or as granting teacher |
-| `certificates.link` | participant | `{ ijazahId }` | `{ link }` | default | the two parties only, else NOT_FOUND; `not_ready` until rendered; revoked still served |
+| `certificates.link` | participant | `{ ijazahId }` | `{ link }` | default | the two parties only, else NOT_FOUND; `not_ready` until rendered; revoked: per D1 (open), never the original PDF |
 | `reports.create` | user | `{ reportedUserId, context: 'session' \| 'chat' \| 'profile', sessionId?, reason, idempotencyKey }` | `{ received: true }` | `rate_limit_user_report` | a profile not visible answers NOT_FOUND (R-GENDER-2); refusals `self`, `open_exists` |
 | `genderFlags.raise` | user | `{ flaggedUserId, reason, idempotencyKey }` | `{ received: true }` | `rate_limit_gender_flag` | only a user the caller is paired with or can see; `open_exists` |
 | `account.pushToken.register` | user | `{ token, platform }` | void | default | upsert by the token's hash; `last_seen_at` |

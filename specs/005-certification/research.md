@@ -46,6 +46,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). **Open** marks a d
 - **On rejection or closing**, the request's signature copy is erased.
 - **At a teacher's deletion**, the live `teacher_signatures` row and its file are erased (closing the gap in
   `identity.repository.ts:428-462`, P3 (a)); a pending request keeps its own copy.
+- **How the correction reaches the request.** Catalog's correction service takes a port `OpenRequestsRefreeze` handed in by `main.ts` and bound to certification (certification imports catalog; `docs/ARCHITECTURE.md:195`'s pattern); it re-freezes the chain and the holder name.
 - **Rationale.** The owner's C3 («حق الطالب هيروح؟»), DEC-67's erasure kept for everything else.
 - **Alternatives.** Referencing the live signature (lost at deletion); closing on deletion (reverses C3).
 
@@ -167,14 +168,16 @@ alternatives, and the code it stands on (read on `d1cefb45`). **Open** marks a d
     and served only by signed link (R-SEC-3).
   - `teacher.signature.get` answers a signed link.
 - **Certificate name.** `account.certificateName.set` (student, once: refused when already set);
-  `users.setCertificateName` (admin, with a reason, audited, ADR 0019 D1).
+  `users.setCertificateName` (admin, with a reason, audited, ADR 0019 D1). Either releases the student's requests
+  waiting for the name through identity's port `AwaitingNameRelease`, bound to certification by `main.ts` (identity
+  imports no module, `docs/ARCHITECTURE.md:183`).
 
 ## R-412 — Revocation, the bar, and what the parties see
 - **Admin procedures:**
   - `ijazahs.revoke` (a reason; sets `revoked_at`, `revoked_reason`, `revoked_by_admin_id`; never deletes);
   - `ijazahs.bar` and `ijazahs.liftBar` (`ijazah_bars`).
 - **The parties:** both read their ijazahs through `certificates.list` and `certificates.get`; a revoked one answers
-  `revoked: true`, and its PDF link is still served to the two parties (FR-IJAZAH-8, R-HONEST-6). The student's
+  `revoked: true`, and what its PDF link does is open with the owner (D1: no link after revocation, recommended, or a re-render with a revoked mark; R-HONEST-6 forbids serving the original as it is). The student's
   public credentials (FR-IJAZAH-4) list only the unrevoked.
 - **Live events:** the request's status is pushed to the open screens by a new live event
   `{ type: 'ijazahRequest', enrollmentId }` (additive to `packages/contracts/src/live.ts`).

@@ -61,7 +61,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - The SRS's §3.14 rows for the four limits beyond DEC-71's two, in the next free track 1 DEC (DEC-73 if P3 takes
     DEC-72), placed after DEC-71's rows.
   - A migration spec red under a mutant migration.
-- [ ] T002 [P] The settings registry (R-410): `apps/api/src/platform/settings/registry.ts`, every §3.14 key with its
+- [ ] T002 [P] The settings registry (R-410; FR-626: every number a setting with its bounds): `apps/api/src/platform/settings/registry.ts`, every §3.14 key with its
   zod schema, bounds, unit, group and SRS row. A CI spec asserts registry keys = seed keys, both ways, and every
   default is inside its bounds. The admin module's settings repository gains its one writer (`update(key, value)`,
   R-PROC-11 as amended here).
@@ -75,8 +75,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T004 [P] [US1] The certificate name (FR-602; ADR 0019 D1):
   - `account.certificateName.set` (student, once; `already_set` after), in identity;
   - `users.setCertificateName` (admin, a reason, audited with no name in the entry);
-  - setting it moves an `awaiting_student_name` request to `pending` through certification's entry, or the
-    certification module reads it at the moment (the order fixed by T006's design, one transaction);
+  - setting it (by the student or an administrator) moves the student's `awaiting_student_name` requests to `pending` on the same transaction. Identity imports no module (`docs/ARCHITECTURE.md:183`) and certification imports identity, so identity's certificate-name service takes a port `AwaitingNameRelease` (`release(tx, studentUserId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`); until T006 lands the port is bound to a no-op;
   - specs, including an admin change never rewriting an issued certificate.
 - [ ] T005 [US6] Notifications' writer and delivery (FR-619, FR-620, FR-621, FR-623; R-405, R-406):
   - `modules/notifications/` `NotificationWriter.record(tx, …)` (the seven v1.0 kinds only; any other kind refused by
@@ -86,7 +85,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - `platform/ports/push/expo.adapter.ts` with `PUSH_PROVIDER` gaining `expo` (P2 (a); built against Expo's documented
     request shape, tried on the stand-in until the owner's P2 acts);
   - the lint rule's allowed file becomes `deliver-notification.ts`;
-  - i18n keys for the seven kinds' titles and bodies (phone `ar.json`/`en.json`, group `notifications`).
+  - i18n keys for the seven kinds' titles and bodies (phone `ar.json`/`en.json`, group `notifications`), reaching the API's generated copy through `pnpm web-copy:build` (`scripts/build-web-copy.ts`) so the server renders them in the user's language at send time, `pnpm check:generated` green.
 
 ## Phase 2: US1 and US2 — the ijazah request, its issue and its rendering (B46)
 
@@ -96,8 +95,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - every refusal of FR-603, each red first and logged with ids and its reason;
   - the freeze at send: the chain from catalog's entry (generations, origin first, the teacher appended), the holder
     name, a copy of the signature under `ijazah-requests/<id>/`;
-  - catalog's chain correction (FR-ISNAD-4) re-freezes the chain of that credential's open requests on the same
-    transaction (P4 (a));
+  - an administrator's correction of an approved credential (`credentials.correct`, `modules/catalog/credentials-admin.router.ts:93`, writing at `credential-review.repository.ts:170-180`) re-freezes the chain and the holder name of that credential's open requests on the same transaction (P4 (a)). Certification imports catalog, so catalog never imports certification: catalog's correction service takes a port `OpenRequestsRefreeze` (`refreeze(tx, credentialId)`), handed in by `main.ts` and bound to certification's entry, as the three dependencies against the arrows are (`docs/ARCHITECTURE.md:195`);
   - the request stays open through any later change of the teacher's standing;
   - a student's deletion closes it and erases its copy;
   - the enrollment reads gain `ijazahRequest`;
@@ -123,8 +121,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     languages, a name holding Typst markup printed as text;
   - CI installs the pinned binary in a step (`.github/workflows/ci.yml`, on the owner's word).
 - [ ] T009 [P] [US1] The parties' certificates (FR-607; R-412):
-  - `certificates.list` and `.link` (the two parties only, else NOT_FOUND; `not_ready` until rendered; a revoked one
-    still served, flagged);
+  - `certificates.list` and `.link` (the two parties only, else NOT_FOUND; `not_ready` until rendered; a revoked one per
+    the owner's answer to D1, never the original PDF as it is, R-HONEST-6);
   - the student's public credentials list only the unrevoked (FR-IJAZAH-4);
   - adversarial registrations.
 - [ ] T010 [P] [US3] Revocation and the bar (FR-609, FR-610; R-412): `ijazahs.list`, `.get`, `.revoke`, `.bar`,
@@ -218,10 +216,10 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 
 ## Phase 6: Proofs and the close (B49)
 
-- [ ] T025 The adversarial suite's reach for Phase 4: `certificates`, `reports` and `genderFlags` join
+- [ ] T025 The adversarial suite's reach for Phase 4 (FR-625): `certificates`, `reports` and `genderFlags` join
   `ATTACKED_ROUTERS` (`tests/adversarial/procedure-harness.ts`), so none can be exempt. Every new user procedure is
   registered in both directions. The declared limits of T001's six keys join T052's check.
-- [ ] T026 The close: quickstart.md §1 to §5 on the last batch's commit, each output in its own file; the phone steps
+- [ ] T026 The close: quickstart.md §1 to §5 on the last batch's commit, each output in its own file; SC-606 measured on the stand-in (from cause to the provider, 100 attempts) and SC-601 timed by hand on the phone run; the phone steps
   joined to the next phone run; `PLAN.md`'s Phase 4 section given its close date.
 
 ---

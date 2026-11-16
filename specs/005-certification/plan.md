@@ -98,6 +98,8 @@ apps/admin/src/pages/        # ijazah-requests, ijazahs, reports, gender, settin
 tests/                       # adversarial registrations, db-integrity probes, job double-runs, template spec
 ```
 
+**The module graph this phase adds** (to ARCHITECTURE §4 in T026): certification imports identity, catalog and booking; moderation's gender decisions import identity, booking and sessions' entries; sessions and payments import notifications; two ports run against the arrows (`AwaitingNameRelease` in identity, `OpenRequestsRefreeze` in catalog), bound by `main.ts` to certification, as `docs/ARCHITECTURE.md:195` does.
+
 **Structure decision.** The existing monorepo layout: each feature lives in the module that owns its table
 (`module-tables.json`). The integration wires them in `surfaces/context.ts`, `admin.router.ts`, `app.router.ts`,
 `main.ts` and `worker.ts`.

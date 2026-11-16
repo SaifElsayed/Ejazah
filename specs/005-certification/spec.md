@@ -53,7 +53,7 @@ caller kinds, guards, settings, audit log, upload port and content sniffing, `pa
 `device_push_tokens` tables the init migration holds (ERD §8, §10, §11).
 
 **Reviewed by this cycle** (`specs/004-sessions/tasks.md` T057): the Not-scheduled row of `specs/004-sessions/tasks.md`
-(item 3: the cancellation request is the first thing that needs push — met by FR-640); the Not-scheduled row of
+(item 3: the cancellation request is the first thing that needs push — met by FR-619); the Not-scheduled row of
 `specs/003-booking/tasks.md` for Phase 4 items (the payment notifications read Phase 2's durable records, PLAN.md);
 `002:T123` (an Arabic template of values only reads right to left; its device check stays open and joins the 11/20
 phone run); and `makeup_offered_again` (SRS FR-NOTIF-1, the owner's decision of 2026-11-06, A2): read as a session's
@@ -114,7 +114,7 @@ a second request and read the reason as the teacher.
 1. **Given** a teacher with no signature image, **When** they try to request an ijazah, **Then** the request is refused and they are sent to upload one.
 2. **Given** a teacher without an approved credential for the enrollment's subject, or a recitation enrollment, or a barred student, **When** they request, **Then** it is refused with its cause and nothing is written.
 3. **Given** a student with no certificate name, **When** the teacher requests, **Then** the request waits as «awaiting the student's name», the student is asked for the name once, and the request goes on to the administrators once it is entered.
-4. **Given** a pending request, **When** an administrator approves it, **Then** one ijazah is issued with a unique certificate number, the chain snapshot with the teacher appended, the printed names, both dates in Hijri and Gregorian, and the PDF; the request is approved and audited.
+4. **Given** a pending request, **When** an administrator approves it, **Then** one ijazah is issued with a unique certificate number, the chain snapshot with the teacher appended, the printed names and both dates in Hijri and Gregorian; the request is approved and audited; the PDF follows from the worker, shown as being prepared until it exists.
 5. **Given** a pending request, **When** an administrator rejects it with a reason, **Then** no ijazah exists and the teacher sees the reason.
 6. **Given** an issued ijazah, **When** the student or the granting teacher opens it, **Then** the PDF opens through a link that expires; nobody else can open it.
 
@@ -152,7 +152,7 @@ requests refused), lift the bar (allowed again).
 
 **Acceptance Scenarios**:
 
-1. **Given** an issued ijazah, **When** revoked with a reason, **Then** both parties see it revoked, the PDF is still readable by them marked revoked, and the audit records the reason.
+1. **Given** an issued ijazah, **When** revoked with a reason, **Then** both parties see it revoked, the audit records the reason, and no PDF shows it as valid (R-HONEST-6; whether the PDF stops being served or is re-rendered with a revoked mark is open with the owner, D1 of `ejazah-tools43	057-analyze.md`).
 2. **Given** a revoked ijazah, **When** the teacher requests again for that student, **Then** the request is accepted.
 3. **Given** a barred student, **When** any teacher requests for them, **Then** the request is refused; **When** the bar is lifted, **Then** requests are accepted again.
 
@@ -248,7 +248,7 @@ effect without a deployment.
 - An administrator corrects a certificate name on the student's request: future certificates print the new name; issued ones keep theirs.
 - A gender correction on a user with no enrollment: only the declaration changes.
 - A report against oneself, or a duplicate open report by the same reporter on the same user and context: refused.
-- A push to a user with no device token: the notification row is written and marked as having no device; no error.
+- A push to a user with no device token: the notification row is written and never pushed (`pushed_at` stays empty); no error.
 - A payment confirmed after its order expired (Phase 2's late payment): one push per recorded outcome, never two for one order.
 
 ## Requirements _(mandatory)_
@@ -264,7 +264,7 @@ effect without a deployment.
 
 - **FR-603**: A teacher MUST be able to request an ijazah from an ijazah-track enrollment of theirs in a subject they hold an approved credential for, giving the completion date and the certificate language (Arabic by default, FR-LOC-4), after seeing the certificate as it will be filled (FR-IJAZAH-1, FR-IJAZAH-15). A request MUST be refused for a teacher who is not active, a recitation enrollment, a barred student, a missing signature or credential, or while another request of that enrollment is pending; each refusal is logged with ids and its reason.
 - **FR-604**: An administrator MUST see each pending request with the same filled certificate and MUST approve it or reject it with a mandatory reason the teacher sees; no administrator action MAY start a grant or change a chain (FR-IJAZAH-7, FR-ADMIN-12). Both are audited (FR-ADMIN-17).
-- **FR-605**: Approving MUST issue exactly one ijazah per request, idempotently: a unique, non-guessable certificate number (16 Crockford base32 symbols, shown 4-4-4-4), a verification token stored only as its hash (minted now so v1.1's page can verify every certificate), the chain snapshot with the granting teacher appended (FR-ISNAD-7), the printed student and teacher names (ADR 0019 D1), the completion and issue dates in Hijri and Gregorian, the teacher's signature, and the generated PDF; mode is always platform-generated (FR-IJAZAH-2, ADR 0013).
+- **FR-605**: Approving MUST issue exactly one ijazah per request, idempotently: a unique, non-guessable certificate number (16 Crockford base32 symbols, shown 4-4-4-4), a verification token stored only as its hash (minted now so v1.1's page can verify every certificate), the chain snapshot with the granting teacher appended (FR-ISNAD-7), the printed student and teacher names (ADR 0019 D1), the completion and issue dates in Hijri and Gregorian, and the teacher's signature; the PDF follows from the worker, and until it exists the parties see the certificate as being prepared (R-API-13); mode is always platform-generated (FR-IJAZAH-2, ADR 0013).
 - **FR-606**: The certificate MUST render correct Arabic and English, a chain of any length (one A4 page up to 60 generations, a following page beyond), multi-name generations as one row, and every name as text, never markup (FR-IJAZAH-11; ADR 0004 D1–D3; ADR 0017 D4). It is rendered outside the request, in the worker.
 - **FR-607**: The student and the granting teacher MUST be able to view and download an issued certificate at any time through an expiring signed link; nobody else (FR-IJAZAH-3, FR-IJAZAH-10's link rule). Every issued ijazah MUST appear on the student's record as a permanent credential (FR-IJAZAH-4).
 - **FR-608**: In v1.0 the parties MUST learn of an issue or a rejection on screen: the request's status on the enrollment for the teacher and the student (pending; issued, with the certificate; rejected, with the reason, to the teacher), refreshed by the live channel while the app is open (FR-427). The issue's and the rejection's push arrive in v1.1 (FR-IJAZAH-15's «notifying both parties», SRS DEC-70; the owner's answer of 2026-11-16).
@@ -330,7 +330,7 @@ effect without a deployment.
 - **SC-603**: 100% of request refusals (no signature, no credential, recitation, barred, pending) write nothing.
 - **SC-604**: An issued ijazah's chain and printed names are unchanged after its credential's chain or the student's name is corrected.
 - **SC-605**: After a gender correction, 100% of the enrollments it made non-compliant are ended with one case each, and none can be restored.
-- **SC-606**: Each of the three push kinds reaches a device within one minute of its cause (reminders within one minute of their offset) in 99% of attempts on the stand-in, and a provider outage loses none.
+- **SC-606**: Each v1.0 push kind reaches the push provider within two minutes of its cause (reminders within two minutes of their offset: a sweep each minute, then the queue) in 99% of attempts on the stand-in, measured in T026, and a provider outage loses none.
 - **SC-607**: No user can open another's certificate, report, flag or notification, in both gender directions, in 100% of the adversarial suite's attempts.
 - **SC-608**: Every setting of §3.14 is changeable from the panel, and every change has one audit entry.
 
