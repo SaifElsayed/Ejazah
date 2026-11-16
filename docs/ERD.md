@@ -539,7 +539,7 @@ Check constraint: at least one of `body` / `attachment_key`, unless `purged_at` 
 
 ## 7. Payments
 
-Records of what the gateway did. Owned by `payments`. The platform takes 0% commission and holds no funds: the gateway settles the net directly to the teacher (FR-PAYG-1, ADR 0007). Nothing here is a balance; there is no wallet, ledger or escrow table and never will be without a new ADR.
+Records of what the gateway did. Owned by `payments`. The platform takes 0% commission and holds no funds: the gateway settles the net directly to the teacher (FR-PAYG-1, ADR 0007). Nothing here is a balance; there is no wallet, ledger or escrow table and never will be without a new ADR. *(Amended 2026-11-17, ADR 0025: the platform takes a commission; `payments` records each order's rate and the Teacher's share (B-M1), its refunded total and the releases of the Teacher's share an Administrator marks done (B-M2), records of what the gateway was told and did. Still no wallet, ledger or escrow table.)*
 
 ### `payments`
 

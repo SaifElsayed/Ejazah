@@ -1,6 +1,6 @@
 # ADR 0024 — The assessment and the ijazah programme paid by instalments
 
-**Status:** accepted · **Date:** 2026-11-10 · **Decided by:** the owner, 2026-11-03, 2026-11-04, 2026-11-05 and 2026-11-09 (the decisions B37's tasks commit records; `PLAN.md`, «The road to the store») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D2 (one gateway order confirms an enrollment and generates all of its sessions) and D4 (`payments` holds one row per gateway order, now several per enrollment); SRS FR-BOOK-3, FR-BOOK-4, FR-BOOK-10, FR-PAYG-19, §3.14, §14, §16 (adds §3.5.1, FR-BOOK-13 to FR-BOOK-19, DEC-63 and OPEN-12) · **Leaves for later:** ADR 0007 D1 (0% commission, no per-session deferred share) and R-MONEY-6 are **not** amended here: the commission (`specs/003-booking/tasks.md` T104) and the teacher's share released session by session (T105) wait for their own ADR (the notes under T104 and T105)
+**Status:** accepted · **Date:** 2026-11-10 · **Decided by:** the owner, 2026-11-03, 2026-11-04, 2026-11-05 and 2026-11-09 (the decisions B37's tasks commit records; `PLAN.md`, «The road to the store») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D2 (one gateway order confirms an enrollment and generates all of its sessions) and D4 (`payments` holds one row per gateway order, now several per enrollment); SRS FR-BOOK-3, FR-BOOK-4, FR-BOOK-10, FR-PAYG-19, §3.14, §14, §16 (adds §3.5.1, FR-BOOK-13 to FR-BOOK-19, DEC-63 and OPEN-12) · **Leaves for later:** ADR 0007 D1 (0% commission, no per-session deferred share) and R-MONEY-6 are **not** amended here: the commission (`specs/003-booking/tasks.md` T104) and the teacher's share released session by session (T105) wait for their own ADR (the notes under T104 and T105) · **Amended by:** SRS DEC-83 (2026-11-16, the owner's decision: D4's open point closed, no return after a close); what it leaves for later is settled by [ADR 0025](0025-commission-teacher-share-held-to-milestones-and-payment-mode.md)
 
 ## Context
 
@@ -78,6 +78,8 @@ realistic, and answers before 11/23, before the programme's Spec Kit cycle. Hang
 reinstated later makes a return possible again, and the gateway's subscription being suspended rather than cancelled
 when a package closes (a cancelled subscription cannot be resumed on the same instalments). D3.7 is worded to stand
 whatever OPEN-12 decides.
+
+*(Amended 2026-11-16, the owner's decision, SRS DEC-83:)* **closed: there is no return after a close.** A package closed by an administrator on the teacher's stop request frees its slots at once (D3.4); a student who wants to continue starts as a new student, with a new subscription and a new paid, never-refunded assessment (D1). The proposal of 2026-11-09 is dropped. Of what hung on it: a reinstated teacher makes no return possible, since there is none; and the gateway's subscription may be cancelled at a close. D3.6's reopening of a closed package by an administrator stays.
 
 ## Consequences
 
