@@ -24,7 +24,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 
 **One Spec Kit cycle per phase.** Every phase gets its own `specs/<nnn>-<name>/` written with the same cycle as Phase 0, in this order: `/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`. The cycle reads this file, the SRS, ARCHITECTURE, the ERD, the ADRs and the constitution, so this file is kept current before each cycle runs. The cycle for Phase 1 runs at the opening of Phase 1 and is counted inside its seven days. For every later phase the cycle runs on the last day of the phase before it and is counted inside that earlier phase's days, so implementation starts on the phase's first day.
 
-**How a phase is run.** The working method of Phase 0's final week continues unchanged: the tasks of a phase are grouped into batches of at most six tasks, in dependency order, tests written before implementation; a batch is one branch cut from `develop`, one pull request, one review; two batches in flight never write the same file or mark adjacent lines of `tasks.md`; only Critical and Major findings block a merge, the rest are recorded as follow-ups, at most two review rounds, strict on security. A batch may exceed six tasks only when there is a real need, and a new task goes where it belongs, never into a batch because it has room.
+**How a phase is run.** The working method of Phase 0's final week continues unchanged: the tasks of a phase are grouped into batches of at most six tasks, in dependency order, tests written before implementation; a batch is one branch cut from `develop`, one pull request, one review; two batches in flight never write the same file or mark adjacent lines of `tasks.md`; only Critical and Major findings block a merge, the rest are recorded as follow-ups, at most two review rounds, strict on security. A batch may exceed six tasks only when there is a real need, and a new task goes where it belongs, never into a batch because it has room. *(Amended 2026-11-16, the owner's plan of 2026-11-15: from 11/16 to 11/19 two tracks run at once, each with its own implementer and review pair and its own batches: track 1 Phase 4, on `ijazah_integrity`; track 2 the money, on a second test database `ijazah_integrity_b` (the owner's approval, «اه موافق»; created by the owner's word typed in that track's session, its environment script a variant of the first's). The two never write the same file; their migrations merge in timestamp order and are proved together on one database. The gates are lighter for these days: full TDD (red first, named mutants) for money, security, gender and time, lighter specs for ordinary screens; the full coverage run and the whole-repository lint run on CI only, locally the typecheck, the contract gate and the changed modules' specs; one review round per batch, its Minor findings recorded as follow-ups; conflict checks short, owner questions only. So the tracks never collide, numbers are reserved: SRS DEC-70 for this record, DEC-71 to DEC-79 and ADRs 0030 to 0039 for track 1, DEC-80 to DEC-89 and ADRs 0025 to 0029 for track 2; every branch of both tracks is cut from this record's commit; no version line of the SRS, the ERD or the constitution changes until the 11/19–20 integration; the owner merges one pull request at a time (the full rules: `ejazah-tools\tracks-coordination.md`, outside the repository).)*
 
 **Extending a phase.** A phase may take one or two days more than its number above only when the plan or tasks cycle, or implementation, uncovers a real need — the video spike's outcome enlarging Phase 3, for example — and only if the extension is stated at that moment with its cause. No phase carries a reserve from the start; the thirty days are the plan, not an estimate.
 
@@ -43,19 +43,19 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 | Date | Work |
 |---|---|
 | 11/10 | B37's tasks commit records this road, the programme's rules (ADR 0024, SRS §3.5.1) and Android first |
-| to 11/16 | The rest of Phase 3, B37 to B43 (`specs/004-sessions/tasks.md`, «Batches»); Phase 4's Spec Kit cycle on the last day |
-| 11/17–11/23 | Phase 4: certification, reviews, notifications and push |
-| 11/23 | The programme's Spec Kit cycle (R-PROC-1) |
-| 11/24–11/30 | The assessment and the ijazah programme by instalments (ADR 0024); with it `specs/003-booking/tasks.md` T104 (the commission), T101, T102 and T105, under the conditions noted under T104 and T105 |
-| 11/24–11/30 | Beside the programme, no code: the design's work begins, its direction pages, and the owner's review of them (the owner's decision of 2026-11-10). Why it starts here: the design needs four to seven days and its ideas will change on the way, so its thinking cannot wait for 12/1; the closed test stays on 12/6. The ADR that open point 6 below asks for is written after this review and before any code |
-| 12/1–12/5 | Beside each other: the design's code and the logo, from the directions the owner reviewed (open point 6 below); `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server); the email sender; the server up; the privacy policy and the terms hosted; a new EAS build with the logo, carrying `specs/004-sessions/tasks.md` T068 (the keep-alive service's stop and the microphone check), tried on a phone before 12/6 |
+| to 11/16 | The rest of Phase 3, B37 to B43 (`specs/004-sessions/tasks.md`, «Batches»); Phase 4's Spec Kit cycle (T057) on 11/16 |
+| 11/16–11/19 | Two tracks at once («How a phase is run», as amended on 2026-11-16). Track 1: Phase 4, lightened (below). Track 2: the assessment and the ijazah programme by instalments (ADR 0024), and `specs/003-booking/tasks.md` T104 (the commission: the teacher's 70% net), T101, T102 and T105 (a monthly payout with its deductions, on the assumption noted under T105). The light items, all required, to whichever track frees first: the administrator's settings page (SRS §3.14), `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server) |
+| 11/20 | One phone run on both Android phones, the owner driving from a written checklist (`specs/004-sessions/tasks.md` T056's device run and the trials noted under it; system font and display size at default, large and largest); then T056's close |
+| 11/20–11/21 | The full-codebase review, in two waves (moved here from Phase 6) |
+| 11/21–11/25 | The design week: the screens, the room made like a call (the share for the teacher only), the certificate's look, large system fonts; the ADR that open point 6 below asks for first |
+| 11/26–12/5 | On the Pro plan: the server up, the email sender, the privacy policy and the terms hosted, the Play listing and its declarations, a new EAS build with the logo carrying `specs/004-sessions/tasks.md` T068, `expo doctor`, and T054 and T055 of that file |
 | **12/6 Sun** | **The closed test starts: the latest date** |
-| 12/6–12/20 | The 14 days, beside the rest of Phase 6: the full-codebase review, the adversarial and performance passes, the restore drill, the week on the panel, the store screenshots |
+| 12/6–12/20 | The 14 days, beside the rest of Phase 6: the fixes the closed test finds, the adversarial and performance passes, the restore drill, the week on the panel, the store screenshots |
 | 12/21 | Apply for production access |
 | about 12/28 | Google's answer (usually seven days or less, by its own page) |
 | **2027-01-01** | **On the store** |
 
-Nothing of the programme or of T104 may slide past 12/6 into Phase 6, which adds no feature (R-PROC-6).
+Nothing of the programme or of T104 may slide past 11/19 into the design week or Phase 6, which add no feature (R-PROC-6).
 
 **The owner's own steps.**
 
@@ -63,7 +63,7 @@ Nothing of the programme or of T104 may slide past 12/6 into Phase 6, which adds
 |---|---|
 | 11/10 | Send the gateway's questions (the owner's paper of 2026-11-09: ten questions, four confirmations) to the account manager |
 | 11/12 | Decide whose name, and open the Google Play account |
-| 11/16 | Decide the commission: rate, fixed or a setting, taken from whom, how it shows (T104) |
+| 11/16 | Decide the commission — decided: the teacher receives 70% net (T104) |
 | 11/23 | The sheikh's view on returning after a close (SRS OPEN-12) |
 | 11/24 | Submit the gateway's contract request |
 | 11/26 | The lawyer's answer on the server's region (PDPL), and the video's routing (`specs/004-sessions/tasks.md`, Not scheduled, item 8) |
@@ -311,6 +311,8 @@ Because every later phase depends on it, and because boundary lint that arrives 
 
 **SRS:** FR-ISNAD-1…7, FR-IJAZAH-1…12 (13 and 14 deferred with the uploaded mode, ADR 0013), FR-REVIEW-1…5, FR-NOTIF-1…4, FR-SESS-15, FR-GENDER-3…7, FR-ADMIN-8 (gender disputes, with user reports; the owner's decision of 2026-11-05), §3.14
 
+*(Amended 2026-11-16, DEC-70: the phase is lightened for v1.0. Built now: the certificate (the teacher's request, the administrator's issue, the Arabic PDF with the chain), user reports and the gender rules (FR-SESS-15, FR-GENDER-3…7, FR-ADMIN-8), push for three kinds only, each push recorded, and §3.14's settings surface. In the first update (v1.1, below): FR-REVIEW-1…5, the public verification page and its QR code, the notification centre and every other push kind. The definition of done's lines «The public page verifies a certificate by token» and «One review per enrollment is enforced by constraint» move with them.)*
+
 **What this phase delivers**
 
 - The chain snapshot at issue; the chain itself is transcribed and reviewed with the credential in Phase 1 (ADR 0017)
@@ -393,7 +395,7 @@ a new ADR and a MAJOR constitution amendment, not a reactivation of this phase.
   - one API process until the Redis bus between processes lands (Not scheduled), so the API is not scaled by adding processes before it.
 - A restart policy for the API and the worker in the hosted Docker setup (`restart: unless-stopped` or the host's equivalent), so a process that ends is brought back (T108: B19a closed the paths found that ended it; the owner, 2026-10-28).
 - LiveKit Cloud's project setting «Automatically create rooms» checked to be off in the production project before the first real session (the owner's decision of 2026-11-07; T009's notes in `specs/004-sessions/tasks.md`; `docs/RUNBOOK.md`, «Room does not open»): with it on, a token minted before `endRoom` re-creates the room after the platform ended it, with no participant limit.
-- The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review.
+- The full-codebase review that the Phase 0 schedule planned as a separate week is not inside the thirty days: it runs after day 30, in the improvement time, once the MVP is complete. Within the thirty days every batch still gets its own review. *(Amended 2026-11-16, the owner's plan of 2026-11-15: it runs on 11/20–21, in two waves of read-only reviewers, before the design week.)*
 
 **Why separate this**
 
@@ -411,7 +413,21 @@ Because no new features are added here, and every team that breaks that rule res
 
 Features decided for after the MVP. None is built before every phase has closed, except what «The road to the store» moves before the server *(amended 2026-11-10, the owner's decisions of 2026-11-09 and of 2026-11-10 on B37's conflict check, Q1)*.
 
-- **An assessment first, then a program paid in stages** — **moved before the server** (the owner's decision of 2026-11-09): its rules are SRS §3.5.1 (FR-BOOK-13 to FR-BOOK-19) and ADR 0024, its cycle runs on 11/23 and its build 11/24–11/30 («The road to the store»); returning after a close is SRS OPEN-12. The first wording here (the owner's decision of 2026-11-03: the first payment for the assessment only; the rest in full or by instalments charged every period the platform sets) is superseded: the assessment's fee is part of the package's price, the instalments are monthly and on the ijazah track only. What its build changes, from this section's first wording and still true: an enrollment confirmed in stages; several paid orders on one enrollment, each with its kind, FR-375 amended to tell them apart (SRS FR-PAYG-19 as amended); the number and length of sessions set after the assessment. Phase 3 already reads the number and length of sessions from the enrollment's snapshot and assumes no one-time generation (`specs/004-sessions/spec.md` FR-424).
+- **An assessment first, then a program paid in stages** — **moved before the server** (the owner's decision of 2026-11-09): its rules are SRS §3.5.1 (FR-BOOK-13 to FR-BOOK-19) and ADR 0024, its cycle runs on 11/23 and its build 11/24–11/30 («The road to the store»); returning after a close is SRS OPEN-12. The first wording here (the owner's decision of 2026-11-03: the first payment for the assessment only; the rest in full or by instalments charged every period the platform sets) is superseded: the assessment's fee is part of the package's price, the instalments are monthly and on the ijazah track only. What its build changes, from this section's first wording and still true: an enrollment confirmed in stages; several paid orders on one enrollment, each with its kind, FR-375 amended to tell them apart (SRS FR-PAYG-19 as amended); the number and length of sessions set after the assessment. Phase 3 already reads the number and length of sessions from the enrollment's snapshot and assumes no one-time generation (`specs/004-sessions/spec.md` FR-424). *(Amended 2026-11-16: built 11/16–11/19 in track 2, its own short Spec Kit cycle first, `specs/006-programme/` (R-PROC-1); `specs/003-booking/tasks.md` T104, T101 and T102 start at once under 003's spec, where they are.)*
+
+---
+
+## The first update (v1.1)
+
+Decided before launch and built after it (SRS DEC-70; the owner's decisions of 2026-11-15 and 2026-11-16). Each line has its task where its phase lives; each goes through the formal change (SRS, then tasks, then code) before it is built.
+
+- Ratings and reviews (FR-REVIEW-1…5) — Phase 4's tasks, `specs/005-certification/tasks.md`, «v1.1»
+- The public certificate verification page and its QR code (FR-IJAZAH-10; FR-IJAZAH-8's endpoint) — the same
+- The notification centre (FR-NOTIF-2) — the same
+- Every other push kind of FR-NOTIF-1 — the same
+- Make-up-only times and a sooner Teacher-No-Show remedy (changes FR-MAKEUP-3 and ADR 0018) — `specs/004-sessions/tasks.md`, «Batches», v1.1
+- An on-device document scanner for a teacher's uploads — `specs/002-identity/tasks.md` T171
+- `specs/004-sessions/tasks.md` T054 and T055, on the Pro plan during the closed test (they add no feature)
 
 ---
 
