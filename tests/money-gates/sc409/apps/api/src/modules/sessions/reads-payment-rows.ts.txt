@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): sessions reading the `Payment` model. Refused: a model access.
+export async function refundedOrders(tx, enrollmentId) {
+  return tx.payment.findMany({ where: { enrollmentId, status: 'refunded' } });
+}

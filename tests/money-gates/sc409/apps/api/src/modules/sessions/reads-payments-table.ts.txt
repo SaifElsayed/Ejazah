@@ -1,0 +1,4 @@
+// T053 fixture (SC-409): sessions reading the payments table through raw SQL. Refused: a model access.
+export async function refundedCount(tx, enrollmentId) {
+  return tx.$queryRaw`SELECT count(*) FROM payments WHERE enrollment_id = ${enrollmentId}::uuid`;
+}

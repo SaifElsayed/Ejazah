@@ -1,0 +1,7 @@
+// T053 fixture (SC-413): an administrator router creating a gateway order through the enrollment's
+// relation. Refused: a nested `Payment` write outside `modules/payments`.
+export const addOrder = (tx, enrollmentId, gatewayOrderId) =>
+  tx.enrollment.update({
+    where: { id: enrollmentId },
+    data: { payments: { create: { gatewayOrderId, gateway: 'paymob', status: 'paid' } } },
+  });

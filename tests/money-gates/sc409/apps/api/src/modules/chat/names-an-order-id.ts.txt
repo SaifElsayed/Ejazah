@@ -1,0 +1,5 @@
+// T053 fixture (SC-409): chat naming a gateway order by `orderId`. Refused: an order reference.
+export interface ChatCheckoutLink {
+  readonly enrollmentId: string;
+  readonly orderId: string;
+}

@@ -1,0 +1,5 @@
+// T053 fixture (SC-409): sessions importing a module of its own whose name speaks of payments, which
+// is not the allowed port. Refused: an import.
+import { readRefunds } from './payment-reader.js';
+
+export const refundsOf = readRefunds;

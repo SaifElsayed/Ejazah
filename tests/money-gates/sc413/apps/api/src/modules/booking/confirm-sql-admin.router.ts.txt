@@ -1,0 +1,4 @@
+// T053 fixture (SC-413): an administrator router stamping `confirmed_at` in raw SQL. Refused: a
+// `confirmedAt` write outside `booking/confirmation.repository.ts` (R-HONEST-1).
+export const stampConfirmed = (tx, id) =>
+  tx.$executeRaw`UPDATE "enrollments" SET "confirmed_at" = now() WHERE "id" = ${id}::uuid`;

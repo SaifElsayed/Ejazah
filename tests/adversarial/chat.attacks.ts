@@ -16,10 +16,15 @@
 //   guessedId             ids never handed out: random ones, the other enrollment's neighbour and its
 //                         upper-case spelling.
 //   tamperedToken         a tampered bearer token: unauthenticated before any service.
-//   clientSuppliedGender  the input carrying the other gender is ignored; after an administrator's
-//                         correction of the teacher's gender (`users.gender` changed in the world, as
-//                         the server's record), the own enrollment answers as a nonexistent one, from
-//                         either party, and again as theirs once restored.
+//   clientSuppliedGender  the input carrying the other gender is ignored.
+// T052 (FR-496's three kinds, Q2 (a)): otherSessionToken and replayedToken not applicable (no token
+// is taken; `attachmentLink` issues a signed link that names the document, not a party, and both
+// parties are answered one, so the other participant replaying it reaches nothing they could not
+// ask for; a link issued before a gender correction lives until R-SEC-3's short expiry);
+//   afterGenderCorrection after an administrator's correction of the teacher's gender (`users.gender`
+//                         changed in the world, as the server's record), the own enrollment answers as
+//                         a nonexistent one, from either party, and again as theirs once restored
+//                         (moved from clientSuppliedGender unchanged).
 import { randomUUID } from 'node:crypto';
 
 import { expect } from 'vitest';
@@ -34,7 +39,8 @@ import { type AppCaller, discoverySurface, type SessionPair } from './discovery-
 import {
   type Direction,
   expectAnswersAsNonexistent,
-  type ProcedureAttacks,
+  notApplicable,
+  type SessionProcedureAttacks,
 } from './procedure-harness.js';
 
 const HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, FR-432, FR-488, FR-496, SC-407';
@@ -98,7 +104,7 @@ async function pairsFor(direction: Direction) {
 /** Both parties of `pair`, as callers. */
 const partiesOf = (pair: SessionPair) => [pair.student, pair.teacher] as const;
 
-function attacksOn(procedure: Procedure): ProcedureAttacks {
+function attacksOn(procedure: Procedure): SessionProcedureAttacks {
   return {
     path: `chat.${procedure}`,
     holds: HOLDS,
@@ -145,13 +151,16 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
         }
       },
       async clientSuppliedGender(direction) {
-        const { surface, own, theirs } = await pairsFor(direction);
+        const { own, theirs } = await pairsFor(direction);
         const withGender = { gender: direction.other };
         await expectAnswersAsNonexistent(
           () => call(own.student.caller, procedure, theirs.enrollmentId, withGender),
           () => call(own.student.caller, procedure, randomUUID(), withGender),
         );
         await expectOwnChat(own.student.caller, procedure, own.enrollmentId, withGender);
+      },
+      async afterGenderCorrection(direction) {
+        const { surface, own } = await pairsFor(direction);
         // After an administrator's correction of the teacher's gender: the server's record.
         await surface.setGender(own.teacher.userId, direction.other);
         try {
@@ -163,11 +172,20 @@ function attacksOn(procedure: Procedure): ProcedureAttacks {
         }
         await expectOwnChat(own.student.caller, procedure, own.enrollmentId);
       },
+      otherSessionToken: notApplicable(
+        `chat.${procedure} issues no token and takes none: it names an enrollment by id (forgedId, guessedId, a session id sent as one included) and its caller by the bearer (tamperedToken)`,
+      ),
+      replayedToken: notApplicable(
+        `chat.${procedure} issues no token, so the other participant has none of the caller’s to replay; both parties are answered their own chat (directCall)`,
+      ),
     },
   };
 }
 
-export const chatAttacks: readonly ProcedureAttacks[] = [attacksOn('list'), attacksOn('send')];
+export const chatAttacks: readonly SessionProcedureAttacks[] = [
+  attacksOn('list'),
+  attacksOn('send'),
+];
 
 // T038 of specs/004-sessions — `chat.attachmentLink`'s attacks (FR-496, SC-407; FR-489, FR-432;
 // R-GENDER-1, R-GENDER-2, R-GENDER-4; R-SEC-3), in the same world, on a document each pair's student
@@ -182,9 +200,11 @@ export const chatAttacks: readonly ProcedureAttacks[] = [attacksOn('list'), atta
 //                         parties' user ids, sent as a message id.
 //   guessedId             random ids, the other document's neighbour and its upper-case spelling.
 //   tamperedToken         a tampered bearer token: unauthenticated before any service.
-//   clientSuppliedGender  the input carrying the other gender is ignored; after an administrator's
-//                         correction of the teacher's gender the own document answers as a
-//                         nonexistent one, from either party, and again as theirs once restored.
+//   clientSuppliedGender  the input carrying the other gender is ignored.
+// T052: otherSessionToken and replayedToken not applicable (their reasons below);
+//   afterGenderCorrection after an administrator's correction of the teacher's gender the own
+//                         document answers as a nonexistent one, from either party, and again as
+//                         theirs once restored (moved from clientSuppliedGender unchanged).
 const LINK_HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, R-SEC-3, FR-432, FR-489, FR-496, SC-407';
 
 /** A PDF's leading bytes, padded past the sniffing head. */
@@ -242,7 +262,7 @@ async function withDocuments(
   }
 }
 
-const linkAttacks: ProcedureAttacks = {
+const linkAttacks: SessionProcedureAttacks = {
   path: 'chat.attachmentLink',
   holds: LINK_HOLDS,
   attacks: {
@@ -289,13 +309,22 @@ const linkAttacks: ProcedureAttacks = {
         }
       }),
     clientSuppliedGender: (direction) =>
-      withDocuments(direction, async ({ surface, own, ownDocument, theirDocument }) => {
+      withDocuments(direction, async ({ own, ownDocument, theirDocument }) => {
         const withGender = { gender: direction.other };
         await expectAnswersAsNonexistent(
           () => linkOf(own.student.caller, theirDocument, withGender),
           () => linkOf(own.student.caller, randomUUID(), withGender),
         );
         await expectOwnLink(own.student.caller, ownDocument, withGender);
+      }),
+    otherSessionToken: notApplicable(
+      'chat.attachmentLink takes no token: it names a message by id (forgedId, guessedId, an enrollment’s and a session’s id sent as one included) and its caller by the bearer (tamperedToken)',
+    ),
+    replayedToken: notApplicable(
+      'chat.attachmentLink’s link names the document, not a party: both parties of the enrollment are answered a link to it (directCall), so the other participant replaying one reaches nothing they could not ask for; R-SEC-3’s expiry is the storage’s',
+    ),
+    afterGenderCorrection: (direction) =>
+      withDocuments(direction, async ({ surface, own, ownDocument }) => {
         // After an administrator's correction of the teacher's gender: the server's record.
         await surface.setGender(own.teacher.userId, direction.other);
         try {
@@ -310,4 +339,4 @@ const linkAttacks: ProcedureAttacks = {
   },
 };
 
-export const chatDocumentAttacks: readonly ProcedureAttacks[] = [linkAttacks];
+export const chatDocumentAttacks: readonly SessionProcedureAttacks[] = [linkAttacks];

@@ -1,0 +1,6 @@
+// T053 fixture (SC-413): the package's file writing an enrollment's snapshot. Refused:
+// `snapshotPricePiasters`; its own `pricePiasters` is allowed.
+export async function changePackage(tx, packageId, price) {
+  await tx.package.update({ where: { id: packageId }, data: { pricePiasters: price } });
+  await tx.enrollment.updateMany({ where: { packageId }, data: { snapshotPricePiasters: price } });
+}

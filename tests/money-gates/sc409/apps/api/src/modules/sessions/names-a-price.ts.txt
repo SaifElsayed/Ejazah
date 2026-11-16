@@ -1,0 +1,5 @@
+// T053 fixture (SC-409): sessions naming a price. Refused: an amount.
+export interface SessionCharge {
+  readonly sessionId: string;
+  readonly price: bigint;
+}
