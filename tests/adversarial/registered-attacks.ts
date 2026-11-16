@@ -15,7 +15,7 @@ import { checkoutAttacks } from './checkout.attacks.js';
 import { discoveryAttacks } from './discovery.attacks.js';
 import { enrollmentsAttacks } from './enrollments.attacks.js';
 import { liveAttacks } from './live.attacks.js';
-import type { ProcedureAttacks } from './procedure-harness.js';
+import type { Registration } from './procedure-harness.js';
 // T060: `sessions.complaint.raise`.
 import {
   sessionComplaintAttacks,
@@ -25,7 +25,9 @@ import {
 import { sessionsCancellationAttacks } from './sessions-cancellation.attacks.js';
 import { sessionsRemedyAttacks } from './sessions-remedy.attacks.js';
 
-export const registeredAttacks: readonly ProcedureAttacks[] = [
+// T052 of specs/004-sessions: the registrations of `sessions`, `chat` and `live` are
+// `SessionProcedureAttacks`, FR-496's three kinds beside FR-410's five; the others are unchanged.
+export const registeredAttacks: readonly Registration[] = [
   ...discoveryAttacks,
   ...bookingAttacks,
   ...checkoutAttacks,

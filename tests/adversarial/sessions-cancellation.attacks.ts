@@ -21,10 +21,14 @@
 //                         spelling.
 //   tamperedToken         the requester's genuine bearer with its signature or its session changed:
 //                         refused as unauthenticated before any service is reached.
-//   clientSuppliedGender  the input carrying the other gender: ignored, the server's records decide;
-//                         after an administrator's correction of the counterparty's gender (K2, as
+//   clientSuppliedGender  the input carrying the other gender: ignored, the server's records decide.
+// T052 (FR-496's three kinds, Q2 (a)): otherSessionToken and replayedToken not applicable (no token
+// issued or taken);
+//   afterGenderCorrection after an administrator's correction of the counterparty's gender (K2, as
 //                         `sessions.attacks.ts` makes it), the own session or request answers as a
-//                         nonexistent one, and again once restored.
+//                         nonexistent one, and again once restored (moved from clientSuppliedGender
+//                         unchanged; `answer`'s clientSuppliedGender keeps its own request declined
+//                         with the gender in the input, which the moved block had ended with).
 import { randomUUID } from 'node:crypto';
 
 import { expect } from 'vitest';
@@ -39,7 +43,8 @@ import { type AppCaller, discoverySurface, type SessionPair } from './discovery-
 import {
   type Direction,
   expectAnswersAsNonexistent,
-  type ProcedureAttacks,
+  notApplicable,
+  type SessionProcedureAttacks,
 } from './procedure-harness.js';
 
 const HOLDS = 'R-GENDER-1, R-GENDER-2, R-GENDER-4, FR-456, FR-496, SC-407';
@@ -53,6 +58,14 @@ const ask = (caller: AppCaller, sessionId: string) =>
 /** A decline of `requestId`, as the phone sends it. */
 const decline = (caller: AppCaller, requestId: string) =>
   caller.sessions.cancellation.answer({ requestId, accept: false });
+
+/** A decline of a request, as the phone sends it, with the other gender in its input. */
+const declineWithGender = (direction: Direction) => (caller: AppCaller, requestId: string) =>
+  caller.sessions.cancellation.answer({
+    requestId,
+    accept: false,
+    gender: direction.other,
+  } as SessionsCancellationAnswerInput);
 
 /** The requester's pair and the other gender's, in the world built once per file. */
 async function pairsFor(direction: Direction) {
@@ -93,7 +106,7 @@ async function withPendingRequest(
   }
 }
 
-const requestAttacks: ProcedureAttacks = {
+const requestAttacks: SessionProcedureAttacks = {
   path: 'sessions.cancellation.request',
   holds: HOLDS,
   attacks: {
@@ -157,7 +170,7 @@ const requestAttacks: ProcedureAttacks = {
       }
     },
     async clientSuppliedGender(direction) {
-      const { surface, own, theirs } = await pairsFor(direction);
+      const { own, theirs } = await pairsFor(direction);
       const withGender = (caller: AppCaller, sessionId: string) =>
         caller.sessions.cancellation.request({
           sessionId,
@@ -171,6 +184,15 @@ const requestAttacks: ProcedureAttacks = {
       );
       const asked = await withGender(own.student.caller, own.sessions.later);
       await decline(own.teacher.caller, asked.requestId);
+    },
+    otherSessionToken: notApplicable(
+      'sessions.cancellation.request issues no token and takes none: it names its session by id (forgedId, guessedId) and its caller by the bearer (tamperedToken)',
+    ),
+    replayedToken: notApplicable(
+      'sessions.cancellation.request issues no token, so the other participant has none of the caller’s to replay; either party asking on their own session is answered their own request (directCall)',
+    ),
+    async afterGenderCorrection(direction) {
+      const { surface, own } = await pairsFor(direction);
       // After an administrator's correction of the teacher's gender (K2): the server's record.
       await surface.setGender(own.teacher.userId, direction.other);
       try {
@@ -187,7 +209,7 @@ const requestAttacks: ProcedureAttacks = {
   },
 };
 
-const answerAttacks: ProcedureAttacks = {
+const answerAttacks: SessionProcedureAttacks = {
   path: 'sessions.cancellation.answer',
   holds: HOLDS,
   attacks: {
@@ -260,19 +282,29 @@ const answerAttacks: ProcedureAttacks = {
       });
     },
     async clientSuppliedGender(direction) {
-      const { surface, own, theirs } = await pairsFor(direction);
-      const withGender = (caller: AppCaller, requestId: string) =>
-        caller.sessions.cancellation.answer({
-          requestId,
-          accept: false,
-          gender: direction.other,
-        } as SessionsCancellationAnswerInput);
+      const { own, theirs } = await pairsFor(direction);
+      const withGender = declineWithGender(direction);
       await withPendingRequest(theirs, async (theirRequest) => {
         await expectAnswersAsNonexistent(
           () => withGender(own.teacher.caller, theirRequest),
           () => withGender(own.teacher.caller, randomUUID()),
         );
       });
+      // T052: the own request answered with the gender in the input, which ended the correction's
+      // block before the correction moved to its own kind.
+      await withPendingRequest(own, async (ownRequest) => {
+        expect((await withGender(own.teacher.caller, ownRequest)).status).toBe('declined');
+      });
+    },
+    otherSessionToken: notApplicable(
+      'sessions.cancellation.answer issues no token and takes none: it names a request by id (forgedId, guessedId, a session id sent as one included) and its caller by the bearer (tamperedToken)',
+    ),
+    replayedToken: notApplicable(
+      'sessions.cancellation.answer issues no token, so the other participant has none of the caller’s to replay; the requester answering their own request answers as a nonexistent one (directCall)',
+    ),
+    async afterGenderCorrection(direction) {
+      const { surface, own } = await pairsFor(direction);
+      const withGender = declineWithGender(direction);
       await withPendingRequest(own, async (ownRequest) => {
         // After an administrator's correction of the student's gender (K2): the server's record.
         await surface.setGender(own.student.userId, direction.other);
@@ -290,7 +322,7 @@ const answerAttacks: ProcedureAttacks = {
   },
 };
 
-export const sessionsCancellationAttacks: readonly ProcedureAttacks[] = [
+export const sessionsCancellationAttacks: readonly SessionProcedureAttacks[] = [
   requestAttacks,
   answerAttacks,
 ];

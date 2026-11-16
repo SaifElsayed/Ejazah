@@ -33,6 +33,12 @@
 // Phase 1's student-facing procedures are exempt below. T028 registers `discovery`'s three from
 // `discovery.attacks.ts`, and T043 the booking, checkout and enrollments procedures from a module of
 // their own, each added to `registeredAttacks` in `registered-attacks.ts` as its router lands.
+//
+// T052 of specs/004-sessions (FR-496, SC-407; Q2 (a)): the `sessions`, `chat` and `live` routers
+// join the ones that cannot be exempt, and their registrations are `SessionProcedureAttacks`, which
+// also give FR-496's three kinds (`SESSION_ATTACK_KINDS`); `sessionKindFailures` fails one written
+// without them. The declared limits T052 names are read from the real routers' meta
+// (`declaredLimitFailures` over `DECLARED_LIMITS`), so a stamp lost or changed fails the spec.
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
@@ -101,11 +107,40 @@ export interface ProcedureAttacks {
   readonly attacks: Readonly<Record<AttackKind, Attack | NotApplicable>>;
 }
 
+/**
+ * T052 of specs/004-sessions (Q2 (a)): the three attacks FR-496 names beyond FR-410's five, which
+ * every registration of the `sessions`, `chat` and `live` routers gives (Phase 2's are unchanged).
+ *
+ *   otherSessionToken      another session's token: a join token is bound to its own session, so
+ *                          holding one opens no other.
+ *   replayedToken          a token replayed by the other participant: each party's token names that
+ *                          party, never the other.
+ *   afterGenderCorrection  after an administrator's gender correction, the corrected record decides
+ *                          (`users.gender` changed in the world, the note under T011, K2).
+ */
+export const SESSION_ATTACK_KINDS = [
+  'otherSessionToken',
+  'replayedToken',
+  'afterGenderCorrection',
+] as const;
+
+export type SessionAttackKind = (typeof SESSION_ATTACK_KINDS)[number];
+
+/** A registration of the `sessions`, `chat` or `live` router: FR-410's five and FR-496's three. */
+export interface SessionProcedureAttacks {
+  readonly path: string;
+  readonly holds: string;
+  readonly attacks: Readonly<Record<AttackKind | SessionAttackKind, Attack | NotApplicable>>;
+}
+
+/** Any registration the harness runs. */
+export type Registration = ProcedureAttacks | SessionProcedureAttacks;
+
 /** One attack of one registration in one direction. */
 export interface AttackCase {
   readonly title: string;
   readonly path: string;
-  readonly kind: AttackKind;
+  readonly kind: AttackKind | SessionAttackKind;
   readonly direction: Direction;
   run(): Promise<void>;
 }
@@ -114,11 +149,29 @@ function isNotApplicable(entry: Attack | NotApplicable): entry is NotApplicable 
   return typeof entry !== 'function';
 }
 
+/** The entry a registration gives `kind`, or undefined when it gives none. */
+function entryOf(
+  registration: Registration,
+  kind: AttackKind | SessionAttackKind,
+): Attack | NotApplicable | undefined {
+  const entry: unknown = Reflect.get(registration.attacks, kind);
+  return typeof entry === 'function' || (typeof entry === 'object' && entry !== null)
+    ? (entry as Attack | NotApplicable)
+    : undefined;
+}
+
 /** Every applicable attack of every registration, once per direction. */
-export function attackCases(registrations: readonly ProcedureAttacks[]): AttackCase[] {
-  return registrations.flatMap(({ path, holds, attacks }) =>
-    ATTACK_KINDS.flatMap((kind) => {
-      const entry = attacks[kind];
+export function attackCases(registrations: readonly Registration[]): AttackCase[] {
+  return registrations.flatMap((registration) =>
+    [...ATTACK_KINDS, ...SESSION_ATTACK_KINDS].flatMap((kind) => {
+      const { path, holds } = registration;
+      const entry = entryOf(registration, kind);
+      if (entry === undefined) {
+        // A Phase 2 registration gives none of FR-496's three; a missing one of a Phase 3
+        // registration is `sessionKindFailures`' to report.
+        if ((SESSION_ATTACK_KINDS as readonly string[]).includes(kind)) return [];
+        throw new Error(`${path}: ${kind} is not registered (FR-410)`);
+      }
       if (isNotApplicable(entry)) {
         if (entry.notApplicable.trim() === '') {
           throw new Error(`${path}: ${kind} is marked not applicable without a reason (FR-410)`);
@@ -140,7 +193,7 @@ export function attackCases(registrations: readonly ProcedureAttacks[]): AttackC
 const ATTACK_TIMEOUT_MS = 180_000;
 
 /** The registered attacks as cases, each registration on the database only (T124). */
-export function describeProcedureAttacks(registrations: readonly ProcedureAttacks[]): void {
+export function describeProcedureAttacks(registrations: readonly Registration[]): void {
   for (const registration of registrations) {
     const options = { tags: ['database'], timeout: ATTACK_TIMEOUT_MS };
     describe(`the attacks on ${registration.path}`, options, () => {
@@ -199,7 +252,18 @@ export async function expectAnswersAsNonexistent(
 // ---------------------------------------------------------------------------------------------
 
 /** The routers whose every procedure returns teacher data or acts on a teacher's slot (FR-410). */
-export const ATTACKED_ROUTERS = ['discovery', 'booking', 'checkout', 'enrollments'] as const;
+const SLOT_ROUTERS = ['discovery', 'booking', 'checkout', 'enrollments'] as const;
+
+/**
+ * T052 of specs/004-sessions: the routers whose every procedure issues a token or reads a session,
+ * its chat or its counterparty (FR-496): `sessions` with its `cancellation`, `remedy`, `dispute`
+ * and `complaint`, `chat`, and `live` (`live.events` delivers chat to a person, contracts/kernel.md
+ * "Gates").
+ */
+const SESSION_ROUTERS = ['sessions', 'chat', 'live'] as const;
+
+/** The routers none of whose procedures can be exempt. */
+export const ATTACKED_ROUTERS = [...SLOT_ROUTERS, ...SESSION_ROUTERS] as const;
 
 /** A student-facing procedure outside the attacked routers that names no teacher, and why. */
 export interface Exemption {
@@ -215,7 +279,8 @@ export interface RouterLike {
 /** The caller kinds a student can never reach: the procedure refuses the role first. */
 const NOT_STUDENT_FACING: ReadonlySet<string> = new Set(['teacher']);
 
-function callerOf(procedure: unknown): unknown {
+/** One field of a procedure's meta, as its kind stamped it. */
+function metaField(procedure: unknown, field: 'caller' | 'rateLimit'): unknown {
   const definition: unknown =
     typeof procedure === 'function' || (typeof procedure === 'object' && procedure !== null)
       ? Reflect.get(procedure, '_def')
@@ -224,7 +289,11 @@ function callerOf(procedure: unknown): unknown {
     typeof definition === 'object' && definition !== null
       ? Reflect.get(definition, 'meta')
       : undefined;
-  return typeof meta === 'object' && meta !== null ? Reflect.get(meta, 'caller') : undefined;
+  return typeof meta === 'object' && meta !== null ? Reflect.get(meta, field) : undefined;
+}
+
+function callerOf(procedure: unknown): unknown {
+  return metaField(procedure, 'caller');
 }
 
 /** The paths of the procedures a student can reach, sorted. */
@@ -243,6 +312,13 @@ function attackedRouterOf(path: string): string | undefined {
   return (ATTACKED_ROUTERS as readonly string[]).includes(router) ? router : undefined;
 }
 
+/** Why a procedure of `router` is never exempt. */
+function neverExemptBecause(router: string): string {
+  return (SESSION_ROUTERS as readonly string[]).includes(router)
+    ? `issues a token or reads a session, its chat or its counterparty, so it registers its attacks and is never exempt (FR-496, FR-410, T052)`
+    : `returns teacher data or acts on a teacher's slot, so it registers its attacks and is never exempt (FR-410, analysis U1)`;
+}
+
 /** Why the surface's student-facing procedures and the two lists disagree, one line per path. */
 export function coverageFailures(
   procedures: readonly string[],
@@ -258,9 +334,7 @@ export function coverageFailures(
     const router = attackedRouterOf(path);
     const exempted = exemption.get(path);
     if (router !== undefined && !isRegistered.has(path)) {
-      failures.push(
-        `${path}: a procedure of the ${router} router returns teacher data or acts on a teacher's slot, so it registers its attacks and is never exempt (FR-410, analysis U1)`,
-      );
+      failures.push(`${path}: a procedure of the ${router} router ${neverExemptBecause(router)}`);
       continue;
     }
     if (isRegistered.has(path) && exempted !== undefined) {
@@ -286,6 +360,120 @@ export function coverageFailures(
   }
   return failures.sort();
 }
+
+/**
+ * T052 (Q2 (a)): each registration of the `sessions`, `chat` or `live` router that does not give
+ * one of FR-496's three kinds, an attack or `notApplicable` with its reason, one line per kind. The
+ * type refuses a `SessionProcedureAttacks` without one; this catches a Phase 3 registration written
+ * as a Phase 2 one.
+ */
+export function sessionKindFailures(registrations: readonly Registration[]): string[] {
+  const failures: string[] = [];
+  for (const registration of registrations) {
+    const router = registration.path.split('.')[0] ?? '';
+    if (!(SESSION_ROUTERS as readonly string[]).includes(router)) continue;
+    for (const kind of SESSION_ATTACK_KINDS) {
+      const entry = entryOf(registration, kind);
+      if (entry === undefined) {
+        failures.push(
+          `${registration.path}: a procedure of the ${router} router registers ${kind}, an attack or not applicable with its reason (FR-496, T052)`,
+        );
+      } else if (isNotApplicable(entry) && entry.notApplicable.trim() === '') {
+        failures.push(
+          `${registration.path}: ${kind} is marked not applicable without a reason (FR-496, T052)`,
+        );
+      }
+    }
+  }
+  return failures.sort();
+}
+
+// ---------------------------------------------------------------------------------------------
+// The declared limits
+// ---------------------------------------------------------------------------------------------
+
+/** A procedure whose meta must carry `key` as its declared limit, and where that was decided. */
+export interface DeclaredLimit {
+  /** The procedure's path on its surface, as the router flattens it. */
+  readonly path: string;
+  /** The settings key its kind stamps in the meta's `rateLimit`. */
+  readonly key: `rate_limit_${string}`;
+  readonly source: string;
+}
+
+/**
+ * Why each `expected` procedure's meta does not carry its declared key, one line per path: read
+ * from the real router's `_def.procedures`, the meta `AppMeta.rateLimit` or `AdminMeta.rateLimit`
+ * its kind stamped, so a stamp removed or changed in a router fails here (T052, G1).
+ */
+export function declaredLimitFailures(
+  router: RouterLike,
+  expected: readonly DeclaredLimit[],
+): string[] {
+  const failures: string[] = [];
+  for (const { path, key, source } of expected) {
+    const procedure: unknown = Reflect.get(router._def.procedures, path);
+    if (procedure === undefined) {
+      failures.push(`${path}: not a procedure of the surface; ${source} names it`);
+      continue;
+    }
+    const declared = metaField(procedure, 'rateLimit');
+    if (declared === undefined) {
+      failures.push(`${path}: declares no limit, where ${source} requires ${key}`);
+    } else if (declared !== key) {
+      failures.push(`${path}: declares ${String(declared)}, where ${source} requires ${key}`);
+    }
+  }
+  return failures.sort();
+}
+
+const LINE = 'T052’s line (the owner’s decision of 2026-11-06, G1)';
+const SEARCH = 'T052’s line, the three name searches (the owner’s decision of 2026-11-06, G4)';
+const FOLLOW_UP = 'T052’s follow-up (B42c’s conflict check, Q-R16 (a))';
+
+/**
+ * Every limit T052's line and its follow-up name, per surface: the user kinds' `rateLimit` and the
+ * administrator kind's `AdminMeta.rateLimit`.
+ */
+export const DECLARED_LIMITS: {
+  readonly app: readonly DeclaredLimit[];
+  readonly admin: readonly DeclaredLimit[];
+} = {
+  app: [
+    { path: 'sessions.complaint.raise', key: 'rate_limit_absence_complaint', source: LINE },
+    { path: 'live.events', key: 'rate_limit_live_channel', source: LINE },
+    { path: 'teacher.students.list', key: 'rate_limit_search', source: SEARCH },
+  ],
+  admin: [
+    { path: 'disputes.revise', key: 'rate_limit_dispute_revision', source: LINE },
+    { path: 'sessions.restore', key: 'rate_limit_enrollment_restore', source: LINE },
+    { path: 'sessions.review.revise', key: 'rate_limit_outcome_correction', source: LINE },
+    { path: 'cases.openManual', key: 'rate_limit_manual_compensation_case', source: LINE },
+    { path: 'sessions.monitor.list', key: 'rate_limit_search', source: SEARCH },
+    { path: 'users.list', key: 'rate_limit_search', source: SEARCH },
+    { path: 'enrollments.releaseSlot', key: 'rate_limit_slot_release', source: FOLLOW_UP },
+    { path: 'students.liftBan', key: 'rate_limit_ban_lift', source: FOLLOW_UP },
+    { path: 'teachers.liftBan', key: 'rate_limit_ban_lift', source: FOLLOW_UP },
+    { path: 'teachers.liftRevocation', key: 'rate_limit_ban_lift', source: FOLLOW_UP },
+    {
+      path: 'teachers.keptData.documentLink',
+      key: 'rate_limit_kept_document_link',
+      source: FOLLOW_UP,
+    },
+    {
+      path: 'teachers.keptData.setEraseDate',
+      key: 'rate_limit_kept_data_erase_date',
+      source: FOLLOW_UP,
+    },
+    {
+      path: 'teachers.keptData.eraseNow',
+      key: 'rate_limit_kept_data_erase_now',
+      source: FOLLOW_UP,
+    },
+    { path: 'users.delete', key: 'rate_limit_admin_user_delete', source: FOLLOW_UP },
+    { path: 'sessions.endEnrollment', key: 'rate_limit_enrollment_end', source: FOLLOW_UP },
+  ],
+};
 
 // ---------------------------------------------------------------------------------------------
 // The lists
