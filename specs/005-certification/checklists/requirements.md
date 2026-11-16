@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — three kept for the owner (FR-608, FR-619, the edge case on a pending request when the teacher's standing changes)
+- [x] No [NEEDS CLARIFICATION] markers remain — the three (FR-608, FR-619, the pending request when the teacher's standing ends) and a fourth question (the limits) answered by the owner on 2026-11-16, recorded at `/speckit-clarify` (FR-608, FR-613, FR-619, FR-627, FR-628)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)

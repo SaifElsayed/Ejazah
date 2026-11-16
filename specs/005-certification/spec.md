@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft
+**Status**: Clarified (2026-11-16)
 
 **Input**: User description: "Phase 4 of PLAN.md, lightened by the owner's plan of 2026-11-15 and SRS DEC-70: the certificate (the teacher's request, the administrator's issue, the Arabic PDF with the chain), user reports and the gender rules, push for three kinds only, the settings surface (specs/005-certification), T057"
 
@@ -22,7 +22,7 @@ teacher appended, frozen at issue (FR-ISNAD-7), and the teacher's stored signatu
 ijazahs. Any user may report another from a session, a chat or a profile, and may flag another user's declared gender;
 administrators work both queues, correcting a gender declaration (with its consequences on enrollments) or banning for
 fraud. The platform sends push notifications for three kinds only in this release: a session's reminder, a
-cancellation request, and a payment's result; each is recorded, queued and retried, in the user's language. The
+cancellation request and its answer, and a payment's result (DEC-70 as amended by DEC-71); each is recorded, queued and retried, in the user's language. The
 administrator's settings page exposes every setting of SRS §3.14 without a deployment.
 
 **Who builds it, and how big it is.** Track 1 of the owner's two tracks (PLAN.md, «How a phase is run», as amended on
@@ -69,7 +69,28 @@ and SC-601.
 
 ## Clarifications
 
-_(The owner's answers to the questions at the end of this cycle's specify step are recorded here by `/speckit-clarify`.)_
+### Session 2026-11-16
+
+The owner's answers to the specify step's questions (`ejazah-tools\b43\t057-clarify.md`), given in the review session
+and relayed; recorded in SRS DEC-71 where they change the SRS.
+
+- Q: How do the parties learn that an ijazah was issued or a request rejected? → A: (a) for v1.0, on screen: the
+  request's status (pending; issued, with the certificate; rejected, with the reason) on the enrollment, refreshed by
+  the live channel while the app is open. The push for an issue or a rejection (`ijazah_granted`, and the rejection's)
+  arrives in v1.1 with the other kinds («يظهر على الشاشة واشعارات بس ده يتعمل مع الحاجات اللي هتتعمل في التحديث»);
+  DEC-70 already covers it. (FR-608)
+- Q: Does the cancellation push cover the request only, or also its answer? → A: (b) the request and its answer:
+  `cancellation_requested`, `cancellation_request_accepted`, `cancellation_request_declined`, as FR-NOTIF-1 words it
+  («their acceptance/decline»). DEC-71 amends DEC-70's v1.0 list. (FR-619)
+- Q: What happens to a pending request when the teacher's standing ends? → A: (c), the owner's own («حق الطالب هيروح؟ …
+  طلب الاجازة ده يعني هما خلصوا الباقة والطالب يستحقها»): a request sent while the teacher was active stays pending
+  whatever happens to the teacher afterwards (suspension, ban, revocation or deletion; a deletion does not close it).
+  An administrator may still issue it, seeing the teacher's standing and its reason beside it, or reject it with a
+  reason (for example a ban for fraud in the teacher's own credentials, which makes the chain doubtful). The teacher's
+  signature, printed name and chain are frozen onto the request when it is sent, so the issue never depends on a
+  deleted teacher's erased data. A teacher who is not active cannot send a new request. (FR-627, FR-628)
+- Q: Limits on reports and gender flags? → A: (a) reports 5 per 24 hours and gender flags 3 per 24 hours, per user, two
+  new §3.14 settings (DEC-71). (FR-613)
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -181,7 +202,7 @@ cannot be restored. Flag a teacher; find fraud; the teacher is banned and every 
 ### User Story 6 - Three kinds of push arrive in the user's language (Priority: P2)
 
 A user with the app installed receives a push before each session (at the configured offsets, 24 hours and 15 minutes
-by default), when the other party asks to cancel a session, and when their payment is confirmed, failed or expired.
+by default), when the other party asks to cancel a session or answers their own request to cancel, and when their payment is confirmed, failed or expired.
 Each push is recorded, sent by a queued job with retries, in the user's language, and tapping it opens the screen
 it is about.
 
@@ -221,8 +242,8 @@ effect without a deployment.
 ### Edge Cases
 
 - A teacher sends a second request for the same enrollment while one is pending: refused.
-- The teacher is suspended, revoked, banned or deleted while a request is pending: [NEEDS CLARIFICATION: does a pending request stay for the administrator to decide, or close automatically?] — assumed here: it stays pending and the administrator sees the teacher's standing beside it; issue is refused while the teacher is not active.
-- The student deletes their account while a request is pending: the request closes, nothing is issued; an issued certificate keeps its printed names after a deletion (ADR 0019 D1).
+- The teacher is suspended, revoked, banned or deleted while a request is pending: the request stays pending; an administrator may issue it from what was frozen at the request, or reject it with a reason (FR-627, FR-628).
+- The student deletes their account while a request is pending: the request closes, nothing is issued (a pending request does not block the student's deletion, since its enrollment is no longer ongoing); an issued certificate keeps its printed names after a deletion (ADR 0019 D1).
 - The credential's chain is corrected after issue: the issued certificate keeps its snapshot (FR-ISNAD-7).
 - An administrator corrects a certificate name on the student's request: future certificates print the new name; issued ones keep theirs.
 - A gender correction on a user with no enrollment: only the declaration changes.
@@ -241,12 +262,12 @@ effect without a deployment.
 
 **The request and the issue**
 
-- **FR-603**: A teacher MUST be able to request an ijazah from an ijazah-track enrollment of theirs in a subject they hold an approved credential for, giving the completion date and the certificate language (Arabic by default, FR-LOC-4), after seeing the certificate as it will be filled (FR-IJAZAH-1, FR-IJAZAH-15). A request MUST be refused for a recitation enrollment, a barred student, a missing signature or credential, or while another request of that enrollment is pending; each refusal is logged with ids and its reason.
+- **FR-603**: A teacher MUST be able to request an ijazah from an ijazah-track enrollment of theirs in a subject they hold an approved credential for, giving the completion date and the certificate language (Arabic by default, FR-LOC-4), after seeing the certificate as it will be filled (FR-IJAZAH-1, FR-IJAZAH-15). A request MUST be refused for a teacher who is not active, a recitation enrollment, a barred student, a missing signature or credential, or while another request of that enrollment is pending; each refusal is logged with ids and its reason.
 - **FR-604**: An administrator MUST see each pending request with the same filled certificate and MUST approve it or reject it with a mandatory reason the teacher sees; no administrator action MAY start a grant or change a chain (FR-IJAZAH-7, FR-ADMIN-12). Both are audited (FR-ADMIN-17).
 - **FR-605**: Approving MUST issue exactly one ijazah per request, idempotently: a unique, non-guessable certificate number (16 Crockford base32 symbols, shown 4-4-4-4), a verification token stored only as its hash (minted now so v1.1's page can verify every certificate), the chain snapshot with the granting teacher appended (FR-ISNAD-7), the printed student and teacher names (ADR 0019 D1), the completion and issue dates in Hijri and Gregorian, the teacher's signature, and the generated PDF; mode is always platform-generated (FR-IJAZAH-2, ADR 0013).
 - **FR-606**: The certificate MUST render correct Arabic and English, a chain of any length (one A4 page up to 60 generations, a following page beyond), multi-name generations as one row, and every name as text, never markup (FR-IJAZAH-11; ADR 0004 D1–D3; ADR 0017 D4). It is rendered outside the request, in the worker.
 - **FR-607**: The student and the granting teacher MUST be able to view and download an issued certificate at any time through an expiring signed link; nobody else (FR-IJAZAH-3, FR-IJAZAH-10's link rule). Every issued ijazah MUST appear on the student's record as a permanent credential (FR-IJAZAH-4).
-- **FR-608**: The parties MUST learn of an issue or a rejection: [NEEDS CLARIFICATION: FR-IJAZAH-15 says «notifying both parties», but DEC-70 limits v1.0's push to three kinds and the notification centre is v1.1 — is the screen's state enough (the request's status on the enrollment), or does v1.0 add the `ijazah_granted` push?]
+- **FR-608**: In v1.0 the parties MUST learn of an issue or a rejection on screen: the request's status on the enrollment for the teacher and the student (pending; issued, with the certificate; rejected, with the reason, to the teacher), refreshed by the live channel while the app is open (FR-427). The issue's and the rejection's push arrive in v1.1 (FR-IJAZAH-15's «notifying both parties», SRS DEC-70; the owner's answer of 2026-11-16).
 
 **Revocation and the bar**
 
@@ -257,7 +278,7 @@ effect without a deployment.
 
 - **FR-611**: A signed-in user MUST be able to report another user with a reason from a session they are a party of, from a chat of theirs, or from a profile they can see; one open report per reporter, reported user and context; reporting oneself is refused; the reporter sees only that it was received (FR-SESS-15).
 - **FR-612**: Administrators MUST have a reports queue listing open reports with context and evidence links, and MUST mark each actioned or dismissed with a note, audited (FR-ADMIN-15). An open report on a session keeps that enrollment's chat (FR-492).
-- **FR-613**: Report creation MUST be rate limited per user by a declared setting key.
+- **FR-613**: Report creation and gender-flag creation MUST each be rate limited per user by a declared setting: reports 5 per 24 hours, flags 3 per 24 hours (§3.14 as amended by DEC-71); the first refusal in a window is logged with ids.
 
 **Gender flags and decisions**
 
@@ -269,11 +290,16 @@ effect without a deployment.
 
 **Push for three kinds**
 
-- **FR-619**: The platform MUST record a notification and push it for exactly three kinds in v1.0: `session_reminder` to both parties at each configured offset before a session (FR-BOOK-8; `reminder_offsets_minutes`, 24 hours and 15 minutes by default), `cancellation_requested` to the other party of a session (FR-CANCEL-1), and the payment's result to the student (`payment_confirmed`, `payment_failed`, `payment_expired`, read from Phase 2's durable records, PLAN.md) (SRS DEC-70). [NEEDS CLARIFICATION: «cancellation request» — the request only, or also its acceptance and refusal (`cancellation_request_accepted`, `_declined`)?]
+- **FR-619**: The platform MUST record a notification and push it for exactly three kinds in v1.0: `session_reminder` to both parties at each configured offset before a session (FR-BOOK-8; `reminder_offsets_minutes`, 24 hours and 15 minutes by default), the cancellation request and its answer, `cancellation_requested` to the other party of a session and `cancellation_request_accepted` or `cancellation_request_declined` to the party who asked (FR-CANCEL-1…3), and the payment's result to the student (`payment_confirmed`, `payment_failed`, `payment_expired`, read from Phase 2's durable records, PLAN.md) (SRS DEC-70 as amended by DEC-71). An expired request (`cancellation_request_expired`) sends no push in v1.0.
 - **FR-620**: Delivery MUST be queued and retried, never sent inside a request, so a push provider outage fails no booking (FR-NOTIF-4); each notification is pushed at most once per device; a recorded delivery time on the row.
 - **FR-621**: A push MUST be in the recipient's language (FR-NOTIF-3), carry no name, amount or free text beyond its keys and ids, and open the screen it is about.
 - **FR-622**: Reminders MUST follow a session's instants when they are recomputed (ADR 0009 D3) and MUST NOT be sent for a session no longer scheduled.
 - **FR-623**: A user MUST be able to register and remove the device's push token; a signed-out or deleted user's tokens are removed.
+
+**A request outlives the teacher's standing (the owner's answer of 2026-11-16, C3)**
+
+- **FR-627**: When a request is sent, the teacher's signature image, printed name (the credential's holder name) and the credential's chain MUST be frozen onto the request; the certificate is issued from what the request froze, never from the teacher's live data. A request MAY be sent only by a teacher who is active.
+- **FR-628**: A request sent while the teacher was active MUST stay pending whatever happens to the teacher afterwards (a suspension, a ban, a revocation or a deletion; a deletion does not close it). An administrator MAY issue it or reject it with a reason, and MUST see the teacher's current standing and its reason beside it.
 
 **The settings page**
 
@@ -287,7 +313,7 @@ effect without a deployment.
 ### Key Entities _(include if feature involves data)_
 
 - **Teacher signature**: one current image per teacher, replaceable; the certificate uses the one current at issue.
-- **Ijazah request**: enrollment, teacher, student, subject, completion date, language, status (awaiting the student's name, pending, approved, rejected, closed), reason, deciding administrator and time; points to its ijazah (ADR 0017 D5).
+- **Ijazah request**: enrollment, teacher, student, subject, completion date, language, status (awaiting the student's name, pending, approved, rejected, closed), reason, deciding administrator and time; the frozen signature, teacher's printed name and chain (FR-627); points to its ijazah (ADR 0017 D5).
 - **Ijazah**: certificate number, request, issuing administrator, chain snapshot, printed names, language, dates, PDF, verification token hash, revocation (time, reason, administrator); never deleted.
 - **Ijazah bar**: user, reason, who and when, lifted (who and when).
 - **User report**: reporter, reported user, context (session, chat, profile), session, reason, status, deciding administrator, note.
