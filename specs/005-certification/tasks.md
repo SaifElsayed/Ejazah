@@ -180,8 +180,10 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     bound to booking; a count above zero refuses `CONFLICT` `pending_ijazah_requests`, writing nothing, one info line
     of ids;
   - `users.delete` of a teacher asks booking's count of enrollments `pending_payment` or `confirmed` (paused included)
-    and the same request count, refusing `active_enrollments` or `pending_ijazah_requests`; a student's unchanged;
-    `004:T081`'s ending of a teacher's live enrollments is reached only by the held ones R-414 names;
+    and the same request count, and moderation's count of open compensation cases on the teacher's enrollments
+    (through moderation's entry), refusing `active_enrollments`, `pending_ijazah_requests` or `open_cases`; a
+    student's unchanged; `004:T081`'s ending of a teacher's enrollments is then reached only by held ones whose case
+    is already closed;
   - the kept signature: `modules/verification/kept-data.service.ts` lists it, opens it by a signed link with a reason,
     and removes its file at the erasure (date or now); a teacher never approved has it erased at deletion; the head
     comment of `kept-data.service.ts` corrected with it (`004:T077`'s follow-up);

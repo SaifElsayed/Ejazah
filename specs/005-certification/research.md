@@ -217,11 +217,19 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
     (paused included) and the same request count. Either refuses with its cause (`active_enrollments`,
     `pending_ijazah_requests`), writing nothing. The administrator ends each confirmed enrollment with the direct end
     (`004:T082`), lets one awaiting payment lapse, and decides each request. A student's `users.delete` is unchanged.
-  - Enrollments closed by the teacher's own ban or revocation while their slot is held do not refuse the
-    administrator's deletion; it ends them as T081 does today.
+  - `users.delete` of a teacher also asks moderation's count of open compensation cases on the teacher's enrollments,
+    refusing `open_cases` (the owner's answer on held enrollments: «بيتمنع المسح لحد متتحل قضية الطالب»). This
+    covers the enrollments closed by the teacher's own ban or revocation while their slot is held, and those the
+    direct end has just ended. Each case then goes one of two ways:
+    - closed with the amount compensated (`compensation_ordered`): the restore is refused from then on
+      (`sessions/restore.service.ts:37`, `case_closed`), the enrollment is final, and the deletion may go on;
+    - compensated with sessions: the administrator lifts the ban or the revocation, the restore brings the enrollment
+      back and closes its case (`restore.service.ts:21`), and the teacher and the student carry on, so the ongoing
+      enrollment refuses the deletion again.
 - **Rationale.** The owner's P3 answers. Every tool the administrator needs already exists (the direct end, the
-  request queue), so «hard but possible» needs no new mechanism.
-- **Code.** `deletion.service.ts:51-75` (the two paths and the port pattern); `004:T080`, `004:T081`, `004:T082`.
+  request queue, the case's closing, the ban's lift), so «hard but possible» needs no new mechanism.
+- **Code.** `deletion.service.ts:51-75` (the two paths and the port pattern); `004:T080`, `004:T081`, `004:T082`;
+  `moderation/compensation-case.repository.ts:59` (the resolutions).
 
 ## R-413 — Proofs
 - Every new user procedure is registered in the adversarial harness (both directions) or exempt with its reason, and

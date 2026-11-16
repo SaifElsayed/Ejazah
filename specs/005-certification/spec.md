@@ -108,7 +108,10 @@ The owner's answers, typed in the implementing session (`ejazah-tools\b43\t057-p
   اللي شغالة فمينفعش يمسح حسابه». An undecided request blocks the teacher's deletion as an ongoing enrollment does. An
   administrator's deletion of a teacher: «مينفعش الادمن يمسح حساب مدرس عليه باقات شغاله او خلي الموضوع صعب جدا يعني بس
   ممكن», then «تمام بترشيحك» for (a): refused until the administrator has ended each ongoing enrollment and decided
-  each request. (FR-630)
+  each request. Held enrollments (closed by the teacher's own ban or revocation, slot held): «بيتمنع المسح لحد متتحل
+  قضية الطالب لو اتحلت بتعويض المبلغ بيقدر يمسحه لو اتحلت بتعويض حصص خلاص بيرجع المعلم عادي ويكملوا»: refused
+  while a student's case is open; the amount compensated lets it go on; sessions compensated restores the teacher and
+  the enrollment. (FR-630)
 - Q: Is a deleted teacher's signature erased? → A: «خليها متتمسحش»: it is kept with the documents DEC-67 keeps.
   (FR-631)
 - Q: A chain correction while a request is open? → A: (a) it re-freezes the open request, and an approved certificate
@@ -327,7 +330,7 @@ effect without a deployment.
 **The sign-off, the deletion and the signature (the owner's answers of 2026-11-16, SRS DEC-72)**
 
 - **FR-629**: A rendered certificate MUST NOT be shown to either party until an administrator has opened the rendered PDF and signed it off; the administrator MAY instead have it rendered again. Until the sign-off, an administrator's correction of the credential's chain or of the student's certificate name MUST re-freeze the issued record and render it again. The sign-off and each re-render are audited and idempotent.
-- **FR-630**: A teacher's own deletion (in the app and on the web) MUST be refused while one of their ijazah requests is undecided (awaiting the student's name, pending, or approved and not yet signed off), as an ongoing enrollment refuses it. An administrator's deletion of a teacher MUST be refused while the teacher has an enrollment awaiting payment or confirmed (one paused by a suspension included) or such a request; the administrator first ends each enrollment with the direct end and decides each request. Each refusal writes nothing and is logged with ids and its cause. An administrator's deletion of a student is unchanged.
+- **FR-630**: A teacher's own deletion (in the app and on the web) MUST be refused while one of their ijazah requests is undecided (awaiting the student's name, pending, or approved and not yet signed off), as an ongoing enrollment refuses it. An administrator's deletion of a teacher MUST be refused while the teacher has an enrollment awaiting payment or confirmed (one paused by a suspension included), such a request, or an open compensation case on any of their enrollments (one closed by the teacher's own ban or revocation while its slot is held included). The administrator first ends each enrollment with the direct end, decides each request, and resolves each case. A case closed with the amount compensated lets the deletion go on. If the student is compensated with sessions instead, the ban or revocation is lifted and the enrollment restored, and it is ongoing again. Each refusal writes nothing and is logged with ids and its cause. An administrator's deletion of a student is unchanged.
 - **FR-631**: A deleted teacher who was ever approved MUST keep their signature image with the documents SRS DEC-67 keeps, read and erased under the same rules (FR-ADMIN-21).
 
 **The settings page**
