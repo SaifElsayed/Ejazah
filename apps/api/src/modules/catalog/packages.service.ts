@@ -21,7 +21,7 @@
 //   length, counting only teachers the visibility predicate shows a student of the session's gender
 //   (the teacher's own), each package's `perSession` averaged half up in `packages/money`. Fewer
 //   such teachers than the setting `price_average_min_teachers` (seed 3, read at each request;
-//   Q-T113-k) answer nothing, so no single teacher's price is exposed; a setting outside 1 to 100
+//   Q-T113-k) answer nothing, so no single teacher's price is exposed; a setting outside 2 to 100
 //   refuses the read. It decides nothing and takes no lock.
 //
 // THE LOCKS (T005's rules, the owner's decisions of 2026-11-01). Lock, then read:

@@ -103,9 +103,10 @@ export const packagesAveragePriceOutput = z.object({
 
 /**
  * The setting `price_average_min_teachers` (SRS §3.14, DEC-88; Q-T113-k): the fewest other teachers
- * the average is shown over, a whole number from 1 to 100 (seed 3).
+ * the average is shown over, a whole number from 2 to 100 (seed 3): at least 2, so no single teacher's
+ * price is shown (the reviewer's bound, DEC-88).
  */
-export const priceAverageMinTeachers = z.int().min(1).max(100);
+export const priceAverageMinTeachers = z.int().min(2).max(100);
 
 export type PackagesAveragePriceInput = z.infer<typeof packagesAveragePriceInput>;
 export type PackagesAveragePriceOutput = z.infer<typeof packagesAveragePriceOutput>;

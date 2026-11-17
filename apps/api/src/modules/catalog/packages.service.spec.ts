@@ -441,7 +441,15 @@ describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the edit
     expect(await serviceOver(memory).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
   });
 
-  it('fails closed on a setting outside 1 to 100: the read is refused', async () => {
+  it("refuses a setting of 1, which would show one teacher's own price (the bound is 2, DEC-88)", async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    await expect(
+      serviceOver(memory, settingsWith(1)).service.averagePrice(TEACHER, REQUESTER, ASKED),
+    ).rejects.toThrow();
+  });
+
+  it('fails closed on a setting outside 2 to 100: the read is refused', async () => {
     const memory = new MemoryPackages();
     peer(memory, PEERS[0] ?? '', 100_000, 3);
     for (const bad of [0, 101, 2.5]) {
