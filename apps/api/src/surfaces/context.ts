@@ -178,6 +178,9 @@ import type {
   adminIjazahsListInput,
   adminIjazahsListOutput,
   adminIjazahsRevokeInput,
+  // 005:T032 (B46): the sign-off and the re-render.
+  adminIjazahsRerenderInput,
+  adminIjazahsSignOffInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -900,6 +903,17 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof adminIjazahBarInput>,
     ): Promise<{ readonly replayed: boolean }>;
+    // 005:T032 (B46; FR-629, R-402): the sign-off and the re-render, keyed on the call's transaction.
+    signOff(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsSignOffInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    rerender(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsRerenderInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
   };
 }
 

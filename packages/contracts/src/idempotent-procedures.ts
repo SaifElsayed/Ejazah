@@ -73,6 +73,10 @@ export const idempotentProcedures = [
   'ijazahs.revoke',
   'ijazahs.bar',
   'ijazahs.liftBar',
+  // 005:T032 (admin-surface.md, `ijazahs.signOff` and `.rerender`): keyed on the kind's transaction
+  // (runOn); the stored outcome the certificate number.
+  'ijazahs.signOff',
+  'ijazahs.rerender',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

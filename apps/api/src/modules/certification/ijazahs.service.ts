@@ -24,6 +24,20 @@
 // what holds one open bar per user: a second is refused `already_barred`, a lift with none
 // `not_barred`; NOT_FOUND for an account that is not there. A lift keeps the row as history.
 //
+// 005:T032 (FR-629; R-402; DEC-72; the note under T032, Q7 (a) with the review's amendment).
+// SIGN-OFF (`ijazahs.signOff`, keyed `runOn`): the kernel row's order, the student's `users` row,
+// then the ijazah, then the reads under them; refused `revoked`, `already_signed_off`,
+// `not_rendered` and `student_barred` (an open `ijazah_bars` row of the student, read under the
+// student's lock); `signed_off_at` and `signed_off_by_admin_id` written together (ERD §15 rule 55),
+// the one write of them; ⚠️ final: after it nothing changes the certificate (SC-604); the live event
+// `ijazahRequest` to both parties after the commit, so their screens read it again.
+// RE-RENDER (`ijazahs.rerender`, a reason, keyed `runOn`): the ijazah locked, then read; refused
+// `revoked` and `already_signed_off`; `render_generation` + 1 and `rendered_at` cleared, and only
+// after the commit `render-certificate` enqueued for the new generation (job id
+// `<ijazahId>-<generation>`, `main.ts`'s queue), whose older job then writes nothing (R-402); a lost
+// enqueue is logged by ids and leaves the ijazah unrendered and visible as such, a second re-render
+// its fix.
+//
 // Every line names ids and a reason, never a name, the chain, a key or the reason's text (R-SEC-2).
 import type {
   AdminIjazahBarInput,
@@ -32,8 +46,11 @@ import type {
   AdminIjazahsListInput,
   AdminIjazahsListItem,
   AdminIjazahsListOutput,
+  AdminIjazahsRerenderInput,
   AdminIjazahsRevokeInput,
+  AdminIjazahsSignOffInput,
   AdminIjazahStatus,
+  IjazahSignOffRefusal,
   IjazahsRefusal,
 } from '@ijazah/contracts/admin';
 import type { IdempotentProcedure, LiveEvent } from '@ijazah/contracts';
@@ -48,7 +65,7 @@ import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import { DOCUMENT_LINK_TTL_SETTING, documentLinkTtl } from '../../platform/settings/keys.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
-import type { DecisionParty, DecisionSubject } from './ijazah-decision.service.js';
+import type { DecisionParty, DecisionSubject, RenderQueue } from './ijazah-decision.service.js';
 
 /** An ijazah as the administrator reads it (ERD §8, `ijazahs`). */
 export interface IjazahRecord {
@@ -116,6 +133,11 @@ export interface IjazahsStore {
   openBarOf(tx: Transaction, userId: string): Promise<string | null>;
   insertBar(tx: Transaction, bar: NewIjazahBar): Promise<void>;
   liftBar(tx: Transaction, barId: string, adminId: string, at: Date): Promise<boolean>;
+  // 005:T032: the sign-off and the re-render.
+  hasOpenBar(tx: Transaction, userId: string): Promise<boolean>;
+  markSignedOff(tx: Transaction, ijazahId: string, adminId: string, at: Date): Promise<boolean>;
+  /** `render_generation` + 1 and `rendered_at` cleared on an unsigned, unrevoked ijazah. */
+  markRerendered(tx: Transaction, ijazahId: string): Promise<boolean>;
 }
 
 /** The lines the service writes: ids and a reason. */
@@ -134,11 +156,15 @@ export interface IjazahsDependencies {
   /** The database's clock on the transaction. */
   readonly clock: (tx: Transaction) => Promise<Date>;
   readonly log: IjazahsLog;
+  /** 005:T032: `render-certificate`, enqueued after a re-render's commit (contracts/jobs.md). */
+  readonly renders: RenderQueue;
 }
 
 export const REVOKE_SCOPE: IdempotentProcedure = 'ijazahs.revoke';
 export const BAR_SCOPE: IdempotentProcedure = 'ijazahs.bar';
 export const LIFT_BAR_SCOPE: IdempotentProcedure = 'ijazahs.liftBar';
+export const SIGN_OFF_SCOPE: IdempotentProcedure = 'ijazahs.signOff';
+export const RERENDER_SCOPE: IdempotentProcedure = 'ijazahs.rerender';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -268,6 +294,123 @@ export class IjazahsService {
       return null;
     });
     return { replayed };
+  }
+
+  /** 005:T032 `ijazahs.signOff`: what shows the certificate to its parties (FR-629; this file's head). */
+  async signOff(
+    tx: Transaction,
+    adminId: string,
+    { ijazahId, idempotencyKey }: AdminIjazahsSignOffInput,
+  ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }> {
+    const live = this.#afterCommitList(tx, { adminId, ijazahId });
+    const keyed = {
+      scope: SIGN_OFF_SCOPE,
+      key: idempotencyKey,
+      actorId: adminId,
+      input: { ijazahId },
+    };
+    const { outcome, replayed } = await this.#dependencies.idempotency.runOn<{
+      readonly certificateNumber: string;
+    }>(tx, keyed, (on) => this.#signOffLocked(on, adminId, ijazahId, live));
+    return { certificateNumber: outcome.certificateNumber, replayed };
+  }
+
+  /** 005:T032 `ijazahs.rerender`: a reason; a new generation rendered after the commit (R-402). */
+  async rerender(
+    tx: Transaction,
+    adminId: string,
+    { ijazahId, reason, idempotencyKey }: AdminIjazahsRerenderInput,
+  ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }> {
+    const live = this.#afterCommitList(tx, { adminId, ijazahId });
+    const keyed = {
+      scope: RERENDER_SCOPE,
+      key: idempotencyKey,
+      actorId: adminId,
+      input: { ijazahId, reason },
+    };
+    const { outcome, replayed } = await this.#dependencies.idempotency.runOn<{
+      readonly certificateNumber: string;
+    }>(tx, keyed, (on) => this.#rerenderLocked(on, adminId, ijazahId, live));
+    return { certificateNumber: outcome.certificateNumber, replayed };
+  }
+
+  async #signOffLocked(
+    tx: Transaction,
+    adminId: string,
+    ijazahId: string,
+    live: AfterCommitList,
+  ): Promise<{ readonly certificateNumber: string }> {
+    const { store, clock, log } = this.#dependencies;
+    const ids = { adminId, ijazahId };
+    const seen = await store.ijazahOf(tx, ijazahId);
+    if (seen === null) throw this.#notFound(ids);
+    // The kernel row's order: the student's `users` row (the bar is read under it, Q7 (a) with the
+    // review's amendment), then the ijazah; the parties never change, so the unlocked read is enough
+    // to name the student.
+    await store.lockAccounts(tx, [seen.studentUserId]);
+    await store.lockIjazahs(tx, [ijazahId]);
+    const ijazah = await store.ijazahOf(tx, ijazahId);
+    if (ijazah === null) throw this.#notFound(ids);
+    if (ijazah.revokedAt !== null) throw this.#signOffRefused(ids, 'revoked');
+    if (ijazah.signedOffAt !== null) throw this.#signOffRefused(ids, 'already_signed_off');
+    if (ijazah.renderedAt === null) throw this.#signOffRefused(ids, 'not_rendered');
+    if (await store.hasOpenBar(tx, ijazah.studentUserId)) {
+      throw this.#signOffRefused(ids, 'student_barred');
+    }
+    if (!(await store.markSignedOff(tx, ijazahId, adminId, await clock(tx)))) {
+      throw new Error('ijazah sign-off: a locked rendered ijazah was not signed off');
+    }
+    log.info({ ...ids, reason: 'signed_off' }, 'An ijazah was signed off');
+    live.afterCommit([ijazah.teacherUserId, ijazah.studentUserId], {
+      type: 'ijazahRequest',
+      enrollmentId: ijazah.enrollmentId,
+    });
+    return { certificateNumber: ijazah.certificateNumber };
+  }
+
+  async #rerenderLocked(
+    tx: Transaction,
+    adminId: string,
+    ijazahId: string,
+    live: AfterCommitList,
+  ): Promise<{ readonly certificateNumber: string }> {
+    const { store, log } = this.#dependencies;
+    const ids = { adminId, ijazahId };
+    // The ijazah alone, the kernel row's last lock: a re-render writes no other row.
+    await store.lockIjazahs(tx, [ijazahId]);
+    const ijazah = await store.ijazahOf(tx, ijazahId);
+    if (ijazah === null) throw this.#notFound(ids);
+    if (ijazah.revokedAt !== null) throw this.#signOffRefused(ids, 'revoked');
+    if (ijazah.signedOffAt !== null) throw this.#signOffRefused(ids, 'already_signed_off');
+    // Read under the lock, so the write below raises exactly this generation by one.
+    const generation = ijazah.renderGeneration + 1;
+    if (!(await store.markRerendered(tx, ijazahId))) {
+      throw new Error('ijazah re-render: a locked unsigned ijazah was not re-rendered');
+    }
+    log.info({ ...ids, generation, reason: 'rerendered' }, 'An ijazah is rendered again');
+    live.afterCommitDo(() => {
+      void this.#enqueueRender(ijazahId, generation);
+    });
+    return { certificateNumber: ijazah.certificateNumber };
+  }
+
+  async #enqueueRender(ijazahId: string, generation: number): Promise<void> {
+    try {
+      await this.#dependencies.renders.enqueue(ijazahId, generation);
+    } catch {
+      // A lost enqueue leaves the ijazah unrendered and visible as such; `ijazahs.rerender` is its fix.
+      this.#dependencies.log.warn(
+        { ijazahId, generation, reason: 'enqueue_failed' },
+        "An ijazah's rendering could not be queued",
+      );
+    }
+  }
+
+  #signOffRefused(ids: Ids, reason: IjazahSignOffRefusal): DomainError {
+    this.#dependencies.log.info({ ...ids, reason }, 'An ijazah action was refused');
+    return markRefusalLogged(
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'ijazahId', code: reason }] }),
+    );
   }
 
   async #revokeLocked(

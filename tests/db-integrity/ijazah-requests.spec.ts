@@ -126,6 +126,8 @@ beforeAll(async () => {
       settings,
     }),
     log: { info: () => undefined, warn: () => undefined },
+    // 005:T032 (rule d): the ijazah re-freeze is tests/db-integrity/ijazahs.spec.ts's.
+    renders: { enqueue: async () => undefined },
   });
 });
 

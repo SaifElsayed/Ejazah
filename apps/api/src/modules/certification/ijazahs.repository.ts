@@ -152,3 +152,35 @@ export async function liftBar(
   });
   return count === 1;
 }
+
+// 005:T032 (FR-629; R-402; ERD §15 rule 55): the sign-off and the re-render, each conditional on the
+// row's state read under its lock, so neither is written twice nor after a sign-off or revocation.
+
+/** Signs off a rendered, unsigned, unrevoked ijazah (rule 55: instant and administrator together). */
+export async function markSignedOff(
+  tx: Client,
+  ijazahId: string,
+  adminId: string,
+  at: Date,
+): Promise<boolean> {
+  const { count } = await tx.ijazah.updateMany({
+    where: {
+      id: ijazahId,
+      signedOffAt: null,
+      revokedAt: null,
+      deletedAt: null,
+      renderedAt: { not: null },
+    },
+    data: { signedOffAt: at, signedOffByAdminId: adminId },
+  });
+  return count === 1;
+}
+
+/** Raises an unsigned, unrevoked ijazah's generation by one and clears its rendering. */
+export async function markRerendered(tx: Client, ijazahId: string): Promise<boolean> {
+  const { count } = await tx.ijazah.updateMany({
+    where: { id: ijazahId, signedOffAt: null, revokedAt: null, deletedAt: null },
+    data: { renderGeneration: { increment: 1 }, renderedAt: null },
+  });
+  return count === 1;
+}

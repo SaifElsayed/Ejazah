@@ -28,6 +28,7 @@ import {
   type IjazahDecisionService,
   type IjazahRequestService,
   type IjazahsService,
+  markRendered,
 } from '../../apps/api/src/modules/certification/index';
 import {
   closeDatabase,
@@ -102,6 +103,13 @@ let storage: ReturnType<typeof memoryStorage>;
 let requests: IjazahRequestService;
 let decisions: IjazahDecisionService;
 let ijazahs: IjazahsService;
+/** 005:T032: every render enqueued, by ijazah and generation. */
+const enqueued: [string, number][] = [];
+const renders = {
+  enqueue: async (ijazahId: string, generation: number) => {
+    enqueued.push([ijazahId, generation]);
+  },
+};
 
 beforeAll(async () => {
   db = await connectAsApplication();
@@ -116,7 +124,7 @@ beforeAll(async () => {
     settings,
   });
   const log = { info: () => undefined, warn: () => undefined };
-  requests = createIjazahRequestService({ database, storage, idempotency, log });
+  requests = createIjazahRequestService({ database, storage, idempotency, log, renders });
   decisions = createIjazahDecisionService({
     storage,
     settings,
@@ -124,7 +132,7 @@ beforeAll(async () => {
     renders: { enqueue: async () => undefined },
     log,
   });
-  ijazahs = createIjazahsService({ storage, settings, idempotency, log });
+  ijazahs = createIjazahsService({ storage, settings, idempotency, log, renders });
 });
 
 afterAll(async () => {
@@ -139,6 +147,7 @@ interface World {
   readonly adminId: string;
   readonly ijazahId: string;
   readonly certificateNumber: string;
+  readonly credentialId: string;
 }
 
 /**
@@ -205,6 +214,7 @@ async function world(): Promise<World> {
     adminId,
     ijazahId: answer.answer.ijazahId,
     certificateNumber: answer.answer.certificateNumber,
+    credentialId,
   };
 }
 
@@ -427,5 +437,185 @@ describe('ijazahs.bar and .liftBar (T010, FR-610)', () => {
   it('NOT_FOUND for an account that is not there', async () => {
     const adminId = await makeAdmin(db);
     expect(await codeOf(bar(adminId, randomUUID()))).toBe('NOT_FOUND');
+  });
+});
+
+// 005:T032 (FR-629; R-402, R-403; SC-604; the note under T032, Q7 (a) with the review's amendment).
+// The sign-off is the one write of `signed_off_at`; before it a re-render or a correction raises the
+// generation, clears the rendering and enqueues the new generation after the commit, an older job
+// writing nothing; after it nothing changes the certificate.
+
+/**
+ * Records generation `generation`'s PDF as the job does (lane B's mark), at a fixed instant before
+ * any sign-off (rule 55: never signed off before the rendering).
+ */
+const rendered = (ijazahId: string, generation: number) =>
+  database.$transaction((tx) =>
+    markRendered(tx, {
+      ijazahId,
+      generation,
+      storageKey: `certificates/${ijazahId}/${String(generation)}.pdf`,
+      at: new Date('2026-11-01T00:00:00.000Z'),
+    }),
+  );
+
+const signOff = (w: World, key = `probe-signoff-${randomUUID()}`) =>
+  acted((tx) => ijazahs.signOff(tx, w.adminId, { ijazahId: w.ijazahId, idempotencyKey: key }));
+
+const rerender = (w: World) =>
+  acted((tx) =>
+    ijazahs.rerender(tx, w.adminId, {
+      ijazahId: w.ijazahId,
+      reason: 'الخط',
+      idempotencyKey: `probe-rerender-${randomUUID()}`,
+    }),
+  );
+
+/** `credentials.correct`'s effect on the row, then the port on an administrator's transaction. */
+async function corrected(w: World, holderName: string) {
+  await db.query(`UPDATE teacher_credentials SET holder_name = $2 WHERE id = $1`, [
+    w.credentialId,
+    holderName,
+  ]);
+  return acted((tx) => requests.refreeze(tx, w.credentialId));
+}
+
+/** `users.setCertificateName`'s effect on the row, then the port on the same transaction. */
+function renamed(w: World, name: string) {
+  return acted(async (tx) => {
+    await tx.$executeRaw`UPDATE users SET certificate_name = ${name} WHERE id = ${w.studentId}::uuid`;
+    await requests.release(tx, w.studentId);
+  });
+}
+
+async function printed(id: string) {
+  const { rows } = await db.query<{
+    chain_snapshot: string[][];
+    teacher_name_printed: string;
+    student_name_printed: string;
+    render_generation: number;
+    rendered_at: Date | null;
+    signed_off_at: Date | null;
+    signed_off_by_admin_id: string | null;
+  }>(
+    `SELECT chain_snapshot, teacher_name_printed, student_name_printed, render_generation,
+            rendered_at, signed_off_at, signed_off_by_admin_id
+       FROM ijazahs WHERE id = $1`,
+    [id],
+  );
+  return rows[0];
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+describe('ijazahs.signOff (T032, FR-629, DEC-72)', () => {
+  it('is refused `not_rendered` before the rendering, then signs off once rendered', async () => {
+    const w = await world();
+    expect(await codeOf(signOff(w))).toBe('not_rendered');
+    expect((await printed(w.ijazahId))?.signed_off_at).toBeNull();
+    await rendered(w.ijazahId, 0);
+    await signOff(w);
+    const row = await printed(w.ijazahId);
+    expect(row?.signed_off_at).toBeInstanceOf(Date);
+    expect(row?.signed_off_by_admin_id).toBe(w.adminId);
+    expect(await codeOf(signOff(w))).toBe('already_signed_off');
+  });
+
+  it('is refused `student_barred` while the student is barred, and signs off once lifted', async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    await bar(w.adminId, w.studentId);
+    expect(await codeOf(signOff(w))).toBe('student_barred');
+    expect((await printed(w.ijazahId))?.signed_off_at).toBeNull();
+    await lift(w.adminId, w.studentId);
+    await signOff(w);
+    expect((await printed(w.ijazahId))?.signed_off_at).toBeInstanceOf(Date);
+  });
+
+  it('is refused `revoked` after a revocation', async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    await revoke(w);
+    expect(await codeOf(signOff(w))).toBe('revoked');
+  });
+});
+
+describe('ijazahs.rerender (T032, R-402)', () => {
+  it("raises the generation after the commit; the older job's mark writes nothing", async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    const { list } = await rerender(w);
+    expect(await printed(w.ijazahId)).toMatchObject({ render_generation: 1, rendered_at: null });
+    expect(enqueued).not.toContainEqual([w.ijazahId, 1]);
+    list.flush();
+    await settle();
+    expect(enqueued).toContainEqual([w.ijazahId, 1]);
+    expect(await rendered(w.ijazahId, 0)).toMatchObject({ outcome: 'stale_generation' });
+    expect((await printed(w.ijazahId))?.rendered_at).toBeNull();
+    expect(await rendered(w.ijazahId, 1)).toMatchObject({ outcome: 'written' });
+  });
+
+  it('is refused once signed off', async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    await signOff(w);
+    expect(await codeOf(rerender(w))).toBe('already_signed_off');
+  });
+});
+
+describe("the ports' re-freeze of an ijazah (T032, R-403, SC-604)", () => {
+  it('a correction before the sign-off re-freezes the snapshot and re-renders after the commit', async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    const { list } = await corrected(w, 'عمر بن الفاروق');
+    const row = await printed(w.ijazahId);
+    expect(row).toMatchObject({
+      teacher_name_printed: 'عمر بن الفاروق',
+      render_generation: 1,
+      rendered_at: null,
+    });
+    expect(row?.chain_snapshot.at(-1)).toEqual(['عمر بن الفاروق']);
+    expect(enqueued).not.toContainEqual([w.ijazahId, 1]);
+    list.flush();
+    await settle();
+    expect(enqueued).toContainEqual([w.ijazahId, 1]);
+  });
+
+  it("a certificate-name change before the sign-off re-freezes the student's printed name", async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    const { list } = await renamed(w, 'مريم بنت أحمد علي');
+    expect(await printed(w.ijazahId)).toMatchObject({
+      student_name_printed: 'مريم بنت أحمد علي',
+      render_generation: 1,
+      rendered_at: null,
+    });
+    expect(enqueued).not.toContainEqual([w.ijazahId, 1]);
+    list.flush();
+    await settle();
+    expect(enqueued).toContainEqual([w.ijazahId, 1]);
+  });
+
+  it('after the sign-off a correction and a name change change nothing (SC-604)', async () => {
+    const w = await world();
+    await rendered(w.ijazahId, 0);
+    await signOff(w);
+    const before = await printed(w.ijazahId);
+    const first = await corrected(w, 'اسم آخر');
+    const second = await renamed(w, 'اسم آخر للطالبة');
+    first.list.flush();
+    second.list.flush();
+    await settle();
+    expect(await printed(w.ijazahId)).toEqual(before);
+    expect(enqueued.filter(([id]) => id === w.ijazahId)).toEqual([]);
+  });
+
+  it('a revoked ijazah is never re-frozen', async () => {
+    const w = await world();
+    await revoke(w);
+    const before = await printed(w.ijazahId);
+    await corrected(w, 'اسم آخر');
+    await renamed(w, 'اسم آخر للطالبة');
+    expect(await printed(w.ijazahId)).toEqual(before);
   });
 });

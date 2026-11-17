@@ -34,8 +34,12 @@ import {
   lockRequests,
   openRequestsOfCredential,
   openRequestsOfStudent,
+  refreezeIjazahs,
   refreezeOpen,
   releaseAwaiting,
+  renameIjazahs,
+  unsignedIjazahsOfCredential,
+  unsignedIjazahsOfStudent,
 } from './ijazah-request.repository.js';
 import {
   type IjazahRequestLog,
@@ -73,7 +77,9 @@ import {
   insertBar,
   liftBar,
   lockIjazahs,
+  markRerendered,
   markRevoked,
+  markSignedOff,
   openBarOf,
 } from './ijazahs.repository.js';
 import { type IjazahsLog, IjazahsService, type IjazahsStore } from './ijazahs.service.js';
@@ -107,6 +113,12 @@ export const ijazahRequestStore: IjazahRequestStore = {
   releaseAwaiting,
   refreezeOpen,
   closeOpen,
+  // 005:T032: the two ports reach the ijazahs not yet signed off, after the requests.
+  unsignedIjazahsOfCredential,
+  unsignedIjazahsOfStudent,
+  lockIjazahs,
+  refreezeIjazahs,
+  renameIjazahs,
 };
 
 /** What the request's service is built over, bound once by `main.ts`. */
@@ -116,6 +128,11 @@ export interface IjazahRequestServiceDependencies {
   /** The kernel's idempotency: `send` is keyed in its own transaction (`run`). */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run' | 'completed'>;
   readonly log: IjazahRequestLog;
+  /**
+   * 005:T032: `render-certificate` for an ijazah the ports re-froze, enqueued after the caller's
+   * commit (`main.ts`'s queue, as `ijazahRenders` is bound for the admin module).
+   */
+  readonly renders: RenderQueue;
 }
 
 /**
@@ -127,6 +144,7 @@ export function createIjazahRequestService({
   storage,
   idempotency,
   log,
+  renders,
 }: IjazahRequestServiceDependencies): IjazahRequestService {
   return new IjazahRequestService({
     transactions: transactionsOver(database),
@@ -136,6 +154,7 @@ export function createIjazahRequestService({
     drawId: () => drawRowId(database),
     clock: clockTimestamp,
     log,
+    renders,
   });
 }
 export type { IjazahRequestService };
@@ -247,6 +266,10 @@ export const ijazahsStore: IjazahsStore = {
   openBarOf,
   insertBar,
   liftBar,
+  // 005:T032: the sign-off and the re-render.
+  hasOpenBar,
+  markSignedOff,
+  markRerendered,
 };
 
 /** What the ijazahs' service is built over, bound once by `main.ts` through the admin module. */
@@ -256,14 +279,20 @@ export interface IjazahsServiceDependencies {
   /** The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`). */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'runOn'>;
   readonly log: IjazahsLog;
+  /** 005:T032: `render-certificate`, enqueued after a re-render's commit (the approval's queue). */
+  readonly renders: RenderQueue;
 }
 
-/** The ijazahs' service (T010): `ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`. */
+/**
+ * The ijazahs' service (T010): `ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`; T032 adds
+ * `.signOff` and `.rerender`.
+ */
 export function createIjazahsService({
   storage,
   settings,
   idempotency,
   log,
+  renders,
 }: IjazahsServiceDependencies): IjazahsService {
   return new IjazahsService({
     store: ijazahsStore,
@@ -273,6 +302,7 @@ export function createIjazahsService({
     drawId: (tx) => drawRowId(tx),
     clock: clockTimestamp,
     log,
+    renders,
   });
 }
 export type { IjazahsService };

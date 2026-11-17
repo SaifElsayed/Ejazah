@@ -179,7 +179,9 @@
         "ijazahReview": {
           "barLifted": "رفع منع الإجازات عن مستخدم",
           "barSet": "منع مستخدم من الإجازات",
+          "ijazahRerendered": "إعادة إخراج إجازة",
           "ijazahRevoked": "سحب إجازة",
+          "ijazahSignedOff": "اعتماد إجازة",
           "ijazahViewed": "فتح إجازة صادرة",
           "ijazahsListed": "عرض الإجازات الصادرة",
           "issued": "إصدار إجازة",

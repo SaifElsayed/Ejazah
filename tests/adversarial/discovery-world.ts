@@ -807,6 +807,8 @@ async function build(): Promise<Built> {
     },
     idempotency,
     log,
+    // 005:T032 (rule d): no world ijazah is re-frozen, so nothing is enqueued.
+    renders: { enqueue: () => Promise.reject(new Error('no ijazah in this world')) },
   });
   const services: AppServices = {
     settings,

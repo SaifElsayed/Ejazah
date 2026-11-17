@@ -200,6 +200,21 @@ class MemoryStore implements IjazahRequestStore {
       one.signatureStorageKey = null;
     }
   }
+  // 005:T032 (rule d): this world holds no ijazah; the re-freeze of one is the DB spec's
+  // (tests/db-integrity/ijazahs.spec.ts).
+  async unsignedIjazahsOfCredential() {
+    return [];
+  }
+  async unsignedIjazahsOfStudent() {
+    return [];
+  }
+  async lockIjazahs() {}
+  async refreezeIjazahs() {
+    return [];
+  }
+  async renameIjazahs() {
+    return [];
+  }
 }
 
 /** The storage port in memory: what is held, and every call. */
@@ -259,6 +274,8 @@ function world() {
     drawId: async () => REQUEST,
     clock: async () => NOW,
     log,
+    // 005:T032 (rule d): nothing here re-freezes an ijazah, so nothing is enqueued.
+    renders: { enqueue: () => Promise.reject(new Error('no ijazah in this world')) },
   });
   const events: { to: readonly string[]; event: LiveEvent }[] = [];
   const live = {

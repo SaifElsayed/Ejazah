@@ -151,6 +151,27 @@ class MemoryStore implements IjazahsStore {
     Object.assign(one, { liftedAt: at, liftedByAdminId: adminId });
     return true;
   }
+  // 005:T032.
+  async hasOpenBar(_tx: Transaction, userId: string) {
+    this.calls.push(`read bar ${userId}`);
+    return this.bars.some((bar) => bar.userId === userId && bar.liftedAt === null);
+  }
+  async markSignedOff(_tx: Transaction, ijazahId: string, adminId: string, at: Date) {
+    this.calls.push('sign off ijazah');
+    const one = this.ijazahs.find(({ id }) => id === ijazahId);
+    // The database's check (`ijazahs_signed_off_check`) and the write's condition.
+    if (one === undefined || one.signedOffAt !== null || one.revokedAt !== null) return false;
+    if (one.renderedAt === null) throw new Error('ijazahs_signed_off_check');
+    Object.assign(one, { signedOffAt: at, signedOffByAdminId: adminId });
+    return true;
+  }
+  async markRerendered(_tx: Transaction, ijazahId: string) {
+    this.calls.push('rerender ijazah');
+    const one = this.ijazahs.find(({ id }) => id === ijazahId);
+    if (one === undefined || one.signedOffAt !== null || one.revokedAt !== null) return false;
+    Object.assign(one, { renderGeneration: one.renderGeneration + 1, renderedAt: null });
+    return true;
+  }
 }
 
 /** The kind's after-commit list, flushed by the spec as the kind does once it commits. */
@@ -175,6 +196,8 @@ function world() {
   const lines: { level: 'info' | 'warn'; fields: Record<string, unknown>; message: string }[] = [];
   const keys = new Map<string, unknown>();
   const links: [string, number][] = [];
+  const enqueued: [string, number][] = [];
+  const state = { enqueueFails: false };
   const tx = {} as Transaction;
   const list = new AfterCommitList();
   bindToTransaction(tx, list);
@@ -213,8 +236,14 @@ function world() {
       info: (fields, message) => lines.push({ level: 'info', fields: { ...fields }, message }),
       warn: (fields, message) => lines.push({ level: 'warn', fields: { ...fields }, message }),
     },
+    renders: {
+      enqueue: async (ijazahId, generation) => {
+        if (state.enqueueFails) throw new Error('redis down');
+        enqueued.push([ijazahId, generation]);
+      },
+    },
   });
-  return { store, service, tx, list, lines, links };
+  return { store, service, tx, list, lines, links, enqueued, state };
 }
 
 async function refusalOf(work: Promise<unknown>): Promise<DomainError> {
@@ -503,3 +532,169 @@ describe('ijazahs.bar and .liftBar (FR-610)', () => {
     expect(w.store.bars.filter(({ liftedAt }) => liftedAt === null)).toHaveLength(1);
   });
 });
+
+// 005:T032 (FR-629; R-402; the note under T032, Q7 (a) with the review's amendment).
+describe('ijazahs.signOff (FR-629, DEC-72)', () => {
+  const signOff = (key = KEY) =>
+    w.service.signOff(w.tx, ADMIN, { ijazahId: IJAZAH, idempotencyKey: key });
+  const unsigned = (change: Partial<IjazahRecord> = {}) => {
+    w.store.ijazahs[0] = { ...w.store.ijazahs[0]!, signedOffAt: null, ...change };
+  };
+  const barStudent = () =>
+    w.store.bars.push({
+      id: BAR,
+      userId: STUDENT,
+      reason: 'تزوير',
+      barredByAdminId: ADMIN,
+      barredAt: NOW,
+      liftedAt: null,
+      liftedByAdminId: null,
+    });
+
+  it('signs off a rendered ijazah: the instant and the administrator, the number answered', async () => {
+    unsigned();
+    const { certificateNumber, replayed } = await signOff();
+    expect(certificateNumber).toBe(NUMBER);
+    expect(replayed).toBe(false);
+    expect(w.store.ijazahs[0]).toMatchObject({ signedOffAt: NOW, signedOffByAdminId: ADMIN });
+    expect(w.lines).toContainEqual(
+      expect.objectContaining({
+        fields: { adminId: ADMIN, ijazahId: IJAZAH, reason: 'signed_off' },
+      }),
+    );
+  });
+
+  it("takes the student's `users` lock, then the ijazah's, then reads the bar under them", async () => {
+    unsigned();
+    await signOff();
+    const at = w.store.calls.indexOf(`lock users ${STUDENT}`);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(w.store.calls.slice(at)).toEqual([
+      `lock users ${STUDENT}`,
+      `lock ijazahs ${IJAZAH}`,
+      `read ijazah ${IJAZAH}`,
+      `read bar ${STUDENT}`,
+      'sign off ijazah',
+    ]);
+  });
+
+  it.each([
+    ['not_rendered', { renderedAt: null }],
+    ['revoked', { revokedAt: new Date('2026-11-17T11:00:00.000Z'), revokedReason: 'خطأ' }],
+  ] as const)('refuses %s, writing nothing', async (code, change) => {
+    unsigned(change);
+    const error = await refusalOf(signOff());
+    expect(error.code).toBe('CONFLICT');
+    expect(codeOf(error)).toBe(code);
+    expect(w.store.calls).not.toContain('sign off ijazah');
+    expect(w.store.ijazahs[0]?.signedOffAt).toBeNull();
+    expect(w.lines).toContainEqual(
+      expect.objectContaining({ fields: { adminId: ADMIN, ijazahId: IJAZAH, reason: code } }),
+    );
+  });
+
+  it('refuses `already_signed_off` under a new key', async () => {
+    unsigned();
+    await signOff();
+    const error = await refusalOf(signOff(OTHER_KEY));
+    expect(codeOf(error)).toBe('already_signed_off');
+  });
+
+  it('refuses `student_barred` while the student holds an open bar (Q7 (a))', async () => {
+    unsigned();
+    barStudent();
+    const error = await refusalOf(signOff());
+    expect(error.code).toBe('CONFLICT');
+    expect(codeOf(error)).toBe('student_barred');
+    expect(w.store.ijazahs[0]?.signedOffAt).toBeNull();
+    expect(w.lines).toContainEqual(
+      expect.objectContaining({
+        fields: { adminId: ADMIN, ijazahId: IJAZAH, reason: 'student_barred' },
+      }),
+    );
+  });
+
+  it('publishes `ijazahRequest` to both parties only after the commit; a replay writes nothing', async () => {
+    unsigned();
+    await signOff();
+    expect(w.list.sent).toEqual([]);
+    w.list.flush();
+    expect(w.list.sent).toEqual([
+      { to: [TEACHER, STUDENT], event: { type: 'ijazahRequest', enrollmentId: ENROLLMENT } },
+    ]);
+    const calls = w.store.calls.length;
+    expect((await signOff()).replayed).toBe(true);
+    expect(w.store.calls).toHaveLength(calls);
+    w.list.flush();
+    expect(w.list.sent).toHaveLength(1);
+  });
+
+  it('NOT_FOUND for an unknown ijazah', async () => {
+    w.store.ijazahs = [];
+    expect((await refusalOf(signOff())).code).toBe('NOT_FOUND');
+  });
+});
+
+describe('ijazahs.rerender (FR-629, R-402)', () => {
+  const rerender = (key = KEY) =>
+    w.service.rerender(w.tx, ADMIN, { ijazahId: IJAZAH, reason: 'الخط', idempotencyKey: key });
+  const unsigned = (change: Partial<IjazahRecord> = {}) => {
+    w.store.ijazahs[0] = { ...w.store.ijazahs[0]!, signedOffAt: null, ...change };
+  };
+
+  it('raises the generation and clears the rendering, the ijazah locked then read', async () => {
+    unsigned();
+    const { certificateNumber } = await rerender();
+    expect(certificateNumber).toBe(NUMBER);
+    expect(w.store.ijazahs[0]).toMatchObject({ renderGeneration: 2, renderedAt: null });
+    const at = w.store.calls.indexOf(`lock ijazahs ${IJAZAH}`);
+    expect(w.store.calls.slice(at)).toEqual([
+      `lock ijazahs ${IJAZAH}`,
+      `read ijazah ${IJAZAH}`,
+      'rerender ijazah',
+    ]);
+  });
+
+  it('enqueues the new generation only after the commit, once under a replay', async () => {
+    unsigned();
+    await rerender();
+    expect(w.enqueued).toEqual([]);
+    w.list.flush();
+    await settled();
+    expect(w.enqueued).toEqual([[IJAZAH, 2]]);
+    expect((await rerender()).replayed).toBe(true);
+    w.list.flush();
+    await settled();
+    expect(w.enqueued).toEqual([[IJAZAH, 2]]);
+  });
+
+  it('logs a lost enqueue by ids: the ijazah stays unrendered and visible as such', async () => {
+    unsigned();
+    w.state.enqueueFails = true;
+    await rerender();
+    w.list.flush();
+    await settled();
+    expect(w.lines).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        fields: { ijazahId: IJAZAH, generation: 2, reason: 'enqueue_failed' },
+      }),
+    );
+  });
+
+  it.each([
+    ['already_signed_off', { signedOffAt: new Date('2026-11-17T10:00:00.000Z') }],
+    ['revoked', { revokedAt: new Date('2026-11-17T11:00:00.000Z'), revokedReason: 'خطأ' }],
+  ] as const)('is refused %s, writing and enqueuing nothing', async (code, change) => {
+    unsigned(change);
+    const error = await refusalOf(rerender());
+    expect(codeOf(error)).toBe(code);
+    expect(w.store.calls).not.toContain('rerender ijazah');
+    w.list.flush();
+    await settled();
+    expect(w.enqueued).toEqual([]);
+  });
+});
+
+/** Lets the after-commit actions' promises settle. */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0));

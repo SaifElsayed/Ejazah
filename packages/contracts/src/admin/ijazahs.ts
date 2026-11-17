@@ -193,3 +193,28 @@ export type AdminIjazahsGetInput = z.infer<typeof adminIjazahsGetInput>;
 export type AdminIjazahsGetOutput = z.input<typeof adminIjazahsGetOutput>;
 export type AdminIjazahsRevokeInput = z.infer<typeof adminIjazahsRevokeInput>;
 export type AdminIjazahBarInput = z.infer<typeof adminIjazahBarInput>;
+
+// 005:T032 (B46, lane E; FR-629; R-402, R-403; the note under T032, Q7 (a)): `ijazahs.signOff` and
+// `ijazahs.rerender`. The sign-off is what shows a certificate to its parties; until it, an
+// administrator may have it rendered again (a reason), and a correction re-freezes and re-renders it
+// (R-403). Both are keyed; a sign-off is final (SC-604: nothing changes the certificate after it).
+
+/** The sign-off's and the re-render's refusals, CONFLICT with this code (DEC-72, Q7 (a)). */
+export const ijazahSignOffRefusal = z.enum([
+  'not_rendered',
+  'revoked',
+  'already_signed_off',
+  'student_barred',
+]);
+
+export const adminIjazahsSignOffInput = z.object({ ijazahId: z.uuid(), idempotencyKey });
+
+export const adminIjazahsRerenderInput = z.object({
+  ijazahId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type IjazahSignOffRefusal = z.infer<typeof ijazahSignOffRefusal>;
+export type AdminIjazahsSignOffInput = z.infer<typeof adminIjazahsSignOffInput>;
+export type AdminIjazahsRerenderInput = z.infer<typeof adminIjazahsRerenderInput>;

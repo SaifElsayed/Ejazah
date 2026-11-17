@@ -10,14 +10,17 @@
 // never a name (admin-surface.md): an ijazah by its certificate number (`IJAZAH_TARGET`, T007's
 // kind), a bar on the `user` it names. `get` gives a signed link to the PDF, so every call is an
 // opening of it and records `ijazah.viewed`. Mounted under `ijazahs` by `admin.router.ts` (the
-// integration's line).
+// integration's line). 005:T032 adds `signOff` (`ijazah.signed_off`) and `rerender`
+// (`ijazah.rerendered` with the reason), each on the ijazah by its number, keyed and counted alike.
 import {
   adminIjazahBarInput,
   adminIjazahsGetInput,
   adminIjazahsGetOutput,
   adminIjazahsListInput,
   adminIjazahsListOutput,
+  adminIjazahsRerenderInput,
   adminIjazahsRevokeInput,
+  adminIjazahsSignOffInput,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
@@ -108,6 +111,50 @@ export const ijazahsAdminRouter = createAdminRouter({
       action: 'ijazah_bar.lifted',
       targetType: 'user',
       targetId: input.targetUserId,
+      reason: input.reason,
+    });
+  }),
+
+  // 005:T032 (FR-629; R-402): the sign-off and the re-render.
+  signOff: adminProcedure({
+    input: adminIjazahsSignOffInput,
+    output: z.void(),
+    rateLimit: DECISION_LIMIT,
+  }).mutation(async ({ ctx, input }) => {
+    const { certificateNumber, replayed } = await ctx.services.ijazahs.signOff(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'ijazah.signed_off',
+      targetType: IJAZAH_TARGET,
+      targetId: certificateNumber,
+    });
+  }),
+
+  rerender: adminProcedure({
+    input: adminIjazahsRerenderInput,
+    output: z.void(),
+    rateLimit: DECISION_LIMIT,
+  }).mutation(async ({ ctx, input }) => {
+    const { certificateNumber, replayed } = await ctx.services.ijazahs.rerender(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'ijazah.rerendered',
+      targetType: IJAZAH_TARGET,
+      targetId: certificateNumber,
       reason: input.reason,
     });
   }),

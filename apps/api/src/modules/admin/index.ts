@@ -259,7 +259,17 @@ export interface AdminServices {
    * 005:T010 of B46 (FR-609, FR-610; R-412): certification's ijazahs, their revocation and the bar
    * (`ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`), keyed on the call's transaction.
    */
-  readonly ijazahs: Pick<IjazahsService, 'list' | 'get' | 'revoke' | 'bar' | 'liftBar'>;
+  readonly ijazahs: Pick<
+    IjazahsService,
+    | 'list'
+    | 'get'
+    | 'revoke'
+    | 'bar'
+    | 'liftBar'
+    // 005:T032 of B46 (FR-629): the sign-off and the re-render.
+    | 'signOff'
+    | 'rerender'
+  >;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -529,6 +539,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       settings: dependencies.settings,
       idempotency: dependencies.idempotency,
       log: dependencies.log,
+      // 005:T032 of B46: a re-render's job, on the approval's queue (`main.ts`'s `ijazahRenders`).
+      renders: dependencies.ijazahRenders,
     }),
   };
 }

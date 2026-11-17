@@ -97,6 +97,15 @@ function surface({ replayed = false } = {}) {
       reached.push(['liftBar', tx, adminId, input]);
       return { replayed };
     },
+    // 005:T032.
+    signOff: async (tx: unknown, adminId: string, input: unknown) => {
+      reached.push(['signOff', tx, adminId, input]);
+      return { certificateNumber: NUMBER, replayed };
+    },
+    rerender: async (tx: unknown, adminId: string, input: unknown) => {
+      reached.push(['rerender', tx, adminId, input]);
+      return { certificateNumber: NUMBER, replayed };
+    },
   };
   const services = new Proxy(unusedAdminServices, {
     get: (target, name, receiver) =>
@@ -162,9 +171,14 @@ const calls = {
     caller.ijazahs.bar({ targetUserId: STUDENT, reason: 'تزوير', idempotencyKey: KEY }),
   'ijazahs.liftBar': (caller: Caller) =>
     caller.ijazahs.liftBar({ targetUserId: STUDENT, reason: 'خطأ', idempotencyKey: KEY }),
+  // 005:T032.
+  'ijazahs.signOff': (caller: Caller) =>
+    caller.ijazahs.signOff({ ijazahId: IJAZAH, idempotencyKey: KEY }),
+  'ijazahs.rerender': (caller: Caller) =>
+    caller.ijazahs.rerender({ ijazahId: IJAZAH, reason: 'الخط', idempotencyKey: KEY }),
 } as const;
 
-const writes = ['revoke', 'bar', 'liftBar'] as const;
+const writes = ['revoke', 'bar', 'liftBar', 'signOff', 'rerender'] as const;
 
 describe('the administrator kind', () => {
   it.each(Object.keys(calls) as (keyof typeof calls)[])(
@@ -273,6 +287,45 @@ describe('ijazahs.revoke, .bar and .liftBar (FR-609, FR-610)', () => {
     ['bar', { targetUserId: STUDENT, idempotencyKey: KEY }],
     ['liftBar', { targetUserId: STUDENT, reason: 'خطأ' }],
   ] as const)('refuses %s without a reason or a key as VALIDATION_FAILED', async (name, input) => {
+    const s = surface();
+    expect(await codeOf(s.verified().ijazahs[name](input as never))).toBe('VALIDATION_FAILED');
+    expect(s.reached).toEqual([]);
+  });
+});
+
+// 005:T032 (FR-629): the sign-off and the re-render, each audited on the ijazah by its number.
+describe('ijazahs.signOff and .rerender (FR-629)', () => {
+  it('signs off through the service, audited `ijazah.signed_off` on the ijazah by its number', async () => {
+    const s = surface();
+    await calls['ijazahs.signOff'](s.verified());
+    expect(s.reached).toEqual([['signOff', TX, ADMIN, { ijazahId: IJAZAH, idempotencyKey: KEY }]]);
+    expect(s.written).toEqual([
+      { action: 'ijazah.signed_off', targetType: 'ijazah', targetId: NUMBER, adminId: ADMIN },
+    ]);
+  });
+
+  it('re-renders through the service, audited `ijazah.rerendered` with the reason', async () => {
+    const s = surface();
+    await calls['ijazahs.rerender'](s.verified());
+    expect(s.reached).toEqual([
+      ['rerender', TX, ADMIN, { ijazahId: IJAZAH, reason: 'الخط', idempotencyKey: KEY }],
+    ]);
+    expect(s.written).toEqual([
+      {
+        action: 'ijazah.rerendered',
+        targetType: 'ijazah',
+        targetId: NUMBER,
+        reason: 'الخط',
+        adminId: ADMIN,
+      },
+    ]);
+  });
+
+  it.each([
+    ['signOff', { ijazahId: IJAZAH }],
+    ['rerender', { ijazahId: IJAZAH, idempotencyKey: KEY }],
+    ['rerender', { ijazahId: IJAZAH, reason: '  ', idempotencyKey: KEY }],
+  ] as const)('refuses %s without its key or reason as VALIDATION_FAILED', async (name, input) => {
     const s = surface();
     expect(await codeOf(s.verified().ijazahs[name](input as never))).toBe('VALIDATION_FAILED');
     expect(s.reached).toEqual([]);
