@@ -23,6 +23,8 @@ const validEnv: Record<string, string> = {
   STORAGE_DRIVER: 'local',
   STORAGE_LOCAL_ROOT: '.storage',
   PAYMENT_GATEWAY: 'fake',
+  // 003:T109 (SRS DEC-87): required, no default; the stand-in runs only in test mode.
+  PAYMENT_MODE: 'test',
   SUPPORT_EMAIL: 'support@ijazah.invalid',
 };
 
@@ -630,8 +632,10 @@ describe('the gateway (T056)', () => {
   };
   const paymobLive: Record<string, string> = {
     ...paymobTest,
+    PAYMENT_MODE: 'live',
     PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder',
     PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_live_placeholder',
+    PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: '1000002',
   };
   // Production also refuses the other ports' stand-ins (T153), so each case looks for its own keys.
   const productionBase: Record<string, string> = { NODE_ENV: 'production' };
@@ -680,43 +684,68 @@ describe('the gateway (T056)', () => {
     }
   });
 
-  it("refuses the gateway's test mode outside development and test, naming each test key and never its value (R-HONEST-1)", () => {
-    const failure = refusal({ ...paymobTest, ...productionBase });
+  // 003:T109 (SRS DEC-87, ADR 0025 D7): the payment mode replaces the two refusals of T056 and
+  // PR #125's review (Paymob, and its test keys, outside development and test): the mode decides
+  // which keys a deployment takes, in every NODE_ENV, so the hosted closed test runs test keys and
+  // flipping to live needs no code change.
+  const PAYMENT_KEYS = [
+    'PAYMENT_MODE',
+    'PAYMENT_GATEWAY',
+    'PAYMENT_GATEWAY_SECRET_KEY',
+    'PAYMENT_GATEWAY_PUBLIC_KEY',
+    'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID',
+  ];
+  const paymentKeysIn = (env: Record<string, string>): string[] => {
+    try {
+      loadConfig(env);
+      return [];
+    } catch (error: unknown) {
+      if (!(error instanceof ConfigError)) throw error;
+      return error.offendingKeys.filter((key) => PAYMENT_KEYS.includes(key));
+    }
+  };
 
-    expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_SECRET_KEY');
-    expect(failure.offendingKeys).toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
-    expect(failure.message).toMatch(/PAYMENT_GATEWAY_SECRET_KEY \(the gateway's test mode/);
-    expect(failure.message).not.toContain('placeholder');
-
-    // A key that is not marked live is refused as a test key is: the rule is "live", never "not test".
-    const unmarked = refusal({
-      ...paymobLive,
-      ...productionBase,
-      PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_placeholder',
-    });
-    expect(unmarked.offendingKeys).toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
-    expect(unmarked.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
+  it('requires the payment mode, test or live, with no default, naming it (003:T109)', () => {
+    for (const env of [without(validEnv, 'PAYMENT_MODE'), { ...validEnv, PAYMENT_MODE: 'sandbox' }]) {
+      const failure = refusal(env);
+      expect(failure.offendingKeys).toEqual(['PAYMENT_MODE']);
+    }
+    expect(loadConfig(validEnv).PAYMENT_MODE).toBe('test');
   });
 
-  // PR #125's review, round 1, M1: no checkout names its payee before contracting (T101).
-  it('refuses the gateway outside development and test until contracting, live keys and a split integration too, naming the gateway and never a value; takes test keys in development and test', () => {
-    for (const env of [
-      { ...paymobLive, ...productionBase },
-      { ...paymobLive, ...productionBase, PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: '1000002' },
-    ]) {
-      const live = refusal(env);
-      expect(live.offendingKeys).toContain('PAYMENT_GATEWAY');
-      expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_SECRET_KEY');
-      expect(live.offendingKeys).not.toContain('PAYMENT_GATEWAY_PUBLIC_KEY');
-      expect(live.message).toMatch(
-        /PAYMENT_GATEWAY \(Paymob is refused outside development and test until contracting/,
-      );
-      expect(live.message).not.toContain('placeholder');
+  it('takes the test keys in test mode in every NODE_ENV, the hosted closed test included (003:T109)', () => {
+    for (const nodeEnv of ['development', 'test', 'production']) {
+      expect(paymentKeysIn({ ...paymobTest, NODE_ENV: nodeEnv })).toEqual([]);
     }
+  });
 
-    for (const nodeEnv of ['development', 'test']) {
-      expect(loadConfig({ ...paymobTest, NODE_ENV: nodeEnv }).PAYMENT_GATEWAY).toBe('paymob');
-    }
+  it('refuses a live key in test mode, naming the key and never its value (003:T109)', () => {
+    const failure = refusal({ ...paymobTest, PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder' });
+    expect(failure.offendingKeys).toEqual(['PAYMENT_GATEWAY_SECRET_KEY']);
+    expect(failure.message).toMatch(/PAYMENT_GATEWAY_SECRET_KEY \(a live key is refused in test mode/);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('takes a hosted live configuration: live keys and the split integration, no payment key refused (003:T109)', () => {
+    expect(paymentKeysIn({ ...paymobLive, ...productionBase })).toEqual([]);
+    expect(paymentKeysIn(paymobLive)).toEqual([]);
+  });
+
+  it('refuses a key not marked live in live mode, naming it and never its value: the rule is "live", never "not test" (003:T109)', () => {
+    const failure = refusal({ ...paymobLive, PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_placeholder' });
+    expect(failure.offendingKeys).toEqual(['PAYMENT_GATEWAY_PUBLIC_KEY']);
+    expect(failure.message).toMatch(/PAYMENT_GATEWAY_PUBLIC_KEY \(live mode takes only a live key/);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('refuses live mode without the split integration, naming it (003:T109)', () => {
+    const failure = refusal(without(paymobLive, 'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'));
+    expect(failure.offendingKeys).toEqual(['PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID']);
+  });
+
+  it('refuses live mode on the stand-in, and keeps the stand-in refused outside development and test (003:T109)', () => {
+    expect(refusal({ ...validEnv, PAYMENT_MODE: 'live' }).offendingKeys).toEqual(['PAYMENT_MODE']);
+    expect(paymentKeysIn({ ...validEnv, NODE_ENV: 'production' })).toEqual(['PAYMENT_GATEWAY']);
   });
 
   it('classifies the gateway keys as provider keys, so no test run holds one (T114, SC-005)', () => {

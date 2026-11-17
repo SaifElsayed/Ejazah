@@ -115,7 +115,8 @@ const settings = requireSettingsReader(admin.createSettingsReader(database));
 
 // Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
 // each job as it arrives. Push is the notification delivery job's alone (R-API-15).
-const ports = selectPorts(config);
+// 003:T101 (track 2, B-M1): the payment gateway writes its warn line to the process's logger.
+const ports = selectPorts(config, log);
 const push = selectPushPort(config);
 
 const idempotency = new IdempotencyService({

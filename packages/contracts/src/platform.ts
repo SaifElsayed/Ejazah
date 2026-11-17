@@ -24,13 +24,29 @@ export const checkoutPolling = z.object({
 });
 
 /**
- * `platform.publicConfig`'s answer: the support address, the current Terms version and (T002) the
- * checkout numbers.
+ * 003:T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, a whole
+ * percent from 0 to 100, an administrator's setting. Not secret: the Terms state the commission.
+ */
+export const teacherSharePercent = z.int().min(0).max(100);
+
+/**
+ * 003:T109 (SRS DEC-87, ADR 0025 D7): the server's payment mode. In `test` every app shows
+ * «نسخة تجريبية»; flipping to `live` is the owner's environment value, never a code change.
+ */
+export const paymentMode = z.enum(['test', 'live']);
+
+/**
+ * `platform.publicConfig`'s answer: the support address, the current Terms version, (T002) the
+ * checkout numbers, and (003:T104, Q-A3 (a)) the teacher's share rate the package editor shows the
+ * share by while the price is typed.
  */
 export const publicConfigOutput = z.object({
   supportEmail: emailAddress,
   termsVersion,
   checkout: checkoutPolling,
+  teacherSharePercent,
+  /** 003:T109: the payment mode, so every app shows «نسخة تجريبية» in test mode. */
+  paymentMode,
 });
 
 export type PublicConfig = z.infer<typeof publicConfigOutput>;

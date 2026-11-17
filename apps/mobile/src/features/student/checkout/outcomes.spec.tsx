@@ -242,6 +242,8 @@ describe('Processing', () => {
       supportEmail: 'support@ijazah.test',
       termsVersion: '2026-10',
       checkout: { ...CHECKOUT_POLLING, processingPollSeconds: 5, confirmationTimeoutSeconds: 20 },
+      teacherSharePercent: 70,
+      paymentMode: 'test',
     });
     mockApi.api.checkout.status.query.mockResolvedValue(pending);
     await renderIn('rtl', within(<Processing />)());

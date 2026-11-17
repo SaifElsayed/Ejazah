@@ -405,6 +405,15 @@
       "sessions": "{count, plural, zero {لا جلسات} one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}"
     }
   },
+  "money": {
+    "testMode": {
+      "label": "نسخة تجريبية"
+    },
+    "packageEditor": {
+      "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)",
+      "averagePrice": "متوسط سعر الحصة عند المعلمين الآخرين في نفس المسار والمدة {amount} ج.م"
+    }
+  },
   "notifications": {
     "a11y": {
       "unread": "غير مقروء"

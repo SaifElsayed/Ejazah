@@ -86,6 +86,8 @@ export function surfaceOf(
         applications: async () => ({ open: 0, oldestSubmittedAt: null, waitingOnApplicant: 0 }),
         credentials: async () => ({ open: 0, addedSubjects: 0, oldestSubmittedAt: null }),
       },
+      // 003:T109 (rule d): the mode `main.ts` hands in.
+      paymentMode: 'test',
       now: world.clock.now,
     }),
     // The catalog module's review has its own router spec (`catalog/credentials-admin.router.spec.ts`).

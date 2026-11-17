@@ -38,6 +38,7 @@
         "refund_case"
       ],
       "packageTrack": ["ijazah_track", "recitation"],
+      "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
@@ -1446,6 +1447,7 @@
               "verification_request"
             ]
           },
+          "$.paymentMode": { "required": true, "type": "string", "values": ["live", "test"] },
           "$.queues": { "required": true, "type": "object" },
           "$.queues.applications": { "required": true, "type": "object" },
           "$.queues.applications.oldestAgeHours": { "type": "integer" },
@@ -1591,7 +1593,9 @@
             "values": ["created", "expired", "failed", "paid", "refunded"]
           },
           "$.student": { "required": true, "type": "object" },
-          "$.student.displayName": { "required": true, "type": "string" }
+          "$.student.displayName": { "required": true, "type": "string" },
+          "$.teacherShareRatePercent": { "type": "integer" },
+          "$.teacherShare_piasters": { "type": "integer" }
         }
       },
       "payments.list": {
@@ -1624,6 +1628,8 @@
           },
           "$.items[].student": { "required": true, "type": "object" },
           "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.items[].teacherShareRatePercent": { "type": "integer" },
+          "$.items[].teacherShare_piasters": { "type": "integer" },
           "$.nextCursor": { "type": "string" }
         }
       },
@@ -3565,7 +3571,9 @@
           "$.checkout.confirmingPollSeconds": { "required": true, "type": "integer" },
           "$.checkout.confirmingPollWindowMinutes": { "required": true, "type": "integer" },
           "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
+          "$.paymentMode": { "required": true, "type": "string", "values": ["live", "test"] },
           "$.supportEmail": { "required": true, "type": "string" },
+          "$.teacherSharePercent": { "required": true, "type": "integer" },
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
@@ -4082,6 +4090,27 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.packages.averagePrice": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.averagePerSession_piasters": { "type": "integer" }
+        }
       },
       "teacher.packages.create": {
         "caller": "teacher",

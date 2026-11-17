@@ -1,7 +1,8 @@
 // T030: branded money type. A `unique symbol` declared here and never exported makes
 // plain numbers and piasters mutually unassignable (FR-012, research R-3).
-// Money values are package prices and the gross/fee/net a gateway reports on a payment record (ADR 0007).
-// There is no wallet, ledger, balance or share splitting; the platform never holds money. Every value was constructed here.
+// Money values are package prices, the gross/fee/net a gateway reports on a payment record (ADR 0007),
+// and the teacher's share of an order (ADR 0025). There is no wallet, ledger or balance; the platform
+// never holds money. Every value was constructed here.
 declare const piastersBrand: unique symbol;
 
 export type Piasters = number & { readonly [piastersBrand]: true };
@@ -15,6 +16,10 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // T009: FR-337 names the first, `perSession`, the price per session a card and a profile show
 // (research R-212). It is for display only: nothing stores or charges it, the gateway charges the
 // package price. `lowest` picks one of the amounts it is given and computes none.
+// T104 (ADR 0025 D1, SRS DEC-80, amending ADR 0007 D1's 0% commission) names `teacherShare`: the
+// teacher's share of an order, sent to the gateway as the split and kept on the order. T113 (SRS
+// DEC-88) names `average`: the package editor's average price per session of other teachers'
+// packages, for display only.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -108,6 +113,29 @@ export function perSession(total_piasters: Piasters, sessionCount: number): Pias
 }
 
 /**
+ * The teacher's share of an order's price at `ratePercent` (T104, ADR 0025 D1, SRS DEC-80): the
+ * price times the rate, **rounded up** to the piaster, so the teacher's net share is never short of
+ * the rate (the review session's decision of 2026-11-16). 1001 at 70% is 701; 1 at 70% is 1.
+ *
+ * Exact in `bigint`: a price near the top of the safe range times a rate passes it, where a
+ * floating product would not be exact. The share never exceeds the price, so it converts back to a
+ * safe integer.
+ *
+ * The rate is a whole percent from 0 to 100 (SRS §3.14); anything else is a programming error, not
+ * a share, and is refused.
+ */
+export function teacherShare(price_piasters: Piasters, ratePercent: number): Piasters {
+  if (!Number.isSafeInteger(ratePercent) || ratePercent < 0 || ratePercent > 100) {
+    throw new RangeError(
+      `teacherShare: the rate must be a whole percent from 0 to 100 — received ${String(ratePercent)}`,
+    );
+  }
+  const product = BigInt(price_piasters) * BigInt(ratePercent);
+  const whole = product / 100n;
+  return piasters(Number(product % 100n === 0n ? whole : whole + 1n));
+}
+
+/**
  * The lowest of `amounts_piasters` (T009, FR-335: a card's lowest price per session). The list is
  * non-empty by type, since an empty one has no lowest amount; one that reaches here empty anyway
  * is refused rather than answered with a made-up amount.
@@ -122,6 +150,25 @@ export function lowest(amounts_piasters: readonly [Piasters, ...Piasters[]]): Pi
     if (amount_piasters < lowest_piasters) lowest_piasters = amount_piasters;
   }
   return lowest_piasters;
+}
+
+/**
+ * The mean of `amounts_piasters`, rounded half up to the piaster (T113, SRS DEC-88: the package
+ * editor's average price per session of other teachers' packages; FR-337's rounding). Exact in
+ * `bigint`, since a sum of safe integers may pass the safe range; the mean of safe integers is one.
+ * The list is non-empty by type; one that reaches here empty anyway is refused.
+ */
+export function average(amounts_piasters: readonly [Piasters, ...Piasters[]]): Piasters {
+  if (amounts_piasters.length === 0) {
+    throw new RangeError('average: an empty list has no average');
+  }
+  const count = BigInt(amounts_piasters.length);
+  const sum = amounts_piasters.reduce(
+    (total, amount_piasters) => total + BigInt(amount_piasters),
+    0n,
+  );
+  const whole = sum / count;
+  return piasters(Number((sum % count) * 2n >= count ? whole + 1n : whole));
 }
 
 function refusalReason(value: number): string {

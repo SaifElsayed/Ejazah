@@ -3,39 +3,45 @@
 // payment_events (append-only signed events; provider_event_id unique NOT NULL). No balance column anywhere (FR-027).
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 //
-// Records of what the gateway did, never a balance: the gateway settles the net to the teacher and
-// the platform holds no funds (FR-PAYG-1, ADR 0007). Amounts are stored as the gateway reports them,
-// never computed here (R-MONEY-5).
+// Records of what the gateway did, never a balance: the gateway settles the teacher's share to the
+// teacher and the platform holds no funds (FR-PAYG-1, ADR 0007, ADR 0025). Amounts are stored as the
+// gateway reports them or as `packages/money` computed them, never computed here (R-MONEY-5).
 
 // One row per gateway order. An enrollment may have several; at most one reaches `paid`, enforced by
 // the confirm step being idempotent on the enrollment, not by an index (ERD section 7).
 model Payment {
-  id                   String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  enrollmentId         String         @map("enrollment_id") @db.Uuid
+  id                      String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId            String         @map("enrollment_id") @db.Uuid
   // Which gateway took the order. Independent of the adapter config selects (R-API-4).
-  gateway              PaymentGateway
+  gateway                 PaymentGateway
   // Created by the platform on the gateway (FR-PAYG-2). One record per order (ERD section 15.14).
-  gatewayOrderId       String         @unique @map("gateway_order_id")
+  gatewayOrderId          String         @unique @map("gateway_order_id")
   // Reported by the paid event. Unique where present: NULLs do not collide (ERD section 15.14).
-  gatewayTransactionId String?        @unique @map("gateway_transaction_id")
+  gatewayTransactionId    String?        @unique @map("gateway_transaction_id")
   // The snapshot price charged.
-  grossPiasters        BigInt         @map("gross_piasters")
+  grossPiasters           BigInt         @map("gross_piasters")
   // Reported by the gateway on the paid event.
-  gatewayFeePiasters   BigInt?        @map("gateway_fee_piasters")
+  gatewayFeePiasters      BigInt?        @map("gateway_fee_piasters")
   // Settled to the teacher, `gross - fee` as reported.
-  netPiasters          BigInt?        @map("net_piasters")
-  currency             String         @db.Char(3)
+  netPiasters             BigInt?        @map("net_piasters")
+  // T104 (ADR 0025 D1, SRS DEC-80): the teacher's share rate read when the order was created, whole
+  // percent, and the share it gave (gross times the rate, rounded up, by `packages/money`), sent to
+  // the gateway as the split. NULL on an order created before the commission; both or neither, the
+  // share never above the gross (ERD section 15 rule 52).
+  teacherShareRatePercent Int?           @map("teacher_share_rate_percent") @db.SmallInt
+  teacherSharePiasters    BigInt?        @map("teacher_share_piasters")
+  currency                String         @db.Char(3)
   // `refunded` is learned from the gateway's signed event; the platform never initiates one (FR-PAYG-10).
-  status               PaymentStatus
+  status                  PaymentStatus
   // The order's expiry as created: no later than the hold's expiry minus the grace (T004,
   // data-model §2.4, FR-355). Read by Retry and by FR-BOOK-12's "still payable".
-  expiresAt            DateTime       @map("expires_at") @db.Timestamptz(6)
+  expiresAt               DateTime       @map("expires_at") @db.Timestamptz(6)
   // The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), so FR-BOOK-12
   // (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Read back
   // only by `checkout.continue` (data-model §2.4.1); reached by the `reencrypt-columns` job (002:T134).
-  checkoutUrlEncrypted Bytes?         @map("checkout_url_encrypted")
-  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  checkoutUrlEncrypted    Bytes?         @map("checkout_url_encrypted")
+  createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
 

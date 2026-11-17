@@ -1,6 +1,6 @@
-// T117: the payment port (contracts/ports.md, ADR 0007). Direct gateway checkout, 0% commission,
-// zero custody: the student pays the gateway, the gateway settles the net to the teacher, and the
-// platform keeps records only.
+// T117: the payment port (contracts/ports.md, ADR 0007). Direct gateway checkout, zero custody:
+// the student pays the gateway, the gateway settles the teacher's share to the teacher (T104, ADR
+// 0025 D1: a commission, amending ADR 0007 D1's 0%), and the platform keeps records only.
 //
 // Held by absence: no operation reads a balance, moves funds between parties or issues a refund
 // (FR-PAYG-1, FR-PAYG-10). `cancelCheckout` is not a refund; it ends an order nobody has paid, so
@@ -23,12 +23,14 @@ export interface Checkout {
 }
 
 /**
- * Whom the order's net settles to, where the gateway splits at checkout (T056, OPEN-11): the
- * teacher's recipient reference as `registerPayoutRecipient` answered it. The whole net is theirs
- * (0% commission, ADR 0007); no share is computed here.
+ * Whom the order's teacher share settles to, where the gateway splits at checkout (T056, OPEN-11):
+ * the teacher's recipient reference as `registerPayoutRecipient` answered it, and the share the
+ * split sends (T104, ADR 0025 D1): the gross at the rate kept on the order, rounded up, computed
+ * by `packages/money`'s `teacherShare` before it reaches the port, never here.
  */
 export interface CheckoutPayee {
   readonly recipientRef: string;
+  readonly share_piasters: Piasters;
 }
 
 /**

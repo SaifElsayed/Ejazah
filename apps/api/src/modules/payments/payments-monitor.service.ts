@@ -122,6 +122,20 @@ function settlementOf(row: MonitorOrderRow) {
   };
 }
 
+/**
+ * 003:T104 (ADR 0025 D1, FR-PAYG-7 and FR-PAYG-11 as amended): the rate and the teacher's share kept
+ * on the order, both present or both absent (ERD §15 rule 52); absent on an order created before the
+ * commission.
+ */
+function teacherShareOf(row: MonitorOrderRow) {
+  return row.teacherShareRatePercent === null || row.teacherSharePiasters === null
+    ? {}
+    : {
+        teacherShareRatePercent: row.teacherShareRatePercent,
+        teacherShare_piasters: piasters(Number(row.teacherSharePiasters)),
+      };
+}
+
 export class PaymentsMonitorService {
   readonly #settings: SettingsReader;
   readonly #store: PaymentsMonitorStore;
@@ -221,6 +235,7 @@ export class PaymentsMonitorService {
       createdAt: order.createdAt.toISOString(),
       gross_piasters: piasters(Number(order.grossPiasters)),
       ...settlementOf(order),
+      ...teacherShareOf(order),
       currency: order.currency,
       student: { displayName: nameOf(enrollment?.studentUserId) },
       ...(enrollment === null
@@ -296,6 +311,7 @@ function itemOf(
     },
     gross_piasters: piasters(Number(row.grossPiasters)),
     ...settlementOf(row),
+    ...teacherShareOf(row),
     status: row.status,
     enrollmentCancelled: row.status === 'paid' && party?.status === 'cancelled',
   };

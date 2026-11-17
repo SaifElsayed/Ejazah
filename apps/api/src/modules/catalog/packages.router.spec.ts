@@ -114,6 +114,11 @@ beforeEach(() => {
       calls.push(['update', ...args]);
       return ANSWER;
     },
+    // 003:T113.
+    averagePrice: async (...args) => {
+      calls.push(['averagePrice', ...args]);
+      return { averagePerSession_piasters: 20_000 };
+    },
   } as CatalogServices['packages'];
 });
 
@@ -148,6 +153,9 @@ function callsOf(caller: Caller) {
     'teacher.packages.create': () => caller.teacher.packages.create(CREATE),
     'teacher.packages.update': () =>
       caller.teacher.packages.update({ packageId: PACKAGE, isActive: false }),
+    // 003:T113.
+    'teacher.packages.averagePrice': () =>
+      caller.teacher.packages.averagePrice({ track: 'recitation', sessionDurationMinutes: 45 }),
   };
 }
 
@@ -155,14 +163,14 @@ const refused = (code: string) =>
   expect.objectContaining({ cause: expect.objectContaining({ code }) });
 
 describe('the namespace', () => {
-  it("refuses an anonymous caller UNAUTHENTICATED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses an anonymous caller UNAUTHENTICATED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const [path, call] of Object.entries(callsOf(callerAs(null)))) {
       await expect(call(), path).rejects.toEqual(refused('UNAUTHENTICATED'));
     }
     expect(calls).toEqual([]);
   });
 
-  it("refuses a student and an applicant FORBIDDEN: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses a student and an applicant FORBIDDEN: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const standing of ['student', 'applicant'] as const) {
       for (const [path, call] of Object.entries(callsOf(callerAs(sessionOf(standing))))) {
         await expect(call(), `${standing} ${path}`).rejects.toEqual(refused('FORBIDDEN'));
@@ -171,7 +179,7 @@ describe('the namespace', () => {
     expect(calls).toEqual([]);
   });
 
-  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const standing of ['suspended teacher', 'banned teacher'] as const) {
       for (const [path, call] of Object.entries(callsOf(callerAs(sessionOf(standing))))) {
         await expect(call(), `${standing} ${path}`).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
@@ -195,6 +203,14 @@ describe('the namespace', () => {
       ['create', CALLER, CREATE],
       ['update', CALLER, { packageId: PACKAGE, price_piasters: 120_000 }],
     ]);
+  });
+
+  it('asks the average price with the session’s gender and the input, answering it as the service does (003:T113)', async () => {
+    const asked = { track: 'ijazah_track', sessionDurationMinutes: 60 } as const;
+    await expect(
+      callerAs(sessionOf('approved')).teacher.packages.averagePrice(asked),
+    ).resolves.toEqual({ averagePerSession_piasters: 20_000 });
+    expect(calls).toEqual([['averagePrice', CALLER, 'female', asked]]);
   });
 
   it('lists with the session’s gender, never the payout state, whatever the payout account', async () => {

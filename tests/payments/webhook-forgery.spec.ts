@@ -170,7 +170,7 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  config = { PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY, API_PUBLIC_ORIGIN: origin };
+  config = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY, API_PUBLIC_ORIGIN: origin };
   payment = createPaymentPort(config);
   route = createPaymentWebhookRoute({
     database,

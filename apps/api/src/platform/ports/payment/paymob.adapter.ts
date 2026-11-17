@@ -14,9 +14,10 @@
 // payment token and is stored encrypted only (R-DB-8). The expiry answered is the latest expiry's
 // whole second, never after it (FR-355): Paymob counts its lifetime from when the request arrives,
 // so its own expiry falls at most the request's travel after that, inside the hold's grace (ADR 0010
-// D4). With a recipient named, the whole gross is split to the teacher's account
-// (`split_amounts`, Paymob's "Split Features Implementation") on the auth integration: 0% commission
-// (ADR 0007), no share computed here.
+// D4). With a recipient named, the teacher's share the payee carries is split to the teacher's
+// account (`split_amounts`, Paymob's "Split Features Implementation") on the auth integration; the
+// rest of the gross stays with the platform's merchant account (T104, ADR 0025 D1). The share is
+// computed by `packages/money` before the port, never here.
 //
 // THE CALLBACK. Paymob signs a processed callback ("HMAC Transaction Callback") with HMAC-SHA512 under
 // the HMAC secret over twenty fields of the transaction, concatenated in a documented order, and
@@ -179,6 +180,14 @@ export interface PaymobOptions {
   readonly notificationUrl: string;
   /** The billing email every intention carries: the platform's `SUPPORT_EMAIL`, never a student's. */
   readonly billingEmail: string;
+  /**
+   * 003:T109 (SRS DEC-87): the payment mode. In `live` mode a checkout must name its payee, so no
+   * payment settles whole into the platform's own account (R-MONEY-6); in `test` mode a payee's order
+   * goes with no split while no auth integration is set (003:T101).
+   */
+  readonly mode: 'test' | 'live';
+  /** 003:T101: one warn line, ids and a reason only, when a test-mode order goes with no split. */
+  readonly log?: { warn(fields: object, message: string): void };
   readonly timeoutMs?: number;
   readonly fetch?: typeof fetch;
   readonly now?: () => Date;
@@ -199,7 +208,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
   }
 
   async createCheckout(
-    _enrollmentId: string,
+    enrollmentId: string,
     gross_piasters: Piasters,
     currency: string,
     latestExpiry: Date,
@@ -207,6 +216,10 @@ export class PaymobPaymentAdapter implements PaymentPort {
   ): Promise<Checkout> {
     if (!/^[A-Z]{3}$/.test(currency)) {
       throw new RangeError('A currency is three capital letters (ISO 4217).');
+    }
+    // 003:T101: in live mode every checkout names its payee, or nothing is sent.
+    if (this.#options.mode === 'live' && payee === undefined) {
+      throw new Error('Live mode refuses a checkout that names no payee (R-MONEY-6, T101).');
     }
     const now = this.#now();
     const lifetimeSeconds = unixSeconds(latestExpiry) - unixSeconds(now);
@@ -228,7 +241,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
         },
         expiration: lifetimeSeconds,
         notification_url: this.#options.notificationUrl,
-        ...this.#split(payee, amount),
+        ...this.#split(enrollmentId, payee),
       }),
     );
     if (!answer.success) throw new GatewayRequestError('unreadable');
@@ -276,14 +289,34 @@ export class PaymobPaymentAdapter implements PaymentPort {
     return splitIntegrationId === undefined ? [integrationId] : [integrationId, splitIntegrationId];
   }
 
-  #split(payee: CheckoutPayee | undefined, amount: number): Record<string, unknown> {
+  /**
+   * The teacher's share to the teacher's recipient (T104): the payee's share, never the gross. In
+   * test mode with no auth integration set, the order goes with no split and one warn line of ids
+   * and the reason (003:T101): the gateway's test account has no split integration, and refusing
+   * would fail every checkout there. Live mode always has one (the env schema, T109); its absence
+   * there is refused, sending nothing.
+   */
+  #split(enrollmentId: string, payee: CheckoutPayee | undefined): Record<string, unknown> {
     if (payee === undefined) return {};
     const { splitIntegrationId } = this.#options;
     if (splitIntegrationId === undefined) {
+      if (this.#options.mode === 'test') {
+        this.#options.log?.warn(
+          { enrollmentId, reason: 'no_split_integration' },
+          'A test-mode checkout goes with no split: no PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID is set',
+        );
+        return {};
+      }
       throw new Error('A split needs PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID, which is not set.');
     }
     return {
-      split_amounts: [{ mid: payee.recipientRef, amount_cents: amount, description: ITEM_NAME }],
+      split_amounts: [
+        {
+          mid: payee.recipientRef,
+          amount_cents: toPlainNumber(payee.share_piasters),
+          description: ITEM_NAME,
+        },
+      ],
       split_payment_methods: [splitIntegrationId],
     };
   }

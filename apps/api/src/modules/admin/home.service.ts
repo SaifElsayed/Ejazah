@@ -6,6 +6,9 @@
 //
 // The queues' tables are the identity and catalog modules' (R-API-6), read through their entries,
 // which `index.ts` binds; the age is counted by `@ijazah/time` from the clock handed in (R-TIME-1).
+//
+// 003:T109 (SRS DEC-87; Q-B4 (a)): the summary also answers the server's payment mode, handed in by
+// `main.ts` from `PAYMENT_MODE`, so the console draws «نسخة تجريبية» in `test`.
 import { wholeHoursSince } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -37,6 +40,8 @@ export interface HomeDependencies {
   readonly settings: SettingsReader;
   readonly audit: Pick<AuditQueryService, 'latest'>;
   readonly queues: HomeQueues;
+  /** 003:T109: the server's payment mode (`config.PAYMENT_MODE`). */
+  readonly paymentMode: 'test' | 'live';
   readonly now?: () => Date;
 }
 
@@ -44,12 +49,14 @@ export class HomeService {
   readonly #settings: SettingsReader;
   readonly #audit: HomeDependencies['audit'];
   readonly #queues: HomeQueues;
+  readonly #paymentMode: HomeDependencies['paymentMode'];
   readonly #now: () => Date;
 
   constructor(dependencies: HomeDependencies) {
     this.#settings = dependencies.settings;
     this.#audit = dependencies.audit;
     this.#queues = dependencies.queues;
+    this.#paymentMode = dependencies.paymentMode;
     this.#now = dependencies.now ?? (() => new Date());
   }
 
@@ -68,6 +75,7 @@ export class HomeService {
       };
     };
     readonly latestActions: AuditListRow[];
+    readonly paymentMode: HomeDependencies['paymentMode'];
   }> {
     const count = await this.#settings.read(LATEST_ACTIONS_SETTING, positiveWhole);
     const applications = await this.#queues.applications(tx);
@@ -91,6 +99,7 @@ export class HomeService {
         },
       },
       latestActions,
+      paymentMode: this.#paymentMode,
     };
   }
 }

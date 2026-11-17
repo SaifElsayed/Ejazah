@@ -45,6 +45,7 @@ import {
   keptProfileHolds,
   markRejected,
   markVerified,
+  PAYOUT_ACCOUNT_REF_COLUMN,
   payoutHolderOf,
   type PayoutRow,
   PayoutRepository,
@@ -52,8 +53,8 @@ import {
 import type { IdentityDependencies } from './session.service.js';
 import { lockAccount } from './standing.repository.js';
 
-/** The column the recipient reference is encrypted under, bound to the profile's id (R-DB-8). */
-export const PAYOUT_ACCOUNT_REF_COLUMN = 'teacher_profiles.payout_account_ref_encrypted';
+// 003:T101: the column's name moved to the repository, which decrypts it for a checkout's split.
+export { PAYOUT_ACCOUNT_REF_COLUMN };
 
 /** What payout setup is built over, beside the module's own dependencies. */
 export interface PayoutDependencies extends IdentityDependencies {

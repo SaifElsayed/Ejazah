@@ -56,7 +56,8 @@ import type {
   CheckoutStatusInput,
   CheckoutStatusOutput,
 } from '@ijazah/contracts';
-import { piasters } from '@ijazah/money';
+import { teacherSharePercent } from '@ijazah/contracts';
+import { piasters, teacherShare } from '@ijazah/money';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -94,6 +95,7 @@ import {
   retryTargetOf,
   studentCheckoutEnrollment,
 } from '../booking/index.js';
+import { payoutRecipientOf } from '../identity/index.js';
 import {
   type AddressedOrder,
   heldOrdersOf,
@@ -111,6 +113,13 @@ export const CHECKOUT_URL_COLUMN = 'payments.checkout_url_encrypted';
 
 /** The currency of every order: piasters are the Egyptian pound's hundredths (R-MONEY-1). */
 export const ORDER_CURRENCY = 'EGP';
+
+/**
+ * T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, whole percent,
+ * an administrator's setting (seed default 70). Read when an order is created and kept on it, so a
+ * change reaches new orders only; a value outside 0 to 100 fails closed before the gateway.
+ */
+export const TEACHER_SHARE_SETTING = 'teacher_share_percent';
 
 /** The student asking, from the session, never from input (R-GENDER-4). */
 export interface CheckoutStudent {
@@ -197,11 +206,14 @@ export interface CheckoutSteps {
   ): Promise<PayTarget>;
   /** Pay's transaction on booking's side (booking's `enrollOnHold`). */
   enrollOnHold(tx: Transaction, target: PayTarget, enrolment: Enrolment): Promise<void>;
+  /** 003:T101: the teacher's verified payout recipient; null when none (identity's `payoutRecipientOf`). */
+  payoutRecipient(teacherUserId: string): Promise<string | null>;
 }
 
 /** The steps over the process's client and the owners' entries. */
 export function checkoutStepsOver(
   database: Database,
+  cipher: Pick<ColumnCipher, 'decrypt'>,
   now: () => Date = () => new Date(),
 ): CheckoutSteps {
   const pay = payStoreOver();
@@ -231,6 +243,7 @@ export function checkoutStepsOver(
     orderById,
     lastOrderOf,
     drawRowId: () => drawRowId(database),
+    payoutRecipient: (teacherUserId) => payoutRecipientOf(database, cipher, teacherUserId),
   };
 }
 
@@ -270,6 +283,8 @@ function asHoldOutput(
 /** What an order's creation and record need. */
 interface OrderToCreate {
   readonly enrollmentId: string;
+  /** 003:T101: whose payout recipient the share is split to. */
+  readonly teacherUserId: string;
   readonly gross_piasters: ReturnType<typeof piasters>;
   readonly latestExpiry: Date;
   /** Locks and checks what the order is recorded on, in the recording transaction. */
@@ -358,6 +373,7 @@ export class CheckoutService {
     }
     const { checkoutUrl, orderExpiresAt } = await this.#createAndRecord(request, {
       enrollmentId,
+      teacherUserId: enrollment.teacherUserId,
       gross_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
       latestExpiry: lastMoment(hold.expiresAt),
       lockTarget: (tx) =>
@@ -410,6 +426,7 @@ export class CheckoutService {
       request,
       {
         enrollmentId,
+        teacherUserId: target.teacherUserId,
         gross_piasters: target.price_piasters,
         latestExpiry,
         lockTarget: (tx) =>
@@ -439,12 +456,25 @@ export class CheckoutService {
     order: OrderToCreate,
     alsoStored: Readonly<Record<string, string>> = {},
   ): Promise<CheckoutHandover & { readonly stored: StoredOrder }> {
+    // T104: the rate read now, before the gateway, so a setting outside 0 to 100 creates no order;
+    // the share is the gross at that rate, rounded up (`packages/money`), and both stay on the order.
+    const teacherShareRatePercent = await this.#settings.read(
+      TEACHER_SHARE_SETTING,
+      teacherSharePercent,
+    );
+    const teacherShare_piasters = teacherShare(order.gross_piasters, teacherShareRatePercent);
+    // T101 (Q-B2 (a)): the share split to the teacher's verified recipient, read before the gateway.
+    // With none, no split is asked for: test mode creates the order, live mode's gateway refuses it.
+    const recipientRef = await this.#steps.payoutRecipient(order.teacherUserId);
+    const payee =
+      recipientRef === null ? undefined : { recipientRef, share_piasters: teacherShare_piasters };
     const paymentId = await this.#steps.drawRowId();
     const checkout = await this.#payment.createCheckout(
       order.enrollmentId,
       order.gross_piasters,
       ORDER_CURRENCY,
       order.latestExpiry,
+      payee,
     );
     let recordedHere = false;
     let stored: StoredOrder;
@@ -465,6 +495,8 @@ export class CheckoutService {
             CHECKOUT_URL_COLUMN,
             paymentId,
           ),
+          teacherShareRatePercent,
+          teacherShare_piasters,
         });
         const outcome: StoredOrder = {
           ...alsoStored,

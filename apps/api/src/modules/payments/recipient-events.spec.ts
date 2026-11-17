@@ -38,6 +38,7 @@ import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.
 
 const CONFIG: PaymentConfig = {
   PAYMENT_GATEWAY: 'fake',
+  PAYMENT_MODE: 'test',
   ENCRYPTION_KEY: Buffer.alloc(32, 5).toString('base64'),
 };
 const PAY_BY = new Date('2099-01-01T00:00:00Z');

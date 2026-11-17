@@ -315,6 +315,16 @@ describe('the payment stand-in: records and induced failure (T122)', () => {
     ]);
   });
 
+  it("records the payee and the teacher's share a checkout was given (T104)", async () => {
+    const payments = gateway();
+    const payee = { recipientRef: 'fake_rcp_1', share_piasters: piasters(70) };
+    await payments.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY, payee);
+
+    expect(payments.calls).toEqual([
+      { operation: 'createCheckout', args: ['enr-1', 100, 'EGP', PAY_BY, payee] },
+    ]);
+  });
+
   it('fails a checkout when told, creating no order', async () => {
     const payments = gateway();
     payments.failNext('createCheckout');

@@ -21,7 +21,7 @@
 // processes or callers.
 import { createEmailPort, type EmailConfig } from './email/index.js';
 import type { EmailPort } from './email/email.port.js';
-import { createPaymentPort, type PaymentConfig } from './payment/index.js';
+import { createPaymentPort, type PaymentConfig, type PaymentLog } from './payment/index.js';
 import type { PaymentPort } from './payment/payment.port.js';
 import { createPushPort, type PushConfig } from './push/index.js';
 import type { PushPort } from './push/push.port.js';
@@ -53,10 +53,11 @@ export interface Ports {
   readonly email: EmailPort;
 }
 
-export function selectPorts(config: PortsConfig): Ports {
+/** 003:T101: `log` takes the payment gateway's one warn line of ids and a reason. */
+export function selectPorts(config: PortsConfig, log?: PaymentLog): Ports {
   return {
     storage: createStoragePort(config),
-    payment: createPaymentPort(config),
+    payment: createPaymentPort(config, log),
     sms: createSmsPort(config),
     video: createVideoPort(config),
     signIn: createSignInPort(config),

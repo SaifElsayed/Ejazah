@@ -93,6 +93,8 @@ function catalogOn(tx: Transaction) {
     database: on,
     use,
     idempotency: { run: (_request, effect) => effect(tx) },
+    // 003:T113 (rule d): the slots read no setting.
+    settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
   });
 }
 

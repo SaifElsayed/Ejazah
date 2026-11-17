@@ -57,8 +57,8 @@ const paymobKeys = [
 ] as const;
 
 // T056: what marks a live key from the gateway's dashboard (`sk_live`, `pk_live`, under a region's
-// prefix such as `egy_`). Outside development and test a key must carry it: the rule is "live", so
-// a key of a shape nobody named is refused as a test key is.
+// prefix such as `egy_`). 003:T109: in live mode a key must carry it (the rule is "live", so a key of
+// a shape nobody named is refused as a test key is), and in test mode no key may.
 const paymobLiveMarks = {
   PAYMENT_GATEWAY_SECRET_KEY: 'sk_live',
   PAYMENT_GATEWAY_PUBLIC_KEY: 'pk_live',
@@ -189,6 +189,11 @@ const envObject = z.object({
   // calls, its public key opens the hosted checkout, the webhook secret is its HMAC secret, and the
   // integration ids name the card integration and, for the split, the auth integration.
   PAYMENT_GATEWAY: z.enum(['fake', 'paymob']),
+  // 003:T109 (SRS DEC-87, ADR 0025 D7): the payment mode, required, no default, an environment value
+  // the owner sets. `test` takes only the gateway's test keys (and the stand-in) and every app shows
+  // «نسخة تجريبية»; `live` takes only live keys and the split integration, and every checkout names
+  // a payee (T101). Flipping to `live` during the closed test needs no code change.
+  PAYMENT_MODE: z.enum(['test', 'live']),
   PAYMENT_GATEWAY_API_KEY: nonEmpty.optional(),
   PAYMENT_GATEWAY_WEBHOOK_SECRET: nonEmpty.optional(),
   PAYMENT_GATEWAY_SECRET_KEY: nonEmpty.optional(),
@@ -277,6 +282,8 @@ const envKeyKinds = {
   S3_ACCESS_KEY_ID: 'provider',
   S3_SECRET_ACCESS_KEY: 'provider',
   PAYMENT_GATEWAY: 'platform',
+  // 003:T109: the owner's environment value, as the gateway's selection is.
+  PAYMENT_MODE: 'platform',
   PAYMENT_GATEWAY_API_KEY: 'provider',
   PAYMENT_GATEWAY_WEBHOOK_SECRET: 'provider',
   PAYMENT_GATEWAY_SECRET_KEY: 'provider',
@@ -378,9 +385,25 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     });
   }
 
-  // T056: Paymob cannot start without its keys and the origin its events are sent to. Outside
-  // development and test its test mode is refused as the stand-in is: a test payment confirms a
-  // booking nobody paid for (R-HONEST-1). The key is named, never its value (R-SEC-2).
+  // 003:T109 (SRS DEC-87): the stand-in confirms whatever it is told to, so it is never live.
+  if (env.PAYMENT_GATEWAY === 'fake' && env.PAYMENT_MODE === 'live') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['PAYMENT_MODE'],
+      message: 'live mode is refused on the stand-in gateway (R-HONEST-1, T109)',
+    });
+  }
+
+  // T056: Paymob cannot start without its keys and the origin its events are sent to. The key is
+  // named, never its value (R-SEC-2).
+  //
+  // 003:T109 (SRS DEC-87, ADR 0025 D7) replaces PR #125's refusal of Paymob outside development and
+  // test, and T056's refusal of its test keys there: the payment mode decides, in every NODE_ENV, so
+  // the hosted closed test runs the gateway's test keys. Test mode takes no live key, so no real
+  // payment is taken while every app says «نسخة تجريبية»; live mode takes only live keys, and the
+  // split integration that sends the teacher's share (T104), so no payment settles whole into the
+  // platform's own account (R-MONEY-6). The rule is "live" in live mode, never "not test": a key of a
+  // shape nobody named is refused there as a test key is.
   if (env.PAYMENT_GATEWAY === 'paymob') {
     for (const key of paymobKeys) {
       if (env[key] === undefined) {
@@ -391,32 +414,34 @@ export const envSchema = envObject.superRefine((env, ctx) => {
         });
       }
     }
-    // PR #125's review, round 1, M1 (the owner's decision of 2026-11-05): no checkout names its
-    // payee yet, so with live keys every payment would settle whole into the platform's own account,
-    // the custody R-MONEY-6 and FR-PAYG-1 forbid. Refused outside development and test until
-    // contracting, as the stand-in is; T101 gives the checkout its payee and lifts this.
-    if (!standInsAllowed) {
+    for (const [key, mark] of Object.entries(paymobLiveMarks) as [
+      keyof typeof paymobLiveMarks,
+      string,
+    ][]) {
+      const value = env[key];
+      if (value === undefined) continue;
+      if (env.PAYMENT_MODE === 'test' && value.includes(mark)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `a live key is refused in test mode; set PAYMENT_MODE=live to take it (T109)`,
+        });
+      }
+      if (env.PAYMENT_MODE === 'live' && !value.includes(mark)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `live mode takes only a live key, which carries ${mark} (R-HONEST-1, T109)`,
+        });
+      }
+    }
+    if (env.PAYMENT_MODE === 'live' && env.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID === undefined) {
       ctx.addIssue({
         code: 'custom',
-        path: ['PAYMENT_GATEWAY'],
+        path: ['PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'],
         message:
-          'Paymob is refused outside development and test until contracting: no checkout names its payee yet (R-MONEY-6, T101)',
+          "required in live mode: the split sends the teacher's share to the teacher (R-MONEY-6, T104, T109)",
       });
-    }
-    if (!standInsAllowed) {
-      for (const [key, mark] of Object.entries(paymobLiveMarks) as [
-        keyof typeof paymobLiveMarks,
-        string,
-      ][]) {
-        const value = env[key];
-        if (value !== undefined && !value.includes(mark)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [key],
-            message: `the gateway's test mode is refused outside development and test; a live key carries ${mark} (R-HONEST-1)`,
-          });
-        }
-      }
     }
   }
 

@@ -137,7 +137,7 @@ beforeAll(async () => {
     [STAND_IN_CHECKOUT_PATH]: (request, response) => page(request, response),
     [WEBHOOK_PATH]: (request, response) => webhook(request, response),
   }));
-  config = { PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY: KEY, API_PUBLIC_ORIGIN: origin };
+  config = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY: KEY, API_PUBLIC_ORIGIN: origin };
   payment = createPaymentPort(config);
   webhook = receiverOver(createPaymentPort(config));
   const routes = standInCheckoutRoutes({ payment, rateLimiter, log });

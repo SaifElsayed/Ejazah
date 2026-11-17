@@ -61,6 +61,9 @@ function adapter(
     fetch?: typeof fetch;
     timeoutMs?: number;
     splitIntegrationId?: number;
+    /** 003:T109: the payment mode; test unless a case says live. */
+    mode?: 'test' | 'live';
+    log?: { warn(fields: object, message: string): void };
   } = {},
 ): PaymobPaymentAdapter {
   return new PaymobPaymentAdapter({
@@ -70,6 +73,8 @@ function adapter(
     integrationId: INTEGRATION_ID,
     notificationUrl: NOTIFICATION_URL,
     billingEmail: BILLING_EMAIL,
+    mode: options.mode ?? 'test',
+    ...(options.log === undefined ? {} : { log: options.log }),
     now: () => NOW,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
@@ -416,29 +421,81 @@ describe('creating a checkout (the Intention API, Unified Checkout)', () => {
     expect(checkout.expiresAt.getTime()).toBeLessThanOrEqual(PAY_BY.getTime());
   });
 
-  it("splits the whole gross to the teacher's recipient, on the auth integration, when a recipient is named", async () => {
+  it("splits the teacher's share, not the gross, to the teacher's recipient, on the auth integration (T104)", async () => {
     const recorder = recordingFetch(intentionAnswer);
 
     await adapter({
       fetch: recorder.fetch,
       splitIntegrationId: SPLIT_INTEGRATION_ID,
-    }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, { recipientRef: '600001' });
+    }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, {
+      recipientRef: '600001',
+      share_piasters: piasters(17_500),
+    });
 
     expect(recorder.requests[0]?.body).toMatchObject({
-      split_amounts: [{ mid: '600001', amount_cents: 25_000, description: 'Package' }],
+      amount: 25_000,
+      items: [{ name: 'Package', amount: 25_000, quantity: 1 }],
+      split_amounts: [{ mid: '600001', amount_cents: 17_500, description: 'Package' }],
       split_payment_methods: [SPLIT_INTEGRATION_ID],
     });
   });
 
-  it('refuses a split without the auth integration, sending nothing', async () => {
+  it('in live mode, refuses a split without the auth integration, sending nothing', async () => {
     const recorder = recordingFetch(intentionAnswer);
 
     await expect(
-      adapter({ fetch: recorder.fetch }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, {
-        recipientRef: '600001',
-      }),
+      adapter({ fetch: recorder.fetch, mode: 'live' }).createCheckout(
+        'enr-1',
+        piasters(25_000),
+        'EGP',
+        PAY_BY,
+        { recipientRef: '600001', share_piasters: piasters(17_500) },
+      ),
     ).rejects.toThrow(/PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID/);
     expect(recorder.requests).toEqual([]);
+  });
+
+  it('in test mode, sends a payee’s order with no split when no auth integration is set, logging ids and the reason (003:T101)', async () => {
+    const recorder = recordingFetch(intentionAnswer);
+    const warned: unknown[][] = [];
+
+    await adapter({
+      fetch: recorder.fetch,
+      log: { warn: (fields, message) => void warned.push([fields, message]) },
+    }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY, {
+      recipientRef: '600001',
+      share_piasters: piasters(17_500),
+    });
+
+    expect(recorder.requests).toHaveLength(1);
+    expect(recorder.requests[0]?.body).not.toHaveProperty('split_amounts');
+    expect(recorder.requests[0]?.body).not.toHaveProperty('split_payment_methods');
+    expect(warned).toEqual([
+      [{ enrollmentId: 'enr-1', reason: 'no_split_integration' }, expect.any(String)],
+    ]);
+    expect(JSON.stringify(warned)).not.toContain('600001');
+  });
+
+  it('in live mode, refuses a checkout that names no payee, sending nothing (003:T101)', async () => {
+    const recorder = recordingFetch(intentionAnswer);
+
+    await expect(
+      adapter({
+        fetch: recorder.fetch,
+        mode: 'live',
+        splitIntegrationId: SPLIT_INTEGRATION_ID,
+      }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY),
+    ).rejects.toThrow(/payee/);
+    expect(recorder.requests).toEqual([]);
+  });
+
+  it('in test mode, sends a checkout that names no payee with no split, as before (003:T101)', async () => {
+    const recorder = recordingFetch(intentionAnswer);
+
+    await adapter({ fetch: recorder.fetch }).createCheckout('enr-1', piasters(25_000), 'EGP', PAY_BY);
+
+    expect(recorder.requests).toHaveLength(1);
+    expect(recorder.requests[0]?.body).not.toHaveProperty('split_amounts');
   });
 
   it('refuses a latest expiry less than a second away, and a currency that is not three capitals, sending nothing', async () => {

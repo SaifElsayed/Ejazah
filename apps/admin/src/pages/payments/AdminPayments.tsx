@@ -134,6 +134,8 @@ export function AdminPayments() {
           { key: 'gross', header: t('admin.payments.columns.gross'), numeric: true },
           { key: 'fee', header: t('admin.payments.columns.fee'), numeric: true },
           { key: 'net', header: t('admin.payments.columns.net'), numeric: true },
+          // 003:T104 (ADR 0025 D1): the teacher's share kept on the order, with its rate.
+          { key: 'teacherShare', header: t('admin.payments.columns.teacherShare'), numeric: true },
           { key: 'status', header: t('admin.payments.columns.status'), end: true },
         ]}
         rows={listed.items.map((row) => ({
@@ -162,6 +164,13 @@ export function AdminPayments() {
               locale,
               t,
             ),
+            teacherShare:
+              row.teacherShare_piasters === undefined || row.teacherShareRatePercent === undefined
+                ? t('admin.payments.dash')
+                : t('admin.payments.teacherShare', {
+                    amount: formatPounds(piasters(row.teacherShare_piasters), locale),
+                    percent: row.teacherShareRatePercent,
+                  }),
             status: (
               <span className="row wrap gap-2">
                 <Badge

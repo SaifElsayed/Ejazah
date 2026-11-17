@@ -29,6 +29,7 @@ import {
   MalformedEventError,
   type CancelOutcome,
   type Checkout,
+  type CheckoutPayee,
   type GatewayEvent,
   type PaymentPort,
   type PayoutDetails,
@@ -188,13 +189,14 @@ export class FakePaymentAdapter
     gross_piasters: Piasters,
     currency: string,
     latestExpiry: Date,
+    payee?: CheckoutPayee,
   ): Promise<Checkout> {
-    const failure = this.attempt('createCheckout', [
-      enrollmentId,
-      gross_piasters,
-      currency,
-      latestExpiry,
-    ]);
+    // T104: the payee and the teacher's share it carries are recorded as they were given, so a
+    // spec reads what the split would send; the stand-in settles nothing.
+    const failure =
+      payee === undefined
+        ? this.attempt('createCheckout', [enrollmentId, gross_piasters, currency, latestExpiry])
+        : this.attempt('createCheckout', [enrollmentId, gross_piasters, currency, latestExpiry, payee]);
     if (failure !== undefined) return Promise.reject(failure);
     if (!/^[A-Z]{3}$/.test(currency)) {
       return Promise.reject(new RangeError('A currency is three capital letters (ISO 4217).'));

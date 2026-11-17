@@ -44,6 +44,7 @@ beforeEach(() => {
 function home(
   queues: HomeQueues,
   latest = SEEDED_ADMIN_SETTINGS['admin_home_latest_actions'],
+  paymentMode: 'test' | 'live' = 'test',
 ): HomeService {
   const settings = settingsOf({ ...SEEDED_ADMIN_SETTINGS, admin_home_latest_actions: latest });
   return new HomeService({
@@ -53,6 +54,8 @@ function home(
       names: { person: async () => null, administrator: readAdministratorName },
     }),
     queues,
+    // 003:T109.
+    paymentMode,
     now: () => NOW,
   });
 }
@@ -63,6 +66,19 @@ const quietQueues: HomeQueues = {
 };
 
 describe('home.summary', () => {
+  it("answers the payment mode the server runs in, so the console shows «نسخة تجريبية» in test (003:T109)", async () => {
+    const queues: HomeQueues = {
+      applications: async () => ({ open: 0, oldestSubmittedAt: null, waitingOnApplicant: 0 }),
+      credentials: async () => ({ open: 0, addedSubjects: 0, oldestSubmittedAt: null }),
+    };
+    for (const mode of ['test', 'live'] as const) {
+      const summary = await database.$transaction((tx) =>
+        home(queues, undefined, mode).summary(tx),
+      );
+      expect(summary.paymentMode).toBe(mode);
+    }
+  });
+
   it('shows the two queue cards: open applications with the oldest’s age in whole hours, and credentials', async () => {
     const summary = await rolledBack(database, (tx) =>
       home({

@@ -135,6 +135,45 @@ export async function packageOf(
   return row ?? null;
 }
 
+/** 003:T113: which packages the average-price hint reads. */
+export interface PeerPackagesQuery {
+  /** The teacher asking, whose own packages are left out. */
+  readonly viewer: string;
+  readonly track: PackageTrack;
+  readonly sessionDurationMinutes: SessionLengthMinutes;
+}
+
+/** 003:T113: one package of the pool, its teacher and its price over its count. */
+export interface PeerPackageRow {
+  readonly teacherUserId: string;
+  readonly price_piasters: Piasters;
+  readonly sessionCount: number;
+}
+
+/**
+ * 003:T113 (SRS DEC-88): the other teachers' active packages on the track and length; the service
+ * keeps those whose teacher the visibility predicate shows. Read-only, no lock.
+ */
+export async function peerPackagesOf(
+  tx: Client,
+  query: PeerPackagesQuery,
+): Promise<PeerPackageRow[]> {
+  const rows = await tx.package.findMany({
+    where: {
+      isActive: true,
+      track: query.track,
+      sessionDurationMinutes: query.sessionDurationMinutes,
+      teacherUserId: { not: query.viewer },
+    },
+    select: { teacherUserId: true, pricePiasters: true, sessionCount: true },
+  });
+  return rows.map(({ teacherUserId, pricePiasters, sessionCount }) => ({
+    teacherUserId,
+    price_piasters: piasters(Number(pricePiasters)),
+    sessionCount,
+  }));
+}
+
 /** An active package's teacher and terms, as the booking sheet reads them (T032). */
 export interface BookablePackage {
   readonly id: string;
