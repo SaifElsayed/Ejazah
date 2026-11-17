@@ -142,12 +142,16 @@ export type IdentityVerificationOutcome = z.infer<typeof identityVerificationOut
 // break, a NUL) and the direction controls, the embeddings and overrides U+202A–U+202E and the
 // isolates U+2066–U+2069: printed on a permanent certificate, either would garble the line or make
 // two names look alike (#145 r1 Minor 2; the chat file name's `\p{Cc}` precedent, `chat.ts`).
+// #145 r2 Follow-up 1: it also refuses the line and paragraph separators (`\p{Zl}`, `\p{Zp}`), which
+// break the printed line as a line break does, and every format character (`\p{Cf}`, the direction
+// controls above among them: a zero-width space, a byte-order mark, a direction mark), except the
+// zero-width non-joiner and joiner (U+200C, U+200D), which Arabic and Persian spelling needs.
 export const certificateName = z
   .string()
   .trim()
   .min(2)
   .max(80)
-  .regex(/^[^\p{Cc}\u202A-\u202E\u2066-\u2069]+$/u);
+  .regex(/^(?:[^\p{Cc}\p{Zl}\p{Zp}\p{Cf}]|[\u200C\u200D])+$/u);
 
 /** Keyed (app-surface.md, "App surface: Phase 4 additions"); refused `already_set` once a name is held. */
 export const certificateNameSetInput = z.object({ name: certificateName, idempotencyKey });
