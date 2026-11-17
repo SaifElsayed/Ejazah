@@ -17,7 +17,7 @@ is required where noted, with the scope listed in `idempotent-procedures.ts`.
 | `reports.create` | user | `{ reportedUserId, context: 'session' \| 'chat' \| 'profile', sessionId?, enrollmentId?, reason, idempotencyKey }` (`sessionId` for a session, `enrollmentId` for a chat) | `{ received: true }` | `rate_limit_user_report` | a profile not visible answers NOT_FOUND (R-GENDER-2); a session or chat that is not the caller's, or whose counterpart is not `reportedUserId`, answers NOT_FOUND (R-408); refusals `self`, `open_exists` |
 | `genderFlags.raise` | user | `{ flaggedUserId, reason, idempotencyKey }` | `{ received: true }` | `rate_limit_gender_flag` | only a user the caller is paired with or can see; `open_exists` |
 | `account.pushToken.register` | user | `{ token, platform }` | void | default | upsert by the token's hash; `last_seen_at` |
-| `account.pushToken.remove` | user | `{ token }` | void | default | |
+| `account.pushToken.remove` | user (a suspended or banned account admitted, as `account.delete`; B45, 2026-11-17) | `{ token }` | void | default | removes the caller's own token only; the same answer whether or not it existed |
 
 **Enrollment reads gain** (additive, on the existing outputs of `enrollments.get` and `teacher.students.get`):
 `ijazahRequest: { status, reason?, ijazahId? } | null`, so the screen shows the state (FR-608).

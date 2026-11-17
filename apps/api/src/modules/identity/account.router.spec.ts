@@ -431,6 +431,30 @@ describe('account.pushToken', () => {
     expect(recording.calls).toEqual([]);
   });
 
+  // The review session's answer to lane E2's Q2 (2026-11-17), on `account.delete`'s precedent: a
+  // suspended or banned person removes their own device's token at sign-out; registering stays the
+  // active account's.
+  it.each(['suspended', 'banned'] as const)(
+    'admits a %s account on remove, handing its own token to the service',
+    async (standing) => {
+      const recording = recordingTokens();
+      surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+      const { userId, caller } = await signedIn(standing);
+      await expect(caller.account.pushToken.remove({ token })).resolves.toBeUndefined();
+      expect(recording.calls).toEqual([['remove', userId, { token }]]);
+    },
+  );
+
+  it('refuses a suspended account on register with ACCOUNT_RESTRICTED, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn('suspended');
+    await expect(
+      caller.account.pushToken.register({ token, platform: 'android' }),
+    ).rejects.toMatchObject(refused('ACCOUNT_RESTRICTED'));
+    expect(recording.calls).toEqual([]);
+  });
+
   it.each([
     ['an empty token', { token: '' }],
     ['a token past 4096 characters', { token: 'x'.repeat(4097) }],

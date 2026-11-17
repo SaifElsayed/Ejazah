@@ -7,6 +7,7 @@
       "chatAttachmentMime": ["application/pdf", "text/plain"],
       "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
+      "devicePlatform": ["android", "ios"],
       "enrollmentCancellationReason": [
         "account_deleted",
         "admin",
@@ -2639,6 +2640,22 @@
           "$.timezone": { "required": true, "type": "string" },
           "$.userId": { "required": true, "type": "string" }
         }
+      },
+      "account.pushToken.register": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.platform": { "required": true, "type": "string", "values": ["android", "ios"] },
+          "$.token": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "account.pushToken.remove": {
+        "caller": "user",
+        "input": { "$": { "type": "object" }, "$.token": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "account.reportDeviceTimezone": {
         "caller": "user",
