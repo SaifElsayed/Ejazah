@@ -80,7 +80,7 @@ export const en = {
         title: 'Cancellation request',
       },
       payment_confirmed: {
-        body: 'We received your payment. Open the app to see your enrollment.',
+        body: 'The payment gateway confirmed your payment. Open the app to see your enrollment.',
         title: 'Payment confirmed',
       },
       payment_expired: {

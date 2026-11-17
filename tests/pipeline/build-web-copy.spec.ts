@@ -165,6 +165,21 @@ describe('the push texts (T005)', () => {
     expect(keys.filter((key) => String(textAt(english, key)).includes('\u200F'))).toEqual([]);
   });
 
+  // #145 r1 Major 1 (constitution R-HONEST-1; SRS FR-PAYG-1 as amended by ADR 0025): the gateway
+  // takes the payment, never the platform, so no payment push says the platform received it.
+  it('says in no payment push text that the platform received the payment (R-HONEST-1)', () => {
+    const paymentKeys = keys.filter((key) => key.startsWith('notifications.push.payment_'));
+    expect(paymentKeys).toHaveLength(6);
+    const arabic = catalogueOf('ar');
+    const english = catalogueOf('en');
+    expect(paymentKeys.filter((key) => /وصلنا|استلمنا/u.test(String(textAt(arabic, key))))).toEqual(
+      [],
+    );
+    expect(
+      paymentKeys.filter((key) => /\breceived?\b/iu.test(String(textAt(english, key)))),
+    ).toEqual([]);
+  });
+
   it('builds the worker’s renderer over the generated copy, as worker.ts binds it', () => {
     const render = pushCopyRenderer({ ar: copyOf('ar'), en: copyOf('en') });
     expect(render('session_reminder', 'ar').title.startsWith('\u200F')).toBe(true);
