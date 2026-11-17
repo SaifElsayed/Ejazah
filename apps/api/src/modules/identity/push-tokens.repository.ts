@@ -67,9 +67,21 @@ export class DeviceTokensRepository {
    * kept, still bound to its own row. Prisma sends it as one `INSERT … ON CONFLICT` (its native
    * upsert: one unique field in `where`, the same value in `create`), so two registrations of one
    * token racing leave one row.
+   *
+   * #145 r1 Minor 1 (FR-626): it answers the row's id and the account that held the token just
+   * before, read by its hash ahead of the upsert, null for a new token. The read is not the write's
+   * guard: the upsert alone keeps one row per token. Raw SQL that answers both in one statement would
+   * leave the kernel (R-API-6). Only two accounts registering one device's token at the same instant
+   * could answer a stale holder; that case is left (the owner's rule on rare edge cases).
    */
-  async upsertByHash(row: DeviceTokenRegistration): Promise<void> {
-    await this.#database.devicePushToken.upsert({
+  async upsertByHash(
+    row: DeviceTokenRegistration,
+  ): Promise<{ readonly id: string; readonly previousUserId: string | null }> {
+    const prior = await this.#database.devicePushToken.findUnique({
+      where: { tokenHash: row.tokenHash },
+      select: { userId: true },
+    });
+    const stored = await this.#database.devicePushToken.upsert({
       where: { tokenHash: row.tokenHash },
       create: {
         id: row.id,
@@ -80,7 +92,9 @@ export class DeviceTokensRepository {
         lastSeenAt: row.lastSeenAt,
       },
       update: { userId: row.userId, platform: row.platform, lastSeenAt: row.lastSeenAt },
+      select: { id: true },
     });
+    return { id: stored.id, previousUserId: prior?.userId ?? null };
   }
 
   /** Deletes the rows of `userId` among `tokenHashes`; another account's row is never matched. */

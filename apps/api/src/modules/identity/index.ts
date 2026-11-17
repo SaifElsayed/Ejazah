@@ -214,9 +214,11 @@ export function createIdentityServices({
     // logger handed in answers `info` (the process's does; a spec's warning log may not).
     payout: new PayoutService({ ...base, payment, idempotency, ...infoLogOf(log) }),
     // T005 of specs/005-certification: the phone's push token, encrypted with the process's cipher.
+    // #145 r1 Minor 1: a token moved from another account is logged where the log answers `info`.
     pushTokens: new PushTokenService({
       devices: new DeviceTokensRepository(base.database),
       cipher,
+      ...infoLogOf(log),
       ...(base.now === undefined ? {} : { now: base.now }),
     }),
     deletion: new DeletionService({

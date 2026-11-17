@@ -12,7 +12,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createColumnCipher } from '../../platform/crypto/encryption.js';
 import { hashLookupToken } from '../../platform/crypto/hashing.js';
@@ -33,8 +33,11 @@ const cipher = createColumnCipher({ ENCRYPTION_KEY: SPEC_ENCRYPTION_KEY });
 const NOW = new Date('2026-11-17T09:00:00Z');
 const LATER = new Date('2026-11-17T10:00:00Z');
 
-function tokens(now: () => Date = () => NOW): PushTokenService {
-  return new PushTokenService({ devices: new DeviceTokensRepository(database), cipher, now });
+function tokens(
+  now: () => Date = () => NOW,
+  log: { info: (entry: object, message?: string) => void } = { info: () => undefined },
+): PushTokenService {
+  return new PushTokenService({ devices: new DeviceTokensRepository(database), cipher, now, log });
 }
 
 /** A made-up token of Expo's shape, unique to the case. */
@@ -109,6 +112,43 @@ describe('account.pushToken.register', () => {
     expect(
       cipher.decrypt(row?.tokenEncrypted ?? new Uint8Array(), PUSH_TOKEN_COLUMN, row?.id ?? ''),
     ).toBe(token);
+  });
+
+  // #145 r1 Minor 1 (FR-626, every automatic action logs ids and a reason): the move ends the other
+  // account's pushes on that device, so it is logged with both accounts and the row, never the token.
+  it('logs a token moved from another account with both ids, the row and token_moved, never the token', async () => {
+    const before = await createAccount(database);
+    const caller = await createAccount(database);
+    const token = madeUpToken();
+    const info = vi.fn();
+    await tokens(() => NOW, { info }).register(before.userId, { token, platform: 'android' });
+    expect(info).not.toHaveBeenCalled();
+
+    await tokens(() => LATER, { info }).register(caller.userId, { token, platform: 'android' });
+
+    const [row] = await rowsOfUser(caller.userId);
+    expect(info.mock.calls).toEqual([
+      [
+        {
+          userId: caller.userId,
+          previousUserId: before.userId,
+          deviceId: row?.id,
+          reason: 'token_moved',
+        },
+        expect.any(String),
+      ],
+    ]);
+    expect(JSON.stringify(info.mock.calls)).not.toContain(token);
+    expect(JSON.stringify(info.mock.calls)).not.toContain(hashLookupToken(token));
+  });
+
+  it('logs nothing for a token the caller registers again', async () => {
+    const { userId } = await createAccount(database);
+    const token = madeUpToken();
+    const info = vi.fn();
+    await tokens(() => NOW, { info }).register(userId, { token, platform: 'android' });
+    await tokens(() => LATER, { info }).register(userId, { token, platform: 'ios' });
+    expect(info).not.toHaveBeenCalled();
   });
 });
 
