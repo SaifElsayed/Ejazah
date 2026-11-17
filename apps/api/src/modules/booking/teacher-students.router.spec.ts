@@ -26,6 +26,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -142,6 +143,7 @@ const booking: BookingServices = {
       ...leaked,
       student: { ...item.student, ...leaked },
       sessions: [session],
+      ijazahRequest: null,
     } as never;
   },
   today: async (...args) => {
@@ -176,6 +178,7 @@ function callerAs(who: UserSession | null, bookingServices: BookingServices = bo
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
+    certification: unusedCertificationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {
@@ -251,7 +254,7 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
     const detail = await callerAs(sessionOf('approved')).teacher.students.get({
       enrollmentId: OWN,
     });
-    expect(detail).toEqual({ ...item, sessions: [session] });
+    expect(detail).toEqual({ ...item, sessions: [session], ijazahRequest: null });
   });
 
   it('sends another teacher’s enrollment NOT_FOUND with no field: the code and its message alone', async () => {

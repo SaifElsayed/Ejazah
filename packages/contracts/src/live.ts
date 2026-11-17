@@ -37,12 +37,23 @@ export const liveChatEvent = z.object({
   message: chatMessage,
 });
 
+/**
+ * T006 of specs/005-certification (contracts/app-surface.md, «Live event»; FR-608): the ijazah
+ * request of this enrollment changed (sent, approved, rejected, signed off, revoked); the parties
+ * read it again. Its enrollment only.
+ */
+export const liveIjazahRequestEvent = z.object({
+  type: z.literal('ijazahRequest'),
+  enrollmentId: z.uuid(),
+});
+
 /** One event of the live channel; every yielded event is parsed by it before it is sent. */
 export const liveEvent = z.discriminatedUnion('type', [
   liveSessionEvent,
   liveEnrollmentEvent,
   liveAccountEvent,
   liveChatEvent,
+  liveIjazahRequestEvent,
 ]);
 
 export type LiveEvent = z.infer<typeof liveEvent>;

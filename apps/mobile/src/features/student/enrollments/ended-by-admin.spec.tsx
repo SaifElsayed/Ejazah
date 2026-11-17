@@ -82,6 +82,7 @@ const detailOf = (item: StudentEnrollmentItem): EnrollmentsGetOutput => ({
   ...item,
   sessions: [held],
   complaintOpen: false,
+  ijazahRequest: null,
 });
 
 const line = (direction: Direction) =>

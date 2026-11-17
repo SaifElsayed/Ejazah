@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 
 import { likeLiteral } from '../../platform/db/like-literal.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 import { UNBANNED_TEACHER } from './credentials.repository.js';
 import type {
   Approval,
@@ -222,4 +223,91 @@ function listRowOf(row: {
     status: row.status,
     reviewedAt: row.reviewedAt,
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// T006 of specs/005-certification (FR-627; research R-403; the note under T006, Q1 (a), Q-A1 (a)):
+// the approved credential an ijazah request freezes, read through catalog's entry by the
+// certification module. One approved credential per teacher and subject (rule 23). The chain is
+// its generations origin first; the teacher is appended by certification.
+
+/** An approved credential as a request freezes it. */
+export interface CredentialChain {
+  readonly credentialId: string;
+  readonly teacherUserId: string;
+  readonly subjectId: string;
+  readonly holderName: string;
+  readonly riwaya: string;
+  readonly tariq: string | null;
+  /** The generations' names, origin first. */
+  readonly generations: readonly (readonly string[])[];
+}
+
+/** The credential by its id while approved, with its chain; null otherwise. No lock. */
+export async function approvedCredentialChainById(
+  tx: Client,
+  credentialId: string,
+): Promise<CredentialChain | null> {
+  const row = await tx.teacherCredential.findFirst({
+    where: { id: credentialId, status: 'approved' },
+    select: {
+      id: true,
+      teacherUserId: true,
+      subjectId: true,
+      holderName: true,
+      riwaya: true,
+      tariq: true,
+      isnadEntries: { orderBy: { position: 'asc' }, select: { names: true } },
+    },
+  });
+  // An approved credential holds its transcription (`approveCredential` writes it with the status).
+  if (row === null || row.holderName === null || row.riwaya === null) return null;
+  return {
+    credentialId: row.id,
+    teacherUserId: row.teacherUserId,
+    subjectId: row.subjectId,
+    holderName: row.holderName,
+    riwaya: row.riwaya,
+    tariq: row.tariq,
+    generations: row.isnadEntries.map(({ names }) => names),
+  };
+}
+
+/** The approved credential's id for the teacher's subject (rule 23), or null. No lock. */
+async function approvedCredentialIdOf(
+  tx: Client,
+  teacherUserId: string,
+  subjectId: string,
+): Promise<string | null> {
+  const row = await tx.teacherCredential.findFirst({
+    where: { teacherUserId, subjectId, status: 'approved' },
+    select: { id: true },
+  });
+  return row?.id ?? null;
+}
+
+/** The teacher's approved credential for the subject, with its chain; null without one. No lock. */
+export async function approvedCredentialChainOf(
+  tx: Client,
+  teacherUserId: string,
+  subjectId: string,
+): Promise<CredentialChain | null> {
+  const id = await approvedCredentialIdOf(tx, teacherUserId, subjectId);
+  return id === null ? null : approvedCredentialChainById(tx, id);
+}
+
+/**
+ * The teacher's approved credential for the subject, locked `FOR UPDATE` and then read under the
+ * lock (T005's rule 1): a send freezes what a correction committed before it, and a correction made
+ * after it waits until the request exists and then re-freezes it. Null without one.
+ */
+export async function lockedCredentialChainOf(
+  tx: Transaction,
+  teacherUserId: string,
+  subjectId: string,
+): Promise<CredentialChain | null> {
+  const id = await approvedCredentialIdOf(tx, teacherUserId, subjectId);
+  if (id === null) return null;
+  await lockRows(tx, 'teacher_credentials', [id]);
+  return approvedCredentialChainById(tx, id);
 }

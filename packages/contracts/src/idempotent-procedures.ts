@@ -60,6 +60,9 @@ export const idempotentProcedures = [
   // on the kind's transaction (runOn), as `users.delete` is.
   'account.certificateName.set',
   'users.setCertificateName',
+  // T006 of specs/005-certification (app-surface.md, `teacher.ijazahRequests.send`): in its own
+  // transaction (run), its stored outcome the request's id and status.
+  'teacher.ijazahRequests.send',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

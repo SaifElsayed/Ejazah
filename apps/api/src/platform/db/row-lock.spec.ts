@@ -19,6 +19,9 @@
 //
 // B46 of specs/005-certification (Q3 (a); contracts/kernel.md, the ijazah request's row) widens it to
 // `ijazah_requests` and `ijazahs`, after `payments`: their statements, and that the role may run them.
+//
+// B46 lane A (T006; the owner's Q-A1 (a), 2026-11-17) widens it to `teacher_credentials`, between
+// `payments` and `ijazah_requests`: the send's chain read locks the approved credential it freezes.
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -71,6 +74,8 @@ describe('lockRows (T126, T005)', () => {
     'cancellation_requests',
     'disputes',
     'payments',
+    // B46 lane A (T006, Q-A1 (a)): the credential a request freezes, before the request.
+    'teacher_credentials',
     // B46 (specs/005-certification, Q3 (a); contracts/kernel.md, the ijazah row): a request, then its ijazah, after the payments.
     'ijazah_requests',
     'ijazahs',
@@ -220,6 +225,8 @@ describe(
       'payments',
       // T077 of specs/004-sessions (Q-R4 (a)).
       'verification_documents',
+      // B46 lane A (T006, Q-A1 (a)).
+      'teacher_credentials',
       // B46 of specs/005-certification (Q3 (a)).
       'ijazah_requests',
       'ijazahs',

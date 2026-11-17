@@ -84,6 +84,7 @@ function enrollment(of: Partial<TeacherStudentsGetOutput> = {}): TeacherStudents
     completed: 0,
     remaining: 5,
     sessions: SESSIONS,
+    ijazahRequest: null,
     ...of,
   };
 }

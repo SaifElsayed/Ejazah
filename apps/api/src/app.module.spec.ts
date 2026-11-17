@@ -41,6 +41,7 @@ const services = {
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
+  certification: unusedCertificationServices,
 };
 
 import { createLogger } from './platform/logging/logger.js';
@@ -56,6 +57,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,

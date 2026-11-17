@@ -65,6 +65,7 @@ const detail: EnrollmentsGetOutput = {
   remaining: 3,
   sessions,
   complaintOpen: false,
+  ijazahRequest: null,
 };
 
 const me = { userId: '0193a6f0-0000-7000-8000-000000000001', timezone: CAIRO } as MeOutput;

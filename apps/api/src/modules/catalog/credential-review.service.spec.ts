@@ -33,8 +33,27 @@ const settings: SettingsReader = {
   },
 };
 
-function serviceOver(store: MemoryReviewStore): CredentialReviewService {
-  return new CredentialReviewService({ store, settings, now: () => NOW });
+/**
+ * T006 of specs/005-certification: the credentials handed to the port
+ * `OpenRequestsRefreeze`, with their call's transaction and the holder name the store held then.
+ */
+type Refrozen = {
+  readonly tx: unknown;
+  readonly credentialId: string;
+  readonly heldHolderName: string | null;
+}[];
+
+function serviceOver(store: MemoryReviewStore, refrozen: Refrozen = []): CredentialReviewService {
+  return new CredentialReviewService({
+    store,
+    settings,
+    now: () => NOW,
+    openRequestsRefreeze: {
+      refreeze: async (tx, credentialId) => {
+        refrozen.push({ tx, credentialId, heldHolderName: store.held(credentialId).holderName });
+      },
+    },
+  });
 }
 
 const TRANSCRIPTION = {
@@ -368,6 +387,30 @@ describe('correct', () => {
       ).toBe('CONFLICT');
     },
   );
+
+  // T006 of specs/005-certification (P4 (a); the note under T006): the correction re-freezes the
+  // credential's open requests through the port, on the correction's own transaction, after its write.
+  it('hands the corrected credential to OpenRequestsRefreeze on its transaction, after the write', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant({ status: 'approved' });
+    const refrozen: Refrozen = [];
+    await serviceOver(store, refrozen).correct(TX, ADMIN, {
+      credentialId,
+      holderName: 'عمر بن فاروق الأنصاري',
+      reason: 'الاسم كما في الملف',
+    });
+    expect(refrozen).toEqual([{ tx: TX, credentialId, heldHolderName: 'عمر بن فاروق الأنصاري' }]);
+  });
+
+  it('hands nothing to OpenRequestsRefreeze when the correction is refused', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant({ status: 'pending' });
+    const refrozen: Refrozen = [];
+    await serviceOver(store, refrozen)
+      .correct(TX, ADMIN, { credentialId, riwaya: 'ورش', reason: 'سبب' })
+      .catch(() => undefined);
+    expect(refrozen).toEqual([]);
+  });
 
   it('answers NOT_FOUND for a credential that is not there', async () => {
     const store = new MemoryReviewStore();

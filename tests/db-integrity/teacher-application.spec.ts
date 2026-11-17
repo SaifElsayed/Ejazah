@@ -69,7 +69,11 @@ beforeAll(async () => {
     settings,
     idempotency: new IdempotencyService({ store: new IdempotencyRepository(database), settings }),
   });
-  review = createCredentialReviewService({ settings });
+  review = createCredentialReviewService({
+    settings,
+    // 005:T006 (rule d): the correction's re-freeze, which this spec does not assert.
+    openRequestsRefreeze: { refreeze: async () => undefined },
+  });
 });
 
 afterAll(async () => {

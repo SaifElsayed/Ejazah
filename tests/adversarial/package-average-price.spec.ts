@@ -53,6 +53,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -227,6 +228,7 @@ function callerAs(tx: Transaction, userId: string, gender: Gender, standing: Sta
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
         chat: unusedChatServices,
+        certification: unusedCertificationServices,
         // T003 of specs/005-certification: the signature's service is composed apart, unused here.
         catalog: { ...catalogOn(tx), signature: unusedCatalogServices.signature },
       },

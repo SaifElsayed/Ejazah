@@ -21,6 +21,7 @@ import {
 import {
   CredentialReviewService,
   type CredentialReviewStore,
+  type OpenRequestsRefreeze,
 } from './credential-review.service.js';
 import { foldedTexts } from '../../platform/db/folded-name.js';
 import {
@@ -103,6 +104,8 @@ export const credentialReviewStore: CredentialReviewStore = {
 export function createCredentialReviewService(dependencies: {
   readonly settings: SettingsReader;
   readonly now?: () => Date;
+  /** T006 of specs/005-certification: the correction's re-freeze, bound to certification's entry. */
+  readonly openRequestsRefreeze: OpenRequestsRefreeze;
 }): CredentialReviewService {
   return new CredentialReviewService({ ...dependencies, store: credentialReviewStore });
 }
@@ -361,3 +364,21 @@ export {
 
 /** The `teacher.signature` namespace, mounted under `teacher.signature` by `app.router.ts`. */
 export { teacherSignatureRouter } from './teacher-signature.router.js';
+
+// ---------------------------------------------------------------------------------------------
+// T006 of specs/005-certification (FR-627; research R-403; the note under T006, Q1 (a), Q-A1 (a),
+// Q-A4 (a)): what the ijazah request reads of catalog, on the caller's transaction. The approved
+// credential of the teacher's subject (rule 23) with its holder name, riwaya, tariq and chain origin
+// first, read plain for the preview, locked FOR UPDATE then read for the send (the kernel row:
+// `users` → `enrollments` → `teacher_credentials` → `ijazah_requests` → `ijazahs`), and by its id
+// for the correction's re-freeze, whose conditional write already holds the row. The teacher's
+// current signature row (`signatureOf`), whose file the send copies. The correction's port
+// `OpenRequestsRefreeze`, which `main.ts` binds to certification's entry.
+export {
+  approvedCredentialChainById,
+  approvedCredentialChainOf,
+  type CredentialChain,
+  lockedCredentialChainOf,
+} from './credential-review.repository.js';
+export { signatureOf as teacherSignatureOf } from './teacher-signature.repository.js';
+export type { OpenRequestsRefreeze };

@@ -22,6 +22,8 @@ export {
   idempotentProcedures,
   isIdempotentProcedure,
 } from './idempotent-procedures.js';
+// T006 of specs/005-certification: `teacher.ijazahRequests` and the enrollment reads' request.
+export * from './ijazah-requests.js';
 export * from './live.js';
 export * from './onboarding.js';
 export * from './packages.js';

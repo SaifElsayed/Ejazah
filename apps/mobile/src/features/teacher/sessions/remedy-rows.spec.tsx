@@ -84,6 +84,7 @@ function enrollment(sessions: ListedSession[]): TeacherStudentsGetOutput {
     completed: 0,
     remaining: 8,
     sessions,
+    ijazahRequest: null,
   };
 }
 

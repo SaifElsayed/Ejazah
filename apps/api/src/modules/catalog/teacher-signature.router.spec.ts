@@ -14,6 +14,7 @@ import { createAppCallerFactory, createAppRouter } from '../../surfaces/procedur
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -87,6 +88,7 @@ function callerAs(session: UserSession | null): Caller {
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
+    certification: unusedCertificationServices,
     catalog,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });

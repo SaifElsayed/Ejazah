@@ -48,6 +48,8 @@ export function surfaceOver(store: MemoryReviewStore): CredentialsSurface {
       },
     },
     now: () => NOW,
+    // T006 of specs/005-certification: the correction's re-freeze, which these specs do not assert.
+    openRequestsRefreeze: { refreeze: async () => undefined },
   });
   const services = new Proxy(unusedAdminServices, {
     get: (target, name, receiver) =>

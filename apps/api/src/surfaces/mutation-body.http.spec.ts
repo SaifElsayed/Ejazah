@@ -23,6 +23,7 @@ import { createLogger } from '../platform/logging/logger.js';
 import type { AdminSession, AdminSurfaceServices, UserSession } from './context.js';
 import {
   unusedBookingServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -168,6 +169,7 @@ beforeAll(async () => {
       checkout: unusedCheckoutServices,
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
+      certification: unusedCertificationServices,
     },
     adminServices,
   });

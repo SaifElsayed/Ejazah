@@ -43,6 +43,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -642,6 +643,7 @@ const caller = createAppCallerFactory(
       checkout: unusedCheckoutServices,
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
+      certification: unusedCertificationServices,
     },
   }),
 );

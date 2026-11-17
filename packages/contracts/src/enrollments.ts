@@ -13,6 +13,7 @@
 import { z } from 'zod';
 
 import { subjectSummary } from './catalog.js';
+import { enrollmentIjazahRequest } from './ijazah-requests.js';
 import { enrollmentSession, enrollmentStatus } from './checkout.js';
 import { MAX_SESSION_COUNT, packageTrack, sessionLengthMinutes } from './packages.js';
 
@@ -154,6 +155,11 @@ export const enrollmentsGetOutput = studentEnrollmentItem.extend({
    * teacher's absence is open, so the button reads «شكوتك قيد المراجعة»; additive (R-API-9).
    */
   complaintOpen: z.boolean(),
+  /**
+   * 005:T006 (FR-608; app-surface.md, «Enrollment reads gain»): the enrollment's latest ijazah
+   * request, null without one; the rejection's reason is the teacher's, never the student's.
+   */
+  ijazahRequest: enrollmentIjazahRequest.omit({ reason: true }).nullable(),
 });
 
 export type EnrollmentListTab = z.infer<typeof enrollmentListTab>;

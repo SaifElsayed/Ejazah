@@ -26,6 +26,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -123,6 +124,7 @@ function surfaces({ subject, budget }: { readonly subject: number; readonly budg
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
+    certification: unusedCertificationServices,
   };
   const administration = {
     transactions: { run: () => Promise.reject(new Error('no transaction is expected here')) },
