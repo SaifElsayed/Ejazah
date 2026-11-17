@@ -282,6 +282,17 @@ membership in the owner role.
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
 and confirms enrollments from signed webhooks (ADR 0007).
 
+**Switch the payment mode to live** (003:T109; SRS DEC-87, ADR 0025 D7) —
+`PAYMENT_MODE` is required, `test` or `live`. In `test`, the closed test's
+mode, only gateway keys without the live marks start, and the phone and the
+console show «نسخة تجريبية». At the closed test's end, before launch, set
+`PAYMENT_MODE=live` with the gateway's live keys (`sk_live…`, `pk_live…`) and
+`PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID` from contracting, check that every
+teacher's payout account is verified (in `live` a checkout with no payee is
+refused), and restart; no code change. A mismatch refuses to start, naming the
+key, never its value. The closed test's data is not carried to launch: the
+database starts clean.
+
 **Open a webhook tunnel for a device run** — a cloudflared quick tunnel to a
 proxy, never to the API: the API runs with `SIGN_IN_PROVIDER=fake` in
 development, so anyone holding the tunnel's address could sign in as anyone.

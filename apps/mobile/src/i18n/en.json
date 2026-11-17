@@ -406,6 +406,9 @@
     }
   },
   "money": {
+    "testMode": {
+      "label": "Test version"
+    },
     "packageEditor": {
       "teacherShare": "You receive EGP {amount} of this price ({percent}%)",
       "averagePrice": "Other teachers average EGP {amount} a session on this track and length"

@@ -5,6 +5,8 @@
 import { z } from 'zod';
 
 import { calendarDate, timeZone } from '../onboarding.js';
+// 003:T109: the payment mode, as `platform.publicConfig` answers it.
+import { paymentMode } from '../platform.js';
 import { adminPage, adminSearch } from './admins.js';
 
 /** What an audit entry may point at in this phase (ADR 0021 D2). */
@@ -92,4 +94,6 @@ export const homeSummaryOutput = z.object({
   }),
   /** The latest `admin_home_latest_actions` entries, newest first. */
   latestActions: z.array(auditRow),
+  /** 003:T109 (SRS DEC-87): the server's payment mode; the console shows «نسخة تجريبية» in `test`. */
+  paymentMode,
 });

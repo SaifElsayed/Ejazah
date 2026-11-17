@@ -190,6 +190,31 @@ describe('AdminHome (FR-176)', () => {
   });
 });
 
+describe('the test-mode strip (003:T109; SRS DEC-87, Q-B4 (a))', () => {
+  const summaryIn = (paymentMode: 'test' | 'live') => ({
+    queues: {
+      applications: { open: 3, oldestAgeHours: 72, waitingOnApplicant: 1 },
+      credentials: { open: 2, oldestAgeHours: 50, addedSubjects: 1 },
+    },
+    latestActions: [latest],
+    paymentMode,
+  });
+
+  it("shows «نسخة تجريبية» on the console while the server's payment mode is test", async () => {
+    open(fakeApi(summaryIn('test')));
+    expect(await screen.findByText(ar('admin.money.testMode'))).toBeTruthy();
+  });
+
+  it('draws none in live mode', async () => {
+    open(fakeApi(summaryIn('live')));
+    const nav = within(
+      await screen.findByRole('complementary', { name: ar('admin.nav.a11y.panel') }),
+    );
+    await nav.findByText('3');
+    expect(screen.queryByText(ar('admin.money.testMode'))).toBeNull();
+  });
+});
+
 describe('T058: RATE_LIMITED on the home', () => {
   it('says when to try again in place of the summary’s generic words', async () => {
     const api = fakeApi();

@@ -407,6 +407,8 @@ const adminServices = createAdminServices({
       await queue().add(DELIVER_ADMIN_INVITE, { adminId });
     },
   },
+  // 003:T109 (Q-B4 (a)): the console's «نسخة تجريبية» reads the mode from `home.summary`.
+  paymentMode: config.PAYMENT_MODE,
 });
 
 const application = await createApplication({

@@ -78,6 +78,8 @@ describe('home.summary', () => {
       credentials: { open: 0, addedSubjects: 0 },
     });
     expect(summary.latestActions.every((row) => !row.action.endsWith('.read'))).toBe(true);
+    // 003:T109: the output keeps the payment mode.
+    expect(summary.paymentMode).toBe('test');
     const [entry] = await world.rows.auditEntriesOf(actorId);
     expect(entry).toMatchObject({ action: 'home.read', targetType: 'admin', targetId: actorId });
   });

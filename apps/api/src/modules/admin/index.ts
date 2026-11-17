@@ -277,6 +277,8 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * the identity services' `deletion` (the one `DeletionService`), for `users.delete`.
    */
   readonly userDeletion: AdministratorDeletion;
+  /** 003:T109 (SRS DEC-87): the server's payment mode, which `home.summary` answers. */
+  readonly paymentMode: 'test' | 'live';
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {

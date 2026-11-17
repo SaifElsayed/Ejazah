@@ -406,6 +406,9 @@
     }
   },
   "money": {
+    "testMode": {
+      "label": "نسخة تجريبية"
+    },
     "packageEditor": {
       "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)",
       "averagePrice": "متوسط سعر الحصة عند المعلمين الآخرين في نفس المسار والمدة {amount} ج.م"

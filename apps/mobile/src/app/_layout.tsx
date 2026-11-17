@@ -34,6 +34,9 @@
 // while the person is signed in and the app is `active` (lib/live-channel.ts); and the query
 // cache retries only a failure with no API code, never a refusal, `RATE_LIMITED` included
 // (`retryNetworkFailure`, lib/client.ts), so a refused read counts once against a limit.
+//
+// 003:T109 (SRS DEC-87; Q-B3 (a)): «نسخة تجريبية» over every screen, the launch's included, while
+// the server's payment mode is `test` (features/shared/test-mode).
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   ThemeProvider as NavigationThemeProvider,
@@ -50,6 +53,7 @@ import { DirectionProvider, navigationTheme, ThemeProvider, useTheme } from '../
 import { tokens } from '../design/tokens';
 import { clearPendingEmail } from '../features/shared/auth/pending';
 import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
+import { TestModeStrip } from '../features/shared/test-mode';
 import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
@@ -85,6 +89,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queries}>
           <ApiProvider>
             <SessionGuard queries={queries} />
+            <TestModeStrip />
           </ApiProvider>
         </QueryClientProvider>
       </DirectionProvider>
