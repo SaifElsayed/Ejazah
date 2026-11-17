@@ -11,6 +11,12 @@
 // every key is a UUID), so a name smuggled into an identifier field is refused before anything is
 // sent. The refusal never echoes the value. An identifier another notification needs is added here,
 // additively, by the phase that sends it.
+//
+// T005 of specs/005-certification (Q5 (a); R-HONEST-5's note of 2026-11-17): the device shows a
+// push with the application closed only if it carries text, so `deliver` takes the kind's fixed
+// title and body apart from the payload, as `message`, rendered by the server in the user's language
+// from the generated copy with no placeholder: nothing personal, no name, amount, date or message.
+// The payload and `assertPushPayload` are unchanged.
 import { z } from 'zod';
 
 /** A device the provider can reach. The token is presented to the provider, never logged (R-SEC-2). */
@@ -27,9 +33,15 @@ export interface PushPayload {
   readonly sessionId?: string;
 }
 
+/** A kind's fixed title and body in the recipient's language, with no placeholder (T005, Q5 (a)). */
+export interface PushMessage {
+  readonly title: string;
+  readonly body: string;
+}
+
 export interface PushPort {
   /** Reach the user on one device. Delivery is queued and retried by the job (FR-NOTIF-4). */
-  deliver(target: PushTarget, payload: PushPayload): Promise<void>;
+  deliver(target: PushTarget, payload: PushPayload, message: PushMessage): Promise<void>;
   /** Of `targets`, those the provider no longer accepts, so their tokens can be pruned. */
   findStaleTargets(targets: readonly PushTarget[]): Promise<readonly PushTarget[]>;
 }
