@@ -555,6 +555,8 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | gross_piasters | bigint | Gross — the snapshot price charged. Named for what it is, so the R-MONEY-6 confinement rule recognises it by its words (PR #20) |
 | gateway_fee_piasters | bigint, nullable | Reported by the gateway on the paid event |
 | net_piasters | bigint, nullable | Settled to the teacher; `gross − fee`, as reported, never computed here (R-MONEY-5) |
+| teacher_share_rate_percent | smallint, nullable | The teacher's share rate read from the setting `teacher_share_percent` when the order was created, whole percent, kept so a later change of the setting reaches new orders only (SRS FR-PAYG-1 as amended, DEC-80; ADR 0025 D1; T104; changelog row 46). NULL on an order created before the commission; both or neither (§15 rule 52) |
+| teacher_share_piasters | bigint, nullable | The teacher's share it gave: the gross times the rate, rounded up to the piaster by `packages/money`'s `teacherShare`, sent to the gateway as the split (ADR 0025 D1; T104; changelog row 46). From 0 to the gross (§15 rule 52) |
 | currency | char(3) | |
 | status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10) |
 | expires_at | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry and by FR-BOOK-12's "still payable" (v1.12) |
@@ -980,6 +982,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 51. `enrollments`: `admin_end_reason IS NULL OR (char_length(admin_end_reason) BETWEEN 1 AND 500 AND status = 'cancelled' AND cancellation_reason = 'admin')` — check constraint `enrollments_admin_end_reason_check`: the direct end's reason only on an enrollment an Administrator cancelled, so a restore that forgets to clear it is refused (SRS FR-CANCEL-10, DEC-68; T082, changelog row 45).
 
+52. `payments`: three check constraints on the teacher's share (T104; ADR 0025 D1; changelog row 46): `payments_teacher_share_rate_check`, `teacher_share_rate_percent IS NULL OR teacher_share_rate_percent BETWEEN 0 AND 100`; `payments_teacher_share_piasters_check`, `teacher_share_piasters IS NULL OR (teacher_share_piasters >= 0 AND teacher_share_piasters <= gross_piasters)`; `payments_teacher_share_both_check`, `(teacher_share_rate_percent IS NULL) = (teacher_share_piasters IS NULL)`. An order created before the commission keeps neither.
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1300,3 +1304,9 @@ Amended on 2026-11-14 by T082 of `specs/004-sessions/tasks.md` (B42c), on the ow
 | # | Change | Migration |
 |---|---|---|
 | 45 | §5 `enrollments.admin_end_reason` (text, nullable) and §15 rule 51, check `enrollments_admin_end_reason_check`: the reason both parties are shown of a direct end, 1 to 500 characters, only on a `cancelled` `admin` enrollment; and §12 `settings`: `rate_limit_enrollment_end` (10 per 60 s) (SRS FR-CANCEL-10, §3.14) | `20261114120000_enrollment_admin_end_reason` (B42c), and the seed |
+
+Amended on 2026-11-17 by T104 of `specs/003-booking/tasks.md` (B-M1), on the owner's decisions of 2026-11-05 (a commission) and 2026-11-15 to 2026-11-17 (the rate, an administrator's setting, rounded up; ADR 0025 D1, SRS DEC-80):
+
+| # | Change | Migration |
+|---|---|---|
+| 46 | §7 `payments.teacher_share_rate_percent` (smallint, nullable) and `payments.teacher_share_piasters` (bigint, nullable), and §15 rule 52, checks `payments_teacher_share_rate_check`, `payments_teacher_share_piasters_check` and `payments_teacher_share_both_check`: the rate kept on the order and the share it gave, both or neither, the share within the gross; and §12 `settings`: `teacher_share_percent` (70) (SRS FR-PAYG-1, §3.14) | `20261117013200_payments_teacher_share` (B-M1), and the seed |

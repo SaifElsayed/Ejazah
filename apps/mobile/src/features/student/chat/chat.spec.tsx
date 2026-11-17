@@ -127,6 +127,7 @@ function arrange() {
     supportEmail: 'support@ijazah.test',
     termsVersion: '2026-10',
     checkout: CHECKOUT_POLLING,
+    teacherSharePercent: 70,
   });
   mockPush.mockReset();
   mockBack.mockReset();

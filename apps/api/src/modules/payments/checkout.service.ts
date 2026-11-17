@@ -56,7 +56,8 @@ import type {
   CheckoutStatusInput,
   CheckoutStatusOutput,
 } from '@ijazah/contracts';
-import { piasters } from '@ijazah/money';
+import { teacherSharePercent } from '@ijazah/contracts';
+import { piasters, teacherShare } from '@ijazah/money';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -111,6 +112,13 @@ export const CHECKOUT_URL_COLUMN = 'payments.checkout_url_encrypted';
 
 /** The currency of every order: piasters are the Egyptian pound's hundredths (R-MONEY-1). */
 export const ORDER_CURRENCY = 'EGP';
+
+/**
+ * T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, whole percent,
+ * an administrator's setting (seed default 70). Read when an order is created and kept on it, so a
+ * change reaches new orders only; a value outside 0 to 100 fails closed before the gateway.
+ */
+export const TEACHER_SHARE_SETTING = 'teacher_share_percent';
 
 /** The student asking, from the session, never from input (R-GENDER-4). */
 export interface CheckoutStudent {
@@ -439,6 +447,13 @@ export class CheckoutService {
     order: OrderToCreate,
     alsoStored: Readonly<Record<string, string>> = {},
   ): Promise<CheckoutHandover & { readonly stored: StoredOrder }> {
+    // T104: the rate read now, before the gateway, so a setting outside 0 to 100 creates no order;
+    // the share is the gross at that rate, rounded up (`packages/money`), and both stay on the order.
+    const teacherShareRatePercent = await this.#settings.read(
+      TEACHER_SHARE_SETTING,
+      teacherSharePercent,
+    );
+    const teacherShare_piasters = teacherShare(order.gross_piasters, teacherShareRatePercent);
     const paymentId = await this.#steps.drawRowId();
     const checkout = await this.#payment.createCheckout(
       order.enrollmentId,
@@ -465,6 +480,8 @@ export class CheckoutService {
             CHECKOUT_URL_COLUMN,
             paymentId,
           ),
+          teacherShareRatePercent,
+          teacherShare_piasters,
         });
         const outcome: StoredOrder = {
           ...alsoStored,

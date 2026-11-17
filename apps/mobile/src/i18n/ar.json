@@ -405,6 +405,11 @@
       "sessions": "{count, plural, zero {لا جلسات} one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}"
     }
   },
+  "money": {
+    "packageEditor": {
+      "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)"
+    }
+  },
   "notifications": {
     "a11y": {
       "unread": "غير مقروء"

@@ -36,6 +36,8 @@ const STORED: Readonly<Record<string, unknown>> = {
   checkout_processing_poll_seconds: 3,
   checkout_confirming_poll_seconds: 45,
   checkout_confirming_poll_window_minutes: 12,
+  // 003:T104 (Q-A3 (a)): not the seed's 70, so the answer can only come from the row.
+  teacher_share_percent: 65,
 };
 
 const CHECKOUT_KEYS = [
@@ -105,7 +107,24 @@ describe('platform.publicConfig (T038, FR-145)', () => {
         confirmingPollSeconds: 45,
         confirmingPollWindowMinutes: 12,
       },
+      teacherSharePercent: 65,
     });
+  });
+
+  it("answers the teacher's share rate from its setting, so the package editor shows the share as the price is typed (003:T104, Q-A3 (a))", async () => {
+    const { caller } = fixture();
+    await expect(caller.platform.publicConfig()).resolves.toMatchObject({ teacherSharePercent: 65 });
+    await expect(
+      fixture({ teacher_share_percent: 0 }).caller.platform.publicConfig(),
+    ).resolves.toMatchObject({ teacherSharePercent: 0 });
+  });
+
+  it("fails closed when the teacher's share rate is not stored or is not a whole percent from 0 to 100 (003:T104)", async () => {
+    for (const value of [undefined, -1, 101, 70.5, '70']) {
+      await expect(
+        fixture({ teacher_share_percent: value }).caller.platform.publicConfig(),
+      ).rejects.toMatchObject({ cause: expect.any(SettingError) });
+    }
   });
 
   it('is public and counts the client address under rate_limit_public_page (T170)', async () => {

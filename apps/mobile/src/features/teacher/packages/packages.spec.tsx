@@ -14,7 +14,7 @@ import type { ReactElement } from 'react';
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, type MessageValues, translate } from '../../../i18n';
 import { formatPoundAmount, formatPounds } from '../../../lib/formatters';
-import { apiError, fakeApi } from '../../shared/__tests__/api-double';
+import { apiError, CHECKOUT_POLLING, fakeApi } from '../../shared/__tests__/api-double';
 import { PackageEditor, Packages, PackagesEmpty, PackagesLocked } from './index';
 
 let mockApi = fakeApi();
@@ -433,6 +433,47 @@ describe('PackageEditor and PackageSubjectPicker', () => {
       }),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('back'));
+  });
+
+  it('shows the teacher’s share of the price as it is typed, rounded up, at the rate the platform answers (003:T104, Q-A3 (a))', async () => {
+    mockParams = { id: 'new' };
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await typeIn('rtl', 'teacher.packages.editor.totalPrice', '1000.01');
+    // 100 001 piasters at 70% is 70 000.7, rounded up to 70 001.
+    expect(
+      await screen.findByText(
+        ar('money.packageEditor.teacherShare', { amount: amountOf('rtl', 70_001), percent: 70 }),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('follows the rate the platform answers, not a rate of its own (003:T104)', async () => {
+    mockApi.value.client.publicConfig.mockResolvedValue({
+      supportEmail: 'support@ijazah.test',
+      termsVersion: '2026-10',
+      checkout: CHECKOUT_POLLING,
+      teacherSharePercent: 65,
+    });
+    mockParams = { id: 'new' };
+    await renderIn('ltr', withQueries(() => <PackageEditor />)());
+    await typeIn('ltr', 'teacher.packages.editor.totalPrice', '1000');
+    expect(
+      await screen.findByText(
+        translate('en', 'money.packageEditor.teacherShare', {
+          amount: amountOf('ltr', 65_000),
+          percent: 65,
+        }),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('draws no share while the rate cannot be read, and the price can still be typed (003:T104)', async () => {
+    mockApi.value.client.publicConfig.mockRejectedValue(new Error('down'));
+    mockParams = { id: 'new' };
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await typeIn('rtl', 'teacher.packages.editor.totalPrice', '1000');
+    await waitFor(() => expect(mockApi.value.client.publicConfig).toHaveBeenCalled());
+    expect(screen.queryByText(/نصيبك/)).toBeNull();
   });
 
   it('cannot send 53 sessions or a price of zero', async () => {

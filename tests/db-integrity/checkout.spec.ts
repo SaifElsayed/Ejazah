@@ -69,6 +69,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   first_session_lead_hours: 24,
   slot_release_buffer_weeks: 0,
   idempotency_key_ttl_hours: 24,
+  // T104 (ADR 0025 D1): the teacher's share setting, read when an order is created.
+  teacher_share_percent: 70,
 };
 const settings: SettingsReader = {
   async read(key, schema) {
@@ -456,6 +458,11 @@ describe('checkout.retry (FR-355, FR-356, M3)', () => {
     const [charged] = await database.$queryRaw<{ amount: string }[]>`
       SELECT gross_piasters::text AS amount FROM payments WHERE id = ${order.id}::uuid`;
     expect(charged?.amount).toBe('100000');
+    // T104: the rate read when the order was created and the share it gave, kept on the order.
+    const [share] = await database.$queryRaw<{ rate: number; amount: string }[]>`
+      SELECT teacher_share_rate_percent AS rate, teacher_share_piasters::text AS amount
+        FROM payments WHERE id = ${order.id}::uuid`;
+    expect(share).toEqual({ rate: 70, amount: '70000' });
     expect(cipher.decrypt(order.checkoutUrlEncrypted, CHECKOUT_URL_COLUMN, order.id)).toBe(
       answer.checkoutUrl,
     );

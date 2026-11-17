@@ -15,7 +15,7 @@ import type {
   TeacherPackage,
 } from '@ijazah/contracts';
 import { MAX_SESSION_COUNT, SESSION_LENGTHS_MINUTES } from '@ijazah/contracts';
-import { perSession, piasters } from '@ijazah/money';
+import { perSession, piasters, teacherShare } from '@ijazah/money';
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -40,7 +40,7 @@ import { formatPoundAmount } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded } from '../../../shared/states';
-import { usePackageActions, usePackages } from '../api';
+import { usePackageActions, usePackages, useTeacherShareRate } from '../api';
 import { TRACK_LABEL } from '../components/PackageCard';
 import { PackageSubjectPicker } from '../components/PackageSubjectPicker';
 import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
@@ -77,6 +77,7 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
   const locale = useLocale();
   const nameOf = useSubjectName();
   const actions = usePackageActions();
+  const shareRate = useTeacherShareRate();
   const [idempotencyKey] = useState(() => Crypto.randomUUID());
   const [subject, setSubject] = useState<SubjectSummary | undefined>(item?.subject);
   const [track, setTrack] = useState<PackageTrack>(item?.track ?? 'recitation');
@@ -258,6 +259,21 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
           <Text tone="muted">{t('teacher.packages.editor.currency')}</Text>
         </View>
       </Field>
+
+      {/* 003:T104 (ADR 0025 D1, Q-A3 (a)): the price guide. The teacher's share of the price as it
+          is typed, at the rate the platform answers, rounded up as the order will be; nothing while
+          the rate is unread. The average price the owner asked for beside it waits for its own
+          task line (2026-11-17). */}
+      {price_piasters !== null && shareRate !== undefined ? (
+        <View style={{ gap: tokens.space['1'] }}>
+          <Text tone="muted">
+            {t('money.packageEditor.teacherShare', {
+              amount: formatPoundAmount(teacherShare(price_piasters, shareRate), locale),
+              percent: shareRate,
+            })}
+          </Text>
+        </View>
+      ) : null}
 
       {item === undefined ? null : (
         <Banner icon={{ name: 'info' }} tone="info">

@@ -356,6 +356,7 @@ describe('the API client', () => {
     const config = {
       supportEmail: 'support@ijazah.app',
       termsVersion: '2026-10-01',
+      teacherSharePercent: 70,
       checkout: {
         confirmationTimeoutSeconds: 15,
         processingPollSeconds: 2,
@@ -380,6 +381,7 @@ describe('the API client', () => {
     const config = {
       supportEmail: 'support@ijazah.app',
       termsVersion: '2026-10-01',
+      teacherSharePercent: 70,
       checkout: {
         confirmationTimeoutSeconds: 15,
         processingPollSeconds: 2,

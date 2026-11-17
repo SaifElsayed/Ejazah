@@ -150,6 +150,8 @@ export interface CheckoutServices {
 }
 
 export { checkoutRouter } from './checkout.router.js';
+// 003:T104 (Q-A3 (a)): the teacher's share setting, which `platform.publicConfig` answers too.
+export { TEACHER_SHARE_SETTING } from './checkout.service.js';
 export type { CheckoutStudent };
 
 /**

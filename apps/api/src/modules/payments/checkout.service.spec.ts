@@ -49,6 +49,7 @@ const settings: SettingsReader = {
         slot_hold_grace_minutes: 5,
         first_session_lead_hours: 24,
         slot_release_buffer_weeks: 0,
+        teacher_share_percent: 70,
       }[key],
     ),
 };
@@ -159,10 +160,13 @@ interface World {
   readonly now?: Date;
   readonly cancelFails?: boolean;
   readonly payTargetError?: Error;
+  /** T104: the teacher's share setting, when not the seed's 70. */
+  readonly sharePercent?: number;
 }
 
 function setUp(world: World = {}) {
   const log: unknown[][] = [];
+  const inserted: Parameters<CheckoutSteps['insertOrder']>[1][] = [];
   const idempotency = fakeIdempotency(log);
   let placement = 0;
   let draws = 0;
@@ -187,6 +191,7 @@ function setUp(world: World = {}) {
       if (world.lockError !== undefined) throw world.lockError;
     },
     insertOrder: async (_tx, order) => {
+      inserted.push(order);
       log.push(['insert order', order.id, order.gatewayOrderId, [...order.checkoutUrlEncrypted]]);
     },
     recordCancelled: async (enrollmentId, paymentId) => {
@@ -291,7 +296,12 @@ function setUp(world: World = {}) {
   };
   const reported: Error[] = [];
   const service = new CheckoutService({
-    settings,
+    settings: {
+      read: (key, schema) =>
+        key === 'teacher_share_percent' && world.sharePercent !== undefined
+          ? Promise.resolve(schema.parse(world.sharePercent))
+          : settings.read(key, schema),
+    },
     idempotency: idempotency.service,
     payment,
     cipher,
@@ -300,8 +310,41 @@ function setUp(world: World = {}) {
     report: (error) => void reported.push(error),
     steps,
   });
-  return { log, service, idempotency, reported };
+  return { log, service, idempotency, reported, inserted };
 }
+
+describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR-PAYG-7 as amended)', () => {
+  it('records the rate the setting holds when a retry creates the order, and the share it gives, rounded up', async () => {
+    const { service, inserted } = setUp();
+    await service.retry(student, retryInput);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 70, teacherShare_piasters: 70_000 });
+  });
+
+  it('records the rate and the share when a payment creates the order', async () => {
+    const { service, inserted } = setUp();
+    await service.pay(student, payInput);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 70, teacherShare_piasters: 70_000 });
+  });
+
+  it('reads the rate when the order is created, so a changed setting reaches the next order', async () => {
+    const { service, inserted } = setUp({ sharePercent: 33 });
+    await service.retry(student, retryInput);
+
+    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 33, teacherShare_piasters: 33_000 });
+  });
+
+  it('refuses a setting outside 0 to 100 before the gateway, creating no order (fails closed)', async () => {
+    const { service, log, inserted } = setUp({ sharePercent: 101 });
+    await expect(service.retry(student, retryInput)).rejects.toThrow();
+
+    expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+  });
+});
 
 async function refusal(promise: Promise<unknown>): Promise<DomainError> {
   return promise.then(

@@ -83,7 +83,9 @@ const SUBJECTS = [
  * operational and listed under it as such.
  *
  * Phase 2 (T002, specs/003-booking/data-model.md §4, FR-412): the five rows booking, checkout and
- * discovery read, from `first_session_lead_hours` on, listed in SRS §3.14.
+ * discovery read, from `first_session_lead_hours` on, listed in SRS §3.14. T104 (ADR 0025 D1, SRS
+ * DEC-80) adds `teacher_share_percent` at 70 after them; a database already seeded gains it, since
+ * the seed inserts what is missing.
  *
  * Phase 3 (T001, specs/004-sessions/data-model.md §4): the seventeen rows the sessions, chat, live
  * channel and administrator flows read, from `session_evaluation_delay_minutes` on, in that table's
@@ -160,6 +162,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['checkout_confirming_poll_seconds', 30],
   ['checkout_confirming_poll_window_minutes', 10],
   ['discovery_page_size', 20],
+  // T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, whole percent,
+  // read when an order is created and kept on it; track 2's rows sit here (tracks-coordination §1).
+  ['teacher_share_percent', 70],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],

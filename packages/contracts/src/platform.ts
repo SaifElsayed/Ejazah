@@ -24,13 +24,21 @@ export const checkoutPolling = z.object({
 });
 
 /**
- * `platform.publicConfig`'s answer: the support address, the current Terms version and (T002) the
- * checkout numbers.
+ * 003:T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, a whole
+ * percent from 0 to 100, an administrator's setting. Not secret: the Terms state the commission.
+ */
+export const teacherSharePercent = z.int().min(0).max(100);
+
+/**
+ * `platform.publicConfig`'s answer: the support address, the current Terms version, (T002) the
+ * checkout numbers, and (003:T104, Q-A3 (a)) the teacher's share rate the package editor shows the
+ * share by while the price is typed.
  */
 export const publicConfigOutput = z.object({
   supportEmail: emailAddress,
   termsVersion,
   checkout: checkoutPolling,
+  teacherSharePercent,
 });
 
 export type PublicConfig = z.infer<typeof publicConfigOutput>;

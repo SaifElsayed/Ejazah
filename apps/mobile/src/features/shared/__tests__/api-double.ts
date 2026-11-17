@@ -177,6 +177,7 @@ export function fakeApi(termsVersion = '2026-10'): FakeApi {
     supportEmail: 'support@ijazah.test',
     termsVersion,
     checkout: CHECKOUT_POLLING,
+    teacherSharePercent: 70,
   }));
   let uploaded = 0;
   const uploadDocument = jest.fn(
