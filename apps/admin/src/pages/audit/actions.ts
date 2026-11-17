@@ -86,6 +86,12 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'ijazah_request.viewed': 'admin.audit.actions.ijazahReview.viewed',
   'ijazah.issued': 'admin.audit.actions.ijazahReview.issued',
   'ijazah_request.rejected': 'admin.audit.actions.ijazahReview.rejected',
+  // 005:T010 of B46 (Q-E4 (a)): an administrator's ijazahs, their revocation and the bar.
+  'ijazahs.listed': 'admin.audit.actions.ijazahReview.ijazahsListed',
+  'ijazah.viewed': 'admin.audit.actions.ijazahReview.ijazahViewed',
+  'ijazah.revoked': 'admin.audit.actions.ijazahReview.ijazahRevoked',
+  'ijazah_bar.set': 'admin.audit.actions.ijazahReview.barSet',
+  'ijazah_bar.lifted': 'admin.audit.actions.ijazahReview.barLifted',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

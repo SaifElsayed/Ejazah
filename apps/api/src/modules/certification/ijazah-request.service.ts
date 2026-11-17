@@ -107,6 +107,8 @@ export interface RequestRead {
   readonly status: IjazahRequestStatus;
   readonly reason: string | null;
   readonly ijazahId: string | null;
+  /** 005:T010 (Q-E2 (a)): the approved request's ijazah was revoked. */
+  readonly revoked: boolean;
 }
 
 /** An open request and its copy's key. */
@@ -532,11 +534,15 @@ function frozenOf(chain: CredentialChain): RequestRefreeze {
   };
 }
 
-/** A request as a party reads it: the reason once rejected, the ijazah once approved. */
+/**
+ * A request as a party reads it: the reason once rejected, the ijazah once approved, and (005:T010,
+ * Q-E2 (a), R-HONEST-6) `revoked` once that ijazah is revoked, never the revocation's reason.
+ */
 function readOf(read: RequestRead): EnrollmentIjazahRequest {
   return {
     status: read.status,
     ...(read.reason === null ? {} : { reason: read.reason }),
     ...(read.ijazahId === null ? {} : { ijazahId: read.ijazahId }),
+    ...(read.revoked ? { revoked: true as const } : {}),
   };
 }

@@ -68,6 +68,11 @@ export const idempotentProcedures = [
   // ijazah's id and number.
   'ijazahRequests.approve',
   'ijazahRequests.reject',
+  // 005:T010 (admin-surface.md, `ijazahs.revoke`, `.bar` and `.liftBar`): keyed on the kind's
+  // transaction (runOn), as the review's decisions are; revoke's stored outcome the number.
+  'ijazahs.revoke',
+  'ijazahs.bar',
+  'ijazahs.liftBar',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

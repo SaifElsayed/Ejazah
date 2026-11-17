@@ -171,6 +171,13 @@ import type {
   adminIjazahRequestsListInput,
   adminIjazahRequestsListOutput,
   adminIjazahRequestsRejectInput,
+  // 005:T010 (B46, Q-E1 (a)): an administrator's ijazahs, their revocation and the bar.
+  adminIjazahBarInput,
+  adminIjazahsGetInput,
+  adminIjazahsGetOutput,
+  adminIjazahsListInput,
+  adminIjazahsListOutput,
+  adminIjazahsRevokeInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -861,6 +868,37 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof adminIjazahRequestsRejectInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+  };
+  /**
+   * 005:T010 (B46, Q-E1 (a); FR-609, FR-610; R-412): an administrator's ijazahs, certification's,
+   * composed by the admin module; the revocation and the bar keyed on the call's transaction.
+   */
+  readonly ijazahs: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsListInput>,
+    ): Answer<typeof adminIjazahsListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsGetInput>,
+    ): Answer<typeof adminIjazahsGetOutput>;
+    revoke(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsRevokeInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    bar(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahBarInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+    liftBar(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahBarInput>,
     ): Promise<{ readonly replayed: boolean }>;
   };
 }

@@ -1,0 +1,431 @@
+// T010 of specs/005-certification — an administrator's ijazahs, revocation and the bar over the real
+// tables as the application role (FR-609, FR-610; research R-412; R-HONEST-6; ERD §15 rule 10; the
+// note under T010, Q12 (a)):
+//
+// - Revoke writes `revoked_at`, `revoked_reason` and `revoked_by_admin_id` and keeps the row: it is
+//   never deleted (the application role holds no DELETE on `ijazahs`) and never soft-deleted; the
+//   administrator's list and get answer it `revoked`, never as valid; a second revocation under a
+//   new key is refused `already_revoked` (final in v1.0), a replay writes nothing more; and the
+//   restore path is open: the enrollment takes a new request (FR-IJAZAH-9).
+// - Bar: one open bar per user under the user's `users` lock: two bars at once under two keys leave
+//   one open row and refuse the other `already_barred` (`ijazah_bars` has no partial unique); a lift
+//   keeps the row as history, and a second bar after it is a second row.
+//
+// The services are certification's factories over the real stores and the kernel's idempotency, on
+// an in-memory storage port; each action runs on a transaction bound to an after-commit list, as the
+// administrator kind binds its own. Each world is committed with accounts of its own; nothing is
+// deleted.
+// @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
+import { randomUUID } from 'node:crypto';
+
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import type { LiveEvent } from '../../packages/contracts/src/index.js';
+import {
+  createIjazahDecisionService,
+  createIjazahRequestService,
+  createIjazahsService,
+  type IjazahDecisionService,
+  type IjazahRequestService,
+  type IjazahsService,
+} from '../../apps/api/src/modules/certification/index';
+import {
+  closeDatabase,
+  type Database,
+  openDatabase,
+  type Transaction,
+} from '../../apps/api/src/platform/db/prisma.repository';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
+import { DomainError } from '../../apps/api/src/platform/errors/domain-error';
+import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
+import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
+import { bindToTransaction, RequestLive } from '../../apps/api/src/platform/live/live-publisher';
+import {
+  SettingError,
+  type SettingsReader,
+} from '../../apps/api/src/platform/settings/settings-reader';
+import {
+  connectAsApplication,
+  type Db,
+  enrollmentValues,
+  insertRow,
+  makeAdmin,
+  makeCredential,
+  makeOffer,
+  makeUser,
+} from './harness';
+
+const SETTINGS: Readonly<Record<string, unknown>> = {
+  idempotency_key_ttl_hours: 24,
+  admin_list_page_size: 20,
+  document_link_ttl_seconds: 300,
+};
+const settings: SettingsReader = {
+  async read(key, schema) {
+    if (!Object.hasOwn(SETTINGS, key)) throw new SettingError(key, 'missing');
+    const parsed = schema.safeParse(SETTINGS[key]);
+    if (!parsed.success) throw new SettingError(key, 'invalid');
+    return parsed.data;
+  },
+};
+const OPTIONS = { maxWait: 5_000, timeout: 20_000 };
+const SIGNATURE = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+const live = { afterCommit: (_to: readonly string[], _event: LiveEvent) => undefined };
+
+/** The storage port in memory (R-API-4: no adapter import). */
+function memoryStorage() {
+  const objects = new Map<string, { readonly body: Uint8Array; readonly contentType: string }>();
+  return {
+    async put(key: string, body: Uint8Array, contentType: string): Promise<void> {
+      objects.set(key, { body: Uint8Array.from(body), contentType });
+    },
+    async read(key: string): Promise<{ readonly body: Uint8Array; readonly contentType: string }> {
+      const object = objects.get(key);
+      if (object === undefined) throw new Error('nothing is stored under this key');
+      return object;
+    },
+    async remove(key: string): Promise<void> {
+      objects.delete(key);
+    },
+    async exists(key: string): Promise<boolean> {
+      return objects.has(key);
+    },
+    async temporaryLink(key: string, seconds: number): Promise<string> {
+      return `https://files.invalid/${key}?expires=${String(seconds)}`;
+    },
+  };
+}
+
+let db: Db;
+let database: Database;
+let storage: ReturnType<typeof memoryStorage>;
+let requests: IjazahRequestService;
+let decisions: IjazahDecisionService;
+let ijazahs: IjazahsService;
+
+beforeAll(async () => {
+  db = await connectAsApplication();
+  database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
+    poolMax: 6,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 60_000,
+  });
+  storage = memoryStorage();
+  const idempotency = new IdempotencyService<Transaction>({
+    store: new IdempotencyRepository(database),
+    settings,
+  });
+  const log = { info: () => undefined, warn: () => undefined };
+  requests = createIjazahRequestService({ database, storage, idempotency, log });
+  decisions = createIjazahDecisionService({
+    storage,
+    settings,
+    idempotency,
+    renders: { enqueue: async () => undefined },
+    log,
+  });
+  ijazahs = createIjazahsService({ storage, settings, idempotency, log });
+});
+
+afterAll(async () => {
+  await db?.end();
+  if (database !== undefined) await closeDatabase(database);
+});
+
+interface World {
+  readonly enrollmentId: string;
+  readonly teacherId: string;
+  readonly studentId: string;
+  readonly adminId: string;
+  readonly ijazahId: string;
+  readonly certificateNumber: string;
+}
+
+/**
+ * A committed world: an approved teacher with an approved credential and a signature, a named
+ * student, a confirmed ijazah-track enrollment, its request sent (T006) and approved (T007).
+ */
+async function world(): Promise<World> {
+  const offer = await makeOffer(db);
+  const adminId = await makeAdmin(db);
+  const identityDocument = await insertRow(db, 'verification_documents', {
+    user_id: offer.teacherId,
+    document_type: 'national_id',
+    storage_key_encrypted: Buffer.from('probe'),
+  });
+  await insertRow(db, 'teacher_profiles', {
+    user_id: offer.teacherId,
+    bio: '',
+    qualification_summary: 'إجازة في حفص',
+    verification_status: 'approved',
+    application_status: 'approved',
+    application_submitted_at: '2026-10-18T09:00:00Z',
+    identity_document_id: identityDocument,
+    identity_document_type: 'national_id',
+  });
+  const studentId = await makeUser(db, { certificate_name: 'مريم بنت أحمد' });
+  await insertRow(db, 'user_roles', { user_id: studentId, role: 'student', status: 'active' });
+  const enrollmentId = await insertRow(db, 'enrollments', {
+    ...enrollmentValues(offer, studentId),
+    status: 'confirmed',
+    confirmed_at: '2026-10-04T08:00:00Z',
+    snapshot_track: 'ijazah_track',
+  });
+  const credentialId = await makeCredential(db, {
+    teacherId: offer.teacherId,
+    subjectId: offer.subjectId,
+    status: 'approved',
+    admin: adminId,
+  });
+  await db.query(`UPDATE teacher_credentials SET holder_name = $2, riwaya = $3 WHERE id = $1`, [
+    credentialId,
+    'عمر بن فاروق',
+    'حفص عن عاصم',
+  ]);
+  await insertRow(db, 'isnad_entries', {
+    credential_id: credentialId,
+    position: 1,
+    names: ['رسول الله ﷺ'],
+    created_by_admin_id: adminId,
+  });
+  const signatureKey = `signatures/${offer.teacherId}/${randomUUID()}.png`;
+  await storage.put(signatureKey, SIGNATURE, 'image/png');
+  await insertRow(db, 'teacher_signatures', {
+    teacher_user_id: offer.teacherId,
+    storage_key: signatureKey,
+  });
+  const { requestId } = await send(offer.teacherId, enrollmentId);
+  const { answer } = await acted((tx) =>
+    decisions.approve(tx, adminId, { requestId, idempotencyKey: `probe-approve-${randomUUID()}` }),
+  );
+  return {
+    enrollmentId,
+    teacherId: offer.teacherId,
+    studentId,
+    adminId,
+    ijazahId: answer.answer.ijazahId,
+    certificateNumber: answer.answer.certificateNumber,
+  };
+}
+
+const send = (teacherId: string, enrollmentId: string) =>
+  requests.send(
+    teacherId,
+    {
+      enrollmentId,
+      completionDate: '2026-11-01',
+      language: 'ar',
+      idempotencyKey: `probe-request-${randomUUID()}`,
+    },
+    live,
+  );
+
+/** Runs an action on a committed transaction bound to its own after-commit list, as the kind does. */
+async function acted<T>(work: (tx: Transaction) => Promise<T>): Promise<{
+  readonly answer: T;
+  readonly list: RequestLive;
+}> {
+  const list = new RequestLive({ publish: () => undefined }, { warn: () => undefined });
+  const answer = await database.$transaction(async (tx) => {
+    const unbind = bindToTransaction(tx, list);
+    try {
+      return await work(tx);
+    } finally {
+      unbind();
+    }
+  }, OPTIONS);
+  return { answer, list };
+}
+
+const revoke = (w: World, key = `probe-revoke-${randomUUID()}`) =>
+  acted((tx) =>
+    ijazahs.revoke(tx, w.adminId, {
+      ijazahId: w.ijazahId,
+      reason: 'خطأ في السند',
+      idempotencyKey: key,
+    }),
+  );
+
+const bar = (adminId: string, userId: string, key = `probe-bar-${randomUUID()}`) =>
+  acted((tx) =>
+    ijazahs.bar(tx, adminId, { targetUserId: userId, reason: 'تزوير', idempotencyKey: key }),
+  );
+
+const lift = (adminId: string, userId: string, key = `probe-lift-${randomUUID()}`) =>
+  acted((tx) =>
+    ijazahs.liftBar(tx, adminId, { targetUserId: userId, reason: 'خطأ', idempotencyKey: key }),
+  );
+
+async function ijazahRow(id: string) {
+  const { rows } = await db.query<{
+    revoked_at: Date | null;
+    revoked_reason: string | null;
+    revoked_by_admin_id: string | null;
+    deleted_at: Date | null;
+  }>(
+    `SELECT revoked_at, revoked_reason, revoked_by_admin_id, deleted_at FROM ijazahs WHERE id = $1`,
+    [id],
+  );
+  return rows;
+}
+
+/** The cursor naming the ijazah issued just before `id`, if any (ids are UUIDv7, in issue order). */
+async function idBefore(id: string): Promise<{ cursor?: string }> {
+  const { rows } = await db.query<{ id: string | null }>(
+    `SELECT max(id::text) AS id FROM ijazahs WHERE id < $1::uuid`,
+    [id],
+  );
+  const before = rows[0]?.id ?? null;
+  return before === null ? {} : { cursor: before };
+}
+
+async function barsOf(userId: string) {
+  const { rows } = await db.query<{
+    reason: string;
+    barred_by_admin_id: string;
+    lifted_at: Date | null;
+    lifted_by_admin_id: string | null;
+  }>(
+    `SELECT reason, barred_by_admin_id, lifted_at, lifted_by_admin_id
+       FROM ijazah_bars WHERE user_id = $1 ORDER BY id`,
+    [userId],
+  );
+  return rows;
+}
+
+async function failureOf(call: Promise<unknown>): Promise<unknown> {
+  return call.then(
+    () => undefined,
+    (caught: unknown) => caught,
+  );
+}
+
+async function codeOf(call: Promise<unknown>): Promise<string | undefined> {
+  const error = await failureOf(call);
+  if (!(error instanceof DomainError)) throw new Error(`expected a DomainError: ${String(error)}`);
+  return error.details?.[0]?.code ?? error.code;
+}
+
+describe('ijazahs.revoke keeps the row and never shows it valid (T010, FR-609, R-HONEST-6)', () => {
+  it('writes the revocation, keeps the row, and the list and get answer it `revoked`', async () => {
+    const w = await world();
+    const { answer } = await revoke(w);
+    expect(answer).toEqual({ certificateNumber: w.certificateNumber, replayed: false });
+    const [row, ...more] = await ijazahRow(w.ijazahId);
+    expect(more).toEqual([]);
+    expect(row?.revoked_at).toBeInstanceOf(Date);
+    expect(row).toMatchObject({
+      revoked_reason: 'خطأ في السند',
+      revoked_by_admin_id: w.adminId,
+      deleted_at: null,
+    });
+    // The database keeps every earlier run's ijazahs: the page is read from just before this one.
+    const cursor = await idBefore(w.ijazahId);
+    const listed = await acted((tx) =>
+      ijazahs.list(tx, w.adminId, { status: 'revoked', ...cursor }),
+    );
+    expect(listed.answer.items[0]).toMatchObject({
+      ijazahId: w.ijazahId,
+      status: 'revoked',
+      revoked: true,
+    });
+    for (const status of ['preparing', 'rendered', 'signed_off'] as const) {
+      const other = await acted((tx) => ijazahs.list(tx, w.adminId, { status, ...cursor }));
+      expect(other.answer.items.map(({ ijazahId }) => ijazahId)).not.toContain(w.ijazahId);
+    }
+    const { answer: detail } = await acted((tx) =>
+      ijazahs.get(tx, w.adminId, { ijazahId: w.ijazahId }),
+    );
+    expect(detail).toMatchObject({
+      status: 'revoked',
+      revoked: true,
+      revokedReason: 'خطأ في السند',
+    });
+  });
+
+  it('the application role cannot delete an ijazah (ERD §15 rule 10)', async () => {
+    const w = await world();
+    await revoke(w);
+    const error = await failureOf(db.query(`DELETE FROM ijazahs WHERE id = $1`, [w.ijazahId]));
+    expect(error).toMatchObject({ code: '42501' });
+    expect(await ijazahRow(w.ijazahId)).toHaveLength(1);
+  });
+
+  it('is final: a second key is refused `already_revoked`; a replay writes nothing more', async () => {
+    const w = await world();
+    const key = `probe-revoke-${randomUUID()}`;
+    await revoke(w, key);
+    const [first] = await ijazahRow(w.ijazahId);
+    expect((await revoke(w, key)).answer.replayed).toBe(true);
+    expect(await codeOf(revoke(w))).toBe('already_revoked');
+    expect(await ijazahRow(w.ijazahId)).toEqual([first]);
+  });
+
+  it("the parties' request read says `revoked: true` after it, never its reason (Q-E2 (a))", async () => {
+    const w = await world();
+    const before = await database.$transaction((tx) => requests.of(tx, [w.enrollmentId]));
+    expect(before.get(w.enrollmentId)).toEqual({ status: 'approved', ijazahId: w.ijazahId });
+    await revoke(w);
+    const after = await database.$transaction((tx) => requests.of(tx, [w.enrollmentId]));
+    expect(after.get(w.enrollmentId)).toEqual({
+      status: 'approved',
+      ijazahId: w.ijazahId,
+      revoked: true,
+    });
+    const { request } = await requests.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    expect(request).toMatchObject({ status: 'approved', ijazahId: w.ijazahId, revoked: true });
+    expect(JSON.stringify(request)).not.toContain('خطأ في السند');
+  });
+
+  it('opens the restore path: the enrollment takes a new request (FR-IJAZAH-9)', async () => {
+    const w = await world();
+    expect(await codeOf(send(w.teacherId, w.enrollmentId))).toBe('already_issued');
+    await revoke(w);
+    const { status } = await send(w.teacherId, w.enrollmentId);
+    expect(status).toBe('pending');
+  });
+});
+
+describe('ijazahs.bar and .liftBar (T010, FR-610)', () => {
+  it('two bars at once under two keys leave one open bar; the other is `already_barred`', async () => {
+    const adminId = await makeAdmin(db);
+    const userId = await makeUser(db);
+    const outcomes = await Promise.allSettled([bar(adminId, userId), bar(adminId, userId)]);
+    expect(outcomes.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    const refused = outcomes.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+    );
+    expect(refused?.reason).toBeInstanceOf(DomainError);
+    expect((refused?.reason as DomainError).details?.[0]?.code).toBe('already_barred');
+    expect(await barsOf(userId)).toEqual([
+      { reason: 'تزوير', barred_by_admin_id: adminId, lifted_at: null, lifted_by_admin_id: null },
+    ]);
+  });
+
+  it('a lift keeps the row; a bar after it is a second row, one open', async () => {
+    const adminId = await makeAdmin(db);
+    const userId = await makeUser(db);
+    await bar(adminId, userId);
+    expect(await codeOf(bar(adminId, userId))).toBe('already_barred');
+    await lift(adminId, userId);
+    expect(await codeOf(lift(adminId, userId))).toBe('not_barred');
+    await bar(adminId, userId);
+    const rows = await barsOf(userId);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.lifted_at).toBeInstanceOf(Date);
+    expect(rows[0]?.lifted_by_admin_id).toBe(adminId);
+    expect(rows[1]?.lifted_at).toBeNull();
+  });
+
+  it('a barred student is refused at send (FR-610)', async () => {
+    const w = await world();
+    await revoke(w);
+    await bar(w.adminId, w.studentId);
+    expect(await codeOf(send(w.teacherId, w.enrollmentId))).toBe('student_barred');
+  });
+
+  it('NOT_FOUND for an account that is not there', async () => {
+    const adminId = await makeAdmin(db);
+    expect(await codeOf(bar(adminId, randomUUID()))).toBe('NOT_FOUND');
+  });
+});

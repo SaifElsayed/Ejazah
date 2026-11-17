@@ -66,6 +66,17 @@ import {
   type RenderQueue,
   type RequestDetail,
 } from './ijazah-decision.service.js';
+// 005:T010: an administrator's ijazahs, their revocation and the bar.
+import {
+  ijazahPage,
+  ijazahRecordOf,
+  insertBar,
+  liftBar,
+  lockIjazahs,
+  markRevoked,
+  openBarOf,
+} from './ijazahs.repository.js';
+import { type IjazahsLog, IjazahsService, type IjazahsStore } from './ijazahs.service.js';
 
 /**
  * The request's store: this module's rows and locks, and the reads of booking (the enrollment),
@@ -220,3 +231,51 @@ export type { IjazahDecisionService, RenderQueue, RequestDetail };
 
 /** 005:T007: the `ijazahRequests` namespace of the administrator surface, mounted by `admin.router.ts`. */
 export { ijazahRequestsAdminRouter } from './ijazah-requests-admin.router.js';
+
+// 005:T010 (B46, lane E; FR-609, FR-610; R-412; the note under T010, Q12 (a)): an administrator's
+// ijazahs, their revocation and the bar, `ijazahs.*` on the administrator surface. Its store reads
+// and locks this module's `ijazahs` and `ijazah_bars`, the parties through identity's entry and the
+// subjects through catalog's; the admin module composes it, `main.ts` binding it once.
+export const ijazahsStore: IjazahsStore = {
+  ijazahOf: ijazahRecordOf,
+  page: ijazahPage,
+  partiesOf: sessionPartiesOf,
+  subjectsOf: subjectSummariesOf,
+  lockAccounts,
+  lockIjazahs,
+  markRevoked,
+  openBarOf,
+  insertBar,
+  liftBar,
+};
+
+/** What the ijazahs' service is built over, bound once by `main.ts` through the admin module. */
+export interface IjazahsServiceDependencies {
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  readonly settings: SettingsReader;
+  /** The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`). */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'runOn'>;
+  readonly log: IjazahsLog;
+}
+
+/** The ijazahs' service (T010): `ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`. */
+export function createIjazahsService({
+  storage,
+  settings,
+  idempotency,
+  log,
+}: IjazahsServiceDependencies): IjazahsService {
+  return new IjazahsService({
+    store: ijazahsStore,
+    storage,
+    settings,
+    idempotency,
+    drawId: (tx) => drawRowId(tx),
+    clock: clockTimestamp,
+    log,
+  });
+}
+export type { IjazahsService };
+
+/** 005:T010: the `ijazahs` namespace of the administrator surface, mounted by `admin.router.ts`. */
+export { ijazahsAdminRouter } from './ijazahs-admin.router.js';

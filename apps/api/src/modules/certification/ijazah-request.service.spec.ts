@@ -152,6 +152,8 @@ class MemoryStore implements IjazahRequestStore {
         status: one.status,
         reason: one.reason,
         ijazahId: one.ijazahId,
+        // 005:T010 (Q-E2 (a)): the revoked flag is the DB spec's (tests/db-integrity/ijazahs.spec.ts).
+        revoked: false,
       });
     }
     return latest;

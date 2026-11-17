@@ -99,14 +99,18 @@ export async function latestRequestsAmong(
   const requestIds = [...latest.values()].map(({ id }) => id);
   const ijazahs = await tx.ijazah.findMany({
     where: { requestId: { in: requestIds }, deletedAt: null },
-    select: { id: true, requestId: true },
+    // 005:T010 (Q-E2 (a)): whether it was revoked, never the reason.
+    select: { id: true, requestId: true, revokedAt: true },
   });
-  const ijazahOf = new Map(ijazahs.map(({ id, requestId }) => [requestId, id]));
+  const ijazahOf = new Map(ijazahs.map((ijazah) => [ijazah.requestId, ijazah]));
   return new Map(
-    [...latest].map(([enrollmentId, row]) => [
-      enrollmentId,
-      { ...row, ijazahId: ijazahOf.get(row.id) ?? null },
-    ]),
+    [...latest].map(([enrollmentId, row]) => {
+      const ijazah = ijazahOf.get(row.id);
+      return [
+        enrollmentId,
+        { ...row, ijazahId: ijazah?.id ?? null, revoked: (ijazah?.revokedAt ?? null) !== null },
+      ];
+    }),
   );
 }
 

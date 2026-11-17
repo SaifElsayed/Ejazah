@@ -177,6 +177,11 @@
         "enrollmentRestored": "Restore an enrollment",
         "heldFileView": "View a held file",
         "ijazahReview": {
+          "barLifted": "Lift a user's ijazah bar",
+          "barSet": "Bar a user from ijazahs",
+          "ijazahRevoked": "Revoke an ijazah",
+          "ijazahViewed": "Open an issued ijazah",
+          "ijazahsListed": "View issued ijazahs",
           "issued": "Issue an ijazah",
           "listed": "View ijazah requests",
           "rejected": "Reject an ijazah request",

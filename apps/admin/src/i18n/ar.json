@@ -177,6 +177,11 @@
         "enrollmentRestored": "استعادة اشتراك",
         "heldFileView": "عرض ملف محفوظ",
         "ijazahReview": {
+          "barLifted": "رفع منع الإجازات عن مستخدم",
+          "barSet": "منع مستخدم من الإجازات",
+          "ijazahRevoked": "سحب إجازة",
+          "ijazahViewed": "فتح إجازة صادرة",
+          "ijazahsListed": "عرض الإجازات الصادرة",
           "issued": "إصدار إجازة",
           "listed": "عرض طلبات الإجازة",
           "rejected": "رفض طلب إجازة",
