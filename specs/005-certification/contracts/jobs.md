@@ -5,7 +5,7 @@ every run; a double-run spec through `runOnceAndTwice` (R-API-14).
 
 | Job | Kind | Payload / schedule | What it does | Idempotent by |
 |---|---|---|---|---|
-| `render-certificate` | on demand | `{ ijazahId, generation }`, `jobId` = ijazah id and generation | renders the PDF with the Typst CLI (R-401), puts it in storage, sets `ijazahs.rendered_at` for that generation (the administrators' queue shows it ready to sign off) | `rendered_at` set, or a newer generation → no write |
+| `render-certificate` | on demand | `{ ijazahId, generation }`, `jobId` = `<ijazahId>-<generation>` (BullMQ 6 refuses `:` in a custom id, `job.js:912`; a UUID's dashes leave the generation the last segment; B46, the review session's ruling on lane C) | renders the PDF with the Typst CLI (R-401), puts it in storage, sets `ijazahs.rendered_at` for that generation (the administrators' queue shows it ready to sign off) | `rendered_at` set, or a newer generation → no write |
 | `deliver-notification` | on demand | `{ notificationId }` | sends to each of the user's device tokens through `PushPort`, sets `pushed_at`, removes stale tokens | `pushed_at` set → skip |
 | `send-reminder` | sweep, every minute | none | records `session_reminder` for each (session, user, offset) whose `scheduled_start_at - offset <= now < scheduled_start_at` and that has no row yet, so a run after downtime catches up; skips sessions no longer scheduled; read through ERD §14's `sessions (scheduled_end_at) WHERE status = 'scheduled'` index, bounded by end time; a session booked inside an offset's window gets that reminder on the next run (R-407) | `session_reminders` primary key |
 

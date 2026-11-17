@@ -97,7 +97,7 @@ batch that seeds them.
 
 ## State transitions
 - **Request.** Sent → `awaiting_student_name` (no certificate name) or `pending`; the name entered → `pending`;
-  approved → `approved` (+ an `ijazahs` row); rejected → `rejected`; the student deleted → `closed`.
+  approved → `approved` (+ an `ijazahs` row); rejected → `rejected`, from `pending` or, by an administrator with a reason, from `awaiting_student_name` (B46, the owner's Q-C5 (a), 2026-11-17); the student deleted → `closed`.
 - **Ijazah.** Issued → rendered (`rendered_at`) → signed off (`signed_off_at`; refused while the student is barred, B46 Q7); before the sign-off, a re-render or a
   correction goes back to issued (`rendered_at` cleared); revoked (`revoked_at`) at any point; never deleted.
 - **Report.** `open` → `actioned` | `dismissed`.

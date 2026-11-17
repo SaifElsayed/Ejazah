@@ -50,6 +50,8 @@ const [
   { PHOTOS_PROCESSED_AT_ONCE, PHOTO_TURN_WAIT_MS },
   // T006 of specs/005-certification: the ijazah request's service and its router.
   certification,
+  // T007 of specs/005-certification: approve's after-commit enqueue of the certificate's render.
+  { RENDER_CERTIFICATE, renderCertificatePayload },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -84,6 +86,7 @@ const [
   import('./modules/chat/index.js'),
   import('./platform/guards/upload.middleware.js'),
   import('./modules/certification/index.js'),
+  import('./jobs/render-certificate.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -479,6 +482,22 @@ const adminServices = createAdminServices({
   },
   // 003:T109 (Q-B4 (a)): the console's «نسخة تجريبية» reads the mode from `home.summary`.
   paymentMode: config.PAYMENT_MODE,
+  // T007 of specs/005-certification (Q6 (a)): `ijazahRequests.approve` enqueues generation 0's render
+  // after its commit, under the job id `<ijazahId>-<generation>` (BullMQ refuses `:` in a custom id),
+  // through `addOrRetry`, so a failed job held under that id is retried rather than silently kept.
+  ijazahRenders: {
+    enqueue: async (ijazahId, generation) => {
+      await addOrRetry(
+        queue(),
+        {
+          name: RENDER_CERTIFICATE,
+          data: renderCertificatePayload(ijazahId, generation),
+          jobId: `${ijazahId}-${generation}`,
+        },
+        log,
+      );
+    },
+  },
 });
 
 const application = await createApplication({

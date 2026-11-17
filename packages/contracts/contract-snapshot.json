@@ -528,6 +528,8 @@
               "dispute",
               "document",
               "enrollment",
+              "ijazah",
+              "ijazah_request",
               "payment",
               "provider_outage",
               "session",
@@ -554,6 +556,8 @@
               "dispute",
               "document",
               "enrollment",
+              "ijazah",
+              "ijazah_request",
               "payment",
               "provider_outage",
               "session",
@@ -589,6 +593,8 @@
               "dispute",
               "document",
               "enrollment",
+              "ijazah",
+              "ijazah_request",
               "payment",
               "provider_outage",
               "session",
@@ -1450,6 +1456,8 @@
               "dispute",
               "document",
               "enrollment",
+              "ijazah",
+              "ijazah_request",
               "payment",
               "provider_outage",
               "session",
@@ -1470,6 +1478,132 @@
           "$.queues.credentials.oldestAgeHours": { "type": "integer" },
           "$.queues.credentials.open": { "required": true, "type": "integer" }
         }
+      },
+      "ijazahRequests.approve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.certificateNumber": { "required": true, "type": "string" },
+          "$.ijazahId": { "required": true, "type": "string" }
+        }
+      },
+      "ijazahRequests.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.chain": { "required": true, "type": "array" },
+          "$.chain[]": { "type": "array" },
+          "$.chain[][]": { "type": "string" },
+          "$.completionDate": { "required": true, "type": "string" },
+          "$.decidedAt": { "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.ijazahId": { "type": "string" },
+          "$.language": { "required": true, "type": "string", "values": ["ar", "en"] },
+          "$.reason": { "type": "string" },
+          "$.requestId": { "required": true, "type": "string" },
+          "$.riwaya": { "required": true, "type": "string" },
+          "$.sentAt": { "required": true, "type": "string" },
+          "$.signatureLink": { "required": true, "type": "null|string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "awaiting_student_name", "closed", "pending", "rejected"]
+          },
+          "$.student": { "required": true, "type": "object" },
+          "$.student.displayName": { "required": true, "type": "null|string" },
+          "$.student.userId": { "required": true, "type": "string" },
+          "$.studentName": { "required": true, "type": "null|string" },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.tariq": { "required": true, "type": "null|string" },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.teacher.userId": { "required": true, "type": "string" },
+          "$.teacherNamePrinted": { "required": true, "type": "string" },
+          "$.teacherStanding": { "required": true, "type": "object" },
+          "$.teacherStanding.reason": { "type": "string" },
+          "$.teacherStanding.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "active",
+              "banned",
+              "deleted",
+              "revoked",
+              "suspended",
+              "verification_required"
+            ]
+          }
+        }
+      },
+      "ijazahRequests.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": {
+            "type": "string",
+            "values": ["approved", "awaiting_student_name", "closed", "pending", "rejected"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].requestId": { "required": true, "type": "string" },
+          "$.items[].sentAt": { "required": true, "type": "string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "awaiting_student_name", "closed", "pending", "rejected"]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "null|string" },
+          "$.items[].student.userId": { "required": true, "type": "string" },
+          "$.items[].subject": { "required": true, "type": "object" },
+          "$.items[].subject.id": { "required": true, "type": "string" },
+          "$.items[].subject.nameAr": { "required": true, "type": "string" },
+          "$.items[].subject.nameEn": { "required": true, "type": "string" },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.displayName": { "required": true, "type": "null|string" },
+          "$.items[].teacher.userId": { "required": true, "type": "string" },
+          "$.items[].teacherStanding": { "required": true, "type": "object" },
+          "$.items[].teacherStanding.status": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "active",
+              "banned",
+              "deleted",
+              "revoked",
+              "suspended",
+              "verification_required"
+            ]
+          },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "ijazahRequests.reject": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "payments.get": {
         "input": {

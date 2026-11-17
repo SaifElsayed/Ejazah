@@ -76,7 +76,8 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 
 ## R-404 — The request's states
 - **States:** `awaiting_student_name` → `pending` → `approved` | `rejected`; `closed` when the student's account is
-  deleted.
+  deleted; `awaiting_student_name` → `rejected` by an administrator with a reason (B46, the owner's Q-C5 (a),
+  2026-11-17: a student who never enters a name would hold the enrollment's one open request forever).
 - **Checks when sending:**
   - the teacher is active (`StandingService` reads; an applicant cannot send);
   - the enrollment is the teacher's, ijazah-track, and confirmed or completed;
