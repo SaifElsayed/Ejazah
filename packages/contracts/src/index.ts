@@ -24,6 +24,8 @@ export {
 } from './idempotent-procedures.js';
 // T006 of specs/005-certification: `teacher.ijazahRequests` and the enrollment reads' request.
 export * from './ijazah-requests.js';
+// 005:T009 (the owner's «موافق», Q-D1): the parties' certificates, `certificates.list` and `.link`.
+export * from './certificates.js';
 export * from './live.js';
 export * from './onboarding.js';
 export * from './packages.js';
