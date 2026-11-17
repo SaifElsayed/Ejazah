@@ -131,6 +131,7 @@
       "IdempotencyKeyStatus": ["completed", "in_progress"],
       "IdentityDocumentType": ["national_id", "passport"],
       "IjazahMode": ["generated", "uploaded"],
+      "IjazahRequestStatus": ["approved", "awaiting_student_name", "closed", "pending", "rejected"],
       "IsnadVerificationStatus": ["unverified", "verified"],
       "Language": ["ar", "en"],
       "NotificationType": [

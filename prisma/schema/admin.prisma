@@ -50,7 +50,12 @@ model AdminUser {
   reviewedCredentials  TeacherCredential[]
   createdIsnadEntries  IsnadEntry[]
   settledSessions      Session[]
-  revokedIjazahs       Ijazah[]
+  revokedIjazahs       Ijazah[]              @relation("IjazahRevokedBy")
+  // Phase 4 (T001 of specs/005-certification): the requests an administrator decided, the ijazahs
+  // one issued and signed off, back-relations only.
+  decidedIjazahRequests IjazahRequest[]      @relation("IjazahRequestDecidedBy")
+  issuedIjazahs         Ijazah[]             @relation("IjazahIssuedBy")
+  signedOffIjazahs      Ijazah[]             @relation("IjazahSignedOffBy")
   ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
   ijazahBarsLifted     IjazahBar[]           @relation("IjazahBarLiftedBy")
   moderatedReviews     Review[]

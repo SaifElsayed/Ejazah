@@ -99,6 +99,10 @@ model Enrollment {
   payments      Payment[]
   chatMessages  ChatMessage[]
   ijazahs       Ijazah[]
+  // Phase 4 (T001 of specs/005-certification): certification's requests and moderation's reports,
+  // back-relations only.
+  ijazahRequests IjazahRequest[]
+  userReports    UserReport[]
   review        Review?
   disputes      Dispute[]
   events        EnrollmentEvent[]

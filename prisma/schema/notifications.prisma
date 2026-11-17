@@ -1,5 +1,5 @@
 // notifications domain (T062, ERD section 11). Owned by apps/api/src/modules/notifications.
-// notifications.
+// notifications and, since Phase 4 (T001 of specs/005-certification), session_reminders.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 
 // Backs both push delivery and the notification centre (FR-NOTIF-1/2).
@@ -21,7 +21,31 @@ model Notification {
 
   user User @relation(fields: [userId], references: [id])
 
+  sessionReminders SessionReminder[]
+
   // The notification centre badge (ERD section 14).
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// Phase 4 (T001 of specs/005-certification, data-model.md; R-407): the reminder sweep's record, so
+// each (session, user, offset) is reminded once, a run after downtime catching up. The sweep reads
+// sessions through ERD §14's `sessions (scheduled_end_at)` index; this table adds no index beyond
+// its key and its foreign keys' (ERD §14).
+model SessionReminder {
+  sessionId      String   @map("session_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  // One of `reminder_offsets_minutes`.
+  offsetMinutes  Int      @map("offset_minutes")
+  notificationId String   @map("notification_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session      Session      @relation(fields: [sessionId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  @@id([sessionId, userId, offsetMinutes])
+  @@index([userId])
+  @@index([notificationId])
+  @@map("session_reminders")
 }

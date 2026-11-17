@@ -590,7 +590,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | subject_id | FK → subjects | |
 | mode | enum generated · uploaded | FR-IJAZAH-2, DEC-42. Always `generated` in the MVP; `uploaded` is kept for a deferred mode and never written (ADR 0013) |
 | language | enum ar · en | Mode A template language (FR-LOC-4) |
-| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable. Mode A only, so always present in the MVP (ADR 0013) |
+| chain_snapshot | jsonb, nullable | Ordered names at grant time, teacher appended (FR-ISNAD-7). Immutable from the sign-off (SRS DEC-72): before it, a correction of the chain re-freezes it and the certificate is re-rendered (changelog row 47). Mode A only, so always present in the MVP (ADR 0013) |
 | certificate_storage_key | text | The generated PDF (an uploaded scan once Mode B returns, ADR 0013); signed URLs only |
 | paper_copy_intended | boolean | Informational (FR-IJAZAH-5). Stays false in the MVP: the flag is deferred (ADR 0016) |
 | verification_token_hash | text, unique | Backs the public QR page (FR-IJAZAH-10). The QR carries the plaintext token; the database stores only its hash and looks up by hash (R-DB-7) |
@@ -599,6 +599,33 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | revoked_reason | text, nullable | Mandatory when revoked |
 | revoked_by_admin_id | FK → admin_users, nullable | |
 | deleted_at | timestamptz, nullable | Soft deletion, distinct from revocation. Hard DELETE is revoked (§15.10) |
+| request_id | FK → ijazah_requests, nullable, unique | The request it was issued from (ADR 0017; Phase 4, changelog row 47) |
+| issued_by_admin_id | FK → admin_users, nullable | The administrator who approved the request (ADR 0017) |
+| student_name_printed / teacher_name_printed | text | The names as printed: the student's `users.certificate_name` read at the approval, the teacher's frozen on the request. An issued certificate keeps them from its sign-off, so it verifies after a deletion erases `users.certificate_name` (ADR 0019 D1, as noted 2026-11-17; ADR 0015 D3) |
+| completion_date | date, nullable | From the request (FR-IJAZAH-15) |
+| rendered_at | timestamptz, nullable | Set by `render-certificate` for the payload's `render_generation`; cleared by a re-render (R-402) |
+| render_generation | int, default 0 | Raised by each re-render; an older generation's job writes nothing (R-402) |
+| signed_off_at / signed_off_by_admin_id | timestamptz, nullable / FK → admin_users, nullable | The administrator's sign-off, set together and never before the rendering (§15 rule 55; SRS DEC-72, FR-629). The parties see the certificate only once signed off |
+
+### `ijazah_requests`
+
+Phase 4 (2026-11-17, `specs/005-certification/data-model.md`; ADR 0017 D5, R-403, R-404; changelog row 47). A teacher's request for a student's ijazah, frozen at send, decided by an Administrator. Owned by `certification`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| enrollment_id, teacher_user_id, student_user_id, subject_id | FK → enrollments, users, users, subjects | From the enrollment, never the input |
+| completion_date | date | Not in the future (the service's rule) |
+| language | enum ar · en, default ar | The certificate's language (FR-LOC-4) |
+| status | enum `ijazah_request_status`: awaiting_student_name · pending · approved · rejected · closed | Sent → `awaiting_student_name` (no certificate name yet) or `pending`; the name entered → `pending`; approved (an `ijazahs` row) or rejected by an Administrator; `closed` at the student's deletion |
+| chain_snapshot | jsonb | Generations (arrays of names), origin first, the teacher appended; frozen at send, re-frozen on a correction of the chain while open (R-403) |
+| teacher_name_printed | text | `teacher_credentials.holder_name` at send |
+| signature_storage_key | text, nullable | The request's own copy of the teacher's signature; NULL once erased (rejected or closed) |
+| reason | text, nullable | Mandatory when rejected (§15 rule 54) |
+| decided_by_admin_id / decided_at | FK → admin_users, nullable / timestamptz, nullable | Set together on approve or reject, and only then (§15 rule 54) |
+| created_at / updated_at | timestamptz | |
+
+One open request (awaiting the student's name, or pending) per enrollment (§15 rule 53).
 
 ### `ijazah_bars`
 
@@ -657,7 +684,9 @@ One per enrollment, terminal status + ≥1 delivered session (FR-REVIEW-1/2).
 | id | uuid | PK |
 | flagged_user_id | FK → users | |
 | raised_by_user_id | FK → users, nullable | Null when admin-initiated (FR-GENDER-3) |
-| status | enum open · corrected · fraud_ban · dismissed | Outcomes per FR-GENDER-6/7 |
+| status | enum open · corrected · fraud_ban · dismissed | Outcomes per FR-GENDER-6/7. One open flag per user (§15 rule 57; Phase 4) |
+| reason | text | The raiser's reason (Phase 4, changelog row 49) |
+| report_id | FK → user_reports, nullable | The report an Administrator raised it from (Phase 4, changelog row 49) |
 | resolution_notes | text, nullable | |
 | resolved_by_admin_id | FK → admin_users, nullable | |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
@@ -673,8 +702,9 @@ FR-SESS-15 — report from any session or profile.
 | reporter_user_id | FK → users | |
 | context | enum session · profile · chat | |
 | session_id | FK → sessions, nullable | Extends chat retention while open (FR-SESS-13) |
+| enrollment_id | FK → enrollments, nullable | The enrollment of a session or chat report, set by the server; the chat purge reads it (R-408; Phase 4, changelog row 49). Required unless the context is `profile`, and `session_id` required for a session report (§15 rule 56) |
 | reason | text | |
-| status | enum open · actioned · dismissed | |
+| status | enum open · actioned · dismissed | One open report per reporter, reported user and context; never on oneself (§15 rule 56; Phase 4) |
 | resolved_by_admin_id | FK → admin_users, nullable | |
 | created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
 
@@ -698,6 +728,20 @@ Backs both push delivery and the notification centre (FR-NOTIF-1/2).
 **Amended by ADR 0021 (Phase 2 notifications pass, forward migration).** `type` gains the twelve members the accepted ADRs imply and the design draws, appended in this order after `new_review`: `makeup_proposed`, `makeup_counter_proposed`, `makeup_booked` (ADR 0018 D3), `certificate_name_requested` (ADR 0019 D1), `enrollment_terminated` (FR-NOSHOW-4), `session_cancelled_by_admin` (FR-CANCEL-6), `session_outcome_confirmed` (FR-SESS-19), `ijazah_request_rejected` and `credential_reviewed` (ADR 0017 D1/D3), `payout_account_rejected` (FR-PAYG-15; `recipient_rejected` is a webhook event, not a notification), `account_suspended` and `account_reinstated` (FR-ADMIN-5, ADR 0018 D5). The existing members stay in place; `teacher_application_status_changed` keeps covering approval, rejection, ban and the request for another document, with the status in `payload`. FR-NOTIF-1 lists the same members by name, so the requirement and this enum say one list (ADR 0021 D3).
 
 **Amended 2026-11-05 (v1.15, the owner's decision; SRS FR-NOTIF-1).** `type` gains, by name only, fourteen Phase 3 members appended after `account_reinstated`, in this order: `enrollment_restored`, `dispute_ruling_revised`, `absence_complaint_decided`, `dispute_raised`, `cancellation_request_expired`, `makeup_counter_declined`, `makeup_frozen`, `makeup_lapsed`, `makeup_offered_again`, `makeup_handed_to_case`, `session_outage_reclassified`, `enrollment_completed`, `enrollment_cancelled`, `compensation_case_opened` (their recipients in FR-NOTIF-1; `absence_complaint_decided` is told to both parties, the student and the teacher, as SRS FR-NOSHOW-5 says: the owner's decision of 2026-11-05, changelog row 27). Phase 4 reads each from the durable record Phase 3 writes: `enrollment_events` `restored`, `completed` and `cancelled` (with its `cancellation_reason`, for `enrollment_cancelled`); `session_events` `dispute_revised`, `complaint_decided`, `dispute_raised`, `cancellation_expired`, `counter_declined`, `remedy_frozen`, `remedy_lapsed`, `remedy_offered` (a session's second or later, for `makeup_offered_again`), `remedy_handed_to_case` and `outage_reclassified`. `compensation_case_opened` is read from the manual compensation case's own `disputes` row (SRS FR-ADMIN-20 (c); reason `admin_opened_for_student` or `admin_opened_for_teacher`, naming the party told, and its `created_at`) and its audit entry `case.opened_manually`; a joined opening writes no row and is told again to nobody (the owner's decision of 2026-11-05, changelog row 25; `specs/004-sessions/research.md` R-326). **Amended 2026-11-06 (the owner's decision on Phase 3's fourth analysis; changelog row 30):** a fifteenth member, `session_outcome_corrected`, after `compensation_case_opened`: an Administrator's correction of an outcome nobody disputed (SRS FR-ADMIN-20 (b)), told to both parties, read from the `session_events` row `outcome_corrected`. `makeup_offered_again` stays read from a session's second or later `remedy_offered` row, with no kind of its own; Phase 4's cycle settles its reading. The migration stays in Phase 4's notifications pass, as for ADR 0021's twelve (`PLAN.md`, Phase 4); Phase 3's migration adds none.
+
+**Re-pointed 2026-11-17 (Phase 4, `specs/005-certification` R-406; SRS DEC-70, DEC-71; changelog row 50).** v1.0 sends seven kinds, all already in `type`: `session_reminder`, `cancellation_requested`, `cancellation_request_accepted`, `cancellation_request_declined`, `payment_confirmed`, `payment_failed`, `payment_expired`. So v1.0 runs no enum migration. The twelve members of ADR 0021 and the fourteen of Phase 3 named above (changelog rows 2, 22, 27 and 30) are named here only; their enum migration moves to v1.1 with the notification centre (`specs/005-certification/tasks.md` T029).
+
+### `session_reminders`
+
+Phase 4 (2026-11-17, `specs/005-certification/data-model.md`; R-407; changelog row 48). The reminder sweep's record: each (session, user, offset) is reminded once, and a run after downtime catches up. Owned by `notifications`. The sweep reads `sessions` through §14's `sessions (scheduled_end_at) WHERE status = 'scheduled'` index, so this table adds no index beyond its key and its foreign keys'.
+
+| Column | Type | Notes |
+|---|---|---|
+| session_id | FK → sessions | Primary key (`session_id`, `user_id`, `offset_minutes`) |
+| user_id | FK → users | |
+| offset_minutes | int | One of the setting `reminder_offsets_minutes` |
+| notification_id | FK → notifications | The `session_reminder` notification it recorded |
+| created_at | timestamptz | |
 
 ## 12. Admin and platform kernel
 
@@ -890,6 +934,10 @@ Beyond PKs, uniques and FK indexes, these carry the hot paths and the booking gu
 | `sessions` GiST exclusion `(teacher_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one teacher (§15.19); the teacher's calendar |
 | `sessions` GiST exclusion `(student_user_id WITH =, tstzrange(scheduled_start_at, scheduled_end_at) WITH &&)`, partial, deferrable | No overlapping sessions for one student (§15.19); the reservation check against the student's sessions |
 | `notifications (user_id, read_at)` | Notification centre badge |
+| `ijazah_requests (status, created_at)` | The administrators' queue of requests (Phase 4, changelog row 47) |
+| `ijazah_requests (enrollment_id) WHERE status IN ('awaiting_student_name', 'pending')` partial unique | One open request per enrollment (§15 rule 53; Phase 4) |
+| `user_reports (reporter_user_id, reported_user_id, context) WHERE status = 'open'` partial unique | One open report per reporter, reported user and context (§15 rule 56; Phase 4) |
+| `gender_flags (flagged_user_id) WHERE status = 'open'` partial unique | One open flag per user (§15 rule 57; Phase 4) |
 | `user_sessions (refresh_token_hash)` unique | Session resolution on every authenticated request (§15.25; Phase 1 pass) |
 | `user_sessions (previous_refresh_token_hash)` | The grace window’s lookup by the hash the last rotation retired; without it a presented token that matches no current hash scans the table (T140, T047’s and T094’s notes) |
 | `user_sessions (user_id)` | The foreign key's plain index; "revoke every session of the user" (Phase 1 pass; the partial index on live rows was not kept, R-DB-9) |
@@ -980,11 +1028,21 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 51. `enrollments`: `admin_end_reason IS NULL OR (char_length(admin_end_reason) BETWEEN 1 AND 500 AND status = 'cancelled' AND cancellation_reason = 'admin')` — check constraint `enrollments_admin_end_reason_check`: the direct end's reason only on an enrollment an Administrator cancelled, so a restore that forgets to clear it is refused (SRS FR-CANCEL-10, DEC-68; T082, changelog row 45).
 
+53. `ijazah_requests`: one open request per enrollment — partial unique `ijazah_requests_one_open_per_enrollment_key` on `(enrollment_id) WHERE status IN ('awaiting_student_name', 'pending')` (R-404; Phase 4, `specs/005-certification/data-model.md`; changelog row 47).
+
+54. `ijazah_requests`: `status <> 'rejected' OR (reason IS NOT NULL AND length(btrim(reason)) > 0)` — check `ijazah_requests_reason_check`: a rejection names its reason; and `(decided_by_admin_id IS NULL) = (decided_at IS NULL) AND (decided_at IS NOT NULL) = (status IN ('approved', 'rejected'))` — check `ijazah_requests_decided_check`: the decider and the instant are set together, on approve or reject and only then (changelog row 47).
+
+55. `ijazahs`: `(signed_off_at IS NULL) = (signed_off_by_admin_id IS NULL) AND (signed_off_at IS NULL OR (rendered_at IS NOT NULL AND signed_off_at >= rendered_at))` — check `ijazahs_signed_off_check`: the sign-off's instant and administrator set together, never before the rendering (SRS DEC-72, FR-629; changelog row 47).
+
+56. `user_reports`: `reporter_user_id <> reported_user_id` — check `user_reports_not_self_check`; `(context <> 'session' OR session_id IS NOT NULL) AND (context = 'profile' OR enrollment_id IS NOT NULL)` — check `user_reports_context_check`: a session report names its session, and a session or chat report its enrollment; one open report per reporter, reported user and context — partial unique `user_reports_one_open_key` on `(reporter_user_id, reported_user_id, context) WHERE status = 'open'` (R-408; changelog row 49).
+
+57. `gender_flags`: one open flag per user — partial unique `gender_flags_one_open_per_user_key` on `(flagged_user_id) WHERE status = 'open'` (R-409; changelog row 49).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 44 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 46 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -1300,3 +1358,15 @@ Amended on 2026-11-14 by T082 of `specs/004-sessions/tasks.md` (B42c), on the ow
 | # | Change | Migration |
 |---|---|---|
 | 45 | §5 `enrollments.admin_end_reason` (text, nullable) and §15 rule 51, check `enrollments_admin_end_reason_check`: the reason both parties are shown of a direct end, 1 to 500 characters, only on a `cancelled` `admin` enrollment; and §12 `settings`: `rate_limit_enrollment_end` (10 per 60 s) (SRS FR-CANCEL-10, §3.14) | `20261114120000_enrollment_admin_end_reason` (B42c), and the seed |
+
+Amended on 2026-11-17 by T001 of `specs/005-certification/tasks.md` (B45), on the owner's decisions of 2026-11-16 on Phase 4 (SRS DEC-70, DEC-71, DEC-72: the ijazah request, its issue and its sign-off, reports and gender flags, three push kinds) and of 2026-11-17 on B45's conflict check; `specs/005-certification/data-model.md`:
+
+| # | Change | Migration |
+|---|---|---|
+| 47 | §8 new table `ijazah_requests` and enum `ijazah_request_status` (awaiting_student_name · pending · approved · rejected · closed), §14 its queue index `(status, created_at)`, and §15 rules 53 and 54; §8 `ijazahs` gains `request_id` (unique FK), `issued_by_admin_id`, `student_name_printed` and `teacher_name_printed` (text NOT NULL; the table held no row), `completion_date`, `rendered_at`, `render_generation` (default 0), `signed_off_at` and `signed_off_by_admin_id`, and §15 rule 55 (SRS DEC-72). `ijazahs.chain_snapshot`'s «Immutable» becomes «immutable from the sign-off» (DEC-72): before it, a correction re-freezes the snapshot and the certificate is re-rendered. ADR 0019 D1 gains its dated note: an issued certificate keeps the names it printed from its sign-off | `20261117055600_certification_foundations` |
+| 48 | §11 new table `session_reminders`, primary key (`session_id`, `user_id`, `offset_minutes`), its foreign keys' plain indexes and no other (R-407) | the same |
+| 49 | §10 `user_reports.enrollment_id` (FK → enrollments, nullable) and `gender_flags.reason` (text NOT NULL; the table held no row) and `report_id` (FK → user_reports, nullable); §14 the two partial uniques and §15 rules 56 and 57 (R-408, R-409) | the same |
+| 50 | §11 `notifications`: the notes re-pointed to v1.1. v1.0 sends seven kinds already in `type`, so no enum migration; the twelve names of ADR 0021 and the fourteen of Phase 3 (rows 2, 22, 27 and 30) wait for v1.1's notification centre (R-406) | none |
+| 51 | §12 `settings`: Phase 4's six rate limits, `rate_limit_user_report` (5 per 86400 s) and `rate_limit_gender_flag` (3 per 86400 s) (SRS DEC-71), `rate_limit_ijazah_request` (10 per 3600 s), `rate_limit_ijazah_decision`, `rate_limit_gender_decision` and `rate_limit_settings_update` (10 per 60 s each) (SRS DEC-73), seeded at the list's end | none (the seed) |
+
+Two tables are added: 46 tables.

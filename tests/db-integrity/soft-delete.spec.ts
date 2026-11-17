@@ -348,6 +348,9 @@ describe('soft-deleted rows, through the client extended by T148 (T053)', () => 
             paperCopyIntended: false,
             verificationTokenHash: randomUUID(),
             grantedAt: '2026-10-04T07:00:00Z',
+            // 005:T001 (data-model.md; ADR 0019 D1): the names it prints, NOT NULL.
+            studentNamePrinted: 'اسم الطالب',
+            teacherNamePrinted: 'اسم المعلم',
           },
           select: { id: true },
         });

@@ -72,6 +72,8 @@ model Session {
   cancellationRequests CancellationRequest[]
   disputes             Dispute[]
   userReports          UserReport[]
+  // Phase 4 (T001 of specs/005-certification): notifications' reminders, a back-relation only.
+  sessionReminders     SessionReminder[]
   remedy               SessionRemedy?
   events               SessionEvent[]
 

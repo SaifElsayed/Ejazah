@@ -83,6 +83,11 @@ model User {
   genderFlagsRaised     GenderFlag[]              @relation("GenderFlagRaisedBy")
   reportsReceived       UserReport[]              @relation("UserReportReported")
   reportsFiled          UserReport[]              @relation("UserReportReporter")
+  // Phase 4 (T001 of specs/005-certification): certification's requests and notifications'
+  // reminders, back-relations only.
+  ijazahRequestsAsTeacher IjazahRequest[]         @relation("IjazahRequestTeacher")
+  ijazahRequestsAsStudent IjazahRequest[]         @relation("IjazahRequestStudent")
+  sessionReminders        SessionReminder[]
 
   @@map("users")
 }

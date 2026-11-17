@@ -31,6 +31,13 @@ The final design audit found three gaps.
 **The teacher's name.** The admin transcribes it from the teacher's ijazah PDF when approving the credential
 (`teacher_credentials.holder_name`, ADR 0017).
 
+> **Note, 2026-11-17 (SRS DEC-72; T001 of `specs/005-certification/tasks.md`, B45; ERD changelog row 47).** An issued
+> certificate keeps the names it printed **from its sign-off**. Phase 4 issues in three steps: the record at the
+> approval, the PDF by the render job, then an administrator's sign-off. Before the sign-off, a change of the student's
+> certificate name or a correction of the teacher's credential re-freezes the printed names and the chain, and the
+> certificate is re-rendered. From the sign-off nothing rewrites them, and «never rewrites an issued certificate» above
+> holds from that instant.
+
 ### D2 — One admin role in the MVP
 
 NFR-SEC-6's "role-scoped" means this: admin accounts are a separate class from app accounts (FR-ADMIN-1), with one

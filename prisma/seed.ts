@@ -100,6 +100,10 @@ const SUBJECTS = [
  * administrator rate limits, and `enrollment_restore_window_days` at 14. A database already seeded
  * keeps its row, as every row is kept; the migration `20261113120000_ban_restorable_and_kept_data`
  * moves that one to 14 only while it still holds 7 (Q6 (b)).
+ *
+ * Phase 4 (T001 of specs/005-certification, data-model.md «Settings»; SRS DEC-71, DEC-73): the six
+ * rate limits of the reports, the gender flags, the ijazah requests and the administrators'
+ * decisions, in a block at the list's end (tracks-coordination.md §1), inserted only where missing.
  */
 const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['attendance_threshold_pct', 70],
@@ -199,6 +203,16 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // T082 (SRS DEC-68, §3.14; specs/004-sessions/data-model.md §4): an administrator's direct end of
   // an enrollment (`sessions.endEnrollment`), the administrator as subject.
   ['rate_limit_enrollment_end', { limit: 10, window_seconds: 60 }],
+  // T001 of specs/005-certification (data-model.md «Settings»; SRS §3.14, DEC-71, DEC-73): a user's
+  // reports and gender flags, the user as subject (DEC-71); a teacher's ijazah requests, the teacher
+  // as subject; and the administrators' ijazah decisions (approve, reject, sign off, re-render,
+  // revoke, bar), gender decisions and settings changes, each the administrator as subject (DEC-73).
+  ['rate_limit_user_report', { limit: 5, window_seconds: 86400 }],
+  ['rate_limit_gender_flag', { limit: 3, window_seconds: 86400 }],
+  ['rate_limit_ijazah_request', { limit: 10, window_seconds: 3600 }],
+  ['rate_limit_ijazah_decision', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_gender_decision', { limit: 10, window_seconds: 60 }],
+  ['rate_limit_settings_update', { limit: 10, window_seconds: 60 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

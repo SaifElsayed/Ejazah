@@ -9,7 +9,8 @@
 // specs/004-sessions/data-model.md §4 (T001; `teacher_no_show_threshold` no longer planted), the
 // two rows of the room's close in the same table (T067), the seven rows of a ban's lift, a held
 // slot's release, the kept data and an administrator's deletion (T069, with the restore window's
-// default 14, SRS DEC-66), and one administrator, each with a fixed identifier and a fixed instant;
+// default 14, SRS DEC-66), the one of an administrator's direct end (T082), Phase 4's six rate limits
+// (005:T001, data-model.md «Settings»), and one administrator, each with a fixed identifier and a fixed instant;
 // every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
@@ -140,6 +141,13 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_admin_user_delete: { limit: 10, window_seconds: 60 },
   // 004:T082 (SRS DEC-68, §3.14): an administrator's direct end of an enrollment.
   rate_limit_enrollment_end: { limit: 10, window_seconds: 60 },
+  // 005:T001 (data-model.md «Settings»; SRS §3.14, DEC-71, DEC-73): Phase 4's six rate limits.
+  rate_limit_user_report: { limit: 5, window_seconds: 86400 },
+  rate_limit_gender_flag: { limit: 3, window_seconds: 86400 },
+  rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
+  rate_limit_ijazah_decision: { limit: 10, window_seconds: 60 },
+  rate_limit_gender_decision: { limit: 10, window_seconds: 60 },
+  rate_limit_settings_update: { limit: 10, window_seconds: 60 },
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -152,6 +160,16 @@ const T069_RATE_LIMITS = [
   'rate_limit_slot_release',
 ] as const;
 const T069_WINDOWS = ['ban_restore_window_days', 'enrollment_restore_window_days'] as const;
+
+/** 005:T001: Phase 4's six limits and the values data-model.md «Settings» gives them. */
+const PHASE_4_RATE_LIMITS = {
+  rate_limit_user_report: { limit: 5, window_seconds: 86400 },
+  rate_limit_gender_flag: { limit: 3, window_seconds: 86400 },
+  rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
+  rate_limit_ijazah_decision: { limit: 10, window_seconds: 60 },
+  rate_limit_gender_decision: { limit: 10, window_seconds: 60 },
+  rate_limit_settings_update: { limit: 10, window_seconds: 60 },
+} as const;
 
 const SEEDED_TABLES = new Set(['subjects', 'settings', 'admin_users']);
 
@@ -259,6 +277,20 @@ describe('the seed (T074)', () => {
     }
   });
 
+  it('plants Phase 4’s six rate limits, each parsing as a limit (005:T001)', async () => {
+    const { rows } = await db.query<{ key: string; value: unknown }>(
+      `SELECT key, value FROM settings WHERE key = ANY($1::text[]) ORDER BY key`,
+      [Object.keys(PHASE_4_RATE_LIMITS)],
+    );
+    const values = new Map(rows.map(({ key, value }) => [key, value]));
+    for (const [key, expected] of Object.entries(PHASE_4_RATE_LIMITS)) {
+      expect(rateLimitSetting.safeParse(values.get(key)), key).toEqual({
+        success: true,
+        data: expected,
+      });
+    }
+  });
+
   it('plants one administrator, active, whose credential nobody holds', async () => {
     const admin = await administrator();
     expect(admin).toMatchObject({
@@ -295,8 +327,8 @@ describe('the seed (T074)', () => {
           AND table_name <> '_prisma_migrations'`,
     );
     const others = rows.map((row) => row.table_name).filter((name) => !SEEDED_TABLES.has(name));
-    // 44 tables (T003, T094, T097, Phase 2's T004, Phase 3's T001) less the three seeded ones.
-    expect(others).toHaveLength(41);
+    // 46 tables (T003, T094, T097, Phase 2's T004, Phase 3's T001, Phase 4's T001) less the three seeded ones.
+    expect(others).toHaveLength(43);
     for (const table of others) {
       const { rows: present } = await db.query(
         `SELECT 1 FROM ${pg.escapeIdentifier(table)} LIMIT 1`,
@@ -323,6 +355,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '81', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '87', admins: '1' }]);
   });
 });

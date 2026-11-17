@@ -6,6 +6,12 @@
 // `resolution` `enrollment_ended` (R-322). ERD §15 rule 46, its checks and its two partial uniques
 // (one open session dispute per session, one open complaint per enrollment), lives in migration
 // `20261108120000_sessions_pass`.
+//
+// Phase 4 (T001 of specs/005-certification, data-model.md; R-408, R-409): `user_reports.enrollment_id`
+// and `gender_flags.reason` and `report_id`. The migration `20261117…_certification_foundations`
+// holds what the schema language cannot say: the partial uniques `user_reports_one_open_key` and
+// `gender_flags_one_open_per_user_key`, and the checks `user_reports_not_self_check` and
+// `user_reports_context_check`.
 
 // The moderation case table (ADR 0007 D5). Every case belongs to one enrollment.
 model Dispute {
@@ -60,19 +66,25 @@ model GenderFlag {
   raisedByUserId    String?          @map("raised_by_user_id") @db.Uuid
   // Outcomes per FR-GENDER-6/7.
   status            GenderFlagStatus
+  // Phase 4 (T001, data-model.md): the raiser's reason.
+  reason            String
+  // Phase 4 (T001, data-model.md): the report an administrator raised it from, if any.
+  reportId          String?          @map("report_id") @db.Uuid
   resolutionNotes   String?          @map("resolution_notes")
   resolvedByAdminId String?          @map("resolved_by_admin_id") @db.Uuid
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt        DateTime?        @map("resolved_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  flaggedUser     User       @relation("GenderFlagFlagged", fields: [flaggedUserId], references: [id])
-  raisedBy        User?      @relation("GenderFlagRaisedBy", fields: [raisedByUserId], references: [id], onDelete: Restrict)
-  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
+  flaggedUser     User        @relation("GenderFlagFlagged", fields: [flaggedUserId], references: [id])
+  raisedBy        User?       @relation("GenderFlagRaisedBy", fields: [raisedByUserId], references: [id], onDelete: Restrict)
+  resolvedByAdmin AdminUser?  @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
+  report          UserReport? @relation(fields: [reportId], references: [id], onDelete: Restrict)
 
   @@index([flaggedUserId])
   @@index([raisedByUserId])
   @@index([resolvedByAdminId])
+  @@index([reportId])
   @@map("gender_flags")
 }
 
@@ -84,6 +96,9 @@ model UserReport {
   context           UserReportContext
   // Extends chat retention while open (FR-SESS-13).
   sessionId         String?           @map("session_id") @db.Uuid
+  // Phase 4 (T001, data-model.md; R-408): the enrollment of a session or chat report, set by the
+  // server (`user_reports_context_check`); the chat purge reads it.
+  enrollmentId      String?           @map("enrollment_id") @db.Uuid
   reason            String
   status            UserReportStatus
   resolvedByAdminId String?           @map("resolved_by_admin_id") @db.Uuid
@@ -91,14 +106,17 @@ model UserReport {
   resolvedAt        DateTime?         @map("resolved_at") @db.Timestamptz(6)
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  reportedUser    User       @relation("UserReportReported", fields: [reportedUserId], references: [id])
-  reporter        User       @relation("UserReportReporter", fields: [reporterUserId], references: [id])
-  session         Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  resolvedByAdmin AdminUser? @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
+  reportedUser    User         @relation("UserReportReported", fields: [reportedUserId], references: [id])
+  reporter        User         @relation("UserReportReporter", fields: [reporterUserId], references: [id])
+  session         Session?     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  enrollment      Enrollment?  @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  resolvedByAdmin AdminUser?   @relation(fields: [resolvedByAdminId], references: [id], onDelete: Restrict)
+  genderFlags     GenderFlag[]
 
   @@index([reportedUserId])
   @@index([reporterUserId])
   @@index([sessionId])
+  @@index([enrollmentId])
   @@index([resolvedByAdminId])
   @@map("user_reports")
 }
