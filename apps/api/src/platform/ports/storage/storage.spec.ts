@@ -1,8 +1,9 @@
 // T115: the storage contract (FR-055, R-SEC-3), run against both real implementations of T116, and,
 // since T122, against the in-memory stand-in, which must keep the same contract as what it stands in for.
 //
-// "No durable public path" is held twice. The port's operations are exactly four, and the type
-// check below fails the moment a fifth appears; at run time the only operation that returns text
+// "No durable public path" is held twice. The port's operations are exactly five, and the type
+// check below fails the moment a sixth appears (B46, specs/005-certification Q2 (a): `read`, which
+// hands back an object's bytes to the server, never a path or a link); at run time the only operation that returns text
 // is the temporary link, and every link it hands out carries an expiry and a signature. "Every
 // link expires": the local link is refused by its own verifier once its moment has passed, and the
 // remote link is a presigned URL whose lifetime the storage service enforces.
@@ -16,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -26,7 +28,7 @@ import { afterAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { InMemoryStorageAdapter } from './in-memory.adapter.js';
 import { deriveLinkKey, LocalStorageAdapter } from './local.adapter.js';
 import { S3StorageAdapter } from './s3.adapter.js';
-import { MAX_LINK_SECONDS, type StoragePort } from './storage.port.js';
+import { MAX_LINK_SECONDS, type StoragePort, type StoredObject } from './storage.port.js';
 
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 const ISSUED = new Date('2026-10-07T10:00:00Z');
@@ -93,11 +95,23 @@ function remote(): Subject {
     forcePathStyle: true,
     credentials: { accessKeyId: 'contract-test', secretAccessKey: 'contract-test' },
   });
-  const objects = new Map<string, unknown>();
+  const objects = new Map<string, { readonly body: unknown; readonly type: unknown }>();
   client.send = ((command: unknown) => {
     if (command instanceof PutObjectCommand) {
-      objects.set(String(command.input.Key), command.input.Body);
+      objects.set(String(command.input.Key), {
+        body: command.input.Body,
+        type: command.input.ContentType,
+      });
       return Promise.resolve({});
+    }
+    if (command instanceof GetObjectCommand) {
+      const object = objects.get(String(command.input.Key));
+      if (object === undefined) return Promise.reject(notFound());
+      const bytes = Uint8Array.from(object.body as Uint8Array);
+      return Promise.resolve({
+        Body: { transformToByteArray: () => Promise.resolve(bytes) },
+        ContentType: object.type,
+      });
     }
     if (command instanceof HeadObjectCommand) {
       return objects.has(String(command.input.Key))
@@ -119,10 +133,11 @@ function remote(): Subject {
 }
 
 describe('the storage port (T115, FR-055, R-SEC-3)', () => {
-  it('has exactly four operations, none of which hands out a lasting path', () => {
+  it('has exactly five operations, none of which hands out a lasting path', () => {
     expectTypeOf<keyof StoragePort>().toEqualTypeOf<
-      'put' | 'temporaryLink' | 'remove' | 'exists'
+      'put' | 'temporaryLink' | 'remove' | 'exists' | 'read'
     >();
+    expectTypeOf<ReturnType<StoragePort['read']>>().toEqualTypeOf<Promise<StoredObject>>();
     expectTypeOf<ReturnType<StoragePort['put']>>().toEqualTypeOf<Promise<void>>();
     expectTypeOf<ReturnType<StoragePort['remove']>>().toEqualTypeOf<Promise<void>>();
     expectTypeOf<ReturnType<StoragePort['exists']>>().toEqualTypeOf<Promise<boolean>>();
@@ -142,6 +157,18 @@ describe.each([
     expect(await storage.exists('certificates/2026/a.pdf')).toBe(true);
     expect(await storage.remove('certificates/2026/a.pdf')).toBeUndefined();
     expect(await storage.exists('certificates/2026/a.pdf')).toBe(false);
+  });
+
+  it('reads back what was put, with its content type, and refuses an absent object', async () => {
+    const { storage } = make();
+    const body = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    await storage.put('ijazah-requests/r1/signature.png', body, 'image/png');
+
+    const read = await storage.read('ijazah-requests/r1/signature.png');
+
+    expect([...read.body]).toEqual([...body]);
+    expect(read.contentType).toBe('image/png');
+    await expect(storage.read('ijazah-requests/r1/absent.png')).rejects.toThrow();
   });
 
   it('hands out a signed link that names its lifetime', async () => {
@@ -190,6 +217,7 @@ describe.each([
       await expect(storage.temporaryLink(key, 60)).rejects.toThrow(TypeError);
       await expect(storage.remove(key)).rejects.toThrow(TypeError);
       await expect(storage.exists(key)).rejects.toThrow(TypeError);
+      await expect(storage.read(key)).rejects.toThrow(TypeError);
     },
   );
 });

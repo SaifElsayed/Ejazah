@@ -144,6 +144,8 @@ async function issuedIjazah(
     granted_at: '2026-11-17T08:00:00Z',
     student_name_printed: studentName,
     teacher_name_printed: 'اسم المعلم',
+    // B46 (005:T006, Q5 (c)): the riwaya it prints, NOT NULL.
+    riwaya_printed: 'حفص عن عاصم',
     rendered_at: '2026-11-17T08:05:00Z',
     signed_off_at: '2026-11-17T08:10:00Z',
     signed_off_by_admin_id: adminId,

@@ -16,6 +16,9 @@
 //
 // T077 of specs/004-sessions (Q-R4 (a); contracts/kernel.md, the kept data's row) widens it to
 // `verification_documents`, after `teacher_profiles`: its statement, and that the role may run it.
+//
+// B46 of specs/005-certification (Q3 (a); contracts/kernel.md, the ijazah request's row) widens it to
+// `ijazah_requests` and `ijazahs`, after `payments`: their statements, and that the role may run them.
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -68,6 +71,9 @@ describe('lockRows (T126, T005)', () => {
     'cancellation_requests',
     'disputes',
     'payments',
+    // B46 (specs/005-certification, Q3 (a); contracts/kernel.md, the ijazah row): a request, then its ijazah, after the payments.
+    'ijazah_requests',
+    'ijazahs',
   ])(
     'locks the rows of %s by id, in id order, FOR UPDATE, the ids bound as one uuid array',
     async (table) => {
@@ -214,6 +220,9 @@ describe(
       'payments',
       // T077 of specs/004-sessions (Q-R4 (a)).
       'verification_documents',
+      // B46 of specs/005-certification (Q3 (a)).
+      'ijazah_requests',
+      'ijazahs',
     ])('lockRows on %s is a statement the application role may run', async (table) => {
       await expect(
         database.$transaction((tx) => lockRows(tx, table, [randomUUID()]), OPTIONS),

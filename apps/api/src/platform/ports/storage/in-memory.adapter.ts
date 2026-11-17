@@ -2,7 +2,8 @@
 // placeholder header already assigned it to T122. Objects live in memory, and the stand-in keeps the
 // storage contract of T115 exactly as the two real implementations do: four operations, no lasting
 // path, and a link that is signed and expires. It records each operation it was asked to do and
-// fails one when told, before anything changes (`../stand-in.ts`).
+// fails one when told, before anything changes (`../stand-in.ts`). Since B46 (specs/005-certification
+// Q2 (a)) the contract has a fifth operation, `read`.
 //
 // It is not selected by `STORAGE_DRIVER`: local storage is a real implementation and serves
 // development (FR-055), so this one is constructed by a test that wants the record or a failure.
@@ -17,15 +18,11 @@ import {
   assertStorageKey,
   isStorageKey,
   type StoragePort,
+  type StoredObject,
 } from './storage.port.js';
 
 const LINK_PATH = '/files/';
 const LINK_BASE = 'http://link.invalid';
-
-interface StoredObject {
-  readonly body: Uint8Array;
-  readonly contentType: string;
-}
 
 export class InMemoryStorageAdapter extends StandIn<StoragePort> implements StoragePort {
   readonly #objects = new Map<string, StoredObject>();
@@ -86,6 +83,21 @@ export class InMemoryStorageAdapter extends StandIn<StoragePort> implements Stor
       return Promise.reject(error as Error);
     }
     return Promise.resolve(this.#objects.has(key));
+  }
+
+  read(key: string): Promise<StoredObject> {
+    const failure = this.attempt('read', [key]);
+    if (failure !== undefined) return Promise.reject(failure);
+    try {
+      assertStorageKey(key);
+    } catch (error: unknown) {
+      return Promise.reject(error as Error);
+    }
+    const object = this.#objects.get(key);
+    if (object === undefined) {
+      return Promise.reject(new Error('No object is stored under that key.'));
+    }
+    return Promise.resolve({ body: Uint8Array.from(object.body), contentType: object.contentType });
   }
 
   /** The key a link reads, while its signature holds and its moment has not passed; else undefined. */

@@ -351,6 +351,8 @@ describe('soft-deleted rows, through the client extended by T148 (T053)', () => 
             // 005:T001 (data-model.md; ADR 0019 D1): the names it prints, NOT NULL.
             studentNamePrinted: 'اسم الطالب',
             teacherNamePrinted: 'اسم المعلم',
+            // B46 (005:T006, Q5 (c)): the riwaya it prints, NOT NULL.
+            riwayaPrinted: 'حفص عن عاصم',
           },
           select: { id: true },
         });

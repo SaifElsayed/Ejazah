@@ -76,7 +76,10 @@ export type LockedTable =
   | 'session_remedies'
   | 'cancellation_requests'
   | 'disputes'
-  | 'payments';
+  | 'payments'
+  // B46 (specs/005-certification, Q3 (a); contracts/kernel.md, the ijazah row): a request, then its ijazah, after the payments.
+  | 'ijazah_requests'
+  | 'ijazahs';
 
 /** Locks the rows of `table` whose id is in `ids`, FOR UPDATE, until the transaction ends. */
 export async function lockRows(
@@ -118,6 +121,12 @@ export async function lockRows(
       return;
     case 'payments':
       await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'ijazah_requests':
+      await tx.$queryRaw`SELECT 1 FROM ijazah_requests WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'ijazahs':
+      await tx.$queryRaw`SELECT 1 FROM ijazahs WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       return;
   }
 }
