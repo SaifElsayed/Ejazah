@@ -723,7 +723,7 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Ijazah track: share released at half the sessions (percent of the Teacher's share, 0–100) *(2026-11-17, ADR 0025, DEC-81; fixed for a programme at its first order)* | 25 | FR-PAYG-10 |
 | Postponement notice before a session (hours, at least 1) *(2026-11-17, DEC-86)* | 12 | FR-POSTPONE-3 |
 | Postponement interval per party (weeks, at least 1) *(2026-11-17, DEC-86)* | 4 | FR-POSTPONE-4 |
-| Fewest other Teachers for the average price (whole number, 1–100) *(2026-11-17, DEC-88; the Package editor's average price per session is shown only over at least this many other Teachers; read at each request)* | 3 | FR-PROFILE-2 |
+| Fewest other Teachers for the average price (whole number, 2–100: at least 2, so no single Teacher's price is shown) *(2026-11-17, DEC-88; the Package editor's average price per session is shown only over at least this many other Teachers; read at each request)* | 3 | FR-PROFILE-2 |
 | Currency                                    | EGP             | §2.5                           |
 
 Operational settings *(Phase 1)*, seeded with the table above and adjustable the same way, but read by the sweeps and the session service rather than by a person's decision: one-time code purge after 24 hours; expired session purge after 30 days; refresh-token reuse grace of 30 seconds; stale push token purge after 90 days. Every key is seeded by `prisma/seed.ts` at its default (`specs/002-identity/data-model.md` §4; `specs/003-booking/data-model.md` §4 for the *(Phase 2)* rows; `specs/004-sessions/data-model.md` §4 for the *(Phase 3)* rows).
