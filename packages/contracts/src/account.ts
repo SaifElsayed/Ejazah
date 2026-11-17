@@ -134,3 +134,17 @@ export type IdentityDocumentType = z.infer<typeof identityDocumentType>;
 export type DeleteAccountInput = z.infer<typeof deleteAccountInput>;
 export type IdentityVerificationGetOutput = z.infer<typeof identityVerificationGetOutput>;
 export type IdentityVerificationOutcome = z.infer<typeof identityVerificationOutcome>;
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md, `account.certificateName.set`):
+// the student's full name as the certificate prints it, entered once; afterwards only an
+// administrator changes it (`users.setCertificateName`). Its bounds are the display name's
+// (`onboarding.ts`), no document naming others.
+export const certificateName = z.string().trim().min(2).max(80);
+
+/** Keyed (app-surface.md, "App surface: Phase 4 additions"); refused `already_set` once a name is held. */
+export const certificateNameSetInput = z.object({ name: certificateName, idempotencyKey });
+
+export const certificateNameSetOutput = z.object({ name: z.string() });
+
+export type CertificateNameSetInput = z.infer<typeof certificateNameSetInput>;
+export type CertificateNameSetOutput = z.infer<typeof certificateNameSetOutput>;

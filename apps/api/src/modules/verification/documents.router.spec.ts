@@ -35,6 +35,13 @@ const DELETION = {
   idempotencyKey: 'users-delete-key-0001',
 };
 const NEXT_REQUEST = '0199d0a0-0000-7000-8000-0000000000e2';
+/** T004 of specs/005-certification: an administrator's change of a student's certificate name. */
+const NAMING = {
+  targetUserId: PERSON,
+  name: 'مريم بنت أحمد بن علي',
+  reason: 'طلب الطالبة تصحيح الاسم عبر الدعم',
+  idempotencyKey: 'users-name-key-0001',
+};
 
 // T058 of specs/004-sessions: what the user directory's stand-in answers.
 const USERS_PAGE: UsersListOutput = {
@@ -96,6 +103,8 @@ function surface() {
     get: record('users.get', USER_RECORD),
     // T081 of specs/004-sessions: the administrator's deletion, its first run.
     delete: record('users.delete', { replayed: false }),
+    // T004 of specs/005-certification: the certificate name's change, its first run.
+    setCertificateName: record('users.setCertificateName', { replayed: false }),
   };
   const contexts = adminContextsOver({ documents, users });
   return {
@@ -122,6 +131,11 @@ const unusedDeletion = async (): Promise<never> => {
   throw new Error('users.delete is not reached here');
 };
 
+/** T004 of specs/005-certification: a certificate name's change no case of the directory reaches. */
+const unusedNaming = async (): Promise<never> => {
+  throw new Error('users.setCertificateName is not reached here');
+};
+
 const CALLS: Record<string, (caller: Caller) => Promise<unknown>> = {
   'documents.link': (caller) => caller.documents.link({ documentId: DOCUMENT }),
   'users.requireIdentity': (caller) =>
@@ -133,6 +147,8 @@ const CALLS: Record<string, (caller: Caller) => Promise<unknown>> = {
   'users.get': (caller) => caller.users.get({ targetUserId: PERSON }),
   // T081 of specs/004-sessions.
   'users.delete': (caller) => caller.users.delete(DELETION),
+  // T004 of specs/005-certification.
+  'users.setCertificateName': (caller) => caller.users.setCertificateName(NAMING),
 };
 
 describe('the administrator kind', () => {
@@ -245,7 +261,13 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
     const leaked = { ...USER_RECORD, dateOfBirth: '2012-03-04' } as UsersGetOutput;
     const contexts = adminContextsOver({
       // T081 (rule d): the deletion, never reached here.
-      users: { list: async () => USERS_PAGE, get: async () => leaked, delete: unusedDeletion },
+      users: {
+        list: async () => USERS_PAGE,
+        get: async () => leaked,
+        delete: unusedDeletion,
+        // T004 of specs/005-certification (rule d): never reached here.
+        setCertificateName: unusedNaming,
+      },
     });
     const answer = await callerFor(contexts.contextFor(VERIFIED)).users.get({
       targetUserId: PERSON,
@@ -266,6 +288,8 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
         },
         // T081 (rule d): the deletion, never reached here.
         delete: unusedDeletion,
+        // T004 of specs/005-certification (rule d): never reached here.
+        setCertificateName: unusedNaming,
       },
     });
     expect(
@@ -334,7 +358,13 @@ describe('the user directory (T058 of specs/004-sessions)', () => {
 describe('the administrator’s deletion (T081 of specs/004-sessions)', () => {
   function deletingWith(remove: AdminSurfaceServices['users']['delete']) {
     return adminContextsOver({
-      users: { list: async () => USERS_PAGE, get: async () => USER_RECORD, delete: remove },
+      users: {
+        list: async () => USERS_PAGE,
+        get: async () => USER_RECORD,
+        delete: remove,
+        // T004 of specs/005-certification (rule d): not reached by the deletion's cases.
+        setCertificateName: unusedNaming,
+      },
     });
   }
 
@@ -431,6 +461,120 @@ describe('the administrator’s deletion (T081 of specs/004-sessions)', () => {
         'rate_limit_admin_user_delete',
         { kind: 'administrator', adminId: SPEC_ADMIN },
         'users.delete',
+      ],
+    ]);
+    expect(opened).toBe(0);
+  });
+});
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; admin-surface.md, `users.setCertificateName`;
+// the note under T004, Q4 (a)): an administrator sets or changes a student's certificate name at the
+// student's request, through identity's certificate-name service (`ctx.services.users`, as
+// `users.delete`), under `rate_limit_ijazah_decision`, keyed, and audited
+// `user.certificate_name_set` on the person with the reason and **no name** in the entry, on its
+// first run only. What the service does (the student only, the port on this transaction) is
+// `certificate-name.service.spec.ts`'s; that an issued certificate keeps its printed name is
+// `tests/db-integrity/certificate-name.spec.ts`'s.
+describe('an administrator’s certificate name (T004 of specs/005-certification)', () => {
+  function namingWith(setCertificateName: AdminSurfaceServices['users']['setCertificateName']) {
+    return adminContextsOver({
+      users: {
+        list: async () => USERS_PAGE,
+        get: async () => USER_RECORD,
+        delete: unusedDeletion,
+        setCertificateName,
+      },
+    });
+  }
+
+  it('users.setCertificateName hands the reader and the input to the service and audits user.certificate_name_set on the person, with the reason', async () => {
+    const { as, written, reached } = surface();
+    expect(await CALLS['users.setCertificateName']!(as(VERIFIED))).toBeUndefined();
+    expect(reached).toEqual([['users.setCertificateName', SPEC_ADMIN, NAMING]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'user.certificate_name_set',
+        targetType: 'user',
+        targetId: PERSON,
+        reason: NAMING.reason,
+      },
+    ]);
+  });
+
+  it('writes no name into the audit entry', async () => {
+    const { as, written } = surface();
+    await CALLS['users.setCertificateName']!(as(VERIFIED));
+    expect(written).toHaveLength(1);
+    expect(JSON.stringify(written)).not.toContain(NAMING.name);
+    expect(written[0]).not.toHaveProperty('before');
+    expect(written[0]).not.toHaveProperty('after');
+  });
+
+  it('a replay of the key records no second entry', async () => {
+    const contexts = namingWith(async () => ({ replayed: true }));
+    await callerFor(contexts.contextFor(VERIFIED)).users.setCertificateName(NAMING);
+    expect(contexts.written).toEqual([]);
+  });
+
+  it('answers the service’s NOT_FOUND, writing nothing', async () => {
+    const contexts = namingWith(async () => {
+      throw new DomainError('NOT_FOUND');
+    });
+    expect(
+      await codeOf(callerFor(contexts.contextFor(VERIFIED)).users.setCertificateName(NAMING)),
+    ).toBe('NOT_FOUND');
+    expect(contexts.written).toEqual([]);
+  });
+
+  it.each([
+    ['a blank reason', { ...NAMING, reason: '  ' }],
+    ['a blank name', { ...NAMING, name: '  ' }],
+    ['no idempotency key', { targetUserId: PERSON, name: NAMING.name, reason: NAMING.reason }],
+    ['a person who is no id', { ...NAMING, targetUserId: 'x' }],
+  ])('refuses %s as VALIDATION_FAILED, reaching nothing', async (_case, input) => {
+    const { as, written, reached } = surface();
+    expect(
+      await codeOf(
+        as(VERIFIED).users.setCertificateName(
+          input as Parameters<Caller['users']['setCertificateName']>[0],
+        ),
+      ),
+    ).toBe('VALIDATION_FAILED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('over rate_limit_ijazah_decision is refused RATE_LIMITED, opening no transaction and writing nothing', async () => {
+    const counted: unknown[][] = [];
+    let opened = 0;
+    const context = createAdminContext({
+      session: VERIFIED,
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: {
+          run: async () => {
+            opened += 1;
+            throw new Error('no transaction may open');
+          },
+        },
+        auditWriter: { write: async () => undefined },
+      },
+      services: unusedAdminServices,
+      rateLimiter: {
+        check: async (key: string, subject: unknown, procedure: string) => {
+          counted.push([key, subject, procedure]);
+          throw new DomainError('RATE_LIMITED');
+        },
+      } as unknown as RateLimiter,
+      clientAddress: '203.0.113.9',
+    });
+    expect(await codeOf(callerFor(context).users.setCertificateName(NAMING))).toBe('RATE_LIMITED');
+    expect(counted).toEqual([
+      [
+        'rate_limit_ijazah_decision',
+        { kind: 'administrator', adminId: SPEC_ADMIN },
+        'users.setCertificateName',
       ],
     ]);
     expect(opened).toBe(0);

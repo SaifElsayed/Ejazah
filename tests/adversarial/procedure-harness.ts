@@ -502,6 +502,8 @@ const OWN_ACCOUNT =
  * teacher moves to `registeredAttacks` in the task that changes it.
  */
 export const exemptProcedures: readonly Exemption[] = [
+  // T004 of specs/005-certification (rule d): the student's own certificate name; answers it alone.
+  { path: 'account.certificateName.set', reason: OWN_ACCOUNT },
   { path: 'account.delete', reason: OWN_ACCOUNT },
   {
     path: 'account.identityVerification.get',
