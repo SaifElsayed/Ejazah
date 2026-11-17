@@ -601,6 +601,14 @@ The first wave is fourteen tasks (T123, T126, T129 and T133 to T141 are twelve; 
   - **The code** is in `modules/sessions` and both apps, track 1's area. It is cut from `develop` after track 1's B48 merges (B48 edits `sessions/cancellation.service.ts` and the answer path, `TeacherEnrollment.tsx` and `EnrollmentDetail.tsx`; B47 edits `restore.service.ts` and `ban-lift.service.ts`).
   - Each refusal red first. B-M3
 
+- [ ] T113 The average-price hint in the package editor (the owner's decision of 2026-11-17, «موافق على شكل متوسط الاسعار»; SRS DEC-88, FR-PROFILE-2 as amended).
+  - **What it shows:** beside the teacher's share of the price (T104, Q-A3 (a)), the average price per session of the other teachers' published packages on the same track and with the same session length as the editor's choice.
+  - **The amount:** each package's price per session (`packages/money`'s `perSession`, FR-337's rounding), averaged and rounded half up to the piaster, in `packages/money` (R-MONEY-5).
+  - **k ≥ 3:** only when at least three such teachers have a published package, the viewing teacher not counted; otherwise the read answers nothing and the editor shows nothing.
+  - **The read:** a teacher procedure in `modules/catalog`, input the track and the session length, answering the amount and nothing that names a teacher. It is registered in the adversarial suite in B43's shape (teacher-kind; it names no user).
+  - **Specs, each red first:** the average per session; fewer than three teachers → none; another track or another length excluded; an unpublished or paused package excluded; the viewing teacher's own packages excluded.
+  - The editor draws it in the price guide's spot, i18n in the «money» group. B-M1, lane A, after the share hint.
+
 ---
 
 ## Dependencies and Execution Order
@@ -641,7 +649,7 @@ At most six tasks each, in this order; one pull request each, reviewed by Saif's
 | D19 Tue 11/10 | B32 | T052, T053, T054, T055, T056, T057, T097 | US5, the gates, the documents, the gateway (on its test account, the owner's decision of 2026-11-03), the close; the same day, the phone run, the phase's close and Phase 3's Spec Kit cycle (specify, clarify, plan, tasks, analyze), which reviews the row below for Phase 3 |
 | Tue 11/17 | B-M0 | — | Track 2's tasks commit: ADR 0025, SRS DEC-80 to DEC-87 and §3.8.6, ADR 0024 D4, the notes under T101–T105, T108 to T112 |
 | after B-M0 | B-P0 | T108 | The programme's Spec Kit cycle, `specs/006-programme/`, its own pull request |
-| after B-M0 | B-M1 | T104, T101, T109 | The commission, the payee and the payment mode |
+| after B-M0 | B-M1 | T104, T101, T109, T113 | The commission, the payee, the payment mode and the average-price hint |
 | after B-M1 merges | B-M2 | T102, T103, T105, T110, T111 | Partial refunds, the release at milestones, what a closed enrollment refunds, the refund remedy removed. T111's files: `sessions/remedy-offer.service.ts:18-27, 336-343`, `remedy.service.ts:421-427, 854-859, 989-1070`, `remedy-offer.view.ts:80`, `remedy-case.service.ts:91-95`, `suspension-case.service.ts:5-11` (comment); mobile `student/remedies/` `RefundSheet.tsx` (removed), `RemedyPanel.tsx:19, 31, 117-122, 137`, `api.ts:35-36, 71`, `remedy.ts:5, 25, 42, 52-63`. Not `restore.service.ts` or `ban-lift.service.ts` (B47), so not cut after B47 |
 | after B-M2 and track 1's B48 merge | B-M3 | T112 | The postponement (track 1's area, coordinated) |
 | after B-P0 | B-P1 onwards | `006:` tasks | The programme's code, batches by `specs/006-programme/tasks.md`, each ≤6 tasks |
