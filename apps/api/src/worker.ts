@@ -65,6 +65,8 @@ const [
   { deliverNotification, pushCopyRenderer },
   notifications,
   { copyOf },
+  // T008 of specs/005-certification: the certificate's rendering.
+  { certificateRenderSteps, renderCertificate },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -106,6 +108,7 @@ const [
   import('./jobs/deliver-notification.js'),
   import('./modules/notifications/index.js'),
   import('./platform/web/copy.js'),
+  import('./jobs/render-certificate.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -263,6 +266,17 @@ const jobs: readonly Job[] = [
     recipients: identity.createPushRecipients({ database, cipher }),
     push,
     render: pushCopyRenderer({ ar: copyOf('ar'), en: copyOf('en') }),
+    log,
+  }),
+  // T008 of specs/005-certification (FR-606, R-401; Q6 (a)): one ijazah's certificate, enqueued after
+  // the approval's (T007) or the re-render's (T032) commit with its generation; the PDF under
+  // `certificates/<ijazahId>/<generation>.pdf`, marked under the ijazah's lock only while that
+  // generation is current. ⚠️ automatic: a newer generation's file replaces the older one, which is
+  // removed after the commit; a missing signature copy leaves the ijazah unrendered (`signature_missing`).
+  renderCertificate({
+    steps: certificateRenderSteps(database),
+    storage: ports.storage,
+    typstBin: config.TYPST_BIN,
     log,
   }),
 ];

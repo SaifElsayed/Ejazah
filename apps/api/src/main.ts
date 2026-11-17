@@ -48,6 +48,8 @@ const [
   chat,
   // T003 of specs/005-certification, the owner's Q16 (b): the image line's numbers (T073).
   { PHOTOS_PROCESSED_AT_ONCE, PHOTO_TURN_WAIT_MS },
+  // T006 of specs/005-certification: the ijazah request's service and its router.
+  certification,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -81,6 +83,7 @@ const [
   import('./modules/sessions/index.js'),
   import('./modules/chat/index.js'),
   import('./platform/guards/upload.middleware.js'),
+  import('./modules/certification/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -175,6 +178,18 @@ const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
 });
+// T006 of specs/005-certification (the note under T006, Q4 (a), Q14 (a)): the ijazah request's one
+// service. Certification's entry is bound to the three ports the other modules declare, so none of
+// them imports certification (`docs/ARCHITECTURE.md:195`): identity's `AwaitingNameRelease` and
+// `AccountConsequences` (a student's deletion closes their open requests and erases each copy after
+// the commit), booking's `EnrollmentIjazahRequests` and catalog's `OpenRequestsRefreeze` (below).
+const ijazahRequests = certification.createIjazahRequestService({
+  database,
+  storage: ports.storage,
+  idempotency,
+  log,
+});
+consequences.subscribe(ijazahRequests.deletionConsequence());
 // Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
@@ -228,12 +243,12 @@ const services = {
       // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
       ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
     }),
-    // T004 of specs/005-certification (FR-602): the certificate name. `AwaitingNameRelease` is a
-    // no-op until T006 binds it to certification's entry, so identity imports no module.
+    // T004 of specs/005-certification (FR-602): the certificate name. Its `AwaitingNameRelease` is
+    // bound to certification's request service (T006), so identity imports no module.
     certificateName: identity.createCertificateNameService({
       idempotency,
       log,
-      awaitingNameRelease: { release: async () => undefined },
+      awaitingNameRelease: { release: (tx, studentUserId) => ijazahRequests.release(tx, studentUserId) },
     }),
   },
   verification: verification.createVerificationServices({
@@ -279,7 +294,13 @@ const services = {
     settings,
   }),
   // `booking` (T032): the booking sheet's slots, over catalog's, identity's and sessions' entries.
-  booking: booking.createBookingServices({ database, settings }),
+  // T006 of specs/005-certification (Q4 (a)): the enrollment details' `ijazahRequest`, through
+  // booking's `EnrollmentIjazahRequests` port bound to certification's request service.
+  booking: booking.createBookingServices({
+    database,
+    settings,
+    ijazahRequests: { of: (tx, enrollmentIds) => ijazahRequests.of(tx, enrollmentIds) },
+  }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two
   // steps through the kernel's idempotency, the address encrypted with the column cipher (R-DB-8).
@@ -312,6 +333,8 @@ const services = {
     enrollments: enrollmentSide,
     storage: ports.storage,
   }),
+  // `teacher.ijazahRequests.*` (T006 of specs/005-certification): the request's service above.
+  certification: { ijazahRequests },
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -432,6 +455,9 @@ const adminServices = createAdminServices({
   // T004 of specs/005-certification (FR-602): `users.setCertificateName`, identity's certificate-name
   // service on the administrator's transaction.
   certificateNames: services.identity.certificateName,
+  // T006 of specs/005-certification (P4 (a), Q-A4 (a)): `credentials.correct` re-freezes the
+  // corrected credential's open requests on its own transaction, after its conditional write.
+  openRequestsRefreeze: { refreeze: (tx, credentialId) => ijazahRequests.refreeze(tx, credentialId) },
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,
