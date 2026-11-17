@@ -17,7 +17,9 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // (research R-212). It is for display only: nothing stores or charges it, the gateway charges the
 // package price. `lowest` picks one of the amounts it is given and computes none.
 // T104 (ADR 0025 D1, SRS DEC-80, amending ADR 0007 D1's 0% commission) names `teacherShare`: the
-// teacher's share of an order, sent to the gateway as the split and kept on the order.
+// teacher's share of an order, sent to the gateway as the split and kept on the order. T113 (SRS
+// DEC-88) names `average`: the package editor's average price per session of other teachers'
+// packages, for display only.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -148,6 +150,22 @@ export function lowest(amounts_piasters: readonly [Piasters, ...Piasters[]]): Pi
     if (amount_piasters < lowest_piasters) lowest_piasters = amount_piasters;
   }
   return lowest_piasters;
+}
+
+/**
+ * The mean of `amounts_piasters`, rounded half up to the piaster (T113, SRS DEC-88: the package
+ * editor's average price per session of other teachers' packages; FR-337's rounding). Exact in
+ * `bigint`, since a sum of safe integers may pass the safe range; the mean of safe integers is one.
+ * The list is non-empty by type; one that reaches here empty anyway is refused.
+ */
+export function average(amounts_piasters: readonly [Piasters, ...Piasters[]]): Piasters {
+  if (amounts_piasters.length === 0) {
+    throw new RangeError('average: an empty list has no average');
+  }
+  const count = BigInt(amounts_piasters.length);
+  const sum = amounts_piasters.reduce((total, amount) => total + BigInt(amount), 0n);
+  const whole = sum / count;
+  return piasters(Number((sum % count) * 2n >= count ? whole + 1n : whole));
 }
 
 function refusalReason(value: number): string {

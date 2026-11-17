@@ -1873,7 +1873,7 @@
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
         "gatewayFee": "Gateway fee",
         "gross": "Gross",
-        "netToTeacher": "Net to teacher",
+        "netToTeacher": "Net after the gateway's fee",
         "orderNo": "Order number",
         "paidOrdersNote": "A compensation case covers every paid order of this enrollment.",
         "paidOrdersTitle": "Paid orders of this enrollment",

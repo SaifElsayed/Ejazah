@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   MoneyError,
+  average,
   isPiasters,
   lowest,
   perSession,
@@ -213,6 +214,35 @@ describe('teacherShare (T104, ADR 0025 D1, SRS DEC-80)', () => {
       expect(() => teacherShare(piasters(100), rate)).toThrow(RangeError);
       expect(() => teacherShare(piasters(100), rate)).toThrow(/teacherShare/);
     }
+  });
+});
+
+describe('average (T113, SRS DEC-88)', () => {
+  it('averages amounts that divide evenly, and one amount is itself', () => {
+    expect(toPlainNumber(average([piasters(100), piasters(200), piasters(300)]))).toBe(200);
+    expect(toPlainNumber(average([piasters(15_000)]))).toBe(15_000);
+  });
+
+  it('rounds half a piaster up, less than half down', () => {
+    // 1.5 → 2, 1.33… → 1, 1.67 → 2.
+    expect(toPlainNumber(average([piasters(1), piasters(2)]))).toBe(2);
+    expect(toPlainNumber(average([piasters(1), piasters(1), piasters(2)]))).toBe(1);
+    expect(toPlainNumber(average([piasters(1), piasters(2), piasters(2)]))).toBe(2);
+  });
+
+  it('stays exact at the top of the safe range, where a floating sum would not', () => {
+    const top = Number.MAX_SAFE_INTEGER;
+    const sum = BigInt(top) + BigInt(top - 1) + BigInt(top - 4);
+    const quotient = sum / 3n;
+    const expected = (sum % 3n) * 2n >= 3n ? quotient + 1n : quotient;
+    expect(
+      BigInt(toPlainNumber(average([piasters(top), piasters(top - 1), piasters(top - 4)]))),
+    ).toBe(expected);
+  });
+
+  it('refuses an empty list, which has no average', () => {
+    expect(() => average([] as unknown as [Piasters])).toThrow(RangeError);
+    expect(() => average([] as unknown as [Piasters])).toThrow(/average/);
   });
 });
 
