@@ -61,6 +61,10 @@ const [
   { purgeChat },
   { closeSlotHolds },
   { eraseKeptData },
+  // T005 of specs/005-certification: the push delivery job, its module and the generated copy.
+  { deliverNotification, pushCopyRenderer },
+  notifications,
+  { copyOf },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -99,6 +103,9 @@ const [
   import('./jobs/purge-chat.js'),
   import('./jobs/close-slot-holds.js'),
   import('./jobs/erase-kept-data.js'),
+  import('./jobs/deliver-notification.js'),
+  import('./modules/notifications/index.js'),
+  import('./platform/web/copy.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -246,6 +253,17 @@ const jobs: readonly Job[] = [
   // 04:25 ⚠️ automatic and final: each profile whose `kept_erase_at` passed, one per transaction, under
   // its lock and its kept documents' locks; the files are left to `erase-deleted-files`.
   eraseKeptData({ database, log }),
+  // T005 of specs/005-certification (FR-620, R-405, R-406): one notification's push, enqueued by the
+  // writer after its producer's commit; idempotent on `pushed_at`; the kind's fixed text in the user's
+  // language from the generated copy (checked at start: all 28 texts present); ⚠️ the tokens the
+  // provider no longer accepts removed through identity, automatically and for good.
+  deliverNotification({
+    notifications: notifications.createNotificationDeliveries(database),
+    recipients: identity.createPushRecipients({ database, cipher }),
+    push,
+    render: pushCopyRenderer({ ar: copyOf('ar'), en: copyOf('en') }),
+    log,
+  }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);
