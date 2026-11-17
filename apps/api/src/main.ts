@@ -46,6 +46,8 @@ const [
   { CONFIRM_ENROLLMENT },
   sessionsModule,
   chat,
+  // T003 of specs/005-certification, the owner's Q16 (b): the image line's numbers (T073).
+  { PHOTOS_PROCESSED_AT_ONCE, PHOTO_TURN_WAIT_MS },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -78,6 +80,7 @@ const [
   import('./jobs/confirm-enrollment.js'),
   import('./modules/sessions/index.js'),
   import('./modules/chat/index.js'),
+  import('./platform/guards/upload.middleware.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -182,6 +185,12 @@ const teacherSignatures = catalog.createTeacherSignatureService({
   storage: ports.storage,
   settings,
   log,
+});
+// T003 of specs/005-certification, the owner's Q16 (b): one image line for the process, handed to the
+// photos route and the signature route, so one image is decoded at a time across both (T073).
+const imageTurns = new identity.PhotoTurns({
+  atOnce: PHOTOS_PROCESSED_AT_ONCE,
+  waitMs: PHOTO_TURN_WAIT_MS,
 });
 const services = {
   settings,
@@ -340,6 +349,8 @@ const routes = {
     storage: ports.storage,
     settings,
     database,
+    // T003 of specs/005-certification: the process's one image line, shared with the signature route.
+    turns: imageTurns,
   }),
   // The upload route's third use (T038 of specs/004-sessions): `POST /uploads/chat`, a PDF or UTF-8
   // text document sent in an enrollment's chat, never an image (R-SEC-4, R-SEC-5).
@@ -354,6 +365,7 @@ const routes = {
   [catalog.SIGNATURE_UPLOAD_PATH]: catalog.createSignatureUploadRoute({
     ...uploads,
     signatures: teacherSignatures,
+    turns: imageTurns,
   }),
   ...filesRoutes(ports.storage),
   // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the
