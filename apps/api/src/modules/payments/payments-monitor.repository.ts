@@ -23,6 +23,9 @@ export interface MonitorOrderRow {
   readonly grossPiasters: bigint;
   readonly gatewayFeePiasters: bigint | null;
   readonly netPiasters: bigint | null;
+  /** 003:T104: the rate and the teacher's share kept on the order; null before the commission. */
+  readonly teacherShareRatePercent: number | null;
+  readonly teacherSharePiasters: bigint | null;
   readonly currency: string;
   readonly createdAt: Date;
 }
@@ -68,6 +71,8 @@ export function orderPage(
       grossPiasters: true,
       gatewayFeePiasters: true,
       netPiasters: true,
+      teacherShareRatePercent: true,
+      teacherSharePiasters: true,
       currency: true,
       createdAt: true,
     },
@@ -90,6 +95,8 @@ export function monitoredOrderOf(
       grossPiasters: true,
       gatewayFeePiasters: true,
       netPiasters: true,
+      teacherShareRatePercent: true,
+      teacherSharePiasters: true,
       currency: true,
       createdAt: true,
     },
@@ -128,6 +135,8 @@ export function paidOrdersOf(
       grossPiasters: true,
       gatewayFeePiasters: true,
       netPiasters: true,
+      teacherShareRatePercent: true,
+      teacherSharePiasters: true,
       currency: true,
       createdAt: true,
     },

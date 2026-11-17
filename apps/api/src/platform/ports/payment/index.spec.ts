@@ -15,7 +15,7 @@ const PAY_BY = new Date('2026-10-08T10:30:00Z');
 /** Far enough ahead that an order created now has a lifetime. */
 const PAY_BY_LATER = new Date('2099-01-01T00:00:00Z');
 
-const base: PaymentConfig = { PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY: KEY };
+const base: PaymentConfig = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY: KEY };
 
 async function paidEventFrom(gateway: FakePaymentAdapter) {
   const { gatewayOrderId } = await gateway.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY);
@@ -97,6 +97,7 @@ describe('the gateway (T056)', () => {
   const paymob: PaymentConfig = {
     ...base,
     PAYMENT_GATEWAY: 'paymob',
+    PAYMENT_MODE: 'test',
     PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_test_placeholder',
     PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_test_placeholder',
     PAYMENT_GATEWAY_WEBHOOK_SECRET: 'hmac-placeholder',
@@ -147,5 +148,35 @@ describe('the gateway (T056)', () => {
     const { [key]: _omitted, ...config } = paymob;
 
     expect(() => createPaymentPort(config)).toThrow(key);
+  });
+
+  it('hands Paymob the payment mode: live refuses a checkout with no payee, sending nothing (003:T109, T101)', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
+      sent.push(init.body);
+      return Promise.resolve(Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 }));
+    });
+    const live = createPaymentPort({
+      ...paymob,
+      PAYMENT_MODE: 'live',
+      PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: 1_000_002,
+    });
+
+    await expect(live.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER)).rejects.toThrow(/payee/);
+    expect(sent).toEqual([]);
+  });
+
+  it('hands Paymob the logger: a test-mode payee with no split integration writes one warn line (003:T101)', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 })),
+    );
+    const warned: unknown[] = [];
+    const port = createPaymentPort(paymob, { warn: (fields: object) => void warned.push(fields) });
+
+    await port.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER, {
+      recipientRef: '600001',
+      share_piasters: piasters(70),
+    });
+    expect(warned).toEqual([{ enrollmentId: 'enr-1', reason: 'no_split_integration' }]);
   });
 });

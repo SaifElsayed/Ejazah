@@ -364,6 +364,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
   slot_release_buffer_weeks: 0,
+  // 003:T104 (ADR 0025 D1): the teacher's share setting, read when an order is created.
+  teacher_share_percent: 70,
   // 004:T070: a closed enrollment's slot is held through its kind's window (the seed's values, T069).
   enrollment_restore_window_days: 14,
   ban_restore_window_days: 14,
@@ -671,6 +673,7 @@ async function build(): Promise<Built> {
   const origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
     ENCRYPTION_KEY: encryptionKey,
     API_PUBLIC_ORIGIN: origin,
   };

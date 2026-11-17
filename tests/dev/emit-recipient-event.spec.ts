@@ -204,7 +204,7 @@ describe('the event (T013: built and sent by the gateway stand-in harness)', () 
     );
 
     await expect(
-      createPaymentPort({ PAYMENT_GATEWAY: 'fake', ...config }).verifyAndParseEvent(
+      createPaymentPort({ PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ...config }).verifyAndParseEvent(
         rawBody,
         headers,
       ),
@@ -258,7 +258,7 @@ describe('the event (T013: built and sent by the gateway stand-in harness)', () 
     ]);
     expect(sent[1]?.body.equals(sent[0]?.body ?? Buffer.alloc(0))).toBe(true);
     await expect(
-      createPaymentPort({ PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY: KEY }).verifyAndParseEvent(
+      createPaymentPort({ PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY: KEY }).verifyAndParseEvent(
         sent[0]?.body ?? Buffer.alloc(0),
         sent[0]?.headers ?? {},
       ),
@@ -299,7 +299,7 @@ describe('a replay is a no-op end to end (T079, FR-PAYG-4)', { tags: ['database'
     });
     const route = createPaymentWebhookRoute({
       database,
-      payment: createPaymentPort({ PAYMENT_GATEWAY: 'fake', ENCRYPTION_KEY }),
+      payment: createPaymentPort({ PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY }),
       log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),
       maxBodyBytes: 1_048_576,
       // Only recipient events are delivered here; a paid order event would be T038's.

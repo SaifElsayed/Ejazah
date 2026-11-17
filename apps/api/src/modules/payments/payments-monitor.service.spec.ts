@@ -49,6 +49,8 @@ function order(n: number, overrides: Partial<MonitorOrderRow> = {}): MonitorOrde
     grossPiasters: 120_000n,
     gatewayFeePiasters: null,
     netPiasters: null,
+    teacherShareRatePercent: null,
+    teacherSharePiasters: null,
     currency: 'EGP',
     createdAt: new Date(CREATED[n - 1] ?? '2026-11-09T10:00:00Z'),
     ...overrides,
@@ -260,6 +262,17 @@ describe('payments.list', () => {
     ]);
   });
 
+  it('answers each order’s rate and the teacher’s share kept on it, and neither on an order created before the commission (003:T104)', async () => {
+    const withShare = order(2, { teacherShareRatePercent: 70, teacherSharePiasters: 84_000n });
+    const answer = await serviceOver(storeOf([order(1), withShare])).list(tx, {});
+    expect(answer.items[0]).toMatchObject({
+      teacherShareRatePercent: 70,
+      teacherShare_piasters: piasters(84_000),
+    });
+    expect(answer.items[1]).not.toHaveProperty('teacherShareRatePercent');
+    expect(answer.items[1]).not.toHaveProperty('teacherShare_piasters');
+  });
+
   it('says a cancelled enrollment only on a paid order: an unpaid one of it is just unpaid', async () => {
     const answer = await serviceOver(storeOf([order(2, { status: 'failed' })])).list(tx, {});
     expect(answer.items[0]?.enrollmentCancelled).toBe(false);
@@ -401,6 +414,15 @@ describe('payments.get', () => {
         },
       ],
     });
+  });
+
+  it('answers the order’s rate and teacher share where it keeps them, and neither otherwise (003:T104)', async () => {
+    const withShare = order(1, { teacherShareRatePercent: 65, teacherSharePiasters: 78_000n });
+    const answer = await serviceOver(storeOf([withShare, ...orders.slice(1)])).get(tx, orderId(1));
+    expect(answer).toMatchObject({ teacherShareRatePercent: 65, teacherShare_piasters: piasters(78_000) });
+    const before = await serviceOver(storeOf(orders)).get(tx, orderId(1));
+    expect(before).not.toHaveProperty('teacherShareRatePercent');
+    expect(before).not.toHaveProperty('teacherShare_piasters');
   });
 
   it('answers an unpaid order with no fee, no net and no transaction', async () => {

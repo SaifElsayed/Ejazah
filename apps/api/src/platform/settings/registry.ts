@@ -8,18 +8,25 @@
 //
 // THE SCHEMA IS THE READ SITE'S. Where the kernel or a shared package reads a key, its schema is
 // imported here, never restated: `rateLimitSetting`, `uploadMaxBytes`, `documentLinkTtl`,
-// `liveMaxConnections`, and the contracts' `termsVersion` and `checkoutPolling`. A module's read
+// `liveMaxConnections`, and the contracts' `termsVersion`, `checkoutPolling`, `teacherSharePercent`
+// and `priceAverageMinTeachers` (track 2's two keys, joined at B45's merge of develop). A module's read
 // site cannot be imported (the kernel depends on no module, docs/ARCHITECTURE.md:206), so the rule
 // it reads with is stated once below and the spec checks it against every module schema a public
 // entry exports.
 //
 // BOUNDS (Q3 (a)). The minimum is the read site's schema's: the spec asserts the schema admits it
 // and refuses the value below it. A maximum stands only where a document or the unit names one:
-// a percent is at most 100; the signed-in default's limit is at most 200 (SRS NFR-SEC-12); a signed
+// a percent is at most 100; the signed-in default's limit is at most 200 (SRS NFR-SEC-12);
+// `price_average_min_teachers` is at most 100 (§3.14's row, «2–100»); a signed
 // link lives at most `MAX_LINK_SECONDS` (the storage port refuses longer). No other number is
 // chosen here; the full table of minima and maxima waits for the owner's signature after 11/27
 // (the «Moved» line under T002).
-import { checkoutPolling, termsVersion } from '@ijazah/contracts';
+import {
+  checkoutPolling,
+  priceAverageMinTeachers,
+  teacherSharePercent,
+  termsVersion,
+} from '@ijazah/contracts';
 import { z } from 'zod';
 
 import { rateLimitSetting } from '../guards/rate-limit.guard.js';
@@ -91,6 +98,9 @@ export const reminderOffsets = z.array(z.int().positive());
 
 /** A percent's ceiling: the unit's. */
 const PERCENT_MAX = 100;
+
+/** `price_average_min_teachers`' ceiling: SRS §3.14's row, «2–100» (003:T113, DEC-88). */
+const PRICE_AVERAGE_MIN_TEACHERS_MAX = 100;
 
 /** The signed-in default's ceiling: «a result above 200 sets no number» (SRS NFR-SEC-12). */
 const SIGNED_IN_DEFAULT_LIMIT_MAX = 200;
@@ -376,6 +386,22 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Checkout Confirming read window from release (minutes)',
   ),
   discovery_page_size: whole(positiveWhole, 'count', 'booking', 'Discovery page size (teachers)'),
+  // 003:T104 (ADR 0025 D1, SRS DEC-80): the read site's own bounds, 0 to 100, a percent's.
+  teacher_share_percent: whole(
+    teacherSharePercent,
+    'percent',
+    'booking',
+    "Teacher's share of each gateway order (whole percent, 0–100)",
+    { min: 0, max: PERCENT_MAX },
+  ),
+  // 003:T113 (SRS DEC-88): 2 to 100, the bounds §3.14's row names and the read site holds.
+  price_average_min_teachers: whole(
+    priceAverageMinTeachers,
+    'count',
+    'booking',
+    "Fewest other Teachers for the average price (whole number, 2–100: at least 2, so no single Teacher's price is shown)",
+    { min: 2, max: PRICE_AVERAGE_MIN_TEACHERS_MAX },
+  ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,
     'minutes',

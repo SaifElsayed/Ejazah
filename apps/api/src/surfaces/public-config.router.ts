@@ -15,8 +15,21 @@
 // The file lives beside the surfaces, not under `platform/`, because a procedure is built from the
 // surface's caller kinds and the kernel depends on nothing above it (ARCHITECTURE §4; PR #79
 // review, finding 1).
-import { checkoutPolling, publicConfigOutput, termsVersion } from '@ijazah/contracts';
+//
+// 003:T104 (Q-A3 (a), ADR 0025 D1): it also answers the teacher's share rate, read on every call
+// from the setting the checkout reads when it creates an order, so the package editor shows the
+// teacher's share as the price is typed. The rate is not secret: the Terms state the commission.
+//
+// 003:T109 (SRS DEC-87): it answers the payment mode the server runs in, so every app shows
+// «نسخة تجريبية» in test mode. A surface that wired no mode fails closed rather than answer one.
+import {
+  checkoutPolling,
+  publicConfigOutput,
+  teacherSharePercent,
+  termsVersion,
+} from '@ijazah/contracts';
 import { z } from 'zod';
+import { TEACHER_SHARE_SETTING } from '../modules/payments/index.js';
 import { TERMS_VERSION_SETTING } from '../platform/settings/keys.js';
 import { PUBLIC_PAGE_RATE_LIMIT } from '../platform/web/route.js';
 import { createAppRouter, publicProcedure } from './procedures.js';
@@ -44,13 +57,19 @@ export const platformRouter = createAppRouter({
       processingPollSeconds,
       confirmingPollSeconds,
       confirmingPollWindowMinutes,
+      sharePercent,
     ] = await Promise.all([
       settings.read(TERMS_VERSION_SETTING, termsVersion),
       read('confirmationTimeoutSeconds'),
       read('processingPollSeconds'),
       read('confirmingPollSeconds'),
       read('confirmingPollWindowMinutes'),
+      settings.read(TEACHER_SHARE_SETTING, teacherSharePercent),
     ]);
+    const { paymentMode } = ctx.services.publicConfig;
+    if (paymentMode === undefined) {
+      throw new Error('platform.publicConfig: no payment mode is wired (003:T109)');
+    }
     return {
       supportEmail: ctx.services.publicConfig.supportEmail,
       termsVersion: version,
@@ -60,6 +79,8 @@ export const platformRouter = createAppRouter({
         confirmingPollSeconds,
         confirmingPollWindowMinutes,
       },
+      teacherSharePercent: sharePercent,
+      paymentMode,
     };
   }),
 });

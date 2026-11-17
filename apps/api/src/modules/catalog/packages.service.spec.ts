@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   MemoryPackages,
   OTHER_SUBJECT,
@@ -31,9 +32,20 @@ const KEY = 'spec-packages-key-0001';
 // The session's gender, the teacher's own.
 const REQUESTER = 'female' as RequesterGender;
 
-function serviceOver(memory: MemoryPackages) {
+/** 003:T113: the settings the average reads, `price_average_min_teachers` at the seed's 3 unless told. */
+function settingsWith(minTeachers: unknown = 3): SettingsReader {
+  return {
+    read: async (key, schema) => {
+      if (key !== 'price_average_min_teachers') throw new Error(`no setting ${key} in this spec`);
+      return schema.parse(minTeachers);
+    },
+  };
+}
+
+function serviceOver(memory: MemoryPackages, settings: SettingsReader = settingsWith()) {
   const keyed: unknown[] = [];
   const service = new PackagesService({
+    settings,
     transactions: { run: (work) => work(TX) },
     store: memory,
     use: memory,
@@ -380,5 +392,84 @@ describe('update', () => {
       'packageHasEnrollment',
     ]);
     expect(memory.log).toContain('change');
+  });
+});
+
+describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the editor's average-price hint", () => {
+  const PEERS = [OTHER_TEACHER, '0199d0a0-0000-7000-8000-0000000000d3', '0199d0a0-0000-7000-8000-0000000000d4'];
+  const ASKED = { track: 'recitation', sessionDurationMinutes: 45 } as const;
+
+  /** A published teacher's package on the asked track and length: the price over the count. */
+  function peer(memory: MemoryPackages, teacherUserId: string, price: number, sessionCount: number) {
+    memory.publish(teacherUserId, REQUESTER);
+    memory.plant(teacherUserId, { ...RECITATION, price_piasters: piasters(price), sessionCount });
+  }
+
+  it('averages the price per session of three teachers, rounded half up to the piaster', async () => {
+    const memory = new MemoryPackages();
+    // Per session 33 333 (100 000 over 3), 30 000 and 45 002: 108 335 over 3 is 36 111.67.
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    peer(memory, PEERS[2] ?? '', 45_002, 1);
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({
+      averagePerSession_piasters: 36_112,
+    });
+  });
+
+  it('answers nothing when fewer than three teachers have one, however many packages they have', async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[0] ?? '', 60_000, 2);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    peer(memory, PEERS[1] ?? '', 30_000, 1);
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+  });
+
+  it('reads the fewest teachers from price_average_min_teachers at each request: two are enough when it says 2', async () => {
+    const memory = new MemoryPackages();
+    // Per session 33 333 and 30 000: 63 333 over 2 is 31 666.5, rounded half up.
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+
+    expect(await serviceOver(memory, settingsWith(2)).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({
+      averagePerSession_piasters: 31_667,
+    });
+    expect(await serviceOver(memory).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+  });
+
+  it("refuses a setting of 1, which would show one teacher's own price (the bound is 2, DEC-88)", async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    await expect(
+      serviceOver(memory, settingsWith(1)).service.averagePrice(TEACHER, REQUESTER, ASKED),
+    ).rejects.toThrow();
+  });
+
+  it('fails closed on a setting outside 2 to 100: the read is refused', async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    for (const bad of [0, 101, 2.5]) {
+      await expect(
+        serviceOver(memory, settingsWith(bad)).service.averagePrice(TEACHER, REQUESTER, ASKED),
+        String(bad),
+      ).rejects.toThrow();
+    }
+  });
+
+  it("counts only teachers the predicate shows a student of the session's gender", async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    // The third is shown to the other gender only.
+    memory.publish(PEERS[2] ?? '', 'male');
+    memory.plant(PEERS[2] ?? '', { ...RECITATION, price_piasters: piasters(45_002), sessionCount: 1 });
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+    expect(memory.log).toContain('visibleTeacherIds:female');
   });
 });

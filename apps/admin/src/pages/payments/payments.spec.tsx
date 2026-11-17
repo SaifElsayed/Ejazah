@@ -41,6 +41,9 @@ const reported = {
   gross_piasters: 120_000,
   gatewayFee_piasters: 3_480,
   net_piasters: 116_520,
+  // 003:T104: the rate and the teacher's share kept on the order.
+  teacherShareRatePercent: 70,
+  teacherShare_piasters: 84_000,
   status: 'paid',
   enrollmentCancelled: false,
 } as const;
@@ -172,7 +175,15 @@ describe('AdminPayments (FR-400)', () => {
         expect(await screen.findByText(t('admin.payments.lede'))).toBeTruthy();
         expect(screen.getByText(t('admin.payments.banner'))).toBeTruthy();
         await rowOf(reported.gatewayOrderId);
-        for (const column of ['order', 'student', 'gross', 'fee', 'net', 'status'] as const) {
+        for (const column of [
+          'order',
+          'student',
+          'gross',
+          'fee',
+          'net',
+          'teacherShare',
+          'status',
+        ] as const) {
           expect(
             screen.getByRole('columnheader', { name: t(`admin.payments.columns.${column}`) }),
           ).toBeTruthy();
@@ -198,12 +209,30 @@ describe('AdminPayments (FR-400)', () => {
   it('draws a dash for the fee and the net of a paid order whose gateway reported neither, never 0, and marks its cancelled enrollment', async () => {
     open();
     const row = within(await rowOf(unreported.gatewayOrderId));
-    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(2);
+    // The fee, the net and (003:T104) the teacher's share of an order created before the commission.
+    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(3);
     expect(row.queryByText(ar('admin.common.amount', { amount: '0.00' }))).toBeNull();
     expect(row.getByText(ar('admin.common.amount', { amount: '950.00' }))).toBeTruthy();
     expect(row.getByText(ar('admin.status.payment.paid'))).toBeTruthy();
     expect(row.getByText(ar('admin.payments.enrollmentCancelled'))).toBeTruthy();
     expect(row.getByText('Huda Samir')).toBeTruthy();
+  });
+
+  it('shows the teacher’s share kept on each order with its rate, and a dash before the commission (003:T104)', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const paid = within(await rowOf(reported.gatewayOrderId));
+        expect(
+          paid.getByText(
+            t('admin.payments.teacherShare', {
+              amount: t('admin.common.amount', { amount: '840.00' }),
+              percent: 70,
+            }),
+          ),
+        ).toBeTruthy();
+      },
+    );
   });
 
   it('reads the first page with no filter, and pages by the cursor the server wrote', async () => {
@@ -380,6 +409,37 @@ describe('an order’s detail (FR-400, FR-401)', () => {
         ]);
       },
     );
+  });
+
+  it('shows the order’s teacher share and its rate where it keeps them, and no such line otherwise (003:T104)', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockResolvedValue({
+      ...detail,
+      teacherShareRatePercent: 65,
+      teacherShare_piasters: 61_750,
+    });
+    open(api, `/payments?payment=${P3}`);
+    const aside = await screen.findByRole('complementary', {
+      name: ar('admin.payments.detail.a11y'),
+    });
+    expect(await within(aside).findByText(ar('admin.payments.detail.teacherShare'))).toBeTruthy();
+    expect(
+      within(aside).getByText(
+        ar('admin.payments.teacherShare', {
+          amount: ar('admin.common.amount', { amount: '617.50' }),
+          percent: 65,
+        }),
+      ),
+    ).toBeTruthy();
+  });
+
+  it('draws no teacher share line for an order created before the commission (003:T104)', async () => {
+    open(fakeApi(), `/payments?payment=${P3}`);
+    const aside = await screen.findByRole('complementary', {
+      name: ar('admin.payments.detail.a11y'),
+    });
+    await within(aside).findByText(ar('admin.payments.detail.amountsTitle'));
+    expect(within(aside).queryByText(ar('admin.payments.detail.teacherShare'))).toBeNull();
   });
 
   it('says an enrollment with no hold has none', async () => {

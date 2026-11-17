@@ -36,6 +36,8 @@ const STORED: Readonly<Record<string, unknown>> = {
   checkout_processing_poll_seconds: 3,
   checkout_confirming_poll_seconds: 45,
   checkout_confirming_poll_window_minutes: 12,
+  // 003:T104 (Q-A3 (a)): not the seed's 70, so the answer can only come from the row.
+  teacher_share_percent: 65,
 };
 
 const CHECKOUT_KEYS = [
@@ -57,12 +59,18 @@ function settingsOf(stored: Readonly<Record<string, unknown>>): SettingsReader {
   };
 }
 
-function fixture(changes: Readonly<Record<string, unknown>> = {}) {
+function fixture(
+  changes: Readonly<Record<string, unknown>> = {},
+  publicConfig: AppServices['publicConfig'] = {
+    supportEmail: 'support@ijazah.invalid',
+    paymentMode: 'test',
+  },
+) {
   const check = vi.fn(async () => undefined);
   const rateLimiter = { check } as unknown as RateLimiter;
   const services: AppServices = {
     settings: settingsOf({ ...STORED, ...changes }),
-    publicConfig: { supportEmail: 'support@ijazah.invalid' },
+    publicConfig,
     subjects: {
       listActive: async () => {
         throw new Error('not read here');
@@ -105,7 +113,38 @@ describe('platform.publicConfig (T038, FR-145)', () => {
         confirmingPollSeconds: 45,
         confirmingPollWindowMinutes: 12,
       },
+      teacherSharePercent: 65,
+      paymentMode: 'test',
     });
+  });
+
+  it('answers the payment mode the server runs in, so every app shows «نسخة تجريبية» in test mode (003:T109)', async () => {
+    const live = fixture({}, { supportEmail: 'support@ijazah.invalid', paymentMode: 'live' });
+    await expect(live.caller.platform.publicConfig()).resolves.toMatchObject({ paymentMode: 'live' });
+    await expect(fixture().caller.platform.publicConfig()).resolves.toMatchObject({
+      paymentMode: 'test',
+    });
+  });
+
+  it('fails closed when the payment mode is not wired, never answering a mode of its own (003:T109)', async () => {
+    const unwired = fixture({}, { supportEmail: 'support@ijazah.invalid' });
+    await expect(unwired.caller.platform.publicConfig()).rejects.toThrow();
+  });
+
+  it("answers the teacher's share rate from its setting, so the package editor shows the share as the price is typed (003:T104, Q-A3 (a))", async () => {
+    const { caller } = fixture();
+    await expect(caller.platform.publicConfig()).resolves.toMatchObject({ teacherSharePercent: 65 });
+    await expect(
+      fixture({ teacher_share_percent: 0 }).caller.platform.publicConfig(),
+    ).resolves.toMatchObject({ teacherSharePercent: 0 });
+  });
+
+  it("fails closed when the teacher's share rate is not stored or is not a whole percent from 0 to 100 (003:T104)", async () => {
+    for (const value of [undefined, -1, 101, 70.5, '70']) {
+      await expect(
+        fixture({ teacher_share_percent: value }).caller.platform.publicConfig(),
+      ).rejects.toMatchObject({ cause: expect.any(SettingError) });
+    }
   });
 
   it('is public and counts the client address under rate_limit_public_page (T170)', async () => {

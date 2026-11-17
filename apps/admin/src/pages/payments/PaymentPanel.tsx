@@ -129,6 +129,20 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
                 t,
               ),
             },
+            // 003:T104 (ADR 0025 D1): the teacher's share kept on the order, with its rate; no line
+            // for an order created before the commission, which keeps neither.
+            ...(detail.teacherShare_piasters === undefined ||
+            detail.teacherShareRatePercent === undefined
+              ? []
+              : [
+                  {
+                    label: t('admin.payments.detail.teacherShare'),
+                    value: t('admin.payments.teacherShare', {
+                      amount: formatPounds(piasters(detail.teacherShare_piasters), locale),
+                      percent: detail.teacherShareRatePercent,
+                    }),
+                  },
+                ]),
           ]}
         />
       </section>

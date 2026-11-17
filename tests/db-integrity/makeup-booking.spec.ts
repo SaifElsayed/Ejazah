@@ -438,6 +438,8 @@ function slotsOn(tx: Transaction, afterAccountLock?: () => Promise<void>) {
     database: on,
     use: createCatalogUse({ settings }),
     idempotency: { run: (_request, effect) => on.$transaction(effect) },
+    // 003:T113 (rule d).
+    settings,
   }).slots;
 }
 

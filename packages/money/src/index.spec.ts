@@ -5,10 +5,12 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
   MoneyError,
+  average,
   isPiasters,
   lowest,
   perSession,
   piasters,
+  teacherShare,
   toPlainNumber,
   type Piasters,
 } from './index.js';
@@ -168,6 +170,79 @@ describe('perSession (T009, FR-337, R-212)', () => {
       expect(() => perSession(piasters(100), count)).toThrow(RangeError);
       expect(() => perSession(piasters(100), count)).toThrow(/perSession/);
     }
+  });
+});
+
+describe('teacherShare (T104, ADR 0025 D1, SRS DEC-80)', () => {
+  it('takes the rate of the price when it divides evenly', () => {
+    expect(toPlainNumber(teacherShare(piasters(100_000), 70))).toBe(70_000);
+    expect(toPlainNumber(teacherShare(piasters(1_000), 70))).toBe(700);
+  });
+
+  it('rounds a fraction of a piaster up, never down', () => {
+    // 1001 × 70% = 700.7, 1 × 70% = 0.7, 999 × 33% = 329.67, 101 × 1% = 1.01.
+    expect(toPlainNumber(teacherShare(piasters(1_001), 70))).toBe(701);
+    expect(toPlainNumber(teacherShare(piasters(1), 70))).toBe(1);
+    expect(toPlainNumber(teacherShare(piasters(999), 33))).toBe(330);
+    expect(toPlainNumber(teacherShare(piasters(101), 1))).toBe(2);
+  });
+
+  it('gives nothing at 0% and the whole price at 100%', () => {
+    expect(toPlainNumber(teacherShare(piasters(25_000), 0))).toBe(0);
+    expect(toPlainNumber(teacherShare(piasters(25_000), 100))).toBe(25_000);
+  });
+
+  it('stays exact at the top of the safe range, where a floating product would not', () => {
+    const price = Number.MAX_SAFE_INTEGER;
+    for (const rate of [1, 33, 70, 99]) {
+      const product = BigInt(price) * BigInt(rate);
+      const expected = product / 100n + (product % 100n === 0n ? 0n : 1n);
+      expect(BigInt(toPlainNumber(teacherShare(piasters(price), rate)))).toBe(expected);
+    }
+  });
+
+  it('returns an amount of its own brand, never above the price', () => {
+    const share_piasters: Piasters = teacherShare(piasters(9_999), 70);
+
+    expect(isPiasters(share_piasters)).toBe(true);
+    expect(toPlainNumber(share_piasters)).toBe(7_000);
+    expect(toPlainNumber(share_piasters)).toBeLessThanOrEqual(9_999);
+  });
+
+  it('refuses a rate that is not a whole percent from 0 to 100 (SRS §3.14)', () => {
+    for (const rate of [-1, 101, 70.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => teacherShare(piasters(100), rate)).toThrow(RangeError);
+      expect(() => teacherShare(piasters(100), rate)).toThrow(/teacherShare/);
+    }
+  });
+});
+
+describe('average (T113, SRS DEC-88)', () => {
+  it('averages amounts that divide evenly, and one amount is itself', () => {
+    expect(toPlainNumber(average([piasters(100), piasters(200), piasters(300)]))).toBe(200);
+    expect(toPlainNumber(average([piasters(15_000)]))).toBe(15_000);
+  });
+
+  it('rounds half a piaster up, less than half down', () => {
+    // 1.5 → 2, 1.33… → 1, 1.67 → 2.
+    expect(toPlainNumber(average([piasters(1), piasters(2)]))).toBe(2);
+    expect(toPlainNumber(average([piasters(1), piasters(1), piasters(2)]))).toBe(1);
+    expect(toPlainNumber(average([piasters(1), piasters(2), piasters(2)]))).toBe(2);
+  });
+
+  it('stays exact at the top of the safe range, where a floating sum would not', () => {
+    const top = Number.MAX_SAFE_INTEGER;
+    const sum = BigInt(top) + BigInt(top - 1) + BigInt(top - 4);
+    const quotient = sum / 3n;
+    const expected = (sum % 3n) * 2n >= 3n ? quotient + 1n : quotient;
+    expect(
+      BigInt(toPlainNumber(average([piasters(top), piasters(top - 1), piasters(top - 4)]))),
+    ).toBe(expected);
+  });
+
+  it('refuses an empty list, which has no average', () => {
+    expect(() => average([] as unknown as [Piasters])).toThrow(RangeError);
+    expect(() => average([] as unknown as [Piasters])).toThrow(/average/);
   });
 });
 

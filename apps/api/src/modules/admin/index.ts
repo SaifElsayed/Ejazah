@@ -287,6 +287,8 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * filled by `main.ts` with the identity services' `certificateName`, for `users.setCertificateName`.
    */
   readonly certificateNames: CertificateNames;
+  /** 003:T109 (SRS DEC-87): the server's payment mode, which `home.summary` answers. */
+  readonly paymentMode: 'test' | 'live';
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {

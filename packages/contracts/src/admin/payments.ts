@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { enrollmentCancellationReason, enrollmentStatus, paymentStatus } from '../checkout.js';
 import { enrollmentTerms } from '../enrollments.js';
+import { teacherSharePercent } from '../platform.js';
 import { adminSearch } from './admins.js';
 
 /** An amount the gateway reported, in whole piasters (ERD `payments`). */
@@ -51,6 +52,9 @@ export const paymentsListItem = z.object({
   /** Absent until the gateway reports it, a paid order included (FR-PAYG-7). */
   gatewayFee_piasters: reportedPiasters.optional(),
   net_piasters: reportedPiasters.optional(),
+  /** 003:T104: the rate and the teacher's share kept on the order; absent before the commission. */
+  teacherShareRatePercent: teacherSharePercent.optional(),
+  teacherShare_piasters: reportedPiasters.optional(),
   status: paymentStatus,
   /** The order is paid and its enrollment was cancelled (a `slot_unavailable` refusal, FR-PAYG-19). */
   enrollmentCancelled: z.boolean(),
@@ -141,6 +145,9 @@ export const paymentsGetOutput = z.object({
   gross_piasters: reportedPiasters,
   gatewayFee_piasters: reportedPiasters.optional(),
   net_piasters: reportedPiasters.optional(),
+  /** 003:T104: as on the list. */
+  teacherShareRatePercent: teacherSharePercent.optional(),
+  teacherShare_piasters: reportedPiasters.optional(),
   currency: z.string().length(3),
   student: namedPerson,
   /** Absent only for an enrollment no ordinary read returns (a soft-deleted one, ERD §0). */

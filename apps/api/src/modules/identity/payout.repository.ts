@@ -2,7 +2,11 @@
 // the service decides what is written, and the cipher what the reference is stored as. Each change
 // is one conditional `updateMany`, so a verdict for a hash no teacher holds changes nothing and is
 // told so by a false.
+import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+
+/** The column the recipient reference is encrypted under, bound to the profile's id (R-DB-8). */
+export const PAYOUT_ACCOUNT_REF_COLUMN = 'teacher_profiles.payout_account_ref_encrypted';
 
 type Client = Pick<Database, 'teacherProfile'>;
 type Writer = Pick<Transaction, 'teacherProfile'>;
@@ -130,4 +134,25 @@ export async function payoutKeptOnDeletedTeacher(tx: Writer, userId: string): Pr
     select: { payoutAccountRefHash: true },
   });
   return live?.payoutAccountRefHash != null && keptProfileHolds(tx, live.payoutAccountRefHash);
+}
+
+/**
+ * 003:T101 (ADR 0025 D2, SRS DEC-80; Q-B2 (a)): the gateway recipient a checkout splits the teacher's
+ * share to. The reference is decrypted only when the gateway verified the account
+ * (`payout_verified_at` set); a registration still pending, a rejected one, none, or no profile
+ * answers null. The reference is a secret of the gateway's: never logged.
+ */
+export async function payoutRecipientOf(
+  database: Client,
+  cipher: Pick<ColumnCipher, 'decrypt'>,
+  teacherUserId: string,
+): Promise<string | null> {
+  const row = await database.teacherProfile.findUnique({
+    where: { userId: teacherUserId },
+    select: { id: true, payoutAccountRefEncrypted: true, payoutVerifiedAt: true },
+  });
+  if (row === null || row.payoutVerifiedAt === null || row.payoutAccountRefEncrypted === null) {
+    return null;
+  }
+  return cipher.decrypt(row.payoutAccountRefEncrypted, PAYOUT_ACCOUNT_REF_COLUMN, row.id);
 }

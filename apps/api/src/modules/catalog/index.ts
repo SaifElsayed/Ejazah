@@ -62,6 +62,7 @@ import {
   insertPackage,
   packageOf,
   packagesOf,
+  peerPackagesOf,
 } from './packages.repository.js';
 import { PackagesService, type PackagesStore } from './packages.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
@@ -115,7 +116,7 @@ export type { CatalogUse, PackageEnrollmentCounts };
  */
 export interface CatalogServices {
   /** `teacher.packages.*` (T018). */
-  readonly packages: Pick<PackagesService, 'list' | 'create' | 'update'>;
+  readonly packages: Pick<PackagesService, 'list' | 'create' | 'update' | 'averagePrice'>;
   /** `teacher.slots.*` (T019). */
   readonly slots: TeacherSlots;
   /**
@@ -133,6 +134,8 @@ export interface CatalogServiceDependencies {
   readonly database: Database;
   /** The kernel's idempotency, keying `teacher.packages.create` and `teacher.slots.create`. */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** 003:T113: the settings `teacher.packages.averagePrice` reads (`price_average_min_teachers`). */
+  readonly settings: SettingsReader;
 }
 
 /**
@@ -164,6 +167,7 @@ export function createCatalogServices({
   use,
   database,
   idempotency,
+  settings,
 }: CatalogServiceDependencies): Omit<CatalogServices, 'signature'> {
   return {
     packages: new PackagesService({
@@ -171,6 +175,7 @@ export function createCatalogServices({
       store: packagesStore,
       use,
       idempotency,
+      settings,
     }),
     slots: new SlotsService({ store: slotsStoreOver(database), use, idempotency }),
   };
@@ -190,6 +195,10 @@ export const packagesStore: PackagesStore = {
   packageOf,
   insert: insertPackage,
   change: changePackage,
+  // 003:T113: the average-price hint's pool, and identity's predicate over its teachers.
+  peerPackages: peerPackagesOf,
+  visibleTeacherIds: async (tx, requester, teacherIds) =>
+    (await visibleTeachers(tx, requester, { purpose: 'discover', teacherIds })).map(({ id }) => id),
 };
 export { PackagesService };
 

@@ -284,8 +284,15 @@ export interface SessionResolvers {
 export interface AppServices {
   /** Every operational number a procedure reads (FR-034). */
   readonly settings: SettingsReader;
-  /** `platform.publicConfig`: the support address from the configuration (FR-145). */
-  readonly publicConfig: { readonly supportEmail: string };
+  /**
+   * `platform.publicConfig`: the support address from the configuration (FR-145), and (003:T109,
+   * track 2) the payment mode, which `main.ts` always sets from `PAYMENT_MODE`; a surface that never
+   * answers `platform.publicConfig` may leave it out, and the procedure then fails closed.
+   */
+  readonly publicConfig: {
+    readonly supportEmail: string;
+    readonly paymentMode?: 'test' | 'live';
+  };
   /** `catalog.subjects.list`: the catalog module's subjects read (FR-182). */
   readonly subjects: SubjectsReader;
   /** `auth.*`, `onboarding.*` and `account.*`: the identity module's services (T048, T049). */

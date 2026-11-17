@@ -359,6 +359,12 @@ export {
 } from './identity.repository.js';
 export { payoutKeptOnDeletedTeacher } from './payout.repository.js';
 
+/**
+ * 003:T101 (ADR 0025 D2, SRS DEC-80; Q-B2 (a)): the teacher's verified payout recipient, which the
+ * payments module's checkout splits the teacher's share to.
+ */
+export { payoutRecipientOf } from './payout.repository.js';
+
 /** The administrator's invite mail, which the admin module sends through its job (T066, R-110). */
 export { renderAdminInviteMail } from './mail/admin-invite-mail.js';
 

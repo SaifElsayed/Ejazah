@@ -79,3 +79,34 @@ export type TeacherPackage = z.infer<typeof teacherPackage>;
 export type PackagesListOutput = z.infer<typeof packagesListOutput>;
 export type PackagesCreateInput = z.infer<typeof packagesCreateInput>;
 export type PackagesUpdateInput = z.infer<typeof packagesUpdateInput>;
+
+// 003:T113 (SRS DEC-88, FR-PROFILE-2 as amended): the package editor's average-price hint.
+
+/**
+ * `teacher.packages.averagePrice`'s input: the track and the session length the editor has chosen.
+ * Strict: an input that also names a gender or a teacher is refused, never quietly read (Q-T113-adv).
+ */
+export const packagesAveragePriceInput = z
+  .object({
+    track: packageTrack,
+    sessionDurationMinutes: sessionLengthMinutes,
+  })
+  .strict();
+
+/**
+ * Its answer: the average price per session of the other teachers' published packages on that
+ * track and length, absent when fewer than three such teachers have one. It names no teacher.
+ */
+export const packagesAveragePriceOutput = z.object({
+  averagePerSession_piasters: z.int().nonnegative().optional(),
+});
+
+/**
+ * The setting `price_average_min_teachers` (SRS §3.14, DEC-88; Q-T113-k): the fewest other teachers
+ * the average is shown over, a whole number from 2 to 100 (seed 3): at least 2, so no single teacher's
+ * price is shown (the reviewer's bound, DEC-88).
+ */
+export const priceAverageMinTeachers = z.int().min(2).max(100);
+
+export type PackagesAveragePriceInput = z.infer<typeof packagesAveragePriceInput>;
+export type PackagesAveragePriceOutput = z.infer<typeof packagesAveragePriceOutput>;

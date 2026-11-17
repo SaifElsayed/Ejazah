@@ -28,6 +28,10 @@ import {
   type SettingBound,
   settingRefusal,
 } from '../../apps/api/src/platform/settings/registry.js';
+import {
+  priceAverageMinTeachers,
+  teacherSharePercent,
+} from '../../packages/contracts/src/index.js';
 import { type Queryable, seed } from '../../prisma/seed';
 
 /** The settings the real seed inserts, key to default, read off its INSERTs on a stand-in. */
@@ -161,6 +165,9 @@ describe('the settings registry (T002, R-410)', () => {
     expect(SETTINGS_REGISTRY['live_channel_max_connections_per_user']?.schema).toBe(
       liveMaxConnections,
     );
+    // Track 2's two keys (003:T104, T113), read with the contracts' schemas (B45's merge of develop).
+    expect(SETTINGS_REGISTRY['teacher_share_percent']?.schema).toBe(teacherSharePercent);
+    expect(SETTINGS_REGISTRY['price_average_min_teachers']?.schema).toBe(priceAverageMinTeachers);
   });
 
   it('agrees with every read-site schema a module’s public entry exports', () => {

@@ -99,6 +99,8 @@ function service(): PackagesService {
     store: packagesStore,
     use,
     idempotency,
+    // 003:T113 (rule d): the probes never ask the average.
+    settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
   });
 }
 
@@ -109,6 +111,7 @@ function serviceOn(tx: Transaction): PackagesService {
     store: packagesStore,
     use,
     idempotency: { run: (_request, effect) => effect(tx) },
+    settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
   });
 }
 

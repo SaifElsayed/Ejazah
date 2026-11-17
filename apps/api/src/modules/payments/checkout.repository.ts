@@ -71,15 +71,19 @@ export interface NewOrder {
   readonly currency: string;
   readonly expiresAt: Date;
   readonly checkoutUrlEncrypted: Uint8Array;
+  /** T104: the rate read when the order was created, and the share it gave (ADR 0025 D1). */
+  readonly teacherShareRatePercent: number;
+  readonly teacherShare_piasters: Piasters;
 }
 
 /** Writes the order. The caller holds its enrollment's lock. */
 export async function insertOrder(tx: Client, order: NewOrder): Promise<void> {
-  const { gross_piasters, checkoutUrlEncrypted, ...rest } = order;
+  const { gross_piasters, checkoutUrlEncrypted, teacherShare_piasters, ...rest } = order;
   await tx.payment.create({
     data: {
       ...rest,
       grossPiasters: BigInt(toPlainNumber(gross_piasters)),
+      teacherSharePiasters: BigInt(toPlainNumber(teacherShare_piasters)),
       checkoutUrlEncrypted: Uint8Array.from(checkoutUrlEncrypted),
       status: 'created',
     },

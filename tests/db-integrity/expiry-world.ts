@@ -96,6 +96,7 @@ export async function listenWebhook(
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
     ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     API_PUBLIC_ORIGIN: origin,
   };

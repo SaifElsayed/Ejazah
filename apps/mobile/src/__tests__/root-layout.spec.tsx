@@ -11,6 +11,8 @@
 // application (its `reapply` mode with it), the onboarding's, and the pending address and password.
 // T138: a launch with no connection says it cannot load instead of waiting on a blank screen.
 // T078: every navigator draws its screens' cards and its container in the scheme's background.
+// 003:T109 (SRS DEC-87; Q-B3 (a)): «نسخة تجريبية» over every screen while the server's payment mode
+// is `test`, none in `live`.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { onlineManager, useQueryClient } from '@tanstack/react-query';
@@ -21,7 +23,11 @@ import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
 import { tokens } from '../design/tokens';
-import { apiError, fakeProcedures } from '../features/shared/__tests__/api-double';
+import {
+  apiError,
+  CHECKOUT_POLLING,
+  fakeProcedures,
+} from '../features/shared/__tests__/api-double';
 import {
   clearPendingEmail,
   getPendingEmail,
@@ -48,9 +54,18 @@ jest.mock('../lib/direction', () => ({
 }));
 
 let mockApi = fakeProcedures();
+// 003:T109: the public configuration the strip reads; `live` unless a case says otherwise.
+const publicConfigIn = (paymentMode: 'test' | 'live') => ({
+  supportEmail: 'support@ijazah.test',
+  termsVersion: '2026-10',
+  checkout: CHECKOUT_POLLING,
+  teacherSharePercent: 70,
+  paymentMode,
+});
+let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
 jest.mock('../lib/client', () => ({
   ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
-  createApiClient: () => ({ api: mockApi, publicConfig: jest.fn() }),
+  createApiClient: () => ({ api: mockApi, publicConfig: () => mockPublicConfig() }),
 }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
@@ -128,6 +143,7 @@ const routes = {
 
 beforeEach(() => {
   mockApi = fakeProcedures();
+  mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
   // Unless a case says otherwise, `account.me` is still on its way.
   mockApi.account.me.query.mockReturnValue(new Promise(() => undefined));
   // The homes and tabs read their lists (T050, T051); empty, they draw their empty states.
@@ -147,6 +163,35 @@ afterEach(() => {
   onlineManager.setOnline(true);
   mockSystemScheme.mockReset();
   mockSystemScheme.mockReturnValue('light');
+});
+
+describe('the test-mode strip (003:T109; SRS DEC-87, Q-B3 (a))', () => {
+  it("shows «نسخة تجريبية» over the screen while the server's payment mode is test", async () => {
+    mockPublicConfig = jest.fn(async () => publicConfigIn('test'));
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expect(await screen.findByText(ar('money.testMode.label'))).toBeTruthy();
+  });
+
+  it('shows it while the launch is still waiting for the session', async () => {
+    mockPublicConfig = jest.fn(async () => publicConfigIn('test'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText(ar('money.testMode.label'))).toBeTruthy();
+  });
+
+  it('draws no strip in live mode', async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await waitFor(() => expect(mockPublicConfig).toHaveBeenCalled());
+    // The answer has rendered before the strip is looked for.
+    await act(async () => {
+      await mockPublicConfig.mock.results[0]?.value;
+    });
+    expect(screen.queryByText(ar('money.testMode.label'))).toBeNull();
+  });
 });
 
 describe('the root layout', () => {
