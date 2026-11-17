@@ -18,6 +18,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 import {
@@ -262,6 +263,216 @@ describe('account.delete', () => {
     await expect(
       caller.account.delete(unkeyed as unknown as DeleteAccountInput),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
+  });
+});
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md, `account.certificateName.set`):
+// the student's certificate name, set once. The student kind, so an anonymous caller is
+// UNAUTHENTICATED and a teacher FORBIDDEN, neither reaching the service; the input's name and key
+// are validated before it; the service's refusal `already_set` reaches the caller as it is. What the
+// service does (once, the port on the setter's transaction) is certificate-name.service.spec.ts's.
+describe('account.certificateName.set', () => {
+  const input = { name: 'مريم بنت أحمد بن علي', idempotencyKey: 'spec-name-key-0001' } as const;
+
+  /** A certificate-name service that records whom it was asked to name, and answers the name. */
+  function recordingNames(
+    answer: () => Promise<{ name: string }> = async () => ({ name: input.name }),
+  ) {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      certificateName: {
+        setOwn: async (userId: string, given: unknown) => {
+          calls.push([userId, given]);
+          return answer();
+        },
+        setByAdministrator: unusedIdentityServices.certificateName.setByAdministrator,
+      },
+    };
+  }
+
+  it('declares the procedure as the student kind, under the default limit', () => {
+    expect(metaOf('account.certificateName.set')).toEqual({ surface: 'app', caller: 'student' });
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED, reaching nothing', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    await expect(surface.anonymous().account.certificateName.set(input)).rejects.toMatchObject(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('refuses a teacher with FORBIDDEN, reaching nothing', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { userId } = await createAccount(database, { role: 'teacher' });
+    const { accessToken } = await identity.sessions.issue(userId);
+    const teacher = await surface.bearing(accessToken);
+    await expect(teacher.account.certificateName.set(input)).rejects.toMatchObject(
+      refused('FORBIDDEN'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('hands the student and the input to the service and answers the name it set', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { userId, caller } = await signedIn();
+    await expect(caller.account.certificateName.set(input)).resolves.toEqual({ name: input.name });
+    expect(recording.calls).toEqual([[userId, input]]);
+  });
+
+  it('answers the service’s refusal already_set as CONFLICT', async () => {
+    const recording = recordingNames(async () => {
+      throw new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'certificateName', code: 'already_set' }],
+      });
+    });
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { caller } = await signedIn();
+    await expect(caller.account.certificateName.set(input)).rejects.toMatchObject(
+      refused('CONFLICT'),
+    );
+  });
+
+  it.each([
+    ['no idempotency key', { name: input.name }],
+    ['a blank name', { ...input, name: '   ' }],
+    ['a name of one letter', { ...input, name: 'م' }],
+    // #145 r1 Minor 2 (T004's validation edges): the bound, and what would garble the printed line.
+    ['a name of 81 letters', { ...input, name: 'م'.repeat(81) }],
+    ['a name holding a line break', { ...input, name: 'محمد\nأحمد' }],
+    ['a name holding a NUL', { ...input, name: 'محمد\u0000أحمد' }],
+    ['a name holding a right-to-left override (U+202E)', { ...input, name: 'محمد \u202Eأحمد' }],
+    ['a name holding a left-to-right embedding (U+202A)', { ...input, name: 'محمد \u202Aأحمد' }],
+    ['a name holding a first-strong isolate (U+2068)', { ...input, name: 'محمد \u2068أحمد' }],
+    ['a name holding a pop directional isolate (U+2069)', { ...input, name: 'محمد \u2069أحمد' }],
+  ])('refuses %s before the service is reached', async (_case, given) => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { caller } = await signedIn();
+    await expect(
+      caller.account.certificateName.set(given as unknown as typeof input),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
+  });
+});
+
+// T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+// `.remove`): the phone's push token on the caller's own account. The user kind under the default
+// limit, so an anonymous caller is UNAUTHENTICATED, reaching nothing; a token empty or past its bound,
+// or an unknown platform, is refused before the service; neither answer echoes the token. What the
+// rows become (by the hash, moved to the caller, another account's never removed) is
+// push-tokens.service.spec.ts's. Every token is made up (R-SEC-2).
+describe('account.pushToken', () => {
+  const token = 'ExponentPushToken[spec-router-0000000001]';
+
+  /** A push-token service that records whom it was asked for, and with what. */
+  function recordingTokens() {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      pushTokens: {
+        register: async (userId: string, given: unknown) => {
+          calls.push(['register', userId, given]);
+        },
+        remove: async (userId: string, given: unknown) => {
+          calls.push(['remove', userId, given]);
+        },
+      },
+    };
+  }
+
+  it('declares both procedures as the user kind, under the default limit', () => {
+    for (const path of ['account.pushToken.register', 'account.pushToken.remove']) {
+      expect(metaOf(path)).toEqual({ surface: 'app', caller: 'user' });
+    }
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED on register, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    await expect(
+      surface.anonymous().account.pushToken.register({ token, platform: 'android' }),
+    ).rejects.toMatchObject(refused('UNAUTHENTICATED'));
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED on remove, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    await expect(surface.anonymous().account.pushToken.remove({ token })).rejects.toMatchObject(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('hands the caller and the token to the service, and answers nothing back', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { userId, caller } = await signedIn();
+    await expect(
+      caller.account.pushToken.register({ token, platform: 'ios' }),
+    ).resolves.toBeUndefined();
+    await expect(caller.account.pushToken.remove({ token })).resolves.toBeUndefined();
+    expect(recording.calls).toEqual([
+      ['register', userId, { token, platform: 'ios' }],
+      ['remove', userId, { token }],
+    ]);
+  });
+
+  it.each([
+    ['an empty token', { token: '', platform: 'android' }],
+    ['a token past 4096 characters', { token: 'x'.repeat(4097), platform: 'android' }],
+    ['an unknown platform', { token, platform: 'web' }],
+    ['no platform', { token }],
+  ])('refuses %s on register before the service is reached', async (_case, given) => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn();
+    await expect(
+      caller.account.pushToken.register(given as unknown as { token: string; platform: 'ios' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
+  });
+
+  // The review session's answer to lane E2's Q2 (2026-11-17), on `account.delete`'s precedent: a
+  // suspended or banned person removes their own device's token at sign-out; registering stays the
+  // active account's.
+  it.each(['suspended', 'banned'] as const)(
+    'admits a %s account on remove, handing its own token to the service',
+    async (standing) => {
+      const recording = recordingTokens();
+      surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+      const { userId, caller } = await signedIn(standing);
+      await expect(caller.account.pushToken.remove({ token })).resolves.toBeUndefined();
+      expect(recording.calls).toEqual([['remove', userId, { token }]]);
+    },
+  );
+
+  it('refuses a suspended account on register with ACCOUNT_RESTRICTED, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn('suspended');
+    await expect(
+      caller.account.pushToken.register({ token, platform: 'android' }),
+    ).rejects.toMatchObject(refused('ACCOUNT_RESTRICTED'));
+    expect(recording.calls).toEqual([]);
+  });
+
+  it.each([
+    ['an empty token', { token: '' }],
+    ['a token past 4096 characters', { token: 'x'.repeat(4097) }],
+  ])('refuses %s on remove before the service is reached', async (_case, given) => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn();
+    await expect(caller.account.pushToken.remove(given)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
     expect(recording.calls).toEqual([]);
   });
 });

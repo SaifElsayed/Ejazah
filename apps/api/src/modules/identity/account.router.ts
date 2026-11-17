@@ -7,8 +7,12 @@
 // router, merged there. `account.delete` (T082) admits a restricted account (a suspended person may
 // still leave, FR-140), counts the caller's attempts on the authentication budget, and is keyed.
 import {
+  certificateNameSetInput,
+  certificateNameSetOutput,
   deleteAccountInput,
   meOutput,
+  pushTokenRegisterInput,
+  pushTokenRemoveInput,
   reportDeviceTimezoneInput,
   setLanguageInput,
   setTimezoneInput,
@@ -17,7 +21,7 @@ import {
 import { z } from 'zod';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
-import { createAppRouter, userProcedure } from '../../surfaces/procedures.js';
+import { createAppRouter, studentProcedure, userProcedure } from '../../surfaces/procedures.js';
 
 const { authentication, authenticationBudget } = defaultRateLimits;
 
@@ -60,5 +64,39 @@ export const accountRouter = createAppRouter({
     rateLimit: { key: authentication, budget: authenticationBudget, subject: 'caller' },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.deletion.deleteAccount(ctx.caller.userId, input);
+  }),
+
+  // T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md,
+  // `account.certificateName.set`): the student's certificate name, entered once, keyed; refused
+  // `already_set` once the account holds one, and the student's waiting requests released on the
+  // same transaction (the service's). The student kind, under the default limit.
+  certificateName: createAppRouter({
+    set: studentProcedure({
+      input: certificateNameSetInput,
+      output: certificateNameSetOutput,
+    }).mutation(({ ctx, input }) =>
+      ctx.services.identity.certificateName.setOwn(ctx.caller.userId, input),
+    ),
+  }),
+
+  // T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+  // `.remove`): the phone's push token on the caller's own account, registered at start and removed
+  // at sign-out. The user kind, under the default limit; neither answer echoes the token. `.remove`
+  // admits a suspended or banned account (the review session's answer to lane E2's Q2, 2026-11-17,
+  // on `account.delete`'s precedent): it only removes the caller's own token, so a restricted person
+  // signs out cleanly; registering stays the active account's.
+  pushToken: createAppRouter({
+    register: userProcedure({ input: pushTokenRegisterInput, output: z.void() }).mutation(
+      async ({ ctx, input }) => {
+        await ctx.services.identity.pushTokens.register(ctx.caller.userId, input);
+      },
+    ),
+    remove: userProcedure({
+      input: pushTokenRemoveInput,
+      output: z.void(),
+      admitsRestricted: true,
+    }).mutation(async ({ ctx, input }) => {
+      await ctx.services.identity.pushTokens.remove(ctx.caller.userId, input);
+    }),
   }),
 });

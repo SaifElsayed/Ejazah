@@ -25,6 +25,11 @@
 // (`fields`), the type is any the kind accepts (`text/plain` for the chat's text), and a route may
 // name a `refused` hook, called with each refusal once the caller and the fields are known, before
 // the answer, which it never changes: a hook that throws is caught and the refusal still answered.
+//
+// T003 of specs/005-certification (`POST /uploads/signature`, R-411; R-106): a route may declare the
+// teacher standing it admits, `admits`, as the teacher kind's declaration does, read in the kind's
+// order before a byte of the body: a caller without the teacher role `FORBIDDEN`, then the
+// restricted standings the route refuses, then a standing below the declared one `FORBIDDEN`.
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DomainError } from '../platform/errors/domain-error.js';
@@ -50,8 +55,10 @@ import {
   clientAddressOf,
   type Role,
   type SessionResolver,
+  type TeacherStanding,
   type UserSession,
 } from './context.js';
+import type { TeacherStandingAdmitted } from './procedures.js';
 
 /** The text fields a multipart upload may carry beside its file, and their size. */
 const FIELD_LIMITS = { fields: 4, fieldBytes: 256 } as const;
@@ -108,6 +115,11 @@ export interface UploadRoute<TKind extends UploadKind> {
   readonly kindOf: (fields: ReadonlyMap<string, string>) => TKind;
   /** The standings answered `ACCOUNT_RESTRICTED` (FR-137). */
   readonly refuses: readonly AccountStatus[];
+  /**
+   * T003 of specs/005-certification: a teacher's route, admitting the standing named and above, as
+   * the teacher kind's `admits` (R-106); absent, the route takes either role.
+   */
+  readonly admits?: TeacherStandingAdmitted;
   /** Stores the file and answers what the client gets, as JSON with status 201. */
   readonly handle: (upload: AcceptedUpload<TKind>) => Promise<object>;
   /**
@@ -160,6 +172,17 @@ function refuse(
   response.end(JSON.stringify({ error: mapped.body }), () => request.socket.destroy());
 }
 
+/** T003: whether a teacher's standing is the one `admits` names or above (R-106). */
+function standingAdmitted(
+  teacher: TeacherStanding | undefined,
+  admits: TeacherStandingAdmitted,
+): boolean {
+  const approved = teacher?.verificationStatus === 'approved';
+  if (admits === 'approved') return approved;
+  if (admits === 'publishable') return approved && teacher?.payoutVerified === true;
+  return true;
+}
+
 function declaredLengthOf(request: IncomingMessage): number | undefined {
   const header = request.headers['content-length'];
   if (header === undefined) return undefined;
@@ -198,10 +221,16 @@ export function uploadRoute<TKind extends UploadKind>(
         const bearer = bearerOf(request.headers);
         const session = bearer === null ? null : await sessions(bearer);
         if (session === null) throw new DomainError('UNAUTHENTICATED');
+        if (route.admits !== undefined && session.role !== 'teacher') {
+          throw new DomainError('FORBIDDEN');
+        }
         if (route.refuses.includes(session.accountStatus)) {
           throw new DomainError('ACCOUNT_RESTRICTED', undefined, {
             details: [{ path: 'accountStatus', code: session.accountStatus }],
           });
+        }
+        if (route.admits !== undefined && !standingAdmitted(session.teacher, route.admits)) {
+          throw new DomainError('FORBIDDEN');
         }
         const declaredLength = declaredLengthOf(request);
         if (declaredLength !== undefined) {

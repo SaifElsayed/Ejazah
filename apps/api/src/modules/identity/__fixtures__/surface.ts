@@ -6,10 +6,7 @@
 // application resolves it.
 import { vi } from 'vitest';
 
-import type {
-  RateLimiter,
-  RateLimitSubject,
-} from '../../../platform/guards/rate-limit.guard.js';
+import type { RateLimiter, RateLimitSubject } from '../../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../../platform/logging/logger.js';
 import { type AppServices, createAppContext, type UserSession } from '../../../surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../../surfaces/procedures.js';
@@ -64,7 +61,13 @@ export interface IdentitySurface {
 
 export function surfaceOf(
   identity: Identity,
-  overrides: { readonly deletion?: AppServices['identity']['deletion'] } = {},
+  overrides: {
+    readonly deletion?: AppServices['identity']['deletion'];
+    // T004 of specs/005-certification (rule d): the certificate name's service, a recording one.
+    readonly certificateName?: AppServices['identity']['certificateName'];
+    // T005 of specs/005-certification (rule d): the push token's service, a recording one.
+    readonly pushTokens?: AppServices['identity']['pushTokens'];
+  } = {},
 ): IdentitySurface {
   const check = vi.fn(
     async (_key: string, _subject: RateLimitSubject, _procedure: string) => undefined,
@@ -80,6 +83,8 @@ export function surfaceOf(
       ...identity,
       payout: unusedIdentityServices.payout,
       deletion: overrides.deletion ?? unusedIdentityServices.deletion,
+      certificateName: overrides.certificateName ?? unusedIdentityServices.certificateName,
+      pushTokens: overrides.pushTokens ?? unusedIdentityServices.pushTokens,
     },
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,

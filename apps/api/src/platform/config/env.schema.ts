@@ -204,9 +204,11 @@ const envObject = z.object({
   // Select the adapter behind the video, push and messaging ports (T121, FR-056). Each has only its
   // stand-in until the phase that first calls the port adds its real member (FR-054), so each
   // defaults to it. Every mode but development and test refuses each stand-in below, as it refuses
-  // PAYMENT_GATEWAY's (T153, T168). T009 adds LiveKit to the video port (research R-302).
+  // PAYMENT_GATEWAY's (T153, T168). T009 adds LiveKit to the video port (research R-302). T005 of
+  // specs/005-certification adds Expo's push service to the push port (R-405); EXPO_ACCESS_TOKEN
+  // stays optional, sent only when the project turns it on.
   VIDEO_PROVIDER: z.enum(['fake', 'livekit']).default('fake'),
-  PUSH_PROVIDER: z.enum(['fake']).default('fake'),
+  PUSH_PROVIDER: z.enum(['fake', 'expo']).default('fake'),
   SMS_PROVIDER: z.enum(['fake']).default('fake'),
 
   // T001 (Phase 1, contracts/ports.md): the sign-in port and the email port, `fake` the only member

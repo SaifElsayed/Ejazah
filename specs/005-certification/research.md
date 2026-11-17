@@ -157,7 +157,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
     - a context of session (the caller a party, through `Pairings.partyOfSession`, which also answers the session's
       enrollment), chat (the caller a party of the enrollment, through `Pairings.partyOfEnrollment`) or profile
       (visible to the caller by the visibility predicate, else NOT_FOUND, R-GENDER-2); a session or chat that is not
-      the caller's answers NOT_FOUND;
+      the caller's answers NOT_FOUND; for a session or chat report, `reportedUserId` must equal the port's `counterpartUserId`, else NOT_FOUND (#143 r3, Minor 1);
     - every session and chat report stores its enrollment in `user_reports.enrollment_id`, set by the server (for a
       session report, from the session);
     - one open report per reporter, reported user and context (a partial unique);
@@ -170,7 +170,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   through a port it declares, bound by `main.ts` as identity's `OngoingEnrollments` is bound to booking:
   - `partyOfSession(tx, sessionId, userId)` → `{ enrollmentId, counterpartUserId } | null` (sessions' entry);
   - `partyOfEnrollment(tx, enrollmentId, userId)` → `{ counterpartUserId } | null` (booking's entry);
-  - `paired(tx, userId, otherUserId)` → whether an enrollment, whatever its status, joins the two (booking's entry).
+  - `paired(tx, userId, otherUserId)` → whether an enrollment, whatever its status, joins the two; a soft-deleted enrollment does not count (ADR 0006 :20) (booking's entry).
 - **Code.** No code reads `user_reports` yet; `chat/purge.service.ts:10-12` reads disputes only.
 
 ## R-409 — Gender flags, the correction and the fraud ban

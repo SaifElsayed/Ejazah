@@ -850,6 +850,54 @@ describe('the video provider (T009)', () => {
   });
 });
 
+// T005 of specs/005-certification (R-405, P2 (a)): Expo's push service behind the push port. It
+// starts without a credential: `EXPO_ACCESS_TOKEN` is sent only when the project turns it on, and
+// stays optional. The stand-in stays refused outside development and test (T153).
+describe('the push provider (T005)', () => {
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('selects Expo, with or without its access token', () => {
+    expect(loadConfig({ ...validEnv, PUSH_PROVIDER: 'expo' }).PUSH_PROVIDER).toBe('expo');
+    const withToken = loadConfig({
+      ...validEnv,
+      PUSH_PROVIDER: 'expo',
+      EXPO_ACCESS_TOKEN: 'expo-placeholder',
+    });
+    expect(withToken.EXPO_ACCESS_TOKEN).toBe('expo-placeholder');
+  });
+
+  it('keeps the stand-in by default', () => {
+    expect(loadConfig(validEnv).PUSH_PROVIDER).toBe('fake');
+  });
+
+  it('refuses an unknown provider, naming the key and never the value', () => {
+    const failure = refusal({ ...validEnv, PUSH_PROVIDER: 'fcm-placeholder' });
+
+    expect(failure.offendingKeys).toEqual(['PUSH_PROVIDER']);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('refuses the stand-in outside development and test, and takes Expo there (FR-056, T153)', () => {
+    for (const env of [validEnv, { ...validEnv, PUSH_PROVIDER: 'fake' }]) {
+      const failure = refusal({ ...env, NODE_ENV: 'production' });
+      expect(failure.offendingKeys).toContain('PUSH_PROVIDER');
+    }
+
+    // Still refused for the other ports' stand-ins (T153), never for push.
+    const production = refusal({ ...validEnv, PUSH_PROVIDER: 'expo', NODE_ENV: 'production' });
+    expect(production.offendingKeys).not.toContain('PUSH_PROVIDER');
+    expect(production.offendingKeys).not.toContain('EXPO_ACCESS_TOKEN');
+  });
+});
+
 describe('loadConfigOrExit (T015, FR-039)', () => {
   afterEach(() => {
     vi.restoreAllMocks();

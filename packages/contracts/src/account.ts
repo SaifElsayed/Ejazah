@@ -134,3 +134,42 @@ export type IdentityDocumentType = z.infer<typeof identityDocumentType>;
 export type DeleteAccountInput = z.infer<typeof deleteAccountInput>;
 export type IdentityVerificationGetOutput = z.infer<typeof identityVerificationGetOutput>;
 export type IdentityVerificationOutcome = z.infer<typeof identityVerificationOutcome>;
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md, `account.certificateName.set`):
+// the student's full name as the certificate prints it, entered once; afterwards only an
+// administrator changes it (`users.setCertificateName`). Its bounds are the display name's
+// (`onboarding.ts`), no document naming others. It refuses a control character (`\p{Cc}`: a line
+// break, a NUL) and the direction controls, the embeddings and overrides U+202A–U+202E and the
+// isolates U+2066–U+2069: printed on a permanent certificate, either would garble the line or make
+// two names look alike (#145 r1 Minor 2; the chat file name's `\p{Cc}` precedent, `chat.ts`).
+export const certificateName = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[^\p{Cc}\u202A-\u202E\u2066-\u2069]+$/u);
+
+/** Keyed (app-surface.md, "App surface: Phase 4 additions"); refused `already_set` once a name is held. */
+export const certificateNameSetInput = z.object({ name: certificateName, idempotencyKey });
+
+export const certificateNameSetOutput = z.object({ name: z.string() });
+
+export type CertificateNameSetInput = z.infer<typeof certificateNameSetInput>;
+export type CertificateNameSetOutput = z.infer<typeof certificateNameSetOutput>;
+
+// T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+// `.remove`): the phone's push token, registered when the application starts and removed at sign-out.
+// The token is the provider's own opaque string, bounded as the sign-in provider's tokens are
+// (`auth.ts`, `identityToken`); it is stored encrypted and looked up by its hash, and no answer
+// echoes it. The platform is ERD §2's `device_push_tokens.platform`.
+export const devicePlatform = z.enum(['ios', 'android']);
+
+export const pushToken = z.string().min(1).max(4096);
+
+export const pushTokenRegisterInput = z.object({ token: pushToken, platform: devicePlatform });
+
+export const pushTokenRemoveInput = z.object({ token: pushToken });
+
+export type DevicePlatform = z.infer<typeof devicePlatform>;
+export type PushTokenRegisterInput = z.infer<typeof pushTokenRegisterInput>;
+export type PushTokenRemoveInput = z.infer<typeof pushTokenRemoveInput>;

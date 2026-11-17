@@ -20,6 +20,8 @@ model Subject {
   teacherCredentials TeacherCredential[]
   enrollments        Enrollment[]
   ijazahs            Ijazah[]
+  // Phase 4 (T001 of specs/005-certification): certification's requests, a back-relation only.
+  ijazahRequests     IjazahRequest[]
 
   @@map("subjects")
 }

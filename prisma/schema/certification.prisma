@@ -1,9 +1,59 @@
 // certification domain (T060, ERD section 8). Owned by apps/api/src/modules/certification.
-// ijazahs, ijazah_bars. Hashed verification token; deleted_at on ijazahs.
+// ijazahs, ijazah_bars and, since Phase 4 (T001 of specs/005-certification), ijazah_requests.
+// Hashed verification token; deleted_at on ijazahs.
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 //
 // What the schema language cannot say lives in the migrations: the revoked DELETE on ijazahs (T065,
-// ERD section 15.10).
+// ERD section 15.10); since Phase 4 (`20261117…_certification_foundations`), the partial unique on
+// an enrollment's open request and the checks `ijazah_requests_reason_check`,
+// `ijazah_requests_decided_check` and `ijazahs_signed_off_check` (ERD section 15).
+
+// Phase 4 (T001 of specs/005-certification, data-model.md; ADR 0017 D5, R-403, R-404): a teacher's
+// request for a student's ijazah, frozen at send, decided by an administrator. The enrollment, the
+// parties and the subject come from the enrollment, never the input. One open request (awaiting the
+// student's name, or pending) per enrollment, a partial unique in the migration.
+model IjazahRequest {
+  id                  String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId        String              @map("enrollment_id") @db.Uuid
+  teacherUserId       String              @map("teacher_user_id") @db.Uuid
+  studentUserId       String              @map("student_user_id") @db.Uuid
+  subjectId           String              @map("subject_id") @db.Uuid
+  // Not in the future (the service's rule).
+  completionDate      DateTime            @map("completion_date") @db.Date
+  // The certificate's language (FR-LOC-4).
+  language            Language            @default(ar)
+  status              IjazahRequestStatus
+  // Generations (arrays of names), origin first, the teacher appended: frozen at send, re-frozen on a
+  // correction of the chain while the request is open (R-403).
+  chainSnapshot       Json                @map("chain_snapshot")
+  // `teacher_credentials.holder_name` at send.
+  teacherNamePrinted  String              @map("teacher_name_printed")
+  // The request's own copy of the teacher's signature; NULL once erased (rejected or closed).
+  signatureStorageKey String?             @map("signature_storage_key")
+  // Mandatory when rejected (`ijazah_requests_reason_check`).
+  reason              String?
+  // Set together on approve or reject, and only then (`ijazah_requests_decided_check`).
+  decidedByAdminId    String?             @map("decided_by_admin_id") @db.Uuid
+  decidedAt           DateTime?           @map("decided_at") @db.Timestamptz(6)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
+  teacher        User       @relation("IjazahRequestTeacher", fields: [teacherUserId], references: [id])
+  student        User       @relation("IjazahRequestStudent", fields: [studentUserId], references: [id])
+  subject        Subject    @relation(fields: [subjectId], references: [id])
+  decidedByAdmin AdminUser? @relation("IjazahRequestDecidedBy", fields: [decidedByAdminId], references: [id], onDelete: Restrict)
+  ijazah         Ijazah?
+
+  @@index([enrollmentId])
+  @@index([teacherUserId])
+  @@index([studentUserId])
+  @@index([subjectId])
+  @@index([decidedByAdminId])
+  // The administrators' queue (data-model.md).
+  @@index([status, createdAt])
+  @@map("ijazah_requests")
+}
 
 model Ijazah {
   id                    String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -18,7 +68,9 @@ model Ijazah {
   mode                  IjazahMode
   // The Mode A template language (FR-LOC-4).
   language              Language
-  // Ordered names at grant time, the teacher appended (FR-ISNAD-7). Immutable. Mode A only.
+  // Ordered names at grant time, the teacher appended (FR-ISNAD-7). Immutable from the sign-off
+  // (DEC-72): before it, a correction of the chain re-freezes it and the certificate is re-rendered.
+  // Mode A only.
   chainSnapshot         Json?      @map("chain_snapshot")
   // The generated PDF or the uploaded scan, served only through a signed URL.
   certificateStorageKey String     @map("certificate_storage_key")
@@ -36,20 +88,38 @@ model Ijazah {
   // Soft deletion, distinct from revocation: DELETE is revoked from the application role (T065,
   // ERD section 15.10).
   deletedAt             DateTime?  @map("deleted_at") @db.Timestamptz(6)
+  // Phase 4 (T001 of specs/005-certification, data-model.md; ADR 0019 D1, R-402, DEC-72): the
+  // request it was issued from, who issued it, the two names as printed, the completion date, the
+  // rendering (an older generation's job writes nothing) and the administrator's sign-off, set
+  // together and never before the rendering (`ijazahs_signed_off_check`).
+  requestId             String?    @unique @map("request_id") @db.Uuid
+  issuedByAdminId       String?    @map("issued_by_admin_id") @db.Uuid
+  studentNamePrinted    String     @map("student_name_printed")
+  teacherNamePrinted    String     @map("teacher_name_printed")
+  completionDate        DateTime?  @map("completion_date") @db.Date
+  renderedAt            DateTime?  @map("rendered_at") @db.Timestamptz(6)
+  renderGeneration      Int        @default(0) @map("render_generation")
+  signedOffAt           DateTime?  @map("signed_off_at") @db.Timestamptz(6)
+  signedOffByAdminId    String?    @map("signed_off_by_admin_id") @db.Uuid
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
-  student        User       @relation("IjazahStudent", fields: [studentUserId], references: [id])
-  teacher        User       @relation("IjazahTeacher", fields: [teacherUserId], references: [id])
-  subject        Subject    @relation(fields: [subjectId], references: [id])
-  revokedByAdmin AdminUser? @relation(fields: [revokedByAdminId], references: [id], onDelete: Restrict)
+  enrollment       Enrollment     @relation(fields: [enrollmentId], references: [id])
+  student          User           @relation("IjazahStudent", fields: [studentUserId], references: [id])
+  teacher          User           @relation("IjazahTeacher", fields: [teacherUserId], references: [id])
+  subject          Subject        @relation(fields: [subjectId], references: [id])
+  revokedByAdmin   AdminUser?     @relation("IjazahRevokedBy", fields: [revokedByAdminId], references: [id], onDelete: Restrict)
+  request          IjazahRequest? @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  issuedByAdmin    AdminUser?     @relation("IjazahIssuedBy", fields: [issuedByAdminId], references: [id], onDelete: Restrict)
+  signedOffByAdmin AdminUser?     @relation("IjazahSignedOffBy", fields: [signedOffByAdminId], references: [id], onDelete: Restrict)
 
   @@index([enrollmentId])
   @@index([studentUserId])
   @@index([teacherUserId])
   @@index([subjectId])
   @@index([revokedByAdminId])
+  @@index([issuedByAdminId])
+  @@index([signedOffByAdminId])
   @@map("ijazahs")
 }
 

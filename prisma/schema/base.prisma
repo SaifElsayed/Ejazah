@@ -422,6 +422,19 @@ enum IjazahMode {
   @@map("ijazah_mode")
 }
 
+// Phase 4 (T001 of specs/005-certification, data-model.md; R-404): a request's states. Sent →
+// `awaiting_student_name` (no certificate name yet) or `pending`; the name entered → `pending`;
+// `approved` (an `ijazahs` row) or `rejected` by an administrator; `closed` at the student's deletion.
+enum IjazahRequestStatus {
+  awaiting_student_name
+  pending
+  approved
+  rejected
+  closed
+
+  @@map("ijazah_request_status")
+}
+
 // moderation (ERD section 10)
 
 enum DisputeKind {

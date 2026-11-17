@@ -91,7 +91,7 @@ apps/api/src/
 ├── platform/settings/registry.ts
 ├── platform/ports/push/expo.adapter.ts
 └── jobs/                    # render-certificate, deliver-notification, send-reminder
-packages/contracts/src/      # certificates, reports, gender-flags, push; admin/{ijazahs,reports,gender-flags,settings}
+packages/contracts/src/      # certificates, reports, gender-flags; the push token in account.ts (T005, B45); admin/{ijazahs,reports,gender-flags,settings}
 prisma/                      # migration(s), seed block
 apps/mobile/src/features/    # teacher: signature, request sheet, request status; student: certificate name, certificates; shared: report sheet, flag, push permission
 apps/admin/src/pages/        # ijazah-requests, ijazahs, reports, gender, settings

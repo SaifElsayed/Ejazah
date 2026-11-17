@@ -11,6 +11,11 @@ import type { SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { AccountService } from './account.service.js';
+import {
+  type CertificateNameDependencies,
+  CertificateNameService,
+  certificateNameStoreOver,
+} from './certificate-name.service.js';
 import { EmailAuthService } from './email-auth.service.js';
 import {
   AccountsRepository,
@@ -42,7 +47,9 @@ import {
 } from './photo-upload.controller.js';
 import { UsersRepository } from './users.repository.js';
 import { OtpCodesRepository } from './otp-codes.repository.js';
-import { PushTokensRepository } from './push-tokens.repository.js';
+import { PushRecipientsService } from './push-recipients.service.js';
+import { DeviceTokensRepository, PushTokensRepository } from './push-tokens.repository.js';
+import { PushTokenService } from './push-tokens.service.js';
 import {
   type IdentityDependencies,
   type ResolvedUserSession,
@@ -111,6 +118,13 @@ export interface IdentityServices {
     // T081 of specs/004-sessions: `users.delete`, handed to the admin services by `main.ts`.
     'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion' | 'deleteByAdministrator'
   >;
+  /**
+   * T004 of specs/005-certification (FR-602): `account.certificateName.set`, and
+   * `users.setCertificateName`, handed to the admin services by `main.ts`.
+   */
+  readonly certificateName: CertificateNames;
+  /** T005 of specs/005-certification (FR-620, R-405): `account.pushToken.register` and `.remove`. */
+  readonly pushTokens: Pick<PushTokenService, 'register' | 'remove'>;
 }
 
 /** T077: the logger's `info`, where the log handed in has one. */
@@ -186,7 +200,7 @@ export function createIdentityServices({
   report,
   live,
   ...base
-}: IdentityServiceDependencies): IdentityServices {
+}: IdentityServiceDependencies): Omit<IdentityServices, 'certificateName'> {
   const sessions = new SessionService(base);
   const codes = new OneTimeCodes({ ...base, email, log });
   const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
@@ -199,6 +213,14 @@ export function createIdentityServices({
     // T077 of specs/004-sessions (Q-E (a)): the registration's `payout_kept_match` line, where the
     // logger handed in answers `info` (the process's does; a spec's warning log may not).
     payout: new PayoutService({ ...base, payment, idempotency, ...infoLogOf(log) }),
+    // T005 of specs/005-certification: the phone's push token, encrypted with the process's cipher.
+    // #145 r1 Minor 1: a token moved from another account is logged where the log answers `info`.
+    pushTokens: new PushTokenService({
+      devices: new DeviceTokensRepository(base.database),
+      cipher,
+      ...infoLogOf(log),
+      ...(base.now === undefined ? {} : { now: base.now }),
+    }),
     deletion: new DeletionService({
       ...base,
       cipher,
@@ -466,4 +488,52 @@ export function createHeldPhotos(database: Pick<Database, 'includeDeleted'>): {
 } {
   const photos = new DeletedPhotosRepository(database);
   return { heldPhotoOf: (userId) => photos.heldOf(userId) };
+}
+
+/**
+ * T004 of specs/005-certification (FR-602; ADR 0019 D1; research R-411; the note under T004, Q4 (a)):
+ * the student's certificate name, `account.certificateName.set` and `users.setCertificateName`.
+ * Identity imports no module (`docs/ARCHITECTURE.md:183`), so the student's requests waiting for the
+ * name are released through the port `AwaitingNameRelease`, which `main.ts` hands in: a no-op until
+ * T006, then certification's entry (`docs/ARCHITECTURE.md:197`, a dependency against the arrows).
+ */
+export type { AwaitingNameRelease } from './certificate-name.service.js';
+export type CertificateNames = Pick<CertificateNameService, 'setOwn' | 'setByAdministrator'>;
+
+/**
+ * T004: the certificate-name service over this module's repository, built once by `main.ts` with the
+ * process's idempotency (`run` for the student's own, `runOn` for the administrator's), its logger,
+ * and the port.
+ */
+export function createCertificateNameService(
+  dependencies: Omit<CertificateNameDependencies, 'store'>,
+): CertificateNames {
+  return new CertificateNameService({ ...dependencies, store: certificateNameStoreOver() });
+}
+
+// ---------------------------------------------------------------------------------------------
+// T003 of specs/005-certification, the owner's Q16 (b): the teacher's signature is stored without its
+// metadata through the photo's own strip (T145), in a turn of the one `PhotoTurns` the process hands
+// both routes (T073's one-image memory bound), so catalog's signature route forks neither.
+export { withoutMetadata as imageWithoutMetadata } from './photo-upload.controller.js';
+export { PhotoTurns } from './photo-turns.js';
+
+/**
+ * T005 of specs/005-certification (FR-620, FR-621; R-405, R-406; the review session's answer Q-E1-1
+ * (b)): identity's `PushRecipients`, the store `deliver-notification` declares, bound by `worker.ts`
+ * with the process's cipher: a user's tokens decrypted with their platforms and `preferred_language`
+ * (null for a deleted user), and the removal of the tokens the provider no longer accepts, matched
+ * by `token_hash`. ⚠️ The removal is automatic and final.
+ */
+export type { PushRecipientDevices, PushRecipientTarget } from './push-recipients.service.js';
+export type PushRecipientsStore = Pick<PushRecipientsService, 'targetsOf' | 'removeStale'>;
+
+export function createPushRecipients({
+  database,
+  cipher,
+}: {
+  readonly database: Pick<Database, 'devicePushToken' | 'user' | '$queryRaw'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+}): PushRecipientsStore {
+  return new PushRecipientsService({ devices: new DeviceTokensRepository(database), cipher });
 }

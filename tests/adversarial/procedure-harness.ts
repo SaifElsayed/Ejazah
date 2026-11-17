@@ -502,6 +502,8 @@ const OWN_ACCOUNT =
  * teacher moves to `registeredAttacks` in the task that changes it.
  */
 export const exemptProcedures: readonly Exemption[] = [
+  // T004 of specs/005-certification (rule d): the student's own certificate name; answers it alone.
+  { path: 'account.certificateName.set', reason: OWN_ACCOUNT },
   { path: 'account.delete', reason: OWN_ACCOUNT },
   {
     path: 'account.identityVerification.get',
@@ -516,6 +518,9 @@ export const exemptProcedures: readonly Exemption[] = [
     reason:
       'the caller’s own account; its `teacher` field is the caller’s own application when the caller is a teacher, never another user',
   },
+  // T005 of specs/005-certification (rule d): the caller's own push token; answers nothing.
+  { path: 'account.pushToken.register', reason: OWN_ACCOUNT },
+  { path: 'account.pushToken.remove', reason: OWN_ACCOUNT },
   { path: 'account.reportDeviceTimezone', reason: OWN_ACCOUNT },
   { path: 'account.setLanguage', reason: OWN_ACCOUNT },
   { path: 'account.setTimezone', reason: OWN_ACCOUNT },

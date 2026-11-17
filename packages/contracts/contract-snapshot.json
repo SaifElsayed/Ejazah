@@ -7,6 +7,7 @@
       "chatAttachmentMime": ["application/pdf", "text/plain"],
       "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
+      "devicePlatform": ["android", "ios"],
       "enrollmentCancellationReason": [
         "account_deleted",
         "admin",
@@ -132,6 +133,7 @@
       "IdempotencyKeyStatus": ["completed", "in_progress"],
       "IdentityDocumentType": ["national_id", "passport"],
       "IjazahMode": ["generated", "uploaded"],
+      "IjazahRequestStatus": ["approved", "awaiting_student_name", "closed", "pending", "rejected"],
       "IsnadVerificationStatus": ["unverified", "verified"],
       "Language": ["ar", "en"],
       "NotificationType": [
@@ -2512,9 +2514,30 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "users.setCertificateName": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.name": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       }
     },
     "app": {
+      "account.certificateName.set": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.name": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "object" }, "$.name": { "required": true, "type": "string" } }
+      },
       "account.delete": {
         "caller": "user",
         "input": {
@@ -2623,6 +2646,22 @@
           "$.timezone": { "required": true, "type": "string" },
           "$.userId": { "required": true, "type": "string" }
         }
+      },
+      "account.pushToken.register": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.platform": { "required": true, "type": "string", "values": ["android", "ios"] },
+          "$.token": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "account.pushToken.remove": {
+        "caller": "user",
+        "input": { "$": { "type": "object" }, "$.token": { "required": true, "type": "string" } },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "account.reportDeviceTimezone": {
         "caller": "user",
@@ -4286,6 +4325,16 @@
           "$": { "type": "object" },
           "$.bio": { "required": true, "type": "string" },
           "$.qualificationSummary": { "required": true, "type": "string" }
+        }
+      },
+      "teacher.signature.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.link": { "required": true, "type": "null|string" },
+          "$.uploadedAt": { "required": true, "type": "null|string" }
         }
       },
       "teacher.slots.create": {

@@ -46,6 +46,8 @@ const [
   { CONFIRM_ENROLLMENT },
   sessionsModule,
   chat,
+  // T003 of specs/005-certification, the owner's Q16 (b): the image line's numbers (T073).
+  { PHOTOS_PROCESSED_AT_ONCE, PHOTO_TURN_WAIT_MS },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -78,6 +80,7 @@ const [
   import('./jobs/confirm-enrollment.js'),
   import('./modules/sessions/index.js'),
   import('./modules/chat/index.js'),
+  import('./platform/guards/upload.middleware.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -176,40 +179,63 @@ const idempotency = new IdempotencyService({
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
 const enrollmentSide = booking.createEnrollmentSide({ settings });
+// T003 of specs/005-certification: the teacher's signature, one service for `POST /uploads/signature`
+// and `teacher.signature.get` (R-411).
+const teacherSignatures = catalog.createTeacherSignatureService({
+  database,
+  storage: ports.storage,
+  settings,
+  log,
+});
+// T003 of specs/005-certification, the owner's Q16 (b): one image line for the process, handed to the
+// photos route and the signature route, so one image is decoded at a time across both (T073).
+const imageTurns = new identity.PhotoTurns({
+  atOnce: PHOTOS_PROCESSED_AT_ONCE,
+  waitMs: PHOTO_TURN_WAIT_MS,
+});
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
   publicConfig: { supportEmail: config.SUPPORT_EMAIL, paymentMode: config.PAYMENT_MODE },
   subjects: catalog.createSubjectsService(database),
-  identity: identity.createIdentityServices({
-    ...identityBase,
-    cipher,
-    // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
-    live: liveBus,
-    marks: createRedisSingleUseMarks({
-      redisUrl: config.REDIS_URL,
-      onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+  identity: {
+    ...identity.createIdentityServices({
+      ...identityBase,
+      cipher,
+      // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
+      live: liveBus,
+      marks: createRedisSingleUseMarks({
+        redisUrl: config.REDIS_URL,
+        onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+      }),
+      signIn: ports.signIn,
+      email: ports.email,
+      storage: ports.storage,
+      log,
+      payment: ports.payment,
+      idempotency,
+      consequences,
+      fileErasures: [
+        verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+      ],
+      // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
+      // entry, so identity imports no booking.
+      fileHold: {
+        filesHeld: async (userId) =>
+          (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
+      },
+      // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
+      // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
+      ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
     }),
-    signIn: ports.signIn,
-    email: ports.email,
-    storage: ports.storage,
-    log,
-    payment: ports.payment,
-    idempotency,
-    consequences,
-    fileErasures: [
-      verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
-    ],
-    // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
-    // entry, so identity imports no booking.
-    fileHold: {
-      filesHeld: async (userId) =>
-        (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
-    },
-    // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
-    // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
-    ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
-  }),
+    // T004 of specs/005-certification (FR-602): the certificate name. `AwaitingNameRelease` is a
+    // no-op until T006 binds it to certification's entry, so identity imports no module.
+    certificateName: identity.createCertificateNameService({
+      idempotency,
+      log,
+      awaitingNameRelease: { release: async () => undefined },
+    }),
+  },
   verification: verification.createVerificationServices({
     database,
     storage: ports.storage,
@@ -217,14 +243,18 @@ const services = {
     settings,
     idempotency,
   }),
-  catalog: catalog.createCatalogServices({
-    database,
-    idempotency,
-    // 003:T113 (Q-T113-k): the average's `price_average_min_teachers`.
-    settings,
-    // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
-    use: booking.createCatalogUse({ settings }),
-  }),
+  catalog: {
+    ...catalog.createCatalogServices({
+      database,
+      idempotency,
+      // 003:T113 (Q-T113-k): the average's `price_average_min_teachers`.
+      settings,
+      // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
+      use: booking.createCatalogUse({ settings }),
+    }),
+    // T003 of specs/005-certification: `teacher.signature.get`.
+    signature: teacherSignatures,
+  },
   // `teacher.profile` (T017): the identity module's, the photo answered as the storage port's link.
   teacherProfile: identity.createTeacherProfileService({
     database,
@@ -323,6 +353,8 @@ const routes = {
     storage: ports.storage,
     settings,
     database,
+    // T003 of specs/005-certification: the process's one image line, shared with the signature route.
+    turns: imageTurns,
   }),
   // The upload route's third use (T038 of specs/004-sessions): `POST /uploads/chat`, a PDF or UTF-8
   // text document sent in an enrollment's chat, never an image (R-SEC-4, R-SEC-5).
@@ -331,6 +363,13 @@ const routes = {
     storage: ports.storage,
     transactions: transactionsOver(database),
     enrollments: enrollmentSide,
+  }),
+  // T003 of specs/005-certification: `POST /uploads/signature`, an approved teacher's PNG or JPEG
+  // signature decided by content (R-SEC-4), one current row, the old file erased after the commit.
+  [catalog.SIGNATURE_UPLOAD_PATH]: catalog.createSignatureUploadRoute({
+    ...uploads,
+    signatures: teacherSignatures,
+    turns: imageTurns,
   }),
   ...filesRoutes(ports.storage),
   // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the
@@ -390,6 +429,9 @@ const adminServices = createAdminServices({
   // T081 of specs/004-sessions (FR-512): `users.delete`, identity's deletion without the
   // re-authentication and without T080's check, on the administrator's transaction.
   userDeletion: services.identity.deletion,
+  // T004 of specs/005-certification (FR-602): `users.setCertificateName`, identity's certificate-name
+  // service on the administrator's transaction.
+  certificateNames: services.identity.certificateName,
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,

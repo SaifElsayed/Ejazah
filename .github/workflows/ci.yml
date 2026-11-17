@@ -176,10 +176,11 @@ jobs:
       - run: pnpm db:generate
       # T048 — the type-aware set (eslint.types.config.js), which only the pipeline runs (research R-10).
       # Node's default heap (about 2 GB) ran out on PR #86 (B10, 2026-10-20); 5 GB of the runner's
-      # 7 GB leaves the rest to the system (owner's decision).
+      # 7 GB leaves the rest to the system (owner's decision). 8 GB since PR #145 (B45, 2026-11-17): 5 GB
+      # ran out (exit 134) at 7d2890cc; the owner's decision R1-Q3.
       - run: pnpm lint:types
         env:
-          NODE_OPTIONS: --max-old-space-size=5120
+          NODE_OPTIONS: --max-old-space-size=8192
       # T157 — every numeric literal other than 0 and 1 under apps/api/src/modules/, specs excluded,
       # read from the syntax tree so comments and strings are never read (FR-034). pnpm 9.12 passes the
       # script's exit code through unchanged (checked on Linux and Windows), so the step can tell a

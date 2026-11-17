@@ -29,7 +29,7 @@ Run on `ijazah_integrity` only (`. ejazah-tools/test-env.sh`, `IJAZAH_DB_SPECS=1
 2. A report on a session holds its chat past `purge-chat`'s window.
 3. Flag a student with two enrollments and correct their gender: both enrollments end `gender_correction`, a case
    each, and `sessions.restore` refuses them.
-4. Flag a teacher and find fraud: the teacher is banned, every counterparty enrollment has a `gender_fraud` case, and
+4. Flag a teacher and find fraud: the teacher is banned, every counterparty enrollment has a case under the ban's own reason (`student_banned` or `teacher_ended`, R-409), and
    lifting the ban checks each pairing.
 
 ## 4. Push (stand-in, then the phones on 11/20 if P2's build exists)

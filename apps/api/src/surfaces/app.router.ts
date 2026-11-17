@@ -22,7 +22,13 @@ import {
   teacherStudentsRouter,
   teacherTodayProcedure,
 } from '../modules/booking/index.js';
-import { packagesRouter, slotsRouter, subjectsRouter } from '../modules/catalog/index.js';
+// T003 of specs/005-certification: catalog's `teacher.signature`.
+import {
+  packagesRouter,
+  slotsRouter,
+  subjectsRouter,
+  teacherSignatureRouter,
+} from '../modules/catalog/index.js';
 // T037 of specs/004-sessions: the chat module's `chat`.
 import { chatRouter } from '../modules/chat/index.js';
 import {
@@ -58,6 +64,8 @@ export const appRouter = createAppRouter({
     payout: payoutRouter,
     packages: packagesRouter,
     profile: teacherProfileRouter,
+    // T003 of specs/005-certification: the teacher's signature, a signed link.
+    signature: teacherSignatureRouter,
     slots: slotsRouter,
     students: teacherStudentsRouter,
     today: teacherTodayProcedure,

@@ -92,6 +92,7 @@ import {
 } from '../../apps/api/src/modules/chat/index.js';
 import {
   AccountConsequences,
+  createCertificateNameService,
   createIdentityServices,
   type IdentityServices,
   resolveUserSession,
@@ -704,31 +705,40 @@ async function build(): Promise<Built> {
       log: { info: () => undefined, warn: () => undefined },
     }),
   );
-  const identity: IdentityServices = createIdentityServices({
-    ...identityBase,
-    cipher,
-    marks: new MemorySingleUseMarks(() => new Date()),
-    signIn: {
-      verifyIdentityToken: unreachable,
-      exchangeAuthorization: unreachable,
-      revoke: unreachable,
-    },
-    email: { deliver: async () => undefined },
-    storage,
-    log: { warn: () => undefined, info: () => undefined },
-    payment: {
-      async registerPayoutRecipient(teacherUserId, details) {
-        const recipientRef = await payment.registerPayoutRecipient(teacherUserId, details);
-        recipients.set(teacherUserId, recipientRef);
-        return recipientRef;
+  const identity: IdentityServices = {
+    ...createIdentityServices({
+      ...identityBase,
+      cipher,
+      marks: new MemorySingleUseMarks(() => new Date()),
+      signIn: {
+        verifyIdentityToken: unreachable,
+        exchangeAuthorization: unreachable,
+        revoke: unreachable,
       },
-    },
-    idempotency,
-    consequences,
-    report: () => undefined,
-    // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
-    ongoingEnrollments: createOngoingEnrollments({ settings }),
-  });
+      email: { deliver: async () => undefined },
+      storage,
+      log: { warn: () => undefined, info: () => undefined },
+      payment: {
+        async registerPayoutRecipient(teacherUserId, details) {
+          const recipientRef = await payment.registerPayoutRecipient(teacherUserId, details);
+          recipients.set(teacherUserId, recipientRef);
+          return recipientRef;
+        },
+      },
+      idempotency,
+      consequences,
+      report: () => undefined,
+      // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
+      ongoingEnrollments: createOngoingEnrollments({ settings }),
+    }),
+    // T004 of specs/005-certification (rule d): the certificate name, its port a no-op as `main.ts`
+    // binds it until T006.
+    certificateName: createCertificateNameService({
+      idempotency,
+      log: { info: () => undefined },
+      awaitingNameRelease: { release: async () => undefined },
+    }),
+  };
   // T043: the suspension as the panel's admin services build it, on the same registry (FR-165).
   const standing = new StandingService({
     store: standingStoreOver(database),

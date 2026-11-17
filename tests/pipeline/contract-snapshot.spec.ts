@@ -704,8 +704,9 @@ describe('the real contract (T084)', () => {
     // 28 enums of Phase 0, the eight the Phase 1 ERD pass declared (T009 to T012), and the
     // verification call's outcome (T068), the kind of a banned person's kept identifier (T097), and
     // the kind of an enrollment's event (Phase 2's T004), and Phase 3's two (specs/004-sessions T001):
-    // the kind of a session's event and the reason a hold was released.
-    expect(Object.keys(declared)).toHaveLength(41);
+    // the kind of a session's event and the reason a hold was released, and Phase 4's one
+    // (specs/005-certification T001): an ijazah request's status.
+    expect(Object.keys(declared)).toHaveLength(42);
     expect(snapshot.enums.prisma).toEqual(declared);
     expect(Object.keys(snapshot.procedures)).toEqual(['admin', 'app']);
   });
