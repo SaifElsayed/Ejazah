@@ -1,7 +1,9 @@
 // PUBLIC ENTRY of the catalog module (T017). Other modules import this file and nothing below it (R-API-3).
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
@@ -64,6 +66,11 @@ import {
 import { PackagesService, type PackagesStore } from './packages.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import { type SubjectsReader, SubjectsService } from './subjects.service.js';
+import { signatureOf, writeSignature } from './teacher-signature.repository.js';
+import {
+  type TeacherSignatureStore,
+  TeacherSignatureService,
+} from './teacher-signature.service.js';
 
 /** The administrator surface's `credentials` namespace, mounted by `admin.router.ts` (T069). */
 export { credentialsAdminRouter } from './credentials-admin.router.js';
@@ -111,6 +118,11 @@ export interface CatalogServices {
   readonly packages: Pick<PackagesService, 'list' | 'create' | 'update'>;
   /** `teacher.slots.*` (T019). */
   readonly slots: TeacherSlots;
+  /**
+   * `teacher.signature.get` (T003 of specs/005-certification), built apart by
+   * `createTeacherSignatureService`, since it needs the storage port, and composed by `main.ts`.
+   */
+  readonly signature: Pick<TeacherSignatureService, 'get'>;
 }
 
 /** What the catalog module's user-surface services are built over, bound once by `main.ts` (T020). */
@@ -144,12 +156,15 @@ function slotsStoreOver(database: Database): SlotsStore {
   };
 }
 
-/** The catalog module's user-surface services (T020); T018 and T019 build theirs over `use`. */
+/**
+ * The catalog module's user-surface services (T020); T018 and T019 build theirs over `use`. The
+ * signature's is `createTeacherSignatureService`'s (T003 of specs/005-certification).
+ */
 export function createCatalogServices({
   use,
   database,
   idempotency,
-}: CatalogServiceDependencies): CatalogServices {
+}: CatalogServiceDependencies): Omit<CatalogServices, 'signature'> {
   return {
     packages: new PackagesService({
       transactions: transactionsOver(database),
@@ -287,3 +302,53 @@ export function createDiscoveryCatalog(
   return new DiscoveryService({ settings, storage, store: discoveryStore });
 }
 export type { DiscoveryCatalog };
+
+// ---------------------------------------------------------------------------------------------
+// T003 of specs/005-certification: the teacher's signature (FR-601, SRS FR-IJAZAH-12; research
+// R-411): `POST /uploads/signature` and `teacher.signature.get`, over `teacher_signatures`.
+
+/** The signature's store: this module's rows, and the account's lock through identity's entry. */
+export const teacherSignatureStore: TeacherSignatureStore = {
+  lockAccount,
+  current: signatureOf,
+  write: writeSignature,
+};
+
+/** What the signature service is built over, bound once by `main.ts`. */
+export interface TeacherSignatureServiceDependencies {
+  readonly database: Database;
+  readonly storage: Pick<StoragePort, 'put' | 'remove' | 'temporaryLink'>;
+  readonly settings: SettingsReader;
+  readonly log: Logger;
+}
+
+/**
+ * The signature's service: the upload route's `replace` and `teacher.signature.get`'s `get`.
+ * `main.ts` builds it once, hands it to the route, and composes it into `CatalogServices`.
+ */
+export function createTeacherSignatureService({
+  database,
+  storage,
+  settings,
+  log,
+}: TeacherSignatureServiceDependencies): TeacherSignatureService {
+  return new TeacherSignatureService({
+    transactions: transactionsOver(database),
+    store: teacherSignatureStore,
+    storage,
+    settings,
+    log,
+    clock: clockTimestamp,
+  });
+}
+export type { TeacherSignatureService };
+
+/** `POST /uploads/signature`, registered by `main.ts` among the upload routes. */
+export {
+  createSignatureUploadRoute,
+  SIGNATURE_UPLOAD_PATH,
+  type SignatureUploadDependencies,
+} from './signature-upload.controller.js';
+
+/** The `teacher.signature` namespace, mounted under `teacher.signature` by `app.router.ts`. */
+export { teacherSignatureRouter } from './teacher-signature.router.js';

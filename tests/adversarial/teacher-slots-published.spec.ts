@@ -37,6 +37,7 @@ import { createAppContext } from '../../apps/api/src/surfaces/context.js';
 import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
+  unusedCatalogServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -161,7 +162,8 @@ function teacherCaller(tx: Transaction, teacherId: string, gender: Gender) {
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
         chat: unusedChatServices,
-        catalog: catalogOn(tx),
+        // T003 of specs/005-certification: the signature's service is composed apart, unused here.
+        catalog: { ...catalogOn(tx), signature: unusedCatalogServices.signature },
       },
     }),
   );

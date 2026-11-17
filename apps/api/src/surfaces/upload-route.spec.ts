@@ -70,7 +70,37 @@ const sessionsByBearer: Readonly<Record<string, UserSession>> = {
   't-fields': session('u-fields', 'active'),
   't-hooked': session('u-hooked', 'active'),
   't-hook-throws': session('u-hook-throws', 'active'),
+  // T003 of specs/005-certification: a teacher's route admitting an approved teacher.
+  't-t-student': session('u-t-student', 'active'),
+  't-t-applicant': teacherSession('u-t-applicant', 'pending', 'active'),
+  't-t-approved': teacherSession('u-t-approved', 'approved', 'active'),
+  't-t-publishable': {
+    ...teacherSession('u-t-publishable', 'approved', 'active'),
+    teacher: {
+      verificationStatus: 'approved',
+      payoutVerified: true,
+      applicationStatus: 'approved',
+    },
+  },
+  't-t-suspended': teacherSession('u-t-suspended', 'approved', 'suspended'),
 };
+
+/** A teacher's session at a verification status, its payout account not verified. */
+function teacherSession(
+  userId: string,
+  verificationStatus: 'pending' | 'approved',
+  accountStatus: UserSession['accountStatus'],
+): UserSession {
+  return {
+    ...session(userId, accountStatus),
+    role: 'teacher',
+    teacher: {
+      verificationStatus,
+      payoutVerified: false,
+      applicationStatus: verificationStatus === 'approved' ? 'approved' : 'in_review',
+    },
+  };
+}
 const sessions = {
   user: async (bearer: string) => {
     // A slow resolver: the window between the headers and the body's first read (round 2, B).
@@ -116,6 +146,9 @@ const uploaded = { type: 'enrollment', enrollmentId: '0199d0a0-0000-7000-8000-00
 
 // T038 of specs/004-sessions: what the refusal hook was handed, in order.
 const hooked: { code: unknown; userId: string; fields: Record<string, string> }[] = [];
+
+// T003 of specs/005-certification: the uploaders the teacher's route handled, in order.
+const teacherHandled: string[] = [];
 
 beforeAll(async () => {
   application = await createApplication({
@@ -193,6 +226,19 @@ beforeAll(async () => {
           handle: async ({ uploader, live }) => {
             live.afterCommit([uploader.userId], uploaded);
             throw new DomainError('CONFLICT');
+          },
+        },
+      ),
+      // T003 of specs/005-certification: a teacher's route, as `POST /uploads/signature` declares.
+      '/uploads/teacher-probe': uploadRoute(
+        { sessions: sessions.user, guard: { settings, rateLimiter }, log },
+        {
+          kindOf: kindField(['identity']),
+          admits: 'approved',
+          refuses: ['suspended', 'banned'],
+          handle: async ({ uploader }) => {
+            teacherHandled.push(uploader.userId);
+            return { userId: uploader.userId };
           },
         },
       ),
@@ -338,6 +384,50 @@ describe('the upload route’s fields and refusal hook (T038 of specs/004-sessio
     const response = await post('/uploads/hook-throws', 't-hook-throws', withFields([]));
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'CONFLICT' } });
+  });
+});
+
+// T003 of specs/005-certification (R-411, R-106): a route may declare the teacher standing it admits,
+// as the teacher kind's `admits` does, in the kind's order: the role (403), the restricted standings
+// (`ACCOUNT_RESTRICTED`), then the standing below the declared one (403), each before the body is
+// read, so the handler is never reached.
+describe('a teacher’s upload route (T003 of specs/005-certification)', () => {
+  it('refuses a student FORBIDDEN, the handler never reached', async () => {
+    const response = await post('/uploads/teacher-probe', 't-t-student', identityPdf());
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(teacherHandled).not.toContain('u-t-student');
+  });
+
+  it('refuses an applicant FORBIDDEN, the handler never reached', async () => {
+    const response = await post('/uploads/teacher-probe', 't-t-applicant', identityPdf());
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'FORBIDDEN' } });
+    expect(teacherHandled).not.toContain('u-t-applicant');
+  });
+
+  it('refuses a suspended approved teacher ACCOUNT_RESTRICTED', async () => {
+    const response = await post('/uploads/teacher-probe', 't-t-suspended', identityPdf());
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'ACCOUNT_RESTRICTED',
+        details: [{ path: 'accountStatus', code: 'suspended' }],
+      },
+    });
+    expect(teacherHandled).not.toContain('u-t-suspended');
+  });
+
+  it('admits an approved teacher, the payout account verified or not', async () => {
+    for (const [bearer, userId] of [
+      ['t-t-approved', 'u-t-approved'],
+      ['t-t-publishable', 'u-t-publishable'],
+    ] as const) {
+      const response = await post('/uploads/teacher-probe', bearer, identityPdf());
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toEqual({ userId });
+    }
+    expect(teacherHandled).toEqual(['u-t-approved', 'u-t-publishable']);
   });
 });
 

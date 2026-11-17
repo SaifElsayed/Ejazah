@@ -40,6 +40,16 @@ const unusedPackages = new Proxy(
   },
 ) as AppServices['catalog']['packages'];
 
+// T003 of specs/005-certification's signature, which no slot procedure reaches.
+const unusedSignature = new Proxy(
+  {},
+  {
+    get: () => {
+      throw new Error('catalog.signature is not used by the slots router');
+    },
+  },
+) as AppServices['catalog']['signature'];
+
 const CALLER = '0199d0a0-0000-7000-8000-0000000000b1';
 const SLOT = '0199d0a0-0000-7000-8000-0000000000d1';
 const KEY = 'spec-slot-key-00000001';
@@ -118,7 +128,7 @@ function as(session: UserSession | null) {
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
-    catalog: { slots, packages: unusedPackages },
+    catalog: { slots, packages: unusedPackages, signature: unusedSignature },
   };
   return callerFor(
     createAppContext({

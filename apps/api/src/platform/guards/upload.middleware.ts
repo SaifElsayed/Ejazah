@@ -150,14 +150,17 @@ export async function sniffUpload(body: AsyncIterable<Uint8Array>): Promise<Snif
 /**
  * The kinds of upload, and the sniffed types each admits (FR-151). T038 of specs/004-sessions adds
  * `chat`, decided by `acceptChatUpload` below: a PDF by its signature, or text by its whole stream.
+ * T003 of specs/005-certification adds `signature`, the teacher's signature (FR-601, R-411): a PNG or a
+ * JPEG by its content, as the photo is, whatever its name (R-SEC-4).
  */
-export type UploadKind = 'identity' | 'credential' | 'photo' | 'chat';
+export type UploadKind = 'identity' | 'credential' | 'photo' | 'chat' | 'signature';
 
 export const uploadKinds: Readonly<Record<UploadKind, readonly SniffedType[]>> = {
   identity: ['application/pdf'],
   credential: ['application/pdf'],
   photo: ['image/jpeg', 'image/png'],
   chat: ['application/pdf'],
+  signature: ['image/jpeg', 'image/png'],
 };
 
 // ---------------------------------------------------------------------------------------------
