@@ -253,9 +253,13 @@ export class PackagesService {
       if (new Set(counted.map((row) => row.teacherUserId)).size < minTeachers) {
         return {};
       }
-      const [first, ...rest] = counted.map((row) => perSession(row.price_piasters, row.sessionCount));
-      if (first === undefined) return {};
-      return { averagePerSession_piasters: toPlainNumber(average([first, ...rest])) };
+      const [first_piasters, ...rest_piasters] = counted.map((row) =>
+        perSession(row.price_piasters, row.sessionCount),
+      );
+      if (first_piasters === undefined) return {};
+      return {
+        averagePerSession_piasters: toPlainNumber(average([first_piasters, ...rest_piasters])),
+      };
     });
   }
 }

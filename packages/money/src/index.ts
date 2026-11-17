@@ -163,7 +163,10 @@ export function average(amounts_piasters: readonly [Piasters, ...Piasters[]]): P
     throw new RangeError('average: an empty list has no average');
   }
   const count = BigInt(amounts_piasters.length);
-  const sum = amounts_piasters.reduce((total, amount) => total + BigInt(amount), 0n);
+  const sum = amounts_piasters.reduce(
+    (total, amount_piasters) => total + BigInt(amount_piasters),
+    0n,
+  );
   const whole = sum / count;
   return piasters(Number((sum % count) * 2n >= count ? whole + 1n : whole));
 }
