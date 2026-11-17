@@ -291,6 +291,42 @@ describe('the upload kinds (T020, FR-151)', () => {
     });
     expect(guard.counter.hits).toBe(3);
   });
+
+  // T003 of specs/005-certification (FR-601, R-411; R-SEC-4): the `signature` kind, a PNG or a JPEG
+  // decided by content. The guard never sees a name, so a renamed file is judged by its bytes.
+  describe('the signature kind (T003 of specs/005-certification)', () => {
+    const JPEG = Buffer.concat([bytes(0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10), ascii('JFIF\0')]);
+    const TEXT = Buffer.from('توقيع المعلم\n', 'utf8');
+
+    it.each([
+      ['a PNG', PNG, 'image/png'],
+      ['a JPEG', JPEG, 'image/jpeg'],
+    ] as const)('accepts %s by its content, every byte handed back', async (_name, body, type) => {
+      const upload = await acceptUploadOfKind(guardOf(), {
+        kind: 'signature',
+        uploaderId: uploader,
+        body: chunks(body, 5),
+      });
+      expect(upload.type).toBe(type);
+      expect(await collect(upload.body)).toEqual(body);
+    });
+
+    it.each([
+      ['a PDF', PDF],
+      ['UTF-8 text', TEXT],
+    ] as const)(
+      'refuses %s, VALIDATION_FAILED, whatever it is named (R-SEC-4)',
+      async (_name, body) => {
+        await expect(
+          acceptUploadOfKind(guardOf(), {
+            kind: 'signature',
+            uploaderId: uploader,
+            body: chunks(body, 7),
+          }),
+        ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      },
+    );
+  });
 });
 
 // T038 of specs/004-sessions (FR-489, FR-490; R-SEC-4, R-SEC-5; research R-314; plan.md decision
