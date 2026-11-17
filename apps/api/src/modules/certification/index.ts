@@ -66,6 +66,13 @@ import {
   type RenderQueue,
   type RequestDetail,
 } from './ijazah-decision.service.js';
+// 005:T009: the parties' certificates.
+import { certificateById, certificatesOfParty } from './certificates.repository.js';
+import {
+  type CertificatesLog,
+  CertificatesService,
+  type CertificatesStore,
+} from './certificates.service.js';
 
 /**
  * The request's store: this module's rows and locks, and the reads of booking (the enrollment),
@@ -129,9 +136,14 @@ export function createIjazahRequestService({
 }
 export type { IjazahRequestService };
 
-/** The certification module's services on the user surface (T006): `teacher.ijazahRequests.*`. */
+/**
+ * The certification module's services on the user surface: `teacher.ijazahRequests.*` (T006) and,
+ * 005:T009, `certificates.*` (the owner's answer to lane D's point 2, (a): the member sits here, so
+ * `surfaces/context.ts` is unchanged).
+ */
 export interface CertificationServices {
   readonly ijazahRequests: Pick<IjazahRequestService, 'preview' | 'send' | 'get'>;
+  readonly certificates: Pick<CertificatesService, 'list' | 'link'>;
 }
 
 /** The `teacher.ijazahRequests` namespace, mounted by `app.router.ts`. */
@@ -220,3 +232,48 @@ export type { IjazahDecisionService, RenderQueue, RequestDetail };
 
 /** 005:T007: the `ijazahRequests` namespace of the administrator surface, mounted by `admin.router.ts`. */
 export { ijazahRequestsAdminRouter } from './ijazah-requests-admin.router.js';
+
+// 005:T009 (B46, lane D; FR-607, FR-609; R-412; the note under T009, Q9 (a)): the parties'
+// certificates, `certificates.list` and `.link` on the user surface. Its store reads this module's
+// `ijazahs` and catalog's subject names through its entry; the link is the storage port's signed
+// link under `document_link_ttl_seconds`. `main.ts` builds it once and hands it to `AppServices`
+// as `certification.certificates`.
+export const certificatesStore: CertificatesStore = {
+  ofParty: certificatesOfParty,
+  byId: certificateById,
+  subjectsOf: subjectSummariesOf,
+};
+
+/** What the parties' certificates are built over, bound once by `main.ts`. */
+export interface CertificatesServiceDependencies {
+  readonly database: Database;
+  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  readonly settings: SettingsReader;
+  readonly log: CertificatesLog;
+}
+
+/** The parties' certificates (T009): `certificates.list` and `certificates.link`. */
+export function createCertificatesService({
+  database,
+  storage,
+  settings,
+  log,
+}: CertificatesServiceDependencies): CertificatesService {
+  return new CertificatesService({
+    transactions: transactionsOver(database),
+    store: certificatesStore,
+    storage,
+    settings,
+    log,
+  });
+}
+export type { CertificatesService };
+
+/** The `certificates` namespace, mounted by `app.router.ts`. */
+export { certificatesRouter } from './certificates.router.js';
+
+/**
+ * The student's public credentials (FR-IJAZAH-4, the note under T009): the ijazahs signed off and
+ * unrevoked only. No v1.0 surface reads it; the public page is T028 (v1.1).
+ */
+export { type PublicCredential, publicCredentialsOf } from './certificates.repository.js';
