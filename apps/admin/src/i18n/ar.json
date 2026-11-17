@@ -1841,7 +1841,8 @@
         "net": "الصافي",
         "order": "الطلب",
         "status": "الحالة",
-        "student": "الطالب"
+        "student": "الطالب",
+        "teacherShare": "نصيب المعلم"
       },
       "dash": "—",
       "detail": {
@@ -1884,7 +1885,8 @@
         "holdPlaced": "حُجز {placed} · تنتهي مهلته {expires}",
         "holdReleased": "حُرّر {released} · {reason}",
         "holdNotReleased": "لم يُحرَّر",
-        "holdReasonNotRecorded": "السبب لم يُسجَّل"
+        "holdReasonNotRecorded": "السبب لم يُسجَّل",
+        "teacherShare": "نصيب المعلم"
       },
       "empty": {
         "text": "جرّب مرجعًا أو اسمًا آخر، أو أزل فلترًا.",
@@ -1922,7 +1924,8 @@
         "admin": "قرار الإدارة",
         "teacherSuspended": "إيقاف المعلم أو حظره أو سحب اعتماده",
         "accountDeleted": "حُذف الحساب"
-      }
+      },
+      "teacherShare": "{amount} بنسبة {percent}٪"
     },
     "reports": {
       "columns": {

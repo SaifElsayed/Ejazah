@@ -1841,7 +1841,8 @@
         "net": "Net",
         "order": "Order",
         "status": "Status",
-        "student": "Student"
+        "student": "Student",
+        "teacherShare": "Teacher share"
       },
       "dash": "—",
       "detail": {
@@ -1884,7 +1885,8 @@
         "holdPlaced": "Held {placed} · expires {expires}",
         "holdReleased": "Released {released} · {reason}",
         "holdNotReleased": "Not released",
-        "holdReasonNotRecorded": "reason not recorded"
+        "holdReasonNotRecorded": "reason not recorded",
+        "teacherShare": "Teacher share"
       },
       "empty": {
         "text": "Try another reference or name, or remove a filter.",
@@ -1922,7 +1924,8 @@
         "admin": "Administration's decision",
         "teacherSuspended": "Teacher suspended, banned or approval revoked",
         "accountDeleted": "Account deleted"
-      }
+      },
+      "teacherShare": "{amount} at {percent}%"
     },
     "reports": {
       "columns": {
