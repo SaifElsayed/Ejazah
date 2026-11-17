@@ -59,12 +59,18 @@ function settingsOf(stored: Readonly<Record<string, unknown>>): SettingsReader {
   };
 }
 
-function fixture(changes: Readonly<Record<string, unknown>> = {}) {
+function fixture(
+  changes: Readonly<Record<string, unknown>> = {},
+  publicConfig: AppServices['publicConfig'] = {
+    supportEmail: 'support@ijazah.invalid',
+    paymentMode: 'test',
+  },
+) {
   const check = vi.fn(async () => undefined);
   const rateLimiter = { check } as unknown as RateLimiter;
   const services: AppServices = {
     settings: settingsOf({ ...STORED, ...changes }),
-    publicConfig: { supportEmail: 'support@ijazah.invalid' },
+    publicConfig,
     subjects: {
       listActive: async () => {
         throw new Error('not read here');
@@ -108,7 +114,21 @@ describe('platform.publicConfig (T038, FR-145)', () => {
         confirmingPollWindowMinutes: 12,
       },
       teacherSharePercent: 65,
+      paymentMode: 'test',
     });
+  });
+
+  it('answers the payment mode the server runs in, so every app shows «نسخة تجريبية» in test mode (003:T109)', async () => {
+    const live = fixture({}, { supportEmail: 'support@ijazah.invalid', paymentMode: 'live' });
+    await expect(live.caller.platform.publicConfig()).resolves.toMatchObject({ paymentMode: 'live' });
+    await expect(fixture().caller.platform.publicConfig()).resolves.toMatchObject({
+      paymentMode: 'test',
+    });
+  });
+
+  it('fails closed when the payment mode is not wired, never answering a mode of its own (003:T109)', async () => {
+    const unwired = fixture({}, { supportEmail: 'support@ijazah.invalid' });
+    await expect(unwired.caller.platform.publicConfig()).rejects.toThrow();
   });
 
   it("answers the teacher's share rate from its setting, so the package editor shows the share as the price is typed (003:T104, Q-A3 (a))", async () => {

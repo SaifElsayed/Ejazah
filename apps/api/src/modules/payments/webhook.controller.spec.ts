@@ -35,6 +35,7 @@ const MAX_BODY_BYTES = 2048;
 
 const port = createPaymentPort({
   PAYMENT_GATEWAY: 'fake',
+  PAYMENT_MODE: 'test',
   PAYMENT_GATEWAY_WEBHOOK_SECRET: SECRET,
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 });

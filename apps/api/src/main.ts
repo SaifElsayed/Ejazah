@@ -123,7 +123,8 @@ const administration = {
 // Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
 // each module as its first consumer arrives. The request process never holds the push port
 // (R-API-15).
-const ports = selectPorts(config);
+// 003:T101 (track 2, B-M1): the payment gateway writes its warn line to the process's logger.
+const ports = selectPorts(config, log);
 
 // What the identity module's services are built over (T048): the database, the settings, the key
 // its tokens are signed under, and the single-use marks of nonces and onboarding tokens in Redis,
@@ -177,7 +178,8 @@ const idempotency = new IdempotencyService({
 const enrollmentSide = booking.createEnrollmentSide({ settings });
 const services = {
   settings,
-  publicConfig: { supportEmail: config.SUPPORT_EMAIL },
+  // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
+  publicConfig: { supportEmail: config.SUPPORT_EMAIL, paymentMode: config.PAYMENT_MODE },
   subjects: catalog.createSubjectsService(database),
   identity: identity.createIdentityServices({
     ...identityBase,

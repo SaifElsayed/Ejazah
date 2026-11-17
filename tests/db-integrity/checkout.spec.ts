@@ -109,6 +109,7 @@ beforeAll(() => {
   // The stand-in as `main.ts` selects it; no event is delivered here, so its origin is never reached.
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
     ENCRYPTION_KEY: randomBytes(32).toString('base64'),
   };
   gateway = createPaymentPort(config);

@@ -98,6 +98,7 @@ beforeAll(async () => {
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
     ENCRYPTION_KEY,
     API_PUBLIC_ORIGIN: origin,
   };

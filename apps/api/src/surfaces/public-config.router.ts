@@ -19,6 +19,9 @@
 // 003:T104 (Q-A3 (a), ADR 0025 D1): it also answers the teacher's share rate, read on every call
 // from the setting the checkout reads when it creates an order, so the package editor shows the
 // teacher's share as the price is typed. The rate is not secret: the Terms state the commission.
+//
+// 003:T109 (SRS DEC-87): it answers the payment mode the server runs in, so every app shows
+// «نسخة تجريبية» in test mode. A surface that wired no mode fails closed rather than answer one.
 import {
   checkoutPolling,
   publicConfigOutput,
@@ -63,6 +66,10 @@ export const platformRouter = createAppRouter({
       read('confirmingPollWindowMinutes'),
       settings.read(TEACHER_SHARE_SETTING, teacherSharePercent),
     ]);
+    const { paymentMode } = ctx.services.publicConfig;
+    if (paymentMode === undefined) {
+      throw new Error('platform.publicConfig: no payment mode is wired (003:T109)');
+    }
     return {
       supportEmail: ctx.services.publicConfig.supportEmail,
       termsVersion: version,
@@ -73,6 +80,7 @@ export const platformRouter = createAppRouter({
         confirmingPollWindowMinutes,
       },
       teacherSharePercent: sharePercent,
+      paymentMode,
     };
   }),
 });

@@ -47,6 +47,7 @@ const PAY_BY = new Date('2026-10-08T10:30:00Z');
 
 const gateway = createPaymentPort({
   PAYMENT_GATEWAY: 'fake',
+  PAYMENT_MODE: 'test',
   PAYMENT_GATEWAY_WEBHOOK_SECRET: SECRET,
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 });

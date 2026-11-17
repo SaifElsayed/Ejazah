@@ -672,6 +672,7 @@ async function build(): Promise<Built> {
   const origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
     ENCRYPTION_KEY: encryptionKey,
     API_PUBLIC_ORIGIN: origin,
   };

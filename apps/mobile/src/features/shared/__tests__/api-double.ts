@@ -178,6 +178,7 @@ export function fakeApi(termsVersion = '2026-10'): FakeApi {
     termsVersion,
     checkout: CHECKOUT_POLLING,
     teacherSharePercent: 70,
+    paymentMode: 'test',
   }));
   let uploaded = 0;
   const uploadDocument = jest.fn(

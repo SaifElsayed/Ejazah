@@ -134,7 +134,7 @@ const services = {
       throw new Error('no setting is read here');
     },
   },
-  publicConfig: { supportEmail: 'support@ijazah.invalid' },
+  publicConfig: { supportEmail: 'support@ijazah.invalid', paymentMode: 'test' as const },
   subjects: { listActive: async () => [] },
   identity,
   verification,

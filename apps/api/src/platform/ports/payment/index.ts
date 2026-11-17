@@ -35,6 +35,8 @@ export {
 export type PaymentConfig = Pick<
   Config,
   | 'PAYMENT_GATEWAY'
+  // 003:T109: the payment mode, which decides what a checkout without a payee does (T101).
+  | 'PAYMENT_MODE'
   | 'PAYMENT_GATEWAY_WEBHOOK_SECRET'
   | 'ENCRYPTION_KEY'
   | 'API_PUBLIC_ORIGIN'
@@ -66,7 +68,12 @@ export function standInWebhookSecret(
   );
 }
 
-export function createPaymentPort(config: PaymentConfig): PaymentPort {
+/** 003:T101: where the gateway writes its one warn line of ids and a reason (the process's logger). */
+export interface PaymentLog {
+  warn(fields: object, message: string): void;
+}
+
+export function createPaymentPort(config: PaymentConfig, log?: PaymentLog): PaymentPort {
   switch (config.PAYMENT_GATEWAY) {
     case 'fake':
       return new FakePaymentAdapter({
@@ -74,7 +81,7 @@ export function createPaymentPort(config: PaymentConfig): PaymentPort {
         ...(config.API_PUBLIC_ORIGIN === undefined ? {} : { origin: config.API_PUBLIC_ORIGIN }),
       });
     case 'paymob':
-      return paymobFrom(config);
+      return paymobFrom(config, log);
   }
 }
 
@@ -83,9 +90,13 @@ function required<T>(value: T | undefined, key: keyof PaymentConfig): T {
   return value;
 }
 
-function paymobFrom(config: PaymentConfig): PaymobPaymentAdapter {
+function paymobFrom(config: PaymentConfig, log?: PaymentLog): PaymobPaymentAdapter {
   const origin = required(config.PUBLIC_WEBHOOK_ORIGIN, 'PUBLIC_WEBHOOK_ORIGIN');
   return new PaymobPaymentAdapter({
+    // 003:T109, T101: the mode decides what a checkout without a payee, or a payee without a split
+    // integration, does; the logger takes the one warn line of ids and a reason.
+    mode: config.PAYMENT_MODE,
+    ...(log === undefined ? {} : { log }),
     secretKey: required(config.PAYMENT_GATEWAY_SECRET_KEY, 'PAYMENT_GATEWAY_SECRET_KEY'),
     publicKey: required(config.PAYMENT_GATEWAY_PUBLIC_KEY, 'PAYMENT_GATEWAY_PUBLIC_KEY'),
     hmacSecret: required(config.PAYMENT_GATEWAY_WEBHOOK_SECRET, 'PAYMENT_GATEWAY_WEBHOOK_SECRET'),

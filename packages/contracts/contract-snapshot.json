@@ -38,6 +38,7 @@
         "refund_case"
       ],
       "packageTrack": ["ijazah_track", "recitation"],
+      "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
       "role": ["student", "teacher"],
@@ -3569,6 +3570,7 @@
           "$.checkout.confirmingPollSeconds": { "required": true, "type": "integer" },
           "$.checkout.confirmingPollWindowMinutes": { "required": true, "type": "integer" },
           "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
+          "$.paymentMode": { "required": true, "type": "string", "values": ["live", "test"] },
           "$.supportEmail": { "required": true, "type": "string" },
           "$.teacherSharePercent": { "required": true, "type": "integer" },
           "$.termsVersion": { "required": true, "type": "string" }

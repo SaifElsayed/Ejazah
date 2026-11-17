@@ -364,6 +364,7 @@ describe('Enrollments', () => {
       termsVersion: '2026-10',
       checkout: { ...CHECKOUT_POLLING, confirmingPollSeconds: 5, confirmingPollWindowMinutes: 1 },
       teacherSharePercent: 70,
+      paymentMode: 'test',
     });
     mockApi.api.enrollments.list.query.mockResolvedValue(list(confirming));
     await renderIn('rtl', within(<Enrollments />)());

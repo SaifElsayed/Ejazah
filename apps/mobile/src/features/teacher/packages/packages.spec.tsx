@@ -453,6 +453,7 @@ describe('PackageEditor and PackageSubjectPicker', () => {
       termsVersion: '2026-10',
       checkout: CHECKOUT_POLLING,
       teacherSharePercent: 65,
+      paymentMode: 'test',
     });
     mockParams = { id: 'new' };
     await renderIn('ltr', withQueries(() => <PackageEditor />)());
