@@ -163,6 +163,14 @@ import type {
   // T082 of specs/004-sessions: an administrator's direct end of an enrollment.
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
+  // 005:T007 (B46, Q-C2 (a)): the administrators' review of an ijazah request.
+  adminIjazahRequestsApproveInput,
+  adminIjazahRequestsApproveOutput,
+  adminIjazahRequestsGetInput,
+  adminIjazahRequestsGetOutput,
+  adminIjazahRequestsListInput,
+  adminIjazahRequestsListOutput,
+  adminIjazahRequestsRejectInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -824,6 +832,36 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof sessionsEndEnrollmentOutput>;
       readonly replayed: boolean;
     }>;
+  };
+  /**
+   * 005:T007 (B46, Q-C2 (a); FR-604, FR-605, FR-628): the administrators' review of an ijazah
+   * request, certification's, composed by the admin module (`get` with the teacher's standing reason
+   * from its audit log, Q10 (a)); the two decisions keyed on the call's transaction.
+   */
+  readonly ijazahRequests: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsListInput>,
+    ): Answer<typeof adminIjazahRequestsListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsGetInput>,
+    ): Answer<typeof adminIjazahRequestsGetOutput>;
+    approve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsApproveInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof adminIjazahRequestsApproveOutput>;
+      readonly replayed: boolean;
+    }>;
+    reject(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsRejectInput>,
+    ): Promise<{ readonly replayed: boolean }>;
   };
 }
 

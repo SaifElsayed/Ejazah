@@ -42,6 +42,30 @@ import {
   IjazahRequestService,
   type IjazahRequestStore,
 } from './ijazah-request.service.js';
+// 005:T007: the administrators' review.
+import { hashLookupToken } from '../../platform/crypto/hashing.js';
+import {
+  generateCertificateNumber,
+  generateVerificationToken,
+} from '../../platform/guards/identifiers.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import { subjectSummariesOf } from '../catalog/index.js';
+import { sessionPartiesOf } from '../identity/index.js';
+import {
+  decisionRequestOf,
+  ijazahOfRequest,
+  insertIjazah,
+  markApproved,
+  markRejected,
+  requestPage,
+} from './ijazah-decision.repository.js';
+import {
+  type IjazahDecisionLog,
+  IjazahDecisionService,
+  type IjazahDecisionStore,
+  type RenderQueue,
+  type RequestDetail,
+} from './ijazah-decision.service.js';
 
 /**
  * The request's store: this module's rows and locks, and the reads of booking (the enrollment),
@@ -133,3 +157,66 @@ export {
   type SignatureImage,
   UnsupportedSignatureType,
 } from './template/certificate-case.js';
+
+// 005:T007 (B46, lane C; the note under T007, Q7 (a), Q10 (a), Q15 (a)): the administrators' review
+// of a request, `ijazahRequests.*` on the administrator surface. Its store reads this module's rows
+// and, through their entries, identity's parties and certificate name and catalog's subjects; the
+// number and the token are the kernel's (`platform/guards/identifiers.ts`, R-DB-6), the token hashed
+// at once (`hashLookupToken`, R-DB-7). `main.ts` binds `renders` to the queue's `render-certificate`
+// (`RENDER_CERTIFICATE`, `renderCertificatePayload(ijazahId, generation)`, job id
+// `${ijazahId}-${generation}`: BullMQ refuses a `:` in a custom id); the admin module composes it,
+// `get` with the standing's reason from its audit log (Q10 (a)).
+export const ijazahDecisionStore: IjazahDecisionStore = {
+  requestOf: decisionRequestOf,
+  page: requestPage,
+  ijazahOf: ijazahOfRequest,
+  partiesOf: sessionPartiesOf,
+  subjectsOf: subjectSummariesOf,
+  certificateNameOf,
+  lockAccounts,
+  lockRequests,
+  hasOpenBar,
+  insertIjazah,
+  markApproved,
+  markRejected,
+};
+
+/** What the review's service is built over, bound once by `main.ts` through the admin module. */
+export interface IjazahDecisionServiceDependencies {
+  readonly storage: Pick<StoragePort, 'temporaryLink' | 'remove'>;
+  readonly settings: SettingsReader;
+  /** The kernel's idempotency, keyed on the administrator kind's transaction (`runOn`). */
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'runOn'>;
+  /** `render-certificate`, enqueued after the approval's commit (contracts/jobs.md). */
+  readonly renders: RenderQueue;
+  readonly log: IjazahDecisionLog;
+}
+
+/** The review's service (T007): `ijazahRequests.list`, `.approve`, `.reject` and `get`'s half. */
+export function createIjazahDecisionService({
+  storage,
+  settings,
+  idempotency,
+  renders,
+  log,
+}: IjazahDecisionServiceDependencies): IjazahDecisionService {
+  return new IjazahDecisionService({
+    store: ijazahDecisionStore,
+    storage,
+    settings,
+    idempotency,
+    renders,
+    mint: {
+      certificateNumber: generateCertificateNumber,
+      verificationToken: generateVerificationToken,
+      hashToken: hashLookupToken,
+    },
+    drawId: (tx) => drawRowId(tx),
+    clock: clockTimestamp,
+    log,
+  });
+}
+export type { IjazahDecisionService, RenderQueue, RequestDetail };
+
+/** 005:T007: the `ijazahRequests` namespace of the administrator surface, mounted by `admin.router.ts`. */
+export { ijazahRequestsAdminRouter } from './ijazah-requests-admin.router.js';

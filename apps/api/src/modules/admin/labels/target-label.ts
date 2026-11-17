@@ -15,6 +15,7 @@
 // administrator caller kind rolls the action back with it (FR-180: the writer keeps nothing of the
 // action). The length bound is the contracts package's, which the database's check reads too.
 import { AUDIT_LABEL_MAX_LENGTH } from '@ijazah/contracts';
+import { certificateNumber } from '@ijazah/contracts/admin';
 
 /** What an audit entry may point at in this phase (admin-surface.md; ADR 0021 D2). */
 export type AuditTargetType =
@@ -29,7 +30,10 @@ export type AuditTargetType =
   | 'enrollment'
   | 'dispute'
   | 'session'
-  | 'provider_outage';
+  | 'provider_outage'
+  // 005:T007 (B46, Q-C3 (a)): an ijazah request by its id, an ijazah by its certificate number.
+  | 'ijazah_request'
+  | 'ijazah';
 
 /** The kind word of each target type: the label is this word, the separator and the identifier. */
 export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
@@ -49,6 +53,9 @@ export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
   dispute: 'نزاع أو قضية',
   session: 'جلسة',
   provider_outage: 'انقطاع الفيديو',
+  // 005:T007 (B46, Q-C3 (a); docs/ERD.md:806's label «إجازة · 7K3M-Q9TD-2XWB-8HRN»).
+  ijazah_request: 'طلب إجازة',
+  ijazah: 'إجازة',
 };
 
 /** Between the kind word and the identifier (ERD §12). */
@@ -69,11 +76,22 @@ export function isAuditTargetType(type: string): type is AuditTargetType {
   return Object.hasOwn(auditTargetKinds, type);
 }
 
+/**
+ * 005:T007: an ijazah's identifier is its certificate number, 16 Crockford symbols as stored, and the
+ * label prints it grouped 4-4-4-4 as the certificate does (docs/ERD.md:806); anything else is refused.
+ */
+function printedNumberOf(id: string): string {
+  if (!certificateNumber.safeParse(id).success) {
+    throw new TargetLabelError('an ijazah is identified by its certificate number');
+  }
+  return id.match(/.{4}/g)?.join('-') ?? id;
+}
+
 /** The label of one target: its kind word and its identifier, or a refusal. */
 export function targetLabel(type: string, id: string): string {
   if (!isAuditTargetType(type)) throw new TargetLabelError(`unknown target type "${type}"`);
   if (!IDENTIFIER.test(id)) throw new TargetLabelError('the identifier is empty or is not one');
-  const label = `${auditTargetKinds[type]}${LABEL_SEPARATOR}${id}`;
+  const label = `${auditTargetKinds[type]}${LABEL_SEPARATOR}${type === 'ijazah' ? printedNumberOf(id) : id}`;
   if (label.length > AUDIT_LABEL_MAX_LENGTH) {
     throw new TargetLabelError(`longer than ${AUDIT_LABEL_MAX_LENGTH} characters`);
   }

@@ -176,6 +176,12 @@
         "documentView": "عرض وثيقة",
         "enrollmentRestored": "استعادة اشتراك",
         "heldFileView": "عرض ملف محفوظ",
+        "ijazahReview": {
+          "issued": "إصدار إجازة",
+          "listed": "عرض طلبات الإجازة",
+          "rejected": "رفض طلب إجازة",
+          "viewed": "عرض طلب إجازة"
+        },
         "issueIjazahOnRequest": "إصدار إجازة بطلب المعلم",
         "paymentsListed": "عرض المدفوعات",
         "paymentsViewed": "عرض طلب دفع",
@@ -280,6 +286,10 @@
         "dispute": "نزاع أو قضية",
         "document": "وثيقة",
         "enrollment": "اشتراك",
+        "ijazahReview": {
+          "ijazah": "إجازة صادرة",
+          "request": "طلب إجازة"
+        },
         "payment": "طلب دفع",
         "providerOutage": "انقطاع الفيديو",
         "session": "جلسة",

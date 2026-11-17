@@ -27,6 +27,8 @@ describe('the target label (T021, FR-180)', () => {
     // T052: the payments monitor's `payments.viewed` names the order it opened.
     expect(targetLabel('payment', USER_ID)).toBe(`طلب دفع · ${USER_ID}`);
     for (const [type, word] of Object.entries(auditTargetKinds)) {
+      // 005:T007: an ijazah is labelled by its certificate number only (below).
+      if (type === 'ijazah') continue;
       expect(targetLabel(type, 'x')).toBe(`${word}${LABEL_SEPARATOR}x`);
     }
   });
@@ -158,5 +160,50 @@ describe('the Phase 3 audit targets (T002 of specs/004-sessions, G3)', () => {
     for (const type of ['enrollment', 'dispute', 'session', 'provider_outage'] as const) {
       expect(await resolveTargetName(tx, type, USER_ID, readers)).toBeNull();
     }
+  });
+});
+
+// 005:T007 of B46 (Q-C3 (a), the owner's word and the review's ruling of 2026-11-17): the
+// administrators' review of an ijazah request. A request is labelled by its id; an ijazah by its
+// certificate number in the printed 4-4-4-4 form of docs/ERD.md:806, written once at the action.
+// `ijazah_requests.listed` keeps the `admin` target of the other list reads.
+const NUMBER = '7K3MQ9TD2XWB8HRN';
+
+describe('the ijazah review audit targets (005:T007)', () => {
+  it('labels a request by its id and an ijazah by its number, grouped 4-4-4-4', () => {
+    expect(targetLabel('ijazah_request', USER_ID)).toBe(`طلب إجازة · ${USER_ID}`);
+    expect(targetLabel('ijazah', NUMBER)).toBe('إجازة · 7K3M-Q9TD-2XWB-8HRN');
+  });
+
+  it.each([
+    ['a uuid', USER_ID],
+    ['the grouped form', '7K3M-Q9TD-2XWB-8HRN'],
+    ['a lower-case number', NUMBER.toLowerCase()],
+    ['15 symbols', NUMBER.slice(1)],
+  ])('refuses an ijazah identified by %s', (_case, id) => {
+    expect(() => targetLabel('ijazah', id)).toThrow(TargetLabelError);
+  });
+
+  it.each([
+    ['ijazah_requests.listed', 'admin', USER_ID],
+    ['ijazah_request.viewed', 'ijazah_request', USER_ID],
+    ['ijazah.issued', 'ijazah', NUMBER],
+    ['ijazah_request.rejected', 'ijazah_request', USER_ID],
+  ])(
+    '%s: its target type %s labels its identifier, so the action never throws',
+    (_action, type, id) => {
+      expect(isAuditTargetType(type)).toBe(true);
+      expect(() => targetLabel(type, id)).not.toThrow();
+    },
+  );
+
+  it('names no person for either type', async () => {
+    const tx = {} as Transaction;
+    const readers = {
+      person: () => Promise.reject(new Error('no person is read')),
+      administrator: () => Promise.reject(new Error('no administrator is read')),
+    };
+    expect(await resolveTargetName(tx, 'ijazah_request' as never, USER_ID, readers)).toBeNull();
+    expect(await resolveTargetName(tx, 'ijazah' as never, NUMBER, readers)).toBeNull();
   });
 });

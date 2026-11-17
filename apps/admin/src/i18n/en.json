@@ -176,6 +176,12 @@
         "documentView": "View a document",
         "enrollmentRestored": "Restore an enrollment",
         "heldFileView": "View a held file",
+        "ijazahReview": {
+          "issued": "Issue an ijazah",
+          "listed": "View ijazah requests",
+          "rejected": "Reject an ijazah request",
+          "viewed": "View an ijazah request"
+        },
         "issueIjazahOnRequest": "Issue ijazah on teacher's request",
         "paymentsListed": "View payments",
         "paymentsViewed": "View a payment order",
@@ -280,6 +286,10 @@
         "dispute": "Dispute or case",
         "document": "Document",
         "enrollment": "Enrollment",
+        "ijazahReview": {
+          "ijazah": "Issued ijazah",
+          "request": "Ijazah request"
+        },
         "payment": "Payment order",
         "providerOutage": "Video outage",
         "session": "Session",
