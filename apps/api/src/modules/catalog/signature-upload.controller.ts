@@ -11,10 +11,19 @@
 // the file is read through `teacher.signature.get`'s signed link (R-SEC-3). Each refusal once the
 // caller is known writes one info line, `{ userId, errorCode }`: never the file's name or any of its
 // content.
+//
+// The owner's Q16 (b): before it reaches the service, the file is turned upright and re-encoded in its
+// own type with no metadata (no EXIF, so no GPS or device; no PNG text chunks) by the photo's own
+// strip, identity's `imageWithoutMetadata` (T145), in a turn of the `PhotoTurns` the route is
+// handed. `main.ts` hands the photos route and this one the same instance, so the process decodes
+// one image at a time across both (T073's memory bound). A header declaring more than
+// `PHOTO_MAX_INPUT_PIXELS`, or a file `sharp` cannot read, is refused `VALIDATION_FAILED`, and a
+// request finding no turn in time `RATE_LIMITED`, each before anything is stored.
 import { type SignatureUploadOutput, signatureUploadOutput } from '@ijazah/contracts';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { NodeHandler } from '../../platform/web/route.js';
+import { imageWithoutMetadata, type PhotoTurns } from '../identity/index.js';
 import {
   type RefusedUpload,
   uploadRoute,
@@ -32,6 +41,8 @@ export interface SignatureReplacer {
 
 export interface SignatureUploadDependencies extends UploadRouteDependencies {
   readonly signatures: SignatureReplacer;
+  /** The process's one image line (the owner's Q16 (b)), shared with the photos route. */
+  readonly turns: PhotoTurns;
 }
 
 function isSignatureType(type: string): type is SignatureType {
@@ -51,6 +62,7 @@ function logRefusal(error: unknown, { uploader, log }: RefusedUpload): void {
 
 export function createSignatureUploadRoute({
   signatures,
+  turns,
   ...dependencies
 }: SignatureUploadDependencies): NodeHandler {
   return uploadRoute<'signature'>(dependencies, {
@@ -62,8 +74,9 @@ export function createSignatureUploadRoute({
       if (!isSignatureType(type)) {
         throw new Error('signature: the signature kind admitted a type it does not take');
       }
+      const stored = await turns.take(() => imageWithoutMetadata(type, bytes));
       return signatureUploadOutput.parse(
-        await signatures.replace(uploader.userId, { type, bytes }),
+        await signatures.replace(uploader.userId, { type, bytes: stored }),
       );
     },
   });

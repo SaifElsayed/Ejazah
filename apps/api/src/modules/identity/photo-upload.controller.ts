@@ -63,7 +63,7 @@ function unreadable(cause: unknown): DomainError {
 }
 
 /** The photo upright, re-encoded in its own type, with no metadata (T145). */
-async function withoutMetadata(type: SniffedType, bytes: Buffer): Promise<Buffer> {
+export async function withoutMetadata(type: SniffedType, bytes: Buffer): Promise<Buffer> {
   const { width, height } = await sharp(bytes)
     .metadata()
     .catch((error: unknown) => {
