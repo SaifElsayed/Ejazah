@@ -10,6 +10,8 @@ export * from './cases.js';
 export * from './credentials.js';
 export * from './documents.js';
 export * from './empty-input.js';
+// 005:T007 (B46, Q-C1 (a)): the `ijazahRequests` namespace, the administrators' review.
+export * from './ijazahs.js';
 export * from './payments.js';
 export * from './sessions.js';
 export * from './students.js';

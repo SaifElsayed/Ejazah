@@ -132,3 +132,35 @@ export class AuditRepository implements AuditWriter {
     });
   }
 }
+
+/**
+ * 005:T007 of B46 (Q10 (a), Q-C4 (a); FR-628): the actions that set or restore a teacher's standing,
+ * each on the person (`user`). A standing set by a case ruling is not among them: `complaint.decided`
+ * and `dispute.resolved` target the dispute (the follow-up under T007).
+ */
+export const STANDING_ACTIONS = [
+  'teacher.suspend',
+  'teacher.revoke',
+  'teacher.ban',
+  'teacher.reinstate',
+  'teacher.ban_lifted',
+  'teacher.revocation_lifted',
+  'application.ban',
+  'user.require_identity',
+] as const;
+
+/**
+ * The newest standing entry on the user (005:T007, Q-C4 (a)): its action and its reason, or null.
+ * One read per `ijazahRequests.get`, on the same `(target_type, target_id)` filter as the log's
+ * pages (`whereOf` above); no index is added for it (R-DB-9: none without a measured slow query).
+ */
+export async function latestStandingReasonOf(
+  tx: Transaction,
+  userId: string,
+): Promise<{ readonly action: string; readonly reason: string | null } | null> {
+  return tx.auditLog.findFirst({
+    where: { targetType: 'user', targetId: userId, action: { in: [...STANDING_ACTIONS] } },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    select: { action: true, reason: true },
+  });
+}

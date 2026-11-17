@@ -28,6 +28,9 @@ export const auditTargetType = z.enum([
   'dispute',
   'session',
   'provider_outage',
+  /** 005:T007 of B46 (Q-C3 (a)): an ijazah request by its id, an ijazah by its certificate number. */
+  'ijazah_request',
+  'ijazah',
 ]);
 
 /**

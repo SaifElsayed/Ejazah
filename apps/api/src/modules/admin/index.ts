@@ -92,6 +92,16 @@ import {
 } from '../verification/index.js';
 // T077 of specs/004-sessions: an administrator's control of a deleted teacher's kept data.
 import { createKeptData, type KeptData } from '../verification/index.js';
+// 005:T007 of specs/005-certification: the administrators' review of an ijazah request.
+import type {
+  AdminIjazahRequestsGetInput,
+  AdminIjazahRequestsGetOutput,
+} from '@ijazah/contracts/admin';
+import {
+  createIjazahDecisionService,
+  type IjazahDecisionService,
+  type RenderQueue,
+} from '../certification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -99,7 +109,7 @@ import { AdminSessionsRepository } from './admin-sessions.repository.js';
 import { AdminUsersRepository, readAdministratorNames } from './admin-users.repository.js';
 import { type AdminInviteQueue, AdminsService } from './admins.service.js';
 import { AuditQueryService } from './audit-query.service.js';
-import { AuditRepository } from './audit.repository.js';
+import { AuditRepository, latestStandingReasonOf } from './audit.repository.js';
 import { HomeService } from './home.service.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
@@ -232,13 +242,24 @@ export interface AdminServices {
    * `EnrollmentSide`.
    */
   readonly enrollmentEnd: EnrollmentEnd;
+  /**
+   * 005:T007 of B46 (FR-604, FR-605, FR-628; Q10 (a), Q-C4 (a)): certification's review of an ijazah
+   * request, `get` composed here with the teacher's standing reason from this module's audit log.
+   */
+  readonly ijazahRequests: Pick<IjazahDecisionService, 'list' | 'approve' | 'reject'> & {
+    get(
+      tx: Transaction,
+      adminId: string,
+      input: AdminIjazahRequestsGetInput,
+    ): Promise<AdminIjazahRequestsGetOutput>;
+  };
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly encryptionKey: string;
   readonly inviteQueue: AdminInviteQueue;
   /** For the document viewer's signed links (T068). */
-  readonly storage: Pick<StoragePort, 'temporaryLink'>;
+  readonly storage: Pick<StoragePort, 'temporaryLink' | 'remove'>;
   /**
    * The process's column cipher (`createColumnCipher`): the second factor's secret and the document
    * viewer's keys, read under the previous key too while a rotation runs (T134).
@@ -294,6 +315,11 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * re-freeze of the corrected credential's open ijazah requests on the correction's transaction.
    */
   readonly openRequestsRefreeze: OpenRequestsRefreeze;
+  /**
+   * 005:T007 of B46: `render-certificate`, enqueued by `main.ts`'s queue once an approval has
+   * committed (`RENDER_CERTIFICATE`, `renderCertificatePayload`, job id `${ijazahId}-${generation}`).
+   */
+  readonly ijazahRenders: RenderQueue;
   /** 003:T109 (SRS DEC-87): the server's payment mode, which `home.summary` answers. */
   readonly paymentMode: 'test' | 'live';
 }
@@ -478,6 +504,83 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       idempotency: dependencies.idempotency,
       log: dependencies.log,
     }),
+    // 005:T007 of B46: the review, `get` with the standing's reason (Q10 (a), Q-C4 (a)).
+    ijazahRequests: composeIjazahRequests({
+      decisions: createIjazahDecisionService({
+        storage: dependencies.storage,
+        settings: dependencies.settings,
+        idempotency: dependencies.idempotency,
+        renders: dependencies.ijazahRenders,
+        log: dependencies.log,
+      }),
+      standingReasonOf: latestStandingReasonOf,
+      log: dependencies.log,
+    }),
+  };
+}
+
+/** The newest standing entry of the audit log on a user: its action and reason (Q-C4 (a)). */
+export interface StandingEntry {
+  readonly action: string;
+  readonly reason: string | null;
+}
+
+/** What `ijazahRequests` is composed over: certification's review and this module's audit read. */
+export interface IjazahRequestsComposition {
+  readonly decisions: Pick<IjazahDecisionService, 'list' | 'detail' | 'approve' | 'reject'>;
+  readonly standingReasonOf: (tx: Transaction, userId: string) => Promise<StandingEntry | null>;
+  readonly log: Pick<Logger, 'info' | 'warn'>;
+}
+
+/**
+ * 005:T007 of B46 (Q-C4 (a)): the status each standing action leaves. The reason is shown only when
+ * the newest entry's action agrees with the teacher's status now; a status set elsewhere (a case
+ * ruling) would otherwise show an older entry's stale reason.
+ */
+const STANDING_STATUS_OF: Readonly<Record<string, string>> = {
+  'teacher.suspend': 'suspended',
+  'teacher.ban': 'banned',
+  'application.ban': 'banned',
+  'teacher.revoke': 'revoked',
+  'teacher.reinstate': 'active',
+  'teacher.ban_lifted': 'active',
+  'teacher.revocation_lifted': 'active',
+};
+
+/** `ijazahRequests` over certification's review, `get` with the guarded standing reason. */
+export function composeIjazahRequests({
+  decisions,
+  standingReasonOf,
+  log,
+}: IjazahRequestsComposition): AdminServices['ijazahRequests'] {
+  return {
+    list: (tx, adminId, input) => decisions.list(tx, adminId, input),
+    approve: (tx, adminId, input) => decisions.approve(tx, adminId, input),
+    reject: (tx, adminId, input) => decisions.reject(tx, adminId, input),
+    get: async (tx, adminId, input) => {
+      const { teacherUserId, teacherStanding, ...detail } = await decisions.detail(
+        tx,
+        adminId,
+        input,
+      );
+      const { status } = teacherStanding;
+      const entry = await standingReasonOf(tx, teacherUserId);
+      const agrees = entry !== null && STANDING_STATUS_OF[entry.action] === status;
+      if (!agrees && (entry !== null || status !== 'active')) {
+        log.info(
+          {
+            teacherUserId,
+            requestId: input.requestId,
+            status,
+            action: entry?.action ?? null,
+            reason: 'standing_reason_unmatched',
+          },
+          "A teacher's standing reason was not shown",
+        );
+      }
+      const reason = agrees && entry !== null ? entry.reason : null;
+      return { ...detail, teacherStanding: { status, ...(reason === null ? {} : { reason }) } };
+    },
   };
 }
 
