@@ -95,6 +95,7 @@ import {
   retryTargetOf,
   studentCheckoutEnrollment,
 } from '../booking/index.js';
+import { payoutRecipientOf } from '../identity/index.js';
 import {
   type AddressedOrder,
   heldOrdersOf,
@@ -205,11 +206,14 @@ export interface CheckoutSteps {
   ): Promise<PayTarget>;
   /** Pay's transaction on booking's side (booking's `enrollOnHold`). */
   enrollOnHold(tx: Transaction, target: PayTarget, enrolment: Enrolment): Promise<void>;
+  /** 003:T101: the teacher's verified payout recipient; null when none (identity's `payoutRecipientOf`). */
+  payoutRecipient(teacherUserId: string): Promise<string | null>;
 }
 
 /** The steps over the process's client and the owners' entries. */
 export function checkoutStepsOver(
   database: Database,
+  cipher: Pick<ColumnCipher, 'decrypt'>,
   now: () => Date = () => new Date(),
 ): CheckoutSteps {
   const pay = payStoreOver();
@@ -239,6 +243,7 @@ export function checkoutStepsOver(
     orderById,
     lastOrderOf,
     drawRowId: () => drawRowId(database),
+    payoutRecipient: (teacherUserId) => payoutRecipientOf(database, cipher, teacherUserId),
   };
 }
 
@@ -278,6 +283,8 @@ function asHoldOutput(
 /** What an order's creation and record need. */
 interface OrderToCreate {
   readonly enrollmentId: string;
+  /** 003:T101: whose payout recipient the share is split to. */
+  readonly teacherUserId: string;
   readonly gross_piasters: ReturnType<typeof piasters>;
   readonly latestExpiry: Date;
   /** Locks and checks what the order is recorded on, in the recording transaction. */
@@ -366,6 +373,7 @@ export class CheckoutService {
     }
     const { checkoutUrl, orderExpiresAt } = await this.#createAndRecord(request, {
       enrollmentId,
+      teacherUserId: enrollment.teacherUserId,
       gross_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
       latestExpiry: lastMoment(hold.expiresAt),
       lockTarget: (tx) =>
@@ -418,6 +426,7 @@ export class CheckoutService {
       request,
       {
         enrollmentId,
+        teacherUserId: target.teacherUserId,
         gross_piasters: target.price_piasters,
         latestExpiry,
         lockTarget: (tx) =>
@@ -454,12 +463,18 @@ export class CheckoutService {
       teacherSharePercent,
     );
     const teacherShare_piasters = teacherShare(order.gross_piasters, teacherShareRatePercent);
+    // T101 (Q-B2 (a)): the share split to the teacher's verified recipient, read before the gateway.
+    // With none, no split is asked for: test mode creates the order, live mode's gateway refuses it.
+    const recipientRef = await this.#steps.payoutRecipient(order.teacherUserId);
+    const payee =
+      recipientRef === null ? undefined : { recipientRef, share_piasters: teacherShare_piasters };
     const paymentId = await this.#steps.drawRowId();
     const checkout = await this.#payment.createCheckout(
       order.enrollmentId,
       order.gross_piasters,
       ORDER_CURRENCY,
       order.latestExpiry,
+      payee,
     );
     let recordedHere = false;
     let stored: StoredOrder;

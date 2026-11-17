@@ -181,7 +181,7 @@ export function createCheckoutServices({
     payment,
     cipher,
     gateway,
-    steps: checkoutStepsOver(database, now),
+    steps: checkoutStepsOver(database, cipher, now),
     ...(now === undefined ? {} : { now }),
   });
   return {

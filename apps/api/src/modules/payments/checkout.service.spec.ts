@@ -13,7 +13,11 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { JsonValue } from '../../platform/idempotency/idempotency.service.js';
-import type { CancelOutcome, Checkout } from '../../platform/ports/payment/payment.port.js';
+import type {
+  CancelOutcome,
+  Checkout,
+  CheckoutPayee,
+} from '../../platform/ports/payment/payment.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   type CheckoutHold,
@@ -162,11 +166,16 @@ interface World {
   readonly payTargetError?: Error;
   /** T104: the teacher's share setting, when not the seed's 70. */
   readonly sharePercent?: number;
+  /** T101: the teacher's verified payout recipient; none by default. */
+  readonly recipient?: string | null;
 }
 
 function setUp(world: World = {}) {
   const log: unknown[][] = [];
   const inserted: Parameters<CheckoutSteps['insertOrder']>[1][] = [];
+  /** T101: the payee each gateway order was asked with, and whose recipient was read. */
+  const payees: (CheckoutPayee | undefined)[] = [];
+  const recipientsAsked: string[] = [];
   const idempotency = fakeIdempotency(log);
   let placement = 0;
   let draws = 0;
@@ -260,6 +269,10 @@ function setUp(world: World = {}) {
         price_piasters: piasters(100_000),
       };
     },
+    payoutRecipient: async (teacherUserId) => {
+      recipientsAsked.push(teacherUserId);
+      return world.recipient ?? null;
+    },
     enrollOnHold: async (_tx, target, enrolment) => {
       log.push(['enroll', target.hold.id, enrolment.enrollmentId, enrolment.leadHours]);
       if (world.lockError !== undefined) throw world.lockError;
@@ -271,7 +284,9 @@ function setUp(world: World = {}) {
       gross: number,
       currency: string,
       latestExpiry: Date,
+      payee?: CheckoutPayee,
     ): Promise<Checkout> => {
+      payees.push(payee);
       log.push(['gateway create', enrollmentId, gross, currency, latestExpiry.toISOString()]);
       orders += 1;
       return {
@@ -310,7 +325,7 @@ function setUp(world: World = {}) {
     report: (error) => void reported.push(error),
     steps,
   });
-  return { log, service, idempotency, reported, inserted };
+  return { log, service, idempotency, reported, inserted, payees, recipientsAsked };
 }
 
 describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR-PAYG-7 as amended)', () => {
@@ -366,6 +381,35 @@ const payable = () =>
     gatewayOrderId: 'fake_ord_previous',
     expiresAt: ORDER_EXPIRES,
   });
+
+describe("the teacher's share split to the payee (T101; ADR 0025 D2, SRS DEC-80, Q-B2 (a))", () => {
+  it("asks a retry's order to split the share to the teacher's verified recipient", async () => {
+    const { service, payees, recipientsAsked } = setUp({ recipient: 'rcp_teacher_verified' });
+    await service.retry(student, retryInput);
+
+    expect(recipientsAsked).toEqual([TEACHER]);
+    expect(payees).toEqual([{ recipientRef: 'rcp_teacher_verified', share_piasters: 70_000 }]);
+  });
+
+  it("asks a payment's order to split the share at the setting's rate", async () => {
+    const { service, payees, recipientsAsked } = setUp({
+      recipient: 'rcp_teacher_verified',
+      sharePercent: 33,
+    });
+    await service.pay(student, payInput);
+
+    expect(recipientsAsked).toEqual([TEACHER]);
+    expect(payees).toEqual([{ recipientRef: 'rcp_teacher_verified', share_piasters: 33_000 }]);
+  });
+
+  it('asks for no split when the teacher has no verified recipient (live mode refuses it at the gateway)', async () => {
+    const { service, payees, inserted } = setUp({ recipient: null });
+    await service.retry(student, retryInput);
+
+    expect(payees).toEqual([undefined]);
+    expect(inserted).toHaveLength(1);
+  });
+});
 
 describe('checkout.hold (FR-BOOK-12, FR-357)', () => {
   it('answers the hold as the contract writes it', async () => {
