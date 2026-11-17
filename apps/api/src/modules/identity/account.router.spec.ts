@@ -342,6 +342,14 @@ describe('account.certificateName.set', () => {
     ['no idempotency key', { name: input.name }],
     ['a blank name', { ...input, name: '   ' }],
     ['a name of one letter', { ...input, name: 'م' }],
+    // #145 r1 Minor 2 (T004's validation edges): the bound, and what would garble the printed line.
+    ['a name of 81 letters', { ...input, name: 'م'.repeat(81) }],
+    ['a name holding a line break', { ...input, name: 'محمد\nأحمد' }],
+    ['a name holding a NUL', { ...input, name: 'محمد\u0000أحمد' }],
+    ['a name holding a right-to-left override (U+202E)', { ...input, name: 'محمد \u202Eأحمد' }],
+    ['a name holding a left-to-right embedding (U+202A)', { ...input, name: 'محمد \u202Aأحمد' }],
+    ['a name holding a first-strong isolate (U+2068)', { ...input, name: 'محمد \u2068أحمد' }],
+    ['a name holding a pop directional isolate (U+2069)', { ...input, name: 'محمد \u2069أحمد' }],
   ])('refuses %s before the service is reached', async (_case, given) => {
     const recording = recordingNames();
     surface = surfaceOf(identity, { certificateName: recording.certificateName });

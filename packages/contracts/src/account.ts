@@ -138,8 +138,16 @@ export type IdentityVerificationOutcome = z.infer<typeof identityVerificationOut
 // T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md, `account.certificateName.set`):
 // the student's full name as the certificate prints it, entered once; afterwards only an
 // administrator changes it (`users.setCertificateName`). Its bounds are the display name's
-// (`onboarding.ts`), no document naming others.
-export const certificateName = z.string().trim().min(2).max(80);
+// (`onboarding.ts`), no document naming others. It refuses a control character (`\p{Cc}`: a line
+// break, a NUL) and the direction controls, the embeddings and overrides U+202A–U+202E and the
+// isolates U+2066–U+2069: printed on a permanent certificate, either would garble the line or make
+// two names look alike (#145 r1 Minor 2; the chat file name's `\p{Cc}` precedent, `chat.ts`).
+export const certificateName = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .regex(/^[^\p{Cc}\u202A-\u202E\u2066-\u2069]+$/u);
 
 /** Keyed (app-surface.md, "App surface: Phase 4 additions"); refused `already_set` once a name is held. */
 export const certificateNameSetInput = z.object({ name: certificateName, idempotencyKey });
