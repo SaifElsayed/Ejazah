@@ -492,3 +492,10 @@ export function createCertificateNameService(
 ): CertificateNames {
   return new CertificateNameService({ ...dependencies, store: certificateNameStoreOver() });
 }
+
+// ---------------------------------------------------------------------------------------------
+// T003 of specs/005-certification, the owner's Q16 (b): the teacher's signature is stored without its
+// metadata through the photo's own strip (T145), in a turn of the one `PhotoTurns` the process hands
+// both routes (T073's one-image memory bound), so catalog's signature route forks neither.
+export { withoutMetadata as imageWithoutMetadata } from './photo-upload.controller.js';
+export { PhotoTurns } from './photo-turns.js';
