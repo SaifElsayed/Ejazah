@@ -335,3 +335,12 @@ export {
   slotHoldEndStore,
   type SlotHoldEndSweep,
 } from './slot-hold-end.sweep.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T006 (FR-603, FR-608; the note under T006, Q1 (a), Q4 (a), Q-A3 (a)): the enrollment an
+// ijazah request is sent from, read by certification on its transaction (its parties, snapshot
+// subject and track, status; no lock of its own), and the port `EnrollmentIjazahRequests` the
+// enrollment reads' `ijazahRequest` comes through, which `main.ts` binds to certification's entry
+// and hands to `createBookingServices` (booking imports no certification).
+export { type IjazahEnrollmentRow, ijazahEnrollmentOf } from './ijazah-enrollment.repository.js';
+export type { EnrollmentIjazahRequests } from './enrollment-lists.service.js';

@@ -55,6 +55,7 @@ import { accountTimezone, visibleTeachers } from '../identity/index.js';
 import { windowDaysOf } from '../sessions/index.js';
 import {
   createEnrollmentListServices,
+  type EnrollmentIjazahRequests,
   type EnrollmentListServices,
 } from './enrollment-lists.service.js';
 import {
@@ -232,17 +233,23 @@ export interface BookingServices extends EnrollmentListServices {
 export function createBookingServices({
   database,
   settings,
+  ijazahRequests,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
   readonly database: Database;
   readonly settings: SettingsReader;
+  /**
+   * 005:T006 (the note under T006, Q4 (a)): the enrollment reads' ijazah request, certification's,
+   * bound by `main.ts`.
+   */
+  readonly ijazahRequests: EnrollmentIjazahRequests;
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
   const transactions = transactionsOver(database);
   return {
-    ...createEnrollmentListServices({ database, settings }),
+    ...createEnrollmentListServices({ database, settings, ijazahRequests }),
     slots: async (student, input) => {
       const leadHours = await settings.read(FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours);
       const clock: DiscoveryClock = {

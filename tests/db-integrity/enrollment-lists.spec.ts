@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   enrollmentListsStore,
+  type EnrollmentListsStore,
   studentEnrollmentOf,
   studentEnrollmentsOf,
   teacherStudentOf,
@@ -72,7 +73,11 @@ async function rolledBack(probe: (tx: Transaction) => Promise<void>): Promise<vo
 const CAIRO = 'Africa/Cairo';
 /** Tuesday 2026-11-10 14:00 in Cairo (+02:00). */
 const NOW = new Date('2026-11-10T12:00:00Z');
-const store = enrollmentListsStore;
+// 005:T006 (rule d): the enrollment reads' ijazah request through a stand-in port, none held.
+const store: EnrollmentListsStore = {
+  ...enrollmentListsStore,
+  ijazahRequestsOf: async () => new Map(),
+};
 // 004:T074 (rule d): the restore windows the lists read for `paused`, the seed's 14 days.
 const WINDOWS: WindowDays = async () => 14;
 const clock = (pageSize = 20) => ({ now: NOW, pageSize });

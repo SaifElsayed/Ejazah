@@ -27,6 +27,7 @@ import {
   createEnrollmentSide,
   createSlotHoldEndSweep,
   enrollmentListsStore,
+  type EnrollmentListsStore,
   slotHoldEndStore,
   studentEnrollmentOf,
   studentEnrollmentsOf,
@@ -68,6 +69,12 @@ import {
   type World,
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
+
+// 005:T006 (rule d): the enrollment reads' ijazah request through a stand-in port, none held.
+const listsStore: EnrollmentListsStore = {
+  ...enrollmentListsStore,
+  ijazahRequestsOf: async () => new Map(),
+};
 
 const SETTINGS: Record<string, number> = {
   admin_list_page_size: 50,
@@ -247,20 +254,14 @@ const page = (now: Date) => ({ now, pageSize: 20 });
 const lists = {
   enrollments: (studentId: string, input: { readonly tab: 'active' | 'ended' }) =>
     read((tx, now) =>
-      studentEnrollmentsOf(tx, enrollmentListsStore, studentId, input, page(now), windowDays),
+      studentEnrollmentsOf(tx, listsStore, studentId, input, page(now), windowDays),
     ),
   enrollment: (studentId: string, input: { readonly enrollmentId: string }) =>
-    read((tx, now) =>
-      studentEnrollmentOf(tx, enrollmentListsStore, studentId, input, now, windowDays),
-    ),
+    read((tx, now) => studentEnrollmentOf(tx, listsStore, studentId, input, now, windowDays)),
   students: (teacherId: string, input: { readonly tab: 'active' | 'ended' }) =>
-    read((tx, now) =>
-      teacherStudentsOf(tx, enrollmentListsStore, teacherId, input, page(now), windowDays),
-    ),
+    read((tx, now) => teacherStudentsOf(tx, listsStore, teacherId, input, page(now), windowDays)),
   student: (teacherId: string, input: { readonly enrollmentId: string }) =>
-    read((tx, now) =>
-      teacherStudentOf(tx, enrollmentListsStore, teacherId, input, now, windowDays),
-    ),
+    read((tx, now) => teacherStudentOf(tx, listsStore, teacherId, input, now, windowDays)),
 };
 
 /** Whether another student finds the enrollment's slot taken on a later Thursday. */

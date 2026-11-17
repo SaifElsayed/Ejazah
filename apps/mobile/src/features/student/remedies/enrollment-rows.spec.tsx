@@ -78,6 +78,7 @@ const detail: EnrollmentsGetOutput = {
   remaining: 8,
   sessions,
   complaintOpen: false,
+  ijazahRequest: null,
 };
 
 const said = (direction: Direction, key: MessageKey) =>

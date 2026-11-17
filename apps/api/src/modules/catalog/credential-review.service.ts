@@ -155,8 +155,20 @@ export interface CredentialReviewStore {
   ): Promise<void>;
 }
 
+/**
+ * T006 of specs/005-certification (P4 (a); research R-403; the note under T006, Q-A4 (a)): the open
+ * ijazah requests that froze this credential, re-frozen from its corrected transcription and chain
+ * on the correction's transaction. Certification imports catalog, so catalog declares the port and
+ * `main.ts` binds it to certification's entry (`docs/ARCHITECTURE.md:197`).
+ */
+export interface OpenRequestsRefreeze {
+  refreeze(tx: Transaction, credentialId: string): Promise<void>;
+}
+
 export interface CredentialReviewDependencies {
   readonly store: CredentialReviewStore;
+  /** T006 of specs/005-certification: the correction's re-freeze of the open requests. */
+  readonly openRequestsRefreeze: OpenRequestsRefreeze;
   readonly settings: SettingsReader;
   readonly now?: () => Date;
 }
@@ -180,11 +192,13 @@ export interface ApprovalMove {
 
 export class CredentialReviewService {
   readonly #store: CredentialReviewStore;
+  readonly #refreeze: OpenRequestsRefreeze;
   readonly #settings: SettingsReader;
   readonly #now: () => Date;
 
   constructor(dependencies: CredentialReviewDependencies) {
     this.#store = dependencies.store;
+    this.#refreeze = dependencies.openRequestsRefreeze;
     this.#settings = dependencies.settings;
     this.#now = dependencies.now ?? (() => new Date());
   }
@@ -328,6 +342,10 @@ export class CredentialReviewService {
       adminId,
     });
     if (!written) return this.#refuseMoved(tx, record.id);
+    // T006 of specs/005-certification (P4 (a)): after the conditional write landed, which holds the
+    // credential's row lock, on the same transaction; the order credential → ijazah_requests of the
+    // kernel row (specs/004-sessions/contracts/kernel.md, the ijazah request's row).
+    await this.#refreeze.refreeze(tx, record.id);
     return { before, after };
   }
 

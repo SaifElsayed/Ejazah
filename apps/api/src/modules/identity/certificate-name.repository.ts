@@ -30,3 +30,16 @@ export async function writeCertificateName(
 ): Promise<void> {
   await tx.user.update({ where: { id: userId }, data: { certificateName: name } });
 }
+
+/**
+ * T006 of specs/005-certification (FR-602; the note under T006, Q1 (a)): the live account's
+ * certificate name, or null (none held, no account or a deleted one). The ijazah request reads it
+ * under the student's `users` lock, so a name set meanwhile is either read or releases the request.
+ */
+export async function certificateNameOf(tx: Client, userId: string): Promise<string | null> {
+  const user = await tx.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: { certificateName: true },
+  });
+  return user?.certificateName ?? null;
+}

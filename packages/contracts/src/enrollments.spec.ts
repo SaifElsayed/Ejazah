@@ -101,8 +101,12 @@ describe('the tabs and the session statuses', () => {
     expect(listedSession.safeParse(withoutId).success).toBe(false);
     expect(listedSession.safeParse({ ...session, sessionId: 'session-1' }).success).toBe(false);
     expect(
-      enrollmentsGetOutput.parse({ ...item, sessions: [session], complaintOpen: false }).sessions[0]
-        ?.sessionId,
+      enrollmentsGetOutput.parse({
+        ...item,
+        sessions: [session],
+        complaintOpen: false,
+        ijazahRequest: null,
+      }).sessions[0]?.sessionId,
     ).toBe(session.sessionId);
   });
 
@@ -200,7 +204,7 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
     const { next: _next, last: _last, ...bare } = item;
     const paused = { ...bare, paused: true };
     expect(studentEnrollmentItem.parse(paused)).toEqual(paused);
-    const detail = { ...paused, sessions: [], complaintOpen: false };
+    const detail = { ...paused, sessions: [], complaintOpen: false, ijazahRequest: null };
     expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
   });
 
@@ -218,7 +222,7 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
     ).toEqual(ended);
     expect(studentEnrollmentItem.parse(item)).toEqual(item);
     expect(studentEnrollmentItem.safeParse({ ...ended, endedByAdmin: {} }).success).toBe(false);
-    const detail = { ...ended, sessions: [], complaintOpen: false };
+    const detail = { ...ended, sessions: [], complaintOpen: false, ijazahRequest: null };
     expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
   });
 
@@ -234,11 +238,25 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
       nextCursor: ids.enrollment,
     });
     expect(enrollmentsListOutput.parse({ items: [] })).toEqual({ items: [] });
-    const detail = { ...item, sessions: [session], complaintOpen: false };
+    const detail = { ...item, sessions: [session], complaintOpen: false, ijazahRequest: null };
     expect(enrollmentsGetOutput.parse(detail)).toEqual(detail);
     expect(enrollmentsGetOutput.safeParse(item).success).toBe(false);
     // 004:T060 (FR-452): the detail says whether the student's complaint is open, always.
     expect(enrollmentsGetOutput.parse({ ...detail, complaintOpen: true }).complaintOpen).toBe(true);
     expect(enrollmentsGetOutput.safeParse({ ...item, sessions: [session] }).success).toBe(false);
+  });
+
+  // 005:T006 (FR-608; app-surface.md, «Enrollment reads gain»): the enrollment's ijazah request, null
+  // without one; a rejection's reason is the teacher's, so the student's detail strips it.
+  it('carries ijazahRequest, required and nullable, the reason stripped from the student', () => {
+    const detail = { ...item, sessions: [session], complaintOpen: false };
+    expect(enrollmentsGetOutput.safeParse(detail).success).toBe(false);
+    expect(enrollmentsGetOutput.parse({ ...detail, ijazahRequest: null }).ijazahRequest).toBeNull();
+    expect(
+      enrollmentsGetOutput.parse({
+        ...detail,
+        ijazahRequest: { status: 'rejected', reason: 'سبب الرفض' },
+      }).ijazahRequest,
+    ).toEqual({ status: 'rejected' });
   });
 });

@@ -8,7 +8,7 @@ is required where noted, with the scope listed in `idempotent-procedures.ts`.
 |---|---|---|---|---|---|
 | `teacher.signature.get` | teacher (`approved`) | void | `{ link: string \| null, uploadedAt }` | default | a signed link (`document_link_ttl_seconds`) |
 | `POST /uploads/signature` | teacher (`approved`) | multipart, one PNG or JPEG | `{ uploadedAt }` | `rate_limit_upload` | kind `signature`, sniffed (R-SEC-4) |
-| `teacher.ijazahRequests.preview` | teacher (`approved`) | `{ enrollmentId, completionDate, language }` | `{ chain, teacherName, studentName \| null, dates }` | default | the filled certificate before sending (FR-IJAZAH-15) |
+| `teacher.ijazahRequests.preview` | teacher (`approved`) | `{ enrollmentId, completionDate, language }` | `{ chain, teacherName, riwaya, tariq \| null, studentName \| null, dates }` | default | the filled certificate before sending (FR-IJAZAH-15) |
 | `teacher.ijazahRequests.send` | teacher (`approved`) | `{ enrollmentId, completionDate, language, idempotencyKey }` | `{ requestId, status }` | `rate_limit_ijazah_request` | refusals: `not_active`, `not_ijazah_track`, `no_credential`, `no_signature`, `student_barred`, `request_open`, `already_issued` (FR-603); NOT_FOUND for an enrollment not the caller's |
 | `teacher.ijazahRequests.get` | teacher | `{ enrollmentId }` | `{ request \| null }` | default | status, reason when rejected, `ijazahId` when issued |
 | `account.certificateName.set` | student | `{ name, idempotencyKey }` | `{ name }` | default | once; `already_set` after; moves the waiting request to `pending` |

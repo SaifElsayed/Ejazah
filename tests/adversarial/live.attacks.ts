@@ -62,6 +62,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -361,6 +362,7 @@ function liveWorld(): Promise<LiveWorld> {
         // T066: the real cancellation and chat, over the fixture's enrollments and sessions.
         sessions: cancellationOver(settings),
         chat: chatOver(),
+        certification: unusedCertificationServices,
       },
       adminServices: unusedAdminServices,
       live: { bus, registry },

@@ -22,6 +22,8 @@
 // `keyShareRows`, the `FOR KEY SHARE` a foreign key's check would take, taken first. T077 of
 // specs/004-sessions (Q-R4 (a)) adds `verification_documents` after `teacher_profiles`: an
 // administrator's action on a deleted teacher's kept data takes the profile, then its kept documents.
+// B46 of specs/005-certification (Q3 (a), Q-A1 (a); contracts/kernel.md, the ijazah request's row)
+// adds, after the payments, `teacher_credentials`, `ijazah_requests` and `ijazahs`, in that order.
 //
 // THE TWO RULES OF PHASE 2 (the owner's decision of 2026-11-01, the note under T005). The lock stays
 // FOR UPDATE.
@@ -77,6 +79,9 @@ export type LockedTable =
   | 'cancellation_requests'
   | 'disputes'
   | 'payments'
+  // B46 lane A (specs/005-certification T006, the owner's Q-A1 (a)): the approved credential a request
+  // freezes, locked by catalog's chain read, before the request.
+  | 'teacher_credentials'
   // B46 (specs/005-certification, Q3 (a); contracts/kernel.md, the ijazah row): a request, then its ijazah, after the payments.
   | 'ijazah_requests'
   | 'ijazahs';
@@ -121,6 +126,9 @@ export async function lockRows(
       return;
     case 'payments':
       await tx.$queryRaw`SELECT 1 FROM payments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'teacher_credentials':
+      await tx.$queryRaw`SELECT 1 FROM teacher_credentials WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
       return;
     case 'ijazah_requests':
       await tx.$queryRaw`SELECT 1 FROM ijazah_requests WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;

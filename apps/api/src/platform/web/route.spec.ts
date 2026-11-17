@@ -24,6 +24,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -86,6 +87,7 @@ const services = {
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
+  certification: unusedCertificationServices,
 };
 
 const records: string[] = [];

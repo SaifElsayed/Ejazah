@@ -6,6 +6,7 @@
 // T011 of specs/004-sessions the sessions module's `sessions`.
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
 import type { CatalogServices } from '../modules/catalog/index.js';
+import type { CertificationServices } from '../modules/certification/index.js';
 import type { ChatServices } from '../modules/chat/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
@@ -81,3 +82,9 @@ export const unusedChatServices = new Proxy(
   {},
   { get: (_target, method) => () => unreached(`chat.${String(method)}`) },
 ) as ChatServices;
+
+/** The `teacher.ijazahRequests` procedures' services, whose methods the spec never calls (T006 of specs/005-certification). */
+export const unusedCertificationServices = new Proxy(
+  {},
+  { get: (_target, method) => () => unreached(`certification.${String(method)}`) },
+) as CertificationServices;

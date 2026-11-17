@@ -105,7 +105,7 @@ describe('the teacher’s inputs name what is asked for, never who asks (R-GENDE
 describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)', () => {
   it('parses a student’s enrollment with its sessions and its derived counts', () => {
     expect(teacherStudentItem.parse(item)).toEqual(item);
-    const detail = { ...item, sessions: [session] };
+    const detail = { ...item, sessions: [session], ijazahRequest: null };
     expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
     expect(teacherStudentsListOutput.parse({ items: [item] })).toEqual({ items: [item] });
   });
@@ -119,7 +119,7 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
     const { next: _next, last: _last, ...bare } = item;
     const paused = { ...bare, paused: true };
     expect(teacherStudentItem.parse(paused)).toEqual(paused);
-    const detail = { ...paused, sessions: [] };
+    const detail = { ...paused, sessions: [], ijazahRequest: null };
     expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
   });
 
@@ -137,7 +137,7 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
     ).toEqual(ended);
     expect(teacherStudentItem.parse(item)).toEqual(item);
     expect(teacherStudentItem.safeParse({ ...ended, endedByAdmin: {} }).success).toBe(false);
-    const detail = { ...ended, sessions: [] };
+    const detail = { ...ended, sessions: [], ijazahRequest: null };
     expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
   });
 
@@ -157,10 +157,24 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
   it('strips a date of birth, a minor flag, documents, a dispute history, a photo key and an id', () => {
     const leaked = { ...item, ...forbidden, student: { ...item.student, ...forbidden } };
     expect(teacherStudentItem.parse(leaked)).toEqual(item);
-    expect(teacherStudentsGetOutput.parse({ ...leaked, sessions: [session] })).toEqual({
+    expect(
+      teacherStudentsGetOutput.parse({ ...leaked, sessions: [session], ijazahRequest: null }),
+    ).toEqual({
       ...item,
       sessions: [session],
+      ijazahRequest: null,
     });
+  });
+
+  // 005:T006 (FR-608; app-surface.md, «Enrollment reads gain»): the enrollment's ijazah request, the
+  // rejection's reason included for the teacher, null without one.
+  it('carries ijazahRequest with its reason, required and nullable', () => {
+    const detail = { ...item, sessions: [session] };
+    expect(teacherStudentsGetOutput.safeParse(detail).success).toBe(false);
+    const rejected = { status: 'rejected', reason: 'سبب الرفض' } as const;
+    expect(
+      teacherStudentsGetOutput.parse({ ...detail, ijazahRequest: rejected }).ijazahRequest,
+    ).toEqual(rejected);
   });
 });
 

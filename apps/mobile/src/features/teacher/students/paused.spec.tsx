@@ -80,7 +80,7 @@ function pausedAs(status: 'confirmed' | 'cancelled'): TeacherStudentItem {
 const detailOf = (
   item: TeacherStudentItem,
   sessions: readonly ListedSession[],
-): TeacherStudentsGetOutput => ({ ...item, sessions: [...sessions] });
+): TeacherStudentsGetOutput => ({ ...item, sessions: [...sessions], ijazahRequest: null });
 
 const localeOf = (direction: Direction) => (direction === 'rtl' ? 'ar' : 'en');
 const said = (direction: Direction, key: MessageKey, values?: Record<string, string | number>) =>

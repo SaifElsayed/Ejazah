@@ -38,6 +38,7 @@ import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surf
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -164,6 +165,7 @@ function teacherCaller(tx: Transaction, teacherId: string, gender: Gender) {
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
         chat: unusedChatServices,
+        certification: unusedCertificationServices,
         // T003 of specs/005-certification: the signature's service is composed apart, unused here.
         catalog: { ...catalogOn(tx), signature: unusedCatalogServices.signature },
       },

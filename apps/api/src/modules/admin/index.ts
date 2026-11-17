@@ -17,6 +17,7 @@ import {
 import {
   createCredentialReviewService,
   type CredentialReviewService,
+  type OpenRequestsRefreeze,
   readCredentialQueue,
   revokeSubjects,
 } from '../catalog/index.js';
@@ -287,6 +288,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * filled by `main.ts` with the identity services' `certificateName`, for `users.setCertificateName`.
    */
   readonly certificateNames: CertificateNames;
+  /**
+   * T006 of specs/005-certification (P4 (a); the note under T006, Q-A4 (a)): catalog's
+   * `OpenRequestsRefreeze`, filled by `main.ts` with certification's entry, for `credentials.correct`'s
+   * re-freeze of the corrected credential's open ijazah requests on the correction's transaction.
+   */
+  readonly openRequestsRefreeze: OpenRequestsRefreeze;
   /** 003:T109 (SRS DEC-87): the server's payment mode, which `home.summary` answers. */
   readonly paymentMode: 'test' | 'live';
 }

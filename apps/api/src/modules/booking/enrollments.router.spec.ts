@@ -21,6 +21,7 @@ import {
 } from '../../surfaces/procedures.js';
 import {
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -118,7 +119,14 @@ const booking: BookingServices = {
   enrollment: async (...args) => {
     calls.push(['enrollment', ...args]);
     if (args[1].enrollmentId !== OWN) throw new DomainError('NOT_FOUND');
-    return enrollmentAnswer ?? { ...item, sessions: [item.next], complaintOpen: false };
+    return (
+      enrollmentAnswer ?? {
+        ...item,
+        sessions: [item.next],
+        complaintOpen: false,
+        ijazahRequest: null,
+      }
+    );
   },
   students: unreached('teacher.students.list'),
   student: unreached('teacher.students.get'),
@@ -144,6 +152,7 @@ function callerAs(session: UserSession | null): Caller {
     checkout: unusedCheckoutServices,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
+    certification: unusedCertificationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;
@@ -240,7 +249,13 @@ describe("'enrollments.get' (T049)", () => {
 
   it('answers a deleted teacher deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
     const deleted = { teacherId: TEACHER, displayName: '', displayNameOrNull: null, deleted: true };
-    enrollmentAnswer = { ...item, teacher: deleted, sessions: [item.next], complaintOpen: false };
+    enrollmentAnswer = {
+      ...item,
+      teacher: deleted,
+      sessions: [item.next],
+      complaintOpen: false,
+      ijazahRequest: null,
+    };
     const answer = await calls$.get(callerAs(sessionOf('student')));
     expect(answer.teacher).toEqual(deleted);
   });

@@ -84,6 +84,11 @@ import {
   createDiscoveryCatalog,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
+// T006 of specs/005-certification (rule d): the ijazah request, bound as `main.ts` binds it.
+import {
+  createIjazahRequestService,
+  ijazahRequestsRouter,
+} from '../../apps/api/src/modules/certification/index.js';
 // T037 of specs/004-sessions.
 import {
   CHAT_UPLOAD_PATH,
@@ -141,7 +146,7 @@ import {
 } from '../../apps/api/src/platform/settings/settings-reader.js';
 import { appRouter } from '../../apps/api/src/surfaces/app.router.js';
 import { type AppServices, createAppContext } from '../../apps/api/src/surfaces/context.js';
-import { createAppCallerFactory } from '../../apps/api/src/surfaces/procedures.js';
+import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surfaces/procedures.js';
 // T038 of specs/004-sessions: the chat's documents kept in memory, each operation recorded.
 import { multipart, storageStub } from '../../apps/api/src/surfaces/upload-fixtures.js';
 import {
@@ -179,6 +184,12 @@ import type {
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
+  IjazahRequestsGetInput,
+  IjazahRequestsGetOutput,
+  IjazahRequestsPreviewInput,
+  IjazahRequestsPreviewOutput,
+  IjazahRequestsSendInput,
+  IjazahRequestsSendOutput,
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
@@ -388,6 +399,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   // T038: the chat's documents, as seeded (`document_link_ttl_seconds` is above).
   upload_max_bytes: 10_485_760,
   rate_limit_upload: { limit: 20, window_seconds: 600 },
+  // T006 of specs/005-certification: `teacher.ijazahRequests.send`'s limit, as seeded.
+  rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
 };
 
 const settings: SettingsReader = {
@@ -413,6 +426,10 @@ const TIMEOUTS = { statementTimeoutMs: 30_000, idleInTransactionTimeoutMs: 60_00
 const POOL_MAX = 4;
 
 const callerFactory = createAppCallerFactory(appRouter);
+// T006 of specs/005-certification: `teacher.ijazahRequests`, mounted as `app.router.ts` mounts it.
+const ijazahRequestsCallerFactory = createAppCallerFactory(
+  createAppRouter({ teacher: createAppRouter({ ijazahRequests: ijazahRequestsRouter }) }),
+);
 
 /** The `discovery` and `booking` namespaces of the user surface as one bearer reaches them. */
 export interface AppCaller {
@@ -594,6 +611,29 @@ export interface DiscoverySurface {
   readonly chatStorage: ReturnType<typeof storageStub>;
   /** T038: removes a spec's chat documents, their rows by id and their files by their exact keys. */
   discardChatDocuments(messageIds: readonly string[]): Promise<void>;
+  /**
+   * T006 of specs/005-certification: `teacher.ijazahRequests` as a bearer reaches it, over the
+   * module's router mounted under `teacher.ijazahRequests` as `app.router.ts` mounts it (the
+   * integration's line), on this world's services and caller kinds.
+   */
+  ijazahRequests(accessToken: string): Promise<IjazahRequestsCaller>;
+  /**
+   * T006 of specs/005-certification: the teacher's application marked approved, as an approved
+   * teacher's is (a world teacher is seeded with none), so the teacher kind's `admits: 'approved'`
+   * reads the session's standing as approved (`session.service.ts`, the teacher standing).
+   */
+  approveApplication(teacherId: string): Promise<void>;
+}
+
+/** T006 of specs/005-certification: the ijazah request's procedures, as a bearer calls them. */
+export interface IjazahRequestsCaller {
+  readonly teacher: {
+    readonly ijazahRequests: {
+      preview(input: IjazahRequestsPreviewInput): Promise<IjazahRequestsPreviewOutput>;
+      send(input: IjazahRequestsSendInput): Promise<IjazahRequestsSendOutput>;
+      get(input: IjazahRequestsGetInput): Promise<IjazahRequestsGetOutput>;
+    };
+  };
 }
 
 /** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
@@ -755,6 +795,19 @@ async function build(): Promise<Built> {
   const video = recordedVideo(encryptionKey);
   // T038: the chat's documents and their links, in memory.
   const chatStorage = storageStub();
+  // T006 of specs/005-certification (rule d): the ijazah request over its own in-memory storage,
+  // the enrollment reads' port bound to it, as `main.ts` binds them.
+  const certification = createIjazahRequestService({
+    database,
+    // No world teacher holds a signature, so nothing is ever read or put.
+    storage: {
+      read: () => Promise.reject(new Error('no signature in this world')),
+      put: () => Promise.reject(new Error('no signature in this world')),
+      remove: async () => undefined,
+    },
+    idempotency,
+    log,
+  });
   const services: AppServices = {
     settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
@@ -773,7 +826,11 @@ async function build(): Promise<Built> {
       settings,
     }),
     // As `main.ts` binds it (T032): the booking sheet's slots over the owners' entries.
-    booking: createBookingServices({ database, settings }),
+    booking: createBookingServices({
+      database,
+      settings,
+      ijazahRequests: { of: (tx, enrollmentIds) => certification.of(tx, enrollmentIds) },
+    }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({
       database,
@@ -803,6 +860,8 @@ async function build(): Promise<Built> {
       // T038: `chat.attachmentLink`'s signed links.
       storage: chatStorage,
     }),
+    // T006 of specs/005-certification (rule d).
+    certification: { ijazahRequests: certification },
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -1197,6 +1256,24 @@ async function build(): Promise<Built> {
       });
     },
     chatStorage,
+    async approveApplication(teacherId) {
+      await database.teacherProfile.update({
+        where: { userId: teacherId },
+        data: { applicationStatus: 'approved' },
+        select: { id: true },
+      });
+    },
+    // T006 of specs/005-certification: the module's router on this world's context.
+    ijazahRequests: async (accessToken) =>
+      ijazahRequestsCallerFactory(
+        createAppContext({
+          session: await resolve(accessToken),
+          log,
+          rateLimiter,
+          clientAddress: SPEC_CLIENT,
+          services,
+        }),
+      ),
     async discardChatDocuments(messageIds) {
       if (messageIds.length === 0) return;
       const rows = await database.chatMessage.findMany({

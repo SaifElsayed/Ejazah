@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { enrollmentStatus } from './checkout.js';
+import { enrollmentIjazahRequest } from './ijazah-requests.js';
 import { DISCOVERY_QUERY_MAX_LENGTH } from './discovery.js';
 import {
   enrollmentListCursor,
@@ -60,6 +61,11 @@ export const teacherStudentsGetInput = z.object({ enrollmentId: z.uuid() });
 /** The enrollment and every session of it by sequence number (`TeacherEnrollment`). */
 export const teacherStudentsGetOutput = teacherStudentItem.extend({
   sessions: z.array(listedSession),
+  /**
+   * 005:T006 (FR-608; app-surface.md, «Enrollment reads gain»): the enrollment's latest ijazah
+   * request, its rejection's reason included, null without one.
+   */
+  ijazahRequest: enrollmentIjazahRequest.nullable(),
 });
 
 /** One session of the teacher's day, with its enrollment's student and package line. */
