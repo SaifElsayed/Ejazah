@@ -16,7 +16,7 @@ never a name (FR-ADMIN-17).
 | `ijazahs.rerender` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.rerendered`; refused once signed off or revoked |
 | `ijazahs.revoke` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.revoked` |
 | `ijazahs.bar` / `ijazahs.liftBar` | `{ userId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah_bar.set` / `ijazah_bar.lifted` |
-| `users.setCertificateName` | `{ userId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |
+| `users.setCertificateName` | `{ targetUserId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |
 | `reports.list` / `reports.get` | `{ status?, cursor? }` / `{ reportId }` | queue and detail, links to the session or enrollment | default | `reports.listed` / `report.viewed` |
 | `reports.resolve` | `{ reportId, outcome: 'actioned' \| 'dismissed', note, idempotencyKey }` | void | default | `report.resolved` |
 | `genderFlags.list` / `genderFlags.get` | queue / `{ flagId }` | the flag; on `get`, the enrollments a correction would end (a preview count and ids), composed in the admin module (R-409) | default | `gender_flags.listed` / `gender_flag.viewed` |

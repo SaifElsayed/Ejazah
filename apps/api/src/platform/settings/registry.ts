@@ -386,11 +386,12 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Checkout Confirming read window from release (minutes)',
   ),
   discovery_page_size: whole(positiveWhole, 'count', 'booking', 'Discovery page size (teachers)'),
-  // 003:T104 (ADR 0025 D1, SRS DEC-80): the read site's own bounds, 0 to 100, a percent's.
+  // 003:T104 (ADR 0025 D1, SRS DEC-80): the read site's own bounds, 0 to 100, a percent's; on the
+  // panel's general settings page, as DEC-80 and ADR 0025 D1 place it (#145 r1 nit 2).
   teacher_share_percent: whole(
     teacherSharePercent,
     'percent',
-    'booking',
+    'general',
     "Teacher's share of each gateway order (whole percent, 0–100)",
     { min: 0, max: PERCENT_MAX },
   ),
@@ -500,7 +501,7 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
   rate_limit_gender_flag: rateLimit('Gender flag rate limit (per User, per window)'),
   rate_limit_ijazah_request: rateLimit('Ijazah request rate limit (per Teacher, per window)'),
   rate_limit_ijazah_decision: rateLimit(
-    'Ijazah decision rate limit: approve, reject, sign off, re-render, revoke and bar, each (per Administrator, per window)',
+    "Ijazah decision rate limit: approve, reject, sign off, re-render, revoke, bar and the certificate name's change, each (per Administrator, per window)",
   ),
   rate_limit_gender_decision: rateLimit(
     'Gender decision rate limit: raise, dismiss, correct and fraud ban, each (per Administrator, per window)',

@@ -724,7 +724,7 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | User report rate limit (per User, per window) *(Phase 4; 2026-11-16, DEC-71)* | 5 per 86400 s | FR-SESS-15 |
 | Gender flag rate limit (per User, per window) *(Phase 4; 2026-11-16, DEC-71)* | 3 per 86400 s | FR-GENDER-3 |
 | Ijazah request rate limit (per Teacher, per window) *(Phase 4; 2026-11-17, DEC-73)* | 10 per 3600 s | FR-IJAZAH-1, FR-IJAZAH-15 |
-| Ijazah decision rate limit: approve, reject, sign off, re-render, revoke and bar, each (per Administrator, per window) *(Phase 4; 2026-11-17, DEC-73)* | 10 per 60 s | FR-IJAZAH-8, FR-IJAZAH-9, FR-IJAZAH-15 |
+| Ijazah decision rate limit: approve, reject, sign off, re-render, revoke, bar and the certificate name's change, each (per Administrator, per window) *(Phase 4; 2026-11-17, DEC-73; the certificate name's change named 2026-11-17, #145 r1 nit 1, as `users.setCertificateName` declares it)* | 10 per 60 s | FR-IJAZAH-8, FR-IJAZAH-9, FR-IJAZAH-15 |
 | Gender decision rate limit: raise, dismiss, correct and fraud ban, each (per Administrator, per window) *(Phase 4; 2026-11-17, DEC-73)* | 10 per 60 s | FR-GENDER-3, FR-GENDER-6, FR-GENDER-7 |
 | Settings change rate limit (per Administrator, per window) *(Phase 4; 2026-11-17, DEC-73)* | 10 per 60 s | FR-ADMIN-9 |
 | Programme: time to pay the rest after the assessment (hours) *(2026-11-10, ADR 0024)* | 48 | FR-BOOK-15 |
