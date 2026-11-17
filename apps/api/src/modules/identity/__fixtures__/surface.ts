@@ -65,6 +65,8 @@ export function surfaceOf(
     readonly deletion?: AppServices['identity']['deletion'];
     // T004 of specs/005-certification (rule d): the certificate name's service, a recording one.
     readonly certificateName?: AppServices['identity']['certificateName'];
+    // T005 of specs/005-certification (rule d): the push token's service, a recording one.
+    readonly pushTokens?: AppServices['identity']['pushTokens'];
   } = {},
 ): IdentitySurface {
   const check = vi.fn(
@@ -82,6 +84,7 @@ export function surfaceOf(
       payout: unusedIdentityServices.payout,
       deletion: overrides.deletion ?? unusedIdentityServices.deletion,
       certificateName: overrides.certificateName ?? unusedIdentityServices.certificateName,
+      pushTokens: overrides.pushTokens ?? unusedIdentityServices.pushTokens,
     },
     verification: unusedVerificationServices,
     catalog: unusedCatalogServices,

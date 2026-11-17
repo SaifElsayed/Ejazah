@@ -11,6 +11,8 @@ import {
   certificateNameSetOutput,
   deleteAccountInput,
   meOutput,
+  pushTokenRegisterInput,
+  pushTokenRemoveInput,
   reportDeviceTimezoneInput,
   setLanguageInput,
   setTimezoneInput,
@@ -74,6 +76,22 @@ export const accountRouter = createAppRouter({
       output: certificateNameSetOutput,
     }).mutation(({ ctx, input }) =>
       ctx.services.identity.certificateName.setOwn(ctx.caller.userId, input),
+    ),
+  }),
+
+  // T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+  // `.remove`): the phone's push token on the caller's own account, registered at start and removed
+  // at sign-out. The user kind, under the default limit; neither answer echoes the token.
+  pushToken: createAppRouter({
+    register: userProcedure({ input: pushTokenRegisterInput, output: z.void() }).mutation(
+      async ({ ctx, input }) => {
+        await ctx.services.identity.pushTokens.register(ctx.caller.userId, input);
+      },
+    ),
+    remove: userProcedure({ input: pushTokenRemoveInput, output: z.void() }).mutation(
+      async ({ ctx, input }) => {
+        await ctx.services.identity.pushTokens.remove(ctx.caller.userId, input);
+      },
     ),
   }),
 });

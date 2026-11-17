@@ -4,12 +4,15 @@
 // copies the keys the API renders, in both languages, into `apps/api/src/platform/web/i18n/`, and
 // `pnpm check:generated` refuses a copy that differs from what the catalogue generates now (R-PROC-9).
 // The keys are taken whole and at their own paths, so a page names a key exactly as the phone does.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { pushCopyRenderer } from '../../apps/api/src/jobs/deliver-notification';
+import { NOTIFICATION_KINDS } from '../../apps/api/src/modules/notifications/index';
+import { copyOf } from '../../apps/api/src/platform/web/copy';
 import {
   generateWebCopy,
   generateWebCopyFromRepository,
@@ -46,16 +49,18 @@ const catalogue = {
     verify: {},
   },
   student: { home: 'not copied' },
+  notifications: { push: { session_reminder: { title: 'p' } }, title: 'not copied' },
 };
 
 describe('the keys taken from the catalogue', () => {
-  it('takes the deletion and not-found groups and nothing else, at their own paths', () => {
-    expect(WEB_COPY_KEYS).toEqual(['web.deleteAccount', 'web.notFound']);
+  it('takes the deletion and not-found groups and the push texts, and nothing else, at their own paths', () => {
+    expect(WEB_COPY_KEYS).toEqual(['web.deleteAccount', 'web.notFound', 'notifications.push']);
     expect(pickCopy(catalogue, WEB_COPY_KEYS)).toEqual({
       web: {
         deleteAccount: { title: 't', brandName: 'إجازة', done: { lede: 'l' } },
         notFound: { title: 'n' },
       },
+      notifications: { push: { session_reminder: { title: 'p' } } },
     });
   });
 
@@ -113,5 +118,67 @@ describe('the drift check (R-PROC-9)', () => {
     const message = describeDrift(drifts[0] ?? { path: '', problem: '', command: '' });
     expect(message).toContain('R-PROC-9');
     expect(message).toContain('pnpm web-copy:build');
+  });
+});
+
+// T005 of specs/005-certification (Q5 (a); R-HONEST-5's note of 2026-11-17; `002:T123`): the push's
+// fixed title and body of each of the seven kinds, which `deliver-notification`'s renderer reads from
+// the generated copy in the user's language. Each is in both catalogues, holds no placeholder (no
+// name, amount or date), and the Arabic opens with one right-to-left mark: the device lays the push
+// out itself, outside the phone's `translate` that adds the mark in the application, and takes its
+// direction from the first strong character. The English carries none.
+describe('the push texts (T005)', () => {
+  const catalogueOf = (language: 'ar' | 'en'): unknown =>
+    JSON.parse(readFileSync(join(root, `apps/mobile/src/i18n/${language}.json`), 'utf8'));
+  const textAt = (catalogue: unknown, key: string): unknown =>
+    key
+      .split('.')
+      .reduce<unknown>(
+        (node, part) =>
+          typeof node === 'object' && node !== null
+            ? (node as Record<string, unknown>)[part]
+            : undefined,
+        catalogue,
+      );
+  const keys = NOTIFICATION_KINDS.flatMap((kind) =>
+    (['title', 'body'] as const).map((part) => `notifications.push.${kind}.${part}`),
+  );
+
+  it('holds a fixed title and body for each of the seven kinds in both languages', () => {
+    expect(keys).toHaveLength(14);
+    for (const language of ['ar', 'en'] as const) {
+      const catalogue = catalogueOf(language);
+      const unfit = keys.filter((key) => {
+        const text = textAt(catalogue, key);
+        return typeof text !== 'string' || text.trim().length === 0 || /[{}]/.test(text);
+      });
+      expect(unfit, language).toEqual([]);
+    }
+  });
+
+  it('opens each Arabic text with one right-to-left mark, and no English one with any', () => {
+    const arabic = catalogueOf('ar');
+    const english = catalogueOf('en');
+    expect(keys.filter((key) => !/^\u200F(?!\u200F)/u.test(String(textAt(arabic, key))))).toEqual(
+      [],
+    );
+    expect(keys.filter((key) => String(textAt(english, key)).includes('\u200F'))).toEqual([]);
+  });
+
+  it('builds the worker’s renderer over the generated copy, as worker.ts binds it', () => {
+    const render = pushCopyRenderer({ ar: copyOf('ar'), en: copyOf('en') });
+    expect(render('session_reminder', 'ar').title.startsWith('\u200F')).toBe(true);
+    expect(render('payment_failed', 'en')).toEqual({
+      title: 'Payment failed',
+      body: 'Your payment did not go through. Try again from the app.',
+    });
+  });
+
+  it('reaches the API through the generated copy', () => {
+    for (const language of ['ar', 'en'] as const) {
+      expect(pickCopy(catalogueOf(language), WEB_COPY_KEYS)).toMatchObject({
+        notifications: { push: textAt(catalogueOf(language), 'notifications.push') },
+      });
+    }
   });
 });
