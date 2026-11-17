@@ -382,3 +382,51 @@ describe('update', () => {
     expect(memory.log).toContain('change');
   });
 });
+
+describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the editor's average-price hint", () => {
+  const PEERS = [OTHER_TEACHER, '0199d0a0-0000-7000-8000-0000000000d3', '0199d0a0-0000-7000-8000-0000000000d4'];
+  const ASKED = { track: 'recitation', sessionDurationMinutes: 45 } as const;
+
+  /** A published teacher's package on the asked track and length: the price over the count. */
+  function peer(memory: MemoryPackages, teacherUserId: string, price: number, sessionCount: number) {
+    memory.publish(teacherUserId, REQUESTER);
+    memory.plant(teacherUserId, { ...RECITATION, price_piasters: piasters(price), sessionCount });
+  }
+
+  it('averages the price per session of three teachers, rounded half up to the piaster', async () => {
+    const memory = new MemoryPackages();
+    // Per session 33 333 (100 000 over 3), 30 000 and 45 002: 108 335 over 3 is 36 111.67.
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    peer(memory, PEERS[2] ?? '', 45_002, 1);
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({
+      averagePerSession_piasters: 36_112,
+    });
+  });
+
+  it('answers nothing when fewer than three teachers have one, however many packages they have', async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[0] ?? '', 60_000, 2);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    peer(memory, PEERS[1] ?? '', 30_000, 1);
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+  });
+
+  it("counts only teachers the predicate shows a student of the session's gender", async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+    // The third is shown to the other gender only.
+    memory.publish(PEERS[2] ?? '', 'male');
+    memory.plant(PEERS[2] ?? '', { ...RECITATION, price_piasters: piasters(45_002), sessionCount: 1 });
+    const { service } = serviceOver(memory);
+
+    expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+    expect(memory.log).toContain('visibleTeacherIds:female');
+  });
+});

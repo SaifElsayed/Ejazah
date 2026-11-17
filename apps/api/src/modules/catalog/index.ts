@@ -60,6 +60,7 @@ import {
   insertPackage,
   packageOf,
   packagesOf,
+  peerPackagesOf,
 } from './packages.repository.js';
 import { PackagesService, type PackagesStore } from './packages.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
@@ -108,7 +109,7 @@ export type { CatalogUse, PackageEnrollmentCounts };
  */
 export interface CatalogServices {
   /** `teacher.packages.*` (T018). */
-  readonly packages: Pick<PackagesService, 'list' | 'create' | 'update'>;
+  readonly packages: Pick<PackagesService, 'list' | 'create' | 'update' | 'averagePrice'>;
   /** `teacher.slots.*` (T019). */
   readonly slots: TeacherSlots;
 }
@@ -175,6 +176,10 @@ export const packagesStore: PackagesStore = {
   packageOf,
   insert: insertPackage,
   change: changePackage,
+  // 003:T113: the average-price hint's pool, and identity's predicate over its teachers.
+  peerPackages: peerPackagesOf,
+  visibleTeacherIds: async (tx, requester, teacherIds) =>
+    (await visibleTeachers(tx, requester, { purpose: 'discover', teacherIds })).map(({ id }) => id),
 };
 export { PackagesService };
 

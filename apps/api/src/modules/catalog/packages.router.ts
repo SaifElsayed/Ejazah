@@ -6,6 +6,8 @@
 // schema (R-API-1). `published` is the visibility predicate's answer, asked with the session's
 // gender (the owner's decision of 2026-11-02). Mounted under `teacher.packages` by `app.router.ts`.
 import {
+  packagesAveragePriceInput,
+  packagesAveragePriceOutput,
   packagesCreateInput,
   packagesListOutput,
   packagesUpdateInput,
@@ -33,4 +35,14 @@ export const packagesRouter = createAppRouter({
     input: packagesUpdateInput,
     output: teacherPackage,
   }).mutation(({ ctx, input }) => ctx.services.catalog.packages.update(ctx.caller.userId, input)),
+
+  // 003:T113 (SRS DEC-88): the editor's average-price hint, asked with the session's gender; it
+  // answers an amount and nothing that names a teacher.
+  averagePrice: teacherProcedure({
+    admits: 'approved',
+    input: packagesAveragePriceInput,
+    output: packagesAveragePriceOutput,
+  }).query(({ ctx, input }) =>
+    ctx.services.catalog.packages.averagePrice(ctx.caller.userId, ctx.caller.gender, input),
+  ),
 });

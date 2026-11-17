@@ -7,7 +7,13 @@ import { randomUUID } from 'node:crypto';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
-import type { NewPackageRow, PackageChange, PackageRow } from './packages.repository.js';
+import type {
+  NewPackageRow,
+  PackageChange,
+  PackageRow,
+  PeerPackageRow,
+  PeerPackagesQuery,
+} from './packages.repository.js';
 import type { PackagesStore } from './packages.service.js';
 
 export const TEACHER = '0199d0a0-0000-7000-8000-0000000000d1';
@@ -134,6 +140,34 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
     if (row === undefined || row.teacherUserId !== teacherUserId) return false;
     this.#rows.set(packageId, { ...row, ...change });
     return true;
+  }
+
+  /** 003:T113: the other teachers' active packages on the track and length, as the query reads them. */
+  async peerPackages(_tx: Transaction, query: PeerPackagesQuery): Promise<PeerPackageRow[]> {
+    this.log.push('peerPackages');
+    return this.all()
+      .filter(
+        (row) =>
+          row.isActive &&
+          row.track === query.track &&
+          row.sessionDurationMinutes === query.sessionDurationMinutes &&
+          row.teacherUserId !== query.viewer,
+      )
+      .map(({ teacherUserId, price_piasters, sessionCount }) => ({
+        teacherUserId,
+        price_piasters,
+        sessionCount,
+      }));
+  }
+
+  /** 003:T113: those of `teacherIds` the predicate shows a student of `requester`'s gender. */
+  async visibleTeacherIds(
+    _tx: Transaction,
+    requester: RequesterGender,
+    teacherIds: readonly string[],
+  ): Promise<string[]> {
+    this.log.push(`visibleTeacherIds:${requester}`);
+    return teacherIds.filter((id) => this.#published.has(`${id}:${requester}`));
   }
 
   async slotInUse(): Promise<boolean> {

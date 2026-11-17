@@ -16,6 +16,12 @@
 //   enrollment keeps its own snapshot of the terms.
 // - `list` answers each package with its price per session from `packages/money` (R-212), its
 //   confirmed enrollments and whether it is frozen, asked of the port once for all of them.
+// - 003:T113 (SRS DEC-88, FR-PROFILE-2 as amended; Q-T113 (a)): `averagePrice` is the editor's
+//   average price per session of the other teachers' active packages on the asked track and
+//   length, counting only teachers the visibility predicate shows a student of the session's gender
+//   (the teacher's own), each package's `perSession` averaged half up in `packages/money`. Fewer
+//   than three such teachers answer nothing, so no single teacher's price is exposed. It decides
+//   nothing and takes no lock.
 //
 // THE LOCKS (T005's rules, the owner's decisions of 2026-11-01). Lock, then read:
 // - `create` inserts a row referencing the teacher's `users` row, so it locks the account first
@@ -32,12 +38,14 @@
 //   no lock of their own (`LockedTable` has none).
 // - `list` decides nothing and takes no lock.
 import type {
+  PackagesAveragePriceInput,
+  PackagesAveragePriceOutput,
   PackagesCreateInput,
   PackagesListOutput,
   PackagesUpdateInput,
   TeacherPackage,
 } from '@ijazah/contracts';
-import { perSession, piasters, toPlainNumber } from '@ijazah/money';
+import { average, perSession, piasters, toPlainNumber } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
@@ -45,7 +53,16 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
-import type { NewPackageRow, PackageChange, PackageRow } from './packages.repository.js';
+import type {
+  NewPackageRow,
+  PackageChange,
+  PackageRow,
+  PeerPackageRow,
+  PeerPackagesQuery,
+} from './packages.repository.js';
+
+/** 003:T113 (SRS DEC-88): the fewest other teachers the average is shown over. */
+export const AVERAGE_PRICE_MIN_TEACHERS = 3;
 
 /** What the packages read and write, each on the transaction it is handed. */
 export interface PackagesStore {
@@ -69,6 +86,14 @@ export interface PackagesStore {
     packageId: string,
     change: PackageChange,
   ): Promise<boolean>;
+  /** 003:T113: the other teachers' active packages on the track and length. */
+  peerPackages(tx: Transaction, query: PeerPackagesQuery): Promise<PeerPackageRow[]>;
+  /** 003:T113: those of `teacherIds` the predicate shows a student of `requester`'s gender, identity's. */
+  visibleTeacherIds(
+    tx: Transaction,
+    requester: RequesterGender,
+    teacherIds: readonly string[],
+  ): Promise<string[]>;
 }
 
 export interface PackagesServiceDependencies {
@@ -197,6 +222,29 @@ export class PackagesService {
       if (changed === null) throw new Error('packages: the package disappeared during the edit');
       const counts = await this.#use.packageEnrollmentCounts(tx, [current.id]);
       return answerOf(changed, counts.get(current.id) ?? NONE);
+    });
+  }
+
+  /**
+   * `teacher.packages.averagePrice` (003:T113): the average price per session over at least three
+   * other published teachers; `requester` is the session's gender, the teacher's own.
+   */
+  averagePrice(
+    teacherUserId: string,
+    requester: RequesterGender,
+    input: PackagesAveragePriceInput,
+  ): Promise<PackagesAveragePriceOutput> {
+    return this.#transactions.run(async (tx) => {
+      const pool = await this.#store.peerPackages(tx, { viewer: teacherUserId, ...input });
+      const teachers = [...new Set(pool.map((row) => row.teacherUserId))];
+      const shown = new Set(await this.#store.visibleTeacherIds(tx, requester, teachers));
+      const counted = pool.filter((row) => shown.has(row.teacherUserId));
+      if (new Set(counted.map((row) => row.teacherUserId)).size < AVERAGE_PRICE_MIN_TEACHERS) {
+        return {};
+      }
+      const [first, ...rest] = counted.map((row) => perSession(row.price_piasters, row.sessionCount));
+      if (first === undefined) return {};
+      return { averagePerSession_piasters: toPlainNumber(average([first, ...rest])) };
     });
   }
 }

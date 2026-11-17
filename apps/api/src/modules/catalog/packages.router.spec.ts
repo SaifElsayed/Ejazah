@@ -114,6 +114,11 @@ beforeEach(() => {
       calls.push(['update', ...args]);
       return ANSWER;
     },
+    // 003:T113.
+    averagePrice: async (...args) => {
+      calls.push(['averagePrice', ...args]);
+      return { averagePerSession_piasters: 20_000 };
+    },
   } as CatalogServices['packages'];
 });
 
@@ -148,6 +153,9 @@ function callsOf(caller: Caller) {
     'teacher.packages.create': () => caller.teacher.packages.create(CREATE),
     'teacher.packages.update': () =>
       caller.teacher.packages.update({ packageId: PACKAGE, isActive: false }),
+    // 003:T113.
+    'teacher.packages.averagePrice': () =>
+      caller.teacher.packages.averagePrice({ track: 'recitation', sessionDurationMinutes: 45 }),
   };
 }
 
@@ -195,6 +203,14 @@ describe('the namespace', () => {
       ['create', CALLER, CREATE],
       ['update', CALLER, { packageId: PACKAGE, price_piasters: 120_000 }],
     ]);
+  });
+
+  it('asks the average price with the session’s gender and the input, answering it as the service does (003:T113)', async () => {
+    const asked = { track: 'ijazah_track', sessionDurationMinutes: 60 } as const;
+    await expect(
+      callerAs(sessionOf('approved')).teacher.packages.averagePrice(asked),
+    ).resolves.toEqual({ averagePerSession_piasters: 20_000 });
+    expect(calls).toEqual([['averagePrice', CALLER, 'female', asked]]);
   });
 
   it('lists with the session’s gender, never the payout state, whatever the payout account', async () => {

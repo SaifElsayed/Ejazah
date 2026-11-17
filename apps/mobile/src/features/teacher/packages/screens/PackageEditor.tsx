@@ -40,7 +40,7 @@ import { formatPoundAmount } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded } from '../../../shared/states';
-import { usePackageActions, usePackages, useTeacherShareRate } from '../api';
+import { useAveragePrice, usePackageActions, usePackages, useTeacherShareRate } from '../api';
 import { TRACK_LABEL } from '../components/PackageCard';
 import { PackageSubjectPicker } from '../components/PackageSubjectPicker';
 import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
@@ -98,6 +98,15 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
   const frozen = fixed !== undefined;
   const sessionCount = sessionCountOf(countText);
   const price_piasters = piastersOfPounds(priceText);
+  // 003:T113: the average for the track and length the package will have, a frozen one's own.
+  const average_piasters = useAveragePrice(
+    fixed?.track ?? track,
+    fixed?.sessionDurationMinutes ?? minutes,
+  );
+  const share_piasters =
+    price_piasters !== null && shareRate !== undefined
+      ? teacherShare(price_piasters, shareRate)
+      : undefined;
   const countWrong = countText.trim() !== '' && sessionCount === null;
   const priceWrong = priceText.trim() !== '' && price_piasters === null;
   const ready =
@@ -262,16 +271,25 @@ function PackageForm({ item }: { readonly item?: TeacherPackage }) {
 
       {/* 003:T104 (ADR 0025 D1, Q-A3 (a)): the price guide. The teacher's share of the price as it
           is typed, at the rate the platform answers, rounded up as the order will be; nothing while
-          the rate is unread. The average price the owner asked for beside it waits for its own
-          task line (2026-11-17). */}
-      {price_piasters !== null && shareRate !== undefined ? (
+          the rate is unread. 003:T113 (SRS DEC-88): beside it, the other teachers' average price
+          per session on the same track and length; nothing when fewer than three have one. */}
+      {share_piasters !== undefined || average_piasters !== undefined ? (
         <View style={{ gap: tokens.space['1'] }}>
-          <Text tone="muted">
-            {t('money.packageEditor.teacherShare', {
-              amount: formatPoundAmount(teacherShare(price_piasters, shareRate), locale),
-              percent: shareRate,
-            })}
-          </Text>
+          {share_piasters !== undefined && shareRate !== undefined ? (
+            <Text tone="muted">
+              {t('money.packageEditor.teacherShare', {
+                amount: formatPoundAmount(share_piasters, locale),
+                percent: shareRate,
+              })}
+            </Text>
+          ) : null}
+          {average_piasters !== undefined ? (
+            <Text tone="muted">
+              {t('money.packageEditor.averagePrice', {
+                amount: formatPoundAmount(piasters(average_piasters), locale),
+              })}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 

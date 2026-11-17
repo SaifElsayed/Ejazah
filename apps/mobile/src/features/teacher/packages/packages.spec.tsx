@@ -112,6 +112,8 @@ beforeEach(() => {
     published: true,
     packages: [recitation, ijazahTrack, paused],
   });
+  // 003:T113: no average unless a case plants one.
+  mockApi.api.teacher.packages.averagePrice.query.mockResolvedValue({});
   mockApi.api.teacher.packages.create.mutate.mockResolvedValue(ijazahTrack);
   mockApi.api.teacher.packages.update.mutate.mockResolvedValue(ijazahTrack);
   mockApi.api.teacher.credentials.list.query.mockResolvedValue([
@@ -475,6 +477,49 @@ describe('PackageEditor and PackageSubjectPicker', () => {
     await typeIn('rtl', 'teacher.packages.editor.totalPrice', '1000');
     await waitFor(() => expect(mockApi.value.client.publicConfig).toHaveBeenCalled());
     expect(screen.queryByText(/نصيبك/)).toBeNull();
+  });
+
+  it("shows the other teachers' average price per session for the new package's track and length (003:T113)", async () => {
+    mockApi.api.teacher.packages.averagePrice.query.mockResolvedValue({
+      averagePerSession_piasters: 21_550,
+    });
+    mockParams = { id: 'new' };
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    expect(
+      await screen.findByText(
+        ar('money.packageEditor.averagePrice', { amount: amountOf('rtl', 21_550) }),
+      ),
+    ).toBeTruthy();
+    expect(mockApi.api.teacher.packages.averagePrice.query).toHaveBeenCalledWith({
+      track: 'recitation',
+      sessionDurationMinutes: 30,
+    });
+  });
+
+  it("asks the average for a frozen package's own track and length (003:T113)", async () => {
+    mockApi.api.teacher.packages.averagePrice.query.mockResolvedValue({
+      averagePerSession_piasters: 16_000,
+    });
+    mockParams = { id: recitation.id };
+    await renderIn('ltr', withQueries(() => <PackageEditor />)());
+    expect(
+      await screen.findByText(
+        translate('en', 'money.packageEditor.averagePrice', { amount: amountOf('ltr', 16_000) }),
+      ),
+    ).toBeTruthy();
+    expect(mockApi.api.teacher.packages.averagePrice.query).toHaveBeenCalledWith({
+      track: 'recitation',
+      sessionDurationMinutes: 45,
+    });
+  });
+
+  it('draws no average when fewer than three teachers have one (003:T113)', async () => {
+    mockParams = { id: 'new' };
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await waitFor(() =>
+      expect(mockApi.api.teacher.packages.averagePrice.query).toHaveBeenCalled(),
+    );
+    expect(screen.queryByText(/متوسط/)).toBeNull();
   });
 
   it('cannot send 53 sessions or a price of zero', async () => {

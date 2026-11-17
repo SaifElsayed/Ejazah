@@ -407,7 +407,8 @@
   },
   "money": {
     "packageEditor": {
-      "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)"
+      "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)",
+      "averagePrice": "متوسط سعر الحصة عند المعلمين الآخرين في نفس المسار والمدة {amount} ج.م"
     }
   },
   "notifications": {

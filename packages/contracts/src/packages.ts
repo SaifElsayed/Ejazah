@@ -79,3 +79,22 @@ export type TeacherPackage = z.infer<typeof teacherPackage>;
 export type PackagesListOutput = z.infer<typeof packagesListOutput>;
 export type PackagesCreateInput = z.infer<typeof packagesCreateInput>;
 export type PackagesUpdateInput = z.infer<typeof packagesUpdateInput>;
+
+// 003:T113 (SRS DEC-88, FR-PROFILE-2 as amended): the package editor's average-price hint.
+
+/** `teacher.packages.averagePrice`'s input: the track and the session length the editor has chosen. */
+export const packagesAveragePriceInput = z.object({
+  track: packageTrack,
+  sessionDurationMinutes: sessionLengthMinutes,
+});
+
+/**
+ * Its answer: the average price per session of the other teachers' published packages on that
+ * track and length, absent when fewer than three such teachers have one. It names no teacher.
+ */
+export const packagesAveragePriceOutput = z.object({
+  averagePerSession_piasters: z.int().nonnegative().optional(),
+});
+
+export type PackagesAveragePriceInput = z.infer<typeof packagesAveragePriceInput>;
+export type PackagesAveragePriceOutput = z.infer<typeof packagesAveragePriceOutput>;

@@ -6,6 +6,8 @@ import type {
   PackagesCreateInput,
   PackagesListOutput,
   PackagesUpdateInput,
+  PackageTrack,
+  SessionLengthMinutes,
 } from '@ijazah/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -28,6 +30,24 @@ export function useTeacherShareRate(): number | undefined {
     queryKey: PUBLIC_CONFIG_QUERY_KEY,
     queryFn: () => client.publicConfig(),
     select: (config) => config.teacherSharePercent,
+  }).data;
+}
+
+/**
+ * 003:T113 (SRS DEC-88): the other teachers' average price per session on the editor's track and
+ * length, in piasters. Undefined while unread, and when fewer than three teachers have one: the
+ * editor then draws no average.
+ */
+export function useAveragePrice(
+  track: PackageTrack,
+  sessionDurationMinutes: SessionLengthMinutes,
+): number | undefined {
+  const { client } = useApi();
+  return useQuery({
+    queryKey: [...PACKAGES_QUERY_KEY, 'averagePrice', track, sessionDurationMinutes],
+    queryFn: () =>
+      client.api.teacher.packages.averagePrice.query({ track, sessionDurationMinutes }),
+    select: (answer) => answer.averagePerSession_piasters,
   }).data;
 }
 

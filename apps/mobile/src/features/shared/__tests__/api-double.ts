@@ -102,6 +102,8 @@ export function fakeProcedures() {
         list: { query: procedure() },
         create: { mutate: procedure() },
         update: { mutate: procedure() },
+        // 003:T113: the editor's average-price hint.
+        averagePrice: { query: procedure() },
       },
       // B26 (T022): the teacher's availability.
       slots: {
