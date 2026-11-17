@@ -16,7 +16,7 @@
 // rule 24). `repeatedAbsences` is a teacher's only: the enrollments FR-451 marks, with the count.
 import { z } from 'zod';
 
-import { accountStatus, teacherVerificationStatus } from '../account.js';
+import { accountStatus, certificateName, teacherVerificationStatus } from '../account.js';
 import { enrollmentStatus } from '../checkout.js';
 import { idempotencyKey } from '../idempotency-key.js';
 import { gender, role } from '../onboarding.js';
@@ -156,3 +156,18 @@ export type UsersGetInput = z.infer<typeof usersGetInput>;
 export type UsersGetOutput = z.infer<typeof usersGetOutput>;
 export type UserRepeatedAbsence = z.infer<typeof userRepeatedAbsence>;
 export type UserKeptData = z.infer<typeof userKeptData>;
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; admin-surface.md, `users.setCertificateName`;
+// the note under T004, Q4 (a)): an administrator sets or changes a student's certificate name at the
+// student's request, with a mandatory reason. Keyed under the administrator's idempotency key; answers
+// nothing; audited `user.certificate_name_set` with no name in the entry. The person is
+// `targetUserId`, as `users.delete`'s is (a `userId` key is refused in any input, R-GENDER-4).
+// `NOT_FOUND` for an unknown or deleted account, or one that is not a student's.
+export const usersSetCertificateNameInput = z.object({
+  targetUserId: z.uuid(),
+  name: certificateName,
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type UsersSetCertificateNameInput = z.infer<typeof usersSetCertificateNameInput>;

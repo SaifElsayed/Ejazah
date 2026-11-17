@@ -11,6 +11,11 @@ import type { SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { AccountService } from './account.service.js';
+import {
+  type CertificateNameDependencies,
+  CertificateNameService,
+  certificateNameStoreOver,
+} from './certificate-name.service.js';
 import { EmailAuthService } from './email-auth.service.js';
 import {
   AccountsRepository,
@@ -111,6 +116,11 @@ export interface IdentityServices {
     // T081 of specs/004-sessions: `users.delete`, handed to the admin services by `main.ts`.
     'deleteAccount' | 'requestWebCode' | 'confirmWebDeletion' | 'deleteByAdministrator'
   >;
+  /**
+   * T004 of specs/005-certification (FR-602): `account.certificateName.set`, and
+   * `users.setCertificateName`, handed to the admin services by `main.ts`.
+   */
+  readonly certificateName: CertificateNames;
 }
 
 /** T077: the logger's `info`, where the log handed in has one. */
@@ -186,7 +196,7 @@ export function createIdentityServices({
   report,
   live,
   ...base
-}: IdentityServiceDependencies): IdentityServices {
+}: IdentityServiceDependencies): Omit<IdentityServices, 'certificateName'> {
   const sessions = new SessionService(base);
   const codes = new OneTimeCodes({ ...base, email, log });
   const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
@@ -460,4 +470,25 @@ export function createHeldPhotos(database: Pick<Database, 'includeDeleted'>): {
 } {
   const photos = new DeletedPhotosRepository(database);
   return { heldPhotoOf: (userId) => photos.heldOf(userId) };
+}
+
+/**
+ * T004 of specs/005-certification (FR-602; ADR 0019 D1; research R-411; the note under T004, Q4 (a)):
+ * the student's certificate name, `account.certificateName.set` and `users.setCertificateName`.
+ * Identity imports no module (`docs/ARCHITECTURE.md:183`), so the student's requests waiting for the
+ * name are released through the port `AwaitingNameRelease`, which `main.ts` hands in: a no-op until
+ * T006, then certification's entry (`docs/ARCHITECTURE.md:197`, a dependency against the arrows).
+ */
+export type { AwaitingNameRelease } from './certificate-name.service.js';
+export type CertificateNames = Pick<CertificateNameService, 'setOwn' | 'setByAdministrator'>;
+
+/**
+ * T004: the certificate-name service over this module's repository, built once by `main.ts` with the
+ * process's idempotency (`run` for the student's own, `runOn` for the administrator's), its logger,
+ * and the port.
+ */
+export function createCertificateNameService(
+  dependencies: Omit<CertificateNameDependencies, 'store'>,
+): CertificateNames {
+  return new CertificateNameService({ ...dependencies, store: certificateNameStoreOver() });
 }

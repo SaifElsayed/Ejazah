@@ -4,7 +4,8 @@
 // identity request's three actions are audited on the person (`user.require_identity`, with the
 // reason) and on the request (`verification_request.accept`, `.request_another`, with the note; the
 // latter's entry names the document turned away and the request that replaces it). T081 of
-// specs/004-sessions: `users.delete`, an administrator's deletion at the owner's request.
+// specs/004-sessions: `users.delete`, an administrator's deletion at the owner's request. T004 of
+// specs/005-certification: `users.setCertificateName`, a student's certificate name at their request.
 // Mounted under `documents` and `users` by `admin.router.ts`.
 import {
   documentsAcceptInput,
@@ -17,6 +18,7 @@ import {
   usersListInput,
   usersListOutput,
   usersRequireIdentityInput,
+  usersSetCertificateNameInput,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
@@ -131,6 +133,35 @@ export const usersRouter = createAdminRouter({
     }
     ctx.audit.record({
       action: 'user.deleted_by_admin',
+      targetType: 'user',
+      targetId: input.targetUserId,
+      reason: input.reason,
+    });
+  }),
+
+  // T004 of specs/005-certification (FR-602; ADR 0019 D1; admin-surface.md,
+  // `users.setCertificateName`; the note under T004, Q4 (a)): an administrator sets or changes a
+  // student's certificate name at the student's request, through identity's certificate-name service
+  // as `users.delete` reaches identity's deletion. `rate_limit_ijazah_decision`, the administrator as
+  // subject, checked before the transaction; keyed on the kind's transaction (`runOn`); audited
+  // `user.certificate_name_set` on the person with the reason and no name (admin-surface.md: the
+  // target is a kind and an id, never a name), on its first run only. Answers nothing.
+  setCertificateName: adminProcedure({
+    input: usersSetCertificateNameInput,
+    output: z.void(),
+    rateLimit: { key: 'rate_limit_ijazah_decision', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { replayed } = await ctx.services.users.setCertificateName(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'user.certificate_name_set',
       targetType: 'user',
       targetId: input.targetUserId,
       reason: input.reason,

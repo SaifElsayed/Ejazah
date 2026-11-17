@@ -18,6 +18,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { unusedIdentityServices } from '../../surfaces/services.fixtures.js';
 import {
@@ -261,6 +262,92 @@ describe('account.delete', () => {
     const { idempotencyKey: _omitted, ...unkeyed } = input;
     await expect(
       caller.account.delete(unkeyed as unknown as DeleteAccountInput),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
+  });
+});
+
+// T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md, `account.certificateName.set`):
+// the student's certificate name, set once. The student kind, so an anonymous caller is
+// UNAUTHENTICATED and a teacher FORBIDDEN, neither reaching the service; the input's name and key
+// are validated before it; the service's refusal `already_set` reaches the caller as it is. What the
+// service does (once, the port on the setter's transaction) is certificate-name.service.spec.ts's.
+describe('account.certificateName.set', () => {
+  const input = { name: 'مريم بنت أحمد بن علي', idempotencyKey: 'spec-name-key-0001' } as const;
+
+  /** A certificate-name service that records whom it was asked to name, and answers the name. */
+  function recordingNames(
+    answer: () => Promise<{ name: string }> = async () => ({ name: input.name }),
+  ) {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      certificateName: {
+        setOwn: async (userId: string, given: unknown) => {
+          calls.push([userId, given]);
+          return answer();
+        },
+        setByAdministrator: unusedIdentityServices.certificateName.setByAdministrator,
+      },
+    };
+  }
+
+  it('declares the procedure as the student kind, under the default limit', () => {
+    expect(metaOf('account.certificateName.set')).toEqual({ surface: 'app', caller: 'student' });
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED, reaching nothing', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    await expect(surface.anonymous().account.certificateName.set(input)).rejects.toMatchObject(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('refuses a teacher with FORBIDDEN, reaching nothing', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { userId } = await createAccount(database, { role: 'teacher' });
+    const { accessToken } = await identity.sessions.issue(userId);
+    const teacher = await surface.bearing(accessToken);
+    await expect(teacher.account.certificateName.set(input)).rejects.toMatchObject(
+      refused('FORBIDDEN'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('hands the student and the input to the service and answers the name it set', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { userId, caller } = await signedIn();
+    await expect(caller.account.certificateName.set(input)).resolves.toEqual({ name: input.name });
+    expect(recording.calls).toEqual([[userId, input]]);
+  });
+
+  it('answers the service’s refusal already_set as CONFLICT', async () => {
+    const recording = recordingNames(async () => {
+      throw new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'certificateName', code: 'already_set' }],
+      });
+    });
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { caller } = await signedIn();
+    await expect(caller.account.certificateName.set(input)).rejects.toMatchObject(
+      refused('CONFLICT'),
+    );
+  });
+
+  it.each([
+    ['no idempotency key', { name: input.name }],
+    ['a blank name', { ...input, name: '   ' }],
+    ['a name of one letter', { ...input, name: 'م' }],
+  ])('refuses %s before the service is reached', async (_case, given) => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { caller } = await signedIn();
+    await expect(
+      caller.account.certificateName.set(given as unknown as typeof input),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(recording.calls).toEqual([]);
   });

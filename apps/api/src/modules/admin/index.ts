@@ -26,6 +26,8 @@ import {
   AccountConsequences,
   // T081 of specs/004-sessions: the administrator's deletion, identity's, handed in by `main.ts`.
   type AdministratorDeletion,
+  // T004 of specs/005-certification: the certificate name's service, identity's, handed in by `main.ts`.
+  type CertificateNames,
   readApplicationQueue,
   StandingService,
   standingStoreOver,
@@ -218,6 +220,8 @@ export interface AdminServices {
   readonly users: UserDirectory & {
     /** T081 of specs/004-sessions (FR-512): identity's deletion at the owner's request ⚠️. */
     readonly delete: AdministratorDeletion['deleteByAdministrator'];
+    /** T004 of specs/005-certification (FR-602): identity's certificate-name change at the student's request. */
+    readonly setCertificateName: CertificateNames['setByAdministrator'];
   };
   /** T070 of specs/004-sessions: booking's release of a held slot (`enrollments.releaseSlot`). */
   readonly enrollments: HeldSlotRelease;
@@ -277,6 +281,12 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
    * the identity services' `deletion` (the one `DeletionService`), for `users.delete`.
    */
   readonly userDeletion: AdministratorDeletion;
+  /**
+   * T004 of specs/005-certification (FR-602; ADR 0019 D1; the note under T004, Q4 (a)): identity's
+   * certificate-name service, its `setByAdministrator` keyed on the administrator kind's transaction,
+   * filled by `main.ts` with the identity services' `certificateName`, for `users.setCertificateName`.
+   */
+  readonly certificateNames: CertificateNames;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -443,6 +453,9 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       // T081: `users.delete`, identity's deletion on the call's transaction.
       delete: (tx, adminId, input) =>
         dependencies.userDeletion.deleteByAdministrator(tx, adminId, input),
+      // T004 of specs/005-certification: `users.setCertificateName`, identity's, on the call's transaction.
+      setCertificateName: (tx, adminId, input) =>
+        dependencies.certificateNames.setByAdministrator(tx, adminId, input),
     },
     // T070: the release of a held slot, keyed through `runOn` on the call's transaction.
     enrollments: createHeldSlotRelease({

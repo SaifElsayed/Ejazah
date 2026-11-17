@@ -7,6 +7,8 @@
 // router, merged there. `account.delete` (T082) admits a restricted account (a suspended person may
 // still leave, FR-140), counts the caller's attempts on the authentication budget, and is keyed.
 import {
+  certificateNameSetInput,
+  certificateNameSetOutput,
   deleteAccountInput,
   meOutput,
   reportDeviceTimezoneInput,
@@ -17,7 +19,7 @@ import {
 import { z } from 'zod';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
-import { createAppRouter, userProcedure } from '../../surfaces/procedures.js';
+import { createAppRouter, studentProcedure, userProcedure } from '../../surfaces/procedures.js';
 
 const { authentication, authenticationBudget } = defaultRateLimits;
 
@@ -60,5 +62,18 @@ export const accountRouter = createAppRouter({
     rateLimit: { key: authentication, budget: authenticationBudget, subject: 'caller' },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.deletion.deleteAccount(ctx.caller.userId, input);
+  }),
+
+  // T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md,
+  // `account.certificateName.set`): the student's certificate name, entered once, keyed; refused
+  // `already_set` once the account holds one, and the student's waiting requests released on the
+  // same transaction (the service's). The student kind, under the default limit.
+  certificateName: createAppRouter({
+    set: studentProcedure({
+      input: certificateNameSetInput,
+      output: certificateNameSetOutput,
+    }).mutation(({ ctx, input }) =>
+      ctx.services.identity.certificateName.setOwn(ctx.caller.userId, input),
+    ),
   }),
 });
