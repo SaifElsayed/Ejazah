@@ -396,7 +396,75 @@ describe('ijazahs.revoke keeps the row and never shows it valid (T010, FR-609, R
   });
 });
 
+/**
+ * The sessions waiting, directly or behind another waiter, on the lock `holderPid` holds (lane C's
+ * held-lock technique, `ijazah-decisions.spec.ts`): read from `pg_blocking_pids`, so a waiter queued
+ * behind the first waiter of a row lock counts too.
+ */
+async function waitersOn(holderPid: number): Promise<number> {
+  const { rows } = await db.query<{ pid: number; blockers: number[] }>(
+    `SELECT pid, pg_blocking_pids(pid) AS blockers
+       FROM pg_stat_activity
+      WHERE cardinality(pg_blocking_pids(pid)) > 0`,
+  );
+  const chain = new Set([holderPid]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const { pid, blockers } of rows) {
+      if (!chain.has(pid) && blockers.some((blocker) => chain.has(blocker))) {
+        chain.add(pid);
+        grew = true;
+      }
+    }
+  }
+  return chain.size - 1;
+}
+
+/** Polls until `count` sessions wait on `holderPid`, or fails after a bounded wait. */
+async function untilWaiting(holderPid: number, count: number): Promise<void> {
+  for (let tries = 0; tries < 200; tries += 1) {
+    if ((await waitersOn(holderPid)) >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`fewer than ${String(count)} sessions waited on the held lock within 10 s`);
+}
+
 describe('ijazahs.bar and .liftBar (T010, FR-610)', () => {
+  // The review's ruling on lane E (2026-11-17): `ijazah_bars` has no partial unique, so one open bar
+  // per user rests on the user's `users` lock alone. A second connection holds the user's row FOR
+  // UPDATE; two bars under two keys start and both wait on it (each at its lock, or, with the lock
+  // dropped, at its insert's foreign-key check after reading no open bar); the holder rolls back.
+  // With the lock the second bar reads the first's row and is refused; without it both insert.
+  it("two bars held at the user's row, then released, leave one open bar (`already_barred`)", async () => {
+    const adminId = await makeAdmin(db);
+    const userId = await makeUser(db);
+    const holder = await connectAsApplication();
+    let outcomes: PromiseSettledResult<unknown>[];
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+      const {
+        rows: [held],
+      } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+      const both = [bar(adminId, userId), bar(adminId, userId)];
+      await untilWaiting(held!.pid, 2);
+      await holder.query('ROLLBACK');
+      outcomes = await Promise.allSettled(both);
+    } finally {
+      await holder.query('ROLLBACK').catch(() => undefined);
+      await holder.end();
+    }
+    const open = (await barsOf(userId)).filter(({ lifted_at }) => lifted_at === null);
+    expect(open).toHaveLength(1);
+    expect(outcomes.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    const refused = outcomes.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+    );
+    expect(refused?.reason).toBeInstanceOf(DomainError);
+    expect((refused?.reason as DomainError).code).toBe('CONFLICT');
+    expect((refused?.reason as DomainError).details?.[0]?.code).toBe('already_barred');
+  });
+
   it('two bars at once under two keys leave one open bar; the other is `already_barred`', async () => {
     const adminId = await makeAdmin(db);
     const userId = await makeUser(db);
