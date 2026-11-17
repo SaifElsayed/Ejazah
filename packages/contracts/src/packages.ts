@@ -82,11 +82,16 @@ export type PackagesUpdateInput = z.infer<typeof packagesUpdateInput>;
 
 // 003:T113 (SRS DEC-88, FR-PROFILE-2 as amended): the package editor's average-price hint.
 
-/** `teacher.packages.averagePrice`'s input: the track and the session length the editor has chosen. */
-export const packagesAveragePriceInput = z.object({
-  track: packageTrack,
-  sessionDurationMinutes: sessionLengthMinutes,
-});
+/**
+ * `teacher.packages.averagePrice`'s input: the track and the session length the editor has chosen.
+ * Strict: an input that also names a gender or a teacher is refused, never quietly read (Q-T113-adv).
+ */
+export const packagesAveragePriceInput = z
+  .object({
+    track: packageTrack,
+    sessionDurationMinutes: sessionLengthMinutes,
+  })
+  .strict();
 
 /**
  * Its answer: the average price per session of the other teachers' published packages on that

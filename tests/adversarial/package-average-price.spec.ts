@@ -7,7 +7,8 @@
 // predicate shows a student of the viewer's own gender; at least three such teachers, or nothing.
 // Each exclusion is its own case: two counted teachers and a third whose package is the excluded one
 // answer nothing, where a control with a counted third answers the average. So a case cannot pass on
-// a read that answers nothing to everyone. The answer names no teacher, and a student is refused.
+// a read that answers nothing to everyone. The answer names no teacher; an input naming a gender or a
+// teacher is refused; a student, an applicant and an anonymous caller are refused before any read.
 //
 // Not a registration of `registered-attacks.ts`: B43's completeness check takes the student-facing
 // procedures and those of `sessions`, `chat` and `live` only (`studentFacingProcedures`), and fails a
@@ -19,8 +20,8 @@
 // every package already in the database, inside that transaction, so rows other specs left cannot
 // enter the pool; that too rolls back.
 //
-// Observed red: every case against the router before the procedure existed; each exclusion against
-// its mutant (M-A9 to M-A14 in `ejazah-tools\track2\b-m1\lane-a-report.md`), restored and
+// Observed red: every case against the router before the procedure existed; each exclusion and each
+// refusal against its mutant (M-A9 to M-A19 in `ejazah-tools\track2\b-m1\lane-a-report.md`), restored and
 // `cmp`-checked.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
@@ -44,7 +45,11 @@ import {
 import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
 import { createAppContext } from '../../apps/api/src/surfaces/context.js';
-import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surfaces/procedures.js';
+import {
+  createAppCallerFactory,
+  createAppRouter,
+  toErrorShape,
+} from '../../apps/api/src/surfaces/procedures.js';
 import {
   unusedBookingServices,
   unusedChatServices,
@@ -174,32 +179,36 @@ const callerFor = createAppCallerFactory(
   createAppRouter({ teacher: createAppRouter({ packages: packagesRouter }) }),
 );
 
-/** `teacher.packages` over the real services, called with the session of `userId` as `role`. */
-function callerAs(
-  tx: Transaction,
-  userId: string,
-  gender: Gender,
-  role: 'teacher' | 'student' = 'teacher',
-) {
+type Standing = 'teacher' | 'student' | 'applicant' | 'anonymous';
+
+/** The session of `userId` in `standing`; none for an anonymous caller. */
+function sessionOf(userId: string, gender: Gender, standing: Standing) {
+  if (standing === 'anonymous') return null;
+  const base = {
+    userId,
+    sessionId: randomUUID(),
+    gender,
+    preferredLanguage: 'ar' as const,
+    accountStatus: 'active' as const,
+  };
+  if (standing === 'student') return { ...base, role: 'student' as const };
+  const applicant = standing === 'applicant';
+  return {
+    ...base,
+    role: 'teacher' as const,
+    teacher: {
+      verificationStatus: applicant ? ('pending' as const) : ('approved' as const),
+      payoutVerified: !applicant,
+      applicationStatus: applicant ? ('in_review' as const) : ('approved' as const),
+    },
+  };
+}
+
+/** `teacher.packages` over the real services, called with the session of `userId` in `standing`. */
+function callerAs(tx: Transaction, userId: string, gender: Gender, standing: Standing = 'teacher') {
   return callerFor(
     createAppContext({
-      session: {
-        userId,
-        sessionId: randomUUID(),
-        gender,
-        preferredLanguage: 'ar',
-        role,
-        accountStatus: 'active',
-        ...(role === 'teacher'
-          ? {
-              teacher: {
-                verificationStatus: 'approved',
-                payoutVerified: true,
-                applicationStatus: 'approved',
-              },
-            }
-          : {}),
-      },
+      session: sessionOf(userId, gender, standing),
       log: createLogger({ level: 'info', destination: { write: () => undefined } }),
       rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
       clientAddress: '203.0.113.9',
@@ -234,6 +243,9 @@ async function twoCounted(tx: Transaction, gender: Gender): Promise<string> {
 }
 
 const THIRD = { price: 10_001, sessionCount: 1 } as const;
+
+const refused = (code: string) =>
+  expect.objectContaining({ cause: expect.objectContaining({ code }) });
 
 describe.each(DIRECTIONS)(
   '003:T113, $name: the average price per session of the other published teachers',
@@ -303,13 +315,36 @@ describe.each(DIRECTIONS)(
       });
     });
 
-    it('refuses a student, before any read', async () => {
+    it.each(['gender', 'teacherId'] as const)(
+      'refuses an input naming a %s VALIDATION_FAILED, before any read',
+      async (named) => {
+        await inRollback(async (tx) => {
+          const viewer = await twoCounted(tx, gender);
+          await packageOf(tx, await teacher(tx, gender), THIRD);
+          const extra = named === 'gender' ? { gender: otherGender(gender) } : { teacherId: viewer };
+
+          const thrown: unknown = await callerAs(tx, viewer, gender)
+            .teacher.packages.averagePrice({ ...ASKED, ...extra } as typeof ASKED)
+            .catch((error: unknown) => error);
+          expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+            'VALIDATION_FAILED',
+          );
+        });
+      },
+    );
+
+    it.each([
+      { standing: 'student', code: 'FORBIDDEN' },
+      { standing: 'applicant', code: 'FORBIDDEN' },
+      { standing: 'anonymous', code: 'UNAUTHENTICATED' },
+    ] as const)('refuses $standing $code, before any read', async ({ standing, code }) => {
       await inRollback(async (tx) => {
-        const student = await teacher(tx, gender);
+        const viewer = await twoCounted(tx, gender);
+        await packageOf(tx, await teacher(tx, gender), THIRD);
 
         await expect(
-          callerAs(tx, student, gender, 'student').teacher.packages.averagePrice(ASKED),
-        ).rejects.toEqual(expect.objectContaining({ cause: expect.objectContaining({ code: 'FORBIDDEN' }) }));
+          callerAs(tx, viewer, gender, standing).teacher.packages.averagePrice(ASKED),
+        ).rejects.toEqual(refused(code));
       });
     });
   },

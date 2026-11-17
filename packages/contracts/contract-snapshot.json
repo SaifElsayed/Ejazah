@@ -1447,6 +1447,7 @@
               "verification_request"
             ]
           },
+          "$.paymentMode": { "required": true, "type": "string", "values": ["live", "test"] },
           "$.queues": { "required": true, "type": "object" },
           "$.queues.applications": { "required": true, "type": "object" },
           "$.queues.applications.oldestAgeHours": { "type": "integer" },
@@ -4089,6 +4090,27 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.packages.averagePrice": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionDurationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.track": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_track", "recitation"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.averagePerSession_piasters": { "type": "integer" }
+        }
       },
       "teacher.packages.create": {
         "caller": "teacher",

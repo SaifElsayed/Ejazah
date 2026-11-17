@@ -163,14 +163,14 @@ const refused = (code: string) =>
   expect.objectContaining({ cause: expect.objectContaining({ code }) });
 
 describe('the namespace', () => {
-  it("refuses an anonymous caller UNAUTHENTICATED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses an anonymous caller UNAUTHENTICATED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const [path, call] of Object.entries(callsOf(callerAs(null)))) {
       await expect(call(), path).rejects.toEqual(refused('UNAUTHENTICATED'));
     }
     expect(calls).toEqual([]);
   });
 
-  it("refuses a student and an applicant FORBIDDEN: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses a student and an applicant FORBIDDEN: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const standing of ['student', 'applicant'] as const) {
       for (const [path, call] of Object.entries(callsOf(callerAs(sessionOf(standing))))) {
         await expect(call(), `${standing} ${path}`).rejects.toEqual(refused('FORBIDDEN'));
@@ -179,7 +179,7 @@ describe('the namespace', () => {
     expect(calls).toEqual([]);
   });
 
-  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update'", async () => {
+  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED: 'teacher.packages.list', 'teacher.packages.create', 'teacher.packages.update', 'teacher.packages.averagePrice'", async () => {
     for (const standing of ['suspended teacher', 'banned teacher'] as const) {
       for (const [path, call] of Object.entries(callsOf(callerAs(sessionOf(standing))))) {
         await expect(call(), `${standing} ${path}`).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
