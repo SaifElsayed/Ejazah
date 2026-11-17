@@ -181,6 +181,29 @@ const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
 });
+// The queue (T112), opened on the first add, so a process that never adds a job never connects to it
+// for that: `admins.add` queues `deliver-admin-invite` (T067), the webhook's paid events
+// `confirm-enrollment` (T038), and the certificate's renders (005:T007, T032).
+let jobQueue: ReturnType<typeof openQueue> | undefined;
+const queue = (): ReturnType<typeof openQueue> =>
+  (jobQueue ??= openQueue(connectionFor(config.REDIS_URL)));
+// 005:T007, T032 (Q6 (a)): one ijazah's render, enqueued after its producer's commit under the job id
+// `<ijazahId>-<generation>` (BullMQ refuses `:` in a custom id), through `addOrRetry`, so a failed job
+// held under that id is retried rather than silently kept. Approve's, the re-render's and the two
+// ports' re-freezes before the sign-off all enqueue here.
+const certificateRenders = {
+  enqueue: async (ijazahId: string, generation: number): Promise<void> => {
+    await addOrRetry(
+      queue(),
+      {
+        name: RENDER_CERTIFICATE,
+        data: renderCertificatePayload(ijazahId, generation),
+        jobId: `${ijazahId}-${generation}`,
+      },
+      log,
+    );
+  },
+};
 // T006 of specs/005-certification (the note under T006, Q4 (a), Q14 (a)): the ijazah request's one
 // service. Certification's entry is bound to the three ports the other modules declare, so none of
 // them imports certification (`docs/ARCHITECTURE.md:195`): identity's `AwaitingNameRelease` and
@@ -191,6 +214,8 @@ const ijazahRequests = certification.createIjazahRequestService({
   storage: ports.storage,
   idempotency,
   log,
+  // 005:T032: the ports' re-freeze of an ijazah before its sign-off re-renders it after the commit.
+  renders: certificateRenders,
 });
 consequences.subscribe(ijazahRequests.deletionConsequence());
 // Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
@@ -251,7 +276,9 @@ const services = {
     certificateName: identity.createCertificateNameService({
       idempotency,
       log,
-      awaitingNameRelease: { release: (tx, studentUserId) => ijazahRequests.release(tx, studentUserId) },
+      awaitingNameRelease: {
+        release: (tx, studentUserId) => ijazahRequests.release(tx, studentUserId),
+      },
     }),
   },
   verification: verification.createVerificationServices({
@@ -368,13 +395,6 @@ const uploads = {
   live: liveBus,
   ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
 };
-// The queue (T112), opened on the first add, so a process that never adds a job never connects to it
-// for that: `admins.add` queues `deliver-admin-invite` (T067), the webhook's paid events
-// `confirm-enrollment` (T038).
-let jobQueue: ReturnType<typeof openQueue> | undefined;
-const queue = (): ReturnType<typeof openQueue> =>
-  (jobQueue ??= openQueue(connectionFor(config.REDIS_URL)));
-
 const routes = {
   [verification.DOCUMENTS_UPLOAD_PATH]: verification.createDocumentsUploadRoute({
     ...uploads,
@@ -470,7 +490,9 @@ const adminServices = createAdminServices({
   certificateNames: services.identity.certificateName,
   // T006 of specs/005-certification (P4 (a), Q-A4 (a)): `credentials.correct` re-freezes the
   // corrected credential's open requests on its own transaction, after its conditional write.
-  openRequestsRefreeze: { refreeze: (tx, credentialId) => ijazahRequests.refreeze(tx, credentialId) },
+  openRequestsRefreeze: {
+    refreeze: (tx, credentialId) => ijazahRequests.refreeze(tx, credentialId),
+  },
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,
@@ -493,21 +515,8 @@ const adminServices = createAdminServices({
   // 003:T109 (Q-B4 (a)): the console's «نسخة تجريبية» reads the mode from `home.summary`.
   paymentMode: config.PAYMENT_MODE,
   // T007 of specs/005-certification (Q6 (a)): `ijazahRequests.approve` enqueues generation 0's render
-  // after its commit, under the job id `<ijazahId>-<generation>` (BullMQ refuses `:` in a custom id),
-  // through `addOrRetry`, so a failed job held under that id is retried rather than silently kept.
-  ijazahRenders: {
-    enqueue: async (ijazahId, generation) => {
-      await addOrRetry(
-        queue(),
-        {
-          name: RENDER_CERTIFICATE,
-          data: renderCertificatePayload(ijazahId, generation),
-          jobId: `${ijazahId}-${generation}`,
-        },
-        log,
-      );
-    },
-  },
+  // after its commit; T032's `ijazahs.rerender` the raised generation (the queue above).
+  ijazahRenders: certificateRenders,
 });
 
 const application = await createApplication({

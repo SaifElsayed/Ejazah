@@ -16,8 +16,8 @@
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 // T070 of specs/004-sessions: booking's `enrollments` namespace.
 import { enrollmentsAdminRouter } from '../modules/booking/index.js';
-// T007 of specs/005-certification: certification's `ijazahRequests`.
-import { ijazahRequestsAdminRouter } from '../modules/certification/index.js';
+// T007 of specs/005-certification: certification's `ijazahRequests`; T010 and T032 its `ijazahs`.
+import { ijazahRequestsAdminRouter, ijazahsAdminRouter } from '../modules/certification/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
 import { studentsRouter, teachersRouter } from '../modules/identity/index.js';
 import { paymentsAdminRouter } from '../modules/payments/index.js';
@@ -48,6 +48,8 @@ export const adminRouter = createAdminRouter({
   enrollments: enrollmentsAdminRouter,
   // T007 of specs/005-certification: the administrators' review of an ijazah request.
   ijazahRequests: ijazahRequestsAdminRouter,
+  // T010 and T032 of specs/005-certification: ijazahs, their revocation, the bar and the sign-off.
+  ijazahs: ijazahsAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

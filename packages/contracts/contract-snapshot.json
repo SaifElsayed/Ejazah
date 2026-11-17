@@ -1606,6 +1606,144 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "ijazahs.bar": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "ijazahs.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.ijazahId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.certificateNumber": { "required": true, "type": "string" },
+          "$.chain": { "required": true, "type": "array" },
+          "$.chain[]": { "type": "array" },
+          "$.chain[][]": { "type": "string" },
+          "$.completionDate": { "required": true, "type": "null|string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.grantedAt": { "required": true, "type": "string" },
+          "$.ijazahId": { "required": true, "type": "string" },
+          "$.language": { "required": true, "type": "string", "values": ["ar", "en"] },
+          "$.pdfLink": { "required": true, "type": "null|string" },
+          "$.renderGeneration": { "required": true, "type": "integer" },
+          "$.rendered": { "required": true, "type": "boolean" },
+          "$.requestId": { "required": true, "type": "null|string" },
+          "$.revoked": { "required": true, "type": "boolean" },
+          "$.revokedAt": { "required": true, "type": "null|string" },
+          "$.revokedReason": { "required": true, "type": "null|string" },
+          "$.riwaya": { "required": true, "type": "string" },
+          "$.signedOffAt": { "required": true, "type": "null|string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["preparing", "rendered", "revoked", "signed_off"]
+          },
+          "$.student": { "required": true, "type": "object" },
+          "$.student.displayName": { "required": true, "type": "null|string" },
+          "$.student.userId": { "required": true, "type": "string" },
+          "$.studentNamePrinted": { "required": true, "type": "string" },
+          "$.subject": { "required": true, "type": "object" },
+          "$.subject.id": { "required": true, "type": "string" },
+          "$.subject.nameAr": { "required": true, "type": "string" },
+          "$.subject.nameEn": { "required": true, "type": "string" },
+          "$.tariq": { "required": true, "type": "null|string" },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "null|string" },
+          "$.teacher.userId": { "required": true, "type": "string" },
+          "$.teacherNamePrinted": { "required": true, "type": "string" }
+        }
+      },
+      "ijazahs.liftBar": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "ijazahs.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": {
+            "type": "string",
+            "values": ["preparing", "rendered", "revoked", "signed_off"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].certificateNumber": { "required": true, "type": "string" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].grantedAt": { "required": true, "type": "string" },
+          "$.items[].ijazahId": { "required": true, "type": "string" },
+          "$.items[].language": { "required": true, "type": "string", "values": ["ar", "en"] },
+          "$.items[].renderGeneration": { "required": true, "type": "integer" },
+          "$.items[].rendered": { "required": true, "type": "boolean" },
+          "$.items[].requestId": { "required": true, "type": "null|string" },
+          "$.items[].revoked": { "required": true, "type": "boolean" },
+          "$.items[].revokedAt": { "required": true, "type": "null|string" },
+          "$.items[].signedOffAt": { "required": true, "type": "null|string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["preparing", "rendered", "revoked", "signed_off"]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "null|string" },
+          "$.items[].student.userId": { "required": true, "type": "string" },
+          "$.items[].subject": { "required": true, "type": "object" },
+          "$.items[].subject.id": { "required": true, "type": "string" },
+          "$.items[].subject.nameAr": { "required": true, "type": "string" },
+          "$.items[].subject.nameEn": { "required": true, "type": "string" },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.displayName": { "required": true, "type": "null|string" },
+          "$.items[].teacher.userId": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "ijazahs.rerender": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.ijazahId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "ijazahs.revoke": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.ijazahId": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "ijazahs.signOff": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.ijazahId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "payments.get": {
         "input": {
           "$": { "type": "object" },
@@ -3432,6 +3570,7 @@
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.ijazahRequest": { "required": true, "type": "null|object" },
           "$.ijazahRequest.ijazahId": { "type": "string" },
+          "$.ijazahRequest.revoked": { "type": "boolean", "values": ["true"] },
           "$.ijazahRequest.status": {
             "required": true,
             "type": "string",
@@ -4323,6 +4462,7 @@
           "$.request.ijazahId": { "type": "string" },
           "$.request.reason": { "type": "string" },
           "$.request.requestId": { "required": true, "type": "string" },
+          "$.request.revoked": { "type": "boolean", "values": ["true"] },
           "$.request.status": {
             "required": true,
             "type": "string",
@@ -4674,6 +4814,7 @@
           "$.ijazahRequest": { "required": true, "type": "null|object" },
           "$.ijazahRequest.ijazahId": { "type": "string" },
           "$.ijazahRequest.reason": { "type": "string" },
+          "$.ijazahRequest.revoked": { "type": "boolean", "values": ["true"] },
           "$.ijazahRequest.status": {
             "required": true,
             "type": "string",
