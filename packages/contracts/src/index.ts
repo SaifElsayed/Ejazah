@@ -33,4 +33,6 @@ export * from './slots.js';
 export * from './teacher-application.js';
 export * from './teacher-credentials.js';
 export * from './teacher-profile.js';
+// T003 of specs/005-certification: the teacher's signature.
+export * from './teacher-signature.js';
 export * from './teacher-students.js';

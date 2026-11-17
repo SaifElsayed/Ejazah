@@ -175,6 +175,14 @@ const idempotency = new IdempotencyService({
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
 const enrollmentSide = booking.createEnrollmentSide({ settings });
+// T003 of specs/005-certification: the teacher's signature, one service for `POST /uploads/signature`
+// and `teacher.signature.get` (R-411).
+const teacherSignatures = catalog.createTeacherSignatureService({
+  database,
+  storage: ports.storage,
+  settings,
+  log,
+});
 const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
@@ -224,12 +232,16 @@ const services = {
     settings,
     idempotency,
   }),
-  catalog: catalog.createCatalogServices({
-    database,
-    idempotency,
-    // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
-    use: booking.createCatalogUse({ settings }),
-  }),
+  catalog: {
+    ...catalog.createCatalogServices({
+      database,
+      idempotency,
+      // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
+      use: booking.createCatalogUse({ settings }),
+    }),
+    // T003 of specs/005-certification: `teacher.signature.get`.
+    signature: teacherSignatures,
+  },
   // `teacher.profile` (T017): the identity module's, the photo answered as the storage port's link.
   teacherProfile: identity.createTeacherProfileService({
     database,
@@ -336,6 +348,12 @@ const routes = {
     storage: ports.storage,
     transactions: transactionsOver(database),
     enrollments: enrollmentSide,
+  }),
+  // T003 of specs/005-certification: `POST /uploads/signature`, an approved teacher's PNG or JPEG
+  // signature decided by content (R-SEC-4), one current row, the old file erased after the commit.
+  [catalog.SIGNATURE_UPLOAD_PATH]: catalog.createSignatureUploadRoute({
+    ...uploads,
+    signatures: teacherSignatures,
   }),
   ...filesRoutes(ports.storage),
   // The gateway's signed webhook (T077): its raw body read under the request limit, verified by the

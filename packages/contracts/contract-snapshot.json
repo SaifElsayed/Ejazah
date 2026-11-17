@@ -4281,6 +4281,16 @@
           "$.qualificationSummary": { "required": true, "type": "string" }
         }
       },
+      "teacher.signature.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.link": { "required": true, "type": "null|string" },
+          "$.uploadedAt": { "required": true, "type": "null|string" }
+        }
+      },
       "teacher.slots.create": {
         "caller": "teacher",
         "input": {
