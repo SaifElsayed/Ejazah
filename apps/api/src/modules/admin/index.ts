@@ -533,18 +533,21 @@ export interface IjazahRequestsComposition {
 }
 
 /**
- * 005:T007 of B46 (Q-C4 (a)): the status each standing action leaves. The reason is shown only when
- * the newest entry's action agrees with the teacher's status now; a status set elsewhere (a case
- * ruling) would otherwise show an older entry's stale reason.
+ * 005:T007 of B46 (Q-C4 (a)): the statuses each standing action can leave. The reason is shown only
+ * when the newest entry's action agrees with the teacher's status now; a status set elsewhere (a
+ * case ruling) would otherwise show an older entry's stale reason. A reinstatement lands on
+ * `verification_required` while an identity request is open (identity's standing.service.ts:9),
+ * and `user.require_identity` sets it (the review's ruling of 2026-11-17).
  */
-const STANDING_STATUS_OF: Readonly<Record<string, string>> = {
-  'teacher.suspend': 'suspended',
-  'teacher.ban': 'banned',
-  'application.ban': 'banned',
-  'teacher.revoke': 'revoked',
-  'teacher.reinstate': 'active',
-  'teacher.ban_lifted': 'active',
-  'teacher.revocation_lifted': 'active',
+const STANDING_STATUSES_OF: Readonly<Record<string, ReadonlySet<string>>> = {
+  'teacher.suspend': new Set(['suspended']),
+  'teacher.ban': new Set(['banned']),
+  'application.ban': new Set(['banned']),
+  'teacher.revoke': new Set(['revoked']),
+  'teacher.reinstate': new Set(['active', 'verification_required']),
+  'teacher.ban_lifted': new Set(['active']),
+  'teacher.revocation_lifted': new Set(['active']),
+  'user.require_identity': new Set(['verification_required']),
 };
 
 /** `ijazahRequests` over certification's review, `get` with the guarded standing reason. */
@@ -565,7 +568,7 @@ export function composeIjazahRequests({
       );
       const { status } = teacherStanding;
       const entry = await standingReasonOf(tx, teacherUserId);
-      const agrees = entry !== null && STANDING_STATUS_OF[entry.action] === status;
+      const agrees = entry !== null && (STANDING_STATUSES_OF[entry.action]?.has(status) ?? false);
       if (!agrees && (entry !== null || status !== 'active')) {
         log.info(
           {
