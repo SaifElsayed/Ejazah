@@ -121,6 +121,7 @@ describe('provider selection (T121, FR-056)', () => {
       selectPushPort(config).deliver(
         { token: 'device-token', platform: 'android' },
         { notificationId: NOTIFICATION },
+        { title: 'probe', body: 'probe' },
       ),
     ).resolves.toBeUndefined();
   });
