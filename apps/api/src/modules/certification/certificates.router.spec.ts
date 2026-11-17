@@ -2,7 +2,7 @@
 // serves them (FR-607, FR-609; contracts/app-surface.md, `certificates.*`; R-MOBILE-13). The
 // authorization-test gate (`scripts/authz-test-gate.ts`, T028) reads module specs only, so each
 // path's refusals are named here (the follow-up under T006), beside the attacks of
-// `tests/adversarial/certificates.attacks.spec.ts`.
+// `tests/adversarial/certificates.attacks.ts` (registered in `registered-attacks.ts`).
 //
 // The participant kind: an anonymous caller UNAUTHENTICATED, a suspended or banned account
 // ACCOUNT_RESTRICTED, none of them reaching the service; a student and a teacher both reach it, with

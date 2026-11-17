@@ -29,8 +29,8 @@ import {
   subjectsRouter,
   teacherSignatureRouter,
 } from '../modules/catalog/index.js';
-// T006 of specs/005-certification: certification's `teacher.ijazahRequests`.
-import { ijazahRequestsRouter } from '../modules/certification/index.js';
+// T006 of specs/005-certification: certification's `teacher.ijazahRequests`; T009 its `certificates`.
+import { certificatesRouter, ijazahRequestsRouter } from '../modules/certification/index.js';
 // T037 of specs/004-sessions: the chat module's `chat`.
 import { chatRouter } from '../modules/chat/index.js';
 import {
@@ -78,6 +78,8 @@ export const appRouter = createAppRouter({
   booking: bookingRouter,
   checkout: checkoutRouter,
   enrollments: enrollmentsRouter,
+  // T009 of specs/005-certification: the two parties' certificates.
+  certificates: certificatesRouter,
   sessions: sessionsRouter,
   // T037 of specs/004-sessions: the chat module's `chat`.
   chat: chatRouter,

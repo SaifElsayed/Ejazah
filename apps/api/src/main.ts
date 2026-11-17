@@ -337,7 +337,17 @@ const services = {
     storage: ports.storage,
   }),
   // `teacher.ijazahRequests.*` (T006 of specs/005-certification): the request's service above.
-  certification: { ijazahRequests },
+  // `certificates.list` and `.link` (T009 of specs/005-certification): the two parties' signed-off PDF
+  // through a signed link under `document_link_ttl_seconds`, never a storage key (R-SEC-3, R-HONEST-6).
+  certification: {
+    ijazahRequests,
+    certificates: certification.createCertificatesService({
+      database,
+      storage: ports.storage,
+      settings,
+      log,
+    }),
+  },
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload

@@ -1,7 +1,8 @@
 // T009 of specs/005-certification: the parties' certificates, `certificates.list` and
 // `certificates.link` (FR-607, FR-609; research R-412; contracts/app-surface.md, `certificates.*`;
 // D1 (a), DEC-72; R-HONEST-6, R-GENDER-2, R-SEC-3). The specs are certificates.service.spec.ts's,
-// certificates.repository.spec.ts's and tests/adversarial/certificates.attacks.spec.ts's.
+// certificates.repository.spec.ts's and tests/adversarial/certificates.attacks.ts's (registered in
+// registered-attacks.ts).
 //
 // THE PARTIES. An ijazah is read by its two parties only, the student and the granting teacher, the
 // caller named by the session and never by the input. Anyone else is answered NOT_FOUND exactly as

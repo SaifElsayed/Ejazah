@@ -4,6 +4,7 @@
       "accountStatus": ["active", "banned", "suspended", "verification_required"],
       "applicationStatus": ["approved", "in_review", "needs_document", "not_started", "rejected"],
       "authProvider": ["apple", "google"],
+      "certificateLinkRefusal": ["not_ready", "revoked"],
       "chatAttachmentMime": ["application/pdf", "text/plain"],
       "credentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "deletionConfirmation": ["DELETE", "حذف"],
@@ -3002,6 +3003,34 @@
           "$[].id": { "required": true, "type": "string" },
           "$[].nameAr": { "required": true, "type": "string" },
           "$[].nameEn": { "required": true, "type": "string" }
+        }
+      },
+      "certificates.link": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.ijazahId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": { "$": { "type": "object" }, "$.link": { "required": true, "type": "string" } }
+      },
+      "certificates.list": {
+        "caller": "participant",
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].ijazahId": { "required": true, "type": "string" },
+          "$.items[].issuedAt": { "required": true, "type": "string" },
+          "$.items[].ready": { "required": true, "type": "boolean" },
+          "$.items[].revoked": { "required": true, "type": "boolean" },
+          "$.items[].subject": { "required": true, "type": "object" },
+          "$.items[].subject.id": { "required": true, "type": "string" },
+          "$.items[].subject.nameAr": { "required": true, "type": "string" },
+          "$.items[].subject.nameEn": { "required": true, "type": "string" },
+          "$.items[].teacherName": { "required": true, "type": "string" }
         }
       },
       "chat.attachmentLink": {
