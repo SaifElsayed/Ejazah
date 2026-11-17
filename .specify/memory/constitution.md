@@ -302,7 +302,7 @@ payload.
 | R-HONEST-2 | **Never** present an unverified isnad as verified. The `unverified` label renders wherever the chain renders. | `CI` - component test on the chain display |
 | R-HONEST-3 | **Never** let an uploaded certificate's verification page imply the platform attests its content. The "uploaded by teacher, not platform-generated" statement is mandatory (FR-IJAZAH-14). | `CI` - verification-page test per mode |
 | R-HONEST-4 | **Never** expose one user's `is_minor`, DOB, documents, or gender-dispute history to another user. Admin-only fields stay off both public routers. | `TYPE` - output schemas; `CI` field-leak test |
-| R-HONEST-5 | **Never** put PII in a push notification payload. IDs for deep-linking only; content rendered in-app. | `TYPE` - payload schema; `REVIEW` |
+| R-HONEST-5 | **Never** put PII in a push notification payload. IDs for deep-linking only; content rendered in-app. *(Amended 2026-11-17, the owner's answer Q5 (a) on B45's conflict check; `specs/005-certification` R-406: «content rendered in-app» reads «nothing personal in a push». A kind's fixed title and body, rendered by the server in the user's language from the generated copy with no placeholder, are allowed beside the ids; a name, an amount, a date or a message's text never is.)* | `TYPE` - payload schema; `REVIEW` |
 | R-HONEST-6 | **Never** show a revoked ijazah as valid anywhere - profile, verification page, or PDF link. | `CI` test on all three surfaces |
 
 ### X. Process (R-PROC)

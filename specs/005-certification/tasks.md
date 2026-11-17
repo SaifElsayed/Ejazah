@@ -64,10 +64,13 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   - The SRS's §3.14 rows for the four limits beyond DEC-71's two, in the next free track 1 DEC (DEC-73), placed after
     DEC-71's rows.
   - A migration spec red under a mutant migration.
+  > **Note under T001 (B45, the owner's decisions of 2026-11-17 on B45's conflict check («الباقي تمام»; Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; relayed by the review session), Q1 (a), Q7 (a), Q8 (a); the check: `C:\Users\amrkn\Documents\ejazah-tools\b45\conflict-check.md`).** **The integration, first.** Prisma needs both sides of every new foreign key, so the back-relation lines go in `identity.prisma` (`User`: the request's student and teacher, the reminder's user), `booking.prisma` (`Enrollment`: the requests, the reports), `catalog.prisma` (`Subject`), `admin.prisma` (`AdminUser`: the request's decider, the ijazah's issuer and signer) and `sessions.prisma` (`Session`: the reminders). `packages/config/module-tables.json` gains `ijazah_requests` (certification) and `session_reminders` (notifications), 44 → 46, with `tests/lint-plugin/table-ownership.spec.ts:126-129` and `tests/seed/migrate-from-empty.spec.ts:7`. Rule d, B33 T001's precedent (`2d10645c`). The SELECT and the migration run on `ijazah_integrity` only. `ijazah` is migrated at the 11/19–20 integration with both tracks' migrations in timestamp order, after the same SELECT there (Q8 (a)). Track 2's PR merges before B45's, because CI's `check:migrations` refuses a folder that does not sort after develop's last (Q7 (a)). `tests/seed/seed.spec.ts:326`'s count is the sum of both tracks' rows, written by whichever lands second.
 - [ ] T002 [P] The settings registry (R-410; FR-626: every number a setting with its bounds): `apps/api/src/platform/settings/registry.ts`, every §3.14 key with its
   zod schema, bounds, unit, group and SRS row. A CI spec asserts registry keys = seed keys, both ways, and every
   default is inside its bounds. The admin module's settings repository gains its one writer (`update(key, value)`,
   the panel's writer R-PROC-11 allows).
+  > **Note under T002 (B45, the owner's decisions of 2026-11-17 on B45's conflict check («الباقي تمام»; Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; relayed by the review session), Q2 (a), Q3 (a); the check: `C:\Users\amrkn\Documents\ejazah-tools\b45\conflict-check.md`).** **Lane B.** The registry holds exactly the seed's keys, both ways, as the spec asserts. Each entry names its §3.14 row, or «§3.14, operational settings» for a key of the paragraph after the table. A §3.14 row with no seed key yet (Currency; the programme's two, track 2's; track 2's share release) joins with its seed row in the batch that seeds it. A key track 2 seeds (`teacher_share_percent`) is added by whichever track lands second (`ejazah-tools\track2\b-m1\implementer-brief.md:11-12`). Bounds (Q3 (a)): the minimum is each key's read-site schema (`platform/settings/keys.ts`, the module's own schemas); a maximum only where a document or the unit names one (a percent ≤ 100); no other number is invented, and the PR body has the table.
+  > **Moved (the owner, 2026-11-17, on B45's Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; recorded in B45's tasks commit): the full bounds table, after 11/27.** For every registry key, a minimum and a maximum proposed by the implementer, with each value's reason, signed by the owner before it is written into `platform/settings/registry.ts`. The registry spec's «every default inside its bounds» then covers the maxima too. Until then T002's bounds are Q3 (a)'s above, and the panel's settings page (T024) refuses only what they refuse. It is listed in `specs/004-sessions/tasks.md`'s «After 11/26» batches row.
 - [ ] T003 [P] [US1] The teacher's signature (FR-601, FR-IJAZAH-12; R-411):
   - upload kind `signature` (PNG or JPEG) in `platform/guards/upload.middleware.ts`;
   - `POST /uploads/signature` (teacher, `approved`) on `surfaces/upload-route.ts`;
@@ -75,11 +78,13 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     erased after commit);
   - `teacher.signature.get` (a signed link);
   - specs: a renamed image refused (R-SEC-4), an applicant refused, the replace path.
+  > **Note under T003 (B45, the owner's decisions of 2026-11-17 on B45's conflict check («الباقي تمام»; Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; relayed by the review session), Q1 (a); the check: `C:\Users\amrkn\Documents\ejazah-tools\b45\conflict-check.md`).** **Lane C.** The files the line does not name, rule d by precedent: `modules/catalog/signature-upload.controller.ts` (as `identity/photo-upload.controller.ts:45` and `chat/chat-upload.controller.ts:66`), `modules/catalog/teacher-signature.router.ts` for `teacher.signature.get`, `packages/contracts/src/teacher-signature.ts` (as `teacher-credentials.ts`), and `catalog/index.ts`'s exports. The integration mounts `teacher.signature` (`surfaces/app.router.ts`) and registers the route (`main.ts`, the uploads block).
 - [ ] T004 [P] [US1] The certificate name (FR-602; ADR 0019 D1):
   - `account.certificateName.set` (student, once; `already_set` after), in identity;
   - `users.setCertificateName` (admin, a reason, audited with no name in the entry);
   - setting it (by the student or an administrator) moves the student's `awaiting_student_name` requests to `pending` on the same transaction. Identity imports no module (`docs/ARCHITECTURE.md:183`) and certification imports identity, so identity's certificate-name service takes a port `AwaitingNameRelease` (`release(tx, studentUserId)`), handed in by `main.ts` and bound to certification's entry, as the dependencies against the arrows are (`docs/ARCHITECTURE.md:197`); until T006 lands the port is bound to a no-op;
   - specs, including an admin change never rewriting an issued certificate.
+  > **Note under T004 (B45, the owner's decisions of 2026-11-17 on B45's conflict check («الباقي تمام»; Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; relayed by the review session), Q4 (a); the check: `C:\Users\amrkn\Documents\ejazah-tools\b45\conflict-check.md`).** **Lane D.** The administrators' `users` namespace is verification's `usersRouter` (`modules/verification/documents.router.ts:74`), so `users.setCertificateName` is a procedure there, its contract in `packages/contracts/src/admin/users.ts`. It calls identity's certificate-name service through `ctx.services.users` as `users.delete` does (`:122-138`, wired in `main.ts`). The «never rewrites an issued certificate» spec reads `ijazahs.student_name_printed`, so the lane is cut after T001.
 - [ ] T005 [US6] Notifications' writer and delivery (FR-619, FR-620, FR-621, FR-623; R-405, R-406):
   - `modules/notifications/` `NotificationWriter.record(tx, …)` (the seven v1.0 kinds only; any other kind refused by
     type);
@@ -90,6 +95,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
     constant), and `EXPO_ACCESS_TOKEN` optional in `env.schema.ts` and `.env.example` if the project turns it on;
   - the lint rule's allowed file becomes `deliver-notification.ts`;
   - i18n keys for the seven kinds' titles and bodies (phone `ar.json`/`en.json`, group `notifications`), reaching the API's generated copy through `pnpm web-copy:build` (`scripts/build-web-copy.ts`) so the server renders them in the user's language at send time, `pnpm check:generated` green.
+  > **Note under T005 (B45, the owner's decisions of 2026-11-17 on B45's conflict check («الباقي تمام»; Q3: «خلي موضوع حد الاعدادات ده فالمهمات اللي هتتعمل بعد 27»; relayed by the review session), Q5 (a), Q6 (a); the check: `C:\Users\amrkn\Documents\ejazah-tools\b45\conflict-check.md`).** **Lanes E1 and E2.** E1 (after T001): the writer, the job, the `expo` member (`env.schema.ts:204`) and adapter. `PushPort.deliver` gains a separate `message: { title, body }`, the kind's fixed text in the user's `preferred_language` from the generated copy, with no placeholder (a spec asserts none of the seven has an ICU argument); `assertPushPayload` (ids only) is unchanged (`push.port.ts`, `fake.adapter.ts` and its spec, rule d; R-HONEST-5's dated note in the constitution). E2 (after T004 merges): `account.pushToken.register` and `.remove`, `contracts/src/account.ts`, `notifications.push` in both phone catalogues (placed between `markAllRead` and `teacher`), `scripts/build-web-copy.ts`'s `WEB_COPY_KEYS` and its generated `platform/web/i18n/{ar,en}.ts`. Already true on `d5f6a136`, recorded in the Done line with no edit: the lint rule's allowed file is `deliver-notification` (`no-push-outside-job.js:16-18, 71`), and `EXPO_ACCESS_TOKEN` is optional (`env.schema.ts:228`, `.env.example:86`).
 
 ## Phase 2: US1 and US2 — the ijazah request, its issue and its rendering (B46)
 
@@ -151,23 +157,26 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - [ ] T011 [US4] Reports (FR-611, FR-612, FR-613; R-408):
   - `modules/moderation/` `user-report.service.ts` and `.repository.ts`;
   - `reports.create` (user; contexts session, chat (with its `enrollmentId`), profile; NOT_FOUND for a profile not
-    visible, R-GENDER-2, and for a session or chat that is not the caller's; `self`, `open_exists`;
+    visible, R-GENDER-2, and for a session or chat that is not the caller's; for a session or chat report,
+    `reportedUserId` must equal the port's `counterpartUserId`, else NOT_FOUND; `self`, `open_exists`;
     `rate_limit_user_report`); every session and chat report stores `enrollment_id`, set by the server;
   - the `Pairings` port (R-408): declared in `modules/moderation/`, bound in `main.ts` to sessions' entry
     (`partyOfSession`) and booking's (`partyOfEnrollment`, `paired`); moderation imports neither;
   - `reports.list`, `.get`, `.resolve` (admin, audited);
   - adversarial registrations.
+  - an adversarial case: a party of a session reports, from that session, a non-party user of the other gender, and
+    gets NOT_FOUND (#143 r3, Saif's Minor 1).
 - [ ] T012 [P] [US4] Chat retention honours an open report (FR-492, FR-SESS-13): moderation's
   `enrollmentsWithOpenMatterAmong` (`modules/moderation/open-matters.repository.ts`) also answers an enrollment with an
   open `user_reports` row on one of its sessions or its chat, read through `user_reports.enrollment_id` (moderation's
   own table); `purge-chat`'s spec gains the case, its double-run kept.
 - [ ] T013 [US5] Gender flags and their queue (FR-613, FR-614, FR-615, FR-618; R-409):
-  - `genderFlags.raise` (user: a user the caller is paired with (`Pairings.paired`) or can see, else NOT_FOUND;
+  - `genderFlags.raise` (user: a user the caller is paired with (`Pairings.paired`, a soft-deleted enrollment not counted) or can see, else NOT_FOUND;
     `open_exists`;
     `rate_limit_gender_flag`; the reason stored);
   - admin `genderFlags.raise` (from a report, its `report_id` stored, or alone), `.list`, `.get`, `.dismiss`, each
     administrator mutation under `rate_limit_gender_decision`; `.get`'s list of the enrollments a correction would
-    end is composed in `modules/admin/gender-decisions.service.ts` from booking's entry (R-409);
+    end is composed in `modules/admin/gender-decisions.service.ts` from booking's entry (R-409), so `.get` is served by the admin module's router, beside `.correct` and `.fraudBan` (moderation cannot import booking);
   - a CI test asserting no procedure on either router changes one's own gender (R-GENDER-6);
   - adversarial registrations.
 - [ ] T014 [US5] The correction (FR-616, FR-617, FR-GENDER-7; R-409):
@@ -309,7 +318,7 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 - **B46:** T006 after T003 and T004. T007 after T006. T008 after T007's enqueue; it can be written in parallel on its
   own files. T009 and T010 after T007. T032 after T007, T008 and T010 (T010 and T032 write the same `ijazahs.*` router
   and contracts).
-- **B47:** T011, then T012. T013, then T014, then T015 (the shared flag service and the admin module's gender
+- **B47:** T011, then T012. T013 after T011 (the `Pairings` port and booking's and sessions' new entries), then T014, then T015 (the shared flag service and the admin module's gender
   decisions). T031 after T006 (its request count).
 - **B48:** T016 and T017 after T005. T018 with T017. T019 to T021 after their procedures.
 - **B49:** T022 to T024 after their procedures. T025 after every procedure. T026 last.
