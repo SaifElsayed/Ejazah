@@ -960,3 +960,21 @@ describe('the entrypoints refuse to start on an invalid configuration (T093, FR-
     },
   );
 });
+
+// T008 of specs/005-certification (R-401): the Typst binary's path, read by the worker's
+// `render-certificate` job only. Optional: a missing binary fails the job, never the request, and
+// the API process never reads it. An empty value, as a copied .env.example leaves it, is unset.
+describe('the certificate renderer (T008)', () => {
+  it('starts without TYPST_BIN', () => {
+    expect(loadConfig(validEnv).TYPST_BIN).toBeUndefined();
+  });
+
+  it('takes the binary’s path', () => {
+    const config = loadConfig({ ...validEnv, TYPST_BIN: '/usr/local/bin/typst' });
+    expect(config.TYPST_BIN).toBe('/usr/local/bin/typst');
+  });
+
+  it('reads an empty value as unset', () => {
+    expect(loadConfig({ ...validEnv, TYPST_BIN: '' }).TYPST_BIN).toBeUndefined();
+  });
+});
