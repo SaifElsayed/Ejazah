@@ -179,35 +179,44 @@ const services = {
   settings,
   publicConfig: { supportEmail: config.SUPPORT_EMAIL },
   subjects: catalog.createSubjectsService(database),
-  identity: identity.createIdentityServices({
-    ...identityBase,
-    cipher,
-    // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
-    live: liveBus,
-    marks: createRedisSingleUseMarks({
-      redisUrl: config.REDIS_URL,
-      onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+  identity: {
+    ...identity.createIdentityServices({
+      ...identityBase,
+      cipher,
+      // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
+      live: liveBus,
+      marks: createRedisSingleUseMarks({
+        redisUrl: config.REDIS_URL,
+        onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
+      }),
+      signIn: ports.signIn,
+      email: ports.email,
+      storage: ports.storage,
+      log,
+      payment: ports.payment,
+      idempotency,
+      consequences,
+      fileErasures: [
+        verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+      ],
+      // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
+      // entry, so identity imports no booking.
+      fileHold: {
+        filesHeld: async (userId) =>
+          (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
+      },
+      // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
+      // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
+      ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
     }),
-    signIn: ports.signIn,
-    email: ports.email,
-    storage: ports.storage,
-    log,
-    payment: ports.payment,
-    idempotency,
-    consequences,
-    fileErasures: [
-      verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
-    ],
-    // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
-    // entry, so identity imports no booking.
-    fileHold: {
-      filesHeld: async (userId) =>
-        (await booking.heldFileOwnersAmong(database, [userId])).has(userId),
-    },
-    // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
-    // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
-    ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
-  }),
+    // T004 of specs/005-certification (FR-602): the certificate name. `AwaitingNameRelease` is a
+    // no-op until T006 binds it to certification's entry, so identity imports no module.
+    certificateName: identity.createCertificateNameService({
+      idempotency,
+      log,
+      awaitingNameRelease: { release: async () => undefined },
+    }),
+  },
   verification: verification.createVerificationServices({
     database,
     storage: ports.storage,
@@ -386,6 +395,9 @@ const adminServices = createAdminServices({
   // T081 of specs/004-sessions (FR-512): `users.delete`, identity's deletion without the
   // re-authentication and without T080's check, on the administrator's transaction.
   userDeletion: services.identity.deletion,
+  // T004 of specs/005-certification (FR-602): `users.setCertificateName`, identity's certificate-name
+  // service on the administrator's transaction.
+  certificateNames: services.identity.certificateName,
   log,
   // B39 (the notes under T059 and T064; the owner's decision of 2026-11-11): the kernel's idempotency,
   // keyed on the administrator kind's transaction (`runOn`), for `disputes.revise`,

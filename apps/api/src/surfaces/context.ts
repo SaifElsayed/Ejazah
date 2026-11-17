@@ -148,6 +148,8 @@ import type {
   usersListOutput,
   // T081 of specs/004-sessions: an administrator's deletion at the owner's request.
   usersDeleteInput,
+  // T004 of specs/005-certification: an administrator sets a student's certificate name.
+  usersSetCertificateNameInput,
   // T070.
   enrollmentsReleaseSlotInput,
   enrollmentsReleaseSlotOutput,
@@ -552,7 +554,11 @@ export interface AdminSurfaceServices {
         tx: Transaction,
         actorId: string,
         input: z.output<typeof teachersKeptEraseNowInput>,
-      ): Promise<{ readonly documents: number; readonly payout: boolean; readonly replayed: boolean }>;
+      ): Promise<{
+        readonly documents: number;
+        readonly payout: boolean;
+        readonly replayed: boolean;
+      }>;
     };
   };
   /** A student's standing (FR-421, FR-486; T005 of specs/004-sessions), the identity module's. */
@@ -772,6 +778,15 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       actorId: string,
       input: z.output<typeof usersDeleteInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+    /**
+     * T004 of specs/005-certification (FR-602): `users.setCertificateName`, identity's service keyed
+     * on the call's transaction; the student's requests awaiting the name are released on it.
+     */
+    setCertificateName(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof usersSetCertificateNameInput>,
     ): Promise<{ readonly replayed: boolean }>;
   };
   /** T070 of specs/004-sessions: an administrator releases a held slot (`enrollments.releaseSlot`). */
