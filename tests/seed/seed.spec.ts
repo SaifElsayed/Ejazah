@@ -107,6 +107,8 @@ const SETTINGS: Record<string, unknown> = {
   discovery_page_size: 20,
   // T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, whole percent.
   teacher_share_percent: 70,
+  // 003:T113 (rule d).
+  price_average_min_teachers: 3,
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -325,6 +327,6 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '82', admins: '1' }]);
+    expect(counts).toEqual([{ subjects: '5', settings: '83', admins: '1' }]);
   });
 });

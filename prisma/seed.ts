@@ -84,8 +84,8 @@ const SUBJECTS = [
  *
  * Phase 2 (T002, specs/003-booking/data-model.md §4, FR-412): the five rows booking, checkout and
  * discovery read, from `first_session_lead_hours` on, listed in SRS §3.14. T104 (ADR 0025 D1, SRS
- * DEC-80) adds `teacher_share_percent` at 70 after them; a database already seeded gains it, since
- * the seed inserts what is missing.
+ * DEC-80) adds `teacher_share_percent` at 70 after them, and T113 (DEC-88) `price_average_min_teachers`
+ * at 3; a database already seeded gains them, since the seed inserts what is missing.
  *
  * Phase 3 (T001, specs/004-sessions/data-model.md §4): the seventeen rows the sessions, chat, live
  * channel and administrator flows read, from `session_evaluation_delay_minutes` on, in that table's
@@ -165,6 +165,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // T104 (ADR 0025 D1, SRS DEC-80, §3.14): the teacher's share of each gateway order, whole percent,
   // read when an order is created and kept on it; track 2's rows sit here (tracks-coordination §1).
   ['teacher_share_percent', 70],
+  // 003:T113 (SRS DEC-88, §3.14; Q-T113-k): the fewest other teachers the package editor's average
+  // price per session is shown over, read at each request.
+  ['price_average_min_teachers', 3],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],

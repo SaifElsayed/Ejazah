@@ -112,6 +112,8 @@ function catalogOn(tx: Transaction) {
     database: on,
     use,
     idempotency: { run: (_request, effect) => effect(tx) },
+    // `price_average_min_teachers` at the seed's 3.
+    settings: { read: async (_key, schema) => schema.parse(3) },
   });
 }
 

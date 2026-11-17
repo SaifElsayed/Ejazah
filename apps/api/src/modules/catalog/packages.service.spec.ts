@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   MemoryPackages,
   OTHER_SUBJECT,
@@ -31,9 +32,20 @@ const KEY = 'spec-packages-key-0001';
 // The session's gender, the teacher's own.
 const REQUESTER = 'female' as RequesterGender;
 
-function serviceOver(memory: MemoryPackages) {
+/** 003:T113: the settings the average reads, `price_average_min_teachers` at the seed's 3 unless told. */
+function settingsWith(minTeachers: unknown = 3): SettingsReader {
+  return {
+    read: async (key, schema) => {
+      if (key !== 'price_average_min_teachers') throw new Error(`no setting ${key} in this spec`);
+      return schema.parse(minTeachers);
+    },
+  };
+}
+
+function serviceOver(memory: MemoryPackages, settings: SettingsReader = settingsWith()) {
   const keyed: unknown[] = [];
   const service = new PackagesService({
+    settings,
     transactions: { run: (work) => work(TX) },
     store: memory,
     use: memory,
@@ -415,6 +427,29 @@ describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the edit
     const { service } = serviceOver(memory);
 
     expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+  });
+
+  it('reads the fewest teachers from price_average_min_teachers at each request: two are enough when it says 2', async () => {
+    const memory = new MemoryPackages();
+    // Per session 33 333 and 30 000: 63 333 over 2 is 31 666.5, rounded half up.
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    peer(memory, PEERS[1] ?? '', 90_000, 3);
+
+    expect(await serviceOver(memory, settingsWith(2)).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({
+      averagePerSession_piasters: 31_667,
+    });
+    expect(await serviceOver(memory).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
+  });
+
+  it('fails closed on a setting outside 1 to 100: the read is refused', async () => {
+    const memory = new MemoryPackages();
+    peer(memory, PEERS[0] ?? '', 100_000, 3);
+    for (const bad of [0, 101, 2.5]) {
+      await expect(
+        serviceOver(memory, settingsWith(bad)).service.averagePrice(TEACHER, REQUESTER, ASKED),
+        String(bad),
+      ).rejects.toThrow();
+    }
   });
 
   it("counts only teachers the predicate shows a student of the session's gender", async () => {

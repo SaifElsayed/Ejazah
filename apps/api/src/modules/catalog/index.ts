@@ -122,6 +122,8 @@ export interface CatalogServiceDependencies {
   readonly database: Database;
   /** The kernel's idempotency, keying `teacher.packages.create` and `teacher.slots.create`. */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
+  /** 003:T113: the settings `teacher.packages.averagePrice` reads (`price_average_min_teachers`). */
+  readonly settings: SettingsReader;
 }
 
 /**
@@ -150,6 +152,7 @@ export function createCatalogServices({
   use,
   database,
   idempotency,
+  settings,
 }: CatalogServiceDependencies): CatalogServices {
   return {
     packages: new PackagesService({
@@ -157,6 +160,7 @@ export function createCatalogServices({
       store: packagesStore,
       use,
       idempotency,
+      settings,
     }),
     slots: new SlotsService({ store: slotsStoreOver(database), use, idempotency }),
   };

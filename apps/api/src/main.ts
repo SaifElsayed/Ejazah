@@ -220,6 +220,8 @@ const services = {
   catalog: catalog.createCatalogServices({
     database,
     idempotency,
+    // 003:T113 (Q-T113-k): the average's `price_average_min_teachers`.
+    settings,
     // A slot's release (T026, R-205) reads the clock and `slot_release_buffer_weeks`.
     use: booking.createCatalogUse({ settings }),
   }),
