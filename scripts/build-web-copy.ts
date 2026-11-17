@@ -11,6 +11,10 @@
 // brand and the two error lines the pages share with the phone are repeated inside the group (the
 // owner's answer to B16's review, 2026-10-26). `web.verify` is Phase 4's.
 //
+// T005 of specs/005-certification (Q5 (a)): `notifications.push` too, the seven kinds' fixed push
+// titles and bodies, which the worker's `deliver-notification` renders in the user's language at send
+// time (`pushCopyRenderer`).
+//
 // WHAT IS WRITTEN
 //
 //   apps/api/src/platform/web/i18n/ar.ts   `export const ar = { … }`: the Arabic keys
@@ -34,7 +38,7 @@ export const WEB_COPY_SOURCES = {
 export type WebCopyLanguage = keyof typeof WEB_COPY_SOURCES;
 
 /** The keys the API's pages render, each a group or a leaf of the catalogue, copied whole. */
-export const WEB_COPY_KEYS = ['web.deleteAccount', 'web.notFound'] as const;
+export const WEB_COPY_KEYS = ['web.deleteAccount', 'web.notFound', 'notifications.push'] as const;
 
 /** Every file this generator writes, in the order of the languages. */
 export const WEB_COPY_FILES = [

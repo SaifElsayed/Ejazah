@@ -352,3 +352,95 @@ describe('account.certificateName.set', () => {
     expect(recording.calls).toEqual([]);
   });
 });
+
+// T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+// `.remove`): the phone's push token on the caller's own account. The user kind under the default
+// limit, so an anonymous caller is UNAUTHENTICATED, reaching nothing; a token empty or past its bound,
+// or an unknown platform, is refused before the service; neither answer echoes the token. What the
+// rows become (by the hash, moved to the caller, another account's never removed) is
+// push-tokens.service.spec.ts's. Every token is made up (R-SEC-2).
+describe('account.pushToken', () => {
+  const token = 'ExponentPushToken[spec-router-0000000001]';
+
+  /** A push-token service that records whom it was asked for, and with what. */
+  function recordingTokens() {
+    const calls: unknown[][] = [];
+    return {
+      calls,
+      pushTokens: {
+        register: async (userId: string, given: unknown) => {
+          calls.push(['register', userId, given]);
+        },
+        remove: async (userId: string, given: unknown) => {
+          calls.push(['remove', userId, given]);
+        },
+      },
+    };
+  }
+
+  it('declares both procedures as the user kind, under the default limit', () => {
+    for (const path of ['account.pushToken.register', 'account.pushToken.remove']) {
+      expect(metaOf(path)).toEqual({ surface: 'app', caller: 'user' });
+    }
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED on register, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    await expect(
+      surface.anonymous().account.pushToken.register({ token, platform: 'android' }),
+    ).rejects.toMatchObject(refused('UNAUTHENTICATED'));
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('refuses an anonymous caller with UNAUTHENTICATED on remove, reaching nothing', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    await expect(surface.anonymous().account.pushToken.remove({ token })).rejects.toMatchObject(
+      refused('UNAUTHENTICATED'),
+    );
+    expect(recording.calls).toEqual([]);
+  });
+
+  it('hands the caller and the token to the service, and answers nothing back', async () => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { userId, caller } = await signedIn();
+    await expect(
+      caller.account.pushToken.register({ token, platform: 'ios' }),
+    ).resolves.toBeUndefined();
+    await expect(caller.account.pushToken.remove({ token })).resolves.toBeUndefined();
+    expect(recording.calls).toEqual([
+      ['register', userId, { token, platform: 'ios' }],
+      ['remove', userId, { token }],
+    ]);
+  });
+
+  it.each([
+    ['an empty token', { token: '', platform: 'android' }],
+    ['a token past 4096 characters', { token: 'x'.repeat(4097), platform: 'android' }],
+    ['an unknown platform', { token, platform: 'web' }],
+    ['no platform', { token }],
+  ])('refuses %s on register before the service is reached', async (_case, given) => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn();
+    await expect(
+      caller.account.pushToken.register(given as unknown as { token: string; platform: 'ios' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(recording.calls).toEqual([]);
+  });
+
+  it.each([
+    ['an empty token', { token: '' }],
+    ['a token past 4096 characters', { token: 'x'.repeat(4097) }],
+  ])('refuses %s on remove before the service is reached', async (_case, given) => {
+    const recording = recordingTokens();
+    surface = surfaceOf(identity, { pushTokens: recording.pushTokens });
+    const { caller } = await signedIn();
+    await expect(caller.account.pushToken.remove(given)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(recording.calls).toEqual([]);
+  });
+});

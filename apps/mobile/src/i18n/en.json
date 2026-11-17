@@ -454,6 +454,36 @@
       }
     },
     "markAllRead": "Mark all as read",
+    "push": {
+      "cancellation_request_accepted": {
+        "body": "The session is cancelled by agreement. Open the app for the details.",
+        "title": "Your cancellation request was accepted"
+      },
+      "cancellation_request_declined": {
+        "body": "The session stands at its scheduled time.",
+        "title": "Your cancellation request was declined"
+      },
+      "cancellation_requested": {
+        "body": "A cancellation was requested for one of your sessions. Accept or decline before it starts.",
+        "title": "Cancellation request"
+      },
+      "payment_confirmed": {
+        "body": "We received your payment. Open the app to see your enrollment.",
+        "title": "Payment confirmed"
+      },
+      "payment_expired": {
+        "body": "The time to pay ran out before the payment was completed. Open the app to see your booking.",
+        "title": "The time to pay ran out"
+      },
+      "payment_failed": {
+        "body": "Your payment did not go through. Try again from the app.",
+        "title": "Payment failed"
+      },
+      "session_reminder": {
+        "body": "Your session is coming up. Open the app to join on time.",
+        "title": "Session reminder"
+      }
+    },
     "teacher": {
       "a11y": {
         "unread": "Unread"

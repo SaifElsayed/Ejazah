@@ -148,3 +148,20 @@ export const certificateNameSetOutput = z.object({ name: z.string() });
 
 export type CertificateNameSetInput = z.infer<typeof certificateNameSetInput>;
 export type CertificateNameSetOutput = z.infer<typeof certificateNameSetOutput>;
+
+// T005 of specs/005-certification (FR-620; R-405; app-surface.md, `account.pushToken.register` and
+// `.remove`): the phone's push token, registered when the application starts and removed at sign-out.
+// The token is the provider's own opaque string, bounded as the sign-in provider's tokens are
+// (`auth.ts`, `identityToken`); it is stored encrypted and looked up by its hash, and no answer
+// echoes it. The platform is ERD §2's `device_push_tokens.platform`.
+export const devicePlatform = z.enum(['ios', 'android']);
+
+export const pushToken = z.string().min(1).max(4096);
+
+export const pushTokenRegisterInput = z.object({ token: pushToken, platform: devicePlatform });
+
+export const pushTokenRemoveInput = z.object({ token: pushToken });
+
+export type DevicePlatform = z.infer<typeof devicePlatform>;
+export type PushTokenRegisterInput = z.infer<typeof pushTokenRegisterInput>;
+export type PushTokenRemoveInput = z.infer<typeof pushTokenRemoveInput>;
