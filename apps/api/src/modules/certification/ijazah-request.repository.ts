@@ -99,14 +99,18 @@ export async function latestRequestsAmong(
   const requestIds = [...latest.values()].map(({ id }) => id);
   const ijazahs = await tx.ijazah.findMany({
     where: { requestId: { in: requestIds }, deletedAt: null },
-    select: { id: true, requestId: true },
+    // 005:T010 (Q-E2 (a)): whether it was revoked, never the reason.
+    select: { id: true, requestId: true, revokedAt: true },
   });
-  const ijazahOf = new Map(ijazahs.map(({ id, requestId }) => [requestId, id]));
+  const ijazahOf = new Map(ijazahs.map((ijazah) => [ijazah.requestId, ijazah]));
   return new Map(
-    [...latest].map(([enrollmentId, row]) => [
-      enrollmentId,
-      { ...row, ijazahId: ijazahOf.get(row.id) ?? null },
-    ]),
+    [...latest].map(([enrollmentId, row]) => {
+      const ijazah = ijazahOf.get(row.id);
+      return [
+        enrollmentId,
+        { ...row, ijazahId: ijazah?.id ?? null, revoked: (ijazah?.revokedAt ?? null) !== null },
+      ];
+    }),
   );
 }
 
@@ -167,6 +171,88 @@ export async function closeOpen(tx: Client, ids: readonly string[]): Promise<voi
     where: { id: { in: [...ids] }, status: { in: [...OPEN] } },
     data: { status: 'closed', signatureStorageKey: null },
   });
+}
+
+// 005:T032 (FR-629; R-403; SC-604; the note under T032): the two ports reach an ijazah not yet
+// signed off. Each write is conditional on the row being unsigned, unrevoked and not deleted, read
+// under the ijazah's lock, which the service takes after the requests' (the kernel row's order); a
+// signed-off or revoked ijazah is never written (SC-604). Each written row's generation is raised by
+// one and its rendering cleared, so the job of the generation before writes nothing (R-402).
+
+/** An ijazah re-frozen: its id and its new generation, the one the job is enqueued for. */
+export interface RerenderedIjazah {
+  readonly id: string;
+  readonly generation: number;
+}
+
+/** The unsigned, unrevoked ijazahs of the teacher's subject (the approved credential's, rule 23). */
+export async function unsignedIjazahsOfCredential(
+  tx: Client,
+  teacherUserId: string,
+  subjectId: string,
+): Promise<readonly string[]> {
+  const rows = await tx.ijazah.findMany({
+    where: { teacherUserId, subjectId, signedOffAt: null, revokedAt: null, deletedAt: null },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+  return rows.map(({ id }) => id);
+}
+
+/** The student's unsigned, unrevoked ijazahs. */
+export async function unsignedIjazahsOfStudent(
+  tx: Client,
+  studentUserId: string,
+): Promise<readonly string[]> {
+  const rows = await tx.ijazah.findMany({
+    where: { studentUserId, signedOffAt: null, revokedAt: null, deletedAt: null },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+  return rows.map(({ id }) => id);
+}
+
+/** Re-freezes the chain, the teacher's name, riwaya and tariq of those among `ids` still unsigned. */
+export function refreezeIjazahs(
+  tx: Client,
+  ids: readonly string[],
+  refreeze: RequestRefreeze,
+): Promise<readonly RerenderedIjazah[]> {
+  return rerenderedWith(tx, ids, {
+    chainSnapshot: chainJson(refreeze.chainSnapshot),
+    teacherNamePrinted: refreeze.teacherNamePrinted,
+    riwayaPrinted: refreeze.riwayaPrinted,
+    tariqPrinted: refreeze.tariqPrinted,
+  });
+}
+
+/** Re-freezes the student's printed name of those among `ids` still unsigned. */
+export function renameIjazahs(
+  tx: Client,
+  ids: readonly string[],
+  studentNamePrinted: string,
+): Promise<readonly RerenderedIjazah[]> {
+  return rerenderedWith(tx, ids, { studentNamePrinted });
+}
+
+/** The rows among `ids` still unsigned and unrevoked, read under their locks, written and re-rendered. */
+async function rerenderedWith(
+  tx: Client,
+  ids: readonly string[],
+  data: Prisma.IjazahUpdateManyMutationInput,
+): Promise<readonly RerenderedIjazah[]> {
+  const unsigned = { signedOffAt: null, revokedAt: null, deletedAt: null } as const;
+  const rows = await tx.ijazah.findMany({
+    where: { id: { in: [...ids] }, ...unsigned },
+    orderBy: { id: 'asc' },
+    select: { id: true, renderGeneration: true },
+  });
+  if (rows.length === 0) return [];
+  await tx.ijazah.updateMany({
+    where: { id: { in: rows.map(({ id }) => id) }, ...unsigned },
+    data: { ...data, renderGeneration: { increment: 1 }, renderedAt: null },
+  });
+  return rows.map(({ id, renderGeneration }) => ({ id, generation: renderGeneration + 1 }));
 }
 
 /** The chain as its `jsonb` column holds it: generations, each an array of names. */

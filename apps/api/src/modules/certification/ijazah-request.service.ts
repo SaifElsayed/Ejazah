@@ -27,10 +27,17 @@
 // PREVIEW and GET read with no lock. THE PORTS, each on the caller's transaction:
 //   - `EnrollmentIjazahRequests.of` (booking's): every enrollment's latest request in one read;
 //   - `AwaitingNameRelease.release` (identity's, the student's `users` row already locked): the
-//     student's waiting requests locked, then moved to `pending`;
+//     student's waiting requests locked, then moved to `pending`; T032: then the student's ijazahs
+//     not yet signed off locked, their printed name re-frozen from the name now held;
 //   - `OpenRequestsRefreeze.refreeze` (catalog's, the credential's row held by the correction's
-//     write): the credential's open requests locked, then re-frozen from it (P4 (a)); the ijazah side
-//     is T032's;
+//     write): the credential's open requests locked, then re-frozen from it (P4 (a)); T032: then the
+//     ijazahs of that credential not yet signed off locked, their chain, teacher's name, riwaya and
+//     tariq re-frozen (DEC-72);
+//   - T032 for both (FR-629, R-403): the kernel row's order (the caller's lock, the requests, then the
+//     ijazahs); each re-frozen ijazah's generation raised and its rendering cleared on the caller's
+//     transaction, `render-certificate` enqueued for the new generation only after the caller's commit
+//     (the after-commit list it bound; none bound and an ijazah to re-freeze is a refusal). A signed-off
+//     or revoked ijazah is never touched (SC-604). ⚠️ Automatic: the previous PDF is replaced;
 //   - the deletion's consequence (identity's `AccountConsequences`, the student's row locked): the
 //     student's open requests locked, closed and their copies' keys cleared on the transaction, each
 //     file removed once after the commit, a failed removal logged by ids and left to the orphan sweep
@@ -58,6 +65,7 @@ import { type LivePublisher, publisherOn } from '../../platform/live/live-publis
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { CredentialChain } from '../catalog/index.js';
 import type { AccountConsequence } from '../identity/index.js';
+import type { RenderQueue } from './ijazah-decision.service.js';
 
 export type { CredentialChain };
 
@@ -107,6 +115,8 @@ export interface RequestRead {
   readonly status: IjazahRequestStatus;
   readonly reason: string | null;
   readonly ijazahId: string | null;
+  /** 005:T010 (Q-E2 (a)): the approved request's ijazah was revoked. */
+  readonly revoked: boolean;
 }
 
 /** An open request and its copy's key. */
@@ -156,6 +166,30 @@ export interface IjazahRequestStore {
   releaseAwaiting(tx: Transaction, ids: readonly string[]): Promise<void>;
   refreezeOpen(tx: Transaction, ids: readonly string[], refreeze: RequestRefreeze): Promise<void>;
   closeOpen(tx: Transaction, ids: readonly string[]): Promise<void>;
+  // 005:T032: the ports reach the ijazahs not yet signed off.
+  unsignedIjazahsOfCredential(
+    tx: Transaction,
+    teacherUserId: string,
+    subjectId: string,
+  ): Promise<readonly string[]>;
+  unsignedIjazahsOfStudent(tx: Transaction, studentUserId: string): Promise<readonly string[]>;
+  lockIjazahs(tx: Transaction, ids: readonly string[]): Promise<void>;
+  refreezeIjazahs(
+    tx: Transaction,
+    ids: readonly string[],
+    refreeze: RequestRefreeze,
+  ): Promise<readonly RerenderedIjazah[]>;
+  renameIjazahs(
+    tx: Transaction,
+    ids: readonly string[],
+    studentNamePrinted: string,
+  ): Promise<readonly RerenderedIjazah[]>;
+}
+
+/** 005:T032: an ijazah re-frozen and the generation its render is enqueued for. */
+export interface RerenderedIjazah {
+  readonly id: string;
+  readonly generation: number;
 }
 
 /** The lines the request writes: ids and a reason. */
@@ -174,6 +208,13 @@ export interface IjazahRequestDependencies {
   /** The database's clock on the transaction: the teacher's today. */
   readonly clock: (tx: Transaction) => Promise<Date>;
   readonly log: IjazahRequestLog;
+  /** 005:T032: `render-certificate`, enqueued after the caller's commit for a re-frozen ijazah. */
+  readonly renders: RenderQueue;
+}
+
+/** 005:T032: the caller's after-commit list, its `afterCommitDo` present. */
+interface RerenderList {
+  afterCommitDo(action: () => void): void;
 }
 
 /** An after-commit list a deletion binds to its transaction (`publisherOn`). */
@@ -295,9 +336,19 @@ export class IjazahRequestService {
     const waiting = (await store.openOfStudent(tx, studentUserId))
       .filter(({ status }) => status === 'awaiting_student_name')
       .map(({ id }) => id);
-    if (waiting.length === 0) return;
-    await store.lockRequests(tx, waiting);
-    await store.releaseAwaiting(tx, waiting);
+    // 005:T032: the student's ijazahs not yet signed off, re-frozen after the requests.
+    const issued = await store.unsignedIjazahsOfStudent(tx, studentUserId);
+    const list = this.#rerenderListFor(tx, issued, { studentUserId });
+    if (waiting.length > 0) {
+      await store.lockRequests(tx, waiting);
+      await store.releaseAwaiting(tx, waiting);
+    }
+    if (list === null) return;
+    const name = await store.certificateNameOf(tx, studentUserId);
+    // The setter wrote the name on this transaction, so a student with no name has nothing to print.
+    if (name === null) return;
+    await store.lockIjazahs(tx, issued);
+    this.#rerenderAfterCommit(list, await store.renameIjazahs(tx, issued, name), 'name_refrozen');
   }
 
   /** `OpenRequestsRefreeze.refreeze` (catalog's port): the credential's row is already held. */
@@ -306,9 +357,75 @@ export class IjazahRequestService {
     const chain = await store.chainById(tx, credentialId);
     if (chain === null) return;
     const open = await store.openOfCredential(tx, chain.teacherUserId, chain.subjectId);
-    if (open.length === 0) return;
-    await store.lockRequests(tx, open);
-    await store.refreezeOpen(tx, open, frozenOf(chain));
+    // 005:T032: the credential's ijazahs not yet signed off, re-frozen after the requests (DEC-72).
+    const issued = await store.unsignedIjazahsOfCredential(
+      tx,
+      chain.teacherUserId,
+      chain.subjectId,
+    );
+    const list = this.#rerenderListFor(tx, issued, { credentialId });
+    if (open.length > 0) {
+      await store.lockRequests(tx, open);
+      await store.refreezeOpen(tx, open, frozenOf(chain));
+    }
+    if (list === null) return;
+    await store.lockIjazahs(tx, issued);
+    this.#rerenderAfterCommit(
+      list,
+      await store.refreezeIjazahs(tx, issued, frozenOf(chain)),
+      'chain_refrozen',
+    );
+  }
+
+  /**
+   * 005:T032: the caller's after-commit list when there are ijazahs to re-freeze, null when there are
+   * none; refused before any write when the caller bound none, so a re-render is never lost silently.
+   */
+  #rerenderListFor(
+    tx: Transaction,
+    issued: readonly string[],
+    ids: Readonly<Record<string, string>>,
+  ): RerenderList | null {
+    if (issued.length === 0) return null;
+    const list = publisherOn(tx);
+    if (list?.afterCommitDo === undefined) {
+      this.#dependencies.log.info(
+        { ...ids, reason: 'no_after_commit_list' },
+        'An ijazah re-freeze was refused',
+      );
+      throw new Error(
+        'An ijazah is re-frozen on a transaction its caller bound an after-commit list to (T032, R-API-13), so its new generation is rendered only once the re-freeze has committed.',
+      );
+    }
+    return { afterCommitDo: list.afterCommitDo.bind(list) };
+  }
+
+  /** 005:T032: each re-frozen ijazah logged, its new generation enqueued once the caller commits. */
+  #rerenderAfterCommit(
+    list: RerenderList,
+    rerendered: readonly RerenderedIjazah[],
+    reason: 'chain_refrozen' | 'name_refrozen',
+  ): void {
+    const { renders, log } = this.#dependencies;
+    for (const { id, generation } of rerendered) {
+      log.info({ ijazahId: id, generation, reason }, 'An ijazah was re-frozen');
+    }
+    if (rerendered.length === 0) return;
+    list.afterCommitDo(() => {
+      void Promise.all(
+        rerendered.map(async ({ id, generation }) => {
+          try {
+            await renders.enqueue(id, generation);
+          } catch {
+            // A lost enqueue leaves the ijazah unrendered and visible as such; `ijazahs.rerender` fixes it.
+            log.warn(
+              { ijazahId: id, generation, reason: 'enqueue_failed' },
+              "A re-frozen ijazah's rendering could not be queued",
+            );
+          }
+        }),
+      );
+    });
   }
 
   /**
@@ -532,11 +649,15 @@ function frozenOf(chain: CredentialChain): RequestRefreeze {
   };
 }
 
-/** A request as a party reads it: the reason once rejected, the ijazah once approved. */
+/**
+ * A request as a party reads it: the reason once rejected, the ijazah once approved, and (005:T010,
+ * Q-E2 (a), R-HONEST-6) `revoked` once that ijazah is revoked, never the revocation's reason.
+ */
 function readOf(read: RequestRead): EnrollmentIjazahRequest {
   return {
     status: read.status,
     ...(read.reason === null ? {} : { reason: read.reason }),
     ...(read.ijazahId === null ? {} : { ijazahId: read.ijazahId }),
+    ...(read.revoked ? { revoked: true as const } : {}),
   };
 }

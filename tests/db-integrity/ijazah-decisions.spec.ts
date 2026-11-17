@@ -122,7 +122,14 @@ beforeAll(async () => {
     settings,
   });
   const log = { info: () => undefined, warn: () => undefined };
-  requests = createIjazahRequestService({ database, storage, idempotency, log });
+  // 005:T032 (rule d): the ijazah re-freeze is tests/db-integrity/ijazahs.spec.ts's.
+  requests = createIjazahRequestService({
+    database,
+    storage,
+    idempotency,
+    log,
+    renders: { enqueue: async () => undefined },
+  });
   decisions = createIjazahDecisionService({
     storage,
     settings,

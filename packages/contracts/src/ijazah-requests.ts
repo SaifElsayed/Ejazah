@@ -75,6 +75,11 @@ export const enrollmentIjazahRequest = z.object({
   reason: z.string().optional(),
   /** Once approved. */
   ijazahId: z.uuid().optional(),
+  /**
+   * 005:T010 (B46, Q-E2 (a); FR-609, R-HONEST-6): the approved request's ijazah was revoked, so no
+   * party reads it as valid. The flag only: the revocation's reason stays in the audit.
+   */
+  revoked: z.literal(true).optional(),
 });
 
 export const ijazahRequestsGetOutput = z.object({

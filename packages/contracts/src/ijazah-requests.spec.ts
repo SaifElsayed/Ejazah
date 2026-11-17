@@ -111,6 +111,20 @@ describe('teacher.ijazahRequests outputs (T006)', () => {
     });
   });
 
+  // 005:T010 (B46, Q-E2 (a); FR-609, R-HONEST-6): an approved request whose ijazah was revoked
+  // carries the flag only, so no party reads it as a valid certificate; never the revocation's reason.
+  it('keeps `revoked: true` on a revoked ijazah, refuses any other value, and carries no reason of it', () => {
+    const read = { status: 'approved', ijazahId: IJAZAH, revoked: true };
+    expect(enrollmentIjazahRequest.parse(read)).toEqual(read);
+    expect(ijazahRequestsGetOutput.parse({ request: { requestId: REQUEST, ...read } })).toEqual({
+      request: { requestId: REQUEST, ...read },
+    });
+    expect(enrollmentIjazahRequest.safeParse({ ...read, revoked: false }).success).toBe(false);
+    expect(
+      enrollmentIjazahRequest.parse({ ...read, revokedReason: 'خطأ في السند' }),
+    ).not.toHaveProperty('revokedReason');
+  });
+
   it('lists the seven refusals of FR-603 and nothing else', () => {
     expect(ijazahRequestRefusal.options).toEqual([
       'not_active',

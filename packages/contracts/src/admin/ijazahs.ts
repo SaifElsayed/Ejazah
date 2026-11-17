@@ -108,3 +108,113 @@ export type AdminIjazahRequestsGetOutput = z.input<typeof adminIjazahRequestsGet
 export type AdminIjazahRequestsApproveInput = z.infer<typeof adminIjazahRequestsApproveInput>;
 export type AdminIjazahRequestsApproveOutput = z.infer<typeof adminIjazahRequestsApproveOutput>;
 export type AdminIjazahRequestsRejectInput = z.infer<typeof adminIjazahRequestsRejectInput>;
+
+// 005:T010 (B46, lane E; FR-609, FR-610; R-412; the note under T010, Q12 (a)): `ijazahs.list`,
+// `.get`, `.revoke`, `.bar` and `.liftBar`. The administrator sees every ijazah, revoked or not,
+// with whether it is rendered and whether it is revoked; a revoked one is never shown as valid
+// (R-HONEST-6): its status is `revoked` whatever else it holds. `get` adds a signed link to the
+// rendered PDF, never its key (R-SEC-3); the token's hash is never answered (R-DB-7). The three
+// writes are keyed and need a reason; a revocation is final in v1.0 (Q12 (a)).
+
+/** An ijazah's state as the administrator reads it: revoked first, then signed off, then rendered. */
+export const adminIjazahStatus = z.enum(['preparing', 'rendered', 'signed_off', 'revoked']);
+
+/** The `ijazahs` writes' refusals, CONFLICT with this code. */
+export const ijazahsRefusal = z.enum(['already_revoked', 'already_barred', 'not_barred']);
+
+export const adminIjazahsListInput = z.object({
+  status: adminIjazahStatus.optional(),
+  /** The last ijazah id of the previous page (a UUIDv7, so the order is the order of issue). */
+  cursor: z.uuid().optional(),
+});
+
+export const adminIjazahsListItem = z.object({
+  ijazahId: z.uuid(),
+  certificateNumber,
+  enrollmentId: z.uuid(),
+  requestId: z.uuid().nullable(),
+  teacher: party,
+  student: party,
+  subject: subjectSummary,
+  language,
+  grantedAt: z.iso.datetime(),
+  status: adminIjazahStatus,
+  /** The current generation's PDF is rendered. */
+  rendered: z.boolean(),
+  revoked: z.boolean(),
+  renderGeneration: z.int().min(0),
+  signedOffAt: z.iso.datetime().nullable(),
+  revokedAt: z.iso.datetime().nullable(),
+});
+
+export const adminIjazahsListOutput = z.object({
+  items: z.array(adminIjazahsListItem),
+  nextCursor: z.uuid().optional(),
+});
+
+export const adminIjazahsGetInput = z.object({ ijazahId: z.uuid() });
+
+export const adminIjazahsGetOutput = adminIjazahsListItem.extend({
+  /** From the request (FR-IJAZAH-15). */
+  completionDate: calendarDate.nullable(),
+  /** As frozen: origin first, the teacher appended (FR-ISNAD-7). */
+  chain: z.array(generation).min(1),
+  studentNamePrinted: z.string(),
+  teacherNamePrinted: z.string(),
+  riwaya: z.string(),
+  tariq: z.string().nullable(),
+  revokedReason: z.string().nullable(),
+  /** A signed link to the current generation's PDF once rendered; null before (R-412). */
+  pdfLink: z.string().nullable(),
+});
+
+export const adminIjazahsRevokeInput = z.object({
+  ijazahId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+/**
+ * `ijazahs.bar` and `ijazahs.liftBar` (FR-610). `targetUserId`: the person barred (a field named
+ * `userId` is refused in an input, R-GENDER-4, as `users.requireIdentity`'s).
+ */
+export const adminIjazahBarInput = z.object({
+  targetUserId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type AdminIjazahStatus = z.infer<typeof adminIjazahStatus>;
+export type IjazahsRefusal = z.infer<typeof ijazahsRefusal>;
+export type AdminIjazahsListInput = z.infer<typeof adminIjazahsListInput>;
+export type AdminIjazahsListOutput = z.input<typeof adminIjazahsListOutput>;
+export type AdminIjazahsListItem = z.input<typeof adminIjazahsListItem>;
+export type AdminIjazahsGetInput = z.infer<typeof adminIjazahsGetInput>;
+export type AdminIjazahsGetOutput = z.input<typeof adminIjazahsGetOutput>;
+export type AdminIjazahsRevokeInput = z.infer<typeof adminIjazahsRevokeInput>;
+export type AdminIjazahBarInput = z.infer<typeof adminIjazahBarInput>;
+
+// 005:T032 (B46, lane E; FR-629; R-402, R-403; the note under T032, Q7 (a)): `ijazahs.signOff` and
+// `ijazahs.rerender`. The sign-off is what shows a certificate to its parties; until it, an
+// administrator may have it rendered again (a reason), and a correction re-freezes and re-renders it
+// (R-403). Both are keyed; a sign-off is final (SC-604: nothing changes the certificate after it).
+
+/** The sign-off's and the re-render's refusals, CONFLICT with this code (DEC-72, Q7 (a)). */
+export const ijazahSignOffRefusal = z.enum([
+  'not_rendered',
+  'revoked',
+  'already_signed_off',
+  'student_barred',
+]);
+
+export const adminIjazahsSignOffInput = z.object({ ijazahId: z.uuid(), idempotencyKey });
+
+export const adminIjazahsRerenderInput = z.object({
+  ijazahId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export type IjazahSignOffRefusal = z.infer<typeof ijazahSignOffRefusal>;
+export type AdminIjazahsSignOffInput = z.infer<typeof adminIjazahsSignOffInput>;
+export type AdminIjazahsRerenderInput = z.infer<typeof adminIjazahsRerenderInput>;

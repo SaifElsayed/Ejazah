@@ -102,6 +102,8 @@ import {
   type IjazahDecisionService,
   type RenderQueue,
 } from '../certification/index.js';
+// 005:T010 of specs/005-certification: an administrator's ijazahs, their revocation and the bar.
+import { createIjazahsService, type IjazahsService } from '../certification/index.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -253,6 +255,21 @@ export interface AdminServices {
       input: AdminIjazahRequestsGetInput,
     ): Promise<AdminIjazahRequestsGetOutput>;
   };
+  /**
+   * 005:T010 of B46 (FR-609, FR-610; R-412): certification's ijazahs, their revocation and the bar
+   * (`ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`), keyed on the call's transaction.
+   */
+  readonly ijazahs: Pick<
+    IjazahsService,
+    | 'list'
+    | 'get'
+    | 'revoke'
+    | 'bar'
+    | 'liftBar'
+    // 005:T032 of B46 (FR-629): the sign-off and the re-render.
+    | 'signOff'
+    | 'rerender'
+  >;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -515,6 +532,15 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }),
       standingReasonOf: latestStandingReasonOf,
       log: dependencies.log,
+    }),
+    // 005:T010 of B46: the ijazahs, keyed through `runOn` on the call's transaction.
+    ijazahs: createIjazahsService({
+      storage: dependencies.storage,
+      settings: dependencies.settings,
+      idempotency: dependencies.idempotency,
+      log: dependencies.log,
+      // 005:T032 of B46: a re-render's job, on the approval's queue (`main.ts`'s `ijazahRenders`).
+      renders: dependencies.ijazahRenders,
     }),
   };
 }

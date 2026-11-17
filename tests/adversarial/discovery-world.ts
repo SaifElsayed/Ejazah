@@ -852,6 +852,8 @@ async function build(): Promise<Built> {
     },
     idempotency,
     log,
+    // 005:T032 (rule d): no world ijazah is re-frozen, so nothing is enqueued.
+    renders: { enqueue: () => Promise.reject(new Error('no ijazah in this world')) },
   });
   // 005:T009 (rule d): the parties' certificates over their own in-memory storage.
   const certificateStorage = storageStub();
