@@ -32,6 +32,9 @@ import {
   type FileHold,
   // T080 of specs/004-sessions: the count's port, bound by `main.ts`.
   type OngoingEnrollments,
+  // 005:T031: the two counts an undecided matter of a teacher refuses a deletion by.
+  type OpenCases,
+  type OpenIjazahRequests,
 } from './deletion.service.js';
 import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
@@ -174,6 +177,16 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
    * by `main.ts` as `fileHold` is.
    */
   readonly ongoingEnrollments: OngoingEnrollments;
+  /**
+   * 005:T031 (FR-630; R-414; the note under T031): a teacher's undecided ijazah requests, on the
+   * deletion's transaction: certification's `openRequestCountOfTeacher`, bound by `main.ts`.
+   */
+  readonly openIjazahRequests: OpenIjazahRequests;
+  /**
+   * 005:T031 (Q-D1 (a)): the open compensation cases on a teacher's enrollments, composed by
+   * `main.ts` from booking's `enrollmentIdsOfTeacher` and moderation's `openCompensationCasesAmong`.
+   */
+  readonly openCases: OpenCases;
   /** Where a failure after a deletion's commit is reported; the error tracker unless given. */
   readonly report?: (error: unknown) => void;
   /**
@@ -197,6 +210,8 @@ export function createIdentityServices({
   fileErasures,
   fileHold,
   ongoingEnrollments,
+  openIjazahRequests,
+  openCases,
   report,
   live,
   ...base
@@ -235,6 +250,8 @@ export function createIdentityServices({
       fileErasures,
       fileHold,
       ongoingEnrollments,
+      openIjazahRequests,
+      openCases,
       report,
       ...(live === undefined ? {} : { live }),
     }),
@@ -443,6 +460,9 @@ export type { FileErasure, FileHold, HeldPhoto };
  * bound to in `main.ts`, and the deletion's log (a refusal's info line).
  */
 export type { DeletionLog, OngoingEnrollments };
+// 005:T031 (FR-630; R-414; the note under T031, Q-D1 (a)): the two ports `main.ts` binds, a
+// teacher's undecided ijazah requests to certification and the open cases to moderation's entry.
+export type { OpenCases, OpenIjazahRequests };
 /**
  * T081 of specs/004-sessions (FR-512; SRS FR-ADMIN-22): the administrator's deletion the admin
  * module composes into `users.delete`, filled by `main.ts` with the identity services' `deletion`.
@@ -544,3 +564,11 @@ export function createPushRecipients({
 // under the student's `users` lock, and (already above) `readStanding` for the teacher's standing,
 // `accountTimezone` for the teacher's day.
 export { certificateNameOf } from './certificate-name.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D3 (a), Q-D4 (a)): of
+// some teachers, those whose signature is no longer kept: deleted and either never approved (a
+// teacher never approved keeps nothing, so it goes at the deletion) or whose kept data was erased
+// (`kept_erased_at` set, at the administrator's date or «now»). Read by verification's
+// `createKeptSignatureErasure`, past the soft-delete filter (`includeDeleted`).
+export { signatureErasableOwnersAmong } from './identity.repository.js';

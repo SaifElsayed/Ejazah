@@ -177,7 +177,16 @@ beforeAll(async () => {
       consequences: registry,
       report: () => undefined,
       // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
-      ongoingEnrollments: createOngoingEnrollments({ settings: identitySettings }),
+      // 005:T031 (rule d; Q-D6 (a)): the teacher's deletion with confirmed enrollments and the one that
+      // fails after the subscriber (the cases at `:534-541` and `:655-668` before this block) delete a
+      // teacher over confirmed enrollments to prove booking's subscriber, so `live` and the two counts
+      // answer none here; the refusals are `teacher-deletion.spec.ts`'.
+      ongoingEnrollments: {
+        ...createOngoingEnrollments({ settings: identitySettings }),
+        live: async () => false,
+      },
+      openIjazahRequests: { count: async () => 0 },
+      openCases: { count: async () => 0 },
     }).deletion;
   deletion = deletionOver(consequences);
   webhook = await listenWebhook(database, {

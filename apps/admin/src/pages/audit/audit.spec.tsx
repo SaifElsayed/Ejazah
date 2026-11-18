@@ -489,6 +489,19 @@ describe('T083: B42c’s six actions by name', () => {
   );
 });
 
+// 005:T031 of specs/005-certification (FR-631; Q-D2 (a)): a deleted teacher's kept signature opened
+// (`teachers.keptData.signatureLink`), named by the catalogue's text in Arabic and in English.
+describe('005:T031: the kept signature’s opening by name', () => {
+  it('kept_signature.view reads its text in both languages, never the stored code', () => {
+    expect(actionText('kept_signature.view', (key: MessageKey) => translate('ar', key))).toBe(
+      'عرض توقيع محفوظ لمعلم محذوف',
+    );
+    expect(actionText('kept_signature.view', (key: MessageKey) => translate('en', key))).toBe(
+      "View a deleted teacher's kept signature",
+    );
+  });
+});
+
 describe('T058: RATE_LIMITED on the audit log', () => {
   it('the list says when to try again', async () => {
     const api = fakeApi();

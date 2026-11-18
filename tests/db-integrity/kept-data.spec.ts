@@ -164,6 +164,9 @@ beforeAll(async () => {
     report: () => undefined,
     // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
     ongoingEnrollments: createOngoingEnrollments({ settings }),
+    // 005:T031 (rule d): a teacher's two counts, none in this spec's worlds.
+    openIjazahRequests: { count: async () => 0 },
+    openCases: { count: async () => 0 },
   });
 });
 
@@ -871,6 +874,8 @@ describe('teachers.keptData over the real tables (T077, FR-509)', () => {
       payoutKept: true,
       eraseAt: null,
       erasedAt: null,
+      // 005:T031 (rule d): this teacher kept no signature.
+      signature: null,
     });
     expect(JSON.stringify(record)).not.toMatch(/storage\.invalid|spec_rcp_|documents\//);
     expect(record).not.toHaveProperty('payoutKeptOnDeletedTeacher');

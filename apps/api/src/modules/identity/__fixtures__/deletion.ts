@@ -167,6 +167,19 @@ export function buildDeletion(
     answer: async (_tx: Transaction, userId: string): Promise<boolean> =>
       ongoing.people.has(userId),
   };
+  // 005:T031 (FR-630): the people `live` answers as having an enrollment `pending_payment` or
+  // `confirmed`, and the teachers the two counts answer one for, as booking's, certification's and
+  // moderation's reads answer through the ports; a spec may replace an answer.
+  const open = {
+    live: new Set<string>(),
+    requests: new Set<string>(),
+    cases: new Set<string>(),
+    liveAnswer: async (_tx: Transaction, userId: string): Promise<boolean> => open.live.has(userId),
+    requestsAnswer: async (_tx: Transaction, userId: string): Promise<number> =>
+      open.requests.has(userId) ? 1 : 0,
+    casesAnswer: async (_tx: Transaction, userId: string): Promise<number> =>
+      open.cases.has(userId) ? 1 : 0,
+  };
   const infos: object[] = [];
   const dependencies = {
     database,
@@ -197,6 +210,22 @@ export function buildDeletion(
       hasOngoing: async (tx: Transaction, userId: string) => {
         events.push('ongoing-asked');
         return ongoing.answer(tx, userId);
+      },
+      live: async (tx: Transaction, userId: string) => {
+        events.push('live-asked');
+        return open.liveAnswer(tx, userId);
+      },
+    },
+    openIjazahRequests: {
+      count: async (tx: Transaction, userId: string) => {
+        events.push('requests-asked');
+        return open.requestsAnswer(tx, userId);
+      },
+    },
+    openCases: {
+      count: async (tx: Transaction, userId: string) => {
+        events.push('cases-asked');
+        return open.casesAnswer(tx, userId);
       },
     },
     report: (error) => void reports.push(error),
@@ -229,6 +258,8 @@ export function buildDeletion(
     held,
     /** T080: the people booking's count answers as having an ongoing enrollment, and the answer. */
     ongoing,
+    /** 005:T031: what `live` and the two counts answer, by person, and the answers. */
+    open,
     /** T080: the deletion's info lines. */
     infos,
     consequences,

@@ -299,3 +299,16 @@ export {
   type KeptDataErasureRun,
   type KeptDataErasureSweep,
 } from './kept-data.sweep.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D2 (a) to Q-D4 (a)): a
+// deleted teacher's kept signature, listed by `users.get` and opened by
+// `teachers.keptData.signatureLink` (the kept-data service above), and erased once it is no longer
+// kept: `main.ts` adds `createKeptSignatureErasure` to the deletion's `fileErasures` (a teacher never
+// approved has it erased at the deletion) and `worker.ts` to `erase-deleted-files`' stores (an
+// approved teacher's, once the kept data is erased at its date or «now»), file first, then the row.
+export {
+  createKeptSignatureErasure,
+  type KeptSignatureErasure,
+  type KeptSignatureErasureDependencies,
+} from './kept-data.signatures.js';

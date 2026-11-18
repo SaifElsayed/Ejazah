@@ -382,3 +382,14 @@ export {
 } from './credential-review.repository.js';
 export { signatureOf as teacherSignatureOf } from './teacher-signature.repository.js';
 export type { OpenRequestsRefreeze };
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D3 (a), Q-D4 (a)): the
+// kept signature's erasure reads this module's `teacher_signatures` a page at a time and deletes a
+// row once its file is gone, where the row still holds that key; verification's
+// `createKeptSignatureErasure` composes them with identity's `signatureErasableOwnersAmong`.
+export {
+  deleteSignatureHolding,
+  type SignatureFileRow,
+  signaturesPage,
+} from './teacher-signature.repository.js';

@@ -14,6 +14,8 @@ import {
   teachersKeptDocumentLinkOutput,
   teachersKeptEraseDateInput,
   teachersKeptEraseNowInput,
+  teachersKeptSignatureLinkInput,
+  teachersKeptSignatureLinkOutput,
 } from './teachers.js';
 
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000c1';
@@ -117,5 +119,32 @@ describe('teachers.keptData (T077)', () => {
     ['eraseNow without a key', teachersKeptEraseNowInput, { teacherUserId: TEACHER, reason: 'x' }],
   ] as const)('refuses %s', (_name, schema, input) => {
     expect(schema.safeParse(input).success).toBe(false);
+  });
+});
+
+// 005:T031 (FR-631; R-411; the note under T031, Q-D2 (a)): `teachers.keptData.signatureLink
+// { teacherUserId, reason }` opens a deleted teacher's kept signature by one signed link per press,
+// as `documentLink` opens a kept document; the reason mandatory, the person named `teacherUserId`.
+describe('teachers.keptData.signatureLink (005:T031)', () => {
+  it('takes the teacher and a reason, trimmed, and answers a link', () => {
+    expect(
+      teachersKeptSignatureLinkInput.parse({ teacherUserId: TEACHER, reason: '  طلب الجهات  ' }),
+    ).toEqual({ teacherUserId: TEACHER, reason: 'طلب الجهات' });
+    const link = { url: 'https://storage.invalid/s', expiresAt: '2026-11-18T10:05:00.000Z' };
+    expect(teachersKeptSignatureLinkOutput.parse(link)).toEqual(link);
+  });
+
+  it.each([
+    ['no reason', { teacherUserId: TEACHER, reason: '  ' }],
+    ['no teacher', { reason: 'x' }],
+    ['a userId key', { userId: TEACHER, reason: 'x' }],
+    ['a teacher that is no id', { teacherUserId: 'teacher', reason: 'x' }],
+  ] as const)('refuses %s', (_name, input) => {
+    expect(teachersKeptSignatureLinkInput.safeParse(input).success).toBe(false);
+  });
+
+  it('answers no field beyond the link and its expiry', () => {
+    const link = { url: 'https://storage.invalid/s', expiresAt: '2026-11-18T10:05:00.000Z' };
+    expect(teachersKeptSignatureLinkOutput.parse({ ...link, storageKey: 'k.png' })).toEqual(link);
   });
 });

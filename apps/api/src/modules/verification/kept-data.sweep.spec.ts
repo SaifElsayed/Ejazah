@@ -107,6 +107,8 @@ function storeOver(w: World): KeptDataStore {
         .slice(0, limit)
         .map(({ profileId, userId }) => ({ profileId, userId })),
     payoutKeptOnDeletedTeacher: async () => false,
+    // 005:T031 (rule d): the store reads the kept signature too; the sweep never asks it.
+    signatureOf: async () => null,
   };
 }
 

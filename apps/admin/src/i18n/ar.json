@@ -229,6 +229,7 @@
         "teacherRevocationLifted": "إلغاء سحب اعتماد معلم",
         "enrollmentEndedByAdmin": "إنهاء اشتراك",
         "keptDocumentView": "عرض وثيقة محفوظة لمعلم محذوف",
+        "keptSignatureView": "عرض توقيع محفوظ لمعلم محذوف",
         "teacherKeptDataEraseDateSet": "تحديد موعد محو بيانات معلم محذوف",
         "teacherKeptDataEraseDateCleared": "إلغاء موعد محو بيانات معلم محذوف",
         "teacherKeptDataErased": "محو البيانات المحفوظة لمعلم محذوف",

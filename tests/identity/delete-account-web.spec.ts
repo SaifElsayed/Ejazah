@@ -142,6 +142,9 @@ describe('the web deletion end to end (T081, FR-143)', () => {
       consequences: new AccountConsequences(),
       // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
       ongoingEnrollments: createOngoingEnrollments({ settings }),
+      // 005:T031 (rule d): a teacher's two counts, none in this spec's worlds.
+      openIjazahRequests: { count: async () => 0 },
+      openCases: { count: async () => 0 },
     });
     const routes = deleteAccountRoutes({
       deletion: services.deletion,

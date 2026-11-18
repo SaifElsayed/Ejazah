@@ -229,6 +229,7 @@
         "teacherRevocationLifted": "Lift a teacher's revocation",
         "enrollmentEndedByAdmin": "End an enrollment",
         "keptDocumentView": "View a deleted teacher's kept document",
+        "keptSignatureView": "View a deleted teacher's kept signature",
         "teacherKeptDataEraseDateSet": "Set the erase date of a deleted teacher's kept data",
         "teacherKeptDataEraseDateCleared": "Clear the erase date of a deleted teacher's kept data",
         "teacherKeptDataErased": "Erase a deleted teacher's kept data",

@@ -62,7 +62,14 @@ function composed(lines: Record<string, unknown>[]): ReturnType<typeof createIde
       runOn: unreachable,
     } as unknown as IdentityServiceDependencies['idempotency'],
     consequences: new AccountConsequences(),
-    ongoingEnrollments: { anyOf: unreachable } as unknown as IdentityServiceDependencies['ongoingEnrollments'],
+    ongoingEnrollments: {
+      anyOf: unreachable,
+    } as unknown as IdentityServiceDependencies['ongoingEnrollments'],
+    // 005:T031 (rule d): the two ports a teacher's deletion asks, never reached here.
+    openIjazahRequests: {
+      count: unreachable,
+    } as unknown as IdentityServiceDependencies['openIjazahRequests'],
+    openCases: { count: unreachable } as unknown as IdentityServiceDependencies['openCases'],
   });
 }
 

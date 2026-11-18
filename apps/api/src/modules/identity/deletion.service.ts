@@ -69,6 +69,23 @@
 //   the mail) is queued on it (`afterCommitDo`), run once the kind's transaction has committed and
 //   dropped on a rollback. One info line of ids for the deletion, one for its `NOT_FOUND` refusal
 //   (an unknown or already deleted account).
+// - A TEACHER'S DELETION WAITS (005:T031 of specs/005-certification; FR-630; R-414; DEC-72; the note
+//   under T031, Q-D1 (a)). The person's own, in the app and on the web, asks after T080's count the
+//   `OpenIjazahRequests` port (certification's count of the teacher's requests `awaiting_student_name`
+//   or `pending`, and `approved` ones whose ijazah is neither signed off nor revoked; none for a
+//   student): above zero refuses `CONFLICT` `pending_ijazah_requests`. An administrator's reads the
+//   live person's role after the account's lock; for a teacher it asks, in this order, `live` (an
+//   enrollment `pending_payment` or `confirmed`, a paused one included), the same request count, and
+//   the `OpenCases` port (the open compensation cases on the teacher's enrollments), refusing
+//   `active_enrollments`, `pending_ijazah_requests` or `open_cases`; a student's is unchanged. Each
+//   refusal writes nothing (the transaction rolls back with the key's claim) and logs one info line
+//   of ids and its cause. THE RACE: every path that adds a request or a live enrollment locks the
+//   teacher's `users` row first, so the counts read after `lockAccount` need no lock of their own;
+//   but a direct end with `slot: 'hold'` (or a complaint decided, a fault confirmed) moves `confirmed`
+//   to `cancelled` and opens a case in one transaction without that lock. `live` is read before the
+//   open cases, so under READ COMMITTED a deletion either still sees the enrollment live or already
+//   sees its case (`tests/db-integrity/teacher-deletion.spec.ts`, the race, red first with the two
+//   reads swapped).
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import type { UsersDeleteInput } from '@ijazah/contracts/admin';
 
@@ -104,6 +121,7 @@ import {
   readDeletionProof,
   readBannedSignIn,
   readErasureSnapshot,
+  readLiveRole,
 } from './identity.repository.js';
 import { renderDeletionMail } from './mail/deletion-mail.js';
 import { normalizeEmail, type OneTimeCodes, type WarningLog } from './one-time-codes.js';
@@ -137,6 +155,34 @@ export interface FileHold {
  */
 export interface OngoingEnrollments {
   hasOngoing(tx: Transaction, userId: string): Promise<boolean>;
+  /**
+   * 005:T031 (FR-630; R-414; the note under T031): whether the account has an enrollment
+   * `pending_payment` or `confirmed` (one paused by a suspension is `confirmed`), as student or
+   * teacher, with no closing counted; asked by an administrator's deletion of a teacher, before
+   * the open cases (the line's race: a direct end opens a case without the teacher's lock).
+   */
+  live(tx: Transaction, userId: string): Promise<boolean>;
+}
+
+/**
+ * 005:T031 (FR-630; R-414; DEC-72; the note under T031): how many of a teacher's ijazah requests are
+ * undecided, `awaiting_student_name` or `pending`, or `approved` with an ijazah neither signed off
+ * nor revoked, asked on the deletion's transaction after the account's lock: certification's count,
+ * bound by `main.ts` as `OngoingEnrollments` is bound to booking (identity imports no module,
+ * `docs/ARCHITECTURE.md:183`). Every path that adds such a request locks the teacher's `users` row
+ * first (the send, the approval), so the count needs no lock of its own.
+ */
+export interface OpenIjazahRequests {
+  count(tx: Transaction, teacherUserId: string): Promise<number>;
+}
+
+/**
+ * 005:T031 (FR-630; R-414; the note under T031, Q-D1 (a)): how many compensation cases are open on a
+ * teacher's enrollments, asked by an administrator's deletion of a teacher after `live`: `main.ts`
+ * composes booking's teacher enrollment ids with moderation's `openCompensationCasesAmong`.
+ */
+export interface OpenCases {
+  count(tx: Transaction, teacherUserId: string): Promise<number>;
 }
 
 /** Where the deletion writes its lines: a refusal's at info, a mail it could not hand over at warn. */
@@ -169,6 +215,10 @@ export interface DeletionDependencies extends IdentityDependencies {
   readonly fileHold?: FileHold | undefined;
   /** T080: asked after the account's lock, by the person's own deletion only. */
   readonly ongoingEnrollments: OngoingEnrollments;
+  /** 005:T031: asked after the account's lock by every deletion of a teacher, the person's own included. */
+  readonly openIjazahRequests: OpenIjazahRequests;
+  /** 005:T031: asked by an administrator's deletion of a teacher, after `live`. */
+  readonly openCases: OpenCases;
   /** Where a failure after the commit is reported; the error tracker unless a spec sets one. */
   readonly report?: ((error: unknown) => void) | undefined;
   /** Where the work after the commit is left to run; detached unless a spec collects it. */
@@ -184,6 +234,9 @@ export interface DeletionDependencies extends IdentityDependencies {
 type Reauth = DeleteAccountInput['reauth'];
 
 const proofRefused = () => new DomainError('SIGN_IN_FAILED');
+
+/** 005:T031: the causes a deletion is refused by while a matter of the person is open. */
+type OpenMatterCause = 'active_enrollments' | 'pending_ijazah_requests' | 'open_cases';
 
 export class DeletionService {
   readonly #dependencies: DeletionDependencies;
@@ -273,6 +326,12 @@ export class DeletionService {
       },
       async (keyed) => {
         await lockAccount(keyed, targetUserId);
+        // 005:T031: a teacher's open matters, read under the account's lock (this file's head).
+        if ((await readLiveRole(keyed, targetUserId)) === 'teacher') {
+          const cause = await this.#openMatterOfTeacher(keyed, targetUserId);
+          if (cause !== null)
+            throw this.#refusedOpenMatter({ adminId, userId: targetUserId }, cause);
+        }
         const erased = await this.#eraseLocked(keyed, targetUserId, this.#now(), { adminId });
         if (erased === null) throw this.#notFound(adminId, targetUserId);
         list.afterCommitDo?.(() => {
@@ -287,6 +346,28 @@ export class DeletionService {
       },
     );
     return { replayed };
+  }
+
+  /**
+   * 005:T031: the first open matter of a teacher an administrator's deletion is refused by, or null:
+   * `live` first, then the requests, then the open cases (this file's head, «THE RACE»).
+   */
+  async #openMatterOfTeacher(tx: Transaction, userId: string): Promise<OpenMatterCause | null> {
+    if (await this.#dependencies.ongoingEnrollments.live(tx, userId)) return 'active_enrollments';
+    if ((await this.#dependencies.openIjazahRequests.count(tx, userId)) > 0) {
+      return 'pending_ijazah_requests';
+    }
+    if ((await this.#dependencies.openCases.count(tx, userId)) > 0) return 'open_cases';
+    return null;
+  }
+
+  /** 005:T031: an administrator's deletion refused, after its one info line of ids and the cause. */
+  #refusedOpenMatter(
+    ids: { readonly adminId: string; readonly userId: string },
+    cause: OpenMatterCause,
+  ): DomainError {
+    this.#dependencies.log.info({ ...ids, reason: cause }, 'An administrator deletion was refused');
+    return conflictOf(cause);
   }
 
   /** T081 (Q-R13 (a)): an unknown or already deleted account, after its one info line of ids. */
@@ -353,7 +434,11 @@ export class DeletionService {
     try {
       await lockAccount(tx, userId);
       if (await this.#dependencies.ongoingEnrollments.hasOngoing(tx, userId)) {
-        throw this.#refusedOngoing(userId);
+        throw this.#refusedOwn(userId, 'active_enrollments');
+      }
+      // 005:T031: a teacher's undecided ijazah requests, after T080's count (none for a student).
+      if ((await this.#dependencies.openIjazahRequests.count(tx, userId)) > 0) {
+        throw this.#refusedOwn(userId, 'pending_ijazah_requests');
       }
       return await this.#eraseLocked(tx, userId, at);
     } finally {
@@ -361,17 +446,16 @@ export class DeletionService {
     }
   }
 
-  /** T080: the refusal, after its one info line of ids and the reason; no count (Q-J (a)). */
-  #refusedOngoing(userId: string): DomainError {
-    this.#dependencies.log.info(
-      { userId, reason: 'active_enrollments' },
-      'An account deletion was refused',
-    );
-    return markRefusalLogged(
-      new DomainError('CONFLICT', undefined, {
-        details: [{ path: 'cause', code: 'active_enrollments' }],
-      }),
-    );
+  /**
+   * T080: the refusal, after its one info line of ids and the reason; no count (Q-J (a)). 005:T031:
+   * the same shape for a teacher's undecided ijazah requests.
+   */
+  #refusedOwn(
+    userId: string,
+    cause: Extract<OpenMatterCause, 'active_enrollments' | 'pending_ijazah_requests'>,
+  ): DomainError {
+    this.#dependencies.log.info({ userId, reason: cause }, 'An account deletion was refused');
+    return conflictOf(cause);
   }
 
   /**
@@ -524,4 +608,11 @@ export class DeletionService {
       );
     }
   }
+}
+
+/** The refusal of a deletion while a matter of the person is open: `CONFLICT` naming its cause, no count. */
+function conflictOf(cause: OpenMatterCause): DomainError {
+  return markRefusalLogged(
+    new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: cause }] }),
+  );
 }

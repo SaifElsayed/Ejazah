@@ -19,6 +19,7 @@ import {
   compensationCasesAmong,
   compensationCasesOf,
   insertCase,
+  openCompensationCasesAmong,
   lockCasesOf,
   openCaseOf,
   latestCaseOf,
@@ -52,6 +53,7 @@ interface Answers {
   create?: unknown;
   updateMany?: unknown;
   groupBy?: unknown;
+  count?: unknown;
 }
 
 /**
@@ -75,6 +77,7 @@ function client(answers: Answers = {}) {
       create: method('create', () => answers.create),
       updateMany: method('updateMany', () => answers.updateMany),
       groupBy: method('groupBy', () => answers.groupBy ?? []),
+      count: method('count', () => answers.count ?? 0),
     },
     $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
       asked.push(['$queryRaw', sql.join('?'), values]);
@@ -194,7 +197,12 @@ describe('closeOpenCase', () => {
   it('writes the link a suspension case’s closing names (rule 49; the note under T036)', async () => {
     const { tx, asked } = client({ updateMany: { count: 1 } });
     expect(
-      await closeOpenCase(tx, CASE, { ...WRITE, status: 'dismissed', resolution: null, coveredBy: CASE_2 }),
+      await closeOpenCase(tx, CASE, {
+        ...WRITE,
+        status: 'dismissed',
+        resolution: null,
+        coveredBy: CASE_2,
+      }),
     ).toBe(true);
     expect(asked).toEqual([
       [
@@ -711,5 +719,34 @@ describe('latestCaseOf', () => {
         },
       ],
     ]);
+  });
+});
+
+// 005:T031 (FR-630; R-414; the note under T031, Q-D1 (a)): how many open compensation cases the
+// enrollments have, the count identity's `OpenCases` port answers for a teacher, composed by
+// `main.ts` with booking's teacher enrollment ids. One statement over `disputes_enrollment_id_idx`,
+// with no lock; a session dispute, and a case resolved or dismissed, counts nothing.
+describe('openCompensationCasesAmong (005:T031)', () => {
+  it('counts the open compensation cases of the enrollments in one statement', async () => {
+    const { tx, asked } = client({ count: 2 });
+    expect(await openCompensationCasesAmong(tx, [ENROLLMENT, OTHER_ENROLLMENT])).toBe(2);
+    expect(asked).toEqual([
+      [
+        'count',
+        {
+          where: {
+            enrollmentId: { in: [ENROLLMENT, OTHER_ENROLLMENT] },
+            kind: 'compensation_case',
+            status: 'open',
+          },
+        },
+      ],
+    ]);
+  });
+
+  it('answers zero for no enrollment, asking nothing', async () => {
+    const { tx, asked } = client({ count: 5 });
+    expect(await openCompensationCasesAmong(tx, [])).toBe(0);
+    expect(asked).toEqual([]);
   });
 });

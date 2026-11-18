@@ -77,6 +77,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // its erase date set, cleared and carried out, and T081's deletion at the owner's request.
   'enrollment.ended_by_admin': 'admin.audit.actions.enrollmentEndedByAdmin',
   'kept_document.view': 'admin.audit.actions.keptDocumentView',
+  // 005:T031 of specs/005-certification (Q-D2 (a)): a deleted teacher's kept signature opened.
+  'kept_signature.view': 'admin.audit.actions.keptSignatureView',
   'teacher.kept_data.erase_date_set': 'admin.audit.actions.teacherKeptDataEraseDateSet',
   'teacher.kept_data.erase_date_cleared': 'admin.audit.actions.teacherKeptDataEraseDateCleared',
   'teacher.kept_data.erased': 'admin.audit.actions.teacherKeptDataErased',

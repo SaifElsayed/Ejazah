@@ -423,6 +423,37 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     expect(page).toContain(`href="mailto:${SUPPORT}"`);
   });
 
+  // 005:T031 of specs/005-certification (FR-630; the note under T031): a teacher's deletion refused
+  // for an undecided ijazah request, after the right code was spent, renders that cause's own words
+  // and the support address, never the ongoing enrollment's.
+  const pendingRequests = () =>
+    new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'pending_ijazah_requests' }],
+    });
+
+  it.each([
+    ['ar', '', ar],
+    ['en', '?lang=en', en],
+  ] as const)(
+    'renders the refusal of an undecided ijazah request in its own words (%s, 005:T031)',
+    async (lang, query, text) => {
+      deletion.confirmWebDeletion.mockRejectedValueOnce(pendingRequests());
+      const response = await submit(`${DELETE_ACCOUNT_CONFIRM_PATH}${query}`, {
+        email: 'someone@example.com',
+        code: '123456',
+      });
+      expect(response.status).toBe(409);
+      expectPublicHeaders(response);
+      const page = await response.text();
+      expect(page).toContain(`<html lang="${lang}"`);
+      expect(page).toContain(text.refused.pendingIjazahRequests);
+      expect(page).not.toContain(text.refused.activeEnrollments);
+      expect(page).toContain(`href="mailto:${SUPPORT}"`);
+      expect(page).not.toContain(text.done.title);
+      expect(page).not.toContain('someone@example.com');
+    },
+  );
+
   it('answers the error page for any other conflict, never the refusal (T080)', async () => {
     deletion.confirmWebDeletion.mockRejectedValueOnce(new DomainError('CONFLICT'));
     const response = await submit(DELETE_ACCOUNT_CONFIRM_PATH, {
@@ -432,6 +463,8 @@ describe('POST /delete-account/confirm: the code step (FR-141, FR-143, FR-145)',
     const page = await response.text();
     expect(response.status).not.toBe(200);
     expect(page).not.toContain(ar.refused.activeEnrollments);
+    // 005:T031 (rule d): nor the request's refusal.
+    expect(page).not.toContain(ar.refused.pendingIjazahRequests);
     expect(page).not.toContain(ar.done.title);
   });
 

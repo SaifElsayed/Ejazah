@@ -85,12 +85,16 @@ export const userKeptDocument = z.object({
  * T077: what a deleted teacher's profile keeps: the kept documents, whether the payout reference is
  * kept (never its value), the erasure date an administrator set (null for none) and the erasure
  * (null until it ran). A teacher never approved keeps nothing: no document, no payout.
+ *
+ * 005:T031 (FR-631; R-411; Q-D2 (a)): the kept signature image, by its upload instant only, never its
+ * key or a link (`teachers.keptData.signatureLink` opens it); null when none is kept or once erased.
  */
 export const userKeptData = z.object({
   documents: z.array(userKeptDocument),
   payoutKept: z.boolean(),
   eraseAt: z.iso.datetime().nullable(),
   erasedAt: z.iso.datetime().nullable(),
+  signature: z.object({ uploadedAt: z.iso.datetime() }).nullable(),
 });
 
 export const usersGetOutput = z.object({
