@@ -413,6 +413,60 @@
     "packageEditor": {
       "teacherShare": "You receive EGP {amount} of this price ({percent}%)",
       "averagePrice": "Other teachers average EGP {amount} a session on this track and length"
+    },
+    "dues": {
+      "row": "My dues",
+      "title": "My dues",
+      "lede": "Your share of each package: still held until it falls due, due and awaiting the administration's payment, or paid to you.",
+      "totals": {
+        "held": "Total held",
+        "paid": "Total paid"
+      },
+      "releasesTitle": "Your share of your packages",
+      "part": {
+        "recitationEnd": "Recitation package",
+        "ijazahHalf": "Ijazah: at half the sessions",
+        "ijazahEnd": "Ijazah: the rest at the end",
+        "teacherDropout": "Package ended on your withdrawal: the sessions held",
+        "studentComplaintClose": "Package closed on a complaint against the student"
+      },
+      "state": {
+        "held": "Held",
+        "due": "Due",
+        "paid": "Paid"
+      },
+      "heldUntil": "Falls due on {date} at {time}, if no complaint is opened",
+      "heldAfterLast": "Falls due when the complaint window after the last session ends, if no complaint is opened",
+      "heldWaitsForCase": "On hold until the open complaint is closed",
+      "dueAwaiting": "Awaiting the administration's payment",
+      "paidOn": "Paid on {date}",
+      "deductionsTitle": "Owed back",
+      "deductionsLede": "Your share of each amount refunded to a student.",
+      "deductionsEmpty": "Nothing has been refunded to a student from your orders.",
+      "reasonLine": "Reason: {reason}",
+      "reason": {
+        "slotUnavailable": "The time was no longer available",
+        "partyRestricted": "One side's account was restricted",
+        "duplicatePayment": "A duplicate payment",
+        "absenceTermination": "Package ended for your repeated absence",
+        "adminCancellation": "Cancelled by the administration",
+        "teacherEnded": "You ended the package",
+        "studentSuspended": "The student's account was suspended",
+        "studentBanned": "The student's account was banned",
+        "studentFaultConfirmed": "The student's fault was confirmed",
+        "refundChoice": "The student chose a refund",
+        "counterUnanswered": "A counter-proposal went unanswered",
+        "makeupRefused": "The make-up session was refused",
+        "adminOpenedForStudent": "A case the administration opened for the student",
+        "adminOpenedForTeacher": "A case the administration opened for you",
+        "teacherSuspended": "Your account was suspended",
+        "adminEnded": "Ended by the administration",
+        "genderCorrection": "An account details correction"
+      },
+      "empty": {
+        "title": "No dues yet",
+        "text": "They appear here once an order on one of your packages is paid."
+      }
     }
   },
   "notifications": {
