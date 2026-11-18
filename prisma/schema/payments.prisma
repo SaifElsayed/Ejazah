@@ -30,6 +30,12 @@ model Payment {
   // share never above the gross (ERD section 15 rule 52).
   teacherShareRatePercent Int?           @map("teacher_share_rate_percent") @db.SmallInt
   teacherSharePiasters    BigInt?        @map("teacher_share_piasters")
+  // 003:T102 (ADR 0025 D3, SRS DEC-82): the order's refunded total, the sum of the refunds the
+  // gateway's signed child events reported (by `packages/money`), from 0 to the gross (ERD section
+  // 15 rule 61); the order becomes `refunded` when it reaches the gross. `refundReportedAt`: when the
+  // gateway first flagged a refund on the original payment, which reports no amount (Q-2 (a)).
+  refundedPiasters        BigInt         @default(0) @map("refunded_piasters")
+  refundReportedAt        DateTime?      @map("refund_reported_at") @db.Timestamptz(6)
   currency                String         @db.Char(3)
   // `refunded` is learned from the gateway's signed event; the platform never initiates one (FR-PAYG-10).
   status                  PaymentStatus
