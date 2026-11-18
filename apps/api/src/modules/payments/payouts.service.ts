@@ -14,7 +14,7 @@
 //
 // THE ADMINISTRATOR («تحويلات المعلمين»). `list`: the figures of every teacher with a release
 // written or owed or a refund on his orders, computed over every paid order with a share and every
-// written release, read in pages of `SCAN_PAGE_SIZE` (each read bounded; the whole scan grows with
+// written release, read in pages of `admin_list_page_size` (each read bounded; the whole scan grows with
 // the orders, re-checked at Phase 6's load pass, a follow-up). The teachers with something due first,
 // the oldest due first, then by id; pages of `admin_list_page_size` after a teacher's id. `get`: one
 // teacher's rows with the order and the student behind each, and his payout account masked.
@@ -76,14 +76,13 @@ import {
 const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
 const positiveWhole = z.int().positive();
 
-/** How many rows each read of the list's scan takes. */
-export const SCAN_PAGE_SIZE = 200;
-
 /** The month «paid this month» counts in (Q-B1-9 (a)): the platform's market's calendar month. */
 export const PAYOUT_MONTH_ZONE = 'Africa/Cairo';
 
-/** The masked payout account shows its reference's last characters only. */
-const MASK_KEEP = 4;
+/**
+ * The masked payout account shows its reference's last characters only, as many as the mask's dots
+ * (Q-B1-8 (a): four), so no length is written as a literal (the magic-number gate, FR-034).
+ */
 const MASK = '••••';
 
 const MARK_SCOPE = 'payouts.mark';
@@ -150,12 +149,12 @@ const amountsIn = (lines: readonly ReleaseLine[], state: ShareReleaseState): Pia
 /** The first instant of `now`'s calendar month in the payouts' zone. */
 export function monthStartOf(now: Date): Date {
   const today = localDateIn(now, PAYOUT_MONTH_ZONE);
-  return new Date(startOfLocalDay(`${today.slice(0, 8)}01`, PAYOUT_MONTH_ZONE));
+  return new Date(startOfLocalDay(today.replace(/-\d+$/, '-01'), PAYOUT_MONTH_ZONE));
 }
 
 /** The last characters of the gateway's recipient reference, the rest hidden (Q-B1-8 (a)). */
 export function maskedReference(reference: string): string {
-  return `${MASK}${reference.slice(-MASK_KEEP)}`;
+  return `${MASK}${reference.slice(-MASK.length)}`;
 }
 
 function figuresOf(
@@ -341,19 +340,21 @@ export function createPayouts({
       let after: string | undefined;
       const seen = new Set<string>();
       for (;;) {
-        const orders = await store.shareOrdersAfter(tx, after, SCAN_PAGE_SIZE);
+        const orders = await store.shareOrdersAfter(tx, after, pageSize);
         const fresh = orders.map(({ enrollmentId }) => enrollmentId).filter((id) => !seen.has(id));
         for (const id of fresh) seen.add(id);
         for (const one of await releasesAmong(tx, fresh, store.reads)) {
           lines.push(...releaseLinesOf(one, { windowHours, now }));
         }
-        if (orders.length < SCAN_PAGE_SIZE) break;
-        after = orders.at(-1)?.paymentId;
+        const next = orders.at(-1)?.paymentId;
+        // A page that moves the cursor nowhere ends the scan, so a read that ignores it cannot loop.
+        if (orders.length < pageSize || next === undefined || next === after) break;
+        after = next;
       }
       // A written release of an enrollment no paid order reaches any more stays counted.
       let releasesFrom: string | undefined;
       for (;;) {
-        const rows = await store.releasesAfter(tx, releasesFrom, SCAN_PAGE_SIZE);
+        const rows = await store.releasesAfter(tx, releasesFrom, pageSize);
         for (const row of rows.filter(({ enrollmentId }) => !seen.has(enrollmentId))) {
           lines.push({
             releaseId: row.id,
@@ -369,13 +370,14 @@ export function createPayouts({
             ...(row.markedAt === null ? {} : { paidAt: row.markedAt }),
           });
         }
-        if (rows.length < SCAN_PAGE_SIZE) break;
-        releasesFrom = rows.at(-1)?.id;
+        const next = rows.at(-1)?.id;
+        if (rows.length < pageSize || next === undefined || next === releasesFrom) break;
+        releasesFrom = next;
       }
       // «عليه»: every order with a refund recorded, by its enrollment's teacher.
       let refundsFrom: string | undefined;
       for (;;) {
-        const orders = await store.refundedOrdersAfter(tx, refundsFrom, SCAN_PAGE_SIZE);
+        const orders = await store.refundedOrdersAfter(tx, refundsFrom, pageSize);
         const enrollments = await store.reads.enrollmentsAmong(
           tx,
           orders.map(({ enrollmentId }) => enrollmentId),
@@ -388,8 +390,9 @@ export function createPayouts({
             refundShareOf(order),
           ]);
         }
-        if (orders.length < SCAN_PAGE_SIZE) break;
-        refundsFrom = orders.at(-1)?.paymentId;
+        const next = orders.at(-1)?.paymentId;
+        if (orders.length < pageSize || next === undefined || next === refundsFrom) break;
+        refundsFrom = next;
       }
 
       const monthStart = monthStartOf(now);

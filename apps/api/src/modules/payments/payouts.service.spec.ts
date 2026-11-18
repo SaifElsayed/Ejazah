@@ -339,6 +339,12 @@ describe('payouts.list: «تحويلات المعلمين»', () => {
     expect(page.nextCursor).toBeUndefined();
   });
 
+  it('ends its scan when a page does not move the cursor, so a read that ignores it cannot loop', async () => {
+    // A store that answers every written release whatever the cursor, at a page size of 1.
+    const { service } = payouts({ releasesAfter: async () => written });
+    await expect(service.list(tx, ADMIN, {})).resolves.toBeDefined();
+  });
+
   it('keeps only the teachers with something due under «due now only»', async () => {
     // T1's due release marked: T1 has nothing due now, T2 still has.
     const paid = written.map((row) =>
@@ -346,7 +352,8 @@ describe('payouts.list: «تحويلات المعلمين»', () => {
     );
     const base = store().store;
     const { service } = payouts({
-      releasesAfter: async () => paid,
+      releasesAfter: async (_tx, after, take) =>
+        paid.filter((row) => after === undefined || row.id > after).slice(0, take),
       reads: {
         ...base.reads,
         releasesOf: async (_tx, ids) => paid.filter((row) => ids.includes(row.enrollmentId)),

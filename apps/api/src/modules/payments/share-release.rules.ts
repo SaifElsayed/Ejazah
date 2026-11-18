@@ -131,7 +131,7 @@ export function takenOffAtEnd(order: ReleaseOrder): Piasters {
 
 /** Q-B1-2 (a), the literal «≥ half»: 5 of 9, 5 of 10. */
 export function halfReached(delivered: number, sessionCount: number): boolean {
-  return delivered * 2 >= sessionCount;
+  return delivered >= sessionCount - delivered;
 }
 
 /** The fewest delivered sessions that reach the half, by `halfReached` (at most the count). */
