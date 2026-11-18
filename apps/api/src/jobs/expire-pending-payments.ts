@@ -45,6 +45,7 @@ import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import {
   awaitingConfirmationAmong,
   expiredEnrollmentHoldIds,
+  keyShareStudentsOfHolds,
   type PaymentOutcomeNotices,
   releaseHolds,
   withOutcomeNotices,
@@ -107,8 +108,11 @@ export function pendingPaymentStepsOf(notices: PaymentOutcomeNotices): PendingPa
     expiredOrders: expiredOrderIds,
     markExpired: markOrdersExpired,
     expiredHolds: expiredEnrollmentHoldIds,
-    release: (tx, holdIds, at) =>
-      releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices }),
+    // 005:T016 (fixed in B48): the page's students key-shared before the release locks the holds.
+    release: async (tx, holdIds, at) => {
+      await keyShareStudentsOfHolds(tx, holdIds);
+      return releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices });
+    },
     paidOrders: paidOrdersRecordedBefore,
     awaitingConfirmation: awaitingConfirmationAmong,
     cases: caseInstantsAmong,

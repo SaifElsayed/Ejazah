@@ -410,3 +410,7 @@ export {
   type PaymentOutcomeNotices,
   withOutcomeNotices,
 } from './payment-outcome-notices.port.js';
+// 005:T016 (the follow-up under T016, fixed in B48): the students a payment path pushes, key-shared
+// first by a path that holds no lock yet (payments' order events and cancelled order, the sweeps).
+export { keyShareStudentsOfEnrollments } from './enrollment-events.repository.js';
+export { keyShareStudentsOfHolds } from './holds.repository.js';

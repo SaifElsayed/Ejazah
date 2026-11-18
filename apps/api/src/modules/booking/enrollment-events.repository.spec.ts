@@ -175,3 +175,23 @@ describe('recordEnrollmentEvents hands each payment outcome to the notice port (
     expect(trace).toEqual([]);
   });
 });
+
+describe('recordEnrollmentEvents without a push, on purpose (Q-A1 (b))', () => {
+  it('writes a payment outcome’s row and pushes nothing, reading no student', async () => {
+    const { tx, trace, told } = recorded();
+    await recordEnrollmentEvents(
+      tx,
+      [
+        {
+          kind: 'cancelled',
+          enrollmentId: id(1),
+          cancellationReason: 'payment_expired',
+          occurredAt: AT,
+        },
+      ],
+      'without_push',
+    );
+    expect(trace).toEqual(['events cancelled']);
+    expect(told).toEqual([]);
+  });
+});

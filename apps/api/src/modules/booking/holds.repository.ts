@@ -8,6 +8,7 @@
 // instant. Every read of holds is bounded: at most one active hold per slot and per student (the
 // two partial unique indexes), and the ids a caller locked.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { keyShareRows } from '../../platform/db/row-lock.js';
 import type { EnrollmentCancellationReason } from './enrollment-events.repository.js';
 
 type Client = Pick<Transaction, 'slotHold' | 'enrollment'>;
@@ -94,6 +95,29 @@ export function activeHoldsOf(tx: Client, scope: Required<HoldScope>): Promise<H
       expiresAt: true,
     },
   });
+}
+
+/**
+ * 005:T016 (the follow-up under T016, fixed in B48 on the owner's answer of 2026-11-18): the students
+ * of `holdIds`, read with no lock (a hold's student never changes), key-shared in one call in id
+ * order. A sweep takes it on its page before the release locks the holds, so
+ * the push's own foreign-key key share then waits on nothing while the path holds a
+ * hold, an enrollment or an order (kernel.md, «a push recorded by a producer»).
+ */
+export async function keyShareStudentsOfHolds(
+  tx: Transaction,
+  holdIds: readonly string[],
+): Promise<void> {
+  if (holdIds.length === 0) return;
+  const rows = await tx.slotHold.findMany({
+    where: { id: { in: [...holdIds] } },
+    select: { studentUserId: true },
+  });
+  await keyShareRows(
+    tx,
+    'users',
+    [...new Set(rows.map(({ studentUserId }) => studentUserId))].sort(),
+  );
 }
 
 /** Which active holds an account's end is about: those on a teacher's slots, or a student's (T041). */

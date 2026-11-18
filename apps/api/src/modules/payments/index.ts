@@ -221,3 +221,9 @@ export function createPaymentsMonitorService(dependencies: {
 }): Pick<PaymentsMonitorService, 'list' | 'get'> {
   return new PaymentsMonitorService(dependencies);
 }
+
+// 005:T016 (the follow-up under T016 on the push's key share, fixed in B48): the checkout's steps over
+// the process's client, which `createCheckoutServices` composes; exported so the gateway-cancelled
+// order's transaction (`recordCancelled`) is reached alone by
+// `tests/db-integrity/payment-notices-race.spec.ts` (R-API-3).
+export { checkoutStepsOver } from './checkout.service.js';

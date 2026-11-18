@@ -9,7 +9,6 @@
 //   caller (file)                                   transaction that binds its list
 //   booking `confirmEnrollment` (confirmed)          confirm-enrollment, the `'confirm'` attempt
 //   booking `reholdEnrollment` (cancelled, expired)  confirm-enrollment, the `'confirm'` attempt
-//   booking `refuseEnrollment` (cancelled, expired)  confirm-enrollment, an attempt that refuses
 //   booking `recordOrderFailed` (order_failed)       payments' order events (`record()`)
 //   booking `recordOrderFailed` (order_failed)       the checkout's gateway cancellation
 //   booking `placeHold` (cancelled, expired)         the checkout's hold (`checkout.hold`)
@@ -20,7 +19,8 @@
 // refuses (`no_after_commit_list`) and the transaction rolls back, row and outcome together. Also:
 // a `'confirm'` attempt the database refuses leaves no `payment_confirmed` row and the `'refuse'`
 // attempt commits; a replayed failed event writes no second row; a cancellation for a failed
-// payment pushes nothing (its order's failure was pushed). Every queued id names a committed row.
+// payment pushes nothing (its order's failure was pushed); a refused late payment records its
+// `cancelled` outcome with no push (Q-A1 (b)). Every queued id names a committed row.
 // The rows are committed, each probe with a world of its own; every connection is the application
 // role.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
@@ -98,7 +98,7 @@ afterAll(async () => {
   if (database !== undefined) await closeDatabase(database);
 });
 
-const { person, world, order, enrollmentOf, casesOf } = confirmationWorld(() => database);
+const { person, world, order, enrollmentOf, eventsOf, casesOf } = confirmationWorld(() => database);
 
 const confirm = (paymentId: string) =>
   confirmEnrollment({ database, settings, notices: writer, clock: () => NOW }).handle({
@@ -237,7 +237,10 @@ describe('confirm-enrollment pushes on each attempt’s transaction (005:T016)',
     await queuedAreCommitted();
   });
 
-  it('a refusal for a party of an enrollment cancelled for an expired payment records that cancellation again, with its push (Q-N2 (a) as written)', async () => {
+  // Q-A1 (b), the owner's answer of 2026-11-18: a refused late payment records its `cancelled`
+  // outcome without a push, so an enrollment already cancelled for an expired payment is not told
+  // twice («none twice for one order»).
+  it('a refusal for a party of an enrollment cancelled for an expired payment records that cancellation again, with no push (Q-A1 (b))', async () => {
     const on = await world({
       teacher: 'suspended',
       enrollment: { status: 'cancelled', reason: 'payment_expired' },
@@ -246,9 +249,13 @@ describe('confirm-enrollment pushes on each attempt’s transaction (005:T016)',
     expect((await casesOf(on.enrollmentId)).map(({ reason }) => reason)).toEqual([
       'party_restricted',
     ]);
-    expect(await pushesOf(on.studentId)).toEqual([
-      push(on.studentId, 'payment_expired', on.enrollmentId),
-    ]);
+    expect(
+      (await eventsOf(on.enrollmentId)).map(({ kind, cancellationReason }) => [
+        kind,
+        cancellationReason,
+      ]),
+    ).toEqual([['cancelled', 'payment_expired']]);
+    expect(await pushesOf(on.studentId)).toEqual([]);
   });
 });
 

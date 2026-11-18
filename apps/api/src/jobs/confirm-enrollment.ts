@@ -50,11 +50,11 @@
 // THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)).
 // Booking records each outcome's push through the notice port `worker.ts` binds (`notices`), with
 // the outcome, on the attempt's transaction: `payment_confirmed` with the confirmation, and
-// `payment_expired` for an enrollment a release cancels for an expired payment (the re-hold's, or
-// the refusal's). Each attempt runs with an after-commit list of its own (`withOutcomeNotices`), so a
-// `'confirm'` attempt the database refuses drops its push with everything else it wrote, and the
-// `'refuse'` attempt that follows sends only its own. A second run records no second outcome, so
-// no second push.
+// `payment_expired` for another student's enrollment the re-hold's release cancels for an expired
+// payment; a refusal's own record pushes nothing (Q-A1 (b), the owner's answer of 2026-11-18). Each
+// attempt runs with an after-commit list of its own (`withOutcomeNotices`), so a `'confirm'` attempt
+// the database refuses drops its push with everything else it wrote. A second run records no second
+// outcome, so no second push.
 import { z } from 'zod';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';

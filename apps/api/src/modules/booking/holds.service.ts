@@ -209,6 +209,28 @@ export const holdsStore: HoldsStore = {
   sessionsBetween: partiesBusyBetween,
 };
 
+/**
+ * 005:T016 (the follow-up under T016, fixed in B48 on the owner's answer of 2026-11-18): the accounts
+ * a placement locks first, in its one `users` call: the student, the teacher, and the students of
+ * the slot's and the student's active holds, read with no lock (a hold's student never changes, and
+ * the slot admits one active hold). The placement's release of an expired one records that
+ * student's push, whose foreign-key key share then waits on nothing while the placement holds the
+ * hold and its enrollment (kernel.md, «a push recorded by a producer»). A hold that expires is never
+ * placed after this read: a new one expires after the placement's instant.
+ */
+export async function placementAccounts(
+  tx: Transaction,
+  store: Pick<HoldRows, 'activeHoldsOf'>,
+  {
+    studentUserId,
+    teacherUserId,
+    slotId,
+  }: Readonly<Record<'studentUserId' | 'teacherUserId' | 'slotId', string>>,
+): Promise<string[]> {
+  const around = await store.activeHoldsOf(tx, { slotId, studentUserId });
+  return sortedUnique([studentUserId, teacherUserId, ...around.map((hold) => hold.studentUserId)]);
+}
+
 /** The gateway checkout's minutes, which the hold lasts before its grace (FR-BOOK-9, FR-PAYG-6). */
 export const HOLD_TTL_SETTING = 'slot_hold_ttl_minutes';
 /** The minutes a hold outlives its order (FR-BOOK-9, ADR 0010 D4). */
@@ -457,7 +479,15 @@ export async function placeHold(
   if (named === null) throw new DomainError('NOT_FOUND');
   const teacherUserId = named.teacherUserId;
   if (teacherUserId === student.userId) throw new DomainError('FORBIDDEN');
-  await store.lockRows(tx, 'users', sortedUnique([student.userId, teacherUserId]));
+  await store.lockRows(
+    tx,
+    'users',
+    await placementAccounts(tx, store, {
+      studentUserId: student.userId,
+      teacherUserId,
+      slotId: request.slotId,
+    }),
+  );
   if (!(await store.visible(tx, student.gender, teacherUserId, 'discover'))) {
     throw new DomainError('NOT_FOUND');
   }

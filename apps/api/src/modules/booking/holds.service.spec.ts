@@ -226,7 +226,7 @@ describe("placeHold: FR-353's refusals write nothing", () => {
 });
 
 describe('placeHold: the order (FR-351, T005)', () => {
-  it('locks both accounts in one call, then the slot, the expired holds, their enrollments, then asks their orders; releases, then inserts', async () => {
+  it('locks both accounts with the students of the slot’s and the student’s holds in one call (005:T016), then the slot, the expired holds, their enrollments, then asks their orders; releases, then inserts', async () => {
     const placing = place({
       holds: [
         hold(id(3), { slotId: ELSEWHERE, studentUserId: STUDENT, enrollmentId: id(6) }),
@@ -238,7 +238,8 @@ describe('placeHold: the order (FR-351, T005)', () => {
     expect(
       placing.log.map(([kind, ...rest]) => (kind === 'insert' ? [kind] : [kind, ...rest])),
     ).toEqual([
-      ['lock', 'users', [STUDENT, TEACHER]],
+      // 005:T016: OTHER, whose expired hold the placement releases with its push, locked first.
+      ['lock', 'users', [STUDENT, TEACHER, OTHER].sort()],
       ['lock', 'availability_slots', [SLOT]],
       ['lock', 'slot_holds', [id(1), id(3)]],
       ['lock', 'enrollments', [id(5), id(6)]],
