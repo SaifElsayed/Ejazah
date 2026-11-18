@@ -175,6 +175,12 @@
         "disputesListed": "View disputes",
         "documentView": "View a document",
         "enrollmentRestored": "Restore an enrollment",
+        "genderFlags": {
+          "dismissed": "Dismiss a gender flag",
+          "listed": "View gender flags",
+          "raised": "Raise a gender flag",
+          "viewed": "View a gender flag"
+        },
         "heldFileView": "View a held file",
         "ijazahReview": {
           "barLifted": "Lift a user's ijazah bar",

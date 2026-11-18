@@ -260,3 +260,61 @@ describe('no user-surface input carries gender but onboarding.complete (T029, R-
     expect(Object.fromEntries(taking)).toEqual({ 'onboarding.complete': ['gender', 'role'] });
   });
 });
+
+// 005:T013 — no procedure on either router changes one's own gender (R-GENDER-6, FR-618; SRS
+// FR-GENDER-5; research R-409, «No self-service path»). Read from the live routers, not the committed
+// snapshot, so a procedure mounted since the last snapshot is read too: every input schema each
+// procedure parses is turned into its JSON Schema and every property name at any depth collected.
+// On the user surface only `onboarding.complete` takes a `gender`: the declaration made once,
+// before the account exists (T029 above). On the administrator surface no input takes one: the
+// administrators' correction and fraud ban (T014, T015) set the other declared gender from the flag,
+// never from what an administrator types, and an administrator has no declared gender of their own.
+// Red first under the mutant «a `gender` in an administrator's input» (lane D's `mutants\`).
+describe('no procedure on either router changes one’s own gender (005:T013, R-GENDER-6, FR-618)', () => {
+  /** Every property name the procedure's input schemas declare, at any depth. */
+  function inputNamesOf(procedure: AnyProcedure): Set<string> {
+    const names = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
+      }
+      if (typeof node !== 'object' || node === null) return;
+      const { properties } = node as { properties?: unknown };
+      if (typeof properties === 'object' && properties !== null) {
+        for (const name of Object.keys(properties)) names.add(name);
+      }
+      for (const value of Object.values(node)) walk(value);
+    };
+    for (const input of procedure._def.inputs as z.ZodType[]) {
+      walk(z.toJSONSchema(input, { io: 'input', unrepresentable: 'any' }));
+    }
+    return names;
+  }
+
+  /** The paths of the router whose input takes a `gender` at any depth. */
+  function takingGender(router: AnyRouter): string[] {
+    return [...proceduresOf(router)]
+      .filter(([, procedure]) => inputNamesOf(procedure).has('gender'))
+      .map(([path]) => path)
+      .sort();
+  }
+
+  it('the walk reads nested inputs: a gender under an object of an object is found', () => {
+    const nested = adminProcedure({
+      input: z.object({ person: z.object({ gender: z.enum(['male', 'female']) }) }),
+      output: z.void(),
+    }).mutation(() => undefined);
+    expect(takingGender(createAdminRouter({ people: { correct: nested } }))).toEqual([
+      'people.correct',
+    ]);
+  });
+
+  it('the user surface: only onboarding.complete takes a gender', () => {
+    expect(takingGender(appRouter)).toEqual(['onboarding.complete']);
+  });
+
+  it('the administrator surface: no procedure takes a gender', () => {
+    expect(takingGender(adminRouter)).toEqual([]);
+  });
+});

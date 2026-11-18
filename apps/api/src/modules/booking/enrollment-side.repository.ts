@@ -57,6 +57,29 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
 }
 
 /**
+ * 005:T013 (T011's follow-up on `Pairings.paired`, settled by its first caller): whether an
+ * enrollment of any status joins the two people, either as the student; one read of at most one row
+ * over the two parties' plain indexes (one direction each), never the user's whole history. A
+ * soft-deleted enrollment is absent (the client's extension, T148). No lock.
+ */
+export async function pairedEnrollmentExists(
+  tx: Client,
+  userId: string,
+  otherUserId: string,
+): Promise<boolean> {
+  const found = await tx.enrollment.findFirst({
+    where: {
+      OR: [
+        { studentUserId: userId, teacherUserId: otherUserId },
+        { studentUserId: otherUserId, teacherUserId: userId },
+      ],
+    },
+    select: { id: true },
+  });
+  return found !== null;
+}
+
+/**
  * A move's target from `confirmed`: the status and the reason it then carries (null clears it).
  * Never `confirmed`: `moveEnrollment` writes the status from this value, which the confirmation
  * gate cannot read (`tests/pipeline/confirmation-path.spec.ts`, «NOT SEEN»), so the type keeps it

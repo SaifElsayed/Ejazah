@@ -175,6 +175,12 @@
         "disputesListed": "عرض النزاعات",
         "documentView": "عرض وثيقة",
         "enrollmentRestored": "استعادة اشتراك",
+        "genderFlags": {
+          "dismissed": "رفض بلاغ جنس",
+          "listed": "عرض بلاغات الجنس",
+          "raised": "رفع بلاغ جنس",
+          "viewed": "عرض بلاغ جنس"
+        },
         "heldFileView": "عرض ملف محفوظ",
         "ijazahReview": {
           "barLifted": "رفع منع الإجازات عن مستخدم",

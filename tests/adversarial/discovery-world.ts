@@ -118,6 +118,11 @@ import {
 } from '../../apps/api/src/modules/payments/index.js';
 // 005:T011 (Q-X1): reports, over the `Pairings` bodies, bound as `main.ts` will bind them.
 import { createUserReports, reportsRouter } from '../../apps/api/src/modules/moderation/index.js';
+// 005:T013 (rule d): gender flags, over `Pairings.paired`, bound as `main.ts` will bind them.
+import {
+  createGenderFlags,
+  genderFlagsRouter,
+} from '../../apps/api/src/modules/moderation/index.js';
 import {
   createSessionsServices,
   partyOfSession,
@@ -231,6 +236,11 @@ import type {
   ReportsCreateInput,
   ReportsCreateOutput,
 } from '../../packages/contracts/src/reports.js';
+// 005:T013 (rule d): `genderFlags.raise`'s types (the contracts index line is the integration's).
+import type {
+  GenderFlagsRaiseInput,
+  GenderFlagsRaiseOutput,
+} from '../../packages/contracts/src/gender-flags.js';
 import { addDays, addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
@@ -421,6 +431,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
   // 005:T011: `reports.create`'s limit, as seeded (DEC-71).
   rate_limit_user_report: { limit: 5, window_seconds: 86400 },
+  // 005:T013: `genderFlags.raise`'s limit, as seeded (DEC-71).
+  rate_limit_gender_flag: { limit: 3, window_seconds: 86400 },
 };
 
 const settings: SettingsReader = {
@@ -456,6 +468,10 @@ const certificatesCallerFactory = createAppCallerFactory(
 );
 // 005:T011 (Q-X1): `reports`, mounted as `app.router.ts` will mount it (the integration's line).
 const reportsCallerFactory = createAppCallerFactory(createAppRouter({ reports: reportsRouter }));
+// 005:T013 (rule d): `genderFlags`, mounted as `app.router.ts` will mount it (the integration's line).
+const genderFlagsCallerFactory = createAppCallerFactory(
+  createAppRouter({ genderFlags: genderFlagsRouter }),
+);
 
 /** The `discovery` and `booking` namespaces of the user surface as one bearer reaches them. */
 export interface AppCaller {
@@ -667,6 +683,18 @@ export interface DiscoverySurface {
    * `app.router.ts` will mount it, on this world's services and caller kinds.
    */
   reports(accessToken: string): Promise<ReportsCaller>;
+  /**
+   * 005:T013: `genderFlags` as a bearer reaches it, over the module's router mounted under
+   * `genderFlags` as `app.router.ts` will mount it, on this world's services and caller kinds.
+   */
+  genderFlags(accessToken: string): Promise<GenderFlagsCaller>;
+}
+
+/** 005:T013: `genderFlags.raise`, as a bearer calls it. */
+export interface GenderFlagsCaller {
+  readonly genderFlags: {
+    raise(input: GenderFlagsRaiseInput): Promise<GenderFlagsRaiseOutput>;
+  };
 }
 
 /** 005:T011: `reports.create`, as a bearer calls it. */
@@ -952,6 +980,8 @@ async function build(): Promise<Built> {
         pairings: { partyOfSession, partyOfEnrollment, paired },
         settings,
       }),
+      // 005:T013 (rule d): `genderFlags.raise` over `Pairings.paired`, as `main.ts` will bind it.
+      genderFlags: createGenderFlags({ idempotency, pairings: { paired }, settings }),
     },
   };
   const rateLimiter = new RateLimiter({
@@ -1380,6 +1410,17 @@ async function build(): Promise<Built> {
     // 005:T011: the module's router on this world's context.
     reports: async (accessToken) =>
       reportsCallerFactory(
+        createAppContext({
+          session: await resolve(accessToken),
+          log,
+          rateLimiter,
+          clientAddress: SPEC_CLIENT,
+          services,
+        }),
+      ),
+    // 005:T013: the module's router on this world's context.
+    genderFlags: async (accessToken) =>
+      genderFlagsCallerFactory(
         createAppContext({
           session: await resolve(accessToken),
           log,

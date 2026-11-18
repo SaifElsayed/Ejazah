@@ -82,6 +82,12 @@ export const idempotentProcedures = [
   // kind's transaction (runOn).
   'reports.create',
   'reports.resolve',
+  // 005:T013 (app-surface.md and admin-surface.md, `genderFlags.raise`; admin-surface.md,
+  // `genderFlags.dismiss`): one scope for the path on both surfaces, the user's in its own
+  // transaction (run), the administrator's on the kind's transaction (runOn); a key is the actor's
+  // own (`(scope, actor_id, key)`, ERD §15 rule 26), so a user and an administrator never share one.
+  'genderFlags.raise',
+  'genderFlags.dismiss',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */
