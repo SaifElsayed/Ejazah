@@ -354,6 +354,13 @@
       "email": "Email",
       "google": "Google"
     },
+    "report": {
+      "refused": {
+        "openExists": "This is already under review, so there is no need to send it again.",
+        "self": "You cannot report yourself."
+      },
+      "tooLong": "The details are longer than allowed."
+    },
     "reviewTeam": {
       "from": "From the review team",
       "fromOn": "From the review team · {date}"

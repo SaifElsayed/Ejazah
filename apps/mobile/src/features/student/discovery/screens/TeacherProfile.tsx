@@ -6,6 +6,8 @@
 // state, with no hint of why (R-GENDER-2); the shared states draw loading, failure and offline.
 // T044 (FR-BOOK-1, screens.md §4 and §5): the student chooses a package, the first until another is
 // pressed, and the action bar «اختيار الموعد · {package}» opens the booking sheet for it over the page.
+// 005:T021 (FR-611, FR-614; B47's Q-R4 (a)): «إبلاغ» opens the report and flag sheet on the teacher
+// the profile shows (`teacherId`), from the profile; an unknown teacher offers none.
 import type { DiscoveryTeacherOutput, DiscoveryTeacherPackage } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -27,6 +29,7 @@ import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { initialsOf } from '../../../shared/account';
+import { ReportEntry } from '../../../shared/reports';
 import { BookingSheet } from '../../booking';
 import { BackBar, StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -150,6 +153,17 @@ function Profile({
           ))}
         </Section>
       )}
+      <View style={{ alignItems: 'flex-start' }}>
+        <ReportEntry
+          label={t('student.teacherProfile.report')}
+          target={{
+            userId: teacher.teacherId,
+            role: 'teacher',
+            name: teacher.displayName,
+            place: { context: 'profile' },
+          }}
+        />
+      </View>
     </>
   );
 }

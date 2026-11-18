@@ -3,6 +3,8 @@
 // deciding only on what it read since it opened (`read-since-mount.ts`), and draws the chat both
 // roles share (`features/shared/chat`), read-only once the enrollment has ended. A link with no
 // enrollment id is never read: it draws the load error, as the enrollment screen does (T091).
+// 005:T021 (FR-611, FR-614; Q-T4 (a)): the student it read (`student.studentId`) is the one the
+// chat reports.
 import { useLocalSearchParams } from 'expo-router';
 
 import { usePartyName } from '../../../../lib/party';
@@ -18,16 +20,27 @@ export function TeacherChat() {
   const read = readSinceMount(query);
   const partyName = usePartyName();
   const shown = read.state === 'read' ? read.data : undefined;
+  const counterpart = shown === undefined ? undefined : partyName(shown.student, 'student');
   return (
     <ChatScreen
       enrollmentId={enrollmentId}
-      counterpart={shown === undefined ? undefined : partyName(shown.student, 'student')}
+      counterpart={counterpart}
       status={shown?.status}
       failed={!valid || read.state === 'failed'}
       error={query.error}
       onRetry={() => {
         if (valid) void query.refetch();
       }}
+      report={
+        shown === undefined || counterpart === undefined
+          ? undefined
+          : {
+              userId: shown.student.studentId,
+              role: 'student',
+              name: counterpart,
+              place: { context: 'chat', enrollmentId },
+            }
+      }
     />
   );
 }
