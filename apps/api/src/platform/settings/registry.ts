@@ -91,7 +91,7 @@ export const wholeNonNegative = z.int().nonnegative();
 export const attendancePercent = z.number().positive();
 
 /**
- * `reminder_offsets_minutes`: no read site yet (T005's reminder sweep will read with this). Each
+ * `reminder_offsets_minutes`: read by `jobs/send-reminder.ts` (005:T017). Each
  * offset is a whole number of minutes ahead of the session (SRS FR-BOOK-8, «ahead of each session»).
  */
 export const reminderOffsets = z.array(z.int().positive());
