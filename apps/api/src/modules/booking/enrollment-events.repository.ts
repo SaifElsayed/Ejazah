@@ -20,8 +20,10 @@
 // with no port is refused before anything is written, so no caller loses a push silently; every
 // other outcome needs none. A caller that records a payment outcome that must not be pushed says so
 // with `'without_push'`: a refused late payment's `cancelled` record (Q-A1 (b), the owner's answer
-// of 2026-11-18; `refuseEnrollment`). The push's row references the student's `users` row: which lock the
-// caller holds on it is kernel.md's row «a payment outcome's push» (005:T016).
+// of 2026-11-18; `refuseEnrollment`) and the checkout's own gateway cancellation of an earlier
+// order (#148 Saif r1, Major 2; `recordOrderFailed`). The push's row references the student's
+// `users` row: which lock the caller holds on it is kernel.md's row «a push recorded by a
+// producer» (005:T016).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { keyShareRows } from '../../platform/db/row-lock.js';
 import {

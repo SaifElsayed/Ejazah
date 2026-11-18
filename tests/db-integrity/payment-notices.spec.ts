@@ -10,7 +10,6 @@
 //   booking `confirmEnrollment` (confirmed)          confirm-enrollment, the `'confirm'` attempt
 //   booking `reholdEnrollment` (cancelled, expired)  confirm-enrollment, the `'confirm'` attempt
 //   booking `recordOrderFailed` (order_failed)       payments' order events (`record()`)
-//   booking `recordOrderFailed` (order_failed)       the checkout's gateway cancellation
 //   booking `placeHold` (cancelled, expired)         the checkout's hold (`checkout.hold`)
 //   booking `releaseHolds` (cancelled, expired)      expire-pending-payments, a page of holds
 //   booking `releaseHolds` (cancelled, expired)      expire-holds, a page (a Pay linked meanwhile)
@@ -20,7 +19,9 @@
 // a `'confirm'` attempt the database refuses leaves no `payment_confirmed` row and the `'refuse'`
 // attempt commits; a replayed failed event writes no second row; a cancellation for a failed
 // payment pushes nothing (its order's failure was pushed); a refused late payment records its
-// `cancelled` outcome with no push (Q-A1 (b)). Every queued id names a committed row.
+// `cancelled` outcome with no push (Q-A1 (b)); the checkout's own gateway cancellation of an earlier
+// order records its `order_failed` outcome with no push (#148 Saif r1, Major 2: the platform
+// cancelled it, and nothing is left to Retry). Every queued id names a committed row.
 // The rows are committed, each probe with a world of its own; every connection is the application
 // role.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
@@ -412,7 +413,7 @@ describe('the checkout pushes (005:T016)', () => {
     await queuedAreCommitted();
   });
 
-  it('checkout.hold: an earlier order the gateway cancels is recorded failed with one payment_failed row', async () => {
+  it('checkout.hold: an earlier order the gateway cancels is recorded failed with no push (#148 Saif r1, Major 2)', async () => {
     const [first, second] = [
       await world({ enrollment: ENDED }),
       await world({ enrollment: ENDED }),
@@ -431,9 +432,17 @@ describe('the checkout pushes (005:T016)', () => {
       status: 'cancelled',
       cancellationReason: 'checkout_abandoned',
     });
-    expect(await pushesOf(own.studentId)).toEqual([
-      push(own.studentId, 'payment_failed', own.enrollmentId),
+    // The order's failure is recorded; the platform cancelled it, so nothing is pushed.
+    expect(
+      (await eventsOf(own.enrollmentId)).map(({ kind, cancellationReason }) => [
+        kind,
+        cancellationReason,
+      ]),
+    ).toEqual([
+      ['order_failed', null],
+      ['cancelled', 'checkout_abandoned'],
     ]);
+    expect(await pushesOf(own.studentId)).toEqual([]);
     await queuedAreCommitted();
   });
 });

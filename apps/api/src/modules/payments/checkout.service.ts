@@ -45,12 +45,16 @@
 // A CANCELLATION THE GATEWAY FAILS is reported (T111) and never hides the answer it followed: the
 // order it left is the one FR-375's `duplicate_payment` case covers if it is ever paid.
 //
-// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)). Two
-// transactions here can record a payment outcome: `hold`'s, whose placement releases the expired
-// holds on the slot and of the student (FR-351) and so can cancel an enrollment for an expired
-// payment, and the gateway's cancellation recorded as a failed order (`recordCancelled`). Each runs
-// with an after-commit list of its own (booking's `withOutcomeNotices`), and booking's writer
-// records the push with the outcome through the notice port `main.ts` binds (`notices`).
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)). One
+// transaction here records a payment outcome that is pushed: `hold`'s, whose placement releases the
+// expired holds on the slot and of the student (FR-351) and so can cancel an enrollment for an
+// expired payment. It runs with an after-commit list of its own (booking's `withOutcomeNotices`),
+// and booking's writer records the push with the outcome through the notice port `main.ts` binds
+// (`notices`). The gateway's cancellation of an earlier order, recorded as a failed order
+// (`recordCancelled`), pushes nothing (#148 Saif r1, Major 2): the platform cancelled it, and the
+// placement then releases its hold as `checkout_abandoned`, so nothing is left to Retry. It records
+// `order_failed` with `'without_push'`, so it binds no list and takes no lock on the student: no
+// write of its transaction references the account.
 import type {
   CheckoutHandover,
   CheckoutHoldInput,
@@ -101,7 +105,6 @@ import {
   recordOrderFailed,
   type RetryTarget,
   retryTargetOf,
-  keyShareStudentsOfEnrollments,
   studentCheckoutEnrollment,
   withOutcomeNotices,
 } from '../booking/index.js';
@@ -222,7 +225,7 @@ export interface CheckoutSteps {
 
 /**
  * The steps over the process's client and the owners' entries; 005:T016: `notices`, the payment
- * pushes' port, handed to the placement and the failed order's record.
+ * pushes' port, handed to the placement (the failed order's record pushes nothing, Major 2).
  */
 export function checkoutStepsOver(
   database: Database,
@@ -245,20 +248,15 @@ export function checkoutStepsOver(
     lockOrderTarget: (tx, target, stillPayable) => lockOrderTarget(tx, target, stillPayable),
     insertOrder,
     recordCancelled: (enrollmentId, paymentId) =>
-      withOutcomeNotices(
-        (work) => database.$transaction(work),
-        async (tx) => {
-          // 005:T016 (fixed in B48): the push's student key-shared first (kernel.md, «a push
-          // recorded by a producer»); then the enrollment and the order (T005), as the order event
-          // branch locks them (T038).
-          await keyShareStudentsOfEnrollments(tx, [enrollmentId]);
-          await lockOrder(tx, { paymentId, enrollmentId });
-          const orders = new PaymentsRepository(tx);
-          if ((await orders.statusOf(paymentId)) !== 'created') return;
-          await orders.moveOrder(paymentId, 'failed', undefined);
-          await recordOrderFailed(tx, enrollmentId, paymentId, now(), notices);
-        },
-      ),
+      database.$transaction(async (tx) => {
+        // The enrollment and the order (T005), as the order event branch locks them (T038); no
+        // push, so nothing references the student (this file's head, #148 Saif r1, Major 2).
+        await lockOrder(tx, { paymentId, enrollmentId });
+        const orders = new PaymentsRepository(tx);
+        if ((await orders.statusOf(paymentId)) !== 'created') return;
+        await orders.moveOrder(paymentId, 'failed', undefined);
+        await recordOrderFailed(tx, enrollmentId, paymentId, now(), 'without_push');
+      }),
     studentEnrollment: studentCheckoutEnrollment,
     orderById,
     lastOrderOf,

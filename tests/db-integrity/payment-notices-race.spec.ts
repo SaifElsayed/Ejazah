@@ -10,9 +10,12 @@
 // student while holding them, and a path that holds the student and then waits on one of those rows
 // (the student's own checkout or confirmation, an account's end) closes the cycle: 40P01. So each
 // producer takes the student first: `keyShareRows` before its first lock where it holds nothing yet
-// (payments' order events, the checkout's cancelled order, the two sweeps), and the accounts' one
-// `FOR UPDATE` call widened to the students of the slot's and the student's holds where the path
-// already locks accounts first (a placement, the confirmation's re-hold).
+// (payments' order events, the two sweeps), and the accounts' one `FOR UPDATE` call widened to the
+// students of the slot's and the student's holds where the path already locks accounts first (a
+// placement, the confirmation's re-hold). The checkout's own gateway cancellation of an earlier order
+// pushes nothing (#148 Saif r1, Major 2), so no write of its transaction references the student and
+// it takes no lock on the account: its case holds the student `FOR UPDATE` throughout and sees the
+// order recorded failed without waiting on it.
 //
 // THE OTHER PATH is a raw transaction on its own connection with exactly that order: the student
 // `FOR UPDATE`, then the producer's row `FOR UPDATE`, then the commit. Each order is staged with the
@@ -384,22 +387,41 @@ describe('payments’ order events, a failed order (the student key-shared first
   );
 });
 
-describe('the checkout’s order the gateway cancelled (the student key-shared first)', () => {
-  it.each(ORDERS)(
-    '%s: both commit, no deadlock, one payment_failed',
-    async (which) => {
+describe('the checkout’s order the gateway cancelled (no push, nothing on the student; #148 Saif r1, Major 2)', () => {
+  it(
+    'the student held FOR UPDATE throughout: the order is recorded failed without waiting on it, nothing pushed',
+    async () => {
       const on = await world();
       const paymentId = await order(on.enrollmentId, 'created');
-      const settled = await run(which)(
-        {
-          student: on.studentId,
-          taken: { table: 'enrollments', id: on.enrollmentId },
-          later: { table: 'payments', id: paymentId },
-        },
-        () =>
+      const state: { done?: Outcome } = {};
+      let recorded: Promise<Outcome> = Promise.resolve({ ok: true });
+      let waitedOnStudent = false;
+      await other.query('BEGIN');
+      try {
+        await other.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [on.studentId]);
+        recorded = settle(
           checkoutStepsOver(database, cipher, writer).recordCancelled(on.enrollmentId, paymentId),
-      );
-      await bothCommitted(settled, on.studentId, 'payment_failed');
+        ).then((outcome) => (state.done = outcome));
+        await until(
+          async () => state.done !== undefined || (await blocking(otherPid)),
+          'the record ended, or waiting on the student',
+        );
+        waitedOnStudent = state.done === undefined;
+      } finally {
+        await other.query('ROLLBACK');
+      }
+      expect(await recorded).toEqual({ ok: true });
+      expect(waitedOnStudent).toBe(false);
+      const payment = await database.payment.findUniqueOrThrow({
+        where: { id: paymentId },
+        select: { status: true },
+      });
+      expect(payment.status).toBe('failed');
+      const pushes = await database.notification.findMany({
+        where: { userId: on.studentId },
+        select: { id: true },
+      });
+      expect(pushes).toEqual([]);
     },
     RACE_TIMEOUT,
   );

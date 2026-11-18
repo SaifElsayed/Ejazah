@@ -32,10 +32,11 @@
 //
 // THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). Each outcome's
 // record hands its push to the notice port the job passes (`payment-outcome-notices.port.ts`), on
-// the job's transaction: `confirmed` → `payment_confirmed`. The push's row references the student, whose `users` row the job holds
-// `FOR UPDATE` (`lockForConfirmation`, first). A refusal's own `cancelled` record pushes nothing
-// (Q-A1 (b), the owner's answer of 2026-11-18), even with the reason `payment_expired` it keeps;
-// its release, under `slot_unavailable`, pushes nothing either.
+// the job's transaction: `confirmed` → `payment_confirmed`. The push's row references the
+// student, whose `users` row the job holds `FOR UPDATE` (`lockForConfirmation`, first). A
+// refusal's own `cancelled` record pushes nothing (Q-A1 (b), the owner's answer of 2026-11-18),
+// even with the reason `payment_expired` it keeps; its release, under `slot_unavailable`, pushes
+// nothing either.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   type EnrollmentParties,
