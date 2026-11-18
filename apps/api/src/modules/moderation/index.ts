@@ -147,3 +147,9 @@ export interface ModerationServices {
 export type AdminReports = Pick<UserReports, 'list' | 'get' | 'resolve'>;
 export { reportsRouter, USER_REPORT_RATE_LIMIT } from './reports.router.js';
 export { reportsAdminRouter } from './reports-admin.router.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T012 (FR-492, SRS FR-SESS-13; the note under T012, Q-R1 (a)): of some enrollments, those with
+// an open `user_reports` row, read through its `enrollment_id`, with no lock; the chat purge reads it
+// beside `enrollmentsWithOpenMatterAmong`, booking's held files do not (FR-AUTH-14).
+export { enrollmentsWithOpenReportAmong } from './open-matters.repository.js';

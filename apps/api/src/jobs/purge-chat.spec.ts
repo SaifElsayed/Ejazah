@@ -18,11 +18,15 @@
 //   `{ messageId }` per removal that failed, none for an enrollment not purged, never a body, a file
 //   name or a storage key; a later run removing the held-back files writes `{ enrollmentId,
 //   messages: 0, files }` (Q2 (a));
-// - each enrollment's failure caught on its own, and every read paged.
+// - each enrollment's failure caught on its own, and every read paged;
+// - (005:T012; FR-492, SRS FR-SESS-13; the note under T012, Q-R1 (a)) the store's open matters are
+//   the union of moderation's two reads: an open `user_reports` row on the enrollment keeps its chat
+//   as an open `disputes` row does, an actioned or dismissed one does not, one raised before the
+//   lock is granted is seen; read through the store's own binding over the transaction's delegates.
 // Written before the job and the module's purge, and run red first.
 import { describe, expect, it } from 'vitest';
 
-import type { ChatPurgeStore, HeldChatFile } from '../modules/chat/index.js';
+import { type ChatPurgeStore, chatPurgeStore, type HeldChatFile } from '../modules/chat/index.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import { runOnceAndTwice } from './double-run.js';
@@ -80,6 +84,25 @@ const file = (id: string, enrollmentId: string): Row => ({
   purgedAt: null,
 });
 
+/** A `disputes` or `user_reports` row as moderation's reads see it (a profile report has no enrollment). */
+interface Matter {
+  readonly enrollmentId: string | null;
+  readonly status: 'open' | 'actioned' | 'dismissed';
+}
+
+/** A delegate's `findMany` over `rows()`, honouring the `enrollmentId: { in }` and `status` given. */
+const findManyOver = (rows: () => readonly Matter[]) => ({
+  findMany: async ({ where }: { where: { enrollmentId: { in: string[] }; status?: string } }) =>
+    rows()
+      .filter(
+        ({ enrollmentId, status }) =>
+          enrollmentId !== null &&
+          where.enrollmentId.in.includes(enrollmentId) &&
+          (where.status === undefined || status === where.status),
+      )
+      .map(({ enrollmentId }) => ({ enrollmentId })),
+});
+
 interface Line {
   readonly level: 'info' | 'warn' | 'error';
   readonly fields: Record<string, unknown>;
@@ -98,8 +121,14 @@ interface WorldOptions {
   /** Runs when the enrollment's lock is taken, as a concurrent opening would just before it. */
   readonly onLock?: (
     enrollmentId: string,
-    world: { readonly enrollments: Map<string, EnrollmentState> },
+    world: { readonly enrollments: Map<string, EnrollmentState>; readonly userReports: Matter[] },
   ) => void;
+  /**
+   * `user_reports` rows (005:T012). When given, the open matters are read through the store's own
+   * binding (`chatPurgeStore.openMattersAmong`) over the transaction's `dispute` delegate (each
+   * enrollment's `open`) and `userReport` delegate (these rows).
+   */
+  readonly userReports?: readonly Matter[];
   /** An enrollment whose purge throws inside its transaction. */
   readonly throwingOn?: string;
 }
@@ -114,6 +143,7 @@ function worldOf(options: WorldOptions) {
     ]),
   );
   const rows = options.rows.map((row) => ({ ...row }));
+  const userReports = [...(options.userReports ?? [])];
   const keys = rows.flatMap(({ key }) => (key === null ? [] : [key]));
   const missing = new Set(options.missing ?? []);
   const storage = {
@@ -141,6 +171,7 @@ function worldOf(options: WorldOptions) {
 
   const world = {
     enrollments,
+    userReports,
     rows,
     storage,
     lines,
@@ -184,6 +215,7 @@ function worldOf(options: WorldOptions) {
     },
     async openMattersAmong(tx, ids) {
       calls.push([txOf(tx), 'matters']);
+      if (options.userReports !== undefined) return chatPurgeStore.openMattersAmong(tx, ids);
       return new Set(ids.filter((id) => enrollments.get(id)?.open === true));
     },
     async purgeMessagesOf(tx, enrollmentId, at) {
@@ -242,7 +274,15 @@ function worldOf(options: WorldOptions) {
     transactions: {
       run: async (work) => {
         transactionsOpened += 1;
-        return work({ n: transactionsOpened } as unknown as Transaction);
+        const disputes = (): Matter[] =>
+          [...enrollments].flatMap(([enrollmentId, { open }]) =>
+            open ? [{ enrollmentId, status: 'open' as const }] : [],
+          );
+        return work({
+          n: transactionsOpened,
+          dispute: findManyOver(disputes),
+          userReport: findManyOver(() => userReports),
+        } as unknown as Transaction);
       },
     },
     settings,
@@ -534,6 +574,64 @@ describe('purge-chat: a sweep (each failure on its own, every read paged)', () =
     await world.run();
     expect(world.lines.map(({ level, fields }) => [level, fields])).toEqual([
       ['info', { enrollmentId: 'e1', messages: 0, files: 2 }],
+    ]);
+  });
+});
+
+describe('purge-chat: an open report keeps the chat (005:T012, FR-492, SRS FR-SESS-13; Q-R1 (a))', () => {
+  const build = () =>
+    worldOf({
+      enrollments: { e1: {}, e2: {}, e3: { status: 'cancelled' }, e4: { open: true }, e5: {} },
+      rows: [
+        ...['e1', 'e2', 'e3', 'e4', 'e5'].map((id) => text(`m-${id}`, id)),
+        file('m-e1-file', 'e1'),
+      ],
+      userReports: [
+        { enrollmentId: 'e1', status: 'open' },
+        { enrollmentId: 'e2', status: 'actioned' },
+        { enrollmentId: 'e3', status: 'dismissed' },
+        { enrollmentId: null, status: 'open' },
+      ],
+    });
+  const purgedOf = (world: World) => [
+    ...new Set(world.rows.filter(({ purgedAt }) => purgedAt !== null).map((r) => r.enrollmentId)),
+  ];
+
+  it('an open report on the enrollment keeps its chat, as an open dispute does; an actioned or dismissed one holds nothing', async () => {
+    const world = build();
+    await world.run();
+    expect(purgedOf(world)).toEqual(['e2', 'e3', 'e5']);
+    expect(world.rows.find(({ id }) => id === 'm-e1')?.body).toBe('body of m-e1');
+    expect(world.storage.removed).toEqual([]);
+    expect(world.lines.map(({ fields }) => fields['enrollmentId'])).toEqual(['e2', 'e3', 'e5']);
+  });
+
+  it('a report raised after the page was read, before the lock was granted, is read under the lock: the chat is kept', async () => {
+    const world = worldOf({
+      enrollments: { e1: {} },
+      rows: [text('m1', 'e1')],
+      userReports: [],
+      onLock: (id, { userReports }) => void userReports.push({ enrollmentId: id, status: 'open' }),
+    });
+    await world.run();
+    expect(world.rows[0]?.purgedAt).toBeNull();
+    expect(world.lines).toEqual([]);
+  });
+
+  it('twice = once with reports (R-API-14): the same rows purged, the reported chat kept both times', async () => {
+    const { once, twice } = await runOnceAndTwice({
+      world: build,
+      run: (world) => world.run(),
+      observe: observed,
+    });
+    expect(twice).toEqual(once);
+    const single = build();
+    await single.run();
+    await single.run();
+    expect(single.rows.filter(({ purgedAt }) => purgedAt === null).map(({ id }) => id)).toEqual([
+      'm-e1',
+      'm-e4',
+      'm-e1-file',
     ]);
   });
 });

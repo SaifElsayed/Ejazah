@@ -119,6 +119,22 @@ describe("a deleted person's files held by an open matter (T004, FR-487, R-327)"
     expect(await held([])).toEqual([]);
   });
 
+  it('an open report holds no file (005:T012, Q-R1 (a); FR-AUTH-14 names disputes, cases and complaints only)', async () => {
+    const { enrollmentId, sessionId, studentId, teacherId } = await makeSession(db);
+    await insertRow(db, 'user_reports', {
+      reporter_user_id: teacherId,
+      reported_user_id: studentId,
+      context: 'session',
+      session_id: sessionId,
+      enrollment_id: enrollmentId,
+      reason: 'سبب البلاغ',
+      status: 'open',
+    });
+    await deleted(studentId);
+    expect(await held([studentId, teacherId])).toEqual([]);
+    expect([...(await enrollmentsWithOpenMatterAmong(database, [enrollmentId]))]).toEqual([]);
+  });
+
   it('moderation names the enrollments with an open matter of any kind, and only those', async () => {
     const open = await makeEnrollment(db);
     const closed = await makeEnrollment(db);
