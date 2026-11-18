@@ -7,6 +7,10 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { VideoPort } from '../../platform/ports/video/video.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
 import { ParticipantEventsService, videoWebhookRoute } from './video-webhook.controller.js';
+// 005:T011: the `Pairings` port's session read (at the end of this file).
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { PairingParty } from '../moderation/index.js';
+import { sessionOfParty } from './sessions.repository.js';
 
 /** Each enrollment's final session's local date, for a slot's release (T026, R-205, FR-394). */
 export { lastSessionDateOf } from './sessions.repository.js';
@@ -640,3 +644,22 @@ export {
   type EnrollmentEndStore,
   enrollmentEndStore,
 } from './enrollment-end.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T011 (FR-611; research R-408; the note under T011): moderation's `Pairings.partyOfSession`,
+// bound by `main.ts`: the session's enrollment and the other party when `userId` is one of its two,
+// over `sessionOfParty` (a stranger, an unknown id and a soft-deleted session all null). No lock:
+// a session's parties never change. The parties are compared, never their genders (Q-R5 (a)).
+export async function partyOfSession(
+  tx: Transaction,
+  sessionId: string,
+  userId: string,
+): Promise<PairingParty | null> {
+  const session = await sessionOfParty(tx, sessionId, userId);
+  if (session === null) return null;
+  return {
+    enrollmentId: session.enrollmentId,
+    counterpartUserId:
+      session.studentUserId === userId ? session.teacherUserId : session.studentUserId,
+  };
+}

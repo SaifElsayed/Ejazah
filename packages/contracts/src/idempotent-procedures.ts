@@ -77,6 +77,11 @@ export const idempotentProcedures = [
   // (runOn); the stored outcome the certificate number.
   'ijazahs.signOff',
   'ijazahs.rerender',
+  // 005:T011 (app-surface.md, `reports.create`; admin-surface.md, `reports.resolve`): the user's in
+  // its own transaction (run), its stored outcome `{ received: true }`; the administrator's on the
+  // kind's transaction (runOn).
+  'reports.create',
+  'reports.resolve',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

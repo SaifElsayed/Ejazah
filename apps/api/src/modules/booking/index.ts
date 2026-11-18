@@ -16,6 +16,11 @@ import {
   slotInUse,
   slotReleaseBufferWeeks,
 } from './slot-occupancy.service.js';
+// 005:T011: the `Pairings` port's enrollment reads (at the end of this file).
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { PairingParty } from '../moderation/index.js';
+import { enrollmentTermsById } from './enrollment-side.repository.js';
+import { enrollmentPartiesAmong } from './held-files.repository.js';
 
 /**
  * What catalog's `CatalogUse` port asks of booking (T020, R-207), on the caller's transaction:
@@ -344,3 +349,44 @@ export {
 // and hands to `createBookingServices` (booking imports no certification).
 export { type IjazahEnrollmentRow, ijazahEnrollmentOf } from './ijazah-enrollment.repository.js';
 export type { EnrollmentIjazahRequests } from './enrollment-lists.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T011 (FR-611, FR-614; research R-408; the note under T011): moderation's
+// `Pairings.partyOfEnrollment` and `Pairings.paired`, bound by `main.ts`, each on the caller's
+// transaction with no lock (an enrollment's parties never change); a soft-deleted enrollment is
+// absent from both reads (the client's extension, T148). The parties are compared, never their
+// genders (Q-R5 (a)).
+
+/** The enrollment and the other party when `userId` is one of its two; else null, as an unknown id. */
+export async function partyOfEnrollment(
+  tx: Transaction,
+  enrollmentId: string,
+  userId: string,
+): Promise<PairingParty | null> {
+  const terms = await enrollmentTermsById(tx, enrollmentId);
+  if (terms === null) return null;
+  if (terms.studentUserId === userId) {
+    return { enrollmentId: terms.id, counterpartUserId: terms.teacherUserId };
+  }
+  if (terms.teacherUserId === userId) {
+    return { enrollmentId: terms.id, counterpartUserId: terms.studentUserId };
+  }
+  return null;
+}
+
+/**
+ * Whether an enrollment of any status joins the two people, either as the student (ADR 0006): over
+ * `userId`'s enrollments, the parties' plain indexes (`enrollmentPartiesAmong`, the held files' read).
+ */
+export async function paired(
+  tx: Transaction,
+  userId: string,
+  otherUserId: string,
+): Promise<boolean> {
+  const enrollments = await enrollmentPartiesAmong(tx, [userId]);
+  return enrollments.some(
+    ({ studentUserId, teacherUserId }) =>
+      (studentUserId === userId && teacherUserId === otherUserId) ||
+      (teacherUserId === userId && studentUserId === otherUserId),
+  );
+}

@@ -78,6 +78,9 @@ import {
   createDiscoveryServices,
   createEnrollmentSide,
   createOngoingEnrollments,
+  // 005:T011 (Q-X1): the `Pairings` bodies.
+  paired,
+  partyOfEnrollment,
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index.js';
 import {
@@ -113,8 +116,11 @@ import {
   orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
 } from '../../apps/api/src/modules/payments/index.js';
+// 005:T011 (Q-X1): reports, over the `Pairings` bodies, bound as `main.ts` will bind them.
+import { createUserReports, reportsRouter } from '../../apps/api/src/modules/moderation/index.js';
 import {
   createSessionsServices,
+  partyOfSession,
   sessionsStore,
 } from '../../apps/api/src/modules/sessions/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
@@ -220,6 +226,11 @@ import type {
   SessionsRemedyCounterOptionsOutput,
   SessionsRemedyCounterOutput,
 } from '../../packages/contracts/src/index.js';
+// 005:T011 (Q-X1): `reports.create`'s types (the contracts index line is the integration's).
+import type {
+  ReportsCreateInput,
+  ReportsCreateOutput,
+} from '../../packages/contracts/src/reports.js';
 import { addDays, addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
@@ -408,6 +419,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_upload: { limit: 20, window_seconds: 600 },
   // T006 of specs/005-certification: `teacher.ijazahRequests.send`'s limit, as seeded.
   rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
+  // 005:T011: `reports.create`'s limit, as seeded (DEC-71).
+  rate_limit_user_report: { limit: 5, window_seconds: 86400 },
 };
 
 const settings: SettingsReader = {
@@ -441,6 +454,8 @@ const ijazahRequestsCallerFactory = createAppCallerFactory(
 const certificatesCallerFactory = createAppCallerFactory(
   createAppRouter({ certificates: certificatesRouter }),
 );
+// 005:T011 (Q-X1): `reports`, mounted as `app.router.ts` will mount it (the integration's line).
+const reportsCallerFactory = createAppCallerFactory(createAppRouter({ reports: reportsRouter }));
 
 /** The `discovery` and `booking` namespaces of the user surface as one bearer reaches them. */
 export interface AppCaller {
@@ -647,6 +662,18 @@ export interface DiscoverySurface {
   issueIjazah(pair: SessionPair, state: IjazahState): Promise<string>;
   /** 005:T009: the certificates' in-memory storage, each signed link recorded. */
   readonly certificateStorage: ReturnType<typeof storageStub>;
+  /**
+   * 005:T011: `reports` as a bearer reaches it, over the module's router mounted under `reports` as
+   * `app.router.ts` will mount it, on this world's services and caller kinds.
+   */
+  reports(accessToken: string): Promise<ReportsCaller>;
+}
+
+/** 005:T011: `reports.create`, as a bearer calls it. */
+export interface ReportsCaller {
+  readonly reports: {
+    create(input: ReportsCreateInput): Promise<ReportsCreateOutput>;
+  };
 }
 
 /** 005:T009: the states an ijazah of the world is written in. */
@@ -917,6 +944,15 @@ async function build(): Promise<Built> {
     }),
     // T006 of specs/005-certification (rule d).
     certification: { ijazahRequests: certification, certificates },
+    // 005:T011 (Q-X1): `reports.create` over the `Pairings` bodies, as `main.ts` will bind them
+    // (`AppServices.moderation` is the integration's line in `context.ts`).
+    moderation: {
+      reports: createUserReports({
+        idempotency,
+        pairings: { partyOfSession, partyOfEnrollment, paired },
+        settings,
+      }),
+    },
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -1341,6 +1377,17 @@ async function build(): Promise<Built> {
         }),
       ),
     certificateStorage,
+    // 005:T011: the module's router on this world's context.
+    reports: async (accessToken) =>
+      reportsCallerFactory(
+        createAppContext({
+          session: await resolve(accessToken),
+          log,
+          rateLimiter,
+          clientAddress: SPEC_CLIENT,
+          services,
+        }),
+      ),
     async issueIjazah(pair, state) {
       const enrollment = await database.enrollment.findUniqueOrThrow({
         where: { id: pair.enrollmentId },

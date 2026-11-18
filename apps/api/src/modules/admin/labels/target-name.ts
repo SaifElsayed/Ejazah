@@ -100,6 +100,8 @@ export async function resolveTargetName(
     // 005:T007: a request and an ijazah name no person here.
     case 'ijazah_request':
     case 'ijazah':
+    // 005:T011 (B47): a report names no person here.
+    case 'user_report':
       return null;
   }
 }

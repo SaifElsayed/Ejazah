@@ -197,6 +197,11 @@
         "recordVerificationCall": "Record verification call",
         "rejectApplication": "Reject application",
         "removeReviewComment": "Remove review comment",
+        "reports": {
+          "listed": "View reports",
+          "resolved": "Resolve a report",
+          "viewed": "View a report"
+        },
         "requestMoreInfo": "Request more information",
         "sessionCancelled": "Cancel a session",
         "sessionOutcomeCorrected": "Correct a session's outcome",
@@ -299,6 +304,7 @@
         },
         "payment": "Payment order",
         "providerOutage": "Video outage",
+        "report": "Report",
         "session": "Session",
         "setting": "Setting",
         "teacherApplication": "Application",

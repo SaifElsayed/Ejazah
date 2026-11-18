@@ -95,6 +95,10 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // 005:T032 of B46 (Q-E4 (a)): the sign-off and the re-render.
   'ijazah.signed_off': 'admin.audit.actions.ijazahReview.ijazahSignedOff',
   'ijazah.rerendered': 'admin.audit.actions.ijazahReview.ijazahRerendered',
+  // 005:T011 (B47; FR-612): the reports queue.
+  'reports.listed': 'admin.audit.actions.reports.listed',
+  'report.viewed': 'admin.audit.actions.reports.viewed',
+  'report.resolved': 'admin.audit.actions.reports.resolved',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
@@ -113,6 +117,8 @@ const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
   // 005:T007 of B46 (Q-C3 (a)).
   ijazah_request: 'admin.audit.targets.ijazahReview.request',
   ijazah: 'admin.audit.targets.ijazahReview.ijazah',
+  // 005:T011 (B47; FR-612).
+  user_report: 'admin.audit.targets.report',
 };
 
 type Translate = ReturnType<typeof useT>;
