@@ -178,14 +178,10 @@ function closingRelease(
   return undefined;
 }
 
-function latest(sessions: readonly ReleaseSession[]): ReleaseSession | undefined {
-  return sessions.reduce<ReleaseSession | undefined>(
-    (found, one) =>
-      found === undefined || one.sequenceNumber > found.sequenceNumber ? one : found,
-    undefined,
-  );
-}
-
+/**
+ * The session that ends last, by its end, never by its sequence number: a make-up booked inside the
+ * package takes the next number and can end before the last session (#149 r1, Minor 2).
+ */
 function lastToEnd(sessions: readonly ReleaseSession[]): ReleaseSession | undefined {
   return sessions.reduce<ReleaseSession | undefined>(
     (found, one) => (found === undefined || one.endsAt > found.endsAt ? one : found),
@@ -224,7 +220,7 @@ export function plannedReleases(
   const live = enrollment.status === 'confirmed' || enrollment.status === 'completed';
   const completed = enrollment.status === 'completed';
   const closed = enrollment.status === 'cancelled' || enrollment.status === 'terminated_no_show';
-  const last = latest(sessions);
+  const last = lastToEnd(sessions);
 
   if (live && enrollment.track === 'recitation') {
     owe(

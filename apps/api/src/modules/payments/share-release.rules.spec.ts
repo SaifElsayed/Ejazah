@@ -86,6 +86,18 @@ const plan = (input: ReleaseFacts, now: Date = LATER) =>
 /** The instant 72 hours after session `n` ends. */
 const windowAfter = (n: number): string => new Date(addHours(endOf(n), 72)).toISOString();
 
+/**
+ * PR #149's review, round 1, Minor 2 (Saif's case): ten sessions, session 3 a teacher no-show, its
+ * make-up (#11) booked from the teacher's free times inside the package and ending on day 4, and
+ * session 10 ending on day 10. The make-up has the highest sequence number; session 10 ends last.
+ */
+const madeUpMidPackage = (): ReleaseSession[] => [
+  ...Array.from({ length: 10 }, (_, index) =>
+    at(index + 1, index === 2 ? 'teacher_no_show' : 'done'),
+  ),
+  { sequenceNumber: 11, endsAt: new Date(addHours(endOf(4), 6)), outcome: 'done', madeUpSequence: 3 },
+];
+
 describe('recitation_end (ADR 0025 D2: the whole share at the package’s end)', () => {
   it('falls due for the whole share once the package completed and its last session’s window passed', () => {
     expect(plan(facts())).toEqual([
@@ -133,6 +145,12 @@ describe('recitation_end (ADR 0025 D2: the whole share at the package’s end)',
         due: false,
         waitsForCase: false,
       },
+    ]);
+  });
+
+  it('falls due 72 h after the last session to end, not after a make-up with the highest number (#149 r1, Minor 2): 2026-10-13T10:00Z', () => {
+    expect(plan(facts({ sessions: madeUpMidPackage() }))).toMatchObject([
+      { milestone: 'recitation_end', dueAt: '2026-10-13T10:00:00.000Z' },
     ]);
   });
 
@@ -275,6 +293,18 @@ describe('the ijazah track (ADR 0025 D2: 25% at half the sessions, the rest at t
         waitsForCase: false,
       },
     ]);
+  });
+
+  it('falls due at the end 72 h after the last session to end, not after a make-up with the highest number (#149 r1, Minor 2): 2026-10-13T10:00Z', () => {
+    expect(
+      plan(
+        facts({
+          track: 'ijazah_track',
+          sessions: madeUpMidPackage(),
+          written: [{ milestone: 'ijazah_half', amount_piasters: piasters(175_000) }],
+        }),
+      ),
+    ).toMatchObject([{ milestone: 'ijazah_end', dueAt: '2026-10-13T10:00:00.000Z' }]);
   });
 
   it('falls due for both at once when the half was never written before the end', () => {
