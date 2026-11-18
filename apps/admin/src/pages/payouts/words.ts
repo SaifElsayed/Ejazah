@@ -2,7 +2,8 @@
 // release's part and state, a closing case's reason (the cases page's own words), and a refused
 // «تم الصرف» by its code: `NOT_FOUND`, `CONFLICT` with `already_marked` (another key's conflict is
 // the panel's reused-key words), and `RATE_LIMITED` with when to try again through T058's
-// `errorMessageKey`, which keeps the generic words for any other failure.
+// `errorMessageKey`, which keeps the generic words for any other failure. A refused «التراجع عن
+// الصرف» likewise: `NOT_FOUND`, `CONFLICT` with `not_marked`, `RATE_LIMITED`.
 import type { ShareReleaseMilestone, ShareReleaseState } from '@ijazah/contracts';
 
 import type { StatusTone } from '../../design/components';
@@ -43,6 +44,22 @@ export function markFailure(error: unknown): ErrorMessage {
       return {
         key: errorDetailsOf(error).some(({ code }) => code === 'already_marked')
           ? 'admin.money.payouts.mark.refused.alreadyMarked'
+          : 'admin.shared.keyReused',
+      };
+    default:
+      return errorMessageKey(error, 'admin.dialogs.submitError');
+  }
+}
+
+/** The words of a refused «التراجع عن الصرف». */
+export function unmarkFailure(error: unknown): ErrorMessage {
+  switch (errorCodeOf(error)) {
+    case 'NOT_FOUND':
+      return { key: 'admin.money.payouts.unmark.refused.notFound' };
+    case 'CONFLICT':
+      return {
+        key: errorDetailsOf(error).some(({ code }) => code === 'not_marked')
+          ? 'admin.money.payouts.unmark.refused.notMarked'
           : 'admin.shared.keyReused',
       };
     default:
