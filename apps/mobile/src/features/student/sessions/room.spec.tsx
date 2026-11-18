@@ -5,7 +5,7 @@
 import type { MeOutput } from '@ijazah/contracts';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { inBothDirections } from '../../../design/primitives/__tests__/harness';
 import { translate } from '../../../i18n';
@@ -17,6 +17,9 @@ import { Room } from './index';
 
 jest.mock('livekit-client', () => require('../../shared/room/__tests__/fake-room'));
 jest.mock('@livekit/react-native', () => require('../../shared/room/__tests__/fake-livekit-rn'));
+// 005:T021, E1 (a): the report's idempotency key.
+let mockKey = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));
 
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
@@ -73,5 +76,45 @@ describe('Room (FR-433)', () => {
     });
     expect(mockApi.sessions.join.mutate).toHaveBeenCalledWith({ sessionId: SESSION_ID });
     expect(rooms.at(-1)?.connect).toHaveBeenCalledWith('wss://video.ijazah.test', 'token-1');
+  });
+});
+
+// 005:T021, E1 (a) (the owner's «موافق على التلاتة», 2026-11-18; FR-611 «from a session they are a
+// party of»): the live room's header carries the same report entry as the pre-session screen.
+describe('the report from inside the room (005:T021, E1 (a))', () => {
+  it('reports the teacher from the room, naming the session, and answers «received» only', async () => {
+    const read = session();
+    const create = jest.fn(async (_input: unknown) => ({ received: true }));
+    const raise = jest.fn(async (_input: unknown) => ({ received: true }));
+    Object.assign(mockApi.api, {
+      reports: { create: { mutate: create } },
+      genderFlags: { raise: { mutate: raise } },
+    });
+    mockApi.sessions.get.query.mockResolvedValue(read);
+    await inBothDirections(ui, async (_rendered, direction) => {
+      const name = read.counterparty.displayName ?? '';
+      await fireEvent.press(
+        await screen.findByRole('button', { name: said(direction, 'common.a11y.report') }),
+      );
+      const locale = direction === 'rtl' ? 'ar' : 'en';
+      expect(
+        screen.getByText(translate(locale, 'student.report.title', { teacher: name })),
+      ).toBeTruthy();
+      await fireEvent.press(
+        screen.getByRole('radio', { name: said(direction, 'student.report.reasons.misconduct') }),
+      );
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'student.report.submit') }),
+      );
+      expect(await screen.findByText(said(direction, 'common.toast.reportSent'))).toBeTruthy();
+      expect(create).toHaveBeenLastCalledWith({
+        reportedUserId: read.counterparty.userId,
+        context: 'session',
+        sessionId: SESSION_ID,
+        reason: said(direction, 'student.report.reasons.misconduct'),
+        idempotencyKey: expect.any(String),
+      });
+    });
+    expect(raise).not.toHaveBeenCalled();
   });
 });
