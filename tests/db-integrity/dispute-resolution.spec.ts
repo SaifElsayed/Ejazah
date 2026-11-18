@@ -62,6 +62,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Readonly<Record<string, number>> = {
   dispute_window_hours: 72,
   admin_list_page_size: 50,
@@ -585,6 +588,7 @@ describe.each(STAGINGS)(
             { userId: other, gender: 'male' as RequesterGender },
             { packageId: w.offer.packageId, slotId: w.mondaySlotId },
             {
+              notices: NO_PUSH,
               terms: {
                 now: new Date(),
                 ttlMinutes: 10,

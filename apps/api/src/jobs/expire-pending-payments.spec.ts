@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CaseInstants } from '../modules/moderation/index.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
+import { publisherOn } from '../platform/live/live-publisher.js';
 import { SettingError, type SettingsReader } from '../platform/settings/settings-reader.js';
 import { runOnceAndTwice } from './double-run.js';
 import {
@@ -84,6 +85,12 @@ function page<T extends { readonly id: string }>(
 }
 
 function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows) {
+  /** 005:T016: the payment pushes' port; the steps are stand-ins, so nothing reaches it. */
+  const notices = {
+    record: () => Promise.reject(new Error('the stand-in steps record no push')),
+  };
+  /** 005:T016: whether each release ran on a transaction carrying a list that takes work. */
+  const bound: boolean[] = [];
   const transactions: string[][] = [];
   /** The queue, by job id: a second add of one id is the same job. */
   const queued = new Map<string, number>();
@@ -131,6 +138,7 @@ function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows)
     },
     release: async (client, ids, at) => {
       expect([client, at]).toEqual([tx, NOW]);
+      bound.push(publisherOn(client)?.afterCommitDo !== undefined);
       current?.push(`release ${ids.join(',')}`);
       for (const hold of holds) {
         if (!ids.includes(hold.id) || hold.releasedAt !== null) continue;
@@ -181,7 +189,18 @@ function paymentsWorld({ orders = [], holds = [], enrollments = [] }: WorldRows)
       queued.set(paymentId, (queued.get(paymentId) ?? 0) + 1);
     },
   };
-  return { orders, holds, enrollments, transactions, queued, database, steps, confirmations };
+  return {
+    orders,
+    holds,
+    enrollments,
+    transactions,
+    queued,
+    database,
+    steps,
+    confirmations,
+    notices,
+    bound,
+  };
 }
 
 const at = (iso: string) => new Date(iso);
@@ -455,5 +474,29 @@ describe('expire-pending-payments (T040, FR-364)', () => {
       queued: ['o2'],
     });
     expect(twice).toEqual(once);
+  });
+});
+
+describe('expire-pending-payments: the pushes (005:T016, the note under T016, Q-N3 (a))', () => {
+  it('releases each page of holds on a transaction that carries an after-commit list of its own', async () => {
+    const world = paymentsWorld({
+      holds: [
+        { id: 'h1', enrollmentId: 'e1', expiresAt: at('2026-11-03T07:00:00Z'), releasedAt: null },
+        { id: 'h2', enrollmentId: 'e2', expiresAt: at('2026-11-03T07:10:00Z'), releasedAt: null },
+        { id: 'h3', enrollmentId: 'e3', expiresAt: at('2026-11-03T07:20:00Z'), releasedAt: null },
+      ],
+      enrollments: [
+        { id: 'e1', status: 'pending_payment' },
+        { id: 'e2', status: 'pending_payment' },
+        { id: 'e3', status: 'pending_payment' },
+      ],
+    });
+    await expirePendingPayments({
+      ...world,
+      settings: settingsOf(TIMEOUT_SECONDS),
+      clock: () => NOW,
+      pageSize: 2,
+    }).handle({});
+    expect(world.bound).toEqual([true, true]);
   });
 });

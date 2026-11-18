@@ -45,6 +45,7 @@ import {
   studentEnrollment,
 } from './checkout-holds.repository.js';
 import { activeHoldsByIds, type HeldRow, lockRows } from './holds.repository.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 import {
   type HoldRequest,
   type HoldStudent,
@@ -155,6 +156,8 @@ export interface CheckoutHoldDependencies {
   readonly terms: HoldTerms;
   readonly orders: OrderStandings;
   readonly heldOrders: HeldOrdersOf;
+  /** 005:T016: the pushes of the expired holds the placement releases (`placeHold`). */
+  readonly notices: PaymentOutcomeNotices;
   readonly store?: CheckoutHoldStore;
   /** T033's placement and release; replaced in a spec. */
   readonly place?: typeof placeHold;
@@ -240,6 +243,7 @@ export async function placeCheckoutHold(
   const placed: PlacedHold = await (dependencies.place ?? placeHold)(tx, student, request, {
     terms: dependencies.terms,
     orders: dependencies.orders,
+    notices: dependencies.notices,
   });
   const teacherUserId = placed.package.teacherUserId;
   const [pkg, displayName] = await Promise.all([

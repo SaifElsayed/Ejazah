@@ -3,9 +3,11 @@
 // (R-API-6), so payments appends it through booking's entry, on its own transaction. The row names
 // the order by its id alone: booking never reads a `payments` row. It is written by booking's one
 // writer of `enrollment_events` rows (`enrollment-events.repository.ts`, T033), as B29's
-// integration made it (the note under T038).
+// integration made it (the note under T038). 005:T016 of specs/005-certification: its push,
+// `payment_failed`, through the notice port the caller passes, on the same transaction.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
 /**
  * Appends `order_failed` for the enrollment, naming the order that failed, at `occurredAt`. The
@@ -13,10 +15,15 @@ import { recordEnrollmentEvents } from './enrollment-events.repository.js';
  * order to `failed` in the same transaction.
  */
 export async function recordOrderFailed(
-  tx: Pick<Transaction, 'enrollmentEvent'>,
+  tx: Transaction,
   enrollmentId: string,
   paymentId: string,
   occurredAt: Date,
+  notices: PaymentOutcomeNotices,
 ): Promise<void> {
-  await recordEnrollmentEvents(tx, [{ kind: 'order_failed', enrollmentId, paymentId, occurredAt }]);
+  await recordEnrollmentEvents(
+    tx,
+    [{ kind: 'order_failed', enrollmentId, paymentId, occurredAt }],
+    notices,
+  );
 }

@@ -55,6 +55,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const FEMALE = 'female' as RequesterGender;
 const SETTINGS: Record<string, number> = {
   dispute_window_hours: 72,
@@ -101,7 +104,7 @@ function offerAt(at: Date, store = remedyOfferStore) {
 
 async function confirmedWorld(): Promise<World> {
   const confirmed = await world();
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(confirmed.enrollmentId),
   });
   return confirmed;
@@ -225,6 +228,7 @@ describe('an accepted cancellation offers its make-up in its transaction (T028, 
     const at = new Date('2026-11-10T12:00:00Z');
     const { enrollments, offer } = offerAt(at);
     const services = createSessionsServices({
+      notifications: NO_PUSH,
       transactions: transactionsOver(database),
       settings,
       video: {} as never,
@@ -489,6 +493,7 @@ describe('P1: checkout.hold against the offer for the same teacher and student (
             { userId: confirmed.studentId, gender: FEMALE },
             { packageId, slotId },
             {
+              notices: NO_PUSH,
               terms: {
                 now: holdAt,
                 ttlMinutes: 10,

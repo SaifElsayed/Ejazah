@@ -44,6 +44,13 @@
 //
 // A CANCELLATION THE GATEWAY FAILS is reported (T111) and never hides the answer it followed: the
 // order it left is the one FR-375's `duplicate_payment` case covers if it is ever paid.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)). Two
+// transactions here can record a payment outcome: `hold`'s, whose placement releases the expired
+// holds on the slot and of the student (FR-351) and so can cancel an enrollment for an expired
+// payment, and the gateway's cancellation recorded as a failed order (`recordCancelled`). Each runs
+// with an after-commit list of its own (booking's `withOutcomeNotices`), and booking's writer
+// records the push with the outcome through the notice port `main.ts` binds (`notices`).
 import type {
   CheckoutHandover,
   CheckoutHoldInput,
@@ -89,11 +96,13 @@ import {
   payByOf,
   placeCheckoutHold,
   previousCheckout,
+  type PaymentOutcomeNotices,
   readHoldTerms,
   recordOrderFailed,
   type RetryTarget,
   retryTargetOf,
   studentCheckoutEnrollment,
+  withOutcomeNotices,
 } from '../booking/index.js';
 import { payoutRecipientOf } from '../identity/index.js';
 import {
@@ -210,10 +219,14 @@ export interface CheckoutSteps {
   payoutRecipient(teacherUserId: string): Promise<string | null>;
 }
 
-/** The steps over the process's client and the owners' entries. */
+/**
+ * The steps over the process's client and the owners' entries; 005:T016: `notices`, the payment
+ * pushes' port, handed to the placement and the failed order's record.
+ */
 export function checkoutStepsOver(
   database: Database,
   cipher: Pick<ColumnCipher, 'decrypt'>,
+  notices: PaymentOutcomeNotices,
   now: () => Date = () => new Date(),
 ): CheckoutSteps {
   const pay = payStoreOver();
@@ -225,20 +238,23 @@ export function checkoutStepsOver(
     enrollOnHold: (tx, target, enrolment) => enrollOnHold(tx, target, enrolment, pay),
     transaction: (work) => database.$transaction(work),
     placeHold: (tx, student, request, dependencies) =>
-      placeCheckoutHold(tx, student, request, dependencies),
+      placeCheckoutHold(tx, student, request, { ...dependencies, notices }),
     retryTarget: (tx, studentUserId, enrollmentId) =>
       retryTargetOf(tx, studentUserId, enrollmentId),
     lockOrderTarget: (tx, target, stillPayable) => lockOrderTarget(tx, target, stillPayable),
     insertOrder,
     recordCancelled: (enrollmentId, paymentId) =>
-      database.$transaction(async (tx) => {
-        // The enrollment, then the order (T005), as the order event branch locks them (T038).
-        await lockOrder(tx, { paymentId, enrollmentId });
-        const orders = new PaymentsRepository(tx);
-        if ((await orders.statusOf(paymentId)) !== 'created') return;
-        await orders.moveOrder(paymentId, 'failed', undefined);
-        await recordOrderFailed(tx, enrollmentId, paymentId, now());
-      }),
+      withOutcomeNotices(
+        (work) => database.$transaction(work),
+        async (tx) => {
+          // The enrollment, then the order (T005), as the order event branch locks them (T038).
+          await lockOrder(tx, { paymentId, enrollmentId });
+          const orders = new PaymentsRepository(tx);
+          if ((await orders.statusOf(paymentId)) !== 'created') return;
+          await orders.moveOrder(paymentId, 'failed', undefined);
+          await recordOrderFailed(tx, enrollmentId, paymentId, now(), notices);
+        },
+      ),
     studentEnrollment: studentCheckoutEnrollment,
     orderById,
     lastOrderOf,
@@ -327,16 +343,19 @@ export class CheckoutService {
     for (;;) {
       const terms = await readHoldTerms(this.#settings, this.#now());
       try {
-        return await this.#idempotency.run(request, async (tx) =>
-          asHoldOutput(
-            await this.#steps.placeHold(
-              tx,
-              student,
-              { packageId, slotId },
-              { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
+        // 005:T016: the placement's releases can push `payment_expired` (this file's head).
+        return await withOutcomeNotices(
+          (work) => this.#idempotency.run(request, work),
+          async (tx) =>
+            asHoldOutput(
+              await this.#steps.placeHold(
+                tx,
+                student,
+                { packageId, slotId },
+                { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
+              ),
+              terms,
             ),
-            terms,
-          ),
         );
       } catch (error) {
         if (!(error instanceof PayableCheckout)) throw error;

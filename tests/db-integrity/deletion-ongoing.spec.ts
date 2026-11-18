@@ -48,6 +48,9 @@ import {
 } from '../../apps/api/src/platform/settings/settings-reader';
 import { confirmationWorld, NOW, SETTINGS as CONFIRMATION_SETTINGS } from './confirmation-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const KEY = Buffer.alloc(32, 7).toString('base64');
 const PASSWORD = 'a long probe passphrase 80';
 const CAIRO = 'Africa/Cairo';
@@ -409,7 +412,7 @@ describe('a deletion raced against a confirmation of the same student’s enroll
     try {
       await gate.query('BEGIN');
       await gate.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [on.studentId]);
-      const confirmed = confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+      const confirmed = confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({
         paymentId: paid,
       });
       await until(probe, 1);
@@ -432,7 +435,7 @@ describe('a deletion raced against a confirmation of the same student’s enroll
     const paid = await world.order(on.enrollmentId);
     const [deleted] = await Promise.all([
       refusalOf(deleteOwn(on.studentId)),
-      confirmEnrollment({ database, settings, clock: () => NOW }).handle({ paymentId: paid }),
+      confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({ paymentId: paid }),
     ]);
     expect(deleted).toEqual(ACTIVE_ENROLLMENTS);
     expect(await enrollmentOf(on.enrollmentId)).toMatchObject({ status: 'confirmed' });

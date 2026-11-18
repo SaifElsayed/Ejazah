@@ -37,6 +37,13 @@
 // accounts and the slot, and takes the holds and then the enrollments, its own among them, in one
 // call. Booking never reads a `payments` row (R-API-6) and never imports `payments` (which imports
 // booking, R-208): the orders' standing is payments' answer, handed in by the caller.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). A release's
+// cancellation for an expired payment (`payment_expired`) is pushed to its student through the
+// notice port its caller passes (`notices`), with its record, on the caller's transaction: the
+// placement's and the re-hold's releases of expired holds and the sweeps' pass it; a release under
+// another reason pushes nothing and needs none (`recordEnrollmentEvents` refuses a payment outcome
+// without it).
 import { addMinutes, type Occurrence } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -59,6 +66,7 @@ import {
   type EnrollmentOutcome,
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 import {
   activeHoldsByIds,
   activeHoldsOf,
@@ -135,7 +143,12 @@ export interface HoldRows {
     enrollmentIds: readonly string[],
     reason: EnrollmentCancellationReason,
   ): Promise<void>;
-  recordEvents(tx: Transaction, outcomes: readonly EnrollmentOutcome[]): Promise<void>;
+  /** 005:T016: the outcomes' pushes through `notices` (`recordEnrollmentEvents`). */
+  recordEvents(
+    tx: Transaction,
+    outcomes: readonly EnrollmentOutcome[],
+    notices?: PaymentOutcomeNotices,
+  ): Promise<void>;
   insertHold(tx: Transaction, hold: NewHold): Promise<string>;
   /** The enrollment's package and snapshot count, read under its lock (the re-hold's). */
   enrollmentTerms(
@@ -254,6 +267,8 @@ export interface ReleaseDependencies {
   readonly at: Date;
   readonly orders: OrderStandings;
   readonly store?: HoldRows;
+  /** 005:T016: the pushes, required of a release that can cancel for an expired payment. */
+  readonly notices?: PaymentOutcomeNotices;
 }
 
 /** What a release did: the holds it released, the enrollments it cancelled and those it kept. */
@@ -341,6 +356,7 @@ async function release(
       cancellationReason,
       occurredAt: at,
     })),
+    dependencies.notices,
   );
   return { released, cancelled, keptPending };
 }
@@ -405,6 +421,8 @@ export interface PlacementDependencies {
   readonly terms: HoldTerms;
   readonly orders: OrderStandings;
   readonly store?: HoldsStore;
+  /** 005:T016: the pushes of the expired holds the placement releases. */
+  readonly notices: PaymentOutcomeNotices;
 }
 
 /** Writes the hold, naming the database's refusal of a second active one (ERD §15 rules 17–18). */
@@ -460,7 +478,7 @@ export async function placeHold(
   await releaseExpiredHolds(
     tx,
     { slotId: slot.id, studentUserId: student.userId },
-    { at: terms.now, orders: dependencies.orders, store },
+    { at: terms.now, orders: dependencies.orders, store, notices: dependencies.notices },
   );
   const active = await store.activeHoldsOf(tx, {
     slotId: slot.id,
@@ -510,6 +528,8 @@ export interface Rehold {
   readonly terms: Pick<HoldTerms, 'now' | 'ttlMinutes' | 'graceMinutes'>;
   readonly orders: OrderStandings;
   readonly store?: HoldRows;
+  /** 005:T016: the pushes of the expired holds the re-hold releases. */
+  readonly notices: PaymentOutcomeNotices;
 }
 
 /**
@@ -532,7 +552,13 @@ export async function reholdEnrollment(
     { slotId: enrollment.slotId, studentUserId: enrollment.studentUserId },
     at,
   );
-  await release(tx, ids, 'expired', { at, orders: dependencies.orders, store }, [enrollment.id]);
+  await release(
+    tx,
+    ids,
+    'expired',
+    { at, orders: dependencies.orders, store, notices: dependencies.notices },
+    [enrollment.id],
+  );
   const terms = await store.enrollmentTerms(tx, enrollment.id);
   if (terms === null) throw new Error('rehold: the enrollment is not there to read');
   return store.insertHold(tx, {

@@ -45,6 +45,9 @@ import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/i
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   enrollment_restore_window_days: 14,
   ban_restore_window_days: 3,
@@ -264,6 +267,7 @@ async function hold(tx: Transaction, on: Offer): Promise<string> {
       { userId: studentId, gender: FEMALE },
       { packageId: on.packageId, slotId: on.slotId },
       {
+        notices: NO_PUSH,
         terms: {
           now: new Date(),
           ttlMinutes: 10,

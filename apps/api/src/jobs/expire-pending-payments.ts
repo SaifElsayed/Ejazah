@@ -30,6 +30,13 @@
 //
 // IDEMPOTENT (R-API-14): a second run finds no `created` order past its expiry and no active
 // expired hold, and hands on the same orders under the same job ids, which the queue holds once.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)). A
+// hold's release that cancels its enrollment for an expired payment records `payment_expired` for
+// the student with its outcome, through the notice port `worker.ts` binds (`notices`), on the page's
+// transaction, which runs with an after-commit list of its own (booking's `withOutcomeNotices`); one
+// cancelled for a failed payment pushes nothing (its order's failure was pushed). A second run
+// cancels nothing again, so it pushes nothing.
 import { checkoutPolling } from '@ijazah/contracts';
 import { z } from 'zod';
 
@@ -38,7 +45,9 @@ import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import {
   awaitingConfirmationAmong,
   expiredEnrollmentHoldIds,
+  type PaymentOutcomeNotices,
   releaseHolds,
+  withOutcomeNotices,
 } from '../modules/booking/index.js';
 import { type CaseInstants, caseInstantsAmong } from '../modules/moderation/index.js';
 import {
@@ -92,17 +101,19 @@ export interface PendingPaymentSteps {
   ): Promise<ReadonlyMap<string, CaseInstants>>;
 }
 
-/** The steps over the modules' entries. */
-export const pendingPaymentSteps: PendingPaymentSteps = {
-  expiredOrders: expiredOrderIds,
-  markExpired: markOrdersExpired,
-  expiredHolds: expiredEnrollmentHoldIds,
-  release: (tx, holdIds, at) =>
-    releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf }),
-  paidOrders: paidOrdersRecordedBefore,
-  awaitingConfirmation: awaitingConfirmationAmong,
-  cases: caseInstantsAmong,
-};
+/** The steps over the modules' entries; 005:T016: a release's pushes through `notices`. */
+export function pendingPaymentStepsOf(notices: PaymentOutcomeNotices): PendingPaymentSteps {
+  return {
+    expiredOrders: expiredOrderIds,
+    markExpired: markOrdersExpired,
+    expiredHolds: expiredEnrollmentHoldIds,
+    release: (tx, holdIds, at) =>
+      releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices }),
+    paidOrders: paidOrdersRecordedBefore,
+    awaitingConfirmation: awaitingConfirmationAmong,
+    cases: caseInstantsAmong,
+  };
+}
 
 export interface ExpirePendingPaymentsOptions {
   readonly database: Pick<Database, '$transaction'>;
@@ -110,6 +121,8 @@ export interface ExpirePendingPaymentsOptions {
   readonly settings: SettingsReader;
   /** Where `confirm-enrollment` is added under the job id `paymentId` (`worker.ts` binds it). */
   readonly confirmations: ConfirmationQueue;
+  /** 005:T016: the payment pushes' port (`NotificationWriter`, bound by `worker.ts`). */
+  readonly notices: PaymentOutcomeNotices;
   readonly steps?: PendingPaymentSteps;
   /** The clock; the system clock unless a spec sets one. */
   readonly clock?: () => Date;
@@ -120,7 +133,8 @@ export function expirePendingPayments({
   database,
   settings,
   confirmations,
-  steps = pendingPaymentSteps,
+  notices,
+  steps = pendingPaymentStepsOf(notices),
   clock = () => new Date(),
   pageSize = EXPIRY_PAGE_SIZE,
 }: ExpirePendingPaymentsOptions): Job {
@@ -156,12 +170,16 @@ export function expirePendingPayments({
           return ids;
         }),
       );
+      // 005:T016: each page with an after-commit list of its own (this file's head).
       await inPages(pageSize, (after) =>
-        database.$transaction(async (tx) => {
-          const ids = await steps.expiredHolds(tx, at, after, pageSize);
-          if (ids.length > 0) await steps.release(tx, ids, at);
-          return ids;
-        }),
+        withOutcomeNotices(
+          (work) => database.$transaction(work),
+          async (tx) => {
+            const ids = await steps.expiredHolds(tx, at, after, pageSize);
+            if (ids.length > 0) await steps.release(tx, ids, at);
+            return ids;
+          },
+        ),
       );
       const recordedBefore = instantBefore(at, timeoutSeconds);
       await inPages(pageSize, async (after) => {

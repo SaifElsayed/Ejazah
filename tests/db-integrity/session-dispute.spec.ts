@@ -50,6 +50,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 let db: Db;
 let database: Database;
 
@@ -78,6 +81,7 @@ afterAll(async () => {
 /** The services as `main.ts` binds them, the raise's store narrowed where a probe says. */
 function servicesWith(disputeStore: DisputeRaiseStore = disputeRaiseStore): SessionsServices {
   return createSessionsServices({
+    notifications: NO_PUSH,
     transactions: transactionsOver(database),
     settings,
     video: {} as never,

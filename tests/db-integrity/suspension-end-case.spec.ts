@@ -51,6 +51,9 @@ import type { SettingsReader } from '../../apps/api/src/platform/settings/settin
 import { confirmationWorld, NOW, settings as worldSettings } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   admin_list_page_size: 50,
   dispute_window_hours: 72,
@@ -115,7 +118,7 @@ describe('a cleared suspension case links only an end case opened after it (PR #
         { userId: made.teacherId, role: 'teacher', status: 'active' },
       ],
     });
-    await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+    await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
       paymentId: await order(made.enrollmentId),
     });
     // A complaint decided (a): the `absence_termination` case.

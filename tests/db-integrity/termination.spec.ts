@@ -105,6 +105,9 @@ import {
 import { listenWebhook, plantOrder, type Webhook } from './expiry-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const KEY = randomBytes(32).toString('base64');
 const PASSWORD = 'a long probe passphrase 41';
 const FEMALE = 'female' as RequesterGender;
@@ -355,7 +358,7 @@ describe('a revocation after a Pay, then its paid event (the owner’s decision 
 
     expect(await webhook.stand.deliver(webhook.stand.paid(gatewayOrderId))).toBe(200);
     expect(enqueued).toContain(paymentId);
-    const job = confirmEnrollment({ database, settings, clock: () => NOW });
+    const job = confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW });
     await job.handle({ paymentId });
     await job.handle({ paymentId });
 
@@ -443,7 +446,7 @@ describe("a student's end (R-219, FR-AUTH-14)", () => {
 /** A confirmed enrollment of `studentId` on the offer's slot: hold, Pay, a paid order, the job. */
 async function confirmed(on: Offer, slotId: string, studentId: string): Promise<string> {
   const enrollmentId = await pay(on, studentId, await hold(on, slotId, studentId));
-  await confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(enrollmentId),
   });
   expect(await enrollmentOf(enrollmentId)).toMatchObject({ status: 'confirmed' });

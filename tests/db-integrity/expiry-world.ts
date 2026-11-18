@@ -13,6 +13,7 @@ import type { AddressInfo } from 'node:net';
 
 import { piasters } from '../../packages/money/src/index';
 import { addSeconds } from '../../packages/time/src/index';
+import type { PaymentOutcomeNotices } from '../../apps/api/src/modules/booking/index';
 import {
   type ConfirmationQueue,
   createPaymentWebhookRoute,
@@ -28,6 +29,9 @@ import type { PaymentPort } from '../../apps/api/src/platform/ports/payment/paym
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 import { LATER, SETTINGS } from './confirmation-world';
+
+// 005:T016 (rule d): the payment pushes' port, which records nothing unless a spec hands one in.
+const NO_PUSH: PaymentOutcomeNotices = { record: async () => undefined };
 
 /** The confirm job's settings and the sweep's timeout, `checkout_confirmation_timeout_seconds`. */
 export const EXPIRY_SETTINGS: Record<string, number> = {
@@ -76,10 +80,14 @@ export interface Webhook {
   close(): Promise<void>;
 }
 
-/** The webhook listening on a local port, `confirmations` its `confirm-enrollment` queue. */
+/**
+ * The webhook listening on a local port, `confirmations` its `confirm-enrollment` queue; 005:T016:
+ * `notices` the payment pushes' port (`main.ts` binds the writer), none recorded unless handed in.
+ */
 export async function listenWebhook(
   database: Database,
   confirmations: ConfirmationQueue,
+  notices: PaymentOutcomeNotices = NO_PUSH,
 ): Promise<Webhook> {
   let route: ReturnType<typeof createPaymentWebhookRoute> | undefined;
   const server: Server = createServer((request, response) => {
@@ -102,6 +110,7 @@ export async function listenWebhook(
   };
   const payment = createPaymentPort(config);
   route = createPaymentWebhookRoute({
+    notices,
     database,
     payment,
     log: createLogger({ level: 'error', destination: { write: () => undefined } }),

@@ -47,6 +47,9 @@ import {
 } from '../db-integrity/confirmation-world';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const ENCRYPTION_KEY = randomBytes(32).toString('base64');
 const REPLAYS = 100;
 /** The worker's deliveries at once, `QUEUE_CONCURRENCY`'s default (T171). */
@@ -85,7 +88,7 @@ beforeAll(async () => {
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 60_000,
   });
-  const job = confirmEnrollment({ database, settings, clock: () => NOW });
+  const job = confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW });
   let route: ReturnType<typeof createPaymentWebhookRoute> | undefined;
   server = createServer((request, response) => {
     const url = request.url ?? '/';
@@ -107,6 +110,7 @@ beforeAll(async () => {
   };
   payment = createPaymentPort(config);
   route = createPaymentWebhookRoute({
+    notices: NO_PUSH,
     database,
     payment,
     log: createLogger({ level: 'error', destination: { write: () => undefined } }),

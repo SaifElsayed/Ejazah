@@ -80,6 +80,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 type Gender = 'male' | 'female';
 
 const SETTINGS: Record<string, number> = {
@@ -235,7 +238,7 @@ async function confirmedWorld(gender: Gender): Promise<World> {
       { userId: made.teacherId, role: 'teacher', status: 'active' },
     ],
   });
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;
@@ -413,7 +416,7 @@ describe('a hold awaiting payment (Q-G2 (c))', () => {
   it('a paid event after it keeps the enrollment cancelled with its reason and opens party_restricted', async () => {
     const made = await world({ gender: 'female' });
     await correct(await flagOn(made.studentId));
-    await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+    await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
       paymentId: await order(made.enrollmentId),
     });
     const state = await stateOf(made.enrollmentId);

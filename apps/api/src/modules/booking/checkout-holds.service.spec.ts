@@ -119,6 +119,8 @@ function setUp(world: World = {}) {
       {
         terms,
         orders: async () => new Map(),
+        // 005:T016: the placement is a stand-in here, and records no push.
+        notices: { record: () => Promise.reject(new Error('no push is recorded here')) },
         heldOrders: async (_tx, enrollmentId) => {
           log.push(['orders', enrollmentId]);
           return world.orders ?? { payable: null, paid: false };

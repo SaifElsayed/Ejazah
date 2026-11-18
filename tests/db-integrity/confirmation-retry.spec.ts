@@ -45,6 +45,9 @@ import {
   type Webhook,
 } from './expiry-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const QUEUE = `confirmation-retry-spec-${randomUUID()}`;
 
 let database: Database;
@@ -86,7 +89,7 @@ beforeAll(async () => {
   });
   const connection = connectionFor(redisUrl());
   queue = openQueue(connection, QUEUE);
-  const job = confirmEnrollment({ database, settings: expirySettings, clock: () => NOW });
+  const job = confirmEnrollment({ database, settings: expirySettings, notices: NO_PUSH, clock: () => NOW });
   // The job as the worker registers it, counting its runs and failing while `broken`.
   const counted: Job = {
     name: CONFIRM_ENROLLMENT,
@@ -131,6 +134,7 @@ async function until(condition: () => Promise<boolean>, what: string): Promise<v
 
 const sweep = () =>
   expirePendingPayments({
+    notices: NO_PUSH,
     database,
     settings: expirySettings,
     confirmations,

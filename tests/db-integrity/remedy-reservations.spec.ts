@@ -47,6 +47,9 @@ import {
   type World,
 } from './confirmation-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const FEMALE = 'female' as RequesterGender;
 /** The proposal's date: the Thursday after the world's last session (2026-11-26). */
 const PROPOSED = new Date('2026-12-03T00:00:00Z');
@@ -81,7 +84,7 @@ const { person, world, order, enrollmentOf, sessionsOf, casesOf } = confirmation
 /** The world's enrollment confirmed through the job: four Thursdays from 2026-11-05. */
 async function confirmedWorld(): Promise<World> {
   const confirmed = await world();
-  await confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(confirmed.enrollmentId),
   });
   expect(await enrollmentOf(confirmed.enrollmentId)).toMatchObject({ status: 'confirmed' });
@@ -269,7 +272,7 @@ describe('booking.slots and checkout.hold read the remedy’s status (the note u
           tx,
           { userId: confirmed.studentId, gender: FEMALE },
           { packageId: elsewhere.packageId, slotId: elsewhere.slotId },
-          { terms: holdTerms, orders: orderStandingsOf },
+          { terms: holdTerms, orders: orderStandingsOf, notices: NO_PUSH },
         );
         throw new Placed('probe: placed, rolled back');
       });
@@ -437,7 +440,7 @@ describe('a late payment over a reservation (T027, FR-PAYG-19, Q2 (a))', () => {
   it('takes the refusal branch: cancelled slot_unavailable, one case, no session, no new hold', async () => {
     const late = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
     await teacherReservationOn(late, 'proposed');
-    const job = confirmEnrollment({ database, settings, clock: () => NOW });
+    const job = confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW });
     const paymentId = await order(late.enrollmentId);
 
     await job.handle({ paymentId });
@@ -462,7 +465,7 @@ describe('a late payment over a reservation (T027, FR-PAYG-19, Q2 (a))', () => {
   it('confirms the same payment when the reservation’s remedy is frozen', async () => {
     const late = await world({ enrollment: { status: 'cancelled', reason: 'payment_expired' } });
     await teacherReservationOn(late, 'frozen');
-    await confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+    await confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({
       paymentId: await order(late.enrollmentId),
     });
     expect(await enrollmentOf(late.enrollmentId)).toMatchObject({ status: 'confirmed' });
@@ -493,7 +496,7 @@ describe('every release and the conversion write their reason (rule 48, GAP-8)',
     // Every reason releases a hold; `expired` only one past its expiry.
     const at = reason === 'expired' ? new Date('2026-11-03T09:00:00Z') : NOW;
     await database.$transaction((tx) =>
-      releaseHolds(tx, [running.holdId], reason, { at, orders: orderStandingsOf }),
+      releaseHolds(tx, [running.holdId], reason, { at, orders: orderStandingsOf, notices: NO_PUSH }),
     );
     expect(
       await database.slotHold.findUniqueOrThrow({

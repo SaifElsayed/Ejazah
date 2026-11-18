@@ -29,6 +29,12 @@
 // party (`party_restricted`) while already cancelled, with the reason it has (FR-362: "stays
 // cancelled with its reason"). Either way one `enrollment_events(cancelled)` row records the
 // refused paid event (FR-385). The compensation case is the caller's, through moderation's entry.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). Each outcome's
+// record hands its push to the notice port the job passes (`payment-outcome-notices.port.ts`), on
+// the job's transaction: `confirmed` → `payment_confirmed`; a refusal's `cancelled` → a push only for
+// `payment_expired`. The push's row references the student, whose `users` row the job holds
+// `FOR UPDATE` (`lockForConfirmation`, first).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   type EnrollmentParties,
@@ -47,6 +53,7 @@ import {
 } from './enrollment-events.repository.js';
 import { activeHoldsByIds, lockRows } from './holds.repository.js';
 import { type OrderStandings, releaseHolds } from './holds.service.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
 export type { EnrollmentParties };
 
@@ -139,19 +146,22 @@ export interface Confirmation {
 /**
  * Converts the enrollment's active hold and confirms it with one `confirmed` row naming the order
  * (FR-361, R-HONEST-1); `'no_active_hold'`, writing nothing, when it has no hold to convert. The
- * caller holds `lockForConfirmation`'s locks.
+ * caller holds `lockForConfirmation`'s locks. 005:T016: `payment_confirmed` through `notices`.
  */
 export async function confirmEnrollment(
   tx: Transaction,
   { enrollmentId, paymentId, at }: Confirmation,
+  notices: PaymentOutcomeNotices,
 ): Promise<'confirmed' | 'no_active_hold'> {
   if (!(await convertHoldOf(tx, enrollmentId, at))) return 'no_active_hold';
   if (!(await markConfirmed(tx, enrollmentId, at))) {
     throw new Error(`Enrollment ${enrollmentId} is neither awaiting payment nor cancelled`);
   }
-  await recordEnrollmentEvents(tx, [
-    { kind: 'confirmed', enrollmentId, paymentId, occurredAt: at },
-  ]);
+  await recordEnrollmentEvents(
+    tx,
+    [{ kind: 'confirmed', enrollmentId, paymentId, occurredAt: at }],
+    notices,
+  );
   return 'confirmed';
 }
 
@@ -178,7 +188,12 @@ export async function refuseEnrollment(
   tx: Transaction,
   enrollment: LockedEnrollment,
   refusal: Refusal,
-  dependencies: { readonly at: Date; readonly orders: OrderStandings },
+  dependencies: {
+    readonly at: Date;
+    readonly orders: OrderStandings;
+    /** 005:T016: the pushes of what the refusal records. */
+    readonly notices: PaymentOutcomeNotices;
+  },
 ): Promise<EnrollmentCancellationReason> {
   if (enrollment.activeHoldId !== null) {
     const { cancelled } = await releaseHolds(
@@ -194,13 +209,17 @@ export async function refuseEnrollment(
   if (!(await markRefused(tx, enrollment.id, reason))) {
     throw new Error(`Enrollment ${enrollment.id} is neither awaiting payment nor cancelled`);
   }
-  await recordEnrollmentEvents(tx, [
-    {
-      kind: 'cancelled',
-      enrollmentId: enrollment.id,
-      cancellationReason: reason,
-      occurredAt: dependencies.at,
-    },
-  ]);
+  await recordEnrollmentEvents(
+    tx,
+    [
+      {
+        kind: 'cancelled',
+        enrollmentId: enrollment.id,
+        cancellationReason: reason,
+        occurredAt: dependencies.at,
+      },
+    ],
+    dependencies.notices,
+  );
   return reason;
 }

@@ -396,3 +396,17 @@ export { enrollmentIdsOfTeacher, hasLiveEnrollment } from './ongoing-enrollments
 // `confirmed` enrollments, as student or teacher, in id order, with no lock (a soft-deleted one
 // left out), for the admin module's preview of what a gender correction would end.
 export { confirmedEnrollmentsOf } from './termination.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T016 of specs/005-certification (FR-619; SRS DEC-70; the note under T016, Q-N1 (a) to Q-N3
+// (a)): the payment pushes. `PaymentOutcomeNotices` is the port booking's one writer of
+// `enrollment_events` rows hands each payment outcome to, on its transaction; `main.ts` and
+// `worker.ts` bind it to the notifications module's `NotificationWriter`. `withOutcomeNotices` runs
+// a payment transaction with an after-commit list of its own bound to it, so the writer queues the
+// push once that transaction has committed.
+export {
+  type PaymentNotice,
+  type PaymentNoticeKind,
+  type PaymentOutcomeNotices,
+  withOutcomeNotices,
+} from './payment-outcome-notices.port.js';

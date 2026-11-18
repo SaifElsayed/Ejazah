@@ -244,6 +244,9 @@ import type {
 import { addDays, addMinutes } from '../../packages/time/src/index.js';
 import { gatewayStandIn, type GatewayStandIn } from '../support/gateway-stand-in';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 type Gender = 'male' | 'female';
 
 /** A hold's minutes: the checkout's ten and the grace's five (the seeded settings). */
@@ -819,6 +822,7 @@ async function build(): Promise<Built> {
   };
   const payment = createPaymentPort(config);
   route = createPaymentWebhookRoute({
+    notices: NO_PUSH,
     database,
     payment,
     log,
@@ -949,6 +953,7 @@ async function build(): Promise<Built> {
     }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({
+      notices: NO_PUSH,
       database,
       settings,
       idempotency,
@@ -958,6 +963,7 @@ async function build(): Promise<Built> {
     }),
     // As `main.ts` binds it (T011 of specs/004-sessions): over the video port and booking's side.
     sessions: createSessionsServices({
+      notifications: NO_PUSH,
       transactions: reads,
       settings,
       video,
