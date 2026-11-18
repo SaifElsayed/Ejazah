@@ -115,6 +115,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'payouts.listed': 'admin.money.audit.payoutsListed',
   'payouts.viewed': 'admin.money.audit.payoutsViewed',
   'payout_release.marked': 'admin.money.audit.payoutReleaseMarked',
+  // The undo of a mark made in error (the owner, 2026-11-18).
+  'payout_release.unmarked': 'admin.money.audit.payoutReleaseUnmarked',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

@@ -94,6 +94,8 @@ export const idempotentProcedures = [
   'genderFlags.fraudBan',
   // 003:T105: the administrator's mark that a release of a teacher's share was executed.
   'payouts.mark',
+  // 003:T105: the undo of a mark made in error (the owner, 2026-11-18).
+  'payouts.unmark',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

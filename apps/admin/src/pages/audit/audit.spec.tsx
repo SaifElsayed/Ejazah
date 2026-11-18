@@ -584,6 +584,8 @@ const T105_PAYOUT_ACTIONS: readonly (readonly [string, string, string])[] = [
   ['payouts.listed', 'عرض تحويلات المعلمين', 'View teacher payouts'],
   ['payouts.viewed', 'عرض تحويلات معلم', "View a teacher's payouts"],
   ['payout_release.marked', 'تسجيل صرف مستحق لمعلم', "Mark a teacher's release paid"],
+  // The undo of a mark made in error (the owner, 2026-11-18).
+  ['payout_release.unmarked', 'التراجع عن صرف مستحق لمعلم', "Undo a teacher's release paid mark"],
 ];
 
 describe('003:T105: the payouts page’s actions by name', () => {

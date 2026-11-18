@@ -316,3 +316,16 @@ export async function markRelease(
   });
   return count === 1;
 }
+
+/**
+ * Undoes a mark made in error (DEC-89, the owner of 2026-11-18): `marked_at` and
+ * `marked_by_admin_id` cleared together (rule 63), only while marked, so the release is due again.
+ * True when this call cleared it.
+ */
+export async function unmarkRelease(tx: Client, releaseId: string): Promise<boolean> {
+  const { count } = await tx.teacherShareRelease.updateMany({
+    where: { id: releaseId, markedAt: { not: null } },
+    data: { markedAt: null, markedByAdminId: null },
+  });
+  return count === 1;
+}

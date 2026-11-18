@@ -240,8 +240,8 @@ export { IJAZAH_HALF_RELEASE_SETTING } from './checkout.service.js';
  */
 export { type ReleaseRow, releasesOf } from './share-release.repository.js';
 
-/** The administrator's three procedures on the kind's transaction (`AdminSurfaceServices.payouts`). */
-export type AdminPayouts = Pick<Payouts, 'list' | 'get' | 'mark'>;
+/** The administrator's four procedures on the kind's transaction (`AdminSurfaceServices.payouts`). */
+export type AdminPayouts = Pick<Payouts, 'list' | 'get' | 'mark' | 'unmark'>;
 
 /** The teacher's read, on a transaction of its own (`AppServices.teacherDues`). */
 export interface TeacherDues {
@@ -269,6 +269,8 @@ export function createPayoutServices({
       list: (tx, adminId, input) => payouts.list(tx, adminId, input),
       get: (tx, adminId, teacherUserId) => payouts.get(tx, adminId, teacherUserId),
       mark: (tx, adminId, input) => payouts.mark(tx, adminId, input),
+      // The undo of a mark made in error (the owner, 2026-11-18).
+      unmark: (tx, adminId, input) => payouts.unmark(tx, adminId, input),
     },
     teacher: {
       get: (teacherUserId) => transactions.run((tx) => payouts.teacherDues(tx, teacherUserId)),

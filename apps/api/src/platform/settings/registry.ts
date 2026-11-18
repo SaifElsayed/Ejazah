@@ -418,9 +418,9 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     "Ijazah track: share released at half the sessions (percent of the Teacher's share, 0–100)",
     { min: 0, max: PERCENT_MAX },
   ),
-  // 003:T105: the administrator's mark «تم الصرف», §3.14's row of 2026-11-18 (Q-B1-12 (a)).
+  // 003:T105: the administrator's mark «تم الصرف» and its undo, §3.14's row of 2026-11-18 (Q-B1-12 (a)).
   rate_limit_payout_mark: rateLimit(
-    'Payout release mark rate limit (per Administrator, per window)',
+    'Payout release mark or unmark rate limit (per Administrator, per window)',
   ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,

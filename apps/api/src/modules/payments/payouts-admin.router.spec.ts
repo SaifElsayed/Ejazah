@@ -34,6 +34,7 @@ const ADMIN = '0199d0a0-0000-7000-8000-00000000ad01';
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000a1';
 const RELEASE = '0199d0a0-0000-7000-8000-0000000000b1';
 const KEY = 'mark-key-0000000001';
+const REASON = 'marked by mistake: the transfer did not go through';
 const TX = { stand: 'in' };
 
 const FIGURES = {
@@ -73,6 +74,10 @@ function surfaceOver(replayed = false): Surface {
     },
     mark: async (tx, adminId, input) => {
       reached.push(['mark', tx, adminId, input]);
+      return { teacherUserId: TEACHER, replayed };
+    },
+    unmark: async (tx, adminId, input) => {
+      reached.push(['unmark', tx, adminId, input]);
       return { teacherUserId: TEACHER, replayed };
     },
   };
@@ -132,6 +137,8 @@ describe('the administrator kind', () => {
     'payouts.get': (caller: PayoutsCaller) => caller.payouts.get({ teacherUserId: TEACHER }),
     'payouts.mark': (caller: PayoutsCaller) =>
       caller.payouts.mark({ releaseId: RELEASE, idempotencyKey: KEY }),
+    'payouts.unmark': (caller: PayoutsCaller) =>
+      caller.payouts.unmark({ releaseId: RELEASE, reason: REASON, idempotencyKey: KEY }),
   } as const;
 
   it.each(Object.keys(calls) as (keyof typeof calls)[])(
@@ -204,6 +211,51 @@ describe('payouts.mark («تم الصرف»)', () => {
   });
 });
 
+describe('payouts.unmark: a mark made in error undone (DEC-89)', () => {
+  it('unmarks on the call’s transaction, audited on the teacher with its reason', async () => {
+    const surface = surfaceOver();
+    await surface
+      .verified()
+      .payouts.unmark({ releaseId: RELEASE, reason: REASON, idempotencyKey: KEY });
+
+    expect(surface.reached).toEqual([
+      ['unmark', TX, ADMIN, { releaseId: RELEASE, reason: REASON, idempotencyKey: KEY }],
+    ]);
+    expect(surface.written).toEqual([
+      {
+        adminId: ADMIN,
+        action: 'payout_release.unmarked',
+        targetType: 'user',
+        targetId: TEACHER,
+        reason: REASON,
+      },
+    ]);
+  });
+
+  it('writes no second entry on a replay', async () => {
+    const surface = surfaceOver(true);
+    await surface
+      .verified()
+      .payouts.unmark({ releaseId: RELEASE, reason: REASON, idempotencyKey: KEY });
+
+    expect(surface.written).toEqual([]);
+  });
+
+  it('refuses an unmark with no reason, or an empty one, as VALIDATION_FAILED, reaching nothing', async () => {
+    const surface = surfaceOver();
+    for (const reason of [undefined, '', '   ']) {
+      expect(
+        await codeOf(
+          surface
+            .verified()
+            .payouts.unmark({ releaseId: RELEASE, reason, idempotencyKey: KEY } as never),
+        ),
+      ).toBe('VALIDATION_FAILED');
+    }
+    expect(surface.reached).toEqual([]);
+  });
+});
+
 describe('payouts.mark’s own limit (rate_limit_payout_mark, 10 per 60 s per administrator)', () => {
   it('refuses a call over the limit RATE_LIMITED before the transaction opens', async () => {
     const keysRead: string[] = [];
@@ -256,6 +308,76 @@ describe('payouts.mark’s own limit (rate_limit_payout_mark, 10 per 60 s per ad
     await callerFor(context()).payouts.mark({ releaseId: RELEASE, idempotencyKey: KEY });
     expect(
       await codeOf(callerFor(context()).payouts.mark({ releaseId: RELEASE, idempotencyKey: KEY })),
+    ).toBe('RATE_LIMITED');
+    expect(keysRead).toContain('rate_limit_payout_mark');
+    expect(transactions).toBe(1);
+    expect(reached).toEqual([ADMIN]);
+    expect(written).toHaveLength(1);
+  });
+});
+
+describe('payouts.unmark’s limit, the same rate_limit_payout_mark', () => {
+  it('refuses a call over the limit RATE_LIMITED before the transaction opens', async () => {
+    const keysRead: string[] = [];
+    const counts = new Map<string, number>();
+    const rateLimiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          keysRead.push(key);
+          return schema.parse({ limit: 1, window_seconds: 60 });
+        },
+      },
+      counter: {
+        hit: async (key) => {
+          const count = (counts.get(key) ?? 0) + 1;
+          counts.set(key, count);
+          return count;
+        },
+      },
+      subjectKey: Buffer.alloc(32, 3),
+    });
+    let transactions = 0;
+    const written: AuditRecord[] = [];
+    const reached: unknown[] = [];
+    const payouts: Pick<AdminSurfaceServices['payouts'], 'unmark'> = {
+      unmark: async (_tx, adminId) => {
+        reached.push(adminId);
+        return { teacherUserId: TEACHER, replayed: false };
+      },
+    };
+    const context = () =>
+      createAdminContext({
+        session: { adminId: ADMIN, sessionId: ADMIN, mfaVerified: true },
+        log,
+        administration: {
+          transactions: {
+            run: async <T>(work: (tx: Transaction) => Promise<T>): Promise<T> => {
+              transactions += 1;
+              return work({} as Transaction);
+            },
+          },
+          auditWriter: { write: async (_tx, record) => void written.push(record) },
+        },
+        services: new Proxy(unusedAdminServices, {
+          get: (target, name, receiver) =>
+            name === 'payouts' ? payouts : Reflect.get(target, name, receiver),
+        }),
+        rateLimiter,
+        clientAddress: '203.0.113.9',
+      });
+    await callerFor(context()).payouts.unmark({
+      releaseId: RELEASE,
+      reason: REASON,
+      idempotencyKey: KEY,
+    });
+    expect(
+      await codeOf(
+        callerFor(context()).payouts.unmark({
+          releaseId: RELEASE,
+          reason: REASON,
+          idempotencyKey: KEY,
+        }),
+      ),
     ).toBe('RATE_LIMITED');
     expect(keysRead).toContain('rate_limit_payout_mark');
     expect(transactions).toBe(1);
