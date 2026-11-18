@@ -26,3 +26,5 @@ export * from './enrollments.js';
 export * from './reports.js';
 // 005:T013 to T015 (B47): the `genderFlags` namespace, the flags' queue, the correction and the fraud ban.
 export * from './gender-flags.js';
+// 003:T105: the `payouts` namespace, «تحويلات المعلمين»: the list, a teacher's detail and the mark.
+export * from './payouts.js';
