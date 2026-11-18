@@ -112,6 +112,8 @@ const SETTINGS: Record<string, unknown> = {
   price_average_min_teachers: 3,
   // 003:T105 (ADR 0025 D2, SRS DEC-81, §3.14): the ijazah track's half, percent of the teacher's share.
   ijazah_half_release_percent: 25,
+  // 003:T105: the payout mark's limit, per administrator.
+  rate_limit_payout_mark: { limit: 10, window_seconds: 60 },
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -361,6 +363,7 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    expect(counts).toEqual([{ subjects: '5', settings: '89', admins: '1' }]);
+    // 003:T105 (rule d): 89 + ijazah_half_release_percent + rate_limit_payout_mark.
+    expect(counts).toEqual([{ subjects: '5', settings: '91', admins: '1' }]);
   });
 });

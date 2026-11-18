@@ -731,6 +731,7 @@ Every value below shall be adjustable from the admin panel without a code deploy
 | Programme: pause before a Teacher may request a stop (days) *(2026-11-10, ADR 0024)* | 7 | FR-BOOK-18 |
 | Teacher's share of each gateway order (whole percent, 0–100) *(2026-11-17, ADR 0025, DEC-80; read when an order is created, a change reaching new orders only)* | 70 | FR-PAYG-1 |
 | Ijazah track: share released at half the sessions (percent of the Teacher's share, 0–100) *(2026-11-17, ADR 0025, DEC-81; fixed for a programme at its first order)* | 25 | FR-PAYG-10 |
+| Payout release mark rate limit (per Administrator, per window) *(2026-11-18, DEC-89; 003:T105)* | 10 per 60 s | FR-PAYG-11 |
 | Postponement notice before a session (hours, at least 1) *(2026-11-17, DEC-86)* | 12 | FR-POSTPONE-3 |
 | Postponement interval per party (weeks, at least 1) *(2026-11-17, DEC-86)* | 4 | FR-POSTPONE-4 |
 | Fewest other Teachers for the average price (whole number, 2–100: at least 2, so no single Teacher's price is shown) *(2026-11-17, DEC-88; the Package editor's average price per session is shown only over at least this many other Teachers; read at each request)* | 3 | FR-PROFILE-2 |
