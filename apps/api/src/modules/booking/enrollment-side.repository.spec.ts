@@ -264,15 +264,20 @@ describe('enrollmentsPage (T008, U3)', () => {
 
 describe("recordEnrollmentEvents' Phase 3 kinds (T008)", () => {
   it('writes completed, terminated_no_show and restored with neither an order nor a reason', async () => {
-    const { client, calls } = recorded({});
-    await recordEnrollmentEvents(client, [
-      { kind: 'completed', enrollmentId: id(1), occurredAt: AT },
-      { kind: 'terminated_no_show', enrollmentId: id(2), occurredAt: AT },
-      { kind: 'restored', enrollmentId: id(3), occurredAt: AT },
-      { kind: 'cancelled', enrollmentId: id(4), cancellationReason: 'admin', occurredAt: AT },
-      { kind: 'confirmed', enrollmentId: id(5), paymentId: id(55), occurredAt: AT },
-    ]);
-    expect(calls).toHaveLength(1);
+    // 005:T016 (rule d): the confirmation's push needs the port and reads its student after the rows.
+    const { client, calls } = recorded({ findMany: [{ id: id(5), studentUserId: id(56) }] });
+    await recordEnrollmentEvents(
+      client as unknown as Transaction,
+      [
+        { kind: 'completed', enrollmentId: id(1), occurredAt: AT },
+        { kind: 'terminated_no_show', enrollmentId: id(2), occurredAt: AT },
+        { kind: 'restored', enrollmentId: id(3), occurredAt: AT },
+        { kind: 'cancelled', enrollmentId: id(4), cancellationReason: 'admin', occurredAt: AT },
+        { kind: 'confirmed', enrollmentId: id(5), paymentId: id(55), occurredAt: AT },
+      ],
+      { record: async () => undefined },
+    );
+    expect(calls.filter(({ method }) => method === 'enrollmentEvent.createMany')).toHaveLength(1);
     expect(calls[0]?.args).toStrictEqual({
       data: [
         { enrollmentId: id(1), kind: 'completed', occurredAt: AT },

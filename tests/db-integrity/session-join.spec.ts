@@ -66,6 +66,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 let db: Db;
 let watcher: Db;
 let database: Database;
@@ -127,6 +130,7 @@ function recordedVideo(): RecordedVideo {
 
 function servicesWith(video: VideoPort): SessionsServices {
   return createSessionsServices({
+    notifications: NO_PUSH,
     transactions: transactionsOver(database),
     settings,
     video,
@@ -338,6 +342,7 @@ describe('the join’s one lock (contracts/kernel.md, the `sessions.join` row)',
         ),
     };
     const services = createSessionsServices({
+      notifications: NO_PUSH,
       transactions: watched,
       settings,
       video: recordedVideo(),

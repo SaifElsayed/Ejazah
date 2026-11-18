@@ -91,7 +91,7 @@ export const wholeNonNegative = z.int().nonnegative();
 export const attendancePercent = z.number().positive();
 
 /**
- * `reminder_offsets_minutes`: no read site yet (T005's reminder sweep will read with this). Each
+ * `reminder_offsets_minutes`: read by `jobs/send-reminder.ts` (005:T017). Each
  * offset is a whole number of minutes ahead of the session (SRS FR-BOOK-8, «ahead of each session»).
  */
 export const reminderOffsets = z.array(z.int().positive());
@@ -508,6 +508,21 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
   ),
   rate_limit_settings_update: rateLimit(
     'Settings change rate limit (per Administrator, per window)',
+  ),
+  // T017 of specs/005-certification (SRS DEC-74; the follow-up under T005 and the note under T017,
+  // Q-N4 (a)): `send-reminder` queues again a notification whose push was not queued after its
+  // commit, once it is this old, and no longer once it is older than the maximum age.
+  notification_requeue_after_minutes: whole(
+    positiveWhole,
+    'minutes',
+    'notifications',
+    'Notification queued again after a lost enqueue: the wait before it is queued again (minutes)',
+  ),
+  notification_requeue_max_age_minutes: whole(
+    positiveWhole,
+    'minutes',
+    'notifications',
+    'Notification queued again after a lost enqueue: the age after which it is no longer sent (minutes)',
   ),
 };
 

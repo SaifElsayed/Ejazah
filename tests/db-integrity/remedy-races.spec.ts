@@ -64,6 +64,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   idempotency_key_ttl_hours: 24,
   first_session_lead_hours: 24,
@@ -155,6 +158,7 @@ const storeOf = (path: Path): RemedyStore => ({
 /** The sessions services as `main.ts` builds them, for one path at a fixed clock. */
 function servicesFor(path: Path, at: Date): SessionsServices {
   return createSessionsServices({
+    notifications: NO_PUSH,
     transactions: stoppable(path),
     settings,
     video: {} as never,
@@ -531,6 +535,7 @@ describe.each(STAGINGS)(
             { userId: other, gender: 'male' as RequesterGender },
             { packageId: w.offer.packageId, slotId: w.mondaySlotId },
             {
+              notices: NO_PUSH,
               terms: {
                 now: holdAt,
                 ttlMinutes: 10,

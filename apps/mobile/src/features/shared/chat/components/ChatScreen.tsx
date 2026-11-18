@@ -8,6 +8,9 @@
 // ended the words that the chat is read-only, and no composer (FR-488); the server refuses a send
 // all the same (`CHAT_CLOSED`, R-MOBILE-13). What is shown and sent is the hooks' (`api.ts`);
 // this file renders.
+//
+// 005:T021 (FR-611, FR-614): once the role's screen has read the counterparty, the header's
+// «إبلاغ» opens the report and flag sheet on them, from this chat (its enrollment).
 import type { ChatMessage, EnrollmentStatus } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { type ReactNode, useState } from 'react';
@@ -31,6 +34,7 @@ import { useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import type { ErrorMessage } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
+import { ReportEntry, type ReportTarget } from '../../reports';
 import { StackScreen } from '../../screen';
 import { LoadError, NotLoaded } from '../../states';
 import {
@@ -52,6 +56,8 @@ export interface ChatScreenProps {
   readonly failed: boolean;
   readonly error: unknown;
   readonly onRetry: () => void;
+  /** 005:T021: the counterparty to report from this chat; undefined until it is read. */
+  readonly report?: ReportTarget | undefined;
 }
 
 export function ChatScreen({
@@ -61,6 +67,7 @@ export function ChatScreen({
   failed,
   error,
   onRetry,
+  report,
 }: ChatScreenProps) {
   const t = useT();
   const me = useMe();
@@ -70,6 +77,7 @@ export function ChatScreen({
       title={t('chat.thread.title')}
       {...(counterpart === undefined ? {} : { subtitle: counterpart })}
       back={{ kind: 'back', onPress: () => router.back() }}
+      {...(report === undefined ? {} : { trailing: <ReportEntry target={report} /> })}
     />
   );
   if (status === undefined || zone === undefined) {

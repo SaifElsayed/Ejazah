@@ -13,6 +13,10 @@
 //
 // B41 (the note under 004:T041, Q1 (a)): one role-neutral slot, `children`, drawn after the rows
 // once the session is read; each role's wrapper fills it with its own panels.
+//
+// 005:T021 (FR-611, FR-614; the note under T021, Q-T4 (a)): once the session is read, the header's
+// «إبلاغ» opens the report and flag sheet on the counterparty `sessions.get` names
+// (`counterparty.userId`), from this session, for both roles.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -35,6 +39,7 @@ import { useMe } from '../../../../lib/account';
 import { errorCodeOf } from '../../../../lib/client';
 import { avatarNameOf, type PartyRole, usePartyName } from '../../../../lib/party';
 import { initialsOf } from '../../account';
+import { ReportEntry } from '../../reports';
 import { StackScreen } from '../../screen';
 import { NotLoaded } from '../../states';
 import { useSessionRead } from '../api';
@@ -63,12 +68,7 @@ export function PreSessionScreen({
   const sessionId = useSessionParam();
   const read = useSessionRead(sessionId);
   const me = useMe();
-  const header = (
-    <NavHeader
-      title={t('session.pre.title')}
-      back={{ kind: 'back', onPress: () => router.back() }}
-    />
-  );
+  const header = <Header />;
   const zone = me.data?.timezone;
   if (read.data === undefined || zone === undefined) {
     const notFound = sessionId === '' || errorCodeOf(read.error) === 'NOT_FOUND';
@@ -91,7 +91,6 @@ export function PreSessionScreen({
   }
   return (
     <Loaded
-      header={header}
       session={read.data}
       viewerZone={zone}
       counterpartyRole={counterpartyRole}
@@ -102,15 +101,25 @@ export function PreSessionScreen({
   );
 }
 
+/** The screen's header; the report's entry once the session is read (005:T021). */
+function Header({ trailing }: { readonly trailing?: ReactNode }) {
+  const t = useT();
+  return (
+    <NavHeader
+      title={t('session.pre.title')}
+      back={{ kind: 'back', onPress: () => router.back() }}
+      {...(trailing === undefined ? {} : { trailing })}
+    />
+  );
+}
+
 function Loaded({
-  header,
   session,
   viewerZone,
   counterpartyRole,
   roomRoute,
   children,
 }: {
-  readonly header: ReactNode;
   readonly session: SessionsGetOutput;
   readonly viewerZone: string;
   readonly counterpartyRole: PartyRole;
@@ -124,6 +133,20 @@ function Loaded({
     displayNameOrNull: session.counterparty.displayName,
     deleted: session.counterparty.deleted,
   };
+  const header = (
+    <Header
+      trailing={
+        <ReportEntry
+          target={{
+            userId: session.counterparty.userId,
+            role: counterpartyRole,
+            name: partyName(party, counterpartyRole),
+            place: { context: 'session', sessionId: session.sessionId },
+          }}
+        />
+      }
+    />
+  );
   const footer = (
     <View style={{ paddingHorizontal: tokens.layout.gutter, paddingBottom: tokens.space['4'] }}>
       <Button

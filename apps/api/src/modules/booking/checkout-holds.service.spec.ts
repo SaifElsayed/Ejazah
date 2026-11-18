@@ -81,6 +81,8 @@ interface World {
   readonly ownStillActive?: boolean;
   readonly orders?: HeldOrders;
   readonly name?: string | null;
+  /** 005:T016: the active holds on the slot and of the student, beside the own one. */
+  readonly around?: readonly HeldRow[];
 }
 
 function setUp(world: World = {}) {
@@ -93,6 +95,10 @@ function setUp(world: World = {}) {
       world.own === undefined || world.own === null || world.ownStillActive === false
         ? []
         : [world.own],
+    activeHoldsOf: async () => [
+      ...(world.own === undefined || world.own === null ? [] : [world.own]),
+      ...(world.around ?? []),
+    ],
     teacherPackageOf: async () => row,
     teacherName: async () => (world.name === undefined ? 'الشيخ' : world.name),
   };
@@ -119,6 +125,8 @@ function setUp(world: World = {}) {
       {
         terms,
         orders: async () => new Map(),
+        // 005:T016: the placement is a stand-in here, and records no push.
+        notices: { record: () => Promise.reject(new Error('no push is recorded here')) },
         heldOrders: async (_tx, enrollmentId) => {
           log.push(['orders', enrollmentId]);
           return world.orders ?? { payable: null, paid: false };
@@ -321,5 +329,26 @@ describe('lockOrderTarget: the hold, then the enrollment, read again under the l
     const { store } = targetStore({ hold: ownHold() });
     const error = await thrown(lockOrderTarget(tx, target, () => false, store));
     expect((error as DomainError).code).toBe('ORDER_NOT_PAYABLE');
+  });
+});
+
+describe('placeCheckoutHold: the accounts first (005:T016, the follow-up under T016)', () => {
+  it('locks, in its one users call, the students of the slot’s active holds beside both accounts', async () => {
+    const OTHER = id(20);
+    const { log, run } = setUp({
+      around: [
+        {
+          id: id(52),
+          slotId: SLOT,
+          studentUserId: OTHER,
+          enrollmentId: id(61),
+          expiresAt: new Date('2026-11-03T07:00:00Z'),
+        },
+      ],
+    });
+    await run();
+    expect(log.filter(([, table]) => table === 'users')).toEqual([
+      ['lock', 'users', [STUDENT, OTHER, TEACHER].sort()],
+    ]);
   });
 });

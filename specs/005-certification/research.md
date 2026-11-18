@@ -150,7 +150,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   only needs a comment pointing here.
 - **Alternatives.** Delayed BullMQ jobs per session and offset (must be moved on every recompute and cancelled on every
   cancellation).
-- **Data.** A small table `session_reminders (session_id, user_id, offset_minutes, notification_id, sent_at)`, unique
+- **Data.** A small table `session_reminders (session_id, user_id, offset_minutes, notification_id, created_at)`, unique
   on the first three.
 
 ## R-408 — Reports

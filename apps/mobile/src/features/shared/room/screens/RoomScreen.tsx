@@ -34,6 +34,7 @@ import { useMe } from '../../../../lib/account';
 import { genericErrorKey } from '../../../../lib/error-message';
 import { avatarNameOf, type PartyRole, usePartyName } from '../../../../lib/party';
 import { initialsOf } from '../../account';
+import { ReportEntry } from '../../reports';
 import { StackScreen } from '../../screen';
 import { useSessionRead } from '../api';
 import { ZoneLines } from '../components/ZoneLines';
@@ -76,7 +77,21 @@ export function RoomScreen({ counterpartyRole }: { readonly counterpartyRole: Pa
       goBack();
     });
   }
-  const header = <NavHeader title={name} back={{ kind: 'back', onPress: () => leave() }} />;
+  // 005:T021, E1 (a) (FR-611): the same report entry as the pre-session screen's, from inside the room.
+  const trailing =
+    session === undefined ? undefined : (
+      <ReportEntry
+        target={{
+          userId: session.counterparty.userId,
+          role: counterpartyRole,
+          name,
+          place: { context: 'session', sessionId: session.sessionId },
+        }}
+      />
+    );
+  const header = (
+    <NavHeader title={name} back={{ kind: 'back', onPress: () => leave() }} trailing={trailing} />
+  );
   return (
     <StackScreen header={header}>
       <Body

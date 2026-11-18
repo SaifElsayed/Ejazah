@@ -49,6 +49,9 @@ import {
   type Webhook,
 } from './expiry-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 let database: Database;
 let webhook: Webhook;
 /** Whether the queue holds what it is given until `runHeld`, rather than running it at once. */
@@ -59,7 +62,7 @@ const runs = new Map<string, number>();
 
 const runJob = async (paymentId: string): Promise<void> => {
   runs.set(paymentId, (runs.get(paymentId) ?? 0) + 1);
-  await confirmEnrollment({ database, settings: expirySettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: expirySettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId,
   });
 };
@@ -113,6 +116,7 @@ async function orderOf(paymentId: string) {
 /** One run of `expire-pending-payments` at `at`, its hand-off dropped. */
 function sweep(at: Date): Promise<void> {
   return expirePendingPayments({
+    notices: NO_PUSH,
     database,
     settings: expirySettings,
     confirmations: { enqueue: async () => undefined },

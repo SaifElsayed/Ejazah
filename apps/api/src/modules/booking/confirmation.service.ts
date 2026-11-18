@@ -29,6 +29,14 @@
 // party (`party_restricted`) while already cancelled, with the reason it has (FR-362: "stays
 // cancelled with its reason"). Either way one `enrollment_events(cancelled)` row records the
 // refused paid event (FR-385). The compensation case is the caller's, through moderation's entry.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). Each outcome's
+// record hands its push to the notice port the job passes (`payment-outcome-notices.port.ts`), on
+// the job's transaction: `confirmed` → `payment_confirmed`. The push's row references the
+// student, whose `users` row the job holds `FOR UPDATE` (`lockForConfirmation`, first). A
+// refusal's own `cancelled` record pushes nothing (Q-A1 (b), the owner's answer of 2026-11-18),
+// even with the reason `payment_expired` it keeps; its release, under `slot_unavailable`, pushes
+// nothing either.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   type EnrollmentParties,
@@ -45,8 +53,9 @@ import {
   type EnrollmentCancellationReason,
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
-import { activeHoldsByIds, lockRows } from './holds.repository.js';
+import { activeHoldsByIds, activeHoldsOf, lockRows } from './holds.repository.js';
 import { type OrderStandings, releaseHolds } from './holds.service.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
 export type { EnrollmentParties };
 
@@ -101,7 +110,23 @@ export async function lockForConfirmation(
   parties: EnrollmentParties,
   dependencies: { readonly orders: OrderStandings },
 ): Promise<LockedEnrollment> {
-  await lockRows(tx, 'users', sortedUnique([parties.studentUserId, parties.teacherUserId]));
+  // 005:T016 (the follow-up under T016, fixed in B48): with the students of the slot's and the
+  // student's active holds, read with no lock, so the re-hold's release of another student's expired
+  // hold records that student's push holding the account already (kernel.md, «a push recorded by a
+  // producer»).
+  const around = await activeHoldsOf(tx, {
+    slotId: parties.slotId,
+    studentUserId: parties.studentUserId,
+  });
+  await lockRows(
+    tx,
+    'users',
+    sortedUnique([
+      parties.studentUserId,
+      parties.teacherUserId,
+      ...around.map(({ studentUserId }) => studentUserId),
+    ]),
+  );
   await lockRows(tx, 'availability_slots', [parties.slotId]);
   const holdIds = await activeHoldIdsAround(tx, parties);
   if (holdIds.length > 0) await lockRows(tx, 'slot_holds', holdIds);
@@ -139,19 +164,22 @@ export interface Confirmation {
 /**
  * Converts the enrollment's active hold and confirms it with one `confirmed` row naming the order
  * (FR-361, R-HONEST-1); `'no_active_hold'`, writing nothing, when it has no hold to convert. The
- * caller holds `lockForConfirmation`'s locks.
+ * caller holds `lockForConfirmation`'s locks. 005:T016: `payment_confirmed` through `notices`.
  */
 export async function confirmEnrollment(
   tx: Transaction,
   { enrollmentId, paymentId, at }: Confirmation,
+  notices: PaymentOutcomeNotices,
 ): Promise<'confirmed' | 'no_active_hold'> {
   if (!(await convertHoldOf(tx, enrollmentId, at))) return 'no_active_hold';
   if (!(await markConfirmed(tx, enrollmentId, at))) {
     throw new Error(`Enrollment ${enrollmentId} is neither awaiting payment nor cancelled`);
   }
-  await recordEnrollmentEvents(tx, [
-    { kind: 'confirmed', enrollmentId, paymentId, occurredAt: at },
-  ]);
+  await recordEnrollmentEvents(
+    tx,
+    [{ kind: 'confirmed', enrollmentId, paymentId, occurredAt: at }],
+    notices,
+  );
   return 'confirmed';
 }
 
@@ -178,7 +206,12 @@ export async function refuseEnrollment(
   tx: Transaction,
   enrollment: LockedEnrollment,
   refusal: Refusal,
-  dependencies: { readonly at: Date; readonly orders: OrderStandings },
+  dependencies: {
+    readonly at: Date;
+    readonly orders: OrderStandings;
+    /** 005:T016: handed to the release; a refusal itself pushes nothing (Q-A1 (b)). */
+    readonly notices: PaymentOutcomeNotices;
+  },
 ): Promise<EnrollmentCancellationReason> {
   if (enrollment.activeHoldId !== null) {
     const { cancelled } = await releaseHolds(
@@ -194,13 +227,19 @@ export async function refuseEnrollment(
   if (!(await markRefused(tx, enrollment.id, reason))) {
     throw new Error(`Enrollment ${enrollment.id} is neither awaiting payment nor cancelled`);
   }
-  await recordEnrollmentEvents(tx, [
-    {
-      kind: 'cancelled',
-      enrollmentId: enrollment.id,
-      cancellationReason: reason,
-      occurredAt: dependencies.at,
-    },
-  ]);
+  await recordEnrollmentEvents(
+    tx,
+    [
+      {
+        kind: 'cancelled',
+        enrollmentId: enrollment.id,
+        cancellationReason: reason,
+        occurredAt: dependencies.at,
+      },
+    ],
+    // Q-A1 (b), the owner's answer of 2026-11-18: the refused paid event's record pushes nothing,
+    // so an enrollment already cancelled for an expired payment is not told so twice.
+    'without_push',
+  );
   return reason;
 }

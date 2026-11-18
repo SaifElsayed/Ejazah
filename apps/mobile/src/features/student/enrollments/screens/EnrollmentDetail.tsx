@@ -16,6 +16,9 @@
 // status; the server answers it with no session, so none is drawn.
 // 004:T083 (FR-514): one an administrator ended says so under the teacher, followed by its reason
 // (`EndedByAdmin`).
+// 005:T020 (FR-602, FR-607, FR-608, FR-623): the enrollment's ijazah request as the student reads it,
+// with the certificate-name sheet while it awaits the name (`IjazahRequestPanel`); and, once the
+// enrollment is read, the push permission asked (`useAskForPush`, never at sign-in).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -37,6 +40,7 @@ import { useLocale, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
+import { useAskForPush } from '../../../shared/push';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
 import { ChatEntry } from '../../chat';
@@ -49,6 +53,7 @@ import { ComplaintPanel } from '../components/ComplaintPanel';
 import { ConfirmingNotice } from '../components/ConfirmingNotice';
 import { EndedByAdmin } from '../components/EndedByAdmin';
 import { EnrollmentStatusBadge, PackageLine, SessionCounts } from '../components/EnrollmentCard';
+import { IjazahRequestPanel } from '../components/IjazahRequestPanel';
 import { PendingOrderBadge } from '../components/PendingOrderBadge';
 import { SessionWhen, zonesOf } from '../components/SessionWhen';
 import { useConfirmingSchedule, useScheduledRead } from '../confirming';
@@ -81,6 +86,7 @@ export function EnrollmentDetail() {
     orders.retry();
   };
   const zone = me.data?.timezone;
+  useAskForPush(read.data !== undefined);
   const header = (
     <NavHeader
       title={t('student.enrollmentDetail.title')}
@@ -124,6 +130,7 @@ export function EnrollmentDetail() {
       {read.over && isAwaitingPayment(shown) && orders.isConfirming(shown.enrollmentId) ? (
         <ConfirmingNotice enrollmentId={shown.enrollmentId} onCheckAgain={read.retry} />
       ) : null}
+      <IjazahRequestPanel enrollment={shown} />
       <ComplaintPanel enrollment={shown} />
       <ChatEntry enrollmentId={shown.enrollmentId} status={shown.status} />
       {shown.sessions.length === 0 ? null : (

@@ -54,6 +54,9 @@ const [
   { RENDER_CERTIFICATE, renderCertificatePayload },
   // 005:T011 (B47): the report service and the `Pairings` port it reads parties through.
   moderation,
+  // 005:T016 (B48): the push producers' one writer and its delivery job's name.
+  notifications,
+  { DELIVER_NOTIFICATION },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -90,6 +93,8 @@ const [
   import('./modules/certification/index.js'),
   import('./jobs/render-certificate.js'),
   import('./modules/moderation/index.js'),
+  import('./modules/notifications/index.js'),
+  import('./jobs/deliver-notification.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -207,6 +212,23 @@ const certificateRenders = {
     );
   },
 };
+// 005:T016 (B48; the note under T016, Q-N1 (a), Q-N3 (a)): the one writer of the push producers,
+// bound to sessions' `CancellationNotices` and booking's `PaymentOutcomeNotices` (as payments'
+// `notices`), so no module imports notifications. Each push is enqueued after its producer's commit
+// under the notification's id, through `addOrRetry`; a lost enqueue is `send-reminder`'s re-send.
+const notificationWriter = notifications.createNotificationWriter({
+  database,
+  queue: {
+    enqueue: async (notificationId: string): Promise<void> => {
+      await addOrRetry(
+        queue(),
+        { name: DELIVER_NOTIFICATION, data: { notificationId }, jobId: notificationId },
+        log,
+      );
+    },
+  },
+  log,
+});
 // T006 of specs/005-certification (the note under T006, Q4 (a), Q14 (a)): the ijazah request's one
 // service. Certification's entry is bound to the three ports the other modules declare, so none of
 // them imports certification (`docs/ARCHITECTURE.md:195`): identity's `AwaitingNameRelease` and
@@ -378,6 +400,8 @@ const services = {
     payment: ports.payment,
     cipher,
     gateway: config.PAYMENT_GATEWAY,
+    // 005:T016: the checkout's payment outcomes record their push.
+    notices: notificationWriter,
   }),
   // `sessions.get` and `sessions.join` (T011 of specs/004-sessions): the session read under both
   // accounts' locks, the room and the token through the video port after the commit. The kernel's
@@ -389,6 +413,8 @@ const services = {
     enrollmentSide,
     store: sessionsModule.sessionsStore,
     idempotency,
+    // 005:T016: the cancellation request and its answer record their push.
+    notifications: notificationWriter,
   }),
   // `chat.list`, `chat.send` and `chat.attachmentLink` (T037, T038 of specs/004-sessions): the
   // enrollment's parties and status through booking's side (R-301), `chat.send` keyed by the
@@ -485,6 +511,8 @@ const routes = {
         );
       },
     },
+    // 005:T016: an order's failure records its push on the event's transaction.
+    notices: notificationWriter,
   }),
   // The video provider's signed webhook (T012 of specs/004-sessions, R-SESS-7): its raw body read
   // under the request limit, verified through the video port before anything runs, and an

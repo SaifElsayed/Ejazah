@@ -3,7 +3,8 @@
 //
 // The caller names the session and nothing else (R-GENDER-4). The session carries its local date,
 // local start and zone beside its instants (FR-494). The counterparty is a name or nothing and a
-// deleted flag (contracts/README.md, "A deleted party"), and no field the schema does not name
+// deleted flag (contracts/README.md, "A deleted party"), and its user id (005:T021), and no field
+// the schema does not name
 // reaches the other party (R-HONEST-4). The later screens' fields are optional (T021, T028, T026).
 // The join answers the provider's address, the token and the instant it stops opening a connection.
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,7 @@ import {
 const ids = {
   session: '0199d0a0-0000-7000-8000-0000000000a1',
   enrollment: '0199d0a0-0000-7000-8000-0000000000e1',
+  counterparty: '0199d0a0-0000-7000-8000-0000000000c1',
 };
 
 const got = {
@@ -44,7 +46,7 @@ const got = {
   endsAt: '2026-11-08T15:45:00.000Z',
   lengthMinutes: 45,
   status: 'scheduled',
-  counterparty: { displayName: 'أحمد سالم', deleted: false },
+  counterparty: { userId: ids.counterparty, displayName: 'أحمد سالم', deleted: false },
   join: { opensAt: '2026-11-08T14:50:00.000Z', closesAt: '2026-11-08T15:45:00.000Z' },
   // T065: the counterparty's presence, a hint from the recorded participant events.
   counterpartyInRoom: false,
@@ -64,12 +66,31 @@ describe('sessions.get', () => {
   });
 
   it('names a deleted counterparty with no name', () => {
-    const deleted = { ...got, counterparty: { displayName: null, deleted: true } };
+    const deleted = {
+      ...got,
+      counterparty: { userId: ids.counterparty, displayName: null, deleted: true },
+    };
     expect(sessionsGetOutput.parse(deleted).counterparty).toEqual({
+      userId: ids.counterparty,
       displayName: null,
       deleted: true,
     });
-    expect(Object.keys(sessionParty.shape).sort()).toEqual(['deleted', 'displayName']);
+    expect(Object.keys(sessionParty.shape).sort()).toEqual(['deleted', 'displayName', 'userId']);
+  });
+
+  // 005:T021 (FR-611, FR-614; the note under T021, Q-T4 (a)): the counterparty's user id, which the
+  // report and flag sheet names. Required, a deleted party's included: an id is no name
+  // (contracts/README.md, "A deleted party"), as a student's `teacher.teacherId` stays
+  // (`enrollments.ts:123`). Additive (R-API-9).
+  it('carries the counterparty’s user id, required, a deleted party’s too (005:T021)', () => {
+    expect(sessionsGetOutput.parse(got).counterparty.userId).toBe(ids.counterparty);
+    const gone = { userId: ids.counterparty, displayName: null, deleted: true };
+    expect(sessionParty.parse(gone)).toEqual(gone);
+    const { userId: _absent, ...without } = got.counterparty;
+    expect(sessionParty.safeParse(without).success).toBe(false);
+    expect(sessionParty.safeParse({ ...got.counterparty, userId: 'not-an-id' }).success).toBe(
+      false,
+    );
   });
 
   it('strips any field it does not name, the private fields of the other party among them', () => {
@@ -81,7 +102,7 @@ describe('sessions.get', () => {
     };
     const parsed = sessionsGetOutput.parse(leaked);
     expect(parsed).toEqual(got);
-    expect(Object.keys(parsed.counterparty).sort()).toEqual(['deleted', 'displayName']);
+    expect(Object.keys(parsed.counterparty).sort()).toEqual(['deleted', 'displayName', 'userId']);
   });
 
   it('carries a make-up’s session and the later screens’ fields when they are given', () => {

@@ -4274,6 +4274,7 @@
           "$.counterparty": { "required": true, "type": "object" },
           "$.counterparty.deleted": { "required": true, "type": "boolean" },
           "$.counterparty.displayName": { "required": true, "type": "null|string" },
+          "$.counterparty.userId": { "required": true, "type": "string" },
           "$.counterpartyInRoom": { "required": true, "type": "boolean" },
           "$.dispute": { "type": "object" },
           "$.dispute.closesAt": { "required": true, "type": "string" },
@@ -5190,6 +5191,7 @@
           "$.student.deleted": { "required": true, "type": "boolean" },
           "$.student.displayName": { "required": true, "type": "string" },
           "$.student.displayNameOrNull": { "required": true, "type": "null|string" },
+          "$.student.studentId": { "required": true, "type": "string" },
           "$.summary": { "required": true, "type": "object" },
           "$.summary.sessionCount": { "required": true, "type": "integer" },
           "$.summary.sessionDurationMinutes": {
@@ -5317,6 +5319,7 @@
           "$.items[].student.deleted": { "required": true, "type": "boolean" },
           "$.items[].student.displayName": { "required": true, "type": "string" },
           "$.items[].student.displayNameOrNull": { "required": true, "type": "null|string" },
+          "$.items[].student.studentId": { "required": true, "type": "string" },
           "$.items[].summary": { "required": true, "type": "object" },
           "$.items[].summary.sessionCount": { "required": true, "type": "integer" },
           "$.items[].summary.sessionDurationMinutes": {
@@ -5386,6 +5389,7 @@
           "$.sessions[].student.deleted": { "required": true, "type": "boolean" },
           "$.sessions[].student.displayName": { "required": true, "type": "string" },
           "$.sessions[].student.displayNameOrNull": { "required": true, "type": "null|string" },
+          "$.sessions[].student.studentId": { "required": true, "type": "string" },
           "$.sessions[].summary": { "required": true, "type": "object" },
           "$.sessions[].summary.sessionCount": { "required": true, "type": "integer" },
           "$.sessions[].summary.sessionDurationMinutes": {

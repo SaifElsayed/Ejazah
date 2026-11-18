@@ -354,6 +354,13 @@
       "email": "Email",
       "google": "Google"
     },
+    "report": {
+      "refused": {
+        "openExists": "This is already under review, so there is no need to send it again.",
+        "self": "You cannot report yourself."
+      },
+      "tooLong": "The details are longer than allowed."
+    },
     "reviewTeam": {
       "from": "From the review team",
       "fromOn": "From the review team · {date}"
@@ -881,6 +888,10 @@
       "fullName": "Full name",
       "hint": "Written once; to change it, contact support",
       "preview": "This is how it appears on the ijazah",
+      "refused": {
+        "alreadySet": "Your name for the ijazah is already set; to change it, contact support.",
+        "invalid": "Write your full name in letters, from 2 to 80 characters."
+      },
       "save": "Save",
       "title": "Your name as written on the ijazah"
     },
@@ -992,6 +1003,10 @@
       "kind": "Ijazah with isnad",
       "number": "Certificate number",
       "numberInline": "Certificate number: {number}",
+      "preparing": "Being prepared",
+      "refused": {
+        "notReady": "The ijazah is not signed off yet; you’ll find it here once it is ready."
+      },
       "riwaya": "{riwaya} · by way of {tariq}",
       "teacherCompleted": "{teacher} · completed {date}",
       "teacherIssued": "{teacher} · {date}",
@@ -1177,6 +1192,11 @@
       },
       "upcomingEnrollment": "{teacher} · starts {date}, {time}",
       "welcome": "Welcome"
+    },
+    "ijazahRequest": {
+      "awaitingName": "Awaiting your name",
+      "awaitingNameText": "Your teacher requested an ijazah for you. Enter your name as it is written on it.",
+      "enterName": "Enter your name"
     },
     "makeupChoice": {
       "legend": "Compensation",
@@ -1624,6 +1644,8 @@
         "view": "View the ijazah"
       },
       "ijazahRequest": {
+        "awaitingName": "Waiting for the student's name",
+        "preparing": "The certificate is being prepared and opens once it is signed off.",
         "rejectedReason": "Reason: {reason}",
         "status": "Ijazah request · {status}"
       },
@@ -1664,11 +1686,22 @@
         "title": "Add your signature first",
         "upload": "Upload signature"
       },
+      "chain": "Chain",
       "completionDate": "Completion date",
       "enrollmentMeta": "{subject} · {count, plural, one {# session} other {# sessions}} · completed {date}",
+      "issueDate": "Issue date",
       "language": "Certificate language",
       "preview": "Preview the certificate",
       "previewAlt": "The ijazah as it will be issued: {student}, {subject} by the riwaya of {riwaya}, under the ijazah of {teacher}",
+      "refused": {
+        "alreadyIssued": "An ijazah has already been issued for this enrollment.",
+        "inFuture": "The completion date cannot be after today.",
+        "noCredential": "You hold no approved ijazah in this subject.",
+        "notActive": "You cannot request an ijazah while your account is not active.",
+        "notIjazahTrack": "This enrollment is not on the ijazah track.",
+        "requestOpen": "This enrollment has an ijazah request not decided yet.",
+        "studentBarred": "An ijazah cannot be requested for this student now."
+      },
       "riwaya": "Riwaya",
       "riwayaValue": "{riwaya} · by the tariq of {tariq}",
       "send": "Send the request",
@@ -1694,6 +1727,8 @@
         "details": "Details",
         "preview": "Preview"
       },
+      "student": "Student's name on the certificate",
+      "studentMissing": "The student is asked for it once the request is sent.",
       "subject": "Subject",
       "title": "Ijazah request"
     },
@@ -1874,6 +1909,7 @@
       "hint": "A clear picture of your signature in ink on white paper, PNG or JPG.",
       "lede": "Your signature appears on every ijazah issued at your request.",
       "previewTitle": "Preview",
+      "refused": "The image was not accepted. Upload a smaller PNG or JPG image.",
       "replaceImage": "Replace image",
       "title": "Signature image",
       "upload": "Upload signature",

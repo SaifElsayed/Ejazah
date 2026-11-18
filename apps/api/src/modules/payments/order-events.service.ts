@@ -52,6 +52,7 @@ import {
   type ReportedPayment,
 } from './payments.repository.js';
 import type { Receipt } from './recipient-events.service.js';
+import { keyShareStudentsOfEnrollments, withOutcomeNotices } from '../booking/index.js';
 
 /** A verified event of a gateway order. */
 export type OrderEvent = Extract<GatewayEvent, { readonly type: OrderEventType }>;
@@ -164,7 +165,18 @@ export class OrderEventsService {
     }
     let outcome: OrderOutcome;
     try {
-      outcome = await this.#database.$transaction((tx) => this.#apply(tx, order, event, receipt));
+      // 005:T016 (the note under T016, Q-N3 (a)): a failed order's `payment_failed` push is recorded
+      // with its `order_failed` outcome, so the transaction carries an after-commit list of its own.
+      outcome = await withOutcomeNotices(
+        (work) => this.#database.$transaction(work),
+        async (tx) => {
+          // 005:T016 (fixed in B48): a failed order's push key-shares its student; taken first, before
+          // the enrollment and the order (kernel.md, «a push recorded by a producer»).
+          if (event.type === 'failed')
+            await keyShareStudentsOfEnrollments(tx, [order.enrollmentId]);
+          return this.#apply(tx, order, event, receipt);
+        },
+      );
     } catch (error: unknown) {
       if (!(error instanceof PaidAmountMismatchError)) throw error;
       this.#report(error);
