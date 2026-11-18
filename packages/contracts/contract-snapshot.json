@@ -2147,6 +2147,16 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "payouts.unmark": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.releaseId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "reports.get": {
         "input": {
           "$": { "type": "object" },
