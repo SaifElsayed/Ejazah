@@ -158,6 +158,8 @@ import type {
   // T077 of specs/004-sessions: a deleted teacher's kept data.
   teachersKeptDocumentLinkInput,
   teachersKeptDocumentLinkOutput,
+  teachersKeptSignatureLinkInput,
+  teachersKeptSignatureLinkOutput,
   teachersKeptEraseDateInput,
   teachersKeptEraseNowInput,
   // T082 of specs/004-sessions: an administrator's direct end of an enrollment.
@@ -181,6 +183,15 @@ import type {
   // 005:T032 (B46): the sign-off and the re-render.
   adminIjazahsRerenderInput,
   adminIjazahsSignOffInput,
+  // 005:T013 to T015 (B47): the administrators' gender flags, the correction and the fraud ban.
+  adminGenderFlagsCorrectInput,
+  adminGenderFlagsDismissInput,
+  adminGenderFlagsFraudBanInput,
+  adminGenderFlagsGetInput,
+  adminGenderFlagsGetOutput,
+  adminGenderFlagsListInput,
+  adminGenderFlagsListOutput,
+  adminGenderFlagsRaiseInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -201,6 +212,8 @@ import type { ChatServices } from '../modules/chat/index.js';
 // T006 of specs/005-certification (the owner's Q-A2 (a)): the ijazah request's services.
 import type { CertificationServices } from '../modules/certification/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
+// 005:T011 (B47): `reports.create` and the administrators' `reports.*`, the moderation module's.
+import type { AdminReports, ModerationServices } from '../modules/moderation/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
 import type { SessionsServices } from '../modules/sessions/index.js';
@@ -347,6 +360,11 @@ export interface AppServices {
    * certification module's request service, built once by `main.ts`.
    */
   readonly certification: CertificationServices;
+  /**
+   * 005:T011 (B47; FR-611, R-408): `reports.create`, the moderation module's report service, built
+   * once by `main.ts` over the `Pairings` it binds to sessions' and booking's entries.
+   */
+  readonly moderation: ModerationServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -573,6 +591,12 @@ export interface AdminSurfaceServices {
         actorId: string,
         input: z.output<typeof teachersKeptDocumentLinkInput>,
       ): Answer<typeof teachersKeptDocumentLinkOutput>;
+      // 005:T031 (B47, Q-D2 (a)): the kept signature, one signed link per press, with a reason.
+      signatureLink(
+        tx: Transaction,
+        actorId: string,
+        input: z.output<typeof teachersKeptSignatureLinkInput>,
+      ): Answer<typeof teachersKeptSignatureLinkOutput>;
       setEraseDate(
         tx: Transaction,
         actorId: string,
@@ -914,6 +938,59 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof adminIjazahsRerenderInput>,
     ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+  };
+  /**
+   * 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the administrators' queue of
+   * reports, the same moderation service as `AppServices.moderation`, on the kind's transaction.
+   */
+  readonly reports: AdminReports;
+  /**
+   * 005:T013 to T015 (B47; FR-614 to FR-617; R-409; Q-G1 (a)): the administrators' gender flags,
+   * the admin module's decisions over moderation's flag rows, on the kind's transaction.
+   */
+  readonly genderFlags: {
+    list(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsListInput>,
+    ): Answer<typeof adminGenderFlagsListOutput>;
+    get(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsGetInput>,
+    ): Answer<typeof adminGenderFlagsGetOutput>;
+    raise(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsRaiseInput>,
+    ): Promise<{ readonly flagId: string; readonly replayed: boolean }>;
+    dismiss(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsDismissInput>,
+    ): Promise<{ readonly flaggedUserId: string; readonly replayed: boolean }>;
+    correct(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsCorrectInput>,
+    ): Promise<{
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly endedEnrollments: number;
+      readonly replayed: boolean;
+    }>;
+    fraudBan(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsFraudBanInput>,
+    ): Promise<{
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly accountStatus: string;
+      readonly replayed: boolean;
+    }>;
   };
 }
 

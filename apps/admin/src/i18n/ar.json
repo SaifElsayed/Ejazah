@@ -175,6 +175,14 @@
         "disputesListed": "عرض النزاعات",
         "documentView": "عرض وثيقة",
         "enrollmentRestored": "استعادة اشتراك",
+        "genderFlags": {
+          "corrected": "تصحيح الجنس المعلن",
+          "dismissed": "رفض بلاغ جنس",
+          "fraudBanned": "حظر لتزوير الجنس",
+          "listed": "عرض بلاغات الجنس",
+          "raised": "رفع بلاغ جنس",
+          "viewed": "عرض بلاغ جنس"
+        },
         "heldFileView": "عرض ملف محفوظ",
         "ijazahReview": {
           "barLifted": "رفع منع الإجازات عن مستخدم",
@@ -197,6 +205,11 @@
         "recordVerificationCall": "تسجيل مكالمة التحقق",
         "rejectApplication": "رفض طلب انضمام",
         "removeReviewComment": "إزالة تعليق تقييم",
+        "reports": {
+          "listed": "عرض البلاغات",
+          "resolved": "البتّ في بلاغ",
+          "viewed": "عرض بلاغ"
+        },
         "requestMoreInfo": "طلب معلومات إضافية",
         "sessionCancelled": "إلغاء جلسة",
         "sessionOutcomeCorrected": "تصحيح نتيجة جلسة",
@@ -224,6 +237,7 @@
         "teacherRevocationLifted": "إلغاء سحب اعتماد معلم",
         "enrollmentEndedByAdmin": "إنهاء اشتراك",
         "keptDocumentView": "عرض وثيقة محفوظة لمعلم محذوف",
+        "keptSignatureView": "عرض توقيع محفوظ لمعلم محذوف",
         "teacherKeptDataEraseDateSet": "تحديد موعد محو بيانات معلم محذوف",
         "teacherKeptDataEraseDateCleared": "إلغاء موعد محو بيانات معلم محذوف",
         "teacherKeptDataErased": "محو البيانات المحفوظة لمعلم محذوف",
@@ -299,6 +313,7 @@
         },
         "payment": "طلب دفع",
         "providerOutage": "انقطاع الفيديو",
+        "report": "بلاغ",
         "session": "جلسة",
         "setting": "إعداد",
         "teacherApplication": "طلب انضمام",
@@ -459,7 +474,8 @@
         "studentSuspended": "أُوقف الطالب، والقضية بانتظار المراجعة",
         "teacherEnded": "سُحب اعتماد المعلم أو حُظر أو حُذف حسابه",
         "teacherSuspended": "أُوقف المعلم، والاشتراك متوقف مؤقتًا حتى يعود",
-        "adminEnded": "أنهت الإدارة الاشتراك مباشرة"
+        "adminEnded": "أنهت الإدارة الاشتراك مباشرة",
+        "genderCorrection": "صُحّح الجنس المعلن لأحد الطرفين فانتهى الاشتراك"
       },
       "status": {
         "dismissed": "مرفوضة",
@@ -2758,7 +2774,8 @@
         "adminOpenedForStudent": "فتحتها الإدارة للطالب",
         "adminOpenedForTeacher": "فتحتها الإدارة للمعلم",
         "teacherSuspended": "إيقاف المعلم (الاشتراك متوقف مؤقتًا)",
-        "adminEnded": "إنهاء الإدارة الاشتراك"
+        "adminEnded": "إنهاء الإدارة الاشتراك",
+        "genderCorrection": "تصحيح الجنس المعلن"
       },
       "caseStatus": {
         "open": "مفتوحة",

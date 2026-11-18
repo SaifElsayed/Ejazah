@@ -14,6 +14,10 @@
 // - The lock (F13): a case opened by another transaction holding the enrollment's lock is seen by
 //   the purge, which waits on that lock (seen waiting in `pg_stat_activity`, so the order is the
 //   database's) and reads again after it: the chat is kept.
+// - (005:T012; FR-492, SRS FR-SESS-13; the note under T012, Q-R1 (a)) an open session or chat
+//   report on the enrollment (`user_reports.enrollment_id`) keeps its chat; the same chat is purged
+//   once the report is `actioned` or `dismissed`; a report raised under the enrollment's lock while
+//   the purge waits is seen; moderation's `enrollmentsWithOpenReportAmong` names those and no other.
 //
 // Every row is written and committed by the harness, each probe with an enrollment of its own, and
 // the purge is asked of that enrollment only (`purgeIfDue`), so nothing another spec committed is
@@ -26,6 +30,7 @@ import {
   chatPurgeStore,
   createChatPurge,
 } from '../../apps/api/src/modules/chat/index.js';
+import { enrollmentsWithOpenReportAmong } from '../../apps/api/src/modules/moderation/index.js';
 import {
   closeDatabase,
   type Database,
@@ -338,6 +343,72 @@ describe('the chat purge over the real tables (T039, FR-492, ERD §15 rules 8 an
   });
 });
 
+/** The student's open report of the teacher from a session or the chat, its enrollment set (R-408). */
+function openReport(probe: Probe, context: 'session' | 'chat') {
+  return insertRow(db, 'user_reports', {
+    reporter_user_id: probe.studentId,
+    reported_user_id: probe.teacherId,
+    context,
+    enrollment_id: probe.enrollmentId,
+    ...(context === 'session' ? { session_id: probe.sessionId } : {}),
+    reason: 'سبب البلاغ',
+    status: 'open',
+  });
+}
+
+/** An administrator's resolution, its status, instant and administrator together (ERD §15 rule 59). */
+async function resolveReport(reportId: string, status: 'actioned' | 'dismissed'): Promise<void> {
+  await db.query(
+    `UPDATE user_reports SET status = $2::user_report_status, resolution_notes = 'Probe decision',
+            resolved_by_admin_id = $3, resolved_at = now(), updated_at = now() WHERE id = $1`,
+    [reportId, status, await makeAdmin(db)],
+  );
+}
+
+describe('an open report keeps the chat (005:T012, FR-492, SRS FR-SESS-13; Q-R1 (a))', () => {
+  it.each([
+    ['session', 'actioned'],
+    ['chat', 'dismissed'],
+  ] as const)(
+    'nothing while a %s report is open on it; the same chat purged once the report is %s',
+    async (context, outcome) => {
+      const probe = await chatOf('completed');
+      const reportId = await openReport(probe, context);
+      const { purge, storage } = purgeOver();
+      expect(await purge.purgeIfDue(probe.enrollmentId)).toBeNull();
+      expect(storage.removed).toEqual([]);
+      expect((await messagesOf(probe.enrollmentId)).every(({ purged }) => !purged)).toBe(true);
+
+      await resolveReport(reportId, outcome);
+      expect(await purge.purgeIfDue(probe.enrollmentId)).toEqual({ messages: 2, files: 1 });
+      expect(storage.removed).toEqual([probe.key]);
+    },
+  );
+
+  it('moderation names the enrollments with an open report, and only those', async () => {
+    const open = await chatOf('completed');
+    const resolved = await chatOf('completed');
+    const none = await chatOf('completed');
+    await openReport(open, 'chat');
+    await resolveReport(await openReport(resolved, 'session'), 'dismissed');
+    // A profile report between the same two names no enrollment.
+    await insertRow(db, 'user_reports', {
+      reporter_user_id: none.studentId,
+      reported_user_id: none.teacherId,
+      context: 'profile',
+      reason: 'سبب البلاغ',
+      status: 'open',
+    });
+    const named = await enrollmentsWithOpenReportAmong(database, [
+      open.enrollmentId,
+      resolved.enrollmentId,
+      none.enrollmentId,
+    ]);
+    expect([...named]).toEqual([open.enrollmentId]);
+    expect((await enrollmentsWithOpenReportAmong(database, [])).size).toBe(0);
+  });
+});
+
 describe('the last session is the last disputable one (Q-B1 (b), the owner’s decision of 2026-11-11; FR-473)', () => {
   /** A further committed session of the probe's enrollment, ending at `endAt`, in `status`. */
   function sessionOf(probe: Probe, sequence: number, endAt: string, status: string) {
@@ -393,8 +464,14 @@ describe('the purge waits on the enrollment’s lock and reads again under it (F
     throw new Error(`backend ${String(pid)} never waited on a lock`);
   }
 
-  it('a case opened under the enrollment’s lock, committed while the purge waits, is seen: the chat is kept', async () => {
-    const probe = await chatOf('completed');
+  /**
+   * The probe's enrollment locked by another transaction that writes `opens` under the lock, the
+   * purge seen waiting on that lock, then the commit: the purge reads again and keeps the chat.
+   */
+  async function keptWhileWaiting(
+    probe: Probe,
+    opens: (opener: Db, probe: Probe) => Promise<unknown>,
+  ): Promise<void> {
     const opener = await connectAsApplication();
     let pid: (value: number) => void = () => undefined;
     const began = new Promise<number>((resolve) => {
@@ -413,11 +490,7 @@ describe('the purge waits on the enrollment’s lock and reads again under it (F
       await opener.query('SELECT 1 FROM enrollments WHERE id = $1 FOR UPDATE', [
         probe.enrollmentId,
       ]);
-      await opener.query(
-        `INSERT INTO disputes (enrollment_id, kind, reason, status, updated_at)
-         VALUES ($1, 'compensation_case', 'teacher_ended', 'open', now())`,
-        [probe.enrollmentId],
-      );
+      await opens(opener, probe);
       const { purge, storage } = purgeOver({ store });
       const purging = purge.purgeIfDue(probe.enrollmentId);
       await seenWaiting(await began);
@@ -429,5 +502,26 @@ describe('the purge waits on the enrollment’s lock and reads again under it (F
       await opener.query('ROLLBACK').catch(() => undefined);
       await opener.end();
     }
+  }
+
+  it('a case opened under the enrollment’s lock, committed while the purge waits, is seen: the chat is kept', async () => {
+    await keptWhileWaiting(await chatOf('completed'), (opener, probe) =>
+      opener.query(
+        `INSERT INTO disputes (enrollment_id, kind, reason, status, updated_at)
+         VALUES ($1, 'compensation_case', 'teacher_ended', 'open', now())`,
+        [probe.enrollmentId],
+      ),
+    );
+  });
+
+  it('a report raised under the enrollment’s lock (as reports.create takes it), committed while the purge waits, is seen: the chat is kept (005:T012)', async () => {
+    await keptWhileWaiting(await chatOf('completed'), (opener, probe) =>
+      opener.query(
+        `INSERT INTO user_reports
+                (reporter_user_id, reported_user_id, context, enrollment_id, reason, status, updated_at)
+         VALUES ($1, $2, 'chat', $3, 'سبب البلاغ', 'open', now())`,
+        [probe.studentId, probe.teacherId, probe.enrollmentId],
+      ),
+    );
   });
 });

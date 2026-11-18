@@ -24,6 +24,7 @@ import type { AdminSession, AdminSurfaceServices, UserSession } from './context.
 import {
   unusedBookingServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -170,6 +171,7 @@ beforeAll(async () => {
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     },
     adminServices,
   });

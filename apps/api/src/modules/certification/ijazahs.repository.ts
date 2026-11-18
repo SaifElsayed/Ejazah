@@ -184,3 +184,44 @@ export async function markRerendered(tx: Client, ijazahId: string): Promise<bool
   });
   return count === 1;
 }
+
+// 005:T014 of B47 (Q-G4 (a); SC-604; `ejazah-tools\b46\certificate-text.md:21-29`): a party's
+// unsigned ijazahs re-rendered after a change of their declared gender, which the render reads.
+
+/** The ijazahs not signed off and not revoked where `userId` is the teacher or the student, id order; no lock. */
+export async function unsignedIjazahsOfParty(tx: Client, userId: string): Promise<string[]> {
+  const rows = await tx.ijazah.findMany({
+    where: {
+      OR: [{ teacherUserId: userId }, { studentUserId: userId }],
+      signedOffAt: null,
+      revokedAt: null,
+      deletedAt: null,
+    },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+  return rows.map(({ id }) => id);
+}
+
+/**
+ * Of `ids`, held by the caller (`lockIjazahs`), those still unsigned and unrevoked, read again under
+ * the locks: each one's generation raised by one and its rendering cleared; the new generations.
+ */
+export async function rerenderUnsigned(
+  tx: Client,
+  ids: readonly string[],
+): Promise<readonly { readonly id: string; readonly generation: number }[]> {
+  if (ids.length === 0) return [];
+  const unsigned = { signedOffAt: null, revokedAt: null, deletedAt: null } as const;
+  const rows = await tx.ijazah.findMany({
+    where: { id: { in: [...ids] }, ...unsigned },
+    orderBy: { id: 'asc' },
+    select: { id: true, renderGeneration: true },
+  });
+  if (rows.length === 0) return [];
+  await tx.ijazah.updateMany({
+    where: { id: { in: rows.map(({ id }) => id) }, ...unsigned },
+    data: { renderGeneration: { increment: 1 }, renderedAt: null },
+  });
+  return rows.map(({ id, renderGeneration }) => ({ id, generation: renderGeneration + 1 }));
+}

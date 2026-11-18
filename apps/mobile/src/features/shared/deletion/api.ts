@@ -12,6 +12,9 @@
 // T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): the deletion refused for an
 // ongoing enrollment (`CONFLICT` `active_enrollments`) is told apart here, and the support address
 // the public configuration serves (FR-145) is written to from here, so the sheet only draws them.
+//
+// 005:T031 of specs/005-certification (FR-630): a teacher's deletion refused for an undecided ijazah
+// request (`CONFLICT` `pending_ijazah_requests`) is told apart the same way, each cause its own text.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
@@ -38,12 +41,19 @@ const LATIN_WORD: DeletionConfirmation = 'DELETE';
 
 /** T080: whether a failed attempt is the refusal of an ongoing enrollment; it names no count. */
 export function isOngoingRefusal(error: unknown): boolean {
-  return (
-    errorCodeOf(error) === 'CONFLICT' &&
-    errorDetailsOf(error).some(
-      ({ path, code }) => path === 'cause' && code === 'active_enrollments',
-    )
-  );
+  return deletionRefusalOf(error) === 'active_enrollments';
+}
+
+/** The causes a person's own deletion is refused by while a matter of theirs is open (T080, 005:T031). */
+export type DeletionRefusal = 'active_enrollments' | 'pending_ijazah_requests';
+
+const REFUSALS: readonly DeletionRefusal[] = ['active_enrollments', 'pending_ijazah_requests'];
+
+/** The refusal a failed attempt is, by its cause, or null for any other failure; it names no count. */
+export function deletionRefusalOf(error: unknown): DeletionRefusal | null {
+  if (errorCodeOf(error) !== 'CONFLICT') return null;
+  const cause = errorDetailsOf(error).find(({ path }) => path === 'cause')?.code;
+  return REFUSALS.find((refusal) => refusal === cause) ?? null;
 }
 
 /** The contract's word for what the person typed, or null while it is not one. */

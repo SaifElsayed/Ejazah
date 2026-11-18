@@ -196,11 +196,13 @@ describe('account.delete: the typed word and the proof', () => {
   it('checks the proof before the transaction opens (B16 check, decision 5)', async () => {
     const caller = await providerAccount('google');
     await deleteWith(caller.userId, await providerProof('google', caller.subject));
-    // T080 of specs/004-sessions (rule d): the count is asked inside the transaction, before the erasure.
-    expect(spec.events.slice(0, 5)).toEqual([
+    // T080 of specs/004-sessions (rule d): the count is asked inside the transaction, before the erasure;
+    // 005:T031 (rule d): the request count after it.
+    expect(spec.events.slice(0, 6)).toEqual([
       'verify',
       'transaction',
       'ongoing-asked',
+      'requests-asked',
       'consequence',
       'committed',
     ]);
@@ -960,6 +962,197 @@ describe('an administrator’s deletion (T081, FR-512)', () => {
       ),
     ).rejects.toThrow(/after-commit list/);
     await expectUntouched(caller.userId, caller.email);
+  });
+});
+
+// 005:T031 of specs/005-certification (FR-630; R-414; DEC-72; the note under T031, Q-D1 (a)): a
+// teacher's deletion waits for their undecided ijazah requests (`OpenIjazahRequests`, certification's
+// count): the person's own, in the app and on the web, after T080's count; an administrator's of a
+// teacher (the role read after the account's lock) also for their live enrollments (`live`, read
+// first) and their open compensation cases (`OpenCases`, read after `live`). Each refusal is
+// `CONFLICT` with its cause, writes nothing and logs one info line of ids and the cause. An
+// administrator's deletion of a student asks none of them.
+describe('a teacher’s own deletion waits for their ijazah requests (005:T031, FR-630)', () => {
+  const requestsRefusal = expect.objectContaining({
+    code: 'CONFLICT',
+    details: [{ path: 'cause', code: 'pending_ijazah_requests' }],
+  });
+
+  it('account.delete: refused CONFLICT pending_ijazah_requests, nothing written, no work after the commit, one info line', async () => {
+    const caller = await emailAccount('teacher');
+    spec.open.requests.add(caller.userId);
+    await expect(deleteWith(caller.userId, byPassword())).rejects.toEqual(requestsRefusal);
+    await spec.settle();
+
+    await expectUntouched(caller.userId, caller.email);
+    expect(spec.terminations).toEqual([]);
+    expect(spec.published).toEqual([]);
+    expect(spec.events).not.toContain('files-held');
+    expect(spec.identity.mails().filter(({ to }) => to === caller.email)).toEqual([]);
+    expect(spec.infos).toEqual([{ userId: caller.userId, reason: 'pending_ijazah_requests' }]);
+  });
+
+  it('the web: the right code is spent, the deletion refused with the same error, nothing written', async () => {
+    const caller = await emailAccount('teacher');
+    spec.open.requests.add(caller.userId);
+    await spec.deletion.requestWebCode(caller.email);
+    await vi.waitFor(() =>
+      expect(codeMailedTo(spec.identity.mails(), caller.email)).toMatch(/^\d{6}$/),
+    );
+    const code = codeMailedTo(spec.identity.mails(), caller.email);
+
+    await expect(spec.deletion.confirmWebDeletion(caller.email, code)).rejects.toEqual(
+      requestsRefusal,
+    );
+    await spec.settle();
+    await expectUntouched(caller.userId, caller.email);
+    expect(spec.terminations).toEqual([]);
+    expect(spec.infos).toEqual([{ userId: caller.userId, reason: 'pending_ijazah_requests' }]);
+  });
+
+  it('asks the count after T080’s, on the deletion’s own transaction holding the account’s lock, and deletes when there is none', async () => {
+    const caller = await emailAccount('teacher');
+    const asked: unknown[] = [];
+    const lockedWhenAsked: boolean[] = [];
+    spec.open.requestsAnswer = async (tx, userId) => {
+      asked.push(tx);
+      lockedWhenAsked.push(await rowLockedElsewhere(userId));
+      return 0;
+    };
+    let erasedOn: unknown;
+    spec.consequences.subscribe(async (tx) => {
+      erasedOn = tx;
+    });
+    await deleteWith(caller.userId, byPassword());
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toBe(erasedOn);
+    expect(lockedWhenAsked).toEqual([true]);
+    expect(spec.events.filter((event) => event.endsWith('-asked'))).toEqual([
+      'ongoing-asked',
+      'requests-asked',
+    ]);
+    expect(await rows().deletedUser(caller.userId)).toMatchObject({ email: null });
+  });
+
+  it('refuses for T080’s cause first when both hold, naming one cause', async () => {
+    const caller = await emailAccount('teacher');
+    spec.ongoing.people.add(caller.userId);
+    spec.open.requests.add(caller.userId);
+    await expect(deleteWith(caller.userId, byPassword())).rejects.toEqual(
+      expect.objectContaining({ details: [{ path: 'cause', code: 'active_enrollments' }] }),
+    );
+    expect(spec.events).not.toContain('requests-asked');
+  });
+});
+
+describe('an administrator’s deletion of a teacher waits (005:T031, FR-630)', () => {
+  const ADMIN = '0199d0a0-0000-7000-8000-0000000ad031';
+  const reason = 'طلب صاحب الحساب الحذف عبر الدعم';
+
+  async function asAdministrator<T>(work: (tx: Transaction) => Promise<T>) {
+    const live = new RequestLive({ publish: () => undefined }, { warn: () => undefined });
+    try {
+      const answer = await database.$transaction(async (tx) => {
+        const unbind = bindToTransaction(tx, live);
+        try {
+          return await work(tx);
+        } finally {
+          unbind();
+        }
+      });
+      live.flush();
+      return answer;
+    } catch (error: unknown) {
+      live.drop();
+      throw error;
+    }
+  }
+
+  const removeAsAdministrator = (targetUserId: string) =>
+    asAdministrator((tx) =>
+      spec.deletion.deleteByAdministrator(tx, ADMIN, {
+        targetUserId,
+        reason,
+        idempotencyKey: key(),
+      }),
+    );
+
+  const refusalFor = (cause: string) =>
+    expect.objectContaining({ code: 'CONFLICT', details: [{ path: 'cause', code: cause }] });
+
+  it.each([
+    ['a live enrollment', 'active_enrollments', 'live'],
+    ['an undecided ijazah request', 'pending_ijazah_requests', 'requests'],
+    ['an open compensation case', 'open_cases', 'cases'],
+  ] as const)(
+    'refuses a teacher with %s (CONFLICT %s), writing nothing, with one info line of ids and the cause',
+    async (_case, cause, matter) => {
+      const teacher = await emailAccount('teacher');
+      spec.open[matter].add(teacher.userId);
+      await expect(removeAsAdministrator(teacher.userId)).rejects.toEqual(refusalFor(cause));
+      await spec.settle();
+
+      await expectUntouched(teacher.userId, teacher.email);
+      expect(spec.terminations).toEqual([]);
+      expect(spec.published).toEqual([]);
+      expect(spec.events).not.toContain('files-held');
+      expect(spec.infos).toEqual([{ adminId: ADMIN, userId: teacher.userId, reason: cause }]);
+    },
+  );
+
+  it('reads live first, then the requests, then the open cases, holding the account’s lock, and deletes when all are none', async () => {
+    const teacher = await emailAccount('teacher');
+    const lockedWhenAsked: boolean[] = [];
+    spec.open.liveAnswer = async (_tx, userId) => {
+      lockedWhenAsked.push(await rowLockedElsewhere(userId));
+      return false;
+    };
+    await removeAsAdministrator(teacher.userId);
+    await spec.settle();
+
+    expect(spec.events.filter((event) => event.endsWith('-asked'))).toEqual([
+      'live-asked',
+      'requests-asked',
+      'cases-asked',
+    ]);
+    expect(lockedWhenAsked).toEqual([true]);
+    expect(await rows().deletedUser(teacher.userId)).toMatchObject({ email: null });
+    expect(spec.infos).toEqual([{ adminId: ADMIN, userId: teacher.userId }]);
+  });
+
+  it('refuses for the first cause read when several hold: live before the open cases', async () => {
+    const teacher = await emailAccount('teacher');
+    spec.open.live.add(teacher.userId);
+    spec.open.cases.add(teacher.userId);
+    await expect(removeAsAdministrator(teacher.userId)).rejects.toEqual(
+      refusalFor('active_enrollments'),
+    );
+    expect(spec.events).not.toContain('cases-asked');
+  });
+
+  it('a student’s is unchanged: deleted over a live enrollment, a request and a case, no count asked', async () => {
+    const student = await emailAccount('student');
+    spec.open.live.add(student.userId);
+    spec.open.requests.add(student.userId);
+    spec.open.cases.add(student.userId);
+    await removeAsAdministrator(student.userId);
+    await spec.settle();
+
+    expect(await rows().deletedUser(student.userId)).toMatchObject({ email: null });
+    expect(spec.terminations).toEqual([{ userId: student.userId, cause: 'account_deleted' }]);
+    expect(spec.events.filter((event) => event.endsWith('-asked'))).toEqual([]);
+  });
+
+  it('an already deleted teacher is still NOT_FOUND, no count asked', async () => {
+    const teacher = await emailAccount('teacher');
+    await deleteWith(teacher.userId, byPassword());
+    spec.events.length = 0;
+    spec.infos.length = 0;
+    spec.open.cases.add(teacher.userId);
+    await expect(removeAsAdministrator(teacher.userId)).rejects.toEqual(refused('NOT_FOUND'));
+    expect(spec.events.filter((event) => event.endsWith('-asked'))).toEqual([]);
+    expect(spec.infos).toEqual([{ adminId: ADMIN, userId: teacher.userId, reason: 'not_found' }]);
   });
 });
 

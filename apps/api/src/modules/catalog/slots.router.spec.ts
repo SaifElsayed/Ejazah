@@ -20,6 +20,7 @@ import {
 import {
   unusedBookingServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -130,6 +131,7 @@ function as(session: UserSession | null) {
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
     catalog: { slots, packages: unusedPackages, signature: unusedSignature },
   };
   return callerFor(

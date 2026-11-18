@@ -79,6 +79,10 @@ export const COMPENSATION_REASONS = [
   // T082 of specs/004-sessions (FR-513; SRS FR-CANCEL-10, DEC-68; the note under T082, Q2 (a)): an
   // administrator's direct end of an enrollment, holding the sessions owed and every open remedy.
   'admin_ended',
+  // 005:T014 of B47 (FR-616; SRS FR-GENDER-7; research R-409; the ERD's changelog line is the
+  // integration's): a gender correction's end of a confirmed enrollment, one case each; never
+  // restorable (DEC-69), so no closing kind reads it.
+  'gender_correction',
 ] as const;
 
 /**

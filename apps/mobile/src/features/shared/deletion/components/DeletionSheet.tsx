@@ -9,6 +9,8 @@
 // T080 of specs/004-sessions (FR-511; SRS FR-AUTH-14 as amended): a deletion refused for an ongoing
 // enrollment says the line's sentence, naming no count, and offers «تواصل مع الدعم» (a mail to the
 // support address) in place of the confirm button; the password field goes with the button.
+// 005:T031 of specs/005-certification (FR-630): a teacher's deletion refused for an undecided ijazah
+// request says that cause's own sentence the same way.
 import type { SignInMethod } from '@ijazah/contracts';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -29,7 +31,8 @@ import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-messag
 import {
   type DeletionConfirmation,
   type DeletionProof,
-  isOngoingRefusal,
+  type DeletionRefusal,
+  deletionRefusalOf,
   useAccountDeletion,
 } from '../api';
 
@@ -42,6 +45,12 @@ export interface DeletionSheetCopy {
 
 /** The API's answer to a proof that is not the caller's own (the password or the provider token). */
 const PROOF_REFUSED = 'SIGN_IN_FAILED';
+
+/** Each refusal's sentence (T080, 005:T031). */
+const REFUSAL_TEXT = {
+  active_enrollments: 'account.delete.refused.activeEnrollments',
+  pending_ijazah_requests: 'account.delete.refused.pendingIjazahRequests',
+} as const satisfies Readonly<Record<DeletionRefusal, string>>;
 
 export function DeletionSheet({
   copy,
@@ -59,9 +68,10 @@ export function DeletionSheet({
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'proof' | 'ongoing' | ErrorMessage | null>(null);
+  const [error, setError] = useState<'proof' | ErrorMessage | null>(null);
+  const [refusal, setRefusal] = useState<DeletionRefusal | null>(null);
   const [supportFailure, setSupportFailure] = useState<ErrorMessage | null>(null);
-  const ongoing = error === 'ongoing';
+  const ongoing = refusal !== null;
 
   const proof: DeletionProof =
     method === 'email' ? { kind: 'password', password } : { kind: 'provider', provider: method };
@@ -72,13 +82,15 @@ export function DeletionSheet({
     try {
       await deletion.deleteAccount(confirmation, proof);
     } catch (caught: unknown) {
-      setError(
-        errorCodeOf(caught) === PROOF_REFUSED
-          ? 'proof'
-          : isOngoingRefusal(caught)
-            ? 'ongoing'
+      const refused = deletionRefusalOf(caught);
+      if (refused !== null) setRefusal(refused);
+      else {
+        setError(
+          errorCodeOf(caught) === PROOF_REFUSED
+            ? 'proof'
             : genericErrorKey(caught, 'common.state.actionError'),
-      );
+        );
+      }
     } finally {
       setBusy(false);
     }
@@ -100,11 +112,11 @@ export function DeletionSheet({
         <Text variant="title-3">{copy.title}</Text>
         <Text tone="muted">{copy.text}</Text>
       </View>
-      {ongoing ? (
+      {refusal === null ? null : (
         <Banner icon={{ name: 'triangle-alert' }} tone="warning">
-          {t('account.delete.refused.activeEnrollments')}
+          {t(REFUSAL_TEXT[refusal])}
         </Banner>
-      ) : null}
+      )}
       {supportFailure === null ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           {t(supportFailure.key, supportFailure.values)}

@@ -12,6 +12,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -139,6 +140,7 @@ export function surfaceOf(verification: VerificationServices): VerificationSurfa
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
   };
   const as = (session: UserSession | null) =>
     callerFor(

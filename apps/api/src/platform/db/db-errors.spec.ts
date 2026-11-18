@@ -27,6 +27,10 @@ const UNIQUE: readonly UniqueConstraint[] = [
   'session_remedies_session_id_key',
   'session_participant_events_provider_event_id_key',
   'disputes_one_open_complaint_per_enrollment_key',
+  // 005:T011: a second open report of one reporter on one person in one context.
+  'user_reports_one_open_key',
+  // 005:T013: a second open gender flag on one person.
+  'gender_flags_one_open_per_user_key',
 ];
 const EXCLUSION: readonly ExclusionConstraint[] = [
   'sessions_teacher_no_overlap',

@@ -353,23 +353,34 @@ function doneStep(lang: Locale, email: string, supportEmail: string): WebRespons
   };
 }
 
-/** T080: the deletion's refusal of an ongoing enrollment (`CONFLICT` `active_enrollments`). */
-function isOngoingRefusal(error: unknown): boolean {
-  return (
-    error instanceof DomainError &&
-    error.code === 'CONFLICT' &&
-    (error.details ?? []).some(
-      ({ path, code }) => path === 'cause' && code === 'active_enrollments',
-    )
-  );
+/**
+ * The deletion's refusals a page tells apart, by the copy key of each cause: T080's ongoing
+ * enrollment (`CONFLICT` `active_enrollments`) and 005:T031's undecided ijazah request (`CONFLICT`
+ * `pending_ijazah_requests`, FR-630).
+ */
+const REFUSAL_TEXT = {
+  active_enrollments: 'activeEnrollments',
+  pending_ijazah_requests: 'pendingIjazahRequests',
+} as const;
+
+type RefusalText = (typeof REFUSAL_TEXT)[keyof typeof REFUSAL_TEXT];
+
+/** The copy key of a refusal this page tells apart, or null for any other error. */
+function refusalTextOf(error: unknown): RefusalText | null {
+  if (!(error instanceof DomainError) || error.code !== 'CONFLICT') return null;
+  const cause = (error.details ?? []).find(({ path }) => path === 'cause')?.code;
+  return cause !== undefined && Object.hasOwn(REFUSAL_TEXT, cause)
+    ? REFUSAL_TEXT[cause as keyof typeof REFUSAL_TEXT]
+    : null;
 }
 
 /**
  * T080 (FR-511; the note under T080, N5): the deletion refused for an ongoing enrollment, after
  * the right code was spent. The line's words and the support address as its own link, no count
- * and nothing beyond them: the heading is the email step's title.
+ * and nothing beyond them: the heading is the email step's title. 005:T031: the same page for an
+ * undecided ijazah request, in its own words.
  */
-function refusedStep(lang: Locale, supportEmail: string): WebResponse {
+function refusedStep(lang: Locale, supportEmail: string, cause: RefusalText): WebResponse {
   const text = copyOf(lang).web.deleteAccount;
   return {
     status: REFUSED,
@@ -382,7 +393,7 @@ function refusedStep(lang: Locale, supportEmail: string): WebResponse {
         </div>
         <div class="banner banner--warning" role="alert">
           ${alertIcon}
-          <p class="grow">${text.refused.activeEnrollments}</p>
+          <p class="grow">${text.refused[cause]}</p>
         </div>
         <a href="mailto:${supportEmail}" class="btn btn--secondary btn--block push"
           ><span class="ltr">${supportEmail}</span></a
@@ -432,7 +443,8 @@ export function deleteAccountRoutes({
     try {
       deleted = await deletion.confirmWebDeletion(email, code);
     } catch (error: unknown) {
-      if (isOngoingRefusal(error)) return refusedStep(lang, supportEmail);
+      const refusal = refusalTextOf(error);
+      if (refusal !== null) return refusedStep(lang, supportEmail, refusal);
       throw error;
     }
     return deleted ? doneStep(lang, email, supportEmail) : codeStep(lang, email, true);

@@ -45,6 +45,8 @@ export const en = {
       refused: {
         activeEnrollments:
           'You cannot delete your account now because you have ongoing enrollments. You can delete it once they end, or contact support to end them.',
+        pendingIjazahRequests:
+          'You cannot delete your account now because you have ijazah requests still in progress. You can delete it once Administration has finished them, or contact support.',
       },
       sendCode: 'Send code',
       steps: {

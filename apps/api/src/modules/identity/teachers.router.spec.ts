@@ -70,6 +70,9 @@ function surface() {
       eraseNow: async () => {
         throw new Error('unused');
       },
+      signatureLink: async () => {
+        throw new Error('unused');
+      },
     },
   };
   const contexts = adminContextsOver({ teachers });
@@ -454,6 +457,8 @@ describe('T077: teachers.keptData', () => {
       documentLink: recorded('documentLink'),
       setEraseDate: recorded('setEraseDate'),
       eraseNow: recorded('eraseNow'),
+      // 005:T031: the kept signature's link.
+      signatureLink: recorded('signatureLink'),
     };
     const contexts = adminContextsOver({ teachers: { keptData } as never });
     return {
@@ -466,7 +471,7 @@ describe('T077: teachers.keptData', () => {
 
   const SET_AT = '2026-12-20T08:00:00.000Z';
   const ANSWERS: Answer = (procedure, input) =>
-    procedure === 'documentLink'
+    procedure === 'documentLink' || procedure === 'signatureLink'
       ? LINK
       : procedure === 'setEraseDate'
         ? {
@@ -490,6 +495,24 @@ describe('T077: teachers.keptData', () => {
         targetId: DOCUMENT,
         reason: KEPT_REASON,
         after: { teacherUserId: TEACHER },
+      },
+    ]);
+  });
+
+  // 005:T031 (FR-631; Q-D2 (a)): the kept signature opened by one link per press, audited
+  // `kept_signature.view` on the person with the reason (the signature has no target kind of its own).
+  it('signatureLink answers one link, audited kept_signature.view on the person with the reason (005:T031)', async () => {
+    const { as, written, reached } = keptSurface(ANSWERS);
+    const input = { teacherUserId: TEACHER, reason: KEPT_REASON };
+    expect(await as(VERIFIED).teachers.keptData['signatureLink']?.(input)).toEqual(LINK);
+    expect(reached).toEqual([['signatureLink', SPEC_ADMIN, input]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'kept_signature.view',
+        targetType: 'user',
+        targetId: TEACHER,
+        reason: KEPT_REASON,
       },
     ]);
   });
@@ -571,8 +594,9 @@ describe('T077: teachers.keptData', () => {
       idempotencyKey: KEY,
     },
     eraseNow: { teacherUserId: TEACHER, reason: KEPT_REASON, idempotencyKey: KEY },
+    signatureLink: { teacherUserId: TEACHER, reason: KEPT_REASON },
   } as const;
-  const PROCEDURES = ['documentLink', 'setEraseDate', 'eraseNow'] as const;
+  const PROCEDURES = ['documentLink', 'setEraseDate', 'eraseNow', 'signatureLink'] as const;
 
   it.each(PROCEDURES)(
     '%s refuses an anonymous caller and a blank reason, and keeps no entry for the service refusal',
@@ -597,6 +621,8 @@ describe('T077: teachers.keptData', () => {
     ['documentLink', 'rate_limit_kept_document_link'],
     ['setEraseDate', 'rate_limit_kept_data_erase_date'],
     ['eraseNow', 'rate_limit_kept_data_erase_now'],
+    // 005:T031 (Q-D2 (a)): the signature's link shares the documents' limit.
+    ['signatureLink', 'rate_limit_kept_document_link'],
   ] as const)(
     '%s refuses a call over %s RATE_LIMITED before the transaction opens',
     async (procedure, key) => {
@@ -628,6 +654,7 @@ describe('T077: teachers.keptData', () => {
         documentLink: answering('documentLink', LINK),
         setEraseDate: answering('setEraseDate', { before: null, after: null, replayed: false }),
         eraseNow: answering('eraseNow', { documents: 0, payout: false, replayed: false }),
+        signatureLink: answering('signatureLink', LINK),
       };
       const context = () =>
         createAdminContext({

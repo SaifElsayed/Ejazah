@@ -60,6 +60,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -175,6 +176,7 @@ const services = {
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
   certification: unusedCertificationServices,
+  moderation: unusedModerationServices,
 };
 
 /** The user surface's context for a fixture session, as the HTTP application builds one. */

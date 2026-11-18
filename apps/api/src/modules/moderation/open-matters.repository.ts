@@ -21,3 +21,23 @@ export async function enrollmentsWithOpenMatterAmong(
   });
   return new Set(rows.map(({ enrollmentId }) => enrollmentId));
 }
+
+/**
+ * 005:T012 (FR-492, SRS FR-SESS-13; the note under T012, Q-R1 (a)): of `enrollmentIds`, those with
+ * an open `user_reports` row, read through its `enrollment_id` (a session or chat report carries
+ * it, `user_reports_context_check`; a profile report has none). One read over
+ * `user_reports_enrollment_id_idx`, no lock. The chat purge's alone: booking's held files keep
+ * `enrollmentsWithOpenMatterAmong`, since FR-AUTH-14 holds files for disputes, cases and complaints.
+ */
+export async function enrollmentsWithOpenReportAmong(
+  tx: Pick<Transaction, 'userReport'>,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (enrollmentIds.length === 0) return new Set();
+  const rows = await tx.userReport.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, status: 'open' },
+    distinct: ['enrollmentId'],
+    select: { enrollmentId: true },
+  });
+  return new Set(rows.flatMap(({ enrollmentId }) => (enrollmentId === null ? [] : [enrollmentId])));
+}

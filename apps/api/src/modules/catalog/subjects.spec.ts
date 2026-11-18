@@ -19,6 +19,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -81,6 +82,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

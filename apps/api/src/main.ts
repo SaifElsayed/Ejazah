@@ -52,6 +52,8 @@ const [
   certification,
   // T007 of specs/005-certification: approve's after-commit enqueue of the certificate's render.
   { RENDER_CERTIFICATE, renderCertificatePayload },
+  // 005:T011 (B47): the report service and the `Pairings` port it reads parties through.
+  moderation,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -87,6 +89,7 @@ const [
   import('./platform/guards/upload.middleware.js'),
   import('./modules/certification/index.js'),
   import('./jobs/render-certificate.js'),
+  import('./modules/moderation/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -236,6 +239,25 @@ const imageTurns = new identity.PhotoTurns({
   atOnce: PHOTOS_PROCESSED_AT_ONCE,
   waitMs: PHOTO_TURN_WAIT_MS,
 });
+// 005:T011 (B47; FR-611, FR-612; research R-408; the note under T011): one report service for both
+// surfaces, over the `Pairings` port bound here to sessions' and booking's entries, so moderation
+// imports neither.
+const userReports = moderation.createUserReports({
+  idempotency,
+  pairings: {
+    partyOfSession: sessionsModule.partyOfSession,
+    partyOfEnrollment: booking.partyOfEnrollment,
+    paired: booking.paired,
+  },
+  settings,
+});
+// 005:T013 (B47; FR-613 to FR-615; research R-409; the note under T013, Q-G1 (a)): one gender-flag
+// service for both surfaces, over the `Pairings` port's `paired`, bound here to booking's entry.
+const genderFlags = moderation.createGenderFlags({
+  idempotency,
+  pairings: { paired: booking.paired },
+  settings,
+});
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -260,6 +282,9 @@ const services = {
       consequences,
       fileErasures: [
         verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+        // 005:T031 (B47, Q-D3 (a), Q-D4 (a)): a never-approved teacher's signature, erased after the
+        // deletion's commit; an approved teacher's waits for the kept data's erasure (worker.ts).
+        verification.createKeptSignatureErasure({ database, storage: ports.storage }),
       ],
       // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
       // entry, so identity imports no booking.
@@ -270,6 +295,18 @@ const services = {
       // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
       // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
       ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
+      // 005:T031 (B47; FR-630; R-414; the note under T031, Q-D1 (a)): a teacher's deletion waits for
+      // their open ijazah requests (certification's count) and, by an administrator, their open
+      // compensation cases (booking's enrollment ids composed with moderation's count), on the
+      // deletion's transaction after the account's lock; identity imports neither module.
+      openIjazahRequests: { count: certification.openRequestCountOfTeacher },
+      openCases: {
+        count: async (tx, teacherUserId) =>
+          moderation.openCompensationCasesAmong(
+            tx,
+            await booking.enrollmentIdsOfTeacher(tx, teacherUserId),
+          ),
+      },
     }),
     // T004 of specs/005-certification (FR-602): the certificate name. Its `AwaitingNameRelease` is
     // bound to certification's request service (T006), so identity imports no module.
@@ -375,6 +412,8 @@ const services = {
       log,
     }),
   },
+  // `reports.create` (005:T011, B47) and `genderFlags.raise` (005:T013, B47): the services above.
+  moderation: { reports: userReports, genderFlags },
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -470,7 +509,7 @@ const routes = {
 
 // The admin module's services behind the administrator surface (T067), bound to the surface's port.
 // `admins.add` queues `deliver-admin-invite` with the id alone (R-110), on the queue above.
-const adminServices = createAdminServices({
+const adminModuleServices = createAdminServices({
   database,
   settings,
   encryptionKey: config.ENCRYPTION_KEY,
@@ -517,7 +556,13 @@ const adminServices = createAdminServices({
   // T007 of specs/005-certification (Q6 (a)): `ijazahRequests.approve` enqueues generation 0's render
   // after its commit; T032's `ijazahs.rerender` the raised generation (the queue above).
   ijazahRenders: certificateRenders,
+  // 005:T013 to T015 (B47; Q-G1 (a)): the administrators' `genderFlags.*`, over the same flag service
+  // as the user surface's; the correction's hold release reads payments' order standing (Q-G2 (c)).
+  genderFlags,
+  orders: payments.orderStandingsOf,
 });
+// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
+const adminServices = { ...adminModuleServices, reports: userReports };
 
 const application = await createApplication({
   log,

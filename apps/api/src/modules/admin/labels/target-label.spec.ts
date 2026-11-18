@@ -207,3 +207,26 @@ describe('the ijazah review audit targets (005:T007)', () => {
     expect(await resolveTargetName(tx, 'ijazah' as never, NUMBER, readers)).toBeNull();
   });
 });
+
+// 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): a report is the target of
+// `report.viewed` and `report.resolved`, labelled by its id; `reports.listed` keeps the `admin`
+// target of the other list reads. A report names no person here.
+describe('the reports queue’s audit target (005:T011)', () => {
+  it('labels a report by its id', () => {
+    expect(isAuditTargetType('user_report')).toBe(true);
+    expect(targetLabel('user_report', USER_ID)).toBe(`بلاغ · ${USER_ID}`);
+  });
+
+  it('names no person for a report', async () => {
+    const tx = {} as Transaction;
+    const readers = {
+      person: async (): Promise<TargetPerson | null> => {
+        throw new Error('a report names no person');
+      },
+      administrator: async (): Promise<string | null> => {
+        throw new Error('a report names no administrator');
+      },
+    };
+    expect(await resolveTargetName(tx, 'user_report' as never, USER_ID, readers)).toBeNull();
+  });
+});

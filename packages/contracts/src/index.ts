@@ -26,6 +26,10 @@ export {
 export * from './ijazah-requests.js';
 // 005:T009 (the owner's «موافق», Q-D1): the parties' certificates, `certificates.list` and `.link`.
 export * from './certificates.js';
+// 005:T011 (B47): `reports.create`, a user's report of another user.
+export * from './reports.js';
+// 005:T013 (B47): `genderFlags.raise`, a user's flag of another user's declared gender.
+export * from './gender-flags.js';
 export * from './live.js';
 export * from './onboarding.js';
 export * from './packages.js';

@@ -61,6 +61,8 @@ const REASONS = [
   ['teacher_suspended', 'admin.cases.reason.teacherSuspended'],
   // B42c, T083 (Q-R7 (a)): T082's case of an administrator's direct end.
   ['admin_ended', 'admin.cases.reason.adminEnded'],
+  // 005:T014 (B47): a gender correction's case.
+  ['gender_correction', 'admin.cases.reason.genderCorrection'],
 ] as const satisfies readonly (readonly [string, MessageKey])[];
 
 /** The queue's first page, as the server orders it: the open `student_suspended` case first. */
@@ -756,6 +758,24 @@ describe('T083: an administrator’s direct end, in words', () => {
     }).toEqual({
       ar: 'أنهت الإدارة الاشتراك مباشرة',
       en: 'The administration ended the enrollment directly',
+    });
+  });
+});
+
+// 005:T014 of B47 (FR-616; SRS FR-GENDER-7): a gender correction ends each enrollment it makes mixed
+// with one `gender_correction` case, added to the closed list of case reasons.
+describe('005:T014: a gender correction’s case, in words', () => {
+  it('names a `gender_correction` case as a party’s declared gender corrected', () => {
+    const key: MessageKey | undefined = caseTitle({
+      kind: 'compensation_case',
+      reason: 'gender_correction',
+    });
+    expect({
+      ar: key === undefined ? undefined : translate('ar', key),
+      en: key === undefined ? undefined : translate('en', key),
+    }).toEqual({
+      ar: 'صُحّح الجنس المعلن لأحد الطرفين فانتهى الاشتراك',
+      en: 'A party’s declared gender was corrected, ending the enrollment',
     });
   });
 });

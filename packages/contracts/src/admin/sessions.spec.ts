@@ -12,6 +12,7 @@ import {
   enrollmentEndRefusalCause,
   enrollmentEndSlot,
   monitorEnrollment,
+  restoreRefusalCause,
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
 } from './sessions.js';
@@ -98,8 +99,9 @@ describe('sessions.endEnrollment output and refusals (FR-513, R-MONEY-6)', () =>
 
 describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
   it('adds admin_ended to the closed list of case reasons, at its end', () => {
-    expect(compensationCaseReason.options.at(-1)).toBe('admin_ended');
-    expect(compensationCaseReason.options).toHaveLength(16);
+    // 005:T014 (rule d): `gender_correction` follows it, additively (R-API-9).
+    expect(compensationCaseReason.options.at(-2)).toBe('admin_ended');
+    expect(compensationCaseReason.options).toHaveLength(17);
   });
 
   it('answers enrollmentRestoreWindowDays on the monitor enrollment, a whole positive number', () => {
@@ -124,5 +126,19 @@ describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
         monitorEnrollment.safeParse({ ...enrollment, enrollmentRestoreWindowDays: days }).success,
       ).toBe(false);
     }
+  });
+});
+
+// 005:T014 (B47; FR-616, FR-617; research R-409): the correction's case and the restore's new
+// step-3 cause, each added at its enum's end (R-API-9). Written before the enums, run red first.
+describe('005:T014: gender_correction and gender_mismatch', () => {
+  it('adds gender_correction to the case reasons, at the end', () => {
+    expect(compensationCaseReason.options.at(-1)).toBe('gender_correction');
+    expect(compensationCaseReason.parse('gender_correction')).toBe('gender_correction');
+  });
+
+  it('adds gender_mismatch to the restore refusal causes, at the end, keeping refunded before it', () => {
+    expect(restoreRefusalCause.options.slice(-2)).toEqual(['refunded', 'gender_mismatch']);
+    expect(restoreRefusalCause.options).toHaveLength(10);
   });
 });

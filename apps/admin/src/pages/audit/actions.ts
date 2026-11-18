@@ -77,6 +77,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // its erase date set, cleared and carried out, and T081's deletion at the owner's request.
   'enrollment.ended_by_admin': 'admin.audit.actions.enrollmentEndedByAdmin',
   'kept_document.view': 'admin.audit.actions.keptDocumentView',
+  // 005:T031 of specs/005-certification (Q-D2 (a)): a deleted teacher's kept signature opened.
+  'kept_signature.view': 'admin.audit.actions.keptSignatureView',
   'teacher.kept_data.erase_date_set': 'admin.audit.actions.teacherKeptDataEraseDateSet',
   'teacher.kept_data.erase_date_cleared': 'admin.audit.actions.teacherKeptDataEraseDateCleared',
   'teacher.kept_data.erased': 'admin.audit.actions.teacherKeptDataErased',
@@ -95,6 +97,19 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // 005:T032 of B46 (Q-E4 (a)): the sign-off and the re-render.
   'ijazah.signed_off': 'admin.audit.actions.ijazahReview.ijazahSignedOff',
   'ijazah.rerendered': 'admin.audit.actions.ijazahReview.ijazahRerendered',
+  // 005:T011 (B47; FR-612): the reports queue.
+  'reports.listed': 'admin.audit.actions.reports.listed',
+  'report.viewed': 'admin.audit.actions.reports.viewed',
+  'report.resolved': 'admin.audit.actions.reports.resolved',
+  // 005:T013 (B47; FR-614, FR-615): the gender-flag queue, audited on the flagged person.
+  'gender_flags.listed': 'admin.audit.actions.genderFlags.listed',
+  'gender_flag.viewed': 'admin.audit.actions.genderFlags.viewed',
+  'gender_flag.raised': 'admin.audit.actions.genderFlags.raised',
+  'gender_flag.dismissed': 'admin.audit.actions.genderFlags.dismissed',
+  // 005:T014 (B47; FR-616): the correction.
+  'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
+  // 005:T015 (B47; FR-617): the fraud ban.
+  'gender.fraud_banned': 'admin.audit.actions.genderFlags.fraudBanned',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
@@ -113,6 +128,8 @@ const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
   // 005:T007 of B46 (Q-C3 (a)).
   ijazah_request: 'admin.audit.targets.ijazahReview.request',
   ijazah: 'admin.audit.targets.ijazahReview.ijazah',
+  // 005:T011 (B47; FR-612).
+  user_report: 'admin.audit.targets.report',
 };
 
 type Translate = ReturnType<typeof useT>;

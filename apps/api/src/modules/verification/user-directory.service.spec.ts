@@ -89,6 +89,8 @@ const KEPT_DATA = {
   payoutKept: true,
   eraseAt: null,
   erasedAt: null,
+  // 005:T031 (rule d): the kept signature's field.
+  signature: null,
 };
 
 function world({

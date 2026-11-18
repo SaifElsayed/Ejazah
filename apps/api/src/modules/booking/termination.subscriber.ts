@@ -58,9 +58,12 @@
 // after the end's own case and rows, `disputes` last, through sessions' `closePausedCaseOnEnd`:
 // `resolved`, `compensation_ordered`, the note `ended_meanwhile`, covered by the end's case, by the
 // administrator `StandingService`'s `#end` passes as `actor`, one info line of ids. A person's own
-// deletion (P4, a teacher's; P5, a student's) passes no administrator, so the case is left open
-// (rule 46 needs one) with one warn line of ids, until T080 refuses such a deletion. The case is
-// read under the enrollment's lock this holds, which every case closing takes.
+// deletion (P4, a teacher's; P5, a student's) passes no administrator; T080 refuses it while a
+// paused enrollment is `confirmed`, so it reaches none, and the case would be left open (rule 46
+// needs one) with one warn line of ids only if it did. An administrator's deletion passes the
+// administrator: a student's reaches a paused enrollment and closes its case; a teacher's is refused
+// while one is `confirmed` (005:T031, `live`). The case is read under the enrollment's lock this
+// holds, which every case closing takes.
 //
 // THE LOG LINE (the note under T005). Each call writes one info line, «Account end decided», with
 // the account's id, the cause and counts only: `{ userId, cause, enrollments, cancelledSessions,
@@ -69,8 +72,8 @@
 //
 // THE LOCKS (T005's rules, `platform/db/row-lock.ts`). The caller holds the account's `users` row:
 // the standing actions lock it first (`lockAccount`, then `lockApplication` for a ban and a
-// revocation); the deletion holds it by its conditional update of the row, which waits on, and is
-// waited on by, every `lockRows(tx, 'users', …)`. Every insert of a hold (`placeHold`, FR-PAYG-19's
+// revocation); the deletion takes it first too (`lockAccount`, T080 and T081 of specs/004-sessions),
+// before its counts and its conditional update of the row. Every insert of a hold (`placeHold`, FR-PAYG-19's
 // re-hold) locks that account first and then reads the account's standing again, so no hold of the
 // account appears after this reads them. After the account: the teacher's slots' key
 // (`lockKey('teacher-slots', …)`, the slot's place in rule 2; a slot's create and reactivate take it

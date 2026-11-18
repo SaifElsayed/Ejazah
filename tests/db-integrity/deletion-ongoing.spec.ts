@@ -110,6 +110,9 @@ beforeAll(async () => {
     consequences: new AccountConsequences(),
     // As `main.ts` binds it (the note under T080, Q-R11 (a)).
     ongoingEnrollments: createOngoingEnrollments({ settings }),
+    // 005:T031 (rule d): a teacher's two counts, none in this spec's worlds.
+    openIjazahRequests: { count: async () => 0 },
+    openCases: { count: async () => 0 },
     report: () => undefined,
   }).deletion;
 });

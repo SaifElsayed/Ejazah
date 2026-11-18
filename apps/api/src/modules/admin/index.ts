@@ -104,6 +104,13 @@ import {
 } from '../certification/index.js';
 // 005:T010 of specs/005-certification: an administrator's ijazahs, their revocation and the bar.
 import { createIjazahsService, type IjazahsService } from '../certification/index.js';
+// 005:T014 (B47; Q-G4 (a)): a corrected person's unsigned ijazahs re-rendered.
+import { createPartyRerender } from '../certification/index.js';
+// 005:T013 (B47): the gender-flag queue, moderation's flags composed here (R-409, Q-G1 (a)).
+import type { AdminGenderFlags } from '../moderation/index.js';
+// 005:T014 (B47): the correction's hold release reads payments' order standing (Q-G2 (c)).
+import type { OrderStandings } from '../booking/index.js';
+import { createGenderDecisions, type GenderDecisions } from './gender-decisions.service.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminInvites, type AdminInviteDependencies } from './admin-invite.js';
 import { AdminSessionService, type AdminSessionDependencies } from './admin-session.service.js';
@@ -121,6 +128,9 @@ export { adminsRouter } from './admins.router.js';
 export { auditRouter } from './audit.router.js';
 export { authRouter } from './auth.router.js';
 export { homeRouter } from './home.router.js';
+// 005:T013 (B47; Q-G1 (a)): the administrators' `genderFlags.*`, served by this module's router.
+export { GENDER_DECISION_LIMIT, genderFlagsAdminRouter } from './gender-flags.router.js';
+export type { GenderDecisions } from './gender-decisions.service.js';
 
 /** The administrator's session resolver, bound by `main.ts` for the HTTP application (T066). */
 export { resolveAdminSession, type ResolvedAdminSession } from './admin-session.service.js';
@@ -173,7 +183,8 @@ export interface AdminServices {
      * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; Q-R3 (a)): `teachers.keptData.*`,
      * verification's kept-data service, keyed on the call's transaction (`runOn`).
      */
-    readonly keptData: Pick<KeptData, 'documentLink' | 'setEraseDate' | 'eraseNow'>;
+    // 005:T031 (B47, Q-D2 (a)): `signatureLink`, the kept signature.
+    readonly keptData: Pick<KeptData, 'documentLink' | 'signatureLink' | 'setEraseDate' | 'eraseNow'>;
   };
   /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
   readonly students: Pick<
@@ -270,6 +281,11 @@ export interface AdminServices {
     | 'signOff'
     | 'rerender'
   >;
+  /**
+   * 005:T013 of B47 (FR-614, FR-615; R-409; Q-G1 (a)): the gender-flag queue, moderation's flags
+   * with `get`'s preview composed here from booking's and identity's entries.
+   */
+  readonly genderFlags: GenderDecisions;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -339,6 +355,17 @@ export interface AdminServiceDependencies extends AdminSessionDependencies {
   readonly ijazahRenders: RenderQueue;
   /** 003:T109 (SRS DEC-87): the server's payment mode, which `home.summary` answers. */
   readonly paymentMode: 'test' | 'live';
+  /**
+   * 005:T013 of B47 (Q-G1 (a)): moderation's flags, the administrator's half of the one
+   * `createGenderFlags` `main.ts` builds over the `Pairings` it binds.
+   */
+  readonly genderFlags: AdminGenderFlags;
+  /**
+   * 005:T014 of B47 (Q-G2 (c); the review's ruling of 2026-11-18, B46 Q-A4's precedent): payments'
+   * `orderStandingsOf`, bound by `main.ts`, for the correction's release of the corrected person's
+   * active holds (booking's `releaseHolds`, which locks the holds' orders after their enrollments).
+   */
+  readonly orders: OrderStandings;
 }
 
 export function createAdminServices(dependencies: AdminServiceDependencies): AdminServices {
@@ -542,6 +569,21 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       // 005:T032 of B46: a re-render's job, on the approval's queue (`main.ts`'s `ijazahRenders`).
       renders: dependencies.ijazahRenders,
     }),
+    // 005:T013 of B47: the gender-flag queue; 005:T014: the correction over the bound enrollment
+    // side, the kernel's idempotency, payments' order standing and certification's re-render.
+    genderFlags: createGenderDecisions({
+      flags: dependencies.genderFlags,
+      log: dependencies.log,
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
+      orders: dependencies.orders,
+      rerenderOfParty: createPartyRerender({
+        renders: dependencies.ijazahRenders,
+        log: dependencies.log,
+      }).rerenderOfParty,
+      // 005:T015: the fraud ban's bans, the one standing service above.
+      standing,
+    }),
   };
 }
 
@@ -574,6 +616,8 @@ const STANDING_STATUSES_OF: Readonly<Record<string, ReadonlySet<string>>> = {
   'teacher.ban_lifted': new Set(['active']),
   'teacher.revocation_lifted': new Set(['active']),
   'user.require_identity': new Set(['verification_required']),
+  // 005:T015 of B47 (the owner's word of 2026-11-18): the fraud ban bans the teacher.
+  'gender.fraud_banned': new Set(['banned']),
 };
 
 /** `ijazahRequests` over certification's review, `get` with the guarded standing reason. */

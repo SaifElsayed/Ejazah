@@ -16,6 +16,12 @@ import {
   slotInUse,
   slotReleaseBufferWeeks,
 } from './slot-occupancy.service.js';
+// 005:T011: the `Pairings` port's enrollment reads (at the end of this file).
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import type { PairingParty } from '../moderation/index.js';
+import { enrollmentTermsById } from './enrollment-side.repository.js';
+// 005:T013: `paired`'s one read on the pair (T011's follow-up).
+import { pairedEnrollmentExists } from './enrollment-side.repository.js';
 
 /**
  * What catalog's `CatalogUse` port asks of booking (T020, R-207), on the caller's transaction:
@@ -344,3 +350,49 @@ export {
 // and hands to `createBookingServices` (booking imports no certification).
 export { type IjazahEnrollmentRow, ijazahEnrollmentOf } from './ijazah-enrollment.repository.js';
 export type { EnrollmentIjazahRequests } from './enrollment-lists.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T011 (FR-611, FR-614; research R-408; the note under T011): moderation's
+// `Pairings.partyOfEnrollment` and `Pairings.paired`, bound by `main.ts`, each on the caller's
+// transaction with no lock (an enrollment's parties never change); a soft-deleted enrollment is
+// absent from both reads (the client's extension, T148). The parties are compared, never their
+// genders (Q-R5 (a)).
+
+/** The enrollment and the other party when `userId` is one of its two; else null, as an unknown id. */
+export async function partyOfEnrollment(
+  tx: Transaction,
+  enrollmentId: string,
+  userId: string,
+): Promise<PairingParty | null> {
+  const terms = await enrollmentTermsById(tx, enrollmentId);
+  if (terms === null) return null;
+  if (terms.studentUserId === userId) {
+    return { enrollmentId: terms.id, counterpartUserId: terms.teacherUserId };
+  }
+  if (terms.teacherUserId === userId) {
+    return { enrollmentId: terms.id, counterpartUserId: terms.studentUserId };
+  }
+  return null;
+}
+
+/**
+ * Whether an enrollment of any status joins the two people, either as the student (ADR 0006).
+ * 005:T013 settles T011's follow-up: one read of at most one row on the pair
+ * (`pairedEnrollmentExists`), no longer every enrollment of `userId`.
+ */
+export function paired(tx: Transaction, userId: string, otherUserId: string): Promise<boolean> {
+  return pairedEnrollmentExists(tx, userId, otherUserId);
+}
+
+// 005:T031 of specs/005-certification (FR-630; R-414; the note under T031, Q-D1 (a)): what an
+// administrator's deletion of a teacher reads of booking, on the deletion's transaction after the
+// account's lock: `live` is `createOngoingEnrollments`' second method (above), and the teacher's
+// enrollment ids, which `main.ts` composes with moderation's `openCompensationCasesAmong` into
+// identity's `OpenCases` port.
+export { enrollmentIdsOfTeacher, hasLiveEnrollment } from './ongoing-enrollments.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T013 (FR-615; research R-409; contracts/admin-surface.md, `genderFlags.get`): a person's
+// `confirmed` enrollments, as student or teacher, in id order, with no lock (a soft-deleted one
+// left out), for the admin module's preview of what a gender correction would end.
+export { confirmedEnrollmentsOf } from './termination.repository.js';

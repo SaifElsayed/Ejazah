@@ -44,6 +44,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -644,6 +645,7 @@ const caller = createAppCallerFactory(
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     },
   }),
 );

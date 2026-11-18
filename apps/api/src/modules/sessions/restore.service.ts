@@ -285,7 +285,9 @@ type RestoreCause =
   | 'slot_inactive'
   | 'slot_changed'
   | 'slot_taken'
-  | 'time_taken';
+  | 'time_taken'
+  // 005:T014 of B47 (FR-617; research R-409): step 3, the two declared genders differ.
+  | 'gender_mismatch';
 
 interface RefusalIds {
   readonly adminId: string;
@@ -536,6 +538,10 @@ export function createRestore({
     ) {
       throw refused(log, ids, 'party_restricted');
     }
+    // 005:T014 of B47 (FR-617; research R-409; DEC-69): step 3 also compares the pairing's two
+    // declared genders, read under both accounts' locks, whatever closed the enrollment, so no
+    // restore puts a mixed pairing back after either party's correction. No gender is logged.
+    if (student.gender !== teacher.gender) throw refused(log, ids, 'gender_mismatch');
     // Steps 5 and 6: the slot, read under its lock.
     const slot = await store.slotOf(tx, terms.slotId);
     // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).

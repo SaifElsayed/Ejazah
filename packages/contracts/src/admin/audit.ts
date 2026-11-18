@@ -31,6 +31,8 @@ export const auditTargetType = z.enum([
   /** 005:T007 of B46 (Q-C3 (a)): an ijazah request by its id, an ijazah by its certificate number. */
   'ijazah_request',
   'ijazah',
+  /** 005:T011 (B47; FR-612): a report by its id (`report.viewed`, `report.resolved`). */
+  'user_report',
 ]);
 
 /**

@@ -28,6 +28,7 @@
         "terminated_no_show"
       ],
       "gender": ["female", "male"],
+      "genderFlagRaiseRefusal": ["open_exists"],
       "identityDocumentType": ["national_id", "passport"],
       "ijazahRequestRefusal": [
         "already_issued",
@@ -53,6 +54,8 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "reportContext": ["chat", "profile", "session"],
+      "reportCreateRefusal": ["open_exists", "self"],
       "role": ["student", "teacher"],
       "sessionLengthMinutes": ["30", "45", "60"],
       "sessionStatus": [
@@ -537,6 +540,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           }
@@ -565,6 +569,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -602,6 +607,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -760,6 +766,7 @@
               "admin_opened_for_teacher",
               "counter_unanswered",
               "duplicate_payment",
+              "gender_correction",
               "makeup_refused",
               "party_restricted",
               "refund_choice",
@@ -889,6 +896,7 @@
               "admin_opened_for_teacher",
               "counter_unanswered",
               "duplicate_payment",
+              "gender_correction",
               "makeup_refused",
               "party_restricted",
               "refund_choice",
@@ -1433,6 +1441,109 @@
           "$.slotReleasedAt": { "required": true, "type": "string" }
         }
       },
+      "genderFlags.correct": {
+        "input": {
+          "$": { "type": "object" },
+          "$.flagId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.endedEnrollments": { "required": true, "type": "integer" }
+        }
+      },
+      "genderFlags.dismiss": {
+        "input": {
+          "$": { "type": "object" },
+          "$.flagId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "genderFlags.fraudBan": {
+        "input": {
+          "$": { "type": "object" },
+          "$.applicantNote": { "type": "string" },
+          "$.flagId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
+      "genderFlags.get": {
+        "input": { "$": { "type": "object" }, "$.flagId": { "required": true, "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.correctionWouldEnd": { "required": true, "type": "object" },
+          "$.correctionWouldEnd.count": { "required": true, "type": "integer" },
+          "$.correctionWouldEnd.enrollmentIds": { "required": true, "type": "array" },
+          "$.correctionWouldEnd.enrollmentIds[]": { "type": "string" },
+          "$.createdAt": { "required": true, "type": "string" },
+          "$.flagId": { "required": true, "type": "string" },
+          "$.flaggedUserId": { "required": true, "type": "string" },
+          "$.raisedByUserId": { "required": true, "type": "null|string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportId": { "required": true, "type": "null|string" },
+          "$.resolution": { "required": true, "type": "null|object" },
+          "$.resolution.note": { "required": true, "type": "null|string" },
+          "$.resolution.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["corrected", "dismissed", "fraud_ban"]
+          },
+          "$.resolution.resolvedAt": { "required": true, "type": "string" },
+          "$.resolution.resolvedByAdminId": { "required": true, "type": "string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["corrected", "dismissed", "fraud_ban", "open"]
+          }
+        }
+      },
+      "genderFlags.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": {
+            "type": "string",
+            "values": ["corrected", "dismissed", "fraud_ban", "open"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].createdAt": { "required": true, "type": "string" },
+          "$.items[].flagId": { "required": true, "type": "string" },
+          "$.items[].flaggedUserId": { "required": true, "type": "string" },
+          "$.items[].raisedByUserId": { "required": true, "type": "null|string" },
+          "$.items[].reportId": { "required": true, "type": "null|string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["corrected", "dismissed", "fraud_ban", "open"]
+          },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "genderFlags.raise": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportId": { "type": "string" },
+          "$.targetUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "object" }, "$.flagId": { "required": true, "type": "string" } }
+      },
       "home.summary": {
         "input": { "$": { "type": "unknown" } },
         "kind": "query",
@@ -1465,6 +1576,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -1918,6 +2030,83 @@
           "$.nextCursor": { "type": "string" }
         }
       },
+      "reports.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.createdAt": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "null|string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportId": { "required": true, "type": "string" },
+          "$.reportedUserId": { "required": true, "type": "string" },
+          "$.reporterUserId": { "required": true, "type": "string" },
+          "$.resolution": { "required": true, "type": "null|object" },
+          "$.resolution.note": { "required": true, "type": "null|string" },
+          "$.resolution.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed"]
+          },
+          "$.resolution.resolvedAt": { "required": true, "type": "string" },
+          "$.resolution.resolvedByAdminId": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "null|string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed", "open"]
+          }
+        }
+      },
+      "reports.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": { "type": "string", "values": ["actioned", "dismissed", "open"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.items[].createdAt": { "required": true, "type": "string" },
+          "$.items[].enrollmentId": { "required": true, "type": "null|string" },
+          "$.items[].reportId": { "required": true, "type": "string" },
+          "$.items[].reportedUserId": { "required": true, "type": "string" },
+          "$.items[].reporterUserId": { "required": true, "type": "string" },
+          "$.items[].sessionId": { "required": true, "type": "null|string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed", "open"]
+          },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "reports.resolve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.note": { "required": true, "type": "string" },
+          "$.outcome": { "required": true, "type": "string", "values": ["actioned", "dismissed"] },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "sessions.cancel": {
         "input": {
           "$": { "type": "object" },
@@ -1989,6 +2178,7 @@
               "admin_opened_for_teacher",
               "counter_unanswered",
               "duplicate_payment",
+              "gender_correction",
               "makeup_refused",
               "party_restricted",
               "refund_choice",
@@ -2595,6 +2785,20 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "teachers.keptData.signatureLink": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.pageCount": { "type": "integer" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
       "teachers.liftBan": {
         "input": {
           "$": { "type": "object" },
@@ -2725,6 +2929,8 @@
           "$.keptData.eraseAt": { "required": true, "type": "null|string" },
           "$.keptData.erasedAt": { "required": true, "type": "null|string" },
           "$.keptData.payoutKept": { "required": true, "type": "boolean" },
+          "$.keptData.signature": { "required": true, "type": "null|object" },
+          "$.keptData.signature.uploadedAt": { "required": true, "type": "string" },
           "$.payoutKeptOnDeletedTeacher": { "type": "boolean" },
           "$.profile": { "required": true, "type": "object" },
           "$.profile.deleted": { "required": true, "type": "boolean" },
@@ -3853,6 +4059,20 @@
           "$.nextCursor": { "type": "string" }
         }
       },
+      "genderFlags.raise": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.flaggedUserId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.received": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
       "live.events": {
         "caller": "user",
         "input": { "$": { "type": "unknown" } },
@@ -3933,6 +4153,27 @@
           "$.supportEmail": { "required": true, "type": "string" },
           "$.teacherSharePercent": { "required": true, "type": "integer" },
           "$.termsVersion": { "required": true, "type": "string" }
+        }
+      },
+      "reports.create": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.enrollmentId": { "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportedUserId": { "required": true, "type": "string" },
+          "$.sessionId": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.received": { "required": true, "type": "boolean", "values": ["true"] }
         }
       },
       "sessions.cancellation.answer": {

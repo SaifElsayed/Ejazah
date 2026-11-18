@@ -378,6 +378,23 @@ export async function readErasureSnapshot(
   };
 }
 
+/**
+ * 005:T031 (FR-630; the note under T031): the live person's role, read by an administrator's deletion
+ * under the account's lock; null for a person not live (deleted or unknown) or with no role row. The
+ * ordinary client hides a deleted row, so an already deleted teacher reads null and the deletion
+ * answers `NOT_FOUND` as before, never a teacher's refusal.
+ */
+export async function readLiveRole(
+  tx: Pick<Transaction, 'user'>,
+  userId: string,
+): Promise<'student' | 'teacher' | null> {
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { roles: { select: { role: true } } },
+  });
+  return user?.roles[0]?.role ?? null;
+}
+
 /** T097 (FR-155): what a banned person's deletion keeps of their sign-in identifiers. */
 export interface BannedSignIn {
   readonly email: string | null;
@@ -640,4 +657,28 @@ export async function keptProfilesDue(
     select: { id: true, userId: true },
   });
   return rows.map(({ id, userId }) => ({ profileId: id, userId }));
+}
+
+/**
+ * 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D3 (a), Q-D4 (a)): of
+ * `userIds`, the deleted teachers whose signature is no longer kept: never approved (`approved_at`
+ * NULL: a teacher never approved keeps nothing, so it goes at the deletion), or whose kept data was
+ * erased (`kept_erased_at` set, at the administrator's date or «now»). A teacher ever approved and
+ * not yet erased keeps it (DEC-72). Past the soft-delete filter (`includeDeleted`), with no lock: both
+ * answers are final once true. One statement, bounded by the ids asked; none for none.
+ */
+export async function signatureErasableOwnersAmong(
+  database: Pick<Database, 'includeDeleted'>,
+  userIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (userIds.length === 0) return new Set();
+  const users = await database.includeDeleted.user.findMany({
+    where: {
+      id: { in: [...userIds] },
+      deletedAt: { not: null },
+      teacherProfile: { is: { OR: [{ approvedAt: null }, { keptErasedAt: { not: null } }] } },
+    },
+    select: { id: true },
+  });
+  return new Set(users.map(({ id }) => id));
 }

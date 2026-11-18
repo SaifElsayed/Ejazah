@@ -489,6 +489,19 @@ describe('T083: B42c’s six actions by name', () => {
   );
 });
 
+// 005:T031 of specs/005-certification (FR-631; Q-D2 (a)): a deleted teacher's kept signature opened
+// (`teachers.keptData.signatureLink`), named by the catalogue's text in Arabic and in English.
+describe('005:T031: the kept signature’s opening by name', () => {
+  it('kept_signature.view reads its text in both languages, never the stored code', () => {
+    expect(actionText('kept_signature.view', (key: MessageKey) => translate('ar', key))).toBe(
+      'عرض توقيع محفوظ لمعلم محذوف',
+    );
+    expect(actionText('kept_signature.view', (key: MessageKey) => translate('en', key))).toBe(
+      "View a deleted teacher's kept signature",
+    );
+  });
+});
+
 describe('T058: RATE_LIMITED on the audit log', () => {
   it('the list says when to try again', async () => {
     const api = fakeApi();
@@ -512,4 +525,54 @@ describe('T058: RATE_LIMITED on the audit log', () => {
     expect(await detail.findByText(ar('admin.common.rateLimited'))).toBeTruthy();
     expect(detail.queryByText(ar('admin.common.loadError.text'))).toBeNull();
   });
+});
+
+// 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the reports queue's three
+// actions, named by the catalogue's text in Arabic and in English.
+const B47_REPORT_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['reports.listed', 'عرض البلاغات', 'View reports'],
+  ['report.viewed', 'عرض بلاغ', 'View a report'],
+  ['report.resolved', 'البتّ في بلاغ', 'Resolve a report'],
+];
+
+describe('005:T011: the reports queue’s actions by name', () => {
+  it.each(B47_REPORT_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
+describe('005:T011: a report as an audit target', () => {
+  it('names the target type user_report «بلاغ» and "Report"', () => {
+    const row = { targetType: 'user_report' as const };
+    expect(targetText(row, (key: MessageKey) => translate('ar', key))).toBe('بلاغ');
+    expect(targetText(row, (key: MessageKey) => translate('en', key))).toBe('Report');
+  });
+});
+
+// 005:T013 (B47; FR-614, FR-615; contracts/admin-surface.md, `genderFlags.*`): the gender-flag
+// queue's four actions, named by the catalogue's text in Arabic and in English (T083's per-action
+// pattern). Each is audited on the flagged person (`user`), so no new target type.
+const B47_GENDER_FLAG_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['gender_flags.listed', 'عرض بلاغات الجنس', 'View gender flags'],
+  ['gender_flag.viewed', 'عرض بلاغ جنس', 'View a gender flag'],
+  ['gender_flag.raised', 'رفع بلاغ جنس', 'Raise a gender flag'],
+  ['gender_flag.dismissed', 'رفض بلاغ جنس', 'Dismiss a gender flag'],
+  // 005:T014: the correction, with the gender before and after in the entry.
+  ['gender.corrected', 'تصحيح الجنس المعلن', 'Correct a declared gender'],
+  // 005:T015: the fraud ban.
+  ['gender.fraud_banned', 'حظر لتزوير الجنس', 'Ban for gender fraud'],
+];
+
+describe('005:T013: the gender-flag queue’s actions by name', () => {
+  it.each(B47_GENDER_FLAG_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
 });

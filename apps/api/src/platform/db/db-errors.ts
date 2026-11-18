@@ -37,7 +37,15 @@ export type UniqueConstraint =
   | 'disputes_one_open_per_session_key'
   | 'session_remedies_session_id_key'
   | 'session_participant_events_provider_event_id_key'
-  | 'disputes_one_open_complaint_per_enrollment_key';
+  | 'disputes_one_open_complaint_per_enrollment_key'
+  // 005:T011 (FR-611; research R-408; data-model.md:65, Q-R6 (a)): a second open report of one
+  // reporter on one person in one context, refused by the partial unique of the foundations'
+  // migration (`20261117055600_certification_foundations`); `reports.create` answers `open_exists`.
+  | 'user_reports_one_open_key'
+  // 005:T013 (FR-614; research R-409; data-model.md:66, ERD §15 rule 57): a second open gender flag
+  // on one person, refused by the same migration's partial unique; `genderFlags.raise` answers
+  // `open_exists`.
+  | 'gender_flags_one_open_per_user_key';
 
 /** The exclusion constraints a caller may name (ERD §15 rule 19). */
 export type ExclusionConstraint = 'sessions_teacher_no_overlap' | 'sessions_student_no_overlap';
