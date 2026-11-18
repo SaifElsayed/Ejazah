@@ -99,6 +99,12 @@ export const reminderOffsets = z.array(z.int().positive());
 /** A percent's ceiling: the unit's. */
 const PERCENT_MAX = 100;
 
+/**
+ * `ijazah_half_release_percent` (003:T105): a whole percent from 0 to 100, SRS §3.14's row. The read
+ * site's schema: payments' checkout imports it from here (the kernel depends on no module).
+ */
+export const ijazahHalfReleasePercent = z.int().min(0).max(PERCENT_MAX);
+
 /** `price_average_min_teachers`' ceiling: SRS §3.14's row, «2–100» (003:T113, DEC-88). */
 const PRICE_AVERAGE_MIN_TEACHERS_MAX = 100;
 
@@ -402,6 +408,19 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'booking',
     "Fewest other Teachers for the average price (whole number, 2–100: at least 2, so no single Teacher's price is shown)",
     { min: 2, max: PRICE_AVERAGE_MIN_TEACHERS_MAX },
+  ),
+  // 003:T105 (SRS DEC-81): 0 to 100, a percent's; on the general settings page with the teacher's
+  // share, as rule 16 places every rate (Q-B1-7).
+  ijazah_half_release_percent: whole(
+    ijazahHalfReleasePercent,
+    'percent',
+    'general',
+    "Ijazah track: share released at half the sessions (percent of the Teacher's share, 0–100)",
+    { min: 0, max: PERCENT_MAX },
+  ),
+  // 003:T105: the administrator's mark «تم الصرف» and its undo, §3.14's row of 2026-11-18 (Q-B1-12 (a)).
+  rate_limit_payout_mark: rateLimit(
+    'Payout release mark or unmark rate limit (per Administrator, per window)',
   ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,

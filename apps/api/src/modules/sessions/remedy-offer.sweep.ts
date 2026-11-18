@@ -15,7 +15,9 @@
 //   the windows' ends, after the offers and before the completion check, each remedy decided again
 //   under its own locks by `remedy.service.ts`' `RemedyWindows` (its head holds the rules):
 //      - each `counter_proposed` remedy whose answer window has closed by the run's instant
-//        (`answerClosesAt`, D1, the remedy's own A) handed to a `counter_unanswered` case;
+//        (`answerClosesAt`, D1, the remedy's own A): the counter released and its proposal booked,
+//        a refused or deadlocked booking counted as retried (T111 of specs/003-booking, DEC-84; no
+//        `counter_unanswered` case any more);
 //      - each `proposed` or `awaiting_choice` remedy whose choice window has closed by the run's
 //        instant: its proposal booked (H5), a refusal retried next run while it starts at least L
 //        ahead, then handed to a `makeup_refused` case; a `frozen` one is read by neither.
@@ -119,7 +121,7 @@ export const remedyAdvanceStore: RemedyAdvanceStore = {
 export interface AdvanceRun {
   readonly offered: readonly string[];
   readonly reoffered: readonly string[];
-  /** T032: the remedies handed to a case, `counter_unanswered` or `makeup_refused`. */
+  /** T032: the remedies handed to a `makeup_refused` case (003:T111: no `counter_unanswered` any more). */
   readonly handedOff: readonly string[];
   /** T032: the proposals booked at their choice window's end (H5). */
   readonly booked: readonly string[];
@@ -225,8 +227,15 @@ export function createRemedyAdvance({
     }
   }
 
-  /** T032: the pending counters whose answer window has closed by `at` (D1), each handed over. */
-  async function endAnswerWindows(at: Date, handedOff: string[], failed: string[]) {
+  /**
+   * T032: the pending counters whose answer window has closed by `at` (D1), each released and its
+   * proposal booked, or its booking retried (T111).
+   */
+  async function endAnswerWindows(
+    at: Date,
+    outcome: { booked: string[]; retried: string[] },
+    failed: string[],
+  ) {
     let after: string | undefined;
     for (;;) {
       const page = await transactions.run((tx) => store.pendingCounters(tx, after, pageSize));
@@ -238,7 +247,8 @@ export function createRemedyAdvance({
           'Remedy answer window end failed',
           windows.endAnswerWindow,
         );
-        if (done === 'handed_off') handedOff.push(counter.remedyId);
+        if (done === 'booked') outcome.booked.push(counter.remedyId);
+        if (done === 'refused' || done === 'deadlocked') outcome.retried.push(counter.remedyId);
       }
       if (page.length < pageSize) return;
       after = page.at(-1)?.remedyId;
@@ -313,7 +323,7 @@ export function createRemedyAdvance({
       const failed: string[] = [];
       await offerDue(new Date(addHours(at, -hours)), offered, failed);
       await reofferFrozen(reoffered, failed);
-      await endAnswerWindows(at, ended.handedOff, failed);
+      await endAnswerWindows(at, ended, failed);
       await endChoiceWindows(at, ended, failed);
       await completeDue(completed, failed);
       return { offered, reoffered, ...ended, completed, failed };

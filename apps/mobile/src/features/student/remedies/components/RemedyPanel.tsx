@@ -16,7 +16,6 @@ import { ZoneLines } from '../../../shared/room/components/ZoneLines';
 import { type StudentRemedyShown, studentRemedyShown } from '../remedy';
 import { AcceptSheet } from './AcceptSheet';
 import { CounterSheet } from './CounterSheet';
-import { RefundSheet } from './RefundSheet';
 
 export function StudentRemedyPanel({ sessionId }: { readonly sessionId: string }) {
   const session = useSessionRead(sessionId).data;
@@ -28,7 +27,8 @@ export function StudentRemedyPanel({ sessionId }: { readonly sessionId: string }
   return <Panel session={session} remedy={remedy} shown={shown} viewerZone={viewerZone} />;
 }
 
-type Opened = 'accept' | 'counter' | 'refund';
+// T111 of specs/003-booking (DEC-84): a make-up only, so no refund's button or sheet.
+type Opened = 'accept' | 'counter';
 
 function Panel({
   session,
@@ -114,14 +114,6 @@ function Panel({
           onPress={() => setOpened('counter')}
         />
       ) : null}
-      {shown.canRefund ? (
-        <Button
-          label={t('student.remedy.refund')}
-          variant="ghost"
-          layout="block"
-          onPress={() => setOpened('refund')}
-        />
-      ) : null}
       {opened === 'accept' && proposal !== undefined ? (
         <AcceptSheet
           session={session}
@@ -134,7 +126,6 @@ function Panel({
       {opened === 'counter' ? (
         <CounterSheet session={session} viewerZone={viewerZone} onClose={close} />
       ) : null}
-      {opened === 'refund' ? <RefundSheet session={session} onClose={close} /> : null}
     </Card>
   );
 }

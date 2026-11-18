@@ -1,13 +1,13 @@
 // T043 of specs/004-sessions (FR-463 to FR-466, FR-494, FR-495; R-MOBILE-12; R-320): the student's
 // remedy sheets on the session's screen, in Arabic and English. The panel draws what
 // `sessions.get`'s `remedy` answers and nothing it decides itself: the choice of a make-up (accept
-// the proposal, or counter-propose) or a refund where `canChooseRefund`; the proposal with the
-// choice window's close; a pending counter-proposal with its answer window's close, the proposal
-// still accepted while it is pending; every time in its own zone and the viewer's. The counter
-// options are `sessions.remedy.counterOptions`' and the counter is keyed, one key per chosen option,
-// kept for that option's retry. A refund carries no amount (SC-410). An answer the server refuses
-// reads the session again, so the panel shows what the server holds; a failure with no words of
-// its own is `genericErrorKey`'s.
+// the proposal, or counter-propose), never a refund (T111 of specs/003-booking, DEC-84: no refund
+// button and no refund sheet, whatever `canChooseRefund` says); the proposal with the choice
+// window's close; a pending counter-proposal with its answer window's close, the proposal still
+// accepted while it is pending; every time in its own zone and the viewer's. The counter options are
+// `sessions.remedy.counterOptions`' and the counter is keyed, one key per chosen option, kept for
+// that option's retry. An answer the server refuses reads the session again, so the panel shows what
+// the server holds; a failure with no words of its own is `genericErrorKey`'s.
 import type {
   CounterOption,
   MeOutput,
@@ -84,7 +84,7 @@ function remedy(of: Partial<RemedyView> = {}): RemedyView {
     offeredAt: '2026-11-14T16:45:00.000Z',
     choiceClosesAt: CHOICE_CLOSES,
     proposal: PROPOSAL,
-    canChooseRefund: true,
+    canChooseRefund: false,
     ...of,
   };
 }
@@ -142,6 +142,15 @@ const ui = () => (
 const button = (direction: Direction, key: MessageKey) =>
   screen.queryByRole('button', { name: said(direction, key) });
 
+/** T111: a refund's words in either language, which no button or sheet of an open remedy carries. */
+const REFUND = /استرداد|refund/i;
+const refundButton = () => screen.queryByRole('button', { name: REFUND });
+/** No refund button and no word of a refund (its sheet's included) on an open remedy's panel. */
+const expectNoRefundOffered = () => {
+  expect(refundButton()).toBeNull();
+  expect(screen.queryByText(REFUND)).toBeNull();
+};
+
 beforeEach(() => {
   mockApi = remedyApi();
   mockKeys = 0;
@@ -155,24 +164,30 @@ afterEach(async () => {
 });
 
 describe('the choice (FR-463)', () => {
-  it('awaiting a choice with a refund owed: the proposal and the choice window’s close in both zones, accept, a counter and the refund', async () => {
-    mockApi.sessions.get.query.mockResolvedValue(read({}));
+  // T111 of specs/003-booking (DEC-84; ADR 0025 D5): a make-up only. An `awaiting_choice` remedy
+  // offered before the change, even one an older answer still marks `canChooseRefund`, shows the
+  // proposal, accept and a counter, and no refund button or sheet.
+  it('awaiting a choice: the proposal and the choice window’s close in both zones, accept and a counter, and no refund, whatever `canChooseRefund` says (T111)', async () => {
+    mockApi.sessions.get.query.mockResolvedValue(read({ canChooseRefund: true }));
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(said(direction, 'student.remedy.title'))).toBeTruthy();
-      expect(screen.getByText(said(direction, 'student.remedy.text.choice'))).toBeTruthy();
+      expect(screen.getByText(said(direction, 'student.remedy.text.proposed'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'student.remedy.proposal'))).toBeTruthy();
       expectBothZones(direction, PROPOSAL.startsAt);
       expect(screen.getByText(said(direction, 'student.remedy.choiceClosesAt'))).toBeTruthy();
       expectBothZones(direction, CHOICE_CLOSES);
       expect(button(direction, 'student.remedy.accept')).toBeTruthy();
       expect(button(direction, 'student.remedy.proposeOther')).toBeTruthy();
-      expect(button(direction, 'student.remedy.refund')).toBeTruthy();
+      expect(screen.getAllByRole('button')).toHaveLength(2);
+      expectNoRefundOffered();
     });
+    expect(mockApi.remedy.choose.mutate).not.toHaveBeenCalled();
   });
 
-  it('offers no refund where `canChooseRefund` is false, nor once the remedy is past its choice', async () => {
+  it('offers no refund on any open remedy: awaiting a choice or proposed, `canChooseRefund` true or false (T111)', async () => {
     for (const shape of [
       { canChooseRefund: false },
+      { canChooseRefund: true },
       { status: 'proposed', canChooseRefund: false },
       { status: 'proposed', canChooseRefund: true },
     ] as const) {
@@ -183,40 +198,10 @@ describe('the choice (FR-463)', () => {
         ).toBeTruthy();
         expect(button(direction, 'student.remedy.accept')).toBeTruthy();
         expect(button(direction, 'student.remedy.proposeOther')).toBeTruthy();
-        expect(button(direction, 'student.remedy.refund')).toBeNull();
+        expectNoRefundOffered();
       });
       queries.removeQueries({ queryKey: ['sessions'] });
     }
-  });
-
-  it('a refund is chosen with no amount anywhere (SC-410), and the session read again', async () => {
-    mockApi.sessions.get.query.mockResolvedValue(read({}));
-    mockApi.remedy.choose.mutate.mockResolvedValue(remedy({ status: 'refund_case' }));
-    await inBothDirections(ui, async (_rendered, direction) => {
-      await fireEvent.press(
-        await screen.findByRole('button', { name: said(direction, 'student.remedy.refund') }),
-      );
-      expect(screen.getByText(said(direction, 'student.remedy.refundSheet.text'))).toBeTruthy();
-      // Nothing priced: no pound, no figure but the times' own.
-      expect(screen.queryByText(/EGP|E£|جنيه|ج\.م/)).toBeNull();
-      expect(
-        screen.queryByText(said(direction, 'student.makeupChoice.refund', { amount: '' })),
-      ).toBeNull();
-    });
-    await renderIn('rtl', ui());
-    await fireEvent.press(await screen.findByRole('button', { name: ar('student.remedy.refund') }));
-    const readsBefore = mockApi.sessions.get.query.mock.calls.length;
-    await fireEvent.press(
-      screen.getByRole('button', { name: ar('student.remedy.refundSheet.confirm') }),
-    );
-    expect(mockApi.remedy.choose.mutate).toHaveBeenCalledWith({
-      sessionId: SESSION_ID,
-      choice: 'refund',
-    });
-    await waitFor(() =>
-      expect(mockApi.sessions.get.query.mock.calls.length).toBeGreaterThan(readsBefore),
-    );
-    expect(screen.queryByText(ar('student.remedy.refundSheet.text'))).toBeNull();
   });
 });
 
@@ -260,7 +245,7 @@ describe('the proposal and its acceptance (FR-464, FR-465, FR-466)', () => {
       expectBothZones(direction, COUNTER.answerClosesAt);
       expectBothZones(direction, PROPOSAL.startsAt);
       expect(button(direction, 'student.remedy.proposeOther')).toBeNull();
-      expect(button(direction, 'student.remedy.refund')).toBeNull();
+      expect(refundButton()).toBeNull();
       await fireEvent.press(button(direction, 'student.remedy.accept')!);
       expect(
         screen.getByText(said(direction, 'student.remedy.acceptSheet.withdraws')),
@@ -290,7 +275,7 @@ describe('the proposal and its acceptance (FR-464, FR-465, FR-466)', () => {
         expect(await screen.findByText(said(direction, words))).toBeTruthy();
         expect(button(direction, 'student.remedy.accept')).toBeNull();
         expect(button(direction, 'student.remedy.proposeOther')).toBeNull();
-        expect(button(direction, 'student.remedy.refund')).toBeNull();
+        expect(refundButton()).toBeNull();
         expect(screen.queryByText(said(direction, 'student.remedy.choiceClosesAt'))).toBeNull();
       });
       queries.removeQueries({ queryKey: ['sessions'] });
@@ -431,16 +416,17 @@ describe('failures (T065’s genericErrorKey; R-320)', () => {
     );
   });
 
+  // T111: the acceptance carries this case now that the refund's sheet is gone.
   it('an answer that never reached the server reads nothing again', async () => {
     mockApi.sessions.get.query.mockResolvedValue(read({}));
-    mockApi.remedy.choose.mutate.mockRejectedValue(new Error('network'));
+    mockApi.remedy.accept.mutate.mockRejectedValue(new Error('network'));
     await renderIn('ltr', ui());
     await fireEvent.press(
-      await screen.findByRole('button', { name: said('ltr', 'student.remedy.refund') }),
+      await screen.findByRole('button', { name: said('ltr', 'student.remedy.accept') }),
     );
     const readsBefore = mockApi.sessions.get.query.mock.calls.length;
     await fireEvent.press(
-      screen.getByRole('button', { name: said('ltr', 'student.remedy.refundSheet.confirm') }),
+      screen.getByRole('button', { name: said('ltr', 'student.remedy.acceptSheet.confirm') }),
     );
     expect(await screen.findByText(said('ltr', 'common.state.actionError'))).toBeTruthy();
     expect(mockApi.sessions.get.query.mock.calls.length).toBe(readsBefore);

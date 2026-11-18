@@ -212,6 +212,29 @@ export async function sessionsOfEnrollments(
   return byEnrollment;
 }
 
+/**
+ * 003:T105 (Q-B1-4 (a), the owner's answer of 2026-11-18): of `enrollmentIds`' sessions, each make-up's
+ * id to the id of the session it makes up (ADR 0018 D3, `makeup_for_session_id`), so payments values a
+ * delivered make-up as its original. One statement over `(enrollment_id, sequence_number)`, bounded by
+ * the enrollments asked; read-only, no lock. A session that makes up none is absent.
+ */
+export async function makeupOriginsAmong(
+  tx: Pick<Transaction, 'session'>,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (enrollmentIds.length === 0) return new Map();
+  const rows = await tx.session.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, makeupForSessionId: { not: null } },
+    orderBy: [{ enrollmentId: 'asc' }, { sequenceNumber: 'asc' }],
+    select: { id: true, makeupForSessionId: true },
+  });
+  return new Map(
+    rows.flatMap(({ id, makeupForSessionId }) =>
+      makeupForSessionId === null ? [] : [[id, makeupForSessionId] as const],
+    ),
+  );
+}
+
 /** A session of a teacher's day, with the enrollment it belongs to (T049). */
 export interface DaySession extends EnrollmentSessionRow {
   readonly enrollmentId: string;

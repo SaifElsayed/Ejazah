@@ -409,8 +409,23 @@ enum PaymentEventType {
   refunded
   recipient_verified
   recipient_rejected
+  // 003:T102 (Q-2 (a)'s safety net, DEC-82; ERD changelog row 56): a refund the gateway flagged on
+  // the original payment, which reports no amount.
+  refund_reported
 
   @@map("payment_event_type")
+}
+
+// 003:T105 (ADR 0025 D2, SRS DEC-81; ERD changelog row 57): why a release of the teacher's share
+// fell due. Members are permanent (R-API-9).
+enum ShareReleaseMilestone {
+  recitation_end
+  ijazah_half
+  ijazah_end
+  teacher_dropout
+  student_complaint_close
+
+  @@map("share_release_milestone")
 }
 
 // certification (ERD section 8)

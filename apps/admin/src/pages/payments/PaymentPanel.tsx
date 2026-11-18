@@ -143,8 +143,23 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
                     }),
                   },
                 ]),
+            // 003:T102 (DEC-82): the refunded total; a dash while nothing is refunded.
+            {
+              label: t('admin.payments.detail.refundedTotal'),
+              value: amountOrDash(
+                detail.refunded_piasters === 0 ? undefined : piasters(detail.refunded_piasters),
+                locale,
+                t,
+              ),
+            },
           ]}
         />
+        {/* 003:T102 (Q-2 (a)'s safety net): a refund the gateway flagged with no amount. */}
+        {detail.refundReportedAt === undefined ? null : (
+          <Banner icon={{ name: 'info' }} tone="info">
+            {t('admin.payments.detail.refundReported')}
+          </Banner>
+        )}
       </section>
       <section className="section">
         <h2 className="group-label">{t('admin.payments.detail.referencesTitle')}</h2>

@@ -17,14 +17,16 @@
 // A RESTORE (T061; research R-322, «The restore»; B40's conflict check, F8). `restoredCase` names the
 // closing's case: a remedy it held (`refund_case`, kind `makeup`, `case_id` that case) is owed again
 // and offered as a frozen one is at reinstatement, through the same row's re-offer, which clears its
-// `case_id` and `decided_at`; refundable on recitation for a Teacher-No-Show or a cleared
-// suspension's session, as it was offered first. Any other remedy is offered nothing then.
+// `case_id` and `decided_at`; a make-up only, as every offer (below). Any other remedy is offered
+// nothing then.
 //
 // THE OFFER. `offered_at` is the database's clock (Q8); `choice_closes_at` = `offered_at` +
 // `makeup_choice_window_days`; A (`makeup_counter_answer_hours`) and L (`first_session_lead_hours`)
-// snapshot on the row, so a later settings change moves no bound of it. `awaiting_choice` on a
-// recitation enrollment after a Teacher-No-Show or a cleared suspension's session (I3, A1), the
-// refund shown beside the proposal; otherwise `proposed`. One `remedy_offered` row.
+// snapshot on the row, so a later settings change moves no bound of it. Always `proposed`: a missed
+// session is remedied by a make-up only, on both tracks, a Teacher-No-Show's, a cleared suspension's
+// and a restored one's alike (T111 of specs/003-booking; SRS DEC-84, FR-MAKEUP-2 and FR-ADMIN-5 as
+// amended; ADR 0025 D5). `awaiting_choice` is written no more; rows offered so before keep it, and
+// their make-up stays open to them. One `remedy_offered` row.
 //
 // THE PROPOSAL (H1, F5; Q10: "after its last session" is the last generated). The enrollment's
 // weekly slot at its local start in the enrollment's zone (the monitor's reading; Q1 keeps the slot
@@ -170,7 +172,7 @@ export interface Offered {
   readonly reoffered: boolean;
 }
 
-/** T036's cleared suspension: its cancelled session is owed, and refundable on recitation. */
+/** T036's cleared suspension: its cancelled session is owed a make-up (T111: never a refund). */
 export interface OfferOptions {
   readonly clearedSuspension?: boolean;
   /** T061: the closing's case a restore closes; the remedy it held is offered again. */
@@ -333,14 +335,8 @@ export function createRemedyOffer({
       );
       return null;
     }
-    const refundable =
-      terms.track === 'recitation' &&
-      (session.status === 'teacher_no_show' ||
-        options.clearedSuspension === true ||
-        // T061: a cleared suspension's session, handed to the case before the restore.
-        (options.restoredCase !== undefined && session.status === 'cancelled_by_admin'));
     const row: OfferedRow = {
-      status: refundable ? 'awaiting_choice' : 'proposed',
+      status: 'proposed',
       proposedDate: dateColumnOf(proposedDate),
       offeredAt: now,
       choiceClosesAt,

@@ -78,6 +78,7 @@ import { reportError } from '../../platform/errors/reporting.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
+import { ijazahHalfReleasePercent } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   type CheckoutEnrollmentRow,
@@ -133,6 +134,13 @@ export const ORDER_CURRENCY = 'EGP';
  * change reaches new orders only; a value outside 0 to 100 fails closed before the gateway.
  */
 export const TEACHER_SHARE_SETTING = 'teacher_share_percent';
+
+/**
+ * 003:T105 (ADR 0025 D2, D6, SRS DEC-81, §3.14; Q-4 (a)): the percent of the teacher's share released
+ * at half the sessions on the ijazah track (seed default 25). Read when an `ijazah_track` order is
+ * created and kept on it; a value outside 0 to 100 fails closed before the gateway.
+ */
+export const IJAZAH_HALF_RELEASE_SETTING = 'ijazah_half_release_percent';
 
 /** The student asking, from the session, never from input (R-GENDER-4). */
 export interface CheckoutStudent {
@@ -304,6 +312,8 @@ interface OrderToCreate {
   /** 003:T101: whose payout recipient the share is split to. */
   readonly teacherUserId: string;
   readonly gross_piasters: ReturnType<typeof piasters>;
+  /** 003:T105: the package's track, which decides whether the ijazah half's percent is kept. */
+  readonly track: 'recitation' | 'ijazah_track';
   readonly latestExpiry: Date;
   /** Locks and checks what the order is recorded on, in the recording transaction. */
   readonly lockTarget: (tx: Transaction) => Promise<void>;
@@ -396,6 +406,7 @@ export class CheckoutService {
       enrollmentId,
       teacherUserId: enrollment.teacherUserId,
       gross_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
+      track: enrollment.snapshotTrack,
       latestExpiry: lastMoment(hold.expiresAt),
       lockTarget: (tx) =>
         this.#steps.lockOrderTarget(
@@ -449,6 +460,8 @@ export class CheckoutService {
         enrollmentId,
         teacherUserId: target.teacherUserId,
         gross_piasters: target.price_piasters,
+        // The quoted track: booking checks it against the package under the locks (SUMMARY_CHANGED).
+        track: quoted.track,
         latestExpiry,
         lockTarget: (tx) =>
           this.#steps.enrollOnHold(tx, target, {
@@ -484,6 +497,12 @@ export class CheckoutService {
       teacherSharePercent,
     );
     const teacherShare_piasters = teacherShare(order.gross_piasters, teacherShareRatePercent);
+    // 003:T105 (Q-4 (a)): the ijazah half's percent, read now on an `ijazah_track` order only and
+    // kept on it, so a running package keeps the percent it started with (ADR 0025 D6).
+    const halfReleaseRatePercent =
+      order.track === 'ijazah_track'
+        ? await this.#settings.read(IJAZAH_HALF_RELEASE_SETTING, ijazahHalfReleasePercent)
+        : null;
     // T101 (Q-B2 (a)): the share split to the teacher's verified recipient, read before the gateway.
     // With none, no split is asked for: test mode creates the order, live mode's gateway refuses it.
     const recipientRef = await this.#steps.payoutRecipient(order.teacherUserId);
@@ -518,6 +537,7 @@ export class CheckoutService {
           ),
           teacherShareRatePercent,
           teacherShare_piasters,
+          halfReleaseRatePercent,
         });
         const outcome: StoredOrder = {
           ...alsoStored,

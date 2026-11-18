@@ -57,6 +57,9 @@ export {
   type DaySession,
   teacherSessionsBetween,
 } from './sessions.repository.js';
+// 003:T105 (Q-B1-4 (a)): each make-up's original, beside `sessionsOfEnrollments`, for payments'
+// valuing of a delivered make-up as the session it makes up.
+export { makeupOriginsAmong } from './sessions.repository.js';
 export { type SessionProgress, sessionProgress } from './progress.js';
 
 /**
@@ -336,10 +339,11 @@ export {
 export { pendingCancellationsAmong } from './cancellation.repository.js';
 /**
  * T030 of specs/004-sessions (FR-463, FR-465, FR-467; SC-410; Q6 (a)): the one hand-off of a remedy
- * to its enrollment's compensation case, `refund_choice`, `counter_unanswered` or `makeup_refused`,
- * on the caller's transaction under contracts/kernel.md's row, for T031's `choose`, T032's sweep,
- * T036 and T064; and the automatic hand-off's one line (Q11 (a)), which the sweep writes after its
- * commit.
+ * to its enrollment's compensation case, on the caller's transaction under contracts/kernel.md's
+ * row, for T032's sweep (`makeup_refused`), T036 and T064; and the automatic hand-off's one line
+ * (Q11 (a)), which the sweep writes after its commit. Since T111 of specs/003-booking (DEC-84) no
+ * refund is chosen and an unanswered counter books its proposal: `refund_choice` and
+ * `counter_unanswered` are kept for the cases already open, and nothing hands over with them.
  */
 export {
   type AutomaticRemedyCaseReason,

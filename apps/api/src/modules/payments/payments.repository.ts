@@ -2,7 +2,8 @@
 // payout-recipient event in `payment_events`. Queries only, each on the transaction it is handed;
 // `recipient-events.service.ts` holds the rules. T038 adds the order branch's: the order a gateway
 // order id names, its lock, its status read under the lock, the record of an order event, and the
-// order's move; `order-events.service.ts` holds the rules.
+// order's move; `order-events.service.ts` holds the rules. 003:T102 adds the refunded total's read
+// and write and the reported flag's instant, each under the order's lock.
 //
 // The insert is `INSERT … ON CONFLICT DO NOTHING` (Prisma's `skipDuplicates`), so a replayed
 // `provider_event_id` is refused by the unique NOT NULL column itself and leaves the transaction
@@ -23,7 +24,14 @@ type Client = Pick<Transaction, 'paymentEvent' | 'payment'>;
 export type OrderStatus = 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
 
 /** The event types of a gateway order: every `payment_events.event_type` but the recipient's. */
-export type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded';
+export type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded' | 'refund_reported';
+
+/** 003:T102 (DEC-82): what a refund is decided on, read under `lockOrder`. */
+export interface OrderRefunds {
+  readonly status: OrderStatus;
+  readonly refunded_piasters: Piasters;
+  readonly gross_piasters: Piasters;
+}
 
 /** An order as the branch finds it by the gateway's order id: its row and its enrollment. */
 export interface OrderRef {
@@ -143,6 +151,40 @@ export class PaymentsRepository {
       select: { status: true },
     });
     return status;
+  }
+
+  /** 003:T102: the order's status, refunded total and gross, read under `lockOrder`. */
+  async refundsOf(paymentId: string): Promise<OrderRefunds> {
+    const { status, refundedPiasters, grossPiasters } = await this.#tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { status: true, refundedPiasters: true, grossPiasters: true },
+    });
+    return {
+      status,
+      refunded_piasters: piasters(Number(refundedPiasters)),
+      gross_piasters: piasters(Number(grossPiasters)),
+    };
+  }
+
+  /** 003:T102: writes the order's refunded total `packages/money` computed, under `lockOrder`. */
+  async recordRefundedTotal(paymentId: string, refunded_piasters: Piasters): Promise<void> {
+    await this.#tx.payment.update({
+      where: { id: paymentId },
+      data: { refundedPiasters: BigInt(toPlainNumber(refunded_piasters)) },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * 003:T102 (Q-2 (a)'s safety net): sets `refund_reported_at` the first time the gateway flags a
+   * refund on the order, never again (`WHERE refund_reported_at IS NULL`). True when it set it.
+   */
+  async markRefundReported(paymentId: string, at: Date): Promise<boolean> {
+    const { count } = await this.#tx.payment.updateMany({
+      where: { id: paymentId, refundReportedAt: null },
+      data: { refundReportedAt: at },
+    });
+    return count === 1;
   }
 
   /**

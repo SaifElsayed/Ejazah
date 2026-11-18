@@ -1743,6 +1743,128 @@
       "title": "Ijazahs"
     },
     "money": {
+      "audit": {
+        "caseAmountViewed": "View a case’s amount",
+        "payoutReleaseMarked": "Mark a teacher's release paid",
+        "payoutReleaseUnmarked": "Undo a teacher's release paid mark",
+        "payoutsListed": "View teacher payouts",
+        "payoutsViewed": "View a teacher's payouts"
+      },
+      "payouts": {
+        "columns": {
+          "dueNow": "Due now",
+          "held": "Held",
+          "oldestDue": "Oldest due",
+          "paid": "Paid",
+          "paidThisMonth": "Paid this month",
+          "takenOff": "Taken off",
+          "teacher": "Teacher"
+        },
+        "detail": {
+          "a11y": "Teacher payouts",
+          "deductionsEmpty": "No refund is recorded on this teacher's orders.",
+          "deductionsLede": "Each refund recorded on one of the teacher's orders: the refund as recorded, and the teacher's share of it.",
+          "deductionsTitle": "Owes",
+          "dueNotWritten": "Fell due; it is written for payment on the next periodic run, then «Mark paid» appears.",
+          "dueSince": "Due since {when}, awaiting payment",
+          "heldAfterLast": "Falls due when the complaint window after the last session ends, if no complaint is opened",
+          "heldUntil": "Falls due on {when}, if no complaint is opened",
+          "heldWaitsForCase": "On hold until the case open on the enrollment is closed",
+          "noCase": "No case closed the enrollment",
+          "openCase": "Open the case",
+          "paidOn": "Paid on {when}",
+          "payoutAccount": "Payout account",
+          "payoutAccountNone": "No verified payout account",
+          "reason": "Reason: {reason}",
+          "reasonOther": "Another reason",
+          "refunded": "Refund recorded: {amount}",
+          "releasesEmpty": "Nothing is owed to this teacher yet.",
+          "releasesLede": "The teacher's share of each package or part of one, with its state.",
+          "releasesTitle": "Owed",
+          "share": "The teacher's share of it: {amount}",
+          "student": "Student: {name}"
+        },
+        "empty": {
+          "text": "No teacher has a release awaiting payment now.",
+          "title": "Nothing due now"
+        },
+        "emptyAll": {
+          "text": "Nothing has fallen due to any teacher yet, and no refund is recorded on their orders.",
+          "title": "No payouts yet"
+        },
+        "filter": {
+          "dueOnly": "Due now only"
+        },
+        "lede": "What each teacher is owed from their share: held, due now, paid, and taken off for refunds to students. Each due release is transferred by hand in Paymob's dashboard, then marked paid here.",
+        "mark": {
+          "action": "Mark paid",
+          "cancel": "Cancel",
+          "confirm": "Mark paid",
+          "effect": "The transfer is made by hand in Paymob's dashboard. This confirmation only records that you made it; it moves no money.",
+          "footer": "The mark is recorded under your name in the audit log.",
+          "lead": "{part} · {amount}",
+          "refused": {
+            "alreadyMarked": "This release was already marked paid. Nothing changed.",
+            "notFound": "This release was not found. Nothing changed."
+          },
+          "title": "Mark {teacher}'s release paid"
+        },
+        "nav": "Teacher payouts",
+        "pagerPage": "Page {page}",
+        "part": {
+          "ijazahEnd": "Ijazah: the rest at the end",
+          "ijazahHalf": "Ijazah: at half the sessions",
+          "recitationEnd": "Recitation package",
+          "studentComplaintClose": "Package closed on a complaint against the student",
+          "teacherDropout": "Package ended on the teacher's withdrawal"
+        },
+        "state": {
+          "due": "Due",
+          "held": "Held",
+          "paid": "Paid"
+        },
+        "title": "Teacher payouts",
+        "totals": {
+          "dueNow": "Due now",
+          "held": "Held",
+          "paid": "Paid (all time)",
+          "paidThisMonth": "Paid this month",
+          "takenOff": "Taken off (refunds to students)",
+          "title": "Totals for all teachers"
+        },
+        "unmark": {
+          "action": "Undo the payment mark",
+          "cancel": "Cancel",
+          "confirm": "Undo the payment mark",
+          "effect": "The payment mark is removed and the release is due again, awaiting payment. This moves no money in Paymob.",
+          "footer": "The undo and its reason are recorded under your name in the audit log.",
+          "reasonHint": "From 1 to {max} characters.",
+          "reasonLabel": "Reason for the undo",
+          "reasonTooLong": "The reason is longer than {max} characters.",
+          "refused": {
+            "notFound": "This release was not found. Nothing changed.",
+            "notMarked": "This release is not marked paid. Nothing changed."
+          },
+          "title": "Undo the payment mark of {teacher}'s release"
+        },
+        "userLink": "Teacher payouts"
+      },
+      "caseAmount": {
+        "title": "The amount closing the enrollment gives",
+        "cause": {
+          "ijazahDropout": "The teacher’s dropout on the ijazah track: the student gets back all they paid.",
+          "recitationDropout": "The teacher’s dropout on recitation: the sessions not taken are refunded to the student, and the teacher is released the share of those taken.",
+          "studentComplaintClose": "Closed on a complaint against the student: the sessions after the close are refunded to the student, and the teacher is released the share of the sessions attended and missed up to the close."
+        },
+        "total": "Refunded to the student in all",
+        "held": "The teacher’s share the gateway still holds (refunded through the gateway)",
+        "platformPart": "The platform’s part (refunded through the gateway)",
+        "released": "The teacher’s share already released (paid by the administration outside the app)",
+        "refund": "Refunded to the student",
+        "release": "Released to the teacher",
+        "refundedSoFar": "Refunded so far",
+        "note": "An administrator decides the case and executes the amount by hand in the gateway’s dashboard; nothing here moves money."
+      },
       "testMode": "Test version"
     },
     "mfa": {
@@ -1878,7 +2000,8 @@
         "order": "Order",
         "status": "Status",
         "student": "Student",
-        "teacherShare": "Teacher share"
+        "teacherShare": "Teacher share",
+        "refunded": "Refunded"
       },
       "dash": "—",
       "detail": {
@@ -1898,6 +2021,7 @@
           "orderFailed": "The failed order was recorded on the enrollment",
           "paid": "Gateway reported the payment succeeded",
           "refunded": "The gateway reported a refund",
+          "refundReported": "The gateway flagged a refund on the original payment, with no amount",
           "transaction": "Transaction number {id}",
           "enrollmentCompleted": "The enrollment was completed",
           "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
@@ -1922,7 +2046,9 @@
         "holdReleased": "Released {released} · {reason}",
         "holdNotReleased": "Not released",
         "holdReasonNotRecorded": "reason not recorded",
-        "teacherShare": "Teacher share"
+        "teacherShare": "Teacher share",
+        "refundedTotal": "Refunded so far",
+        "refundReported": "The gateway reported a refund on this order without its amount; the refunded total above counts only the refunds whose amount arrived."
       },
       "empty": {
         "text": "Try another reference or name, or remove a filter.",

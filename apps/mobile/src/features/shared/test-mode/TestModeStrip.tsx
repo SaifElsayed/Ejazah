@@ -4,12 +4,17 @@
 // takes a touch.
 //
 // The mode is held here, not in the query cache: the root layout clears the cache when a session
-// ends (T136), which would drop the answer and the strip with it. A read that fails is asked again
-// when the connection returns.
-import type { PublicConfig } from '@ijazah/contracts';
+// ends (T136), which would drop the answer and the strip with it.
+//
+// 003:T115 (PR #144's review, round 1, finding 3 (b)): the mode is read again each time the app
+// comes back to the foreground (AppState `active`) and each time the connection returns, so a
+// server moved to `live` takes the strip away from a running app. Each read asks the server:
+// `client.publicConfig()` keeps its first answer for the launch. A read that fails keeps the mode
+// last read.
+import { type PublicConfig, publicConfigOutput } from '@ijazah/contracts';
 import { onlineManager } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Badge } from '../../../design/primitives';
@@ -22,26 +27,29 @@ export function TestModeStrip() {
   const { client } = useApi();
   const [mode, setMode] = useState<PublicConfig['paymentMode'] | undefined>(undefined);
   useEffect(() => {
-    let known = false;
     let unmounted = false;
     const read = () => {
-      if (known) return;
-      client.publicConfig().then(
-        (config) => {
-          if (unmounted) return;
-          known = true;
-          setMode(config.paymentMode);
-        },
-        () => undefined,
-      );
+      client.api.platform.publicConfig
+        .query()
+        .then((answer) => publicConfigOutput.parse(answer).paymentMode)
+        .then(
+          (paymentMode) => {
+            if (!unmounted) setMode(paymentMode);
+          },
+          () => undefined,
+        );
     };
     read();
     const unsubscribe = onlineManager.subscribe((online) => {
       if (online) read();
     });
+    const foreground = AppState.addEventListener('change', (status) => {
+      if (status === 'active') read();
+    });
     return () => {
       unmounted = true;
       unsubscribe();
+      foreground.remove();
     };
   }, [client]);
   if (mode !== 'test') return null;

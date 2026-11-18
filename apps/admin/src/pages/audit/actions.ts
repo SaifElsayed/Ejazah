@@ -110,6 +110,15 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
   // 005:T015 (B47; FR-617): the fraud ban.
   'gender.fraud_banned': 'admin.audit.actions.genderFlags.fraudBanned',
+  // 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين», its two reads and the mark «تم الصرف»,
+  // each on the reader or the teacher (`admin`, `user`), so no new target type.
+  'payouts.listed': 'admin.money.audit.payoutsListed',
+  'payouts.viewed': 'admin.money.audit.payoutsViewed',
+  'payout_release.marked': 'admin.money.audit.payoutReleaseMarked',
+  // The undo of a mark made in error (the owner, 2026-11-18).
+  'payout_release.unmarked': 'admin.money.audit.payoutReleaseUnmarked',
+  // 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): what a compensation case shows, audited on the case.
+  'payments.case_amount_viewed': 'admin.money.audit.caseAmountViewed',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

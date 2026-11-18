@@ -88,6 +88,8 @@ model User {
   ijazahRequestsAsTeacher IjazahRequest[]         @relation("IjazahRequestTeacher")
   ijazahRequestsAsStudent IjazahRequest[]         @relation("IjazahRequestStudent")
   sessionReminders        SessionReminder[]
+  // 003:T105: payments' releases of the teacher's share, a back-relation only.
+  teacherShareReleases    TeacherShareRelease[]
 
   @@map("users")
 }

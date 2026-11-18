@@ -44,3 +44,5 @@ export * from './teacher-profile.js';
 // T003 of specs/005-certification: the teacher's signature.
 export * from './teacher-signature.js';
 export * from './teacher-students.js';
+// 003:T105: the teacher's «مستحقاتي», `teacher.dues.get`.
+export * from './teacher-dues.js';

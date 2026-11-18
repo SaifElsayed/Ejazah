@@ -236,6 +236,10 @@ export class PaymentsMonitorService {
       gross_piasters: piasters(Number(order.grossPiasters)),
       ...settlementOf(order),
       ...teacherShareOf(order),
+      refunded_piasters: piasters(Number(order.refundedPiasters)),
+      ...(order.refundReportedAt === null
+        ? {}
+        : { refundReportedAt: order.refundReportedAt.toISOString() }),
       currency: order.currency,
       student: { displayName: nameOf(enrollment?.studentUserId) },
       ...(enrollment === null
@@ -312,6 +316,8 @@ function itemOf(
     gross_piasters: piasters(Number(row.grossPiasters)),
     ...settlementOf(row),
     ...teacherShareOf(row),
+    // 003:T102 (DEC-82): the refunded total, 0 until a refund is recorded.
+    refunded_piasters: piasters(Number(row.refundedPiasters)),
     status: row.status,
     enrollmentCancelled: row.status === 'paid' && party?.status === 'cancelled',
   };

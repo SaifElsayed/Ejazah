@@ -25,11 +25,22 @@ model Payment {
   // Settled to the teacher, `gross - fee` as reported.
   netPiasters             BigInt?        @map("net_piasters")
   // T104 (ADR 0025 D1, SRS DEC-80): the teacher's share rate read when the order was created, whole
-  // percent, and the share it gave (gross times the rate, rounded up, by `packages/money`), sent to
-  // the gateway as the split. NULL on an order created before the commission; both or neither, the
-  // share never above the gross (ERD section 15 rule 52).
+  // percent, and the share it gave (gross times the rate, rounded up, by `packages/money`), the split
+  // it asks for when a payee and a split integration exist. NULL on an order created before the
+  // commission; both or neither, the share never above the gross (ERD section 15 rule 52).
   teacherShareRatePercent Int?           @map("teacher_share_rate_percent") @db.SmallInt
   teacherSharePiasters    BigInt?        @map("teacher_share_piasters")
+  // 003:T102 (ADR 0025 D3, SRS DEC-82): the order's refunded total, the sum of the refunds the
+  // gateway's signed child events reported (by `packages/money`), from 0 to the gross (ERD section
+  // 15 rule 61); the order becomes `refunded` when it reaches the gross. `refundReportedAt`: when the
+  // gateway first flagged a refund on the original payment, which reports no amount (Q-2 (a)).
+  refundedPiasters        BigInt         @default(0) @map("refunded_piasters")
+  refundReportedAt        DateTime?      @map("refund_reported_at") @db.Timestamptz(6)
+  // 003:T105 (ADR 0025 D2, SRS DEC-81; the note under T105, Q-4 (a)): the percent of the teacher's
+  // share released at half the sessions, read from `ijazah_half_release_percent` when an
+  // `ijazah_track` order is created and kept on it; NULL on any other order. NULL or 0 to 100 (ERD
+  // section 15 rule 64).
+  halfReleaseRatePercent  Int?           @map("half_release_rate_percent") @db.SmallInt
   currency                String         @db.Char(3)
   // `refunded` is learned from the gateway's signed event; the platform never initiates one (FR-PAYG-10).
   status                  PaymentStatus
@@ -78,4 +89,37 @@ model PaymentEvent {
 
   @@index([paymentId])
   @@map("payment_events")
+}
+
+// 003:T105 (ADR 0025 D2, SRS DEC-81, DEC-89; ERD section 7, changelog row 57): one release of a
+// teacher's share per enrollment and milestone, written by the `release-teacher-shares` sweep when it
+// falls due, the amount computed by `packages/money`. A record of what the gateway is to be told,
+// never a balance: an administrator executes the release in the gateway's dashboard and marks it
+// here, `marked_at` and `marked_by_admin_id` together, once (ERD section 15 rules 62 and 63). A
+// release still held is computed on read, never stored.
+model TeacherShareRelease {
+  id              String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId    String                @map("enrollment_id") @db.Uuid
+  // The enrollment's teacher, for the per-teacher lists.
+  teacherUserId   String                @map("teacher_user_id") @db.Uuid
+  milestone       ShareReleaseMilestone
+  // Above zero (ERD section 15 rule 62).
+  amountPiasters  BigInt                @map("amount_piasters")
+  // When it fell due by its milestone's rule, not when the sweep wrote it.
+  dueAt           DateTime              @map("due_at") @db.Timestamptz(6)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  // Both or neither (ERD section 15 rule 63).
+  markedAt        DateTime?             @map("marked_at") @db.Timestamptz(6)
+  markedByAdminId String?               @map("marked_by_admin_id") @db.Uuid
+
+  enrollment    Enrollment @relation(fields: [enrollmentId], references: [id])
+  teacher       User       @relation(fields: [teacherUserId], references: [id])
+  markedByAdmin AdminUser? @relation(fields: [markedByAdminId], references: [id], onDelete: Restrict)
+
+  // One release per enrollment and milestone (ERD section 15 rule 62); it serves the enrollment's
+  // foreign key too.
+  @@unique([enrollmentId, milestone])
+  @@index([teacherUserId])
+  @@index([markedByAdminId])
+  @@map("teacher_share_releases")
 }

@@ -25,6 +25,8 @@ import { reportsAdminRouter } from '../modules/moderation/index.js';
 import { credentialsAdminRouter } from '../modules/catalog/index.js';
 import { studentsRouter, teachersRouter } from '../modules/identity/index.js';
 import { paymentsAdminRouter } from '../modules/payments/index.js';
+// 003:T105: payments' «تحويلات المعلمين», the `payouts` namespace.
+import { payoutsAdminRouter } from '../modules/payments/index.js';
 import {
   casesAdminRouter,
   disputesAdminRouter,
@@ -58,6 +60,8 @@ export const adminRouter = createAdminRouter({
   reports: reportsAdminRouter,
   // 005:T013 to T015 (B47): the gender flags' queue, the correction and the fraud ban.
   genderFlags: genderFlagsAdminRouter,
+  // 003:T105: the releases of the teachers' shares, their detail and the mark «تم الصرف».
+  payouts: payoutsAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

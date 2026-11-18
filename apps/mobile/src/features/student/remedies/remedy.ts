@@ -2,10 +2,11 @@
 // remedy panel offers, read from `sessions.get`'s `remedy` and nothing else, so the panel only
 // draws. The proposal is accepted while the remedy is open (`awaiting_choice`, `proposed`, or
 // `counter_proposed`, which withdraws the pending counter); a counter-proposal is offered while
-// none is pending; the refund only where the server says one may be chosen (`canChooseRefund`,
-// A1). Every one of them is decided again by the server (`sessions.remedy.*`'s refusals), the
-// windows being the server's. A settled or frozen remedy says where it stands; a status the
-// parties never see (`lapsed`) draws nothing. The lists' `remedyStatus` is a row's line (FR-495).
+// none is pending; never a refund (T111 of specs/003-booking, DEC-84: a make-up only, whatever
+// `canChooseRefund` says). Every one of them is decided again by the server (`sessions.remedy.*`'s
+// refusals), the windows being the server's. A settled or frozen remedy says where it stands; a
+// status the parties never see (`lapsed`) draws nothing. The lists' `remedyStatus` is a row's line
+// (FR-495).
 import type { ListedSession, RemedyView } from '@ijazah/contracts';
 
 import type { BadgeProps } from '../../../design/primitives';
@@ -22,7 +23,6 @@ export interface StudentRemedyShown {
   readonly counterPending: boolean;
   readonly canAccept: boolean;
   readonly canCounter: boolean;
-  readonly canRefund: boolean;
 }
 
 const OPEN: ReadonlySet<Status> = new Set(['awaiting_choice', 'proposed', 'counter_proposed']);
@@ -39,7 +39,6 @@ const NOTHING_OFFERED = {
   counterPending: false,
   canAccept: false,
   canCounter: false,
-  canRefund: false,
 } as const;
 
 /** The panel for `remedy`, or undefined for a status the parties never see. */
@@ -49,18 +48,12 @@ export function studentRemedyShown(remedy: RemedyView): StudentRemedyShown | und
     return text === undefined ? undefined : { text, ...NOTHING_OFFERED };
   }
   const counterPending = remedy.status === 'counter_proposed' && remedy.counter !== undefined;
-  const canRefund = remedy.status === 'awaiting_choice' && remedy.canChooseRefund;
   return {
-    text: counterPending
-      ? 'student.remedy.text.counter'
-      : canRefund
-        ? 'student.remedy.text.choice'
-        : 'student.remedy.text.proposed',
+    text: counterPending ? 'student.remedy.text.counter' : 'student.remedy.text.proposed',
     open: true,
     counterPending,
     canAccept: remedy.proposal !== undefined,
     canCounter: remedy.status !== 'counter_proposed' && remedy.counter === undefined,
-    canRefund,
   };
 }
 

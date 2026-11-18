@@ -36,6 +36,8 @@ let completes: Set<string>;
 let counters: { remedyId: string; counterProposedAt: Date; snapshotAnswerWindowHours: number }[];
 let choiceEnded: string[];
 let choiceOutcomes: Map<string, ChoiceEndOutcome>;
+/** T111 of specs/003-booking: what each unanswered counter's end did (default: its proposal booked). */
+let answerOutcomes: Map<string, ChoiceEndOutcome>;
 
 const transactions: Transactions = {
   run: async (work) => {
@@ -139,7 +141,7 @@ function advance() {
       endAnswerWindow: async (remedyId) => {
         trace.push(`end answer ${remedyId}`);
         if (failOn.has(remedyId)) throw new Error('probe: this hand-off fails');
-        return 'handed_off';
+        return answerOutcomes.get(remedyId) ?? 'booked';
       },
       bookAtChoiceEnd: async (remedyId) => {
         trace.push(`book ${remedyId}`);
@@ -172,6 +174,7 @@ beforeEach(() => {
   counters = [];
   choiceEnded = [];
   choiceOutcomes = new Map();
+  answerOutcomes = new Map();
   log = createLogger({
     level: 'info',
     destination: new Writable({
@@ -272,7 +275,9 @@ describe('advance-remedies: the windows’ ends (T032)', () => {
   /** Proposed 2026-11-17T10:00Z with A = 72 h: its answer window closes at the run's instant. */
   const AT_THE_RUN = new Date('2026-11-17T10:00:00Z');
 
-  it('hands each pending counter whose answer window has closed by the run’s instant (D1) to its case, a later one left; read in pages', async () => {
+  // T111 of specs/003-booking (DEC-84): an unanswered counter is released and its proposal booked,
+  // never handed to a case.
+  it('ends each pending counter whose answer window has closed by the run’s instant (D1), its proposal booked, a later one left; read in pages', async () => {
     counters = [
       { remedyId: id(41), counterProposedAt: AT_THE_RUN, snapshotAnswerWindowHours: 72 },
       { remedyId: id(42), counterProposedAt: AT_THE_RUN, snapshotAnswerWindowHours: 73 },
@@ -283,7 +288,8 @@ describe('advance-remedies: the windows’ ends (T032)', () => {
       },
     ];
     const run = await advance().run();
-    expect(run.handedOff).toEqual([id(41), id(43)]);
+    expect(run.booked).toEqual([id(41), id(43)]);
+    expect(run.handedOff).toEqual([]);
     expect(
       trace.filter((step) => step.startsWith('counters') || step.startsWith('end answer')),
     ).toEqual([
@@ -292,6 +298,24 @@ describe('advance-remedies: the windows’ ends (T032)', () => {
       `counters after ${id(42)}`,
       `end answer ${id(43)}`,
     ]);
+  });
+
+  it('counts what each unanswered counter’s end did: booked in booked, refused or deadlocked in retried, nothing in handedOff (T111)', async () => {
+    counters = [44, 45, 46, 47].map((n) => ({
+      remedyId: id(n),
+      counterProposedAt: AT_THE_RUN,
+      snapshotAnswerWindowHours: 72,
+    }));
+    answerOutcomes = new Map<string, ChoiceEndOutcome>([
+      [id(45), 'refused'],
+      [id(46), 'deadlocked'],
+      [id(47), 'not_due'],
+    ]);
+    const run = await advance().run();
+    expect(run.booked).toEqual([id(44)]);
+    expect(run.retried).toEqual([id(45), id(46)]);
+    expect(run.handedOff).toEqual([]);
+    expect(run.failed).toEqual([]);
   });
 
   it('books, retries or hands over each remedy whose choice window has closed by the run’s instant, read in pages', async () => {

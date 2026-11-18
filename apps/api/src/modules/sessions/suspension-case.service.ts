@@ -6,8 +6,8 @@
 // CLEARED (`cases.resolve`). The student's fault is not the student's: each session the suspension
 // cancelled (its `cancelled_by_admin` event naming this case, C4) is offered, in the same
 // transaction, through T028's `offerLocked` with `clearedSuspension`, what a Teacher-No-Show owes:
-// on a recitation enrollment `awaiting_choice` (a make-up or a refund, the refund through T030), on
-// the ijazah track `proposed`, placed under H1 to H5 with the lead. Refused `STUDENT_SUSPENDED` only
+// a make-up, `proposed` on either track (T111 of specs/003-booking, DEC-84), placed under H1 to H5
+// with the lead. Refused `STUDENT_SUSPENDED` only
 // while the account is `suspended`, read under its lock (the note under T036, Q4 (b)):
 // `verification_required` and `banned` pass. When an offer finds no free week (`offerLocked`
 // answering null, the guard of `remedy-offer.service.ts`), the whole resolve is refused `CONFLICT`

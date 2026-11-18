@@ -135,6 +135,40 @@ describe('the harness builds signed events the webhook accepts (T013, R-213)', (
     ]);
   });
 
+  // 003:T102 (DEC-82, Q-2 (a)): a refund child's amount, a part or the whole order (a void), and the
+  // parent's flag with no amount.
+  it('refunded: the order’s event with the refund’s amount, a part or the whole order', async () => {
+    const gatewayOrderId = await order(25_000);
+    const part = stand.refunded(gatewayOrderId, piasters(7_500));
+    const whole = stand.refunded(gatewayOrderId, 'whole_order');
+
+    expect(await stand.deliverInOrder([part, whole])).toEqual([200, 200]);
+    expect(arrivals.map((arrival) => arrival.event)).toEqual([
+      {
+        type: 'refunded',
+        providerEventId: part.providerEventId,
+        gatewayOrderId,
+        refunded_piasters: 7_500,
+      },
+      {
+        type: 'refunded',
+        providerEventId: whole.providerEventId,
+        gatewayOrderId,
+        refunded_piasters: 'whole_order',
+      },
+    ]);
+  });
+
+  it('refundReported: the order’s reported refund, with no amount', async () => {
+    const gatewayOrderId = await order();
+    const event = stand.refundReported(gatewayOrderId);
+
+    expect(await stand.deliver(event)).toBe(200);
+    expect(arrivals.map((arrival) => arrival.event)).toEqual([
+      { type: 'refund_reported', providerEventId: event.providerEventId, gatewayOrderId },
+    ]);
+  });
+
   it('recipientVerified and recipientRejected, with and without a reason, for any reference', async () => {
     const recipientRef = 'fake_rcp_registered_by_another_process';
     const verified = stand.recipientVerified(recipientRef);

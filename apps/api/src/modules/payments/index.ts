@@ -20,10 +20,15 @@ import type {
   CheckoutRetryInput,
   CheckoutStatusInput,
   CheckoutStatusOutput,
+  TeacherDuesGetOutput,
 } from '@ijazah/contracts';
+// 003:T110: the case's amount, the monitor's third read.
+import type { PaymentsCaseAmountOutput } from '@ijazah/contracts/admin';
 
 import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+// 003:T105: the teacher's read runs on a transaction of its own.
+import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Logger } from '../../platform/logging/logger.js';
@@ -39,8 +44,11 @@ import {
 import type { PaymentGateway } from './checkout.repository.js';
 import { type CheckoutStudent, CheckoutService, checkoutStepsOver } from './checkout.service.js';
 import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
+import { caseAmount } from './case-amount.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { PaymentsMonitorService } from './payments-monitor.service.js';
+// 003:T105: the payouts' reads and mark.
+import { createPayouts, type Payouts, payoutsStoreOver } from './payouts.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
 import { PAYMENT_WEBHOOK_PATH, paymentWebhookRoute } from './webhook.controller.js';
 
@@ -138,7 +146,8 @@ export {
 /**
  * T073 of specs/004-sessions (FR-507; the note under T073, Q4 (a), Q6 (a), N3): payments' answer to
  * the restore's `EnrollmentPayments` port (sessions' `enrollment-payments.port.ts`), whether any order
- * of an enrollment is `refunded`, read with no lock on the restore's transaction, which holds the
+ * of an enrollment is `refunded` or, since 003:T102 (Q-3 (a)), has any refund recorded
+ * (`refunded_piasters > 0`), read with no lock on the restore's transaction, which holds the
  * enrollment's lock that every order move takes first. `main.ts` hands it to the admin module's
  * `createAdminServices` (`enrollmentPayments`), so sessions reads no payment table (R-301).
  */
@@ -214,13 +223,92 @@ export function createCheckoutServices({
 export { paymentsAdminRouter } from './payments-admin.router.js';
 export { type PaymentsMonitorStore, paymentsMonitorStore } from './payments-monitor.service.js';
 
-/** The monitor over the module's queries and the owners' entries, its page size from settings. */
+/**
+ * The monitor over the module's queries and the owners' entries, its page size from settings; and
+ * 003:T110's third read, `caseAmount` (ADR 0025 D4, SRS DEC-85, DEC-86): what a compensation case
+ * that closes an enrollment shows, so `admin/index.ts`'s composition carries it unchanged.
+ */
 export function createPaymentsMonitorService(dependencies: {
   readonly settings: SettingsReader;
   readonly now?: () => Date;
-}): Pick<PaymentsMonitorService, 'list' | 'get'> {
-  return new PaymentsMonitorService(dependencies);
+}): Pick<PaymentsMonitorService, 'list' | 'get'> & {
+  caseAmount(tx: Transaction, caseId: string): Promise<PaymentsCaseAmountOutput>;
+} {
+  const monitor = new PaymentsMonitorService(dependencies);
+  return {
+    list: (tx, query) => monitor.list(tx, query),
+    get: (tx, paymentId) => monitor.get(tx, paymentId),
+    caseAmount: (tx, caseId) => caseAmount(tx, caseId),
+  };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 003:T105 (ADR 0025 D2, SRS DEC-81, DEC-89; the notes under T105): the releases of a teacher's
+// share at milestones. `createShareReleaseSweep`, built and scheduled by
+// `jobs/release-teacher-shares.ts`, writes each release once when it falls due; `payoutsAdminRouter`
+// («تحويلات المعلمين», mounted under `payouts` by `admin.router.ts`) lists, shows and marks them, and
+// `teacherDuesRouter` («مستحقاتي», mounted under `teacher.dues` by `app.router.ts`) answers the
+// teacher his own. The platform's code makes no release call (N1).
+export { payoutsAdminRouter } from './payouts-admin.router.js';
+export { teacherDuesRouter } from './teacher-dues.router.js';
+export {
+  createShareReleaseSweep,
+  type ReleaseReads,
+  type ShareReleaseRun,
+  type ShareReleaseSweep,
+  type ShareReleaseSweepDependencies,
+} from './share-release.service.js';
+export { IJAZAH_HALF_RELEASE_SETTING } from './checkout.service.js';
+/**
+ * The written releases of some enrollments, each with `markedAt` once an administrator marked it
+ * executed in the gateway's dashboard; with no lock, on the caller's transaction. T110's case amount
+ * reads an ijazah dropout's «released» part from the marked ones (the note under T110).
+ */
+export { type ReleaseRow, releasesOf } from './share-release.repository.js';
+
+/** The administrator's four procedures on the kind's transaction (`AdminSurfaceServices.payouts`). */
+export type AdminPayouts = Pick<Payouts, 'list' | 'get' | 'mark' | 'unmark'>;
+
+/** The teacher's read, on a transaction of its own (`AppServices.teacherDues`). */
+export interface TeacherDues {
+  get(teacherUserId: string): Promise<TeacherDuesGetOutput>;
+}
+
+/** Both surfaces' payouts over the process's client, settings, idempotency, cipher and log. */
+export function createPayoutServices({
+  database,
+  settings,
+  idempotency,
+  cipher,
+  log,
+}: {
+  readonly database: Database;
+  readonly settings: SettingsReader;
+  readonly idempotency: Pick<IdempotencyService<Transaction>, 'runOn'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  readonly log: Pick<Logger, 'info'>;
+}): { readonly admin: AdminPayouts; readonly teacher: TeacherDues } {
+  const payouts = createPayouts({ settings, idempotency, store: payoutsStoreOver(cipher), log });
+  const transactions = transactionsOver(database);
+  return {
+    admin: {
+      list: (tx, adminId, input) => payouts.list(tx, adminId, input),
+      get: (tx, adminId, teacherUserId) => payouts.get(tx, adminId, teacherUserId),
+      mark: (tx, adminId, input) => payouts.mark(tx, adminId, input),
+      // The undo of a mark made in error (the owner, 2026-11-18).
+      unmark: (tx, adminId, input) => payouts.unmark(tx, adminId, input),
+    },
+    teacher: {
+      get: (teacherUserId) => transactions.run((tx) => payouts.teacherDues(tx, teacherUserId)),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 003:T110 (ADR 0025 D4): the orders a compensation case's amount is computed from, the enrollment's
+// paid orders with a share, with no lock; `payments.caseAmount` reads it on the call's transaction
+// (`createPaymentsMonitorService` above), and the database spec reads it here.
+export { caseOrdersOf } from './case-amount.repository.js';
 
 // 005:T016 (the follow-up under T016 on the push's key share, fixed in B48): the checkout's steps over
 // the process's client, which `createCheckoutServices` composes; exported so the gateway-cancelled

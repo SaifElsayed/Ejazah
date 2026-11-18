@@ -5,8 +5,9 @@
 //     (`advance-remedies`' choice window's end, T032): both take «make-up booking»'s locks; one
 //     booking, the other answering `REMEDY_NOT_OPEN` or leaving the remedy as it is, no deadlock.
 //   - P5: the teacher's `sessions.remedy.answerCounter` (a decline) a millisecond before
-//     `answerClosesAt` against the sweep's `counter_unanswered` hand-off at it: one outcome, the
-//     declined counter or the case, never both, no deadlock.
+//     `answerClosesAt` against the sweep's release of the unanswered counter at it, then its booking
+//     of the proposal (T111 of specs/003-booking, DEC-84; no `counter_unanswered` case any more):
+//     one outcome, the declined counter or the booked proposal, never both, no deadlock.
 //   - P7: the teacher's acceptance of a counter on the teacher's Monday slot (T032 → T029) against
 //     another student's `checkout.hold` on that slot, whose first session falls on the counter: one
 //     of them, the make-up booked and the hold refused in both orders (the pending counter is a
@@ -447,7 +448,7 @@ describe.each(STAGINGS)(
 );
 
 describe.each(STAGINGS)(
-  "P5: the teacher's decline just before answerClosesAt against the sweep's counter_unanswered at it (T032), the first held $name",
+  "P5: the teacher's decline just before answerClosesAt against the sweep's release and booking at it (T032; T111), the first held $name",
   (staging) => {
     /** Counter sent at 2026-11-03T08:00Z: its answer window closes 2026-11-06T08:00Z (A = 72 h). */
     const SENT = new Date('2026-11-03T08:00:00.000Z');
@@ -478,7 +479,9 @@ describe.each(STAGINGS)(
       });
     });
 
-    it('the sweep first: one counter_unanswered case, the decline then refused REMEDY_NOT_OPEN', async () => {
+    // T111 (DEC-84): the sweep's release commits first, the decline then finds no counter, and the
+    // sweep's booking of the proposal follows in its own transaction; no case.
+    it('the sweep first: the counter released and the proposal booked, the decline then refused REMEDY_NOT_OPEN, no case (T111)', async () => {
       const w = await world();
       await countered(w, SENT);
       const [swept, declined] = await race(
@@ -486,13 +489,13 @@ describe.each(STAGINGS)(
         { path: 'sweep', run: sweep(w) },
         { path: 'teacher', run: decline(w) },
       );
-      expect(outcomeOf(swept)).toBe('handed_off');
+      expect(outcomeOf(swept)).toBe('booked');
       expect(outcomeOf(declined)).toBe('REMEDY_NOT_OPEN');
       expect(await left(w)).toEqual({
-        remedy: 'refund_case',
-        events: ['counter_proposed', 'remedy_handed_to_case'],
-        makeups: [],
-        cases: ['counter_unanswered'],
+        remedy: 'booked',
+        events: ['counter_proposed', 'makeup_booked'],
+        makeups: ['2026-11-15T07:00:00.000Z'],
+        cases: [],
       });
     });
   },

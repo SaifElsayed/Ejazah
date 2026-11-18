@@ -731,6 +731,64 @@ describe('the gateway (T056)', () => {
     expect(paymentKeysIn(paymobLive)).toEqual([]);
   });
 
+  // 003:T116 (PR #144's review, round 1, nit 4; the review session's (a)): T109's «A spec starts a
+  // hosted `live` configuration», every port's values given. The sign-in, email and SMS ports have
+  // no member but their stand-in yet (env.schema.ts), which production refuses, so those three are
+  // its only refusals until their adapters land; then this case reads «accepted». Every value is a
+  // placeholder of the shape the provider gives, never a real key (R-SEC-1).
+  it('a complete hosted live configuration is refused only for SMS_PROVIDER, SIGN_IN_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116)', () => {
+    const hostedLive: Record<string, string> = {
+      NODE_ENV: 'production',
+      PORT: '3000',
+      LOG_LEVEL: 'info',
+      DATABASE_URL_OWNER: 'postgresql://ijazah_owner:owner-placeholder@db.internal:5432/ijazah',
+      DATABASE_URL: 'postgresql://ijazah_app:app-placeholder@db.internal:5432/ijazah',
+      REDIS_URL: 'rediss://redis.internal:6380',
+      ENCRYPTION_KEY: thirtyTwoBytesBase64,
+      STORAGE_DRIVER: 's3',
+      S3_ENDPOINT: 'https://s3.storage-placeholder.example.net',
+      S3_BUCKET: 'ijazah-placeholder',
+      S3_REGION: 'eu-west-3',
+      S3_ACCESS_KEY_ID: 'AKIAPLACEHOLDER',
+      S3_SECRET_ACCESS_KEY: 'secret-placeholder',
+      API_PUBLIC_ORIGIN: 'https://api.ijazah.app',
+      PUBLIC_WEBHOOK_ORIGIN: 'https://api.ijazah.app',
+      ADMIN_PANEL_ORIGIN: 'https://admin.ijazah.app',
+      ADMIN_ALLOWED_ORIGINS: 'https://admin.ijazah.app',
+      PAYMENT_GATEWAY: 'paymob',
+      PAYMENT_MODE: 'live',
+      PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder',
+      PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_live_placeholder',
+      PAYMENT_GATEWAY_WEBHOOK_SECRET: 'hmac-placeholder',
+      PAYMENT_GATEWAY_INTEGRATION_ID: '1000001',
+      PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: '1000002',
+      VIDEO_PROVIDER: 'livekit',
+      LIVEKIT_URL: 'wss://ejazah-placeholder.livekit.cloud',
+      LIVEKIT_API_KEY: 'APIplaceholder',
+      LIVEKIT_API_SECRET: 'secret-placeholder',
+      PUSH_PROVIDER: 'expo',
+      EXPO_ACCESS_TOKEN: 'expo-placeholder',
+      SMS_PROVIDER: 'fake',
+      SMS_PROVIDER_KEY: 'sms-placeholder',
+      SIGN_IN_PROVIDER: 'fake',
+      GOOGLE_CLIENT_IDS: 'placeholder.apps.googleusercontent.com',
+      APPLE_CLIENT_ID: 'app.ijazah.placeholder',
+      APPLE_TEAM_ID: 'TEAMPLACEHOLDER',
+      APPLE_KEY_ID: 'KEYPLACEHOLDER',
+      APPLE_PRIVATE_KEY: 'apple-key-placeholder',
+      EMAIL_PROVIDER: 'fake',
+      EMAIL_FROM: 'no-reply@ijazah.app',
+      SUPPORT_EMAIL: 'help@ijazah.app',
+      TRUSTED_PROXY: 'X-Forwarded-For',
+      SENTRY_DSN: 'https://placeholder@sentry.example.net/1',
+    };
+
+    const failure = refusal(hostedLive);
+
+    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'SIGN_IN_PROVIDER', 'EMAIL_PROVIDER']);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
   it('refuses a key not marked live in live mode, naming it and never its value: the rule is "live", never "not test" (003:T109)', () => {
     const failure = refusal({ ...paymobLive, PAYMENT_GATEWAY_PUBLIC_KEY: 'egy_pk_placeholder' });
     expect(failure.offendingKeys).toEqual(['PAYMENT_GATEWAY_PUBLIC_KEY']);

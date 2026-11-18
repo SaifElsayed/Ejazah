@@ -9,12 +9,13 @@
 // T158: «الملف العام» leads the teaching list to the public profile, where the display name is
 // edited.
 //
+// 003:T105 (DEC-89): «مستحقاتي» directly under «حساب الاستلام», for an approved teacher only.
 // 005:T019 (FR-601): «صورة التوقيع» leads to the signature screen, for an approved teacher.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
+import { inBothDirections, nodesOf, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, translate } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import { getSession, setSession } from '../../../lib/session';
@@ -189,6 +190,45 @@ describe('TeacherAccount', () => {
         }
       },
     );
+  });
+
+  it('lists «مستحقاتي» directly under «حساب الاستلام» for an approved teacher, and opens it (003:T105)', async () => {
+    mockApi.api.teacher.payout.get.query.mockResolvedValue({ state: 'verified' });
+    await inBothDirections(withAccount(), async (rendered, direction) => {
+      const payout = said(direction, 'teacher.account.payout');
+      const dues = said(direction, 'money.dues.row');
+      await screen.findByText(said(direction, 'status.payout.verified'));
+      const texts = nodesOf(rendered).flatMap((node) =>
+        (node.children ?? []).filter((child): child is string => typeof child === 'string'),
+      );
+      expect(texts).toContain(dues);
+      // Between the two rows there is only the payout row's own badge.
+      expect(texts.slice(texts.indexOf(payout) + 1, texts.indexOf(dues))).toEqual([
+        said(direction, 'status.payout.verified'),
+      ]);
+    });
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByText(translate('ar', 'money.dues.row')));
+    expect(mockPush).toHaveBeenCalledWith('/(teacher)/dues');
+  });
+
+  it('shows no «مستحقاتي» row to a teacher not yet approved (003:T105)', async () => {
+    const pending = {
+      ...me,
+      teacher: { ...me.teacher, applicationStatus: 'submitted', verificationStatus: 'pending' },
+    };
+    mockApi.api.account.me.query.mockResolvedValue(pending);
+    const queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queries.setQueryData(ME_QUERY_KEY, pending);
+    await renderIn(
+      'rtl',
+      <QueryClientProvider client={queries}>
+        <TeacherAccount />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(translate('ar', 'teacher.account.credentials'))).toBeTruthy();
+    expect(screen.queryByText(translate('ar', 'teacher.account.payout'))).toBeNull();
+    expect(screen.queryByText(translate('ar', 'money.dues.row'))).toBeNull();
   });
 
   it('opens the deletion from the danger row (T084)', async () => {

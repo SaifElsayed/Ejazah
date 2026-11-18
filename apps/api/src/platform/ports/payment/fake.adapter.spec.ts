@@ -140,8 +140,8 @@ describe('the payment stand-in: signed events (T117, FR-074, R-MONEY-8, R-MONEY-
     });
   });
 
-  it.each(['failed', 'expired', 'refunded'] as const)(
-    'parses a correctly signed %s event naming its order',
+  it.each(['failed', 'expired', 'refund_reported'] as const)(
+    'parses a correctly signed %s event naming its order, with no amount',
     async (type) => {
       const payments = gateway();
       const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
@@ -156,6 +156,59 @@ describe('the payment stand-in: signed events (T117, FR-074, R-MONEY-8, R-MONEY-
       });
     },
   );
+
+  // 003:T102 (DEC-82): a refund carries its amount, a part of the order, the whole order by default,
+  // or `whole_order` as a void reports it.
+  it('parses a correctly signed refunded event with its amount', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout(
+      'enr-1',
+      piasters(25_000),
+      'EGP',
+      PAY_BY,
+    );
+
+    const parsed = [];
+    for (const refunded_piasters of [piasters(7_500), 'whole_order', undefined] as const) {
+      const { rawBody, headers } = payments.orderEvent(
+        gatewayOrderId,
+        'refunded',
+        refunded_piasters === undefined ? {} : { refunded_piasters },
+      );
+      parsed.push(await payments.verifyAndParseEvent(rawBody, headers));
+    }
+
+    expect(parsed).toEqual(
+      [7_500, 'whole_order', 25_000].map((refunded_piasters) => ({
+        type: 'refunded',
+        providerEventId: expect.any(String) as unknown,
+        gatewayOrderId,
+        refunded_piasters,
+      })),
+    );
+  });
+
+  it('refuses, as malformed, a signed refunded event with no amount', async () => {
+    const payments = gateway();
+    const rawBody = Buffer.from(JSON.stringify({ id: 'evt-1', type: 'refunded', order: 'ord-1' }));
+    const headers = {
+      'x-fake-signature': createHmac('sha256', SECRET).update(rawBody).digest('hex'),
+    };
+
+    await expect(payments.verifyAndParseEvent(rawBody, headers)).rejects.toThrow(
+      MalformedEventError,
+    );
+  });
+
+  it('a reported refund leaves the order paid, so cancelCheckout still answers paid', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+    payments.orderEvent(gatewayOrderId, 'paid');
+
+    payments.orderEvent(gatewayOrderId, 'refund_reported');
+
+    expect(await payments.cancelCheckout(gatewayOrderId)).toBe('paid');
+  });
 
   it('throws on an incorrectly signed event, which changes nothing', async () => {
     const payments = gateway();

@@ -41,6 +41,8 @@ const ITEM = {
   createdAt: '2026-11-03T10:00:00.000Z',
   student: { displayName: 'آمال علي' },
   gross_piasters: 120_000,
+  // 003:T102: the refunded total, 0 until a refund is recorded.
+  refunded_piasters: 0,
   status: 'created',
   enrollmentCancelled: false,
 } as const;
@@ -51,6 +53,7 @@ const DETAIL = {
   status: 'created',
   createdAt: '2026-11-03T10:00:00.000Z',
   gross_piasters: 120_000,
+  refunded_piasters: 0,
   currency: 'EGP',
   student: { displayName: 'آمال علي' },
   enrollment: {
@@ -72,6 +75,14 @@ const DETAIL = {
   paidOrders: [],
 } as const;
 
+const CASE = '0199d0a0-0000-7000-8000-0000000000d1';
+const CASE_AMOUNT = {
+  cause: 'recitation_dropout',
+  refund_piasters: 600_000,
+  release_piasters: 280_000,
+  refunded_piasters: 0,
+} as const;
+
 interface Surface {
   readonly written: AuditRecord[];
   readonly reached: unknown[][];
@@ -89,6 +100,11 @@ function surfaceOver(payments: Partial<AdminSurfaceServices['payments']> = {}): 
     get: async (tx, paymentId) => {
       reached.push(['get', tx, paymentId]);
       return { ...DETAIL, checkoutUrlEncrypted: 'secret' } as never;
+    },
+    // 003:T110: the case's amount, with a field the schema does not name.
+    caseAmount: async (tx, caseId) => {
+      reached.push(['caseAmount', tx, caseId]);
+      return { amount: { ...CASE_AMOUNT, studentName: 'آمال علي' } } as never;
     },
     ...payments,
   };
@@ -149,6 +165,7 @@ describe('the administrator kind (FR-402)', () => {
   const calls = {
     'payments.list': (caller: PaymentsCaller) => caller.payments.list({}),
     'payments.get': (caller: PaymentsCaller) => caller.payments.get({ paymentId: ORDER }),
+    'payments.caseAmount': (caller: PaymentsCaller) => caller.payments.caseAmount({ caseId: CASE }),
   } as const;
 
   it.each(Object.keys(calls) as (keyof typeof calls)[])(
@@ -168,12 +185,13 @@ describe('the administrator kind (FR-402)', () => {
 });
 
 describe('a read and nothing else (FR-401)', () => {
-  it('the namespace is exactly payments.list and payments.get, both queries', () => {
+  // 003:T110 (rule d): `payments.caseAmount` joins them, a read too.
+  it('the namespace is exactly payments.list, payments.get and payments.caseAmount, all queries', () => {
     const procedures = paymentsAdminRouter._def.procedures as unknown as Record<
       string,
       { readonly _def: { readonly type: string } }
     >;
-    expect(Object.keys(procedures).sort()).toEqual(['get', 'list']);
+    expect(Object.keys(procedures).sort()).toEqual(['caseAmount', 'get', 'list']);
     for (const procedure of Object.values(procedures)) expect(procedure._def.type).toBe('query');
   });
 });
@@ -227,6 +245,47 @@ describe('payments.get', () => {
       },
     });
     expect(await codeOf(surface.verified().payments.get({ paymentId: ORDER }))).toBe('NOT_FOUND');
+    expect(surface.written).toEqual([]);
+  });
+});
+
+describe('payments.caseAmount (003:T110)', () => {
+  it('reads on the call’s transaction and writes exactly its payments.case_amount_viewed entry, naming the case', async () => {
+    const surface = surfaceOver();
+    await surface.verified().payments.caseAmount({ caseId: CASE });
+    expect(surface.reached).toEqual([['caseAmount', TX, CASE]]);
+    expect(surface.written).toEqual([
+      {
+        adminId: ADMIN,
+        action: 'payments.case_amount_viewed',
+        targetType: 'dispute',
+        targetId: CASE,
+      },
+    ]);
+  });
+
+  it('answers only the fields its schema names', async () => {
+    const answer = await surfaceOver().verified().payments.caseAmount({ caseId: CASE });
+    expect(answer).toEqual({ amount: CASE_AMOUNT });
+  });
+
+  it('answers no amount as the service gives none', async () => {
+    const surface = surfaceOver({ caseAmount: async () => ({}) });
+    expect(await surface.verified().payments.caseAmount({ caseId: CASE })).toEqual({});
+  });
+
+  it('keeps nothing of a refused read: an unknown case answers NOT_FOUND and writes no entry; a malformed id reaches nothing', async () => {
+    const surface = surfaceOver({
+      caseAmount: async () => {
+        throw new DomainError('NOT_FOUND');
+      },
+    });
+    expect(await codeOf(surface.verified().payments.caseAmount({ caseId: CASE }))).toBe(
+      'NOT_FOUND',
+    );
+    expect(await codeOf(surface.verified().payments.caseAmount({ caseId: 'not-a-case' }))).toBe(
+      'VALIDATION_FAILED',
+    );
     expect(surface.written).toEqual([]);
   });
 });

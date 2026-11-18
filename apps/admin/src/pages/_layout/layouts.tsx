@@ -34,7 +34,8 @@ function TestModeStrip() {
       role="status"
       style={{
         position: 'absolute',
-        insetBlockStart: 8,
+        // 003:T116, nit 2 (c'): the spacing token; the z-index waits for the design revision (T119).
+        insetBlockStart: 'var(--space-2)',
         insetInline: 0,
         display: 'flex',
         justifyContent: 'center',

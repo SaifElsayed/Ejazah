@@ -189,11 +189,14 @@ describe('remedy offer: what is owed and when (FR-462, G1, A2, C1, C3)', () => {
     expect(await offerOf().offerLocked(tx, SESSION)).toMatchObject({ status: 'proposed' });
   });
 
-  it('offers a cancelled_by_admin session only for T036’s cleared suspension, refundable on recitation', async () => {
+  // T111 of specs/003-booking (DEC-84, FR-ADMIN-5 as amended): a cleared suspension's session is
+  // owed a make-up only, `proposed` on recitation too.
+  it('offers a cancelled_by_admin session only for T036’s cleared suspension, proposed on recitation (T111)', async () => {
     session = { ...session, status: 'cancelled_by_admin' };
     expect(await offerOf().offerLocked(tx, SESSION, { clearedSuspension: true })).toMatchObject({
-      status: 'awaiting_choice',
+      status: 'proposed',
     });
+    expect(inserted.map(({ row }) => row.status)).toEqual(['proposed']);
   });
 
   it('offers nothing on an enrollment no longer confirmed, nor to a suspended student', async () => {
@@ -226,13 +229,15 @@ describe('remedy offer: what is owed and when (FR-462, G1, A2, C1, C3)', () => {
 });
 
 describe('remedy offer: the row (I3, A1, Q8)', () => {
+  // T111 of specs/003-booking (DEC-84; ADR 0025 D5): the default session is a Teacher-No-Show on a
+  // recitation enrollment, offered `proposed`: a make-up only, never a refund's choice.
   it('writes offered_at at the clock, the choice window from it, A and L as read, one remedy_offered row', async () => {
     const offered = await offerOf().offerLocked(tx, SESSION);
     expect(inserted).toEqual([
       {
         sessionId: SESSION,
         row: {
-          status: 'awaiting_choice',
+          status: 'proposed',
           proposedDate: new Date('2026-12-17T00:00:00Z'),
           offeredAt: now,
           choiceClosesAt: new Date('2026-12-06T08:00:00Z'),
@@ -248,10 +253,16 @@ describe('remedy offer: the row (I3, A1, Q8)', () => {
       remedyId: REMEDY,
       sessionId: SESSION,
       enrollmentId: ENROLLMENT,
-      status: 'awaiting_choice',
+      status: 'proposed',
       proposedDate: '2026-12-17',
       reoffered: false,
     });
+  });
+
+  it('is proposed after a Teacher-No-Show on recitation, a make-up only (T111, DEC-84)', async () => {
+    expect([terms?.track, session.status]).toEqual(['recitation', 'teacher_no_show']);
+    expect((await offerOf().offerLocked(tx, SESSION))?.status).toBe('proposed');
+    expect(inserted.map(({ row }) => row.status)).toEqual(['proposed']);
   });
 
   it('is proposed after a Both-No-Show, and on the ijazah track after a Teacher-No-Show', async () => {
@@ -446,7 +457,7 @@ describe('remedy offer: a remedy a restore offers again (T061)', () => {
       remedyId: REMEDY,
       sessionId: SESSION,
       enrollmentId: ENROLLMENT,
-      status: 'awaiting_choice',
+      status: 'proposed',
       proposedDate: '2027-02-11',
       reoffered: true,
     });
@@ -455,7 +466,7 @@ describe('remedy offer: a remedy a restore offers again (T061)', () => {
         remedyId: REMEDY,
         fromCase: CLOSING,
         row: {
-          status: 'awaiting_choice',
+          status: 'proposed',
           proposedDate: new Date('2027-02-11T00:00:00Z'),
           offeredAt: now,
           choiceClosesAt: new Date('2027-01-12T10:00:00Z'),
@@ -470,16 +481,23 @@ describe('remedy offer: a remedy a restore offers again (T061)', () => {
     ]);
   });
 
-  it('is proposed after a Both-No-Show, and awaiting a choice for a cleared suspension’s session on recitation', async () => {
+  // T111 of specs/003-booking (DEC-84): a restored remedy is a make-up only, `proposed` on recitation
+  // for a Teacher-No-Show and a cleared suspension's session alike.
+  it('is proposed after a Both-No-Show, a Teacher-No-Show and a cleared suspension’s session on recitation (T111)', async () => {
     existing = { id: REMEDY, status: 'refund_case', kind: 'makeup', caseId: CLOSING };
     session = { ...session, status: 'both_no_show' };
     expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toMatchObject({
       status: 'proposed',
     });
+    session = { ...session, status: 'teacher_no_show' };
+    expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toMatchObject({
+      status: 'proposed',
+    });
     session = { ...session, status: 'cancelled_by_admin' };
     expect(await offerOf().offerLocked(tx, SESSION, { restoredCase: CLOSING })).toMatchObject({
-      status: 'awaiting_choice',
+      status: 'proposed',
     });
+    expect(reoffered.map(({ row }) => row.status)).toEqual(['proposed', 'proposed', 'proposed']);
   });
 
   it.each([
@@ -498,4 +516,32 @@ describe('remedy offer: a remedy a restore offers again (T061)', () => {
     expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
     expect([inserted, reoffered]).toEqual([[], []]);
   });
+});
+
+// T111 of specs/003-booking (DEC-84; ADR 0025 D5): no remedy is shown with a refund's choice, an
+// `awaiting_choice` row offered before the change included; its make-up stays open to it.
+describe('remedy view: no refund is offered (T111)', () => {
+  it.each(['awaiting_choice', 'proposed'] as const)(
+    'answers canChooseRefund false for a %s remedy',
+    (status) => {
+      const view = remedyViewOf(
+        {
+          id: REMEDY,
+          status,
+          kind: 'makeup',
+          offeredAt: now,
+          choiceClosesAt: new Date('2026-12-06T08:00:00Z'),
+          proposedDate: new Date('2026-12-17T00:00:00Z'),
+          counterDate: null,
+          counterStartTimeLocal: null,
+          counterTimezone: null,
+          counterProposedAt: null,
+          snapshotAnswerWindowHours: 72,
+          makeupSessionId: null,
+        },
+        { startTimeLocal: '09:00:00', timezone: CAIRO },
+      );
+      expect(view).toMatchObject({ status, canChooseRefund: false });
+    },
+  );
 });

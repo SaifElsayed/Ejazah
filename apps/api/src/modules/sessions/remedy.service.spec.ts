@@ -38,6 +38,7 @@ import {
   type RemedyServices,
   type RemedyStore,
   type RemedyWindows,
+  type RemedyWindowsDependencies,
 } from './remedy.service.js';
 import type { ReservedTime } from './reservations.service.js';
 import type { SessionEventRecord } from './session-events.repository.js';
@@ -372,7 +373,8 @@ function dependencies() {
         };
       },
     }),
-  } satisfies RemedyDependencies;
+    // T111: the hand-off is the windows' only (`makeup_refused`); the procedures hand nothing over.
+  } satisfies RemedyDependencies & Pick<RemedyWindowsDependencies, 'casesOf'>;
 }
 
 beforeEach(() => {
@@ -529,42 +531,55 @@ describe('sessions.remedy.choose (T031; FR-463, FR-467; the third analysis, A1; 
     });
   });
 
-  it('a refund: handed to the enrollment’s refund_choice case through T030, on the same transaction', async () => {
-    const view = await services().choose(
-      { userId: STUDENT },
-      { sessionId: SESSION, choice: 'refund' },
-      log,
-    );
-    expect(handedOff).toEqual([{ remedyId: REMEDY, reason: 'refund_choice' }]);
-    expect(calls.indexOf(calls.find(([name]) => name === 'handOff') ?? [])).toBeGreaterThan(
-      calls.findIndex(([name]) => name === 'lockRemedyOfSession'),
-    );
-    expect(view.status).toBe('refund_case');
-    expect(view.kind).toBe('refund');
-  });
-
-  it('a refund on the ijazah track, or after a Both-No-Show, CHOICE_NOT_ALLOWED, nothing written', async () => {
+  // T111 of specs/003-booking (DEC-84; ADR 0025 D5; FR-MAKEUP-2 and FR-ADMIN-5 as amended): no refund
+  // is chosen any more, on an `awaiting_choice` row offered before the change too; nothing is handed
+  // to a case, and the remedy stays open for its make-up.
+  it('a refund CHOICE_NOT_ALLOWED on every track and debt, a recitation Teacher-No-Show and a cleared suspension’s session included; nothing written, one info line (T111)', async () => {
     for (const [track, status] of [
+      ['recitation', 'teacher_no_show'],
+      ['recitation', 'cancelled_by_admin'],
       ['ijazah_track', 'teacher_no_show'],
       ['recitation', 'both_no_show'],
     ] as const) {
       terms = { ...TERMS, track };
       session = { ...SESSION_ROW, status };
-      expect(
-        (
-          await refusalOf(
-            services().choose({ userId: STUDENT }, { sessionId: SESSION, choice: 'refund' }, log),
-          )
-        ).code,
-      ).toBe('CHOICE_NOT_ALLOWED');
+      lines = [];
+      const refused = await refusalOf(
+        services().choose({ userId: STUDENT }, { sessionId: SESSION, choice: 'refund' }, log),
+      );
+      expect(refused.code).toBe('CHOICE_NOT_ALLOWED');
+      expect(refused.logged).toBe(true);
+      expect(refusalLines()).toEqual([
+        {
+          sessionId: SESSION,
+          userId: STUDENT,
+          remedyId: REMEDY,
+          errorCode: 'CHOICE_NOT_ALLOWED',
+          reason: 'refund_not_owed',
+        },
+      ]);
     }
     expect(writes()).toEqual([]);
+    expect(handedOff).toEqual([]);
+    expect(remedy?.status).toBe('awaiting_choice');
   });
 
-  it('a refund for a session a cleared suspension cancelled, on recitation, is handed over (T036)', async () => {
-    session = { ...SESSION_ROW, status: 'cancelled_by_admin' };
-    await services().choose({ userId: STUDENT }, { sessionId: SESSION, choice: 'refund' }, log);
-    expect(handedOff).toEqual([{ remedyId: REMEDY, reason: 'refund_choice' }]);
+  it('an awaiting_choice row offered before the change still chooses its make-up, a cleared suspension’s session included (T111)', async () => {
+    for (const status of ['teacher_no_show', 'cancelled_by_admin'] as const) {
+      remedy = remedyRow({ status: 'awaiting_choice' });
+      session = { ...SESSION_ROW, status };
+      const view = await services().choose(
+        { userId: STUDENT },
+        { sessionId: SESSION, choice: 'makeup' },
+        log,
+      );
+      expect(view).toMatchObject({ status: 'proposed', kind: 'makeup', canChooseRefund: false });
+    }
+    expect(writes()).toEqual([
+      ['chooseMakeup', REMEDY],
+      ['chooseMakeup', REMEDY],
+    ]);
+    expect(handedOff).toEqual([]);
   });
 
   it('a remedy no longer awaiting a choice CHOICE_NOT_ALLOWED, either choice', async () => {
@@ -1220,18 +1235,32 @@ describe('advance-remedies: a counter’s answer window ends (T032; FR-465; D1)'
     remedy = counterPending();
   });
 
-  it('before answerClosesAt nothing; at it, handed to a counter_unanswered case under the kernel’s row, one info line after the commit', async () => {
+  // T111 of specs/003-booking (DEC-84; ADR 0025 D5; FR-MAKEUP-3 as amended): a counter left
+  // unanswered releases its time and the system's proposal is booked, as after a decline once the
+  // choice window has closed; no `counter_unanswered` case is opened.
+  it('before answerClosesAt nothing; at it, the counter released under the kernel’s counter row, then the proposal booked as advance-remedies on its own transaction, no case (T111)', async () => {
     now = new Date('2026-11-07T09:59:59.999Z');
     expect(await windows().endAnswerWindow(REMEDY)).toBe('not_due');
-    expect(handedOff).toEqual([]);
+    expect(writes()).toEqual([]);
     now = ANSWER_CLOSES;
-    expect(await windows().endAnswerWindow(REMEDY)).toBe('handed_off');
-    expect(handedOff).toEqual([{ remedyId: REMEDY, reason: 'counter_unanswered' }]);
-    const lastRun = calls.slice(calls.findLastIndex(([name]) => name === 'begin'));
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('booked');
+    expect(handedOff).toEqual([]);
+    expect(writes()).toEqual([['releaseCounter', REMEDY]]);
+    const bookAt = calls.findIndex(([name]) => name === 'book');
+    expect(calls[bookAt]).toEqual([
+      'book',
+      { remedyId: REMEDY, booking: 'proposal', operation: 'advance-remedies' },
+    ]);
+    const release = calls.slice(
+      calls.slice(0, bookAt).findLastIndex(([name]) => name === 'begin'),
+      bookAt,
+    );
     expect(
-      lastRun.filter(([name]) => String(name).startsWith('lock')).map(([name, ids]) => [name, ids]),
+      release.filter(([name]) => String(name).startsWith('lock')).map(([name, ids]) => [name, ids]),
     ).toEqual(CHOICE_LOCKS);
-    expect(lastRun.at(-1)).toEqual(['commit']);
+    expect(release).toContainEqual(['releaseCounter', REMEDY]);
+    expect(release.at(-1)).toEqual(['commit']);
+    expect(remedy?.status).toBe('booked');
     expect(linesAt('info')).toEqual([
       {
         remedyId: REMEDY,
@@ -1239,7 +1268,40 @@ describe('advance-remedies: a counter’s answer window ends (T032; FR-465; D1)'
         enrollmentId: ENROLLMENT,
         action: 'counter_unanswered',
       },
+      { remedyId: REMEDY, sessionId: SESSION, enrollmentId: ENROLLMENT, action: 'booked' },
     ]);
+  });
+
+  it('after the choice window too: released, then the proposal booked, no case (T111)', async () => {
+    now = new Date('2026-11-08T09:00:00.000Z');
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('booked');
+    expect(handedOff).toEqual([]);
+    expect(calls.filter(([name]) => name === 'book')).toHaveLength(1);
+  });
+
+  it('a refused booking leaves the counter released and the remedy proposed for the sweep, one warn line { remedyId, sessionId, constraint }; a second deadlock no line; no case either way (T111)', async () => {
+    now = ANSWER_CLOSES;
+    proposalRefusal = new RefusedBooking(OVERLAP);
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('refused');
+    expect(remedy).toMatchObject({ status: 'proposed', counter: null });
+    expect(linesAt('warn')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, constraint: 'sessions_teacher_no_overlap' },
+    ]);
+    remedy = counterPending();
+    proposalRefusal = new RefusedBooking({ cause: 'deadlock' });
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('deadlocked');
+    expect(remedy).toMatchObject({ status: 'proposed', counter: null });
+    expect(linesAt('warn')).toHaveLength(1);
+    expect(handedOff).toEqual([]);
+    expect(reported).toEqual([]);
+  });
+
+  it('a remedy another path settled between the release and the booking (REMEDY_NOT_OPEN) is left as it is, no failure thrown (T111)', async () => {
+    now = ANSWER_CLOSES;
+    proposalRefusal = new DomainError('REMEDY_NOT_OPEN');
+    expect(await windows().endAnswerWindow(REMEDY)).toBe('not_due');
+    expect(linesAt('warn')).toEqual([]);
+    expect(handedOff).toEqual([]);
   });
 
   it('a remedy no longer counter_proposed, frozen among them, is left as it is', async () => {

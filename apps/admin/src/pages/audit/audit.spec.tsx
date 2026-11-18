@@ -576,3 +576,38 @@ describe('005:T013: the gender-flag queue’s actions by name', () => {
     },
   );
 });
+
+// 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين»'s two reads and the mark «تم الصرف», named by
+// the catalogue's text in Arabic and in English (T083's per-action pattern); each is audited on the
+// reader (`admin`) or the teacher (`user`), so no new target type.
+const T105_PAYOUT_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['payouts.listed', 'عرض تحويلات المعلمين', 'View teacher payouts'],
+  ['payouts.viewed', 'عرض تحويلات معلم', "View a teacher's payouts"],
+  ['payout_release.marked', 'تسجيل صرف مستحق لمعلم', "Mark a teacher's release paid"],
+  // The undo of a mark made in error (the owner, 2026-11-18).
+  ['payout_release.unmarked', 'التراجع عن صرف مستحق لمعلم', "Undo a teacher's release paid mark"],
+];
+
+describe('003:T105: the payouts page’s actions by name', () => {
+  it.each(T105_PAYOUT_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
+// 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): `payments.caseAmount`'s read, audited on the case
+// (`dispute`, as `case.viewed`), so no new target type.
+describe('003:T110: the case amount’s read by name', () => {
+  it('payments.case_amount_viewed reads «عرض مبلغ حالة تعويض» and "View a case’s amount", never the stored code', () => {
+    const action = 'payments.case_amount_viewed';
+    expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(
+      'عرض مبلغ حالة تعويض',
+    );
+    expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(
+      'View a case’s amount',
+    );
+  });
+});

@@ -67,6 +67,8 @@ const [
   { copyOf },
   // T008 of specs/005-certification: the certificate's rendering.
   { certificateRenderSteps, renderCertificate },
+  // 003:T105 (track 2, B-M2): the due sweep of the releases of the teachers' shares.
+  { releaseTeacherShares },
   // 005:T017 (B48): the reminder sweep and the re-send of a lost enqueue.
   { sendReminder },
 ] = await Promise.all([
@@ -111,6 +113,8 @@ const [
   import('./modules/notifications/index.js'),
   import('./platform/web/copy.js'),
   import('./jobs/render-certificate.js'),
+  // 003:T105 (track 2, B-M2).
+  import('./jobs/release-teacher-shares.js'),
   import('./jobs/send-reminder.js'),
 ]);
 
@@ -303,6 +307,11 @@ const jobs: readonly Job[] = [
     typstBin: config.TYPST_BIN,
     log,
   }),
+  // 003:T105 (track 2, B-M2; ADR 0025 D2, SRS DEC-81): the releases of the teachers' shares, hourly at
+  // minute 35 (close-slot-holds' schedule): each release due by its milestone written once (rule 62),
+  // one info line of ids and the milestone. ⚠️ automatic: it records a release as due for an
+  // administrator to execute in the gateway's dashboard; it moves no money and calls no gateway (N1).
+  releaseTeacherShares({ database, settings, log }),
   // 005:T017 (FR-619, FR-622, FR-BOOK-8; R-407; SRS DEC-74), every minute ⚠️ automatic: each party's
   // reminder once per (session, user, offset) from the committed instants, then the unpushed
   // notifications between `notification_requeue_after_minutes` and `_max_age_minutes` old queued again.

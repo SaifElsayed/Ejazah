@@ -9,6 +9,8 @@
 // T158: «الملف العام» leads the teaching list to the public profile, where the display name is
 // edited; the board's hint names the subjects, which the profile does not edit, so it is left out
 // (R-HONEST; the key stays in the catalogue).
+// 003:T105 (DEC-89; the owner's «تمام موافق» of 2026-11-17): «مستحقاتي», for an approved teacher,
+// directly under «حساب الاستلام», to the teacher's own share held, due and paid.
 // 005:T019 (FR-601): «صورة التوقيع», for an approved teacher (the one `teacher.signature.get`
 // admits), after the payout row, to the signature screen.
 import type { PayoutState } from '@ijazah/contracts';
@@ -34,6 +36,7 @@ import { AccountLoading, AccountSettings, initialsOf, SignOutSheet } from '../..
 import { TabScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useCredentials } from '../../credentials';
+import { DUES_ROUTE } from '../../dues';
 import { PAYOUT_ROUTE, usePayout } from '../../payout';
 import { PROFILE_ROUTE } from '../../profile';
 import { SIGNATURE_ROUTE } from '../../signature';
@@ -143,6 +146,8 @@ export function TeacherAccount() {
             {account.teacher?.verificationStatus === 'approved' ? (
               <>
                 <PayoutRow />
+                {/* 003:T105 (DEC-89): «مستحقاتي», directly under «حساب الاستلام». */}
+                <ListRow label={t('money.dues.row')} onPress={() => router.push(DUES_ROUTE)} />
                 <ListRow
                   label={t('teacher.account.signature')}
                   onPress={() => router.push(SIGNATURE_ROUTE)}

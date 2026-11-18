@@ -280,6 +280,9 @@ const genderFlags = moderation.createGenderFlags({
   pairings: { paired: booking.paired },
   settings,
 });
+// 003:T105 (SRS DEC-81, DEC-89; the notes under T105): the releases of the teachers' shares, one
+// service for both surfaces: the teacher's «مستحقاتي» and the administrators' «تحويلات المعلمين».
+const payouts = payments.createPayoutServices({ database, settings, idempotency, cipher, log });
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -440,6 +443,8 @@ const services = {
   },
   // `reports.create` (005:T011, B47) and `genderFlags.raise` (005:T013, B47): the services above.
   moderation: { reports: userReports, genderFlags },
+  // 003:T105: `teacher.dues.get`, the service above.
+  teacherDues: payouts.teacher,
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -590,7 +595,12 @@ const adminModuleServices = createAdminServices({
   orders: payments.orderStandingsOf,
 });
 // 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
-const adminServices = { ...adminModuleServices, reports: userReports };
+const adminServices = {
+  ...adminModuleServices,
+  reports: userReports,
+  // 003:T105: `payouts.*`, the service above.
+  payouts: payouts.admin,
+};
 
 const application = await createApplication({
   log,

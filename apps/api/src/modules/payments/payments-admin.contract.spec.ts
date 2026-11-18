@@ -10,6 +10,8 @@
 // stripped there too ("answers only the fields its schema names", for the list and the detail).
 import {
   enrollmentOutcomeKind,
+  paymentsCaseAmountInput,
+  paymentsCaseAmountOutput,
   paymentsListInput,
   paymentsListItem,
 } from '@ijazah/contracts/admin';
@@ -21,6 +23,8 @@ const ITEM = {
   createdAt: '2026-11-03T10:00:00.000Z',
   student: { displayName: 'آمال علي' },
   gross_piasters: 120_000,
+  // 003:T102: the refunded total, 0 until a refund is recorded.
+  refunded_piasters: 0,
   status: 'created',
   enrollmentCancelled: false,
 };
@@ -73,5 +77,55 @@ describe('a listed order', () => {
     expect(paymentsListItem.parse(unreported)).toEqual(unreported);
     expect(paymentsListItem.safeParse({ ...ITEM, gross_piasters: -1 }).success).toBe(false);
     expect(paymentsListItem.safeParse({ ...ITEM, net_piasters: 1.5 }).success).toBe(false);
+  });
+
+  it('always carries its refunded total, never negative or fractional (003:T102, DEC-82)', () => {
+    const partly = { ...ITEM, status: 'paid', refunded_piasters: 30_000 };
+    expect(paymentsListItem.parse(partly)).toEqual(partly);
+    const { refunded_piasters: _absent, ...without } = ITEM;
+    expect(paymentsListItem.safeParse(without).success).toBe(false);
+    expect(paymentsListItem.safeParse({ ...ITEM, refunded_piasters: -1 }).success).toBe(false);
+    expect(paymentsListItem.safeParse({ ...ITEM, refunded_piasters: 0.5 }).success).toBe(false);
+  });
+});
+
+describe('payments.caseAmount (003:T110, DEC-85, DEC-86)', () => {
+  const IJAZAH = {
+    cause: 'ijazah_dropout',
+    total_piasters: 1_000_000,
+    held_piasters: 525_000,
+    platformPart_piasters: 300_000,
+    released_piasters: 175_000,
+    refunded_piasters: 0,
+  };
+  const RECITATION = {
+    cause: 'recitation_dropout',
+    refund_piasters: 600_000,
+    release_piasters: 280_000,
+    refunded_piasters: 0,
+  };
+
+  it('takes a case id, a uuid', () => {
+    expect(paymentsCaseAmountInput.safeParse({ caseId: 'not-a-uuid' }).success).toBe(false);
+  });
+
+  it('answers each cause with its own parts, or no amount', () => {
+    expect(paymentsCaseAmountOutput.parse({ amount: IJAZAH })).toEqual({ amount: IJAZAH });
+    expect(paymentsCaseAmountOutput.parse({ amount: RECITATION })).toEqual({ amount: RECITATION });
+    const complaint = { ...RECITATION, cause: 'student_complaint_close' };
+    expect(paymentsCaseAmountOutput.parse({ amount: complaint })).toEqual({ amount: complaint });
+    expect(paymentsCaseAmountOutput.parse({})).toEqual({});
+  });
+
+  it('refuses an unknown cause, a missing part, and a negative or fractional amount', () => {
+    const refused = [
+      { ...RECITATION, cause: 'admin_ended' },
+      { ...IJAZAH, held_piasters: undefined },
+      { ...RECITATION, refund_piasters: -1 },
+      { ...IJAZAH, platformPart_piasters: 0.5 },
+    ];
+    for (const amount of refused) {
+      expect(paymentsCaseAmountOutput.safeParse({ amount }).success).toBe(false);
+    }
   });
 });

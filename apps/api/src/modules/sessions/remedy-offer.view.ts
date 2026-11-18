@@ -3,9 +3,9 @@
 // never stored (R-DB-4). The proposal is its `proposed_date` at the enrollment's slot's local start
 // in the enrollment's zone (the monitor's reading); a pending counter its own date, start and zone
 // with `answerClosesAt` from D1's one function; a `frozen` remedy shows no proposal; a `lapsed` one is
-// never shown; `canChooseRefund` only while `awaiting_choice` (which an offer writes only where a
-// refund may be chosen, A1); `makeupSessionId` once a make-up is booked. T031's procedures answer the
-// same view. No lock, no write.
+// never shown; `canChooseRefund` always false, no refund being chosen any more, an `awaiting_choice`
+// row offered before the change included (T111 of specs/003-booking, DEC-84); `makeupSessionId` once
+// a make-up is booked. T031's procedures answer the same view. No lock, no write.
 import type { RemedyView } from '@ijazah/contracts';
 import { calendarDateOf, localTimeOf, resolveLocalDateTime } from '@ijazah/time';
 
@@ -77,7 +77,7 @@ export function remedyViewOf(
           ),
         }),
     ...(counter === undefined ? {} : { counter }),
-    canChooseRefund: remedy.status === 'awaiting_choice',
+    canChooseRefund: false,
     ...(remedy.makeupSessionId === null ? {} : { makeupSessionId: remedy.makeupSessionId }),
   };
 }

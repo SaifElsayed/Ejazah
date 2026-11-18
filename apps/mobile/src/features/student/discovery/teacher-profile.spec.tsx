@@ -232,7 +232,13 @@ describe('TeacherProfile', () => {
           : 'student.teacherProfile.remedy.recitation';
       await inBothDirections(profile, async (_rendered, direction) => {
         expect(await screen.findByText(said(direction, key))).toBeTruthy();
-        expect(screen.queryByText(said(direction, other))).toBeNull();
+        // T111 of specs/003-booking (DEC-84): both tracks are a make-up only, and the Arabic lines
+        // now read the same; the one line is drawn once, and where they differ the other is absent.
+        if (said(direction, other) === said(direction, key)) {
+          expect(screen.getAllByText(said(direction, key))).toHaveLength(1);
+        } else {
+          expect(screen.queryByText(said(direction, other))).toBeNull();
+        }
         // No promise of an ijazah on completion (FR-IJAZAH-1; the owner's decision of 2026-11-02).
         expect(screen.queryByText(/الإجازة بعد الإتمام|ijazah after completion/)).toBeNull();
       });

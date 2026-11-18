@@ -29,6 +29,7 @@ import { piasters } from '../../packages/money/src/index';
 import {
   createPaymentWebhookRoute,
   PAYMENT_WEBHOOK_PATH,
+  refundedOf,
 } from '../../apps/api/src/modules/payments/index';
 import {
   closeDatabase,
@@ -528,6 +529,242 @@ describe('monotonic: a paid order moves only to refunded (data-model §3, FR-373
     expect(await outcomesOf(order.enrollmentId)).toHaveLength(1);
   });
 });
+
+// 003:T102 (ADR 0025 D3, SRS DEC-82; Q-2 (a) with its safety net, Q-3 (a)): a refund child adds
+// its signed amount to the order's refunded total under the order's lock, only while the order is
+// `paid`; the order becomes `refunded` when the total reaches its gross; a total past the gross is
+// refused and reported, nothing recorded (T056's precedent). A parent's flag, `refund_reported`,
+// adds no money, moves nothing and sets `refund_reported_at` once, with one log line.
+describe('a refund (003:T102, DEC-82)', () => {
+  interface Refunds {
+    readonly status: string;
+    readonly refunded: string;
+    readonly reported: boolean;
+  }
+
+  /** The order's status, its refunded total (as text, a bigint) and whether a flag was reported. */
+  async function refundsOf(paymentId: string): Promise<Refunds | undefined> {
+    const { rows } = await db.query<Refunds>(
+      `SELECT status::text AS status, refunded_piasters::text AS refunded,
+              refund_reported_at IS NOT NULL AS reported
+         FROM payments WHERE id = $1`,
+      [paymentId],
+    );
+    return rows[0];
+  }
+
+  async function reportedAt(paymentId: string): Promise<Date | null | undefined> {
+    const { rows } = await db.query<{ at: Date | null }>(
+      'SELECT refund_reported_at AS at FROM payments WHERE id = $1',
+      [paymentId],
+    );
+    return rows[0]?.at;
+  }
+
+  const typesOf = async (paymentId: string): Promise<unknown[]> =>
+    (await eventsOf(paymentId)).map((row) => row['event_type']);
+
+  /** The webhook's log lines with `reason`, parsed. */
+  const linesWith = (reason: string): Record<string, unknown>[] =>
+    lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line['reason'] === reason);
+
+  /** A planted order the gateway reported paid, the queue's record of it cleared. */
+  async function paidOrder(): Promise<Order> {
+    const order = await plantOrder();
+    expect(await stand.deliver(stand.paid(order.gatewayOrderId))).toBe(200);
+    enqueued.length = 0;
+    return order;
+  }
+
+  it('a partial refund leaves the order paid with its total, and the enrollment counts as refunded (Q-3 (a))', async () => {
+    const order = await paidOrder();
+    const refund = stand.refunded(order.gatewayOrderId, piasters(7_500));
+
+    expect(await stand.deliver(refund)).toBe(200);
+
+    expect(await refundsOf(order.paymentId)).toEqual({
+      status: 'paid',
+      refunded: '7500',
+      reported: false,
+    });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded']);
+    expect(await refundedOf(database, order.enrollmentId)).toBe(true);
+    expect(enqueued).toEqual([]);
+    expect(reported).toEqual([]);
+  });
+
+  it('two partial refunds reaching the gross make the order refunded', async () => {
+    const order = await paidOrder();
+
+    expect(
+      await stand.deliverInOrder([
+        stand.refunded(order.gatewayOrderId, piasters(10_000)),
+        stand.refunded(order.gatewayOrderId, piasters(15_000)),
+      ]),
+    ).toEqual([200, 200]);
+
+    expect(await refundsOf(order.paymentId)).toEqual({
+      status: 'refunded',
+      refunded: '25000',
+      reported: false,
+    });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded', 'refunded']);
+  });
+
+  it('a void, the whole order, makes the order refunded with the gross as its total', async () => {
+    const order = await paidOrder();
+
+    expect(await stand.deliver(stand.refunded(order.gatewayOrderId, 'whole_order'))).toBe(200);
+
+    expect(await refundsOf(order.paymentId)).toEqual({
+      status: 'refunded',
+      refunded: '25000',
+      reported: false,
+    });
+  });
+
+  it('a replay adds nothing', async () => {
+    const order = await paidOrder();
+    const refund = stand.refunded(order.gatewayOrderId, piasters(7_500));
+
+    expect(await stand.deliverTwice(refund)).toEqual([200, 200]);
+
+    expect(await refundsOf(order.paymentId)).toMatchObject({ status: 'paid', refunded: '7500' });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded']);
+  });
+
+  it('a total past the gross is refused and reported, with nothing recorded', async () => {
+    const order = await paidOrder();
+    await stand.deliver(stand.refunded(order.gatewayOrderId, piasters(20_000)));
+    const past = stand.refunded(order.gatewayOrderId, piasters(5_001));
+
+    expect(await stand.deliver(past)).toBe(400);
+
+    expect(await refundsOf(order.paymentId)).toMatchObject({ status: 'paid', refunded: '20000' });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded']);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.name).toBe('RefundPastOrderError');
+    expect((reported[0] as Error & { details?: unknown }).details).toEqual({
+      gatewayOrderId: order.gatewayOrderId,
+      providerEventId: past.providerEventId,
+      refund: 5_001,
+      refunded: 20_000,
+      order: 25_000,
+    });
+    expect(linesWith('refund_past_gross')).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        paymentId: order.paymentId,
+        providerEventId: past.providerEventId,
+      }),
+    ]);
+  });
+
+  it('a refund of an order that is not paid is recorded and adds nothing', async () => {
+    const order = await plantOrder();
+
+    expect(await stand.deliver(stand.refunded(order.gatewayOrderId, piasters(7_500)))).toBe(200);
+
+    expect(await refundsOf(order.paymentId)).toEqual({
+      status: 'created',
+      refunded: '0',
+      reported: false,
+    });
+    expect(await typesOf(order.paymentId)).toEqual(['refunded']);
+  });
+
+  it('a parent flag after a partial child leaves the order paid, with no second «refunded» on its timeline', async () => {
+    const order = await paidOrder();
+    await stand.deliver(stand.refunded(order.gatewayOrderId, piasters(7_500)));
+
+    expect(await stand.deliver(stand.refundReported(order.gatewayOrderId))).toBe(200);
+
+    expect(await refundsOf(order.paymentId)).toEqual({
+      status: 'paid',
+      refunded: '7500',
+      reported: true,
+    });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded', 'refund_reported']);
+    expect(enqueued).toEqual([]);
+  });
+
+  it('the flag sets refund_reported_at once and logs one line of ids and a reason', async () => {
+    const order = await paidOrder();
+    const first = stand.refundReported(order.gatewayOrderId);
+
+    expect(await stand.deliver(first)).toBe(200);
+    const at = await reportedAt(order.paymentId);
+    expect(at).toBeInstanceOf(Date);
+    expect(await stand.deliverInOrder([first, stand.refundReported(order.gatewayOrderId)])).toEqual(
+      [200, 200],
+    );
+
+    expect(await reportedAt(order.paymentId)).toEqual(at);
+    expect(await refundsOf(order.paymentId)).toMatchObject({ status: 'paid', refunded: '0' });
+    expect(await typesOf(order.paymentId)).toEqual(['paid', 'refund_reported', 'refund_reported']);
+    const flagged = linesWith('refund_flag_without_amount');
+    expect(flagged).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        paymentId: order.paymentId,
+        providerEventId: first.providerEventId,
+      }),
+    ]);
+    expect(Object.keys(flagged[0] ?? {})).not.toContain('gatewayOrderId');
+  });
+
+  // The lock claim, red first with the order's lock dropped (mutant M-A7): another transaction holds
+  // the order's row FOR NO KEY UPDATE, which lets an event's foreign-key check through but stops
+  // FOR UPDATE and the row's update, so both deliveries are seen waiting before either writes.
+  it('two refunds of one order at once add both, under the order’s lock', async () => {
+    const order = await paidOrder();
+    const holder = await connectAsApplication();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT 1 FROM payments WHERE id = $1 FOR NO KEY UPDATE', [
+        order.paymentId,
+      ]);
+      const { rows: holderRows } = await holder.query<{ pid: number }>(
+        'SELECT pg_backend_pid() AS pid',
+      );
+      const deliveries = Promise.all([
+        stand.deliver(stand.refunded(order.gatewayOrderId, piasters(7_500))),
+        stand.deliver(stand.refunded(order.gatewayOrderId, piasters(5_000))),
+      ]);
+
+      await waitersBehind(holderRows[0]?.pid ?? 0, 2);
+      await holder.query('COMMIT');
+
+      expect(await deliveries).toEqual([200, 200]);
+      expect(await refundsOf(order.paymentId)).toMatchObject({ status: 'paid', refunded: '12500' });
+      expect(await typesOf(order.paymentId)).toEqual(['paid', 'refunded', 'refunded']);
+    } finally {
+      await holder.query('ROLLBACK').catch(() => undefined);
+      await holder.end();
+    }
+  });
+});
+
+/** Waits until `count` backends wait on `pid`'s lock, directly or behind one that does. */
+async function waitersBehind(pid: number, count: number): Promise<void> {
+  for (let look = 0; look < 250; look += 1) {
+    const { rows } = await other.query<{ waiting: number }>(
+      `WITH direct AS (
+         SELECT pid FROM pg_stat_activity
+          WHERE $1 = ANY(pg_blocking_pids(pid)) AND wait_event_type = 'Lock')
+       SELECT count(*)::int AS waiting FROM pg_stat_activity a
+        WHERE a.wait_event_type = 'Lock'
+          AND (a.pid IN (SELECT pid FROM direct)
+               OR pg_blocking_pids(a.pid) && ARRAY(SELECT pid FROM direct))`,
+      [pid],
+    );
+    if ((rows[0]?.waiting ?? 0) >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`fewer than ${String(count)} backends waited behind ${String(pid)}'s lock`);
+}
 
 describe('an order no payment row holds (contracts/gateway.md, ERD rule 20)', () => {
   it('is answered 200, written nowhere, enqueues nothing, and is reported without its body', async () => {
