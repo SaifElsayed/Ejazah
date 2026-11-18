@@ -31,9 +31,8 @@ export function useCounterOptions(sessionId: string) {
   });
 }
 
+/** The student's remedy actions: a make-up only, no refund (T111 of specs/003-booking, DEC-84). */
 export interface RemedyActions {
-  /** `sessions.remedy.choose` with a refund. */
-  chooseRefund(): Promise<RemedyView>;
   /** `sessions.remedy.accept`: the proposal booked, a pending counter withdrawn. */
   accept(): Promise<RemedyView>;
   /** `sessions.remedy.counter` naming `option`, under the action's own key. */
@@ -68,7 +67,6 @@ export function useRemedyActions(session: {
   }
   const remedy = client.api.sessions.remedy;
   return {
-    chooseRefund: () => settle(() => remedy.choose.mutate({ sessionId, choice: 'refund' })),
     accept: () => settle(() => remedy.accept.mutate({ sessionId })),
     counter: (option, idempotencyKey) =>
       settle(() =>

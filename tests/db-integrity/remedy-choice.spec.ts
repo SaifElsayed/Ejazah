@@ -3,9 +3,9 @@
 // to FR-467; research R-311, "The student"; the notes under T031 (Q5 (a), Q9 (a), Q14 (a)).
 //
 //   - `choose`: a make-up moves `awaiting_choice` to `proposed` and writes nothing else; a refund
-//     hands the remedy to the enrollment's `refund_choice` case (T030): `refund_case`, kind `refund`,
-//     one `remedy_handed_to_case` row, no amount anywhere (FR-467); a refund on the ijazah track
-//     `CHOICE_NOT_ALLOWED`, nothing written.
+//     `CHOICE_NOT_ALLOWED` on either track, nothing written, no case opened (T111 of
+//     specs/003-booking, DEC-84: a make-up only; an `awaiting_choice` row offered before still
+//     chooses its make-up).
 //   - `counterOptions`: per active slot of the session's length, its first occurrence at or after
 //     max(now + A + L, `choice_closes_at`) free of the parties' sessions and the reservations (the
 //     remedy's own proposal among them), in the slot's own zone; A and L the row's, never the setting.
@@ -239,21 +239,24 @@ describe('sessions.remedy.choose over the real tables (T031, FR-463, FR-467)', (
     expect({ ...after, remedy: undefined }).toEqual({ ...before, remedy: undefined });
   });
 
-  it('a refund: handed to the enrollment’s refund_choice case, kind refund, one remedy_handed_to_case row, no amount', async () => {
+  // T111 of specs/003-booking (DEC-84; ADR 0025 D5): a recitation Teacher-No-Show's
+  // `awaiting_choice` row, offered before the change, is refused a refund and keeps its make-up.
+  it('a refund on recitation CHOICE_NOT_ALLOWED, nothing written: no case, no row, still awaiting its make-up (T111)', async () => {
     const w = await world();
-    const view = await services.remedy.choose(
-      { userId: w.studentId },
-      { sessionId: w.sessionId, choice: 'refund' },
-      log,
-    );
-    expect(view).toMatchObject({ status: 'refund_case', kind: 'refund' });
+    const before = await committed(w);
+    expect(before.remedy).toMatchObject({ status: 'awaiting_choice', kind: 'makeup' });
+    expect(
+      await codeOf(
+        services.remedy.choose(
+          { userId: w.studentId },
+          { sessionId: w.sessionId, choice: 'refund' },
+          log,
+        ),
+      ),
+    ).toBe('CHOICE_NOT_ALLOWED');
     const after = await committed(w);
-    expect(after.remedy).toMatchObject({ status: 'refund_case', kind: 'refund' });
-    expect(after.remedy?.['case_id']).not.toBeNull();
-    expect(after.cases).toEqual([
-      { kind: 'compensation_case', reason: 'refund_choice', status: 'open' },
-    ]);
-    expect(after.events.map(({ kind }) => kind)).toEqual(['remedy_handed_to_case']);
+    expect(after).toEqual(before);
+    expect(after.cases).toEqual([]);
     // No amount anywhere (FR-467, R-MONEY-6): the case table has no money column to write.
     const { rows } = await db.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns

@@ -16,10 +16,10 @@
 // `refund_case` or `lapsed`, `REMEDY_NOT_OPEN` («a `frozen` remedy answers `REMEDY_NOT_OPEN` to every
 // procedure here»); then each procedure's own:
 //   - `choose` (`awaiting_choice` only): from `choice_closes_at` `REMEDY_NOT_OPEN` (Q9 (a)); a remedy
-//     no longer awaiting a choice `CHOICE_NOT_ALLOWED`; a refund where none is owed (any track but
-//     recitation, or a session neither a Teacher-No-Show nor one a cleared suspension cancelled, A1)
-//     `CHOICE_NOT_ALLOWED`. A make-up: `awaiting_choice` → `proposed`, no event row (no kind records
-//     it). A refund: T030's hand-off, `refund_choice`, on this transaction.
+//     no longer awaiting a choice `CHOICE_NOT_ALLOWED`; a refund `CHOICE_NOT_ALLOWED`, on every track
+//     and debt (T111 of specs/003-booking; SRS DEC-84; ADR 0025 D5: a missed session is remedied by a
+//     make-up only). A make-up: `awaiting_choice` → `proposed`, no event row (no kind records it);
+//     a row offered `awaiting_choice` before T111 still chooses it.
 //   - `accept`: from `awaiting_choice`, `proposed` or `counter_proposed`, before or after
 //     `choice_closes_at` (Q9 (a): it books the proposal the sweep books). A pending counter is
 //     withdrawn: one `counter_withdrawn` row, then T029 books the proposal, whose booking clears the
@@ -66,9 +66,17 @@
 //
 // THE WINDOWS' ENDS (T032; `advance-remedies`, `remedy-offer.sweep.ts`; H3, H5; A3; Q4 (a), Q11 (a)),
 // each remedy on its own transaction, decided again under its locks at the database's clock:
-//   - `endAnswerWindow`: a `counter_proposed` remedy whose `answerClosesAt` has come is handed to a
-//     `counter_unanswered` case (T030), the choice window open or closed; one info line after the
-//     commit (`logRemedyHandedOff`).
+//   - `endAnswerWindow`: a `counter_proposed` remedy whose `answerClosesAt` has come, the choice
+//     window open or closed, is released as a decline releases it (its columns cleared, `proposed`)
+//     under the decline's locks, with no event row of its own (no kind records it), one info line
+//     `{ remedyId, sessionId, enrollmentId, action: 'counter_unanswered' }` after the commit; then
+//     its proposal is booked in a transaction of its own (T029's `book`, as `advance-remedies`), as
+//     after a decline once the choice window has closed, one info line `action: 'booked'`. A refusal
+//     is the choice window's end's warn line, a second deadlock no line, and leaves the remedy
+//     `proposed`, which `bookAtChoiceEnd` books or retries once the choice window has closed (H5);
+//     a remedy another path settled between the two (`REMEDY_NOT_OPEN`, T029's line) is left.
+//     No `counter_unanswered` case is opened any more (T111 of specs/003-booking; SRS DEC-84,
+//     FR-MAKEUP-3 as amended; ADR 0025 D5); the reason stays for the cases already open.
 //   - `bookAtChoiceEnd`: a `proposed` or `awaiting_choice` remedy past `choice_closes_at` (none
 //     pending, by its status) has its proposal booked (H5) through `runRetryingDeadlockOnce` as
 //     `advance-remedies` (Q4 (a)), one info line `{ remedyId, sessionId, enrollmentId, action }`
@@ -303,8 +311,6 @@ export interface RemedyDependencies {
   readonly store?: RemedyStore;
   /** T029's booking over a call's log; `createMakeupBooking` unless a spec fakes it. */
   readonly bookingOf?: (log: Logger) => RemedyBooking;
-  /** T030's hand-off over a call's log; `createRemedyCase` unless a spec fakes it. */
-  readonly casesOf?: (log: Logger) => Pick<RemedyCase, 'handOff'>;
   /** What refused a booking (T029's `makeupRefusalOf`), unless a spec reads its own fakes. */
   readonly makeupRefusalOf?: (error: unknown) => MakeupRefusal | null;
 }
@@ -418,14 +424,6 @@ function optionOf({ slot, occurrence }: Candidate): CounterOption {
   };
 }
 
-/** Whether a refund may be chosen on this session's remedy (A1; T036). */
-function refundOwed(session: PartySessionRow, terms: EnrollmentTerms): boolean {
-  return (
-    terms.track === 'recitation' &&
-    (session.status === 'teacher_no_show' || session.status === 'cancelled_by_admin')
-  );
-}
-
 /** Which slots a path locks after the key (this file's head, THE LOCKS). */
 type SlotLocks = 'none' | 'own' | 'own_and_counter';
 
@@ -494,7 +492,6 @@ export function createRemedyServices({
   clock = clockTimestamp,
   store = remedyStore,
   bookingOf = (log) => createMakeupBooking({ transactions, enrollments, log, clock }),
-  casesOf = (log) => createRemedyCase({ log, clock }),
   makeupRefusalOf: refusalOf = makeupRefusalOf,
 }: RemedyDependencies): RemedyServices {
   const lockRemedy = lockerOver(store, enrollments);
@@ -851,12 +848,11 @@ export function createRemedyServices({
         if (active.status !== 'awaiting_choice') {
           throw refusal(log, named, 'CHOICE_NOT_ALLOWED', 'not_awaiting_choice');
         }
+        // T111 (DEC-84): no refund is owed for a session any more, on any track.
         if (choice === 'refund') {
-          if (!refundOwed(session, terms)) {
-            throw refusal(log, named, 'CHOICE_NOT_ALLOWED', 'refund_not_owed');
-          }
-          await casesOf(log).handOff(tx, { remedyId: active.id, reason: 'refund_choice' });
-        } else if (!(await store.chooseMakeup(tx, active.id))) {
+          throw refusal(log, named, 'CHOICE_NOT_ALLOWED', 'refund_not_owed');
+        }
+        if (!(await store.chooseMakeup(tx, active.id))) {
           // Read under the remedy's lock as `awaiting_choice`, so the conditional update matches.
           throw new Error('sessions: a locked remedy left awaiting_choice before its choice');
         }
@@ -986,8 +982,12 @@ function storedOf({ proposal, counter, makeupSessionId, ...view }: RemedyView): 
 export type ChoiceEndOutcome = 'booked' | 'refused' | 'deadlocked' | 'handed_off' | 'not_due';
 
 export interface RemedyWindows {
-  /** A counter whose answer window has closed handed to a `counter_unanswered` case. */
-  endAnswerWindow(remedyId: string): Promise<'handed_off' | 'not_due'>;
+  /**
+   * A counter whose answer window has closed released, then its proposal booked (T111); a refused
+   * or deadlocked booking leaves the remedy `proposed` for `bookAtChoiceEnd`. Never `handed_off`
+   * any more: the type is the choice window end's, which the sweep reads.
+   */
+  endAnswerWindow(remedyId: string): Promise<ChoiceEndOutcome>;
   /** A proposal past `choice_closes_at` booked, retried, or handed to a `makeup_refused` case. */
   bookAtChoiceEnd(remedyId: string): Promise<ChoiceEndOutcome>;
 }
@@ -1052,9 +1052,17 @@ export function createRemedyWindows({
     return { remedy, now: await clock(tx) };
   }
 
+  /** The remedy's ids for a line about it. */
+  const idsOf = ({ id, sessionId, enrollmentId }: RemedyWithParties) => ({
+    remedyId: id,
+    sessionId,
+    enrollmentId,
+  });
+
   return {
     endAnswerWindow: async (remedyId) => {
-      const handed = await transactions.run(async (tx) => {
+      // T111 (DEC-84): released as a decline releases it, under the decline's locks.
+      const released = await transactions.run(async (tx) => {
         const locked = await lockedRemedy(tx, remedyId, ['counter_proposed'], 'none');
         const counter = locked?.remedy.counter;
         if (locked === null || counter === undefined || counter === null) return null;
@@ -1063,11 +1071,41 @@ export function createRemedyWindows({
           snapshotAnswerWindowHours: locked.remedy.snapshotAnswerWindowHours,
         });
         if (locked.now.getTime() < closes.getTime()) return null;
-        return cases.handOff(tx, { remedyId, reason: 'counter_unanswered' });
+        if (!(await store.releaseCounter(tx, remedyId))) {
+          throw new Error('sessions: a locked remedy left counter_proposed before its release');
+        }
+        return locked.remedy;
       });
-      if (handed === null) return 'not_due';
-      logRemedyHandedOff(log, { ...handed, reason: 'counter_unanswered' });
-      return 'handed_off';
+      if (released === null) return 'not_due';
+      const ids = idsOf(released);
+      log.info(
+        { ...ids, action: 'counter_unanswered' },
+        'An unanswered counter-proposal was released',
+      );
+      // Then the proposal booked on its own transaction, as after a decline once the choice window
+      // has closed; a refusal leaves it `proposed` for `bookAtChoiceEnd` (H5).
+      try {
+        await booking.book({ remedyId, booking: 'proposal', operation: SWEEP });
+      } catch (error: unknown) {
+        const refused = refusalOf(error);
+        if (refused === null) {
+          // Another path settled it between the two transactions (an acceptance); T029 logged it.
+          if (error instanceof DomainError && error.code === 'REMEDY_NOT_OPEN') return 'not_due';
+          throw error;
+        }
+        if (refused.cause === 'deadlock') return 'deadlocked';
+        log.warn(
+          {
+            remedyId,
+            sessionId: ids.sessionId,
+            constraint: refused.cause === 'overlap' ? refused.constraint : 'reservation',
+          },
+          'A make-up booking was refused',
+        );
+        return 'refused';
+      }
+      log.info({ ...ids, action: 'booked' }, 'A remedy was booked');
+      return 'booked';
     },
 
     bookAtChoiceEnd: async (remedyId) => {

@@ -147,6 +147,8 @@ async function eventKinds(sessionId: string): Promise<string[]> {
 }
 
 describe('the offer on Postgres (T028, FR-462, G1, C1, C3)', () => {
+  // T111 of specs/003-booking (DEC-84): the recitation Teacher-No-Show's remedy is `proposed`, a
+  // make-up only, never awaiting a refund's choice.
   it('offers nothing inside the dispute window, one remedy at its close with its row and event, and never a second', async () => {
     const confirmed = await confirmedWorld();
     const sessionId = await sessionNumbered(confirmed.enrollmentId, 4);
@@ -158,10 +160,10 @@ describe('the offer on Postgres (T028, FR-462, G1, C1, C3)', () => {
 
     const { offer } = offerAt(WINDOW_CLOSES);
     const offered = await database.$transaction((tx) => offer.offer(tx, sessionId));
-    expect(offered).toMatchObject({ status: 'awaiting_choice', proposedDate: '2026-12-17' });
+    expect(offered).toMatchObject({ status: 'proposed', proposedDate: '2026-12-17' });
     expect(await remedyOf(sessionId)).toEqual({
       id: offered?.remedyId,
-      status: 'awaiting_choice',
+      status: 'proposed',
       proposedDate: new Date('2026-12-17T00:00:00Z'),
       offeredAt: WINDOW_CLOSES,
       choiceClosesAt: new Date('2026-12-06T08:00:00Z'),
@@ -339,8 +341,9 @@ describe('advance-remedies over this file’s rows, run twice (T028, R-API-14, Q
     expect(third.reoffered).toEqual([]);
     expect(await eventKinds(owed)).toEqual(['remedy_offered']);
     expect(await eventKinds(agreed)).toEqual(['remedy_offered']);
+    // T111 (DEC-84): a frozen remedy is offered again a make-up only.
     expect(await remedyOf(frozenSession)).toMatchObject({
-      status: 'awaiting_choice',
+      status: 'proposed',
       offeredAt: at,
       choiceClosesAt: new Date('2026-12-27T10:00:00Z'),
     });

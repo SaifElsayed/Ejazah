@@ -1229,13 +1229,7 @@
       "frozen": "The make-up is on hold for now.",
       "proposal": "Proposed time",
       "proposeOther": "Propose another time",
-      "refund": "Choose a refund",
       "refundCase": "The refund of this session is with the administration, which will tell you its decision.",
-      "refundSheet": {
-        "confirm": "Confirm the refund",
-        "text": "No make-up session is booked; the refund of this session goes to the administration as a compensation case, and it will tell you its decision.",
-        "title": "A refund instead of a make-up"
-      },
       "row": {
         "awaitingChoice": "Make-up awaiting your choice",
         "booked": "Make-up booked",
@@ -1245,7 +1239,6 @@
         "refundCase": "Refund with the administration"
       },
       "text": {
-        "choice": "Accept the proposed make-up time, propose another of the teacher’s times, or choose a refund. If you have not chosen by the deadline, the proposed time is booked.",
         "counter": "Your proposal awaits the teacher’s answer: if they accept it, it is booked; if they decline it while you can still choose, you may accept the proposed time or propose another, and if they decline it after that, the proposed time is booked. If they do not answer in time, the session becomes a refund the administration handles.",
         "proposed": "Accept the proposed make-up time, or propose another of the teacher’s times. If you have not chosen by the deadline, the proposed time is booked."
       },

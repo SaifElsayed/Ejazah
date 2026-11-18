@@ -10,8 +10,9 @@
 //   with no `enrollment_events` row, every remaining session `cancelled_by_admin` naming one
 //   `teacher_suspended` case, the open remedy frozen; the completion held while the case is open;
 //   the frozen remedy's offer postponed while the teacher is suspended (N2), and made once reinstated;
-// - the reinstatement: each session the suspension cancelled offered (`awaiting_choice` on
-//   recitation, `proposed` on the ijazah track), one `remedy_offered` row each, the case `resolved`,
+// - the reinstatement: each session the suspension cancelled offered (`proposed` on either track,
+//   a make-up only since T111 of specs/003-booking, DEC-84), one `remedy_offered` row each, the case
+//   `resolved`,
 //   `compensation_ordered`, the note `reinstated`, by the administrator; with no free week refused
 //   `CONFLICT` `no_free_week`, nothing written, the teacher still suspended;
 // - each covered end of a paused enrollment (P1 a teacher's ban, P2 a revocation, P3 the student's
@@ -367,8 +368,9 @@ describe('the pause (T071, FR-504)', () => {
 });
 
 describe('the reinstatement (T071, FR-504; Q6 (a))', () => {
+  // T111 of specs/003-booking (DEC-84): a make-up only, on recitation too.
   it.each([
-    ['recitation', 'awaiting_choice'],
+    ['recitation', 'proposed'],
     ['ijazah_track', 'proposed'],
   ] as const)(
     'on %s offers each session the suspension cancelled %s and closes the case reinstated',

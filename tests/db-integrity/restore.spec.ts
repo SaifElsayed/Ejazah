@@ -7,8 +7,9 @@
 // - the restore: `confirmed`, `cancellation_reason` NULL, `confirmed_at` untouched, one `restored`
 //   event; the sessions still owed created after the last number from the first Thursday at least
 //   24 h after the restore, a session the closing cancelled kept; the make-up the case held offered
-//   again (`awaiting_choice`, `case_id` and `decided_at` cleared, one `remedy_offered` row with no
-//   case); the case `dismissed` `restored`; a repeated key answering the first result, writing
+//   again (`proposed`, a make-up only since T111 of specs/003-booking, DEC-84; `case_id` and
+//   `decided_at` cleared, one `remedy_offered` row with no case); the case `dismissed` `restored`; a
+//   repeated key answering the first result, writing
 //   nothing, and the same key with another input `CONFLICT`;
 // - causes on real rows, each writing nothing: `case_closed`, `slot_changed`, `slot_inactive`;
 // - SC-416: another student's hold on the slot and the restore, one winning and the other refused,
@@ -294,7 +295,7 @@ describe('sessions.restore (FR-455, SC-416)', () => {
       [7, 'scheduled'],
     ]);
     expect(after.remedies).toEqual([
-      { status: 'awaiting_choice', caseId: null, decidedAt: null, offeredAt: RESTORED },
+      { status: 'proposed', caseId: null, decidedAt: null, offeredAt: RESTORED },
     ]);
     expect(after.cases).toEqual([
       { reason: 'absence_termination', status: 'dismissed', resolutionNotes: 'restored' },

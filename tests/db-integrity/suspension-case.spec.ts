@@ -7,9 +7,10 @@
 // subscriber bound to its registry as `main.ts` binds it.
 //
 // - quickstart.md §6, suspend, reinstate and resolve: every session the suspension cancelled is
-//   offered in the resolve's transaction, `awaiting_choice` on recitation and `proposed` on the
-//   ijazah track, one `remedy_offered` row each, the case `resolved` with its closing; the
-//   enrollment does not complete while the case is open (T015), and would with it closed;
+//   offered in the resolve's transaction, `proposed` on either track (a make-up only, T111 of
+//   specs/003-booking, DEC-84), one `remedy_offered` row each, the case `resolved` with its
+//   closing; the enrollment does not complete while the case is open (T015), and would with it
+//   closed;
 // - refused `STUDENT_SUSPENDED` while the account is suspended, writing nothing; an account
 //   `verification_required` passes (Q4 (b));
 // - quickstart.md §6, suspend, reinstate, a make-up booked, and dismiss: the enrollment `cancelled`
@@ -273,8 +274,10 @@ async function codeOf(call: Promise<unknown>): Promise<string> {
 }
 
 describe('cleared: suspend, reinstate and resolve (quickstart.md §6; FR-486; R-313)', () => {
+  // T111 of specs/003-booking (DEC-84; FR-ADMIN-5 as amended): a cleared student is owed a make-up
+  // only, on recitation too.
   it.each([
-    ['recitation', 'awaiting_choice'],
+    ['recitation', 'proposed'],
     ['ijazah_track', 'proposed'],
   ] as const)(
     'on %s offers every session the suspension cancelled %s in the resolve’s transaction, and closes the case',

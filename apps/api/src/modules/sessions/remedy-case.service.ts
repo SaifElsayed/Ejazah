@@ -2,7 +2,8 @@
 // research R-311): the one hand-off of a remedy to a compensation case, on the caller's transaction.
 // A student's refund choice (`sessions.remedy.choose`, T031), a counter-proposal left unanswered and
 // a make-up the database refused on every attempt (`advance-remedies`, T032) all hand over here, and
-// T036 and T064 hand over as this does.
+// T036 and T064 hand over as this does. Since T111 of specs/003-booking (DEC-84), no refund is chosen
+// and an unanswered counter books the proposal: `makeup_refused` is the windows' only hand-off.
 //
 // WHAT EACH REASON HANDS OVER (data-model.md §3, the remedy table). `refund_choice`: an
 // `awaiting_choice` remedy. `counter_unanswered`: a `counter_proposed` one. `makeup_refused`: a
@@ -88,7 +89,10 @@ const HANDED_FROM: Readonly<Record<RemedyCaseReason, readonly RemedyStatus[]>> =
   admin_opened_for_student: ['awaiting_choice', 'proposed', 'counter_proposed', 'frozen'],
 };
 
-/** The reasons that make the remedy a refund; `makeup_refused` leaves its `kind` (Q6 (a)). */
+/**
+ * The reasons that make the remedy a refund; `makeup_refused` leaves its `kind` (Q6 (a)). Neither is
+ * handed over any more (T111), and both are kept for the cases already open.
+ */
 const MAKES_A_REFUND: ReadonlySet<RemedyCaseReason> = new Set([
   'refund_choice',
   'counter_unanswered',

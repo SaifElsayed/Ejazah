@@ -13,12 +13,14 @@
 //   - D1 at its boundary: `answerCounter`'s refusal and the sweep agree at `answerClosesAt`, from the
 //     row's A and never the setting.
 //   - the windows' ends through `advance-remedies`' run (`createRemedyAdvance` over
-//     `createRemedyWindows`): the worst case, a counter sent just before C, handed to its case at
-//     C + A; H5's booking, run twice (one booking); a refused proposal retried up to the last instant
+//     `createRemedyWindows`): the worst case, a counter sent just before C, released at C + A and
+//     the proposal booked (T111 of specs/003-booking, DEC-84: no `counter_unanswered` case any
+//     more); H5's booking, run twice (one booking); a refused proposal retried up to the last instant
 //     L before its start, each refusal one warn line, then handed to a `makeup_refused` case (kind
 //     `makeup`), error tracking told once; a retry refused over a hold or another remedy's
 //     reservation of either party.
-//   - the job as `worker.ts` builds it hands an unanswered counter over (the composition).
+//   - the job as `worker.ts` builds it releases an unanswered counter and books the proposal (the
+//     composition; T111).
 //
 // The clock is set per case (Q8's `clockTimestamp` stood in for, as T028's spec does) but for the
 // job's case, which reads the database's own. Committed rows, each case a world of its own; the
@@ -520,44 +522,52 @@ describe("a counter's acceptance the database refuses (T032; A3, A1, A7; FR-468)
 });
 
 describe('D1 at its boundary: answerCounter and the sweep agree at answerClosesAt, from the row (T032)', () => {
-  it('a millisecond before, the sweep leaves it; at answerClosesAt the answer is refused and the sweep hands it to a counter_unanswered case', async () => {
+  // T111 of specs/003-booking (DEC-84; FR-MAKEUP-3 as amended): at answerClosesAt the sweep releases
+  // the counter and books the system's proposal, inside the choice window too; no case is opened.
+  it('a millisecond before, the sweep leaves it; at answerClosesAt the answer is refused and the sweep releases the counter and books the proposal, no case (T111)', async () => {
     reset();
     const w = await world();
     await counterOn(w, AT);
     // AT + the row's 72 h; the setting says 1 h.
     const closes = new Date('2026-11-06T08:00:00.000Z');
     expect((await runAt(w, new Date('2026-11-06T07:59:59.999Z'))).handedOff).toEqual([]);
+    expect((await committed(w)).events).toEqual(['counter_proposed']);
     expect(await codeOf(answer(w, true, closes))).toBe('REMEDY_NOT_OPEN');
     expect((await committed(w)).events).toEqual(['counter_proposed']);
-    expect((await runAt(w, closes)).handedOff).toEqual([w.remedyId]);
+    expect((await runAt(w, closes)).handedOff).toEqual([]);
     expect(await committed(w)).toEqual({
       remedy: {
-        status: 'refund_case',
-        kind: 'refund',
+        status: 'booked',
+        kind: 'makeup',
         counter_slot_id: null,
         counter_proposed_at: null,
       },
-      events: ['counter_proposed', 'remedy_handed_to_case'],
-      makeups: [],
-      cases: ['counter_unanswered'],
+      events: ['counter_proposed', 'makeup_booked'],
+      makeups: ['2026-11-15T07:00'],
+      cases: [],
     });
-    expect(linesAt('info').at(-1)).toEqual({
-      remedyId: w.remedyId,
-      sessionId: w.sessionId,
-      enrollmentId: w.enrollmentId,
-      action: 'counter_unanswered',
-    });
+    const ids = { remedyId: w.remedyId, sessionId: w.sessionId, enrollmentId: w.enrollmentId };
+    expect(linesAt('info').slice(-2)).toEqual([
+      { ...ids, action: 'counter_unanswered' },
+      { ...ids, action: 'booked' },
+    ]);
   });
 
-  it('the worst case, a counter sent just before C: nothing booked at C, the case at C + A', async () => {
+  it('the worst case, a counter sent just before C: nothing booked at C, the counter released and the proposal booked at C + A, no case (T111)', async () => {
     reset();
     const w = await world();
     const sent = new Date('2026-11-08T07:59:59.000Z');
     await counterOn(w, sent);
     const atC = await runAt(w, new Date('2026-11-08T09:00:00.000Z'));
     expect([atC.booked, atC.handedOff]).toEqual([[], []]);
-    expect((await runAt(w, new Date(addHours(sent, 72)))).handedOff).toEqual([w.remedyId]);
-    expect((await committed(w)).cases).toEqual(['counter_unanswered']);
+    expect((await committed(w)).makeups).toEqual([]);
+    expect((await runAt(w, new Date(addHours(sent, 72)))).handedOff).toEqual([]);
+    expect(await committed(w)).toMatchObject({
+      remedy: { status: 'booked', counter_slot_id: null },
+      events: ['counter_proposed', 'makeup_booked'],
+      makeups: ['2026-11-15T07:00'],
+      cases: [],
+    });
   });
 });
 
@@ -668,7 +678,8 @@ describe('the choice window’s end: H5, and a refused proposal retried (T032; A
 });
 
 describe('advance-remedies as worker.ts builds it (T032, the composition)', () => {
-  it('hands a counter whose answer window has closed by the database’s clock to its case', async () => {
+  // T111 of specs/003-booking (DEC-84): no case; the proposal is booked.
+  it('releases a counter whose answer window has closed by the database’s clock and books the proposal, no case (T111)', async () => {
     reset();
     const now = new Date();
     const w = await world({
@@ -708,6 +719,11 @@ describe('advance-remedies as worker.ts builds it (T032, the composition)', () =
       },
     });
     await job.handle({});
-    expect((await committed(w)).cases).toEqual(['counter_unanswered']);
+    expect(await committed(w)).toMatchObject({
+      remedy: { status: 'booked', counter_slot_id: null },
+      events: ['makeup_booked'],
+      makeups: ['2040-01-01T07:00'],
+      cases: [],
+    });
   });
 });

@@ -764,7 +764,9 @@ describe('sessions.get: the remedy (T028)', () => {
     expect(trace.some((step) => step.startsWith('read slot'))).toBe(false);
   });
 
-  it('answers a remedy awaiting the choice: the proposal in the enrollment’s zone, the refund offered', async () => {
+  // T111 of specs/003-booking (DEC-84): an `awaiting_choice` row offered before the change shows no
+  // refund's choice any more.
+  it('answers a remedy awaiting the choice: the proposal in the enrollment’s zone, no refund offered (T111)', async () => {
     remedies.set(SESSION, offered({}));
     const answer = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
     expect(answer.remedy).toEqual({
@@ -778,7 +780,7 @@ describe('sessions.get: the remedy (T028)', () => {
         timezone: 'Africa/Cairo',
         startsAt: '2026-12-03T14:30:00Z',
       },
-      canChooseRefund: true,
+      canChooseRefund: false,
     });
     expect(trace).toContain(`read slot ${terms.slotId}`);
   });
