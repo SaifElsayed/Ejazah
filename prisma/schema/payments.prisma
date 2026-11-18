@@ -25,9 +25,9 @@ model Payment {
   // Settled to the teacher, `gross - fee` as reported.
   netPiasters             BigInt?        @map("net_piasters")
   // T104 (ADR 0025 D1, SRS DEC-80): the teacher's share rate read when the order was created, whole
-  // percent, and the share it gave (gross times the rate, rounded up, by `packages/money`), sent to
-  // the gateway as the split. NULL on an order created before the commission; both or neither, the
-  // share never above the gross (ERD section 15 rule 52).
+  // percent, and the share it gave (gross times the rate, rounded up, by `packages/money`), the split
+  // it asks for when a payee and a split integration exist. NULL on an order created before the
+  // commission; both or neither, the share never above the gross (ERD section 15 rule 52).
   teacherShareRatePercent Int?           @map("teacher_share_rate_percent") @db.SmallInt
   teacherSharePiasters    BigInt?        @map("teacher_share_piasters")
   // 003:T102 (ADR 0025 D3, SRS DEC-82): the order's refunded total, the sum of the refunds the
