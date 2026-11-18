@@ -663,3 +663,9 @@ export async function partyOfSession(
       session.studentUserId === userId ? session.teacherUserId : session.studentUserId,
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 005:T017 (FR-619, FR-622, FR-BOOK-8; research R-407): the `send-reminder` sweep's read, a page of
+// the scheduled sessions ending in a window, through ERD §14's partial index on scheduled sessions;
+// no lock (the sweep reads the committed instants, so a recomputed start is honoured).
+export { scheduledEndingWithin, type SessionToRemind } from './sessions.repository.js';
