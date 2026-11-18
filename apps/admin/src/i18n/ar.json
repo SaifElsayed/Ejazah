@@ -473,7 +473,8 @@
         "studentSuspended": "أُوقف الطالب، والقضية بانتظار المراجعة",
         "teacherEnded": "سُحب اعتماد المعلم أو حُظر أو حُذف حسابه",
         "teacherSuspended": "أُوقف المعلم، والاشتراك متوقف مؤقتًا حتى يعود",
-        "adminEnded": "أنهت الإدارة الاشتراك مباشرة"
+        "adminEnded": "أنهت الإدارة الاشتراك مباشرة",
+        "genderCorrection": "صُحّح الجنس المعلن لأحد الطرفين فانتهى الاشتراك"
       },
       "status": {
         "dismissed": "مرفوضة",
@@ -2772,7 +2773,8 @@
         "adminOpenedForStudent": "فتحتها الإدارة للطالب",
         "adminOpenedForTeacher": "فتحتها الإدارة للمعلم",
         "teacherSuspended": "إيقاف المعلم (الاشتراك متوقف مؤقتًا)",
-        "adminEnded": "إنهاء الإدارة الاشتراك"
+        "adminEnded": "إنهاء الإدارة الاشتراك",
+        "genderCorrection": "تصحيح الجنس المعلن"
       },
       "caseStatus": {
         "open": "مفتوحة",

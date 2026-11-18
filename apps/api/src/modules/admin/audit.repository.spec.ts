@@ -117,6 +117,19 @@ describe('latestStandingReasonOf over audit_logs (Q-C4 (a))', { tags: ['database
     expect(answer).toEqual({ action: 'teacher.reinstate', reason: 'ثان' });
   });
 
+  // 005:T015 of B47 (the owner's word of 2026-11-18): the fraud ban is a standing action, so the
+  // teacher's standing reason reads it (`ijazahRequests.get`, T007).
+  it('answers a fraud ban as the newest standing entry, with its reason', async () => {
+    const teacher = randomUUID();
+    const answer = await rolledBack(database, async (tx) => {
+      const adminId = await administrator(tx);
+      await entry(tx, adminId, 'teacher.suspend', 'user', teacher, 'أول');
+      await entry(tx, adminId, 'gender.fraud_banned', 'user', teacher, 'تزوير');
+      return latestStandingReasonOf(tx, teacher);
+    });
+    expect(answer).toEqual({ action: 'gender.fraud_banned', reason: 'تزوير' });
+  });
+
   it('answers null for a user with no standing entry', async () => {
     const answer = await rolledBack(database, async (tx) =>
       latestStandingReasonOf(tx, randomUUID()),

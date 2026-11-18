@@ -615,6 +615,8 @@ const STANDING_STATUSES_OF: Readonly<Record<string, ReadonlySet<string>>> = {
   'teacher.ban_lifted': new Set(['active']),
   'teacher.revocation_lifted': new Set(['active']),
   'user.require_identity': new Set(['verification_required']),
+  // 005:T015 of B47 (the owner's word of 2026-11-18): the fraud ban bans the teacher.
+  'gender.fraud_banned': new Set(['banned']),
 };
 
 /** `ijazahRequests` over certification's review, `get` with the guarded standing reason. */

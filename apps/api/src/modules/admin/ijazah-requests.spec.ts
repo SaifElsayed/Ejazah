@@ -85,6 +85,8 @@ describe("ijazahRequests.get's standing reason (FR-628, Q-C4 (a))", () => {
     // identity request is open (identity's standing.service.ts:9), and `user.require_identity` sets it.
     ['user.require_identity', 'verification_required'],
     ['teacher.reinstate', 'verification_required'],
+    // 005:T015 of B47 (the owner's word of 2026-11-18): a fraud ban, its entry on the teacher.
+    ['gender.fraud_banned', 'banned'],
   ] as const)('answers the reason of %s while the teacher is %s', async (action, status) => {
     const { services, lines, read } = composed(status, { action, reason: 'سبب القيد' });
     const answer = await services.get(TX, ADMIN, { requestId: REQUEST });

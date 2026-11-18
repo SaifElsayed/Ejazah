@@ -37,6 +37,8 @@ export const REASON: Readonly<Record<Reason, MessageKey>> = {
   teacher_suspended: 'admin.cases.reason.teacherSuspended',
   // B42c, T083 (Q-R7 (a)): T082's case of an administrator's direct end of an enrollment.
   admin_ended: 'admin.cases.reason.adminEnded',
+  // 005:T014 of B47 (FR-616): a gender correction's case, one per enrollment it ended.
+  gender_correction: 'admin.cases.reason.genderCorrection',
 };
 
 /** What a row is: its reason's words, or a complaint by its kind (it has no reason). */
