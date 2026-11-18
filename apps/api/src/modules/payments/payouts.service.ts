@@ -154,6 +154,7 @@ export function monthStartOf(now: Date): Date {
 
 /** The last characters of the gateway's recipient reference, the rest hidden (Q-B1-8 (a)). */
 export function maskedReference(reference: string): string {
+  // The visible tail is as long as the mask on purpose: the owner's last 4 (Q-B1-8 (a)), not a trick.
   return `${MASK}${reference.slice(-MASK.length)}`;
 }
 
