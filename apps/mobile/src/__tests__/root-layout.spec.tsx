@@ -12,13 +12,14 @@
 // T138: a launch with no connection says it cannot load instead of waiting on a blank screen.
 // T078: every navigator draws its screens' cards and its container in the scheme's background.
 // 003:T109 (SRS DEC-87; Q-B3 (a)): «نسخة تجريبية» over every screen while the server's payment mode
-// is `test`, none in `live`.
+// is `test`, none in `live`. 003:T115: the strip reads the mode again when the app comes back to
+// the foreground and on reconnect, so a server moved to `live` takes it away from a running app.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { onlineManager, useQueryClient } from '@tanstack/react-query';
+import { focusManager, onlineManager, useQueryClient } from '@tanstack/react-query';
 import { DefaultTheme, router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
-import { AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
+import { AppState, type AppStateStatus, BackHandler, StyleSheet, Text, View } from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
@@ -63,9 +64,22 @@ const publicConfigIn = (paymentMode: 'test' | 'live') => ({
   paymentMode,
 });
 let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
+// 003:T115: `publicConfig()` keeps its first answer for the launch, as lib/client.ts does (a
+// failure is not kept), while `platform.publicConfig` asks the server each time; both answer
+// with `mockPublicConfig`.
 jest.mock('../lib/client', () => ({
   ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
-  createApiClient: () => ({ api: mockApi, publicConfig: () => mockPublicConfig() }),
+  createApiClient: () => {
+    let kept: ReturnType<typeof mockPublicConfig> | null = null;
+    return {
+      api: { ...mockApi, platform: { publicConfig: { query: () => mockPublicConfig() } } },
+      publicConfig: () =>
+        (kept ??= mockPublicConfig().catch((error: unknown) => {
+          kept = null;
+          throw error;
+        })),
+    };
+  },
 }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
@@ -191,6 +205,101 @@ describe('the test-mode strip (003:T109; SRS DEC-87, Q-B3 (a))', () => {
       await mockPublicConfig.mock.results[0]?.value;
     });
     expect(screen.queryByText(ar('money.testMode.label'))).toBeNull();
+  });
+});
+
+describe('the test-mode strip reads the mode again (003:T115; PR #144 r1, finding 3 (b))', () => {
+  type Listener = (status: AppStateStatus) => void;
+  // React Native's Jest mock of AppState is shared by every case; it is swapped for this block's
+  // and put back, never reset (a reset one would hand the next case no subscription).
+  const addEventListener = AppState.addEventListener;
+  let appStateListeners: Listener[];
+
+  beforeEach(() => {
+    appStateListeners = [];
+    Object.assign(AppState, {
+      addEventListener: (_type: string, listener: Listener) => {
+        appStateListeners.push(listener);
+        return { remove: () => undefined };
+      },
+    });
+  });
+  afterEach(() => {
+    Object.assign(AppState, { addEventListener });
+    // The layout's `followAppState` heard the same changes; the next case starts with no focus set.
+    focusManager.setFocused(undefined);
+  });
+
+  /** Reports a change of the app's state, as AppState does, to every listener added since. */
+  const appStateBecomes = async (status: AppStateStatus) => {
+    await act(async () => {
+      for (const listener of appStateListeners) listener(status);
+    });
+  };
+
+  /** Renders Welcome signed out and waits until the strip's first answer has rendered. */
+  const launch = async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await waitFor(() => expect(mockPublicConfig).toHaveBeenCalled());
+    await act(async () => {
+      await mockPublicConfig.mock.results[0]?.value;
+    });
+  };
+
+  it('takes the strip away once the server says live and the app comes back to the foreground', async () => {
+    mockPublicConfig.mockResolvedValue(publicConfigIn('test'));
+    await launch();
+    expect(screen.getByText(ar('money.testMode.label'))).toBeTruthy();
+    mockPublicConfig.mockResolvedValue(publicConfigIn('live'));
+    await appStateBecomes('background');
+    await appStateBecomes('active');
+    await waitFor(() => expect(screen.queryByText(ar('money.testMode.label'))).toBeNull());
+  });
+
+  it('draws the strip once the server says test and the app comes back to the foreground', async () => {
+    await launch();
+    expect(screen.queryByText(ar('money.testMode.label'))).toBeNull();
+    mockPublicConfig.mockResolvedValue(publicConfigIn('test'));
+    await appStateBecomes('active');
+    expect(await screen.findByText(ar('money.testMode.label'))).toBeTruthy();
+  });
+
+  it('asks nothing while the app goes to the background or the switcher', async () => {
+    mockPublicConfig.mockResolvedValue(publicConfigIn('test'));
+    await launch();
+    const asked = mockPublicConfig.mock.calls.length;
+    await appStateBecomes('inactive');
+    await appStateBecomes('background');
+    expect(mockPublicConfig.mock.calls.length).toBe(asked);
+  });
+
+  it('takes the strip away once the server says live and the connection returns', async () => {
+    mockPublicConfig.mockResolvedValue(publicConfigIn('test'));
+    await launch();
+    expect(screen.getByText(ar('money.testMode.label'))).toBeTruthy();
+    mockPublicConfig.mockResolvedValue(publicConfigIn('live'));
+    await act(async () => {
+      onlineManager.setOnline(false);
+    });
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+    await waitFor(() => expect(screen.queryByText(ar('money.testMode.label'))).toBeNull());
+  });
+
+  it('keeps the strip when a read on the way back fails', async () => {
+    mockPublicConfig.mockResolvedValue(publicConfigIn('test'));
+    await launch();
+    const asked = mockPublicConfig.mock.calls.length;
+    mockPublicConfig.mockRejectedValue(new Error('no answer'));
+    await appStateBecomes('active');
+    await waitFor(() => expect(mockPublicConfig.mock.calls.length).toBeGreaterThan(asked));
+    await act(async () => {
+      await Promise.allSettled([mockPublicConfig.mock.results.at(-1)?.value]);
+    });
+    expect(screen.getByText(ar('money.testMode.label'))).toBeTruthy();
   });
 });
 
