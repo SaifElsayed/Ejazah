@@ -34,7 +34,7 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` |
-| PAYMENTS | `payments` | `payments` · `payment_events` |
+| PAYMENTS | `payments` | `payments` · `payment_events` · `teacher_share_releases` |
 | SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` · `session_events` · `provider_outages` |
 | CHAT | `chat` | `chat_messages` |
 | CERTIFICATION | `certification` | `ijazahs` · `ijazah_bars` |
@@ -559,6 +559,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | teacher_share_piasters | bigint, nullable | The teacher's share it gave: the gross times the rate, rounded up to the piaster by `packages/money`'s `teacherShare`, sent to the gateway as the split (ADR 0025 D1; T104; changelog row 46). From 0 to the gross (§15 rule 52) |
 | refunded_piasters | bigint, NOT NULL, default 0 | The order's refunded total: the sum, by `packages/money`, of the refunds the gateway's signed child events reported, each added under the order's lock while the order is `paid`; a total past the gross is refused and reported, nothing recorded (SRS DEC-82; ADR 0025 D3; T102; changelog row 56). From 0 to the gross (§15 rule 61) |
 | refund_reported_at | timestamptz, nullable | When the gateway first flagged a refund on the original payment (`refund_reported`), which reports no amount; set once, adds no money and moves nothing, so an administrator sees a refund whose child event never came (SRS DEC-82; T102, Q-2 (a); changelog row 56) |
+| half_release_rate_percent | smallint, nullable | The percent of the teacher's share released at half the sessions, read from the setting `ijazah_half_release_percent` when an `ijazah_track` order is created and kept on it, so a later change reaches new orders only; NULL on every other order (SRS DEC-81; ADR 0025 D2, D6; T105, Q-4 (a); changelog row 57). NULL or 0 to 100 (§15 rule 64) |
 | currency | char(3) | |
 | status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10). *(Amended 2026-11-18, T102: an order becomes `refunded` when its `refunded_piasters` reaches the gross; a partial refund leaves it `paid`, DEC-82.)* |
 | expires_at | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry and by FR-BOOK-12's "still payable" (v1.12) |
@@ -578,6 +579,22 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | signature_verified_at | timestamptz | Set by the signature guard before the row is written (R-MONEY-9). A row cannot exist for an unverified event |
 | payload_hash | text | Hash of the raw body, for audit; the body itself is never stored (R-SEC-2) |
 | received_at | timestamptz | |
+
+### `teacher_share_releases`
+
+One release of a teacher's share per enrollment and milestone (SRS DEC-81, DEC-89, FR-PAYG-7 as amended; ADR 0025 D2; T105; changelog row 57): a record of what an administrator is to tell the gateway to release, and of the mark that it was done, never a balance. Written by the `release-teacher-shares` sweep when the release falls due, its amount computed by `packages/money` from the order's teacher share and the sessions' outcomes read through sessions' entry. An administrator executes the release in the gateway's dashboard and marks it here, once; the platform's code makes no release call (N1). A release not yet due is computed on read, never stored.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| enrollment_id | FK → enrollments | Unique with `milestone` (§15 rule 62) |
+| teacher_user_id | FK → users | The enrollment's teacher, for the per-teacher lists; indexed |
+| milestone | enum recitation_end · ijazah_half · ijazah_end · teacher_dropout · student_complaint_close | `share_release_milestone`: a recitation package's end; on the ijazah track, half the sessions delivered and the end; a recitation package closed on the teacher's dropout (`teacher_ended`, `absence_termination`); a package closed on a complaint against the student (`student_fault_confirmed`, `student_banned`) (Q-5 (a)) |
+| amount_piasters | bigint | Above zero (§15 rule 62) |
+| due_at | timestamptz | When it fell due by its milestone's rule, not when the sweep wrote it |
+| created_at | timestamptz | |
+| marked_at | timestamptz, nullable | When an administrator marked it executed in the gateway's dashboard; set once, by a conditional update. Both or neither with `marked_by_admin_id` (§15 rule 63) |
+| marked_by_admin_id | FK → admin_users, nullable | Who marked it; indexed |
 
 ## 8. Certification
 
@@ -902,6 +919,7 @@ erDiagram
 erDiagram
     enrollments ||--o{ payments : "gateway orders"
     payments |o--o{ payment_events : "signed events"
+    enrollments ||--o{ teacher_share_releases : "releases of the teacher's share"
     payments |o--o{ enrollment_events : "confirmed or failed by"
     users ||--o| teacher_profiles : "payout readiness on"
 ```
@@ -1053,11 +1071,17 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 61. `payments`: `refunded_piasters >= 0 AND refunded_piasters <= gross_piasters` — check `payments_refunded_check`: the refunded total from 0 to the order's gross, so a refund that would pass it cannot be recorded even if the service's refusal were skipped (SRS DEC-82; T102; changelog row 56).
 
+62. `teacher_share_releases`: one release per enrollment and milestone — unique `teacher_share_releases_enrollment_id_milestone_key` on `(enrollment_id, milestone)`, so two sweeps at once write one row; and `amount_piasters > 0` — check `teacher_share_releases_amount_check` (SRS DEC-81; T105; changelog row 57).
+
+63. `teacher_share_releases`: `(marked_at IS NULL) = (marked_by_admin_id IS NULL)` — check `teacher_share_releases_marked_check`: the mark's instant and its administrator set together (SRS DEC-89; T105; changelog row 57).
+
+64. `payments`: `half_release_rate_percent IS NULL OR half_release_rate_percent BETWEEN 0 AND 100` — check `payments_half_release_rate_check` (SRS DEC-81; T105; changelog row 57). That it is set only on an `ijazah_track` order spans `enrollments`, so no check can say it: the checkout holds it.
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 46 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 47 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -1410,3 +1434,10 @@ Amended on 2026-11-18 by T102 of `specs/003-booking/tasks.md` (B-M2), on the own
 | # | Change | Migration |
 |---|---|---|
 | 56 | §7 `payments.refunded_piasters` (bigint, NOT NULL, default 0) and `payments.refund_reported_at` (timestamptz, nullable), and §15 rule 61, check `payments_refunded_check`: the order's refunded total within 0 and the gross, the order `refunded` when it reaches the gross, an order already `refunded` taking its gross as its total in the migration; §7 `payment_events.event_type` gains `refund_reported` at its end, a refund flagged on the original payment with no amount (SRS FR-PAYG-7 as amended) | `20261118142403_payments_refunded_total` (B-M2) |
+
+Amended on 2026-11-18 by T105 of `specs/003-booking/tasks.md` (B-M2), on the owner's money rules of 2026-11-16/17 (ADR 0025 D2, SRS DEC-81, DEC-89: the teacher's share held at the gateway and released at milestones, each release listed and marked done by an administrator) and the owner's decisions of 2026-11-18 on B-M2's conflict check (Q-4 (a), Q-5 (a)); `C:\Users\amrkn\Documents\ejazah-tools\track2\owner-words.md`. One table is added: 47 tables.
+
+| # | Change | Migration |
+|---|---|---|
+| 57 | §7 new table `teacher_share_releases` and enum `share_release_milestone` (recitation_end · ijazah_half · ijazah_end · teacher_dropout · student_complaint_close), its foreign keys' plain indexes (`teacher_user_id`, `marked_by_admin_id`; the unique serves `enrollment_id`), and §15 rules 62 and 63; §7 `payments.half_release_rate_percent` (smallint, nullable; set only on an `ijazah_track` order) and §15 rule 64, check `payments_half_release_rate_check`; §1 names the table under `payments` (SRS FR-PAYG-7 as amended) | `20261118153422_teacher_share_releases` (B-M2) |
+| 58 | §12 `settings`: `ijazah_half_release_percent` (25), the percent of the teacher's share released at half the sessions on the ijazah track, read when an `ijazah_track` order is created and kept on it (SRS §3.14, DEC-81) | none (the seed) |

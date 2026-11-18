@@ -21,7 +21,10 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // DEC-88) names `average`: the package editor's average price per session of other teachers'
 // packages, for display only. 003:T102 (SRS DEC-82, ADR 0025 D3; the owner's «موافق (أ)» of
 // 2026-11-18) names `refundedTotal`: an order's refunded total after one more refund, refused past
-// the order's amount.
+// the order's amount. 003:T105 (ADR 0025 D2, SRS DEC-81, DEC-89) names `sessionValues` (a session's
+// value, the last taking the remainder), `shareOfSessions`, `shareLeft` and `sumOf`: the releases of
+// the teacher's share at milestones and the payouts page's totals, records of what the gateway holds
+// and releases, never a balance.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -204,6 +207,78 @@ export function refundedTotal(
   if (sum > BigInt(order_piasters)) {
     throw new RefundPastGrossError(total_piasters, refund_piasters, order_piasters);
   }
+  return piasters(Number(sum));
+}
+
+/**
+ * One value per session of `total_piasters` over `sessionCount` sessions (003:T105, ADR 0025 D2 and
+ * D4: «a session's value is the gross ÷ its sessions, the last taking the remainder»): each the
+ * total ÷ the count, rounded down, and the last one also the remainder, so the values sum back to the
+ * total exactly. 1000 over 3 is 333, 333 and 334.
+ *
+ * Exact in `bigint`, as `teacherShare` is. A count below one or not whole is refused, as
+ * `perSession` refuses it (ERD §15 rule 36).
+ */
+export function sessionValues(total_piasters: Piasters, sessionCount: number): readonly Piasters[] {
+  if (!Number.isSafeInteger(sessionCount) || sessionCount < 1) {
+    throw new RangeError(
+      `sessionValues: the session count must be a whole number of at least one — received ${String(sessionCount)}`,
+    );
+  }
+  const total = BigInt(total_piasters);
+  const count = BigInt(sessionCount);
+  const each_piasters = piasters(Number(total / count));
+  const last_piasters = piasters(Number(total / count + (total % count)));
+  return Array.from({ length: sessionCount }, (_, index) =>
+    index === sessionCount - 1 ? last_piasters : each_piasters,
+  );
+}
+
+/**
+ * The share of the sessions named by `sequenceNumbers` (003:T105, ADR 0025 D2): the sum of their
+ * values, `sessionValues(share_piasters, sessionCount)` by sequence number (1 the first). A number
+ * named twice counts once. A number outside 1 to the count has no value, as written: a make-up past
+ * the package's count is valued nothing until the owner's answer to Q-B1-4.
+ */
+export function shareOfSessions(
+  share_piasters: Piasters,
+  sessionCount: number,
+  sequenceNumbers: readonly number[],
+): Piasters {
+  const values = sessionValues(share_piasters, sessionCount);
+  const named = [...new Set(sequenceNumbers)].flatMap((sequence) => {
+    const value_piasters = Number.isSafeInteger(sequence) ? values[sequence - 1] : undefined;
+    return value_piasters === undefined ? [] : [value_piasters];
+  });
+  return sumOf(named);
+}
+
+/**
+ * What is left of a share (003:T105, ADR 0025 D2: the ijazah end, «the rest»): the share less every
+ * release already made and less `takenOff_piasters`, never below nothing. The caller passes what it
+ * takes off: nothing as T105's table is written, the teacher's share of a refund if the owner answers
+ * Q-B1-1 (a).
+ */
+export function shareLeft(
+  share_piasters: Piasters,
+  released_piasters: readonly Piasters[],
+  takenOff_piasters: Piasters,
+): Piasters {
+  const left =
+    BigInt(share_piasters) - BigInt(sumOf(released_piasters)) - BigInt(takenOff_piasters);
+  return piasters(Number(left > 0n ? left : 0n));
+}
+
+/**
+ * The sum of `amounts_piasters` (003:T105: the payouts page's totals), nothing for none. Exact in
+ * `bigint`; a sum past the safe range is refused by the constructor (`MoneyError`), never rounded
+ * into range: a `bigint` past `Number.MAX_SAFE_INTEGER` converts to a number that is not safe.
+ */
+export function sumOf(amounts_piasters: readonly Piasters[]): Piasters {
+  const sum = amounts_piasters.reduce(
+    (total, amount_piasters) => total + BigInt(amount_piasters),
+    0n,
+  );
   return piasters(Number(sum));
 }
 

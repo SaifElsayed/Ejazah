@@ -57,6 +57,9 @@ export {
   type DaySession,
   teacherSessionsBetween,
 } from './sessions.repository.js';
+// 003:T105 (Q-B1-4 (a)): each make-up's original, beside `sessionsOfEnrollments`, for payments'
+// valuing of a delivered make-up as the session it makes up.
+export { makeupOriginsAmong } from './sessions.repository.js';
 export { type SessionProgress, sessionProgress } from './progress.js';
 
 /**

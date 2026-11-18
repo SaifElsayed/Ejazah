@@ -12,6 +12,10 @@ import {
   piasters,
   RefundPastGrossError,
   refundedTotal,
+  sessionValues,
+  shareLeft,
+  shareOfSessions,
+  sumOf,
   teacherShare,
   toPlainNumber,
   type Piasters,
@@ -264,6 +268,97 @@ describe('refundedTotal (003:T102, ADR 0025 D3, SRS DEC-82)', () => {
     expect(() => refundedTotal(top_piasters, piasters(1), top_piasters)).toThrow(
       RefundPastGrossError,
     );
+  });
+});
+
+const plain = (amounts: readonly Piasters[]): number[] => amounts.map(toPlainNumber);
+
+describe('sessionValues (003:T105, ADR 0025 D2, D4)', () => {
+  it('gives each session the total ÷ the count, the last taking the remainder', () => {
+    expect(plain(sessionValues(piasters(1_000), 3))).toEqual([333, 333, 334]);
+    expect(plain(sessionValues(piasters(10), 4))).toEqual([2, 2, 2, 4]);
+    expect(plain(sessionValues(piasters(7_000), 10))).toEqual([
+      700, 700, 700, 700, 700, 700, 700, 700, 700, 700,
+    ]);
+  });
+
+  it('gives one session the whole total, and none of nothing', () => {
+    expect(plain(sessionValues(piasters(25_000), 1))).toEqual([25_000]);
+    expect(plain(sessionValues(piasters(0), 2))).toEqual([0, 0]);
+  });
+
+  it('sums back to the total exactly, at the top of the safe range too', () => {
+    for (const [total, count] of [
+      [1_001, 7],
+      [Number.MAX_SAFE_INTEGER, 52],
+      [Number.MAX_SAFE_INTEGER, 3],
+    ] as const) {
+      const values = sessionValues(piasters(total), count);
+      expect(values).toHaveLength(count);
+      expect(values.reduce((sum, value_piasters) => sum + BigInt(value_piasters), 0n)).toBe(
+        BigInt(total),
+      );
+    }
+  });
+
+  it('refuses a count below one or not whole (ERD §15 rule 36)', () => {
+    for (const count of [0, -1, 1.5, Number.NaN]) {
+      expect(() => sessionValues(piasters(100), count)).toThrow(RangeError);
+      expect(() => sessionValues(piasters(100), count)).toThrow(/sessionValues/);
+    }
+  });
+});
+
+describe('shareOfSessions (003:T105, ADR 0025 D2)', () => {
+  it('sums the values of the sessions named by their sequence numbers', () => {
+    expect(toPlainNumber(shareOfSessions(piasters(1_000), 3, [1, 2]))).toBe(666);
+    expect(toPlainNumber(shareOfSessions(piasters(1_000), 3, [3]))).toBe(334);
+    expect(toPlainNumber(shareOfSessions(piasters(1_000), 3, [1, 2, 3]))).toBe(1_000);
+  });
+
+  it('counts a sequence number named twice once', () => {
+    expect(toPlainNumber(shareOfSessions(piasters(1_000), 3, [3, 3]))).toBe(334);
+  });
+
+  it('gives nothing for no session', () => {
+    expect(toPlainNumber(shareOfSessions(piasters(1_000), 3, []))).toBe(0);
+  });
+
+  it('gives no value to a sequence number past the count (as written; Q-B1-4)', () => {
+    expect(toPlainNumber(shareOfSessions(piasters(7_000), 10, [11]))).toBe(0);
+    expect(toPlainNumber(shareOfSessions(piasters(7_000), 10, [1, 11, 0]))).toBe(700);
+  });
+});
+
+describe('shareLeft (003:T105, ADR 0025 D2)', () => {
+  it('is the share less what was released (the ijazah end as written)', () => {
+    expect(toPlainNumber(shareLeft(piasters(7_000), [piasters(1_750)], piasters(0)))).toBe(5_250);
+  });
+
+  it('is the whole share when nothing was released or taken off (the recitation end)', () => {
+    expect(toPlainNumber(shareLeft(piasters(7_000), [], piasters(0)))).toBe(7_000);
+  });
+
+  it('takes off what it is given too (Q-B1-1 (a): the teacher’s share of a refund)', () => {
+    expect(toPlainNumber(shareLeft(piasters(7_000), [piasters(1_750)], piasters(701)))).toBe(4_549);
+  });
+
+  it('never goes below nothing', () => {
+    expect(toPlainNumber(shareLeft(piasters(7_000), [piasters(7_000)], piasters(701)))).toBe(0);
+    expect(
+      toPlainNumber(shareLeft(piasters(7_000), [piasters(5_000), piasters(5_000)], piasters(0))),
+    ).toBe(0);
+  });
+});
+
+describe('sumOf (003:T105: the payouts page’s totals)', () => {
+  it('adds the amounts, and none is nothing', () => {
+    expect(toPlainNumber(sumOf([piasters(1), piasters(2), piasters(3)]))).toBe(6);
+    expect(toPlainNumber(sumOf([]))).toBe(0);
+  });
+
+  it('refuses a sum past the safe range rather than rounding it', () => {
+    expect(() => sumOf([piasters(Number.MAX_SAFE_INTEGER), piasters(1)])).toThrow(MoneyError);
   });
 });
 

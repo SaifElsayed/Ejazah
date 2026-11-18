@@ -123,6 +123,8 @@ export function surfaceOf(
     reports: unusedAdminServices.reports,
     // 005:T013 to T015 (B47): the gender flags have their own router spec (`admin/gender-flags.router.spec.ts`).
     genderFlags: unusedAdminServices.genderFlags,
+    // 003:T105 (rule d): the payouts have their own router spec (`payments/payouts-admin.router.spec.ts`).
+    payouts: unusedAdminServices.payouts,
   };
   const administration = {
     transactions: transactionsOver(database),

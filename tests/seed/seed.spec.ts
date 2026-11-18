@@ -110,6 +110,8 @@ const SETTINGS: Record<string, unknown> = {
   teacher_share_percent: 70,
   // 003:T113 (rule d).
   price_average_min_teachers: 3,
+  // 003:T105 (ADR 0025 D2, SRS DEC-81, §3.14): the ijazah track's half, percent of the teacher's share.
+  ijazah_half_release_percent: 25,
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -331,8 +333,8 @@ describe('the seed (T074)', () => {
           AND table_name <> '_prisma_migrations'`,
     );
     const others = rows.map((row) => row.table_name).filter((name) => !SEEDED_TABLES.has(name));
-    // 46 tables (T003, T094, T097, Phase 2's T004, Phase 3's T001, Phase 4's T001) less the three seeded ones.
-    expect(others).toHaveLength(43);
+    // 47 tables (T003, T094, T097, Phase 2's T004, Phase 3's T001, Phase 4's T001, 003:T105) less the three seeded ones.
+    expect(others).toHaveLength(44);
     for (const table of others) {
       const { rows: present } = await db.query(
         `SELECT 1 FROM ${pg.escapeIdentifier(table)} LIMIT 1`,

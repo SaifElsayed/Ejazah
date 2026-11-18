@@ -103,6 +103,8 @@ model Enrollment {
   // back-relations only.
   ijazahRequests IjazahRequest[]
   userReports    UserReport[]
+  // 003:T105: payments' releases of the teacher's share, a back-relation only.
+  teacherShareReleases TeacherShareRelease[]
   review        Review?
   disputes      Dispute[]
   events        EnrollmentEvent[]

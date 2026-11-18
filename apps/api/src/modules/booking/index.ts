@@ -315,6 +315,9 @@ export {
   type OrderEnrollmentParty,
   orderEnrollmentPartiesAmong,
 } from './order-enrollments.service.js';
+// 003:T105 (Q-B1-6 (a), the owner's answer of 2026-11-18): the same read of some enrollments in one
+// statement (their parties, status, track and count), for payments' releases of the teacher's share.
+export { enrollmentsAmong, type OrderEnrollmentRow } from './order-enrollments.repository.js';
 /**
  * T070 of specs/004-sessions (FR-503; SRS FR-CANCEL-9, DEC-69; contracts/admin-surface.md,
  * `enrollments.releaseSlot`): the administrator surface's `enrollments` namespace, mounted by

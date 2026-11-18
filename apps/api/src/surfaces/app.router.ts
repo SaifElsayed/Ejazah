@@ -45,6 +45,8 @@ import {
   teacherProfileRouter,
 } from '../modules/identity/index.js';
 import { checkoutRouter } from '../modules/payments/index.js';
+// 003:T105: payments' `teacher.dues`, the teacher's «مستحقاتي».
+import { teacherDuesRouter } from '../modules/payments/index.js';
 import { sessionsRouter } from '../modules/sessions/index.js';
 import {
   applicationRouter,
@@ -67,6 +69,8 @@ export const appRouter = createAppRouter({
   teacher: createAppRouter({
     application: applicationRouter,
     credentials: credentialsRouter,
+    // 003:T105: the teacher's own releases, held, due and paid, and his share of each refund.
+    dues: teacherDuesRouter,
     // T006 of specs/005-certification: the ijazah request's preview, send and read.
     ijazahRequests: ijazahRequestsRouter,
     payout: payoutRouter,

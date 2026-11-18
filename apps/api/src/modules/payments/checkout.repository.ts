@@ -74,6 +74,11 @@ export interface NewOrder {
   /** T104: the rate read when the order was created, and the share it gave (ADR 0025 D1). */
   readonly teacherShareRatePercent: number;
   readonly teacherShare_piasters: Piasters;
+  /**
+   * 003:T105 (ADR 0025 D2, D6): the ijazah half's percent read when an `ijazah_track` order was
+   * created; null on every other order (ERD §15 rule 64).
+   */
+  readonly halfReleaseRatePercent: number | null;
 }
 
 /** Writes the order. The caller holds its enrollment's lock. */

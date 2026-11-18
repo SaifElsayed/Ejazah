@@ -67,6 +67,8 @@ const [
   { copyOf },
   // T008 of specs/005-certification: the certificate's rendering.
   { certificateRenderSteps, renderCertificate },
+  // 003:T105 (track 2, B-M2): the due sweep of the releases of the teachers' shares.
+  { releaseTeacherShares },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -109,6 +111,8 @@ const [
   import('./modules/notifications/index.js'),
   import('./platform/web/copy.js'),
   import('./jobs/render-certificate.js'),
+  // 003:T105 (track 2, B-M2).
+  import('./jobs/release-teacher-shares.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -282,6 +286,11 @@ const jobs: readonly Job[] = [
     typstBin: config.TYPST_BIN,
     log,
   }),
+  // 003:T105 (track 2, B-M2; ADR 0025 D2, SRS DEC-81): the releases of the teachers' shares, hourly at
+  // minute 35 (close-slot-holds' schedule): each release due by its milestone written once (rule 62),
+  // one info line of ids and the milestone. ⚠️ automatic: it records a release as due for an
+  // administrator to execute in the gateway's dashboard; it moves no money and calls no gateway (N1).
+  releaseTeacherShares({ database, settings, log }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);

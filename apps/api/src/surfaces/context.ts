@@ -216,6 +216,8 @@ import type { IdentityServices } from '../modules/identity/index.js';
 import type { AdminReports, ModerationServices } from '../modules/moderation/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
+// 003:T105: the teacher's «مستحقاتي» and the administrators' «تحويلات المعلمين», payments'.
+import type { AdminPayouts, TeacherDues } from '../modules/payments/index.js';
 import type { SessionsServices } from '../modules/sessions/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 
@@ -365,6 +367,12 @@ export interface AppServices {
    * once by `main.ts` over the `Pairings` it binds to sessions' and booking's entries.
    */
   readonly moderation: ModerationServices;
+  /**
+   * 003:T105 (SRS DEC-89): `teacher.dues.get`, the teacher's own releases, payments' read on a
+   * transaction of its own, which `main.ts` always sets; a surface built without it (the specs'
+   * fixtures) leaves it out, and the procedure then fails closed (003:T109's `paymentMode` precedent).
+   */
+  readonly teacherDues?: TeacherDues;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -944,6 +952,11 @@ export interface AdminSurfaceServices {
    * reports, the same moderation service as `AppServices.moderation`, on the kind's transaction.
    */
   readonly reports: AdminReports;
+  /**
+   * 003:T105 (SRS DEC-89): `payouts.*`, the releases of the teachers' shares, their detail and the
+   * mark, payments' on the kind's transaction.
+   */
+  readonly payouts: AdminPayouts;
   /**
    * 005:T013 to T015 (B47; FR-614 to FR-617; R-409; Q-G1 (a)): the administrators' gender flags,
    * the admin module's decisions over moderation's flag rows, on the kind's transaction.

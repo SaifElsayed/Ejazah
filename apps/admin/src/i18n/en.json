@@ -1743,6 +1743,11 @@
       "title": "Ijazahs"
     },
     "money": {
+      "audit": {
+        "payoutReleaseMarked": "Mark a teacher's release paid",
+        "payoutsListed": "View teacher payouts",
+        "payoutsViewed": "View a teacher's payouts"
+      },
       "testMode": "Test version"
     },
     "mfa": {

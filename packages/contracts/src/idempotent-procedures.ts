@@ -92,6 +92,8 @@ export const idempotentProcedures = [
   'genderFlags.correct',
   // 005:T015 (admin-surface.md, `genderFlags.fraudBan`): on the kind's transaction (runOn).
   'genderFlags.fraudBan',
+  // 003:T105: the administrator's mark that a release of a teacher's share was executed.
+  'payouts.mark',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

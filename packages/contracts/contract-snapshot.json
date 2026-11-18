@@ -70,6 +70,14 @@
         "teacher_no_show",
         "under_threshold"
       ],
+      "shareReleaseMilestone": [
+        "ijazah_end",
+        "ijazah_half",
+        "recitation_end",
+        "student_complaint_close",
+        "teacher_dropout"
+      ],
+      "shareReleaseState": ["due", "held", "paid"],
       "signInMethod": ["apple", "email", "google"],
       "slotState": ["booked", "disabled", "free"],
       "teacherApplicationStatus": [
@@ -177,6 +185,7 @@
         "paid",
         "recipient_rejected",
         "recipient_verified",
+        "refund_reported",
         "refunded"
       ],
       "PaymentGateway": ["fake", "paymob"],
@@ -240,6 +249,13 @@
         "student_no_show",
         "teacher_no_show",
         "under_threshold"
+      ],
+      "ShareReleaseMilestone": [
+        "ijazah_end",
+        "ijazah_half",
+        "recitation_end",
+        "student_complaint_close",
+        "teacher_dropout"
       ],
       "TeacherApplicationStatus": ["approved", "banned", "in_review", "needs_document", "rejected"],
       "TeacherCredentialStatus": ["approved", "needs_document", "pending", "rejected"],
@@ -1935,7 +1951,7 @@
           "$.events[].eventType": {
             "required": true,
             "type": "string",
-            "values": ["expired", "failed", "paid", "refunded"]
+            "values": ["expired", "failed", "paid", "refund_reported", "refunded"]
           },
           "$.events[].receivedAt": { "required": true, "type": "string" },
           "$.gatewayFee_piasters": { "type": "integer" },
@@ -1984,6 +2000,8 @@
             "values": ["created", "expired", "failed", "paid", "refunded"]
           },
           "$.paymentId": { "required": true, "type": "string" },
+          "$.refundReportedAt": { "type": "string" },
+          "$.refunded_piasters": { "required": true, "type": "integer" },
           "$.status": {
             "required": true,
             "type": "string",
@@ -2018,6 +2036,7 @@
           "$.items[].gross_piasters": { "required": true, "type": "integer" },
           "$.items[].net_piasters": { "type": "integer" },
           "$.items[].paymentId": { "required": true, "type": "string" },
+          "$.items[].refunded_piasters": { "required": true, "type": "integer" },
           "$.items[].status": {
             "required": true,
             "type": "string",
@@ -2029,6 +2048,104 @@
           "$.items[].teacherShare_piasters": { "type": "integer" },
           "$.nextCursor": { "type": "string" }
         }
+      },
+      "payouts.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.deductions": { "required": true, "type": "array" },
+          "$.deductions[]": { "type": "object" },
+          "$.deductions[].case": { "type": "object" },
+          "$.deductions[].case.caseId": { "required": true, "type": "string" },
+          "$.deductions[].case.reason": { "required": true, "type": "string" },
+          "$.deductions[].enrollmentId": { "required": true, "type": "string" },
+          "$.deductions[].paymentId": { "required": true, "type": "string" },
+          "$.deductions[].refunded_piasters": { "required": true, "type": "integer" },
+          "$.deductions[].share_piasters": { "required": true, "type": "integer" },
+          "$.deductions[].student": { "required": true, "type": "object" },
+          "$.deductions[].student.displayName": { "required": true, "type": "string" },
+          "$.deductions[].student.userId": { "required": true, "type": "string" },
+          "$.figures": { "required": true, "type": "object" },
+          "$.figures.dueNow_piasters": { "required": true, "type": "integer" },
+          "$.figures.held_piasters": { "required": true, "type": "integer" },
+          "$.figures.paidThisMonth_piasters": { "required": true, "type": "integer" },
+          "$.figures.paid_piasters": { "required": true, "type": "integer" },
+          "$.figures.takenOff_piasters": { "required": true, "type": "integer" },
+          "$.payoutAccountMasked": { "type": "string" },
+          "$.releases": { "required": true, "type": "array" },
+          "$.releases[]": { "type": "object" },
+          "$.releases[].amount_piasters": { "required": true, "type": "integer" },
+          "$.releases[].enrollmentId": { "required": true, "type": "string" },
+          "$.releases[].fallsDueAt": { "type": "string" },
+          "$.releases[].paidAt": { "type": "string" },
+          "$.releases[].part": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "ijazah_end",
+              "ijazah_half",
+              "recitation_end",
+              "student_complaint_close",
+              "teacher_dropout"
+            ]
+          },
+          "$.releases[].paymentId": { "required": true, "type": "string" },
+          "$.releases[].releaseId": { "type": "string" },
+          "$.releases[].state": {
+            "required": true,
+            "type": "string",
+            "values": ["due", "held", "paid"]
+          },
+          "$.releases[].student": { "required": true, "type": "object" },
+          "$.releases[].student.displayName": { "required": true, "type": "string" },
+          "$.releases[].student.userId": { "required": true, "type": "string" },
+          "$.releases[].waitsForCase": { "required": true, "type": "boolean" },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "string" },
+          "$.teacher.userId": { "required": true, "type": "string" }
+        }
+      },
+      "payouts.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.dueOnly": { "type": "boolean" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].dueNow_piasters": { "required": true, "type": "integer" },
+          "$.items[].held_piasters": { "required": true, "type": "integer" },
+          "$.items[].oldestDueAt": { "type": "string" },
+          "$.items[].paidThisMonth_piasters": { "required": true, "type": "integer" },
+          "$.items[].paid_piasters": { "required": true, "type": "integer" },
+          "$.items[].takenOff_piasters": { "required": true, "type": "integer" },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.displayName": { "required": true, "type": "string" },
+          "$.items[].teacher.userId": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" },
+          "$.totals": { "required": true, "type": "object" },
+          "$.totals.dueNow_piasters": { "required": true, "type": "integer" },
+          "$.totals.held_piasters": { "required": true, "type": "integer" },
+          "$.totals.paidThisMonth_piasters": { "required": true, "type": "integer" },
+          "$.totals.paid_piasters": { "required": true, "type": "integer" },
+          "$.totals.takenOff_piasters": { "required": true, "type": "integer" }
+        }
+      },
+      "payouts.mark": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.releaseId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "reports.get": {
         "input": {
@@ -4689,6 +4806,42 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "teacher.dues.get": {
+        "caller": "teacher",
+        "input": { "$": { "type": "object" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.deductions": { "required": true, "type": "array" },
+          "$.deductions[]": { "type": "object" },
+          "$.deductions[].caseReason": { "type": "string" },
+          "$.deductions[].share_piasters": { "required": true, "type": "integer" },
+          "$.held_piasters": { "required": true, "type": "integer" },
+          "$.paid_piasters": { "required": true, "type": "integer" },
+          "$.releases": { "required": true, "type": "array" },
+          "$.releases[]": { "type": "object" },
+          "$.releases[].amount_piasters": { "required": true, "type": "integer" },
+          "$.releases[].fallsDueAt": { "type": "string" },
+          "$.releases[].paidAt": { "type": "string" },
+          "$.releases[].part": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "ijazah_end",
+              "ijazah_half",
+              "recitation_end",
+              "student_complaint_close",
+              "teacher_dropout"
+            ]
+          },
+          "$.releases[].state": {
+            "required": true,
+            "type": "string",
+            "values": ["due", "held", "paid"]
+          },
+          "$.releases[].waitsForCase": { "required": true, "type": "boolean" }
+        }
       },
       "teacher.ijazahRequests.get": {
         "caller": "teacher",
