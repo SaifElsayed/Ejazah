@@ -114,7 +114,13 @@ describe('PreSessionScreen (FR-434, FR-494)', () => {
 
   it('draws the stand-in for a deleted counterparty', async () => {
     mockApi.sessions.get.query.mockResolvedValue(
-      session({ counterparty: { displayName: null, deleted: true } }),
+      session({
+        counterparty: {
+          userId: '0193a6f0-0000-7000-8000-0000000000b8',
+          displayName: null,
+          deleted: true,
+        },
+      }),
     );
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(said(direction, 'common.party.deletedTeacher'))).toBeTruthy();

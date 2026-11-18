@@ -56,7 +56,13 @@ afterEach(() => {
 describe('PreSession (FR-434)', () => {
   it('names a deleted counterparty by the stand-in, and opens the student’s room', async () => {
     mockApi.sessions.get.query.mockResolvedValue(
-      session({ counterparty: { displayName: null, deleted: true } }),
+      session({
+        counterparty: {
+          userId: '0193a6f0-0000-7000-8000-0000000000b8',
+          displayName: null,
+          deleted: true,
+        },
+      }),
     );
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(said(direction, 'common.party.deletedTeacher'))).toBeTruthy();

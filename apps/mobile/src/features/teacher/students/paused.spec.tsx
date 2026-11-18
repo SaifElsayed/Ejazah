@@ -56,7 +56,12 @@ const SESSIONS = [wednesday(1), wednesday(2), wednesday(3)];
 /** A running enrollment, not paused: one session held, the second next. */
 const running: TeacherStudentItem = {
   enrollmentId: ENROLLMENT_ID,
-  student: { displayName: STUDENT, displayNameOrNull: STUDENT, deleted: false },
+  student: {
+    studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+    displayName: STUDENT,
+    displayNameOrNull: STUDENT,
+    deleted: false,
+  },
   summary: {
     subject: { id: '0193a6f0-0000-7000-8000-0000000000a1', nameAr: 'حفظ القرآن', nameEn: 'Quran' },
     track: 'recitation',

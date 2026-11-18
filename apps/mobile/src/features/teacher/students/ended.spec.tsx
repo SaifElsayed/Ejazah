@@ -41,7 +41,12 @@ type EndedStatus = 'completed' | 'terminated_no_show' | 'cancelled';
 function endedAs(status: EndedStatus): TeacherStudentItem {
   return {
     enrollmentId: CURSOR,
-    student: { displayName: STUDENT, displayNameOrNull: STUDENT, deleted: false },
+    student: {
+      studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+      displayName: STUDENT,
+      displayNameOrNull: STUDENT,
+      deleted: false,
+    },
     summary: {
       subject: {
         id: '0193a6f0-0000-7000-8000-0000000000a1',

@@ -3,8 +3,9 @@
 // FR-392, FR-393, FR-395). Written before the schemas, and run red first.
 //
 // What the teacher sees of a student is limited to what «طلابي», the enrollment and «اليوم» draw: the
-// student's name, never a date of birth, a minor flag, a document, a gender-dispute history, a
-// photo key or an id (FR-395, R-HONEST-4); zod strips any field the schema does not name.
+// student's name, and their user id as `studentId` for the report and flag sheet (005:T021, Q-T4
+// (a)), never a date of birth, a minor flag, a document, a gender-dispute history, a photo key or
+// any other id (FR-395, R-HONEST-4); zod strips any field the schema does not name.
 import { describe, expect, it } from 'vitest';
 
 import { DISCOVERY_QUERY_MAX_LENGTH } from './discovery.js';
@@ -46,7 +47,12 @@ const summary = {
 
 const item = {
   enrollmentId: ids.enrollment,
-  student: { displayName: 'يوسف علي', displayNameOrNull: 'يوسف علي', deleted: false },
+  student: {
+    studentId: ids.student,
+    displayName: 'يوسف علي',
+    displayNameOrNull: 'يوسف علي',
+    deleted: false,
+  },
   summary,
   status: 'confirmed',
   next: session,
@@ -143,6 +149,7 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
 
   it('names the student by display name alone, and whether the account was deleted (T007)', () => {
     expect(Object.keys(teacherStudentItem.shape.student.shape)).toEqual([
+      'studentId',
       'displayName',
       'displayNameOrNull',
       'deleted',
@@ -150,11 +157,35 @@ describe('what the teacher is answered of a student (FR-391, FR-395, R-HONEST-4)
   });
 
   it('parses a student whose account was deleted: no name, and deleted (T007, FR-426)', () => {
-    const gone = { ...item, student: { displayName: '', displayNameOrNull: null, deleted: true } };
+    const gone = {
+      ...item,
+      student: { studentId: ids.student, displayName: '', displayNameOrNull: null, deleted: true },
+    };
     expect(teacherStudentItem.parse(gone)).toEqual(gone);
   });
 
-  it('strips a date of birth, a minor flag, documents, a dispute history, a photo key and an id', () => {
+  // 005:T021 (FR-611, FR-614; the note under T021, Q-T4 (a)): the student's user id, which the
+  // teacher's report and flag sheet names, on «طلابي», the enrollment and «اليوم». Required, a
+  // deleted student's included: an id is no name, as a student's `teacher.teacherId` stays
+  // (`enrollments.ts:123`). Additive (R-API-9).
+  it('carries the student’s user id, required, a deleted student’s too (005:T021)', () => {
+    expect(teacherStudentItem.parse(item).student.studentId).toBe(ids.student);
+    expect(
+      teacherStudentsGetOutput.parse({ ...item, sessions: [session], ijazahRequest: null }).student
+        .studentId,
+    ).toBe(ids.student);
+    const { studentId: _absent, ...without } = item.student;
+    expect(teacherStudentItem.safeParse({ ...item, student: without }).success).toBe(false);
+    expect(
+      teacherStudentItem.safeParse({ ...item, student: { ...item.student, studentId: 'x' } })
+        .success,
+    ).toBe(false);
+    const day = { enrollmentId: ids.enrollment, student: item.student, summary, ...session };
+    expect(teacherTodaySession.parse(day).student.studentId).toBe(ids.student);
+    expect(teacherTodaySession.safeParse({ ...day, student: without }).success).toBe(false);
+  });
+
+  it('strips a date of birth, a minor flag, documents, a dispute history, a photo key and a stray id', () => {
     const leaked = { ...item, ...forbidden, student: { ...item.student, ...forbidden } };
     expect(teacherStudentItem.parse(leaked)).toEqual(item);
     expect(
