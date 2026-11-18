@@ -24,7 +24,9 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // the order's amount. 003:T105 (ADR 0025 D2, SRS DEC-81, DEC-89) names `sessionValues` (a session's
 // value, the last taking the remainder), `shareOfSessions`, `shareLeft` and `sumOf`: the releases of
 // the teacher's share at milestones and the payouts page's totals, records of what the gateway holds
-// and releases, never a balance.
+// and releases, never a balance. 003:T110 (ADR 0025 D4, SRS DEC-85, DEC-86) names `untakenValue` (the
+// sessions a closed enrollment refunds) and `dropoutParts` (an ijazah dropout's three parts): what a
+// compensation case shows, which an administrator executes by hand (DEC-82).
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -280,6 +282,65 @@ export function sumOf(amounts_piasters: readonly Piasters[]): Piasters {
     0n,
   );
   return piasters(Number(sum));
+}
+
+/**
+ * The value of the sessions not taken (003:T110, ADR 0025 D4, SRS DEC-85, DEC-86: what a closed
+ * enrollment refunds): `sessionValues(total_piasters, sessionCount)` less the sessions named by
+ * `takenSequences` (1 the first), each named once; a number outside 1 to the count takes nothing.
+ * 10,000 over 10 with four taken is 6,000.
+ */
+export function untakenValue(
+  total_piasters: Piasters,
+  sessionCount: number,
+  takenSequences: readonly number[],
+): Piasters {
+  const taken = new Set(takenSequences);
+  return sumOf(
+    sessionValues(total_piasters, sessionCount).filter(
+      (_value_piasters, index) => !taken.has(index + 1),
+    ),
+  );
+}
+
+/** One order as an ijazah dropout reads it: what was paid and the teacher's share of it. */
+export interface DropoutOrder {
+  readonly paid_piasters: Piasters;
+  readonly share_piasters: Piasters;
+}
+
+/** The three parts of an ijazah dropout's refund, and their whole. */
+export interface DropoutParts {
+  readonly total_piasters: Piasters;
+  readonly held_piasters: Piasters;
+  readonly platformPart_piasters: Piasters;
+  readonly released_piasters: Piasters;
+}
+
+/**
+ * An ijazah teacher's dropout (003:T110, ADR 0025 D4, SRS DEC-85): the student gets back the whole
+ * of every order, in three parts. The teacher's share the gateway still holds (the shares less the
+ * releases already made, never below nothing) and the platform's own part (what was paid less the
+ * shares) are refunded through the gateway; the share already released is paid outside the code
+ * path. Of 10,000 paid with a 7,000 share and 1,750 released: 5,250 + 3,000 + 1,750.
+ *
+ * Exact in `bigint`; a whole past the safe range is refused (`MoneyError`), never rounded. A share
+ * never exceeds what its order paid (`teacherShare`), so the platform's part is never below nothing.
+ */
+export function dropoutParts(
+  orders: readonly DropoutOrder[],
+  released_piasters: readonly Piasters[],
+): DropoutParts {
+  const paid = BigInt(sumOf(orders.map(({ paid_piasters }) => paid_piasters)));
+  const share = BigInt(sumOf(orders.map(({ share_piasters }) => share_piasters)));
+  const released = BigInt(sumOf(released_piasters));
+  const held = share - released;
+  return {
+    total_piasters: piasters(Number(paid)),
+    held_piasters: piasters(Number(held > 0n ? held : 0n)),
+    platformPart_piasters: piasters(Number(paid - share)),
+    released_piasters: piasters(Number(released)),
+  };
 }
 
 function refusalReason(value: number): string {

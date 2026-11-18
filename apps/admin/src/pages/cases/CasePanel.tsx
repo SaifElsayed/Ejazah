@@ -4,12 +4,17 @@
 // decision, a closed case's resolution and note; the enrollment with both parties (a deleted one by
 // its stand-in, lane S's `PartyName`), its status, track, Teacher-No-Show count and mark (lane S's
 // `NoShowMark`), with links to its sessions (`/sessions?enrollment=`) and to its orders on the
-// payments monitor (`/payments?enrollment=`, from `paymentsLink`; Q6 (a)): never an amount here;
+// payments monitor (`/payments?enrollment=`, from `paymentsLink`; Q6 (a)); on a compensation case that
+// closes the enrollment, the amount its cause gives and its parts (003:T110: DEC-85 and ADR 0025 D4
+// supersede «never an amount here»; payments' `payments.caseAmount`, nothing drawn for a reason it
+// gives none, and no button: the administrator executes it in the gateway's dashboard, DEC-82);
 // what the case covers, each session by its number with its status and remedy; and, on an open
 // case or complaint whose enrollment has a deleted party, that party's held files (lane S's
 // `HeldFilesSection`, with this case's id). The footer offers what the server's answer allows: an
 // open compensation case resolved or dismissed, an open complaint decided (never resolved or
 // dismissed here), and on any case a manual case on its enrollment (lane S's `ManualCaseDialog`).
+import { piasters } from '@ijazah/money';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -26,8 +31,10 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { UserText } from '../../i18n/UserText';
+import { useAdmin } from '../../lib/admin-context';
+import type { AdminClient } from '../../lib/client';
 import { errorMessageKey } from '../../lib/error-message';
-import { dayMonth, timeOfDay } from '../../lib/format';
+import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { HeldFilesSection, ManualCaseDialog, NoShowMark, PartyName } from '../_shared';
 import { type Closing, CloseCaseDialog, DecideComplaintDialog } from './CaseDialogs';
@@ -243,6 +250,7 @@ function CaseDetailPanel({ view }: { readonly view: CaseView }) {
           </span>
           <p className="text-caption tone-muted">{t('admin.cases.detail.paymentsNote')}</p>
         </section>
+        {detail.kind === 'compensation_case' ? <CaseAmountSection caseId={detail.caseId} /> : null}
         <section className="section">
           <h2 className="group-label">{t('admin.cases.detail.coversTitle')}</h2>
           {view.covers.length === 0 ? (
@@ -294,5 +302,67 @@ function CaseDetailPanel({ view }: { readonly view: CaseView }) {
         />
       )}
     </>
+  );
+}
+
+// 003:T110 (ADR 0025 D4, SRS DEC-85, DEC-86): the case's amount, payments' `payments.caseAmount`,
+// an audited read (`payments.case_amount_viewed`) kept under the `cases` key, so a closing reads it
+// again (`useCasesRefresh`).
+type CaseAmount = NonNullable<
+  Awaited<ReturnType<AdminClient['api']['payments']['caseAmount']['query']>>['amount']
+>;
+
+const CAUSE: Readonly<Record<CaseAmount['cause'], MessageKey>> = {
+  ijazah_dropout: 'admin.money.caseAmount.cause.ijazahDropout',
+  recitation_dropout: 'admin.money.caseAmount.cause.recitationDropout',
+  student_complaint_close: 'admin.money.caseAmount.cause.studentComplaintClose',
+};
+
+function useCaseAmount(caseId: string) {
+  const { client } = useAdmin();
+  return useQuery({
+    queryKey: ['cases', 'amount', caseId],
+    queryFn: () => client.api.payments.caseAmount.query({ caseId }),
+    staleTime: 30_000,
+  });
+}
+
+/** The amount and its parts with their words, and nothing while none is answered. */
+function CaseAmountSection({ caseId }: { readonly caseId: string }) {
+  const t = useT();
+  const locale = useLocale();
+  const amount = useCaseAmount(caseId).data?.amount;
+  if (amount === undefined) return null;
+  const pounds = (value: number) => formatPounds(piasters(value), locale);
+  const parts =
+    amount.cause === 'ijazah_dropout'
+      ? [
+          { label: t('admin.money.caseAmount.total'), value: pounds(amount.total_piasters) },
+          { label: t('admin.money.caseAmount.held'), value: pounds(amount.held_piasters) },
+          {
+            label: t('admin.money.caseAmount.platformPart'),
+            value: pounds(amount.platformPart_piasters),
+          },
+          { label: t('admin.money.caseAmount.released'), value: pounds(amount.released_piasters) },
+        ]
+      : [
+          { label: t('admin.money.caseAmount.refund'), value: pounds(amount.refund_piasters) },
+          { label: t('admin.money.caseAmount.release'), value: pounds(amount.release_piasters) },
+        ];
+  return (
+    <section className="section" aria-label={t('admin.money.caseAmount.title')}>
+      <h2 className="group-label">{t('admin.money.caseAmount.title')}</h2>
+      <p className="text-callout">{t(CAUSE[amount.cause])}</p>
+      <KeyValue
+        items={[
+          ...parts,
+          {
+            label: t('admin.money.caseAmount.refundedSoFar'),
+            value: pounds(amount.refunded_piasters),
+          },
+        ]}
+      />
+      <p className="text-caption tone-muted">{t('admin.money.caseAmount.note')}</p>
+    </section>
   );
 }

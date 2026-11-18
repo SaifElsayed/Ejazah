@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MoneyError,
   average,
+  dropoutParts,
   isPiasters,
   lowest,
   perSession,
@@ -19,6 +20,7 @@ import {
   teacherShare,
   toPlainNumber,
   type Piasters,
+  untakenValue,
 } from './index.js';
 
 // `..` then `src` on purpose, so this resolves the same whether the spec runs from `src/` (root
@@ -359,6 +361,93 @@ describe('sumOf (003:T105: the payouts page’s totals)', () => {
 
   it('refuses a sum past the safe range rather than rounding it', () => {
     expect(() => sumOf([piasters(Number.MAX_SAFE_INTEGER), piasters(1)])).toThrow(MoneyError);
+  });
+});
+
+describe('untakenValue (003:T110, ADR 0025 D4: the sessions refunded at a close)', () => {
+  it('is the value of the sessions not named: 10,000 over 10, four taken, is 6,000', () => {
+    expect(toPlainNumber(untakenValue(piasters(10_000), 10, [1, 2, 3, 4]))).toBe(6_000);
+  });
+
+  it('gives the last session the remainder, as sessionValues does', () => {
+    expect(toPlainNumber(untakenValue(piasters(1_000), 3, [1, 2]))).toBe(334);
+    expect(toPlainNumber(untakenValue(piasters(1_000), 3, [3]))).toBe(666);
+  });
+
+  it('is the whole amount when none was taken, and nothing when all were', () => {
+    expect(toPlainNumber(untakenValue(piasters(10_000), 10, []))).toBe(10_000);
+    expect(toPlainNumber(untakenValue(piasters(1_000), 3, [1, 2, 3]))).toBe(0);
+  });
+
+  it('counts a sequence number named twice once', () => {
+    expect(toPlainNumber(untakenValue(piasters(1_000), 3, [1, 1]))).toBe(667);
+  });
+
+  it('takes nothing for a sequence number outside 1 to the count', () => {
+    expect(toPlainNumber(untakenValue(piasters(1_000), 3, [0, 4, 11, 1.5]))).toBe(1_000);
+  });
+});
+
+describe('dropoutParts (003:T110, ADR 0025 D4, SRS DEC-85: an ijazah teacher’s dropout)', () => {
+  it('splits 10,000 paid into 5,250 held + 3,000 the platform’s part + 1,750 released', () => {
+    const parts = dropoutParts(
+      [{ paid_piasters: piasters(10_000), share_piasters: piasters(7_000) }],
+      [piasters(1_750)],
+    );
+    expect(parts).toEqual({
+      total_piasters: 10_000,
+      held_piasters: 5_250,
+      platformPart_piasters: 3_000,
+      released_piasters: 1_750,
+    });
+  });
+
+  it('takes every order of the enrollment, the assessment fee’s included', () => {
+    const parts = dropoutParts(
+      [
+        { paid_piasters: piasters(10_000), share_piasters: piasters(7_000) },
+        { paid_piasters: piasters(2_001), share_piasters: piasters(1_401) },
+      ],
+      [piasters(1_750)],
+    );
+    expect(parts).toEqual({
+      total_piasters: 12_001,
+      held_piasters: 6_651,
+      platformPart_piasters: 3_600,
+      released_piasters: 1_750,
+    });
+  });
+
+  it('holds the whole share when nothing was released', () => {
+    expect(
+      dropoutParts([{ paid_piasters: piasters(10_000), share_piasters: piasters(7_000) }], []),
+    ).toEqual({
+      total_piasters: 10_000,
+      held_piasters: 7_000,
+      platformPart_piasters: 3_000,
+      released_piasters: 0,
+    });
+  });
+
+  it('never holds below nothing', () => {
+    expect(
+      dropoutParts(
+        [{ paid_piasters: piasters(1_000), share_piasters: piasters(700) }],
+        [piasters(500), piasters(500)],
+      ).held_piasters,
+    ).toBe(0);
+  });
+
+  it('refuses a total past the safe range rather than rounding it', () => {
+    expect(() =>
+      dropoutParts(
+        [
+          { paid_piasters: piasters(Number.MAX_SAFE_INTEGER), share_piasters: piasters(0) },
+          { paid_piasters: piasters(1), share_piasters: piasters(0) },
+        ],
+        [],
+      ),
+    ).toThrow(MoneyError);
   });
 });
 

@@ -115,6 +115,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'payouts.listed': 'admin.money.audit.payoutsListed',
   'payouts.viewed': 'admin.money.audit.payoutsViewed',
   'payout_release.marked': 'admin.money.audit.payoutReleaseMarked',
+  // 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): what a compensation case shows, audited on the case.
+  'payments.case_amount_viewed': 'admin.money.audit.caseAmountViewed',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

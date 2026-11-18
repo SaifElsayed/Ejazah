@@ -22,6 +22,8 @@ import type {
   CheckoutStatusOutput,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
+// 003:T110: the case's amount, the monitor's third read.
+import type { PaymentsCaseAmountOutput } from '@ijazah/contracts/admin';
 
 import type { ColumnCipher, EncryptedColumn } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
@@ -42,6 +44,7 @@ import {
 import type { PaymentGateway } from './checkout.repository.js';
 import { type CheckoutStudent, CheckoutService, checkoutStepsOver } from './checkout.service.js';
 import { type ConfirmationQueue, OrderEventsService } from './order-events.service.js';
+import { caseAmount } from './case-amount.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { PaymentsMonitorService } from './payments-monitor.service.js';
 // 003:T105: the payouts' reads and mark.
@@ -208,12 +211,23 @@ export function createCheckoutServices({
 export { paymentsAdminRouter } from './payments-admin.router.js';
 export { type PaymentsMonitorStore, paymentsMonitorStore } from './payments-monitor.service.js';
 
-/** The monitor over the module's queries and the owners' entries, its page size from settings. */
+/**
+ * The monitor over the module's queries and the owners' entries, its page size from settings; and
+ * 003:T110's third read, `caseAmount` (ADR 0025 D4, SRS DEC-85, DEC-86): what a compensation case
+ * that closes an enrollment shows, so `admin/index.ts`'s composition carries it unchanged.
+ */
 export function createPaymentsMonitorService(dependencies: {
   readonly settings: SettingsReader;
   readonly now?: () => Date;
-}): Pick<PaymentsMonitorService, 'list' | 'get'> {
-  return new PaymentsMonitorService(dependencies);
+}): Pick<PaymentsMonitorService, 'list' | 'get'> & {
+  caseAmount(tx: Transaction, caseId: string): Promise<PaymentsCaseAmountOutput>;
+} {
+  const monitor = new PaymentsMonitorService(dependencies);
+  return {
+    list: (tx, query) => monitor.list(tx, query),
+    get: (tx, paymentId) => monitor.get(tx, paymentId),
+    caseAmount: (tx, caseId) => caseAmount(tx, caseId),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -275,3 +289,9 @@ export function createPayoutServices({
     },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 003:T110 (ADR 0025 D4): the orders a compensation case's amount is computed from, the enrollment's
+// paid orders with a share, with no lock; `payments.caseAmount` reads it on the call's transaction
+// (`createPaymentsMonitorService` above), and the database spec reads it here.
+export { caseOrdersOf } from './case-amount.repository.js';

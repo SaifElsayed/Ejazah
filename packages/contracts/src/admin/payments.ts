@@ -199,3 +199,55 @@ export type PaymentEventType = z.infer<typeof paymentEventType>;
 export type EnrollmentOutcomeKind = z.infer<typeof enrollmentOutcomeKind>;
 export type HoldReleaseReason = z.infer<typeof holdReleaseReason>;
 export type PaymentEnrollmentHold = z.infer<typeof paymentEnrollmentHold>;
+
+// ---------------------------------------------------------------------------------------------
+// 003:T110 (ADR 0025 D4, SRS DEC-85, DEC-86, FR-DISPUTE-6; the note under T110, Q-5 (a)):
+// `payments.caseAmount`, what a compensation case that closes an enrollment shows, computed in
+// `packages/money` from the enrollment's orders and sessions. An administrator decides the case and
+// executes the amount by hand in the gateway's dashboard (DEC-82); no procedure moves money.
+// Additive (R-API-9).
+
+export const paymentsCaseAmountInput = z.object({ caseId: z.uuid() });
+
+/** An amount the case shows, in whole piasters. */
+const casePiasters = z.int().nonnegative();
+
+/** A close that refunds sessions: the refund to the student and the release to the teacher. */
+const sessionsRefund = {
+  /** Refunded to the student: the sessions not taken. */
+  refund_piasters: casePiasters,
+  /** Released to the teacher (T105): the share of the sessions taken. */
+  release_piasters: casePiasters,
+  refunded_piasters: casePiasters,
+};
+
+/**
+ * The amount by its cause. `refunded_piasters` is the refunds already recorded on the orders the
+ * amount is computed from (T102), shown beside it and never taken off it (Q-C1 (a)).
+ */
+export const paymentsCaseAmount = z.discriminatedUnion('cause', [
+  /**
+   * A teacher's dropout on the ijazah track: the whole of every order, in three parts: the share
+   * the gateway still holds and the platform's own part (both refunded through the gateway), and
+   * the share already released (paid outside the code path).
+   */
+  z.object({
+    cause: z.literal('ijazah_dropout'),
+    total_piasters: casePiasters,
+    held_piasters: casePiasters,
+    platformPart_piasters: casePiasters,
+    released_piasters: casePiasters,
+    refunded_piasters: casePiasters,
+  }),
+  /** A teacher's dropout on recitation. */
+  z.object({ cause: z.literal('recitation_dropout'), ...sessionsRefund }),
+  /** A close on a complaint against the student. */
+  z.object({ cause: z.literal('student_complaint_close'), ...sessionsRefund }),
+]);
+
+/** Absent `amount`: the case's reason is not one that closes with an amount (Q-5 (a)). */
+export const paymentsCaseAmountOutput = z.object({ amount: paymentsCaseAmount.optional() });
+
+export type PaymentsCaseAmountInput = z.infer<typeof paymentsCaseAmountInput>;
+export type PaymentsCaseAmount = z.infer<typeof paymentsCaseAmount>;
+export type PaymentsCaseAmountOutput = z.infer<typeof paymentsCaseAmountOutput>;

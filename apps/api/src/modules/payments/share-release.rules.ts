@@ -18,8 +18,10 @@
 // - `ijazah_end`: `ijazah_track`; on the recitation condition. The share less what earlier releases
 //   gave and less the teacher's share of any refund (`shareLeft`, Q-B1-1 (a)).
 // - `teacher_dropout`: recitation only; closed with a case `teacher_ended` or `absence_termination`;
-//   the last delivered session's dispute window passed; no case open. The share of the sessions
-//   delivered. An ijazah dropout owes nothing more (DEC-85).
+//   the last counted session's dispute window passed; no case open. The share of the sessions
+//   delivered and of those the student missed (`student_no_show`, consumed: 003:T110, the owner's
+//   answer of 2026-11-18 to Q-C3, (b), «متتردش للطالب لو غابها»). An ijazah dropout owes nothing
+//   more (DEC-85).
 // - `student_complaint_close`: either track; closed with a case `student_fault_confirmed` or
 //   `student_banned`; the last counted session's dispute window passed; no case open. The share of
 //   the sessions delivered and of those the student missed (`student_no_show`, consumed)
@@ -105,8 +107,19 @@ const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint
   ['student_banned', 'student_complaint_close'],
 ]);
 
+/**
+ * 003:T110: the cause one case reason gives, or none, from the same closed set, so T110's case
+ * amount and these releases never disagree (T112 adds DEC-86's complaints here, once).
+ */
+export function closingCauseOf(
+  reason: string,
+): 'teacher_dropout' | 'student_complaint_close' | undefined {
+  return CLOSE_RELEASES.get(reason);
+}
+
 const DELIVERED: ReadonlySet<string> = new Set(['done']);
-const CONSUMED: ReadonlySet<string> = new Set(['done', 'student_no_show']);
+/** The sessions consumed, a Student-No-Show counted too; T110's refund is every other session. */
+export const CONSUMED: ReadonlySet<string> = new Set(['done', 'student_no_show']);
 
 /**
  * Q-B1-1 (a): an end takes off the teacher's share of the order's refunded total, the figure «عليه»
@@ -253,15 +266,12 @@ export function plannedReleases(
   if (closed) {
     const release = closingRelease(caseReasons);
     if (release === 'teacher_dropout' && enrollment.track === 'recitation') {
-      const delivered = sequencesOf(DELIVERED);
+      // 003:T110, Q-C3 (b): a session the student missed is consumed, its share released.
+      const taken = sequencesOf(CONSUMED);
       owe(
         'teacher_dropout',
-        shareOfSessions(
-          order.share_piasters,
-          enrollment.sessionCount,
-          delivered.map(valuedSequence),
-        ),
-        after(lastToEnd(delivered), windowHours),
+        shareOfSessions(order.share_piasters, enrollment.sessionCount, taken.map(valuedSequence)),
+        after(lastToEnd(taken), windowHours),
         true,
       );
     }

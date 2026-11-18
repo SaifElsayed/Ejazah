@@ -3,7 +3,8 @@
 // manual reasons by their party), a complaint by its kind, a case's state and closing, a covered
 // session's remedy, and a refusal by its code and `details.cause`; any other failure is the page's
 // generic words (`admin.dialogs.submitError`) through T058's `errorMessageKey`, which says when
-// to try again on `RATE_LIMITED`. No amount is ever said.
+// to try again on `RATE_LIMITED`. No amount is said here: since 003:T110 (DEC-85, ADR 0025 D4) a
+// case that closes an enrollment shows its amount, in `CasePanel.tsx` with `admin.money`'s words.
 import type {
   CaseCoveredSession,
   CaseDetail,
