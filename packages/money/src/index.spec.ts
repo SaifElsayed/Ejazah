@@ -295,7 +295,9 @@ describe('sessionValues (003:T105, ADR 0025 D2, D4)', () => {
     ] as const) {
       const values = sessionValues(piasters(total), count);
       expect(values).toHaveLength(count);
-      expect(values.reduce((sum, one) => sum + BigInt(one), 0n)).toBe(BigInt(total));
+      expect(values.reduce((sum, value_piasters) => sum + BigInt(value_piasters), 0n)).toBe(
+        BigInt(total),
+      );
     }
   });
 

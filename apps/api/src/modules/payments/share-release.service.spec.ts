@@ -136,14 +136,14 @@ describe('the share release sweep (003:T105)', () => {
       w.rows.map(({ enrollmentId, milestone, amount_piasters, dueAt }) => ({
         enrollmentId,
         milestone,
-        amount: amount_piasters,
+        amount_piasters,
         dueAt: dueAt.toISOString(),
       })),
     ).toEqual(
       [1, 2, 3].map((n) => ({
         enrollmentId: id(100 + n),
         milestone: 'recitation_end',
-        amount: 700_000,
+        amount_piasters: 700_000,
         dueAt: '2026-10-13T10:00:00.000Z',
       })),
     );
