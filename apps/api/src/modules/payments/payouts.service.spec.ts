@@ -1,7 +1,7 @@
 // 003:T105: the payouts' reads and mark (`payouts.service.ts`), over a fake store. The worked
 // example: 10,000 EGP packages of 10 sessions, the share at 70% (7,000 EGP, 700,000 piasters); a
 // refund of 1,000 EGP (100,000 piasters) takes 700 EGP of the teacher's share off (Q-6 as revised);
-// the dispute window 72 hours. The mark's race on the real table is
+// the dispute window 72 hours (and 48, to show the teacher's read answers the setting). The mark's race on the real table is
 // `tests/db-integrity/payout-mark-race.spec.ts`.
 import { piasters } from '@ijazah/money';
 import { addDays } from '@ijazah/time';
@@ -205,11 +205,15 @@ const runOnce = (replay = false) => ({
       : { outcome: await effect(tx), replayed: false },
 });
 
-function payouts(overrides: Partial<PayoutsStore> = {}, replay = false) {
+function payouts(
+  overrides: Partial<PayoutsStore> = {},
+  replay = false,
+  reader: SettingsReader = settings,
+) {
   const lines: unknown[][] = [];
   const { store: s, marks, unmarks } = store(overrides);
   const service = createPayouts({
-    settings,
+    settings: reader,
     idempotency: runOnce(replay) as never,
     store: s,
     log: { info: (...line: unknown[]) => void lines.push(line) },
@@ -250,7 +254,30 @@ describe('teacher.dues.get: «مستحقاتي» (DEC-89)', () => {
         },
       ],
       deductions: [{ share_piasters: 70_000, caseReason: 'gender_correction' }],
+      disputeWindowHours: 72,
     });
+  });
+
+  it('answers the dispute window read from its setting at each request, 72 or 48 hours, never a constant (the owner, 2026-11-18)', async () => {
+    const at = (hours: number): SettingsReader => ({
+      read: async (key, schema) =>
+        schema.parse({ dispute_window_hours: hours, admin_list_page_size: 1 }[key]),
+    });
+    const reads: string[] = [];
+    const counting: SettingsReader = {
+      read: async (key, schema) => {
+        reads.push(key);
+        return at(48).read(key, schema);
+      },
+    };
+    const { service } = payouts({}, false, counting);
+
+    expect((await payouts({}, false, at(72)).service.teacherDues(tx, T1)).disputeWindowHours).toBe(
+      72,
+    );
+    expect((await service.teacherDues(tx, T1)).disputeWindowHours).toBe(48);
+    await service.teacherDues(tx, T1);
+    expect(reads.filter((key) => key === 'dispute_window_hours')).toHaveLength(2);
   });
 
   it('never answers another teacher’s release, even one a read hands back', async () => {

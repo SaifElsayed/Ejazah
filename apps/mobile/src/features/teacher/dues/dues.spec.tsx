@@ -1,7 +1,8 @@
 // 003:T105 (SRS DEC-89; the note under T105): «مستحقاتي», in both directions, as
 // `teacher.dues.get` answers it. Two totals on top, held and paid; one row per part (a recitation
 // package, the ijazah half and rest, a close's release) with its amount and state: held with when it
-// falls due («لو مفيش شكوى»), or waiting for an open complaint; due, awaiting the administration;
+// falls due («لو مفيش شكوى»; with no date yet, the window's hours as read, 72 or 48: «بعد آخر حصة بـ
+// 72 ساعة»), or waiting for an open complaint; due, awaiting the administration;
 // paid with its date. «عليه»: his own share of each refund, with the reason when one is given. No
 // order line and no student's name, even one a server sent by mistake.
 import { type Piasters, piasters } from '@ijazah/money';
@@ -94,6 +95,7 @@ const dues = {
     },
   ],
   deductions: [{ share_piasters: 63_000, caseReason: 'teacher_ended' }, { share_piasters: 31_550 }],
+  disputeWindowHours: 72,
 };
 
 const said = (
@@ -178,16 +180,26 @@ describe('TeacherDues («مستحقاتي»)', () => {
     );
   });
 
-  it('says a held part with no date yet falls due after the last session’s complaint window', async () => {
-    get.mockResolvedValue({
-      ...dues,
-      releases: [
-        { part: 'recitation_end', amount_piasters: 490_000, state: 'held', waitsForCase: false },
-      ],
-    });
-    await renderIn('rtl', withQueries(() => <TeacherDues />)());
-    expect(await screen.findByText(said('rtl', 'money.dues.heldAfterLast'))).toBeTruthy();
-  });
+  it.each([72, 48])(
+    'says a held part with no date yet falls due %i hours after the last session, the window it read (the owner, 2026-11-18)',
+    async (hours) => {
+      get.mockResolvedValue({
+        ...dues,
+        disputeWindowHours: hours,
+        releases: [
+          { part: 'recitation_end', amount_piasters: 490_000, state: 'held', waitsForCase: false },
+        ],
+      });
+      await inBothDirections(
+        withQueries(() => <TeacherDues />),
+        async (_rendered, direction) => {
+          const line = said(direction, 'money.dues.heldAfterLast', { hours });
+          expect(line).toContain(String(hours));
+          expect(await screen.findByText(line)).toBeTruthy();
+        },
+      );
+    },
+  );
 
   it('draws «عليه»: his own share of each refund, with the reason when one is given', async () => {
     await inBothDirections(
