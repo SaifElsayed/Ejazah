@@ -1745,6 +1745,7 @@
     "money": {
       "audit": {
         "payoutReleaseMarked": "تسجيل صرف مستحق لمعلم",
+        "payoutReleaseUnmarked": "التراجع عن صرف مستحق لمعلم",
         "payoutsListed": "عرض تحويلات المعلمين",
         "payoutsViewed": "عرض تحويلات معلم"
       },

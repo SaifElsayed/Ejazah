@@ -1745,6 +1745,7 @@
     "money": {
       "audit": {
         "payoutReleaseMarked": "Mark a teacher's release paid",
+        "payoutReleaseUnmarked": "Undo a teacher's release paid mark",
         "payoutsListed": "View teacher payouts",
         "payoutsViewed": "View a teacher's payouts"
       },
