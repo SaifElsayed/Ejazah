@@ -205,6 +205,12 @@ describe('the test-mode strip (003:T109; SRS DEC-87, Q-B4 (a))', () => {
     expect(await screen.findByText(ar('admin.money.testMode'))).toBeTruthy();
   });
 
+  it('places the strip by the spacing token, no raw number (003:T116, nit 2)', async () => {
+    open(fakeApi(summaryIn('test')));
+    const strip = (await screen.findByText(ar('admin.money.testMode'))).closest('[role="status"]');
+    expect(strip?.getAttribute('style')).toContain('inset-block-start: var(--space-2)');
+  });
+
   it('draws none in live mode', async () => {
     open(fakeApi(summaryIn('live')));
     const nav = within(
