@@ -28,7 +28,11 @@
 //   - `EnrollmentIjazahRequests.of` (booking's): every enrollment's latest request in one read;
 //   - `AwaitingNameRelease.release` (identity's, the student's `users` row already locked): the
 //     student's waiting requests locked, then moved to `pending`; T032: then the student's ijazahs
-//     not yet signed off locked, their printed name re-frozen from the name now held;
+//     not yet signed off locked, their printed name re-frozen from the name now held; 005:T019
+//     (Q-T1 (a)): each released request's `ijazahRequest` to its teacher and student through the
+//     list the setter bound to the transaction (the student's own set binds the request's,
+//     `certificate-name.service.ts`; the administrator kind binds its own), sent after the commit;
+//     requests waiting and no list bound is a refusal before any write;
 //   - `OpenRequestsRefreeze.refreeze` (catalog's, the credential's row held by the correction's
 //     write): the credential's open requests locked, then re-frozen from it (P4 (a)); T032: then the
 //     ijazahs of that credential not yet signed off locked, their chain, teacher's name, riwaya and
@@ -119,9 +123,12 @@ export interface RequestRead {
   readonly revoked: boolean;
 }
 
-/** An open request and its copy's key. */
+/** An open request, its enrollment and teacher, and its copy's key. */
 export interface OpenRequest {
   readonly id: string;
+  /** 005:T019 (Q-T1): the release's event names the enrollment, to its teacher and student. */
+  readonly enrollmentId: string;
+  readonly teacherUserId: string;
   readonly status: IjazahRequestStatus;
   readonly signatureStorageKey: string | null;
 }
@@ -333,15 +340,21 @@ export class IjazahRequestService {
   /** `AwaitingNameRelease.release` (identity's port): the student's account is already locked. */
   async release(tx: Transaction, studentUserId: string): Promise<void> {
     const { store } = this.#dependencies;
-    const waiting = (await store.openOfStudent(tx, studentUserId))
-      .filter(({ status }) => status === 'awaiting_student_name')
-      .map(({ id }) => id);
+    const awaiting = (await store.openOfStudent(tx, studentUserId)).filter(
+      ({ status }) => status === 'awaiting_student_name',
+    );
+    const waiting = awaiting.map(({ id }) => id);
     // 005:T032: the student's ijazahs not yet signed off, re-frozen after the requests.
     const issued = await store.unsignedIjazahsOfStudent(tx, studentUserId);
     const list = this.#rerenderListFor(tx, issued, { studentUserId });
-    if (waiting.length > 0) {
+    const live = this.#releaseListFor(tx, waiting, studentUserId);
+    if (live !== null) {
       await store.lockRequests(tx, waiting);
       await store.releaseAwaiting(tx, waiting);
+      // 005:T019 (Q-T1 (a)): each released request's parties read it again once the setter commits.
+      for (const { enrollmentId, teacherUserId } of awaiting) {
+        live.afterCommit([teacherUserId, studentUserId], { type: 'ijazahRequest', enrollmentId });
+      }
     }
     if (list === null) return;
     const name = await store.certificateNameOf(tx, studentUserId);
@@ -398,6 +411,30 @@ export class IjazahRequestService {
       );
     }
     return { afterCommitDo: list.afterCommitDo.bind(list) };
+  }
+
+  /**
+   * 005:T019 (Q-T1 (a)): the setter's list when requests wait for the name, null when none do;
+   * refused before any write when the caller bound none, so a released request's event is never
+   * lost silently (as `#rerenderListFor`).
+   */
+  #releaseListFor(
+    tx: Transaction,
+    waiting: readonly string[],
+    studentUserId: string,
+  ): Pick<LivePublisher, 'afterCommit'> | null {
+    if (waiting.length === 0) return null;
+    const list = publisherOn(tx);
+    if (list === undefined) {
+      this.#dependencies.log.info(
+        { studentUserId, reason: 'no_after_commit_list' },
+        'An ijazah request release was refused',
+      );
+      throw new Error(
+        "A student's waiting ijazah requests are released on a transaction its caller bound an after-commit list to (T019, Q-T1), so each request's parties hear of it once the name has committed.",
+      );
+    }
+    return list;
   }
 
   /** 005:T032: each re-frozen ijazah logged, its new generation enqueued once the caller commits. */

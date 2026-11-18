@@ -30,6 +30,9 @@
 // `expo/fetch`, whose multipart encoder takes a part that is a string, a Blob or an object with
 // `bytes()`, and throws on React Native's `{ uri, name, type }`; so a file part is its fixed name,
 // its type and a `bytes()` that reads the picked file through expo-file-system when it is sent.
+// 005:T019 (FR-601): the teacher's signature goes to `POST /uploads/signature` as the photo does, one
+// JPEG or PNG under the photo's fixed name, and the answer is when it was uploaded (`{ uploadedAt }`);
+// the image itself is read through `teacher.signature.get`'s signed link.
 //
 // THE TIMEOUTS (T146). Every request takes a timeout, the refresh among them: a call or a refresh
 // within `CALL_TIMEOUT_MS`, an upload within `UPLOAD_TIMEOUT_MS`. A request past it is aborted
@@ -55,6 +58,8 @@ import {
   type PublicConfig,
   publicConfigOutput,
   refreshOutput,
+  type SignatureUploadOutput,
+  signatureUploadOutput,
 } from '@ijazah/contracts';
 import {
   createTRPCClient,
@@ -81,6 +86,8 @@ export interface ApiClientOptions {
   readonly photosUploadUrl?: string;
   /** `POST /uploads/chat` on the API's origin (004:T045). */
   readonly chatUploadUrl?: string;
+  /** `POST /uploads/signature` on the API's origin (005:T019). */
+  readonly signatureUploadUrl?: string;
   /** Called once when the server refuses the session's refresh. */
   readonly onSignedOut: () => void;
   /** The transport; the platform's own unless a test hands one in. */
@@ -104,6 +111,8 @@ export interface ApiClient {
     filename: string,
     file: LocalChatFile,
   ): Promise<ChatUploadOutput>;
+  /** Uploads the teacher's signature image the person picked; when it was uploaded (005:T019). */
+  uploadSignature(file: LocalPhoto): Promise<SignatureUploadOutput>;
 }
 
 /** What an upload is for: the identity document or an ijazah (`POST /uploads/documents`). */
@@ -262,6 +271,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       const answer: unknown = await response.json().catch(() => null);
       if (!response.ok) throw new ApiRefusal(answer);
       return chatUploadOutput.parse(answer);
+    },
+    async uploadSignature(file) {
+      const target = options.signatureUploadUrl;
+      if (target === undefined) throw new Error('uploadSignature: no signature upload URL');
+      const body = new FormData();
+      body.append('file', photoPart(file) as unknown as Blob);
+      const response = await uploadFetch(target, { method: 'POST', body });
+      const answer: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new ApiRefusal(answer);
+      return signatureUploadOutput.parse(answer);
     },
     publicConfig() {
       config ??= api.platform.publicConfig

@@ -9,6 +9,8 @@
 // T158: «الملف العام» leads the teaching list to the public profile, where the display name is
 // edited; the board's hint names the subjects, which the profile does not edit, so it is left out
 // (R-HONEST; the key stays in the catalogue).
+// 005:T019 (FR-601): «صورة التوقيع», for an approved teacher (the one `teacher.signature.get`
+// admits), after the payout row, to the signature screen.
 import type { PayoutState } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -34,6 +36,7 @@ import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { useCredentials } from '../../credentials';
 import { PAYOUT_ROUTE, usePayout } from '../../payout';
 import { PROFILE_ROUTE } from '../../profile';
+import { SIGNATURE_ROUTE } from '../../signature';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
 
 /** The payout row's badge for each state; none while no account is configured (T115). */
@@ -137,7 +140,15 @@ export function TeacherAccount() {
                   })}
               onPress={() => router.push('/(teacher)/credentials')}
             />
-            {account.teacher?.verificationStatus === 'approved' ? <PayoutRow /> : null}
+            {account.teacher?.verificationStatus === 'approved' ? (
+              <>
+                <PayoutRow />
+                <ListRow
+                  label={t('teacher.account.signature')}
+                  onPress={() => router.push(SIGNATURE_ROUTE)}
+                />
+              </>
+            ) : null}
           </List>
           <AccountSettings me={account} />
           <List>

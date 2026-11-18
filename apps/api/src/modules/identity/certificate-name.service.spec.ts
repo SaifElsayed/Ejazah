@@ -17,12 +17,21 @@
 // runs the work on a transaction of its own (`run`) or on the one handed in (`runOn`). That an
 // administrator's change never rewrites an issued certificate is
 // `tests/db-integrity/certificate-name.spec.ts`'s, on the real tables.
+//
+// 005:T019 (Q-T1 (a)): the student's own set binds the request's list to its keyed transaction, so
+// the port publishes on it, and unbinds it when the work ends, refused or not; an administrator's
+// change keeps the list the administrator kind bound to its transaction.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
+import {
+  bindToTransaction,
+  type LivePublisher,
+  publisherOn,
+} from '../../platform/live/live-publisher.js';
 import {
   type CertificateNameHolder,
   CertificateNameService,
@@ -76,6 +85,10 @@ let replayed: boolean;
 let ownTransaction: Transaction;
 let infos: { readonly entry: object; readonly message: string }[];
 let service: CertificateNameService;
+/** 005:T019: the request's list handed to the student's own set. */
+let live: LivePublisher;
+/** 005:T019: the list the port found bound to each transaction it was handed. */
+let seen: (LivePublisher | undefined)[];
 
 beforeEach(() => {
   store = new MemoryCertificateNameStore();
@@ -85,6 +98,8 @@ beforeEach(() => {
   replayed = false;
   ownTransaction = transaction('the student’s own transaction');
   infos = [];
+  live = { afterCommit: () => undefined };
+  seen = [];
   service = new CertificateNameService({
     store,
     idempotency: {
@@ -101,6 +116,7 @@ beforeEach(() => {
     awaitingNameRelease: {
       release: async (tx, studentUserId) => {
         store.calls.push(['release', tx, studentUserId]);
+        seen.push(publisherOn(tx));
       },
     },
     log: {
@@ -123,13 +139,13 @@ async function refusalOf(call: Promise<unknown>): Promise<DomainError> {
 describe('the student’s own name, account.certificateName.set', () => {
   it('sets the name of a student who has none, and answers it', async () => {
     await expect(
-      service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }),
+      service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live),
     ).resolves.toEqual({ name: NAME });
     expect(store.nameOf(STUDENT)).toBe(NAME);
   });
 
   it('keys the call under account.certificateName.set, the student the actor', async () => {
-    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' });
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
     expect(keyed).toEqual([
       {
         on: 'run',
@@ -144,10 +160,10 @@ describe('the student’s own name, account.certificateName.set', () => {
   });
 
   it('refuses a second set as CONFLICT already_set, keeping the first name and releasing nothing', async () => {
-    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' });
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
     store.calls.length = 0;
     const refusal = await refusalOf(
-      service.setOwn(STUDENT, { name: OTHER_NAME, idempotencyKey: 'name-key-0002' }),
+      service.setOwn(STUDENT, { name: OTHER_NAME, idempotencyKey: 'name-key-0002' }, live),
     );
     expect(refusal.code).toBe('CONFLICT');
     expect(refusal.details).toEqual([{ path: 'certificateName', code: 'already_set' }]);
@@ -158,7 +174,7 @@ describe('the student’s own name, account.certificateName.set', () => {
   it('logs the refusal with the ids and its reason only, never a name, and marks it logged', async () => {
     store.plant(STUDENT, { student: true, certificateName: NAME });
     const refusal = await refusalOf(
-      service.setOwn(STUDENT, { name: OTHER_NAME, idempotencyKey: 'name-key-0002' }),
+      service.setOwn(STUDENT, { name: OTHER_NAME, idempotencyKey: 'name-key-0002' }, live),
     );
     expect(isRefusalLogged(refusal)).toBe(true);
     expect(infos).toEqual([
@@ -172,7 +188,7 @@ describe('the student’s own name, account.certificateName.set', () => {
     for (const userId of [TEACHER, ABSENT]) {
       store.calls.length = 0;
       const refusal = await refusalOf(
-        service.setOwn(userId, { name: NAME, idempotencyKey: 'name-key-0003' }),
+        service.setOwn(userId, { name: NAME, idempotencyKey: 'name-key-0003' }, live),
       );
       expect(refusal.code).toBe('NOT_FOUND');
       expect(isRefusalLogged(refusal)).toBe(true);
@@ -186,7 +202,7 @@ describe('the student’s own name, account.certificateName.set', () => {
   });
 
   it('releases the student’s waiting requests on the setter’s transaction, after the account’s lock and the write', async () => {
-    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' });
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
     expect(store.calls).toEqual([
       ['lock', ownTransaction, STUDENT],
       ['read', ownTransaction, STUDENT],
@@ -194,9 +210,41 @@ describe('the student’s own name, account.certificateName.set', () => {
       ['release', ownTransaction, STUDENT],
     ]);
   });
+
+  it('binds the request’s list to its own transaction for the port, and unbinds it once done (005:T019, Q-T1)', async () => {
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
+    expect(seen).toEqual([live]);
+    expect(publisherOn(ownTransaction)).toBeUndefined();
+  });
+
+  it('unbinds the list when the work is refused (005:T019, Q-T1)', async () => {
+    store.plant(STUDENT, { student: true, certificateName: NAME });
+    await refusalOf(
+      service.setOwn(STUDENT, { name: OTHER_NAME, idempotencyKey: 'name-key-0002' }, live),
+    );
+    expect(publisherOn(ownTransaction)).toBeUndefined();
+  });
 });
 
 describe('an administrator’s change, users.setCertificateName', () => {
+  it('hands the port the administrator kind’s transaction with its list still bound, and leaves it bound (005:T019, Q-T1)', async () => {
+    const tx = transaction('the administrator’s transaction');
+    const kinds: LivePublisher = { afterCommit: () => undefined };
+    const unbind = bindToTransaction(tx, kinds);
+    try {
+      await service.setByAdministrator(tx, ADMIN, {
+        targetUserId: STUDENT,
+        name: NAME,
+        reason: 'طلب الطالبة تصحيح الاسم عبر الدعم',
+        idempotencyKey: 'users-name-key-0002',
+      });
+      expect(seen).toEqual([kinds]);
+      expect(publisherOn(tx)).toBe(kinds);
+    } finally {
+      unbind();
+    }
+  });
+
   const input = (targetUserId: string, name = NAME) => ({
     targetUserId,
     name,

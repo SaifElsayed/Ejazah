@@ -8,6 +8,8 @@
 //
 // T158: «الملف العام» leads the teaching list to the public profile, where the display name is
 // edited.
+//
+// 005:T019 (FR-601): «صورة التوقيع» leads to the signature screen, for an approved teacher.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
@@ -70,7 +72,7 @@ beforeEach(async () => {
 });
 
 describe('TeacherAccount', () => {
-  it('draws the name with its badge, the settings and the delete row, none of the rows that come later', async () => {
+  it('draws the name with its badge, the settings, the signature row and the delete row', async () => {
     await inBothDirections(withAccount(), (_rendered, direction) => {
       expect(screen.getByText(said(direction, 'teacher.account.title'))).toBeTruthy();
       expect(screen.getByText('أحمد سالم')).toBeTruthy();
@@ -78,8 +80,15 @@ describe('TeacherAccount', () => {
       expect(screen.getByText(said(direction, 'account.providers.apple'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.genders.male'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'teacher.account.deleteAccount'))).toBeTruthy();
-      expect(screen.queryByText(said(direction, 'teacher.account.signature'))).toBeNull();
+      // 005:T019: the signature row, for an approved teacher (FR-601).
+      expect(screen.getByText(said(direction, 'teacher.account.signature'))).toBeTruthy();
     });
+  });
+
+  it('opens the signature screen from «صورة التوقيع» (005:T019)', async () => {
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByText(translate('ar', 'teacher.account.signature')));
+    expect(mockPush).toHaveBeenCalledWith('/(teacher)/account/signature');
   });
 
   it('leads the teaching list with «الملف العام», and opens the profile (T158)', async () => {

@@ -613,6 +613,98 @@ describe('the photo upload (T084)', () => {
   });
 });
 
+// 005:T019 (FR-601; contracts/app-surface.md, `POST /uploads/signature`): the teacher's signature goes
+// as the photo does, one JPEG or PNG under the photo's fixed name with the type the picker reported,
+// through the same bearer; the answer is when it was uploaded, parsed by its contract.
+describe('the signature upload (005:T019)', () => {
+  const signatureUrl = 'https://api.test/uploads/signature';
+  const image = {
+    uri: 'file:///cache/my-signature.png',
+    name: 'my-signature.png',
+    mimeType: 'image/png',
+  };
+
+  function server(answer: () => { status: number; body: unknown }) {
+    const uploads: { bearer: string | null; parts: [string, unknown][] }[] = [];
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe(signatureUrl);
+      const authorization = new Headers(init?.headers).get('authorization');
+      const form = init?.body as {
+        readonly _parts?: [string, unknown][];
+        readonly entries?: () => Iterable<[string, unknown]>;
+      };
+      uploads.push({
+        bearer: authorization === null ? null : authorization.replace(/^Bearer /, ''),
+        parts: form._parts ?? [...(form.entries?.() ?? [])],
+      });
+      const { status, body } = answer();
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    return { uploads, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  function clientOver(fetchImpl: typeof fetch, withUrl = true) {
+    return createApiClient({
+      url,
+      sessions: memorySessions({ accessToken: 'a1', refreshToken: 'r1' }).store,
+      ...(withUrl ? { signatureUploadUrl: signatureUrl } : {}),
+      onSignedOut: jest.fn(),
+      fetch: fetchImpl,
+    });
+  }
+
+  it('posts the one image with the bearer and answers when it was uploaded', async () => {
+    const fake = server(() => ({ status: 201, body: { uploadedAt: '2026-11-18T10:00:00.000Z' } }));
+    await expect(clientOver(fake.fetch).uploadSignature(image)).resolves.toEqual({
+      uploadedAt: '2026-11-18T10:00:00.000Z',
+    });
+    expect(fake.uploads).toHaveLength(1);
+    expect(fake.uploads[0]?.bearer).toBe('a1');
+    expect(fake.uploads[0]?.parts.map(([name]) => name)).toEqual(['file']);
+  });
+
+  it('sends the image under the photo’s fixed name with the type the picker reported, never the person’s name', async () => {
+    const fake = server(() => ({ status: 201, body: { uploadedAt: '2026-11-18T10:00:00.000Z' } }));
+    // Jest's FormData keeps a part as text, so the part is read where the client appends it.
+    const appended = jest.spyOn(FormData.prototype, 'append');
+    try {
+      await clientOver(fake.fetch).uploadSignature(image);
+      expect(appended.mock.calls).toEqual([
+        ['file', { name: UPLOAD_PHOTO_NAMES.png, type: 'image/png', bytes: expect.any(Function) }],
+      ]);
+    } finally {
+      appended.mockRestore();
+    }
+  });
+
+  it('refuses an answer its contract does not admit', async () => {
+    const fake = server(() => ({ status: 201, body: { uploadedAt: 'yesterday' } }));
+    await expect(clientOver(fake.fetch).uploadSignature(image)).rejects.toThrow();
+  });
+
+  it('raises a refusal whose code is read as a call’s is', async () => {
+    const fake = server(() => ({
+      status: 400,
+      body: { error: { code: 'VALIDATION_FAILED', message: 'refused' } },
+    }));
+    const refusal = await clientOver(fake.fetch)
+      .uploadSignature(image)
+      .catch((error: unknown) => error);
+    expect(errorCodeOf(refusal)).toBe('VALIDATION_FAILED');
+  });
+
+  it('refuses to upload when the client was given no signature address', async () => {
+    const fake = server(() => ({ status: 201, body: { uploadedAt: '2026-11-18T10:00:00.000Z' } }));
+    await expect(clientOver(fake.fetch, false).uploadSignature(image)).rejects.toThrow(
+      'no signature upload URL',
+    );
+    expect(fake.uploads).toEqual([]);
+  });
+});
+
 // 004:T045 (FR-489, FR-490; contracts/app-surface.md, `POST /uploads/chat`): a chat document goes as
 // multipart, the enrollment and the name the chat shows before the file, through the same bearer and
 // the same one refresh as a call; the answer is the message it became, parsed by its contract. The

@@ -280,11 +280,15 @@ describe('account.certificateName.set', () => {
     answer: () => Promise<{ name: string }> = async () => ({ name: input.name }),
   ) {
     const calls: unknown[][] = [];
+    // 005:T019 (Q-T1): the list the procedure handed in.
+    const lives: unknown[] = [];
     return {
       calls,
+      lives,
       certificateName: {
-        setOwn: async (userId: string, given: unknown) => {
+        setOwn: async (userId: string, given: unknown, live: unknown) => {
           calls.push([userId, given]);
+          lives.push(live);
           return answer();
         },
         setByAdministrator: unusedIdentityServices.certificateName.setByAdministrator,
@@ -323,6 +327,16 @@ describe('account.certificateName.set', () => {
     const { userId, caller } = await signedIn();
     await expect(caller.account.certificateName.set(input)).resolves.toEqual({ name: input.name });
     expect(recording.calls).toEqual([[userId, input]]);
+  });
+
+  it('hands the request’s live list to the service, for the release’s event (005:T019, Q-T1)', async () => {
+    const recording = recordingNames();
+    surface = surfaceOf(identity, { certificateName: recording.certificateName });
+    const { caller } = await signedIn();
+    await caller.account.certificateName.set(input);
+    expect(recording.lives).toEqual([
+      expect.objectContaining({ afterCommit: expect.any(Function) }),
+    ]);
   });
 
   it('answers the service’s refusal already_set as CONFLICT', async () => {

@@ -69,13 +69,14 @@ export const accountRouter = createAppRouter({
   // T004 of specs/005-certification (FR-602; ADR 0019 D1; app-surface.md,
   // `account.certificateName.set`): the student's certificate name, entered once, keyed; refused
   // `already_set` once the account holds one, and the student's waiting requests released on the
-  // same transaction (the service's). The student kind, under the default limit.
+  // same transaction (the service's). The student kind, under the default limit. 005:T019 (Q-T1):
+  // the request's list goes with it, for the released requests' `ijazahRequest` events.
   certificateName: createAppRouter({
     set: studentProcedure({
       input: certificateNameSetInput,
       output: certificateNameSetOutput,
     }).mutation(({ ctx, input }) =>
-      ctx.services.identity.certificateName.setOwn(ctx.caller.userId, input),
+      ctx.services.identity.certificateName.setOwn(ctx.caller.userId, input, ctx.live),
     ),
   }),
 
