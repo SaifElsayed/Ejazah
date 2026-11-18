@@ -6,7 +6,9 @@
 // What the schema language cannot say lives in the migrations: the revoked DELETE on ijazahs (T065,
 // ERD section 15.10); since Phase 4 (`20261117…_certification_foundations`), the partial unique on
 // an enrollment's open request and the checks `ijazah_requests_reason_check`,
-// `ijazah_requests_decided_check` and `ijazahs_signed_off_check` (ERD section 15).
+// `ijazah_requests_decided_check` and `ijazahs_signed_off_check` (ERD section 15); since B46
+// (`20261117131114_certification_printed_riwaya_tariq`), the four checks that no printed riwaya or
+// tariq is '' (ERD section 15, rule 58).
 
 // Phase 4 (T001 of specs/005-certification, data-model.md; ADR 0017 D5, R-403, R-404): a teacher's
 // request for a student's ijazah, frozen at send, decided by an administrator. The enrollment, the
@@ -28,6 +30,11 @@ model IjazahRequest {
   chainSnapshot       Json                @map("chain_snapshot")
   // `teacher_credentials.holder_name` at send.
   teacherNamePrinted  String              @map("teacher_name_printed")
+  // B46 (T006, Q5 (c)): the credential's riwaya and tariq as printed, frozen with the chain at send and
+  // re-frozen with it while open; the tariq NULL when the credential names none. Never '' (the
+  // checks `ijazah_requests_riwaya_printed_check`, `ijazah_requests_tariq_printed_check`).
+  riwayaPrinted       String              @map("riwaya_printed")
+  tariqPrinted        String?             @map("tariq_printed")
   // The request's own copy of the teacher's signature; NULL once erased (rejected or closed).
   signatureStorageKey String?             @map("signature_storage_key")
   // Mandatory when rejected (`ijazah_requests_reason_check`).
@@ -96,6 +103,12 @@ model Ijazah {
   issuedByAdminId       String?    @map("issued_by_admin_id") @db.Uuid
   studentNamePrinted    String     @map("student_name_printed")
   teacherNamePrinted    String     @map("teacher_name_printed")
+  // B46 (T006, T032, Q5 (c)): the request's printed riwaya and tariq, copied at approval, re-frozen
+  // with the chain before the sign-off, immutable after it. A new row is never '' (the checks
+  // `ijazahs_riwaya_printed_check`, `ijazahs_tariq_printed_check`, NOT VALID: rows before B46 are
+  // test probes backfilled '').
+  riwayaPrinted         String     @map("riwaya_printed")
+  tariqPrinted          String?    @map("tariq_printed")
   completionDate        DateTime?  @map("completion_date") @db.Date
   renderedAt            DateTime?  @map("rendered_at") @db.Timestamptz(6)
   renderGeneration      Int        @default(0) @map("render_generation")

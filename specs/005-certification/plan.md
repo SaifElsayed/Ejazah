@@ -107,7 +107,7 @@ tests/                       # adversarial registrations, db-integrity probes, j
   imports;
 - sessions and payments import notifications.
 
-Five ports run against the arrows, each declared by the module below and bound by `main.ts`
+Six ports run against the arrows, each declared by the module below and bound by `main.ts`
 (`docs/ARCHITECTURE.md:195-197`'s pattern):
 
 | Port | Declared in | Bound to | Task |
@@ -117,6 +117,7 @@ Five ports run against the arrows, each declared by the module below and bound b
 | `OpenIjazahRequests` | identity (deletion) | certification | T031 |
 | `OpenCases` | identity (`users.delete`) | moderation | T031 |
 | `Pairings` (`partyOfSession`, `partyOfEnrollment`, `paired`) | moderation (reports, flags) | sessions (`partyOfSession`), booking (`partyOfEnrollment`, `paired`) | T011, T013 |
+| `EnrollmentIjazahRequests` (`of`) | booking (the enrollment reads) | certification | T006 |
 
 Identity's existing `OngoingEnrollments` port (bound to booking) gains a method `live` for T031.
 

@@ -478,7 +478,12 @@ describe('both parties’ reads (FR-513)', () => {
   it('answer the reason both parties are shown, never the internal note', async () => {
     const made = await confirmedWorld();
     await end(made.enrollmentId);
-    const lists = createBookingServices({ database, settings });
+    const lists = createBookingServices({
+      database,
+      settings,
+      // 005:T006 (rule d): the enrollment reads' ijazah request, none held.
+      ijazahRequests: { of: async () => new Map() },
+    });
     const asStudent = await lists.enrollment(made.studentId, { enrollmentId: made.enrollmentId });
     const asTeacher = await lists.student(made.teacherId, { enrollmentId: made.enrollmentId });
     expect(asStudent.endedByAdmin).toEqual({ reason: PARTY_REASON });

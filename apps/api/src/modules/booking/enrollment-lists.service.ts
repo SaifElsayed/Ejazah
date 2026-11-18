@@ -62,7 +62,16 @@
 // directly answers `endedByAdmin: { reason }`, its `admin_end_reason`, to both parties, in the lists
 // and the details; the internal note is in the audit entry only and never read here. It is never
 // paused (`BAN_CLOSINGS` leaves `admin_ended` out, N4); a restore clears the reason.
+//
+// THE IJAZAH REQUEST (005:T006; FR-608; contracts/app-surface.md, «Enrollment reads gain»; the note
+// under T006, Q4 (a), Q-A3 (a)). Each detail answers `ijazahRequest`, the enrollment's latest
+// request (its status, the ijazah once approved, the rejection's reason to the teacher only), or
+// null without one. Certification imports booking, so booking declares the port
+// `EnrollmentIjazahRequests` (`of(tx, enrollmentIds)`), which `main.ts` binds to certification's
+// entry (`docs/ARCHITECTURE.md:195`'s pattern); booking reads no `ijazah_requests` row and imports
+// no certification. One call per read, with every enrollment it answers.
 import type {
+  EnrollmentIjazahRequest,
   EnrollmentsGetInput,
   EnrollmentsGetOutput,
   EnrollmentsListInput,
@@ -132,6 +141,17 @@ export const LIST_PAGE_SIZE_SETTING = 'discovery_page_size';
 
 const positiveWhole = z.int().positive();
 
+/**
+ * 005:T006 (the note under T006, Q4 (a)): each enrollment's latest ijazah request among
+ * `enrollmentIds`, absent for one with none; certification's, bound by `main.ts`.
+ */
+export interface EnrollmentIjazahRequests {
+  of(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, EnrollmentIjazahRequest>>;
+}
+
 /** What the lists read, each through its owner's entry, on the caller's transaction; faked in a spec. */
 export interface EnrollmentListsStore {
   activeOfStudent(tx: Transaction, studentUserId: string): Promise<readonly ListedEnrollmentRow[]>;
@@ -192,10 +212,15 @@ export interface EnrollmentListsStore {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, readonly EnrollmentCase[]>>;
+  /** 005:T006: each enrollment's latest ijazah request, through `EnrollmentIjazahRequests`. */
+  ijazahRequestsOf: EnrollmentIjazahRequests['of'];
 }
 
-/** The store over booking's own queries and the owners' entries (R-API-6). */
-export const enrollmentListsStore: EnrollmentListsStore = {
+/**
+ * The store over booking's own queries and the owners' entries (R-API-6); the ijazah requests are
+ * the port's, joined by `createEnrollmentListServices` (005:T006).
+ */
+export const enrollmentListsStore: Omit<EnrollmentListsStore, 'ijazahRequestsOf'> = {
   activeOfStudent: activeEnrollmentsOfStudent,
   activeOfTeacher: activeEnrollmentsOfTeacher,
   endedPage: endedEnrollmentPage,
@@ -491,14 +516,16 @@ export async function studentEnrollmentOf(
 ): Promise<EnrollmentsGetOutput> {
   const row = await store.listedOf(tx, enrollmentId, { studentUserId });
   if (row === null) throw new DomainError('NOT_FOUND');
-  const [context, complaintOpen] = await Promise.all([
+  const [context, complaintOpen, requests] = await Promise.all([
     contextOf(tx, store, [row], ofTeacher, now, windowDays),
     store.complaintOpenOf(tx, row.id),
+    store.ijazahRequestsOf(tx, [row.id]),
   ]);
   return {
     ...studentItemOf(row, context),
     sessions: detailSessionsOf(row, context),
     complaintOpen,
+    ijazahRequest: withoutReason(requests.get(row.id)),
   };
 }
 
@@ -586,10 +613,31 @@ export async function teacherStudentOf(
 ): Promise<TeacherStudentsGetOutput> {
   const row = await store.listedOf(tx, enrollmentId, { teacherUserId });
   if (row === null) throw new DomainError('NOT_FOUND');
-  const context = await contextOf(tx, store, [row], ofStudent, now, windowDays);
+  const [context, requests] = await Promise.all([
+    contextOf(tx, store, [row], ofStudent, now, windowDays),
+    store.ijazahRequestsOf(tx, [row.id]),
+  ]);
   return {
     ...teacherItemOf(row, context),
     sessions: detailSessionsOf(row, context),
+    ijazahRequest: requests.get(row.id) ?? null,
+  };
+}
+
+/**
+ * 005:T006 (FR-608): the student's read of the request, the rejection's reason being the teacher's.
+ * A revoked ijazah keeps its `revoked: true` (005:T010, Q-E2 (a), R-HONEST-6; #146 Saif r1, Major 1):
+ * the fields are named one by one, so the reason is never copied and the flag never dropped.
+ */
+function withoutReason(
+  request: EnrollmentIjazahRequest | undefined,
+): Omit<EnrollmentIjazahRequest, 'reason'> | null {
+  if (request === undefined) return null;
+  const { status, ijazahId, revoked } = request;
+  return {
+    status,
+    ...(ijazahId === undefined ? {} : { ijazahId }),
+    ...(revoked === undefined ? {} : { revoked }),
   };
 }
 
@@ -669,16 +717,23 @@ export interface EnrollmentListServices {
 export function createEnrollmentListServices({
   database,
   settings,
+  ijazahRequests,
   clock = clockTimestamp,
-  store = enrollmentListsStore,
+  store: entries = enrollmentListsStore,
 }: {
   readonly database: Database;
   readonly settings: SettingsReader;
+  /** 005:T006: certification's latest requests, bound by `main.ts` (the note under T006, Q4 (a)). */
+  readonly ijazahRequests: EnrollmentIjazahRequests;
   /** The read's instant on its transaction; the database's clock unless a spec sets one. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
-  readonly store?: EnrollmentListsStore;
+  readonly store?: Omit<EnrollmentListsStore, 'ijazahRequestsOf'>;
 }): EnrollmentListServices {
   const transactions = transactionsOver(database);
+  const store: EnrollmentListsStore = {
+    ...entries,
+    ijazahRequestsOf: (tx, enrollmentIds) => ijazahRequests.of(tx, enrollmentIds),
+  };
   const pageSize = () => settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
   // 004:T074: the two restore windows, each read when a held closing needs it (R-MONEY-12).
   const windowDays = windowDaysOf(settings);

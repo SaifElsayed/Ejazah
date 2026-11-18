@@ -191,7 +191,11 @@ export class LiveChannel {
     // A `chat` event carries a message for the open chat to merge by `messageId` (T045,
     // contracts/app-surface.md's `chat` row), never a re-read (PR #135's review, round 1, Minor 1).
     else if (event.type === 'chat') this.ports.chat(event);
-    else this.ports.signal(event);
+    // 005:T006 (FR-608; the owner's Q-A6 (a)): the request's state on the enrollment changed, so the
+    // enrollment's open screens are read again, as on an `enrollment` signal.
+    else if (event.type === 'ijazahRequest') {
+      this.ports.signal({ type: 'enrollment', enrollmentId: event.enrollmentId });
+    } else this.ports.signal(event);
   }
 
   async #failed(error: unknown, started: boolean): Promise<void> {

@@ -92,6 +92,8 @@ function requestValues(
     status: 'pending',
     chain_snapshot: JSON.stringify([['الشيخ الأول'], ['المعلم']]),
     teacher_name_printed: 'اسم المعلم',
+    // B46 (005:T006, Q5 (c)): the riwaya it prints, NOT NULL.
+    riwaya_printed: 'حفص عن عاصم',
     ...values,
   };
 }
@@ -137,6 +139,8 @@ async function tryIjazah(values: Readonly<Record<string, unknown>>): Promise<str
     granted_at: '2026-11-17T08:00:00Z',
     student_name_printed: 'اسم الطالب',
     teacher_name_printed: 'اسم المعلم',
+    // B46 (005:T006, Q5 (c)): the riwaya it prints, NOT NULL.
+    riwaya_printed: 'حفص عن عاصم',
     ...values,
   });
   return attempt(db, sql, params);

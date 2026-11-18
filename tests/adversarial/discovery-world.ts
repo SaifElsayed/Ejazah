@@ -84,6 +84,14 @@ import {
   createDiscoveryCatalog,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
+// T006 of specs/005-certification (rule d): the ijazah request, bound as `main.ts` binds it.
+import {
+  // 005:T009 (rule d): the parties' certificates, bound as `main.ts` binds them.
+  certificatesRouter,
+  createCertificatesService,
+  createIjazahRequestService,
+  ijazahRequestsRouter,
+} from '../../apps/api/src/modules/certification/index.js';
 // T037 of specs/004-sessions.
 import {
   CHAT_UPLOAD_PATH,
@@ -141,7 +149,7 @@ import {
 } from '../../apps/api/src/platform/settings/settings-reader.js';
 import { appRouter } from '../../apps/api/src/surfaces/app.router.js';
 import { type AppServices, createAppContext } from '../../apps/api/src/surfaces/context.js';
-import { createAppCallerFactory } from '../../apps/api/src/surfaces/procedures.js';
+import { createAppCallerFactory, createAppRouter } from '../../apps/api/src/surfaces/procedures.js';
 // T038 of specs/004-sessions: the chat's documents kept in memory, each operation recorded.
 import { multipart, storageStub } from '../../apps/api/src/surfaces/upload-fixtures.js';
 import {
@@ -152,6 +160,10 @@ import {
 import type {
   BookingSlotsInput,
   BookingSlotsOutput,
+  // 005:T009 (rule d): the `certificates` procedures' types.
+  CertificatesLinkInput,
+  CertificatesLinkOutput,
+  CertificatesListOutput,
   ChatAttachmentLinkInput,
   ChatAttachmentLinkOutput,
   ChatListInput,
@@ -179,6 +191,12 @@ import type {
   EnrollmentsGetOutput,
   EnrollmentsListInput,
   EnrollmentsListOutput,
+  IjazahRequestsGetInput,
+  IjazahRequestsGetOutput,
+  IjazahRequestsPreviewInput,
+  IjazahRequestsPreviewOutput,
+  IjazahRequestsSendInput,
+  IjazahRequestsSendOutput,
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
@@ -388,6 +406,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   // T038: the chat's documents, as seeded (`document_link_ttl_seconds` is above).
   upload_max_bytes: 10_485_760,
   rate_limit_upload: { limit: 20, window_seconds: 600 },
+  // T006 of specs/005-certification: `teacher.ijazahRequests.send`'s limit, as seeded.
+  rate_limit_ijazah_request: { limit: 10, window_seconds: 3600 },
 };
 
 const settings: SettingsReader = {
@@ -413,6 +433,14 @@ const TIMEOUTS = { statementTimeoutMs: 30_000, idleInTransactionTimeoutMs: 60_00
 const POOL_MAX = 4;
 
 const callerFactory = createAppCallerFactory(appRouter);
+// T006 of specs/005-certification: `teacher.ijazahRequests`, mounted as `app.router.ts` mounts it.
+const ijazahRequestsCallerFactory = createAppCallerFactory(
+  createAppRouter({ teacher: createAppRouter({ ijazahRequests: ijazahRequestsRouter }) }),
+);
+// 005:T009: `certificates`, mounted as `app.router.ts` will mount it (the integration's line).
+const certificatesCallerFactory = createAppCallerFactory(
+  createAppRouter({ certificates: certificatesRouter }),
+);
 
 /** The `discovery` and `booking` namespaces of the user surface as one bearer reaches them. */
 export interface AppCaller {
@@ -594,6 +622,53 @@ export interface DiscoverySurface {
   readonly chatStorage: ReturnType<typeof storageStub>;
   /** T038: removes a spec's chat documents, their rows by id and their files by their exact keys. */
   discardChatDocuments(messageIds: readonly string[]): Promise<void>;
+  /**
+   * T006 of specs/005-certification: `teacher.ijazahRequests` as a bearer reaches it, over the
+   * module's router mounted under `teacher.ijazahRequests` as `app.router.ts` mounts it (the
+   * integration's line), on this world's services and caller kinds.
+   */
+  ijazahRequests(accessToken: string): Promise<IjazahRequestsCaller>;
+  /**
+   * T006 of specs/005-certification: the teacher's application marked approved, as an approved
+   * teacher's is (a world teacher is seeded with none), so the teacher kind's `admits: 'approved'`
+   * reads the session's standing as approved (`session.service.ts`, the teacher standing).
+   */
+  approveApplication(teacherId: string): Promise<void>;
+  /**
+   * 005:T009: `certificates` as a bearer reaches it, over the module's router mounted under
+   * `certificates` as `app.router.ts` will mount it, on this world's services and caller kinds.
+   */
+  certificates(accessToken: string): Promise<CertificatesCaller>;
+  /**
+   * 005:T009: an ijazah of the pair's enrollment written as T007 to T010 would leave it: rendered,
+   * then signed off (`signed`), not yet (`unsigned`), or signed off and revoked (`revoked`), by
+   * the world's administrator; soft-deleted when the world closes (no DELETE on `ijazahs`).
+   */
+  issueIjazah(pair: SessionPair, state: IjazahState): Promise<string>;
+  /** 005:T009: the certificates' in-memory storage, each signed link recorded. */
+  readonly certificateStorage: ReturnType<typeof storageStub>;
+}
+
+/** 005:T009: the states an ijazah of the world is written in. */
+export type IjazahState = 'signed' | 'unsigned' | 'revoked';
+
+/** 005:T009: the parties' certificates, as a bearer calls them. */
+export interface CertificatesCaller {
+  readonly certificates: {
+    list(): Promise<CertificatesListOutput>;
+    link(input: CertificatesLinkInput): Promise<CertificatesLinkOutput>;
+  };
+}
+
+/** T006 of specs/005-certification: the ijazah request's procedures, as a bearer calls them. */
+export interface IjazahRequestsCaller {
+  readonly teacher: {
+    readonly ijazahRequests: {
+      preview(input: IjazahRequestsPreviewInput): Promise<IjazahRequestsPreviewOutput>;
+      send(input: IjazahRequestsSendInput): Promise<IjazahRequestsSendOutput>;
+      get(input: IjazahRequestsGetInput): Promise<IjazahRequestsGetOutput>;
+    };
+  };
 }
 
 /** An account standing a case moves a teacher to (SRS §3.7.1, `002:T143`). */
@@ -611,7 +686,12 @@ export interface CheckoutRows {
 interface Built extends DiscoverySurface {
   readonly database: Database;
   readonly server: Server;
-  readonly created: { readonly users: string[]; readonly subjects: string[] };
+  readonly created: {
+    readonly users: string[];
+    readonly subjects: string[];
+    /** 005:T009: the ijazahs `issueIjazah` wrote, soft-deleted when the world closes. */
+    readonly ijazahs: string[];
+  };
 }
 
 let building: Promise<Built> | undefined;
@@ -634,6 +714,11 @@ afterAll(async () => {
     where: { id: { in: built.created.subjects } },
     data: { isActive: false },
   });
+  // 005:T009: the application role holds no DELETE on `ijazahs`, so they are soft-deleted.
+  await built.database.ijazah.updateMany({
+    where: { id: { in: built.created.ijazahs }, deletedAt: null },
+    data: { deletedAt: at },
+  });
   await new Promise((resolve) => built.server.close(resolve));
   await closeDatabase(built.database);
 });
@@ -643,7 +728,7 @@ async function build(): Promise<Built> {
     poolMax: POOL_MAX,
     ...TIMEOUTS,
   });
-  const created = { users: [] as string[], subjects: [] as string[] };
+  const created = { users: [] as string[], subjects: [] as string[], ijazahs: [] as string[] };
   const log = createLogger({ level: 'fatal' });
   const encryptionKey = randomBytes(32).toString('base64');
 
@@ -755,6 +840,29 @@ async function build(): Promise<Built> {
   const video = recordedVideo(encryptionKey);
   // T038: the chat's documents and their links, in memory.
   const chatStorage = storageStub();
+  // T006 of specs/005-certification (rule d): the ijazah request over its own in-memory storage,
+  // the enrollment reads' port bound to it, as `main.ts` binds them.
+  const certification = createIjazahRequestService({
+    database,
+    // No world teacher holds a signature, so nothing is ever read or put.
+    storage: {
+      read: () => Promise.reject(new Error('no signature in this world')),
+      put: () => Promise.reject(new Error('no signature in this world')),
+      remove: async () => undefined,
+    },
+    idempotency,
+    log,
+    // 005:T032 (rule d): no world ijazah is re-frozen, so nothing is enqueued.
+    renders: { enqueue: () => Promise.reject(new Error('no ijazah in this world')) },
+  });
+  // 005:T009 (rule d): the parties' certificates over their own in-memory storage.
+  const certificateStorage = storageStub();
+  const certificates = createCertificatesService({
+    database,
+    storage: certificateStorage,
+    settings,
+    log,
+  });
   const services: AppServices = {
     settings,
     publicConfig: { supportEmail: 'support@ijazah.invalid' },
@@ -773,7 +881,11 @@ async function build(): Promise<Built> {
       settings,
     }),
     // As `main.ts` binds it (T032): the booking sheet's slots over the owners' entries.
-    booking: createBookingServices({ database, settings }),
+    booking: createBookingServices({
+      database,
+      settings,
+      ijazahRequests: { of: (tx, enrollmentIds) => certification.of(tx, enrollmentIds) },
+    }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({
       database,
@@ -803,6 +915,8 @@ async function build(): Promise<Built> {
       // T038: `chat.attachmentLink`'s signed links.
       storage: chatStorage,
     }),
+    // T006 of specs/005-certification (rule d).
+    certification: { ijazahRequests: certification, certificates },
   };
   const rateLimiter = new RateLimiter({
     settings,
@@ -1197,6 +1311,72 @@ async function build(): Promise<Built> {
       });
     },
     chatStorage,
+    async approveApplication(teacherId) {
+      await database.teacherProfile.update({
+        where: { userId: teacherId },
+        data: { applicationStatus: 'approved' },
+        select: { id: true },
+      });
+    },
+    // T006 of specs/005-certification: the module's router on this world's context.
+    ijazahRequests: async (accessToken) =>
+      ijazahRequestsCallerFactory(
+        createAppContext({
+          session: await resolve(accessToken),
+          log,
+          rateLimiter,
+          clientAddress: SPEC_CLIENT,
+          services,
+        }),
+      ),
+    // 005:T009: the module's router on this world's context.
+    certificates: async (accessToken) =>
+      certificatesCallerFactory(
+        createAppContext({
+          session: await resolve(accessToken),
+          log,
+          rateLimiter,
+          clientAddress: SPEC_CLIENT,
+          services,
+        }),
+      ),
+    certificateStorage,
+    async issueIjazah(pair, state) {
+      const enrollment = await database.enrollment.findUniqueOrThrow({
+        where: { id: pair.enrollmentId },
+        select: { snapshotSubjectId: true },
+      });
+      const at = new Date();
+      const { id } = await database.ijazah.create({
+        data: {
+          certificateNumber: `adversarial-${randomUUID()}`,
+          enrollmentId: pair.enrollmentId,
+          studentUserId: pair.student.userId,
+          teacherUserId: pair.teacher.userId,
+          subjectId: enrollment.snapshotSubjectId,
+          mode: 'generated',
+          language: 'ar',
+          chainSnapshot: [['محمد ﷺ'], ['المجيز']],
+          certificateStorageKey: `certificates/${randomUUID()}/0.pdf`,
+          paperCopyIntended: false,
+          verificationTokenHash: `adversarial-${randomUUID()}`,
+          grantedAt: at,
+          studentNamePrinted: 'الطالب',
+          teacherNamePrinted: 'المجيز',
+          riwayaPrinted: 'حفص عن عاصم',
+          tariqPrinted: null,
+          completionDate: new Date('2026-11-01T00:00:00Z'),
+          renderedAt: at,
+          ...(state === 'unsigned' ? {} : { signedOffAt: at, signedOffByAdminId: admin }),
+          ...(state === 'revoked'
+            ? { revokedAt: at, revokedReason: 'adversarial', revokedByAdminId: admin }
+            : {}),
+        },
+        select: { id: true },
+      });
+      created.ijazahs.push(id);
+      return id;
+    },
     async discardChatDocuments(messageIds) {
       if (messageIds.length === 0) return;
       const rows = await database.chatMessage.findMany({

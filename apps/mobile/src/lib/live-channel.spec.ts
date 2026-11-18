@@ -245,6 +245,20 @@ describe('the channel’s reopenings (T065)', () => {
     channel.stop();
   });
 
+  // 005:T006 (FR-608; the owner's Q-A6 (a)): the request's state on the enrollment changed, so the
+  // enrollment's open screens are read again, as on an `enrollment` signal; nothing else is read.
+  it('passes an `ijazahRequest` event on as its enrollment’s signal (005:T006)', () => {
+    const { channel, ports, latest } = channelOver();
+    channel.setActive(true);
+    latest().onData({ type: 'ijazahRequest', enrollmentId: ENROLLMENT_ID });
+    expect(ports.signal.mock.calls).toEqual([
+      [{ type: 'enrollment', enrollmentId: ENROLLMENT_ID }],
+    ]);
+    expect(ports.readAccount).not.toHaveBeenCalled();
+    expect(ports.chat).not.toHaveBeenCalled();
+    channel.stop();
+  });
+
   // PR #135's review, round 1, Minor 1: a `chat` event carries a message for the open chat to merge
   // (T045, contracts/app-surface.md's `chat` row), never a re-read of the enrollment's screens.
   it('hands a `chat` event to the open chat’s merge, and re-reads nothing and reads no account.me (T045)', () => {

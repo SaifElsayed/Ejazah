@@ -15,7 +15,7 @@ never a name (FR-ADMIN-17).
 | `ijazahs.signOff` | `{ ijazahId, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.signed_off`; refused `not_rendered`, `revoked`, `already_signed_off` (DEC-72) |
 | `ijazahs.rerender` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.rerendered`; refused once signed off or revoked |
 | `ijazahs.revoke` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.revoked` |
-| `ijazahs.bar` / `ijazahs.liftBar` | `{ userId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah_bar.set` / `ijazah_bar.lifted` |
+| `ijazahs.bar` / `ijazahs.liftBar` | `{ targetUserId, reason, idempotencyKey }` (B46: the no-authority-in-input lint refuses `userId`; `admin/documents.ts:18-19`'s precedent) | void | `rate_limit_ijazah_decision` | `ijazah_bar.set` / `ijazah_bar.lifted` |
 | `users.setCertificateName` | `{ targetUserId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |
 | `reports.list` / `reports.get` | `{ status?, cursor? }` / `{ reportId }` | queue and detail, links to the session or enrollment | default | `reports.listed` / `report.viewed` |
 | `reports.resolve` | `{ reportId, outcome: 'actioned' \| 'dismissed', note, idempotencyKey }` | void | default | `report.resolved` |

@@ -60,6 +60,23 @@ export const idempotentProcedures = [
   // on the kind's transaction (runOn), as `users.delete` is.
   'account.certificateName.set',
   'users.setCertificateName',
+  // T006 of specs/005-certification (app-surface.md, `teacher.ijazahRequests.send`): in its own
+  // transaction (run), its stored outcome the request's id and status.
+  'teacher.ijazahRequests.send',
+  // T007 of specs/005-certification (admin-surface.md, `ijazahRequests.approve` and `.reject`):
+  // keyed on the kind's transaction (runOn), as `users.delete` is; approve's stored outcome the
+  // ijazah's id and number.
+  'ijazahRequests.approve',
+  'ijazahRequests.reject',
+  // 005:T010 (admin-surface.md, `ijazahs.revoke`, `.bar` and `.liftBar`): keyed on the kind's
+  // transaction (runOn), as the review's decisions are; revoke's stored outcome the number.
+  'ijazahs.revoke',
+  'ijazahs.bar',
+  'ijazahs.liftBar',
+  // 005:T032 (admin-surface.md, `ijazahs.signOff` and `.rerender`): keyed on the kind's transaction
+  // (runOn); the stored outcome the certificate number.
+  'ijazahs.signOff',
+  'ijazahs.rerender',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

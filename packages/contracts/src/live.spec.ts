@@ -29,6 +29,15 @@ describe('liveEvent (T063)', () => {
     expect(liveEvent.parse({ type: 'account', userId: SESSION })).toEqual({ type: 'account' });
   });
 
+  // T006 of specs/005-certification (contracts/app-surface.md, «Live event»): the request's state on
+  // the enrollment changed; the parties read `teacher.ijazahRequests.get` or the enrollment again.
+  it('parses the ijazahRequest member, its enrollment only', () => {
+    expect(
+      liveEvent.parse({ type: 'ijazahRequest', enrollmentId: ENROLLMENT, status: 'pending' }),
+    ).toEqual({ type: 'ijazahRequest', enrollmentId: ENROLLMENT });
+    expect(liveEvent.safeParse({ type: 'ijazahRequest' }).success).toBe(false);
+  });
+
   it('refuses an unknown type, a missing id and an id that is not one', () => {
     expect(liveEvent.safeParse({ type: 'other', enrollmentId: ENROLLMENT }).success).toBe(false);
     expect(liveEvent.safeParse({ type: 'session', sessionId: SESSION }).success).toBe(false);

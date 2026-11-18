@@ -97,6 +97,9 @@ export async function resolveTargetName(
     case 'dispute':
     case 'session':
     case 'provider_outage':
+    // 005:T007: a request and an ijazah name no person here.
+    case 'ijazah_request':
+    case 'ijazah':
       return null;
   }
 }

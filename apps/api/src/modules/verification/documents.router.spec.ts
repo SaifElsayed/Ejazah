@@ -532,6 +532,11 @@ describe('an administrator’s certificate name (T004 of specs/005-certification
     ['a blank name', { ...NAMING, name: '  ' }],
     ['no idempotency key', { targetUserId: PERSON, name: NAMING.name, reason: NAMING.reason }],
     ['a person who is no id', { ...NAMING, targetUserId: 'x' }],
+    // #145 r2 nit 3: the shared constant pinned on this surface too (a schema of its own goes red).
+    ['a name holding a right-to-left override (U+202E)', { ...NAMING, name: 'مريم ‮أحمد' }],
+    // #145 r2 Follow-up 1: the line and paragraph separators and the invisible format characters.
+    ['a name holding a line separator (U+2028)', { ...NAMING, name: 'مريم أحمد' }],
+    ['a name holding a zero-width space (U+200B)', { ...NAMING, name: 'مريم​أحمد' }],
   ])('refuses %s as VALIDATION_FAILED, reaching nothing', async (_case, input) => {
     const { as, written, reached } = surface();
     expect(
@@ -543,6 +548,17 @@ describe('an administrator’s certificate name (T004 of specs/005-certification
     ).toBe('VALIDATION_FAILED');
     expect(written).toEqual([]);
     expect(reached).toEqual([]);
+  });
+
+  // #145 r2 Follow-up 1: Arabic and Persian spelling needs the zero-width non-joiner and joiner, so
+  // the format characters' refusal keeps them.
+  it.each([
+    ['a zero-width non-joiner (U+200C)', 'مريم‌أحمد'],
+    ['a zero-width joiner (U+200D)', 'مريم‍أحمد'],
+  ])('admits a name holding %s, handing it to the service', async (_case, name) => {
+    const { as, reached } = surface();
+    await as(VERIFIED).users.setCertificateName({ ...NAMING, name });
+    expect(reached).toEqual([['users.setCertificateName', SPEC_ADMIN, { ...NAMING, name }]]);
   });
 
   it('over rate_limit_ijazah_decision is refused RATE_LIMITED, opening no transaction and writing nothing', async () => {

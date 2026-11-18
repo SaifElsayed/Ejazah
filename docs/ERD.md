@@ -604,6 +604,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | request_id | FK → ijazah_requests, nullable, unique | The request it was issued from (ADR 0017; Phase 4, changelog row 47) |
 | issued_by_admin_id | FK → admin_users, nullable | The administrator who approved the request (ADR 0017) |
 | student_name_printed / teacher_name_printed | text | The names as printed: the student's `users.certificate_name` read at the approval, the teacher's frozen on the request. An issued certificate keeps them from its sign-off, so it verifies after a deletion erases `users.certificate_name` (ADR 0019 D1, as noted 2026-11-17; ADR 0015 D3) |
+| riwaya_printed / tariq_printed | text / text, nullable | The credential's riwaya and tariq as printed (FR-IJAZAH-2), copied from the request at approval, re-frozen with the chain before the sign-off, immutable after it; the tariq NULL when the credential names none; never '' on a new row (§15 rule 58; B46, changelog row 52) |
 | completion_date | date, nullable | From the request (FR-IJAZAH-15) |
 | rendered_at | timestamptz, nullable | Set by `render-certificate` for the payload's `render_generation`; cleared by a re-render (R-402) |
 | render_generation | int, default 0 | Raised by each re-render; an older generation's job writes nothing (R-402) |
@@ -622,6 +623,7 @@ Phase 4 (2026-11-17, `specs/005-certification/data-model.md`; ADR 0017 D5, R-403
 | status | enum `ijazah_request_status`: awaiting_student_name · pending · approved · rejected · closed | Sent → `awaiting_student_name` (no certificate name yet) or `pending`; the name entered → `pending`; approved (an `ijazahs` row) or rejected by an Administrator; `closed` at the student's deletion |
 | chain_snapshot | jsonb | Generations (arrays of names), origin first, the teacher appended; frozen at send, re-frozen on a correction of the chain while open (R-403) |
 | teacher_name_printed | text | `teacher_credentials.holder_name` at send |
+| riwaya_printed / tariq_printed | text / text, nullable | The credential's riwaya and tariq at send, re-frozen with the chain while open; the tariq NULL when the credential names none; never '' (§15 rule 58; B46, changelog row 52) |
 | signature_storage_key | text, nullable | The request's own copy of the teacher's signature; NULL once erased (rejected or closed) |
 | reason | text, nullable | Mandatory when rejected (§15 rule 54) |
 | decided_by_admin_id / decided_at | FK → admin_users, nullable / timestamptz, nullable | Set together on approve or reject, and only then (§15 rule 54) |
@@ -1042,6 +1044,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 57. `gender_flags`: one open flag per user — partial unique `gender_flags_one_open_per_user_key` on `(flagged_user_id) WHERE status = 'open'` (R-409; changelog row 49).
 
+58. `ijazah_requests` and `ijazahs`: `riwaya_printed <> ''` — checks `ijazah_requests_riwaya_printed_check`, `ijazahs_riwaya_printed_check`; `tariq_printed IS NULL OR tariq_printed <> ''` — checks `ijazah_requests_tariq_printed_check`, `ijazahs_tariq_printed_check`. The two on `ijazahs` are NOT VALID: the test databases' `probe-` rows written before them hold the backfilled '' (B46; changelog row 52).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1380,3 +1384,9 @@ Amended on 2026-11-17 by T001 of `specs/005-certification/tasks.md` (B45), on th
 | 51 | §12 `settings`: Phase 4's six rate limits, `rate_limit_user_report` (5 per 86400 s) and `rate_limit_gender_flag` (3 per 86400 s) (SRS DEC-71), `rate_limit_ijazah_request` (10 per 3600 s), `rate_limit_ijazah_decision`, `rate_limit_gender_decision` and `rate_limit_settings_update` (10 per 60 s each) (SRS DEC-73), seeded at the list's end | none (the seed) |
 
 Two tables are added: 46 tables.
+
+Amended on 2026-11-17 by B46 of `specs/005-certification/tasks.md` (the note under T006), on the owner's decisions of 2026-11-17 on B46's conflict check (Q5 (c): the printed riwaya and tariq as typed columns, the tariq nullable; the review's refinement for the test databases' probe rows); `ejazah-tools\b46\owner-words.md`:
+
+| # | Change | Migration |
+|---|---|---|
+| 52 | §8 `ijazah_requests.riwaya_printed` (text NOT NULL; the table held no row) and `tariq_printed` (text, nullable); `ijazahs.riwaya_printed` (text NOT NULL, added with a default of '' dropped in the same migration, since test databases hold `probe-` rows a DB spec cannot delete) and `tariq_printed` (text, nullable); §15 rule 58, the four checks, NOT VALID on `ijazahs` | `20261117131114_certification_printed_riwaya_tariq` |

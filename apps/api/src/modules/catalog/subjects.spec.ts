@@ -18,6 +18,7 @@ import { SubjectsRepository } from './subjects.repository.js';
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -79,6 +80,7 @@ describe('catalog.subjects.list (T038, FR-182)', () => {
       checkout: unusedCheckoutServices,
       sessions: unusedSessionsServices,
       chat: unusedChatServices,
+      certification: unusedCertificationServices,
     };
     const router = createAppRouter({ catalog: createAppRouter({ subjects: subjectsRouter }) });
     const caller = createAppCallerFactory(router)(

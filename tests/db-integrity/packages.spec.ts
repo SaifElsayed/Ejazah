@@ -56,6 +56,7 @@ import {
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -154,6 +155,7 @@ function surfaceCaller(teacherId: string) {
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
         chat: unusedChatServices,
+        certification: unusedCertificationServices,
         catalog,
       },
     }),
@@ -209,6 +211,7 @@ function publishedCaller(teacherId: string, gender: 'male' | 'female') {
         checkout: unusedCheckoutServices,
         sessions: unusedSessionsServices,
         chat: unusedChatServices,
+        certification: unusedCertificationServices,
       },
     }),
   );

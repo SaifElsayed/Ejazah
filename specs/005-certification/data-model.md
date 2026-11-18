@@ -14,6 +14,7 @@ One forward migration per batch that needs it. Every timestamp is `timestamptz` 
 | `status` | enum `ijazah_request_status`: `awaiting_student_name` · `pending` · `approved` · `rejected` · `closed` | |
 | `chain_snapshot` | jsonb | generations (arrays of names), origin first, the teacher appended; frozen at send, re-frozen on a chain correction while open (R-403) |
 | `teacher_name_printed` | text NOT NULL | `teacher_credentials.holder_name` at send |
+| `riwaya_printed`, `tariq_printed` | text NOT NULL; text NULL | the credential's riwaya and tariq (NULL when it names none) at send, re-frozen with the chain while open (B46 Q5 (c)) |
 | `signature_storage_key` | text | the request's own copy; NULL once erased (rejected or closed) |
 | `reason` | text | mandatory when `rejected` (a check) |
 | `decided_by_admin_id`, `decided_at` | | set together on approve or reject (a check) |
@@ -27,6 +28,7 @@ New columns (ERD :582, ADR 0019 D1):
 - `request_id` uuid FK unique → `ijazah_requests`;
 - `issued_by_admin_id` FK → `admin_users`;
 - `student_name_printed` and `teacher_name_printed` text NOT NULL;
+- `riwaya_printed` text NOT NULL and `tariq_printed` text NULL, copied from the request at approval, re-frozen with the chain before the sign-off, immutable after it (B46 Q5 (c); the printed names' precedent, ADR 0019 D1);
 - `completion_date` date;
 - `rendered_at` timestamptz NULL (R-402);
 - `render_generation` int NOT NULL DEFAULT 0, raised by each re-render (R-402);
@@ -85,7 +87,7 @@ changes: T014 adds `gender_correction` to the list, with an ERD changelog line. 
 | `rate_limit_user_report` | 5 per 86400 s (DEC-71) |
 | `rate_limit_gender_flag` | 3 per 86400 s (DEC-71) |
 | `rate_limit_ijazah_request` | 10 per 3600 s (per teacher) |
-| `rate_limit_ijazah_decision` | 10 per 60 s (per administrator: approve, reject, sign off, re-render, revoke, bar) |
+| `rate_limit_ijazah_decision` | 10 per 60 s (per administrator: approve, reject, sign off, re-render, revoke, bar and the certificate name's change) |
 | `rate_limit_gender_decision` | 10 per 60 s (per administrator) |
 | `rate_limit_settings_update` | 10 per 60 s (per administrator) |
 
@@ -95,8 +97,8 @@ batch that seeds them.
 
 ## State transitions
 - **Request.** Sent → `awaiting_student_name` (no certificate name) or `pending`; the name entered → `pending`;
-  approved → `approved` (+ an `ijazahs` row); rejected → `rejected`; the student deleted → `closed`.
-- **Ijazah.** Issued → rendered (`rendered_at`) → signed off (`signed_off_at`); before the sign-off, a re-render or a
+  approved → `approved` (+ an `ijazahs` row); rejected → `rejected`, from `pending` or, by an administrator with a reason, from `awaiting_student_name` (B46, the owner's Q-C5 (a), 2026-11-17); the student deleted → `closed`.
+- **Ijazah.** Issued → rendered (`rendered_at`) → signed off (`signed_off_at`; refused while the student is barred, B46 Q7); before the sign-off, a re-render or a
   correction goes back to issued (`rendered_at` cleared); revoked (`revoked_at`) at any point; never deleted.
 - **Report.** `open` → `actioned` | `dismissed`.
 - **Gender flag.** `open` → `dismissed` | `corrected` | `fraud_ban`.

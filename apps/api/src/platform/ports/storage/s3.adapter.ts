@@ -14,7 +14,12 @@ import {
   S3ServiceException,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { assertLinkLifetime, assertStorageKey, type StoragePort } from './storage.port.js';
+import {
+  assertLinkLifetime,
+  assertStorageKey,
+  type StoragePort,
+  type StoredObject,
+} from './storage.port.js';
 
 export interface S3ClientOptions {
   readonly endpoint: string;
@@ -81,5 +86,18 @@ export class S3StorageAdapter implements StoragePort {
       }
       throw error;
     }
+  }
+
+  /** B46 (Q2 (a)): the object's bytes and content type, read by the server; rejects when absent. */
+  async read(key: string): Promise<StoredObject> {
+    assertStorageKey(key);
+    const object = await this.#client.send(
+      new GetObjectCommand({ Bucket: this.#bucket, Key: key }),
+    );
+    if (object.Body === undefined) throw new Error('The stored object has no body.');
+    return {
+      body: await object.Body.transformToByteArray(),
+      contentType: object.ContentType ?? 'application/octet-stream',
+    };
   }
 }

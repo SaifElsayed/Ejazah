@@ -731,7 +731,13 @@ describe('checkout.current: the first and last session if confirmed now (FR-386,
     const later = new Date(addMinutes(at, 10));
     const on = await offer();
     const student = await person();
-    const booking = createBookingServices({ database, settings, now: () => at });
+    const booking = createBookingServices({
+      database,
+      settings,
+      now: () => at,
+      // 005:T006 (rule d): the enrollment reads' port, which the sheet never reaches.
+      ijazahRequests: { of: async () => new Map() },
+    });
     const { slots } = await booking.slots(studentOf(student), { packageId: on.packageId });
     const sheet = slots.find(({ slotId }) => slotId === on.slotId);
     expect(sheet?.firstSession).toEqual({

@@ -86,7 +86,12 @@ function pausedAs(status: 'confirmed' | 'cancelled'): StudentEnrollmentItem {
 const detailOf = (
   item: StudentEnrollmentItem,
   sessions: readonly ListedSession[],
-): EnrollmentsGetOutput => ({ ...item, sessions: [...sessions], complaintOpen: false });
+): EnrollmentsGetOutput => ({
+  ...item,
+  sessions: [...sessions],
+  complaintOpen: false,
+  ijazahRequest: null,
+});
 
 const said = (direction: Direction, key: MessageKey, values?: MessageValues) =>
   translate(direction === 'rtl' ? 'ar' : 'en', key, values);

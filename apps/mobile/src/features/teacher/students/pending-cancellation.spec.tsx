@@ -65,6 +65,7 @@ const enrollment: TeacherStudentsGetOutput = {
   completed: 0,
   remaining: 5,
   sessions: SESSIONS,
+  ijazahRequest: null,
 };
 
 const localeOf = (direction: Direction) => (direction === 'rtl' ? 'ar' : 'en');

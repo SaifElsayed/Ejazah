@@ -115,6 +115,10 @@ export function surfaceOf(
     enrollments: unusedAdminServices.enrollments,
     // T082: the direct end has its own router spec (`sessions/sessions-end-enrollment.router.spec.ts`).
     enrollmentEnd: unusedAdminServices.enrollmentEnd,
+    // 005:T007: the ijazah review has its own router spec (`certification/ijazah-requests-admin.router.spec.ts`).
+    ijazahRequests: unusedAdminServices.ijazahRequests,
+    // 005:T010: the ijazahs have their own router spec (`certification/ijazahs-admin.router.spec.ts`).
+    ijazahs: unusedAdminServices.ijazahs,
   };
   const administration = {
     transactions: transactionsOver(database),

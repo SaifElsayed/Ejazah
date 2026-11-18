@@ -72,6 +72,7 @@ function detail(of: Partial<EnrollmentsGetOutput> = {}): EnrollmentsGetOutput {
     remaining: 1,
     sessions: [first],
     complaintOpen: false,
+    ijazahRequest: null,
     ...of,
   };
 }

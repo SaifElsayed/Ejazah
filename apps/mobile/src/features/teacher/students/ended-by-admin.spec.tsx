@@ -74,6 +74,7 @@ function cancelled(endedByAdmin?: TeacherStudentItem['endedByAdmin']): TeacherSt
 const detailOf = (item: TeacherStudentItem): TeacherStudentsGetOutput => ({
   ...item,
   sessions: [held],
+  ijazahRequest: null,
 });
 
 const line = (direction: Direction) =>

@@ -163,6 +163,24 @@ import type {
   // T082 of specs/004-sessions: an administrator's direct end of an enrollment.
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
+  // 005:T007 (B46, Q-C2 (a)): the administrators' review of an ijazah request.
+  adminIjazahRequestsApproveInput,
+  adminIjazahRequestsApproveOutput,
+  adminIjazahRequestsGetInput,
+  adminIjazahRequestsGetOutput,
+  adminIjazahRequestsListInput,
+  adminIjazahRequestsListOutput,
+  adminIjazahRequestsRejectInput,
+  // 005:T010 (B46, Q-E1 (a)): an administrator's ijazahs, their revocation and the bar.
+  adminIjazahBarInput,
+  adminIjazahsGetInput,
+  adminIjazahsGetOutput,
+  adminIjazahsListInput,
+  adminIjazahsListOutput,
+  adminIjazahsRevokeInput,
+  // 005:T032 (B46): the sign-off and the re-render.
+  adminIjazahsRerenderInput,
+  adminIjazahsSignOffInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -180,6 +198,8 @@ import type { BookingServices, DiscoveryServices } from '../modules/booking/inde
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 // T037 of specs/004-sessions.
 import type { ChatServices } from '../modules/chat/index.js';
+// T006 of specs/005-certification (the owner's Q-A2 (a)): the ijazah request's services.
+import type { CertificationServices } from '../modules/certification/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
@@ -322,6 +342,11 @@ export interface AppServices {
   readonly sessions: SessionsServices;
   /** T037 of specs/004-sessions: `chat.list` and `chat.send`, the chat module's services. */
   readonly chat: ChatServices;
+  /**
+   * T006 of specs/005-certification (the owner's Q-A2 (a)): `teacher.ijazahRequests.*`, the
+   * certification module's request service, built once by `main.ts`.
+   */
+  readonly certification: CertificationServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -817,6 +842,78 @@ export interface AdminSurfaceServices {
       readonly answer: z.input<typeof sessionsEndEnrollmentOutput>;
       readonly replayed: boolean;
     }>;
+  };
+  /**
+   * 005:T007 (B46, Q-C2 (a); FR-604, FR-605, FR-628): the administrators' review of an ijazah
+   * request, certification's, composed by the admin module (`get` with the teacher's standing reason
+   * from its audit log, Q10 (a)); the two decisions keyed on the call's transaction.
+   */
+  readonly ijazahRequests: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsListInput>,
+    ): Answer<typeof adminIjazahRequestsListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsGetInput>,
+    ): Answer<typeof adminIjazahRequestsGetOutput>;
+    approve(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsApproveInput>,
+    ): Promise<{
+      readonly answer: z.input<typeof adminIjazahRequestsApproveOutput>;
+      readonly replayed: boolean;
+    }>;
+    reject(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahRequestsRejectInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+  };
+  /**
+   * 005:T010 (B46, Q-E1 (a); FR-609, FR-610; R-412): an administrator's ijazahs, certification's,
+   * composed by the admin module; the revocation and the bar keyed on the call's transaction.
+   */
+  readonly ijazahs: {
+    list(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsListInput>,
+    ): Answer<typeof adminIjazahsListOutput>;
+    get(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsGetInput>,
+    ): Answer<typeof adminIjazahsGetOutput>;
+    revoke(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsRevokeInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    bar(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahBarInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+    liftBar(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahBarInput>,
+    ): Promise<{ readonly replayed: boolean }>;
+    // 005:T032 (B46; FR-629, R-402): the sign-off and the re-render, keyed on the call's transaction.
+    signOff(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsSignOffInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    rerender(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsRerenderInput>,
+    ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
   };
 }
 

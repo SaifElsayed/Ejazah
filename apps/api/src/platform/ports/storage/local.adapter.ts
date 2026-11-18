@@ -126,7 +126,10 @@ export class LocalStorageAdapter implements StoragePort {
     return key;
   }
 
-  /** The object and its declared content type, for the route that serves a verified link. */
+  /**
+   * The object and its declared content type, for the route that serves a verified link and, since
+   * B46 (Q2 (a)), for the port's `read`; rejects when nothing is stored there.
+   */
   async read(key: string): Promise<{ readonly body: Buffer; readonly contentType: string }> {
     const body = await readFile(this.#under(this.#objects, key));
     const contentType = await readFile(this.#under(this.#types, key), 'utf8');

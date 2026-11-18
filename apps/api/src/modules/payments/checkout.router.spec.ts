@@ -18,6 +18,7 @@ import { createAppCallerFactory, createAppRouter } from '../../surfaces/procedur
 import {
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -163,6 +164,7 @@ function callerAs(session: UserSession | null): Caller {
     checkout,
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
+    certification: unusedCertificationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {

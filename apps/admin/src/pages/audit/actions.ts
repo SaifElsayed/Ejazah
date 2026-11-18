@@ -81,6 +81,20 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'teacher.kept_data.erase_date_cleared': 'admin.audit.actions.teacherKeptDataEraseDateCleared',
   'teacher.kept_data.erased': 'admin.audit.actions.teacherKeptDataErased',
   'user.deleted_by_admin': 'admin.audit.actions.userDeletedByAdmin',
+  // 005:T007 of B46 (Q-C3 (a)): the administrators' review of an ijazah request.
+  'ijazah_requests.listed': 'admin.audit.actions.ijazahReview.listed',
+  'ijazah_request.viewed': 'admin.audit.actions.ijazahReview.viewed',
+  'ijazah.issued': 'admin.audit.actions.ijazahReview.issued',
+  'ijazah_request.rejected': 'admin.audit.actions.ijazahReview.rejected',
+  // 005:T010 of B46 (Q-E4 (a)): an administrator's ijazahs, their revocation and the bar.
+  'ijazahs.listed': 'admin.audit.actions.ijazahReview.ijazahsListed',
+  'ijazah.viewed': 'admin.audit.actions.ijazahReview.ijazahViewed',
+  'ijazah.revoked': 'admin.audit.actions.ijazahReview.ijazahRevoked',
+  'ijazah_bar.set': 'admin.audit.actions.ijazahReview.barSet',
+  'ijazah_bar.lifted': 'admin.audit.actions.ijazahReview.barLifted',
+  // 005:T032 of B46 (Q-E4 (a)): the sign-off and the re-render.
+  'ijazah.signed_off': 'admin.audit.actions.ijazahReview.ijazahSignedOff',
+  'ijazah.rerendered': 'admin.audit.actions.ijazahReview.ijazahRerendered',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
@@ -96,6 +110,9 @@ const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {
   dispute: 'admin.audit.targets.dispute',
   session: 'admin.audit.targets.session',
   provider_outage: 'admin.audit.targets.providerOutage',
+  // 005:T007 of B46 (Q-C3 (a)).
+  ijazah_request: 'admin.audit.targets.ijazahReview.request',
+  ijazah: 'admin.audit.targets.ijazahReview.ijazah',
 };
 
 type Translate = ReturnType<typeof useT>;

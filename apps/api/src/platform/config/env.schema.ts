@@ -234,6 +234,11 @@ const envObject = z.object({
   SMS_PROVIDER_KEY: nonEmpty.optional(),
   EXPO_ACCESS_TOKEN: nonEmpty.optional(),
 
+  // T008 of specs/005-certification (R-401): the Typst CLI's path, pinned at 0.15.1, which the
+  // worker's `render-certificate` job runs. Optional: a missing binary fails the job into its
+  // retries, never a request, and the API process never reads it.
+  TYPST_BIN: nonEmpty.optional(),
+
   // T001 (contracts/ports.md): the live sign-in adapter's credentials, each optional and stripped
   // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`.
   GOOGLE_CLIENT_IDS: googleClientIds.optional(),
@@ -305,6 +310,8 @@ const envKeyKinds = {
   LIVEKIT_API_SECRET: 'provider',
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
+  // 005:T008: a path on the worker's own machine, no third party's: the template spec reads it in CI.
+  TYPST_BIN: 'platform',
   GOOGLE_CLIENT_IDS: 'provider',
   APPLE_CLIENT_ID: 'provider',
   APPLE_TEAM_ID: 'provider',

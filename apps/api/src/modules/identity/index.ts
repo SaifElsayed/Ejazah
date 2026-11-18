@@ -537,3 +537,10 @@ export function createPushRecipients({
 }): PushRecipientsStore {
   return new PushRecipientsService({ devices: new DeviceTokensRepository(database), cipher });
 }
+
+// ---------------------------------------------------------------------------------------------
+// T006 of specs/005-certification (FR-602, FR-603; the note under T006, Q1 (a)): what the ijazah
+// request reads of identity, on the caller's transaction: the student's certificate name, read
+// under the student's `users` lock, and (already above) `readStanding` for the teacher's standing,
+// `accountTimezone` for the teacher's day.
+export { certificateNameOf } from './certificate-name.repository.js';

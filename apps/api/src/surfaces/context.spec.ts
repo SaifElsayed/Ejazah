@@ -29,6 +29,7 @@ import {
   unusedAdminServices,
   unusedBookingServices,
   unusedCatalogServices,
+  unusedCertificationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -64,6 +65,7 @@ const services = {
   checkout: unusedCheckoutServices,
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
+  certification: unusedCertificationServices,
 };
 
 const appSource = { session: null, log, rateLimiter, clientAddress, services };

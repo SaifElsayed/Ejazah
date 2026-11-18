@@ -16,12 +16,18 @@
 //     and the deprecated name empty, on every list and detail (T007, FR-426);
 //   - every session carries `pendingCancellation`, sessions' read of its sessions at the read's
 //     instant (004:T021, FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists");
-//   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495).
+//   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495);
+//   - each detail carries `ijazahRequest`, the enrollment's latest ijazah request read through
+//     booking's port `EnrollmentIjazahRequests` in one call (005:T006, FR-608; the note under T006,
+//     Q4 (a), Q-A3 (a)): the reason to the teacher only, null without a request; a revoked
+//     ijazah's `revoked: true` to both parties (005:T010, Q-E2 (a); #146 Saif r1, Major 1).
 import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import type { EnrollmentIjazahRequest } from '@ijazah/contracts';
+
 import type { EnrollmentCase } from '../moderation/index.js';
 import type { DaySession, EnrollmentSessionRow, WindowDays } from '../sessions/index.js';
 import {
@@ -123,6 +129,8 @@ interface Asked {
   readonly pending: { sessionIds: readonly string[]; at: string }[];
   /** 004:T074: each read of the cases, by the enrollments asked. */
   readonly cases: (readonly string[])[];
+  /** 005:T006: each read of the ijazah requests, by the enrollments asked. */
+  readonly ijazahRequests: (readonly string[])[];
 }
 
 function storeOf(
@@ -144,9 +152,19 @@ function storeOf(
     complaints?: readonly string[];
     /** 004:T074: each enrollment's compensation cases, newest first (moderation's). */
     cases?: Record<string, readonly EnrollmentCase[]>;
+    /** 005:T006: each enrollment's latest ijazah request (certification's, through the port). */
+    ijazahRequests?: Record<string, EnrollmentIjazahRequest>;
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
-  const asked: Asked = { ended: [], listed: [], prefix: [], day: [], pending: [], cases: [] };
+  const asked: Asked = {
+    ended: [],
+    listed: [],
+    prefix: [],
+    day: [],
+    pending: [],
+    cases: [],
+    ijazahRequests: [],
+  };
   const store: EnrollmentListsStore = {
     activeOfStudent: async () => data.active ?? [],
     activeOfTeacher: async () => data.active ?? [],
@@ -196,6 +214,16 @@ function storeOf(
     casesAmong: async (_tx, enrollmentIds) => {
       asked.cases.push(enrollmentIds);
       return new Map(enrollmentIds.map((id) => [id, [...(data.cases?.[id] ?? [])]]));
+    },
+    // 005:T006.
+    ijazahRequestsOf: async (_tx, enrollmentIds) => {
+      asked.ijazahRequests.push(enrollmentIds);
+      return new Map(
+        enrollmentIds.flatMap((id) => {
+          const request = data.ijazahRequests?.[id];
+          return request === undefined ? [] : [[id, request] as const];
+        }),
+      );
     },
   };
   return { store, asked };
@@ -724,6 +752,8 @@ describe('the lists’ instant is the database’s clock on the read’s transac
     const lists = createEnrollmentListServices({
       database: { $transaction: async (work: (tx: Transaction) => unknown) => work(tx) } as never,
       settings: { read: async (_key, schema) => schema.parse(2) },
+      // 005:T006: the port, which these cases never reach (no detail is asked).
+      ijazahRequests: { of: async () => new Map() },
       clock: async (on: Transaction) => {
         clocked.push(on);
         return AT_END;
@@ -1164,5 +1194,69 @@ describe('endedByAdmin (004:T082, FR-513)', () => {
     expect(items[0]).toMatchObject({ endedByAdmin: { reason: REASON }, paused: false });
     const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS);
     expect(detail.endedByAdmin).toEqual({ reason: REASON });
+  });
+});
+
+// 005:T006 (FR-608; contracts/app-surface.md, «Enrollment reads gain»; the note under T006, Q4 (a),
+// Q-A3 (a)): each detail's ijazah request, through booking's port in one call.
+describe("the details' ijazah request (005:T006)", () => {
+  const REJECTED: EnrollmentIjazahRequest = { status: 'rejected', reason: 'سبب الرفض' };
+
+  it('answers the teacher the request with its reason, asked once for the enrollment', async () => {
+    const { store, asked } = storeOf({ listed: row(E1), ijazahRequests: { [E1]: REJECTED } });
+    const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
+    expect(detail.ijazahRequest).toEqual(REJECTED);
+    expect(asked.ijazahRequests).toEqual([[E1]]);
+  });
+
+  it('answers the student the request without the reason', async () => {
+    const { store, asked } = storeOf({ listed: row(E1), ijazahRequests: { [E1]: REJECTED } });
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
+    expect(detail.ijazahRequest).toEqual({ status: 'rejected' });
+    expect(asked.ijazahRequests).toEqual([[E1]]);
+  });
+
+  it('answers an approved request with its ijazah, and null without a request', async () => {
+    const IJAZAH = '0199d0a0-0000-7000-8000-0000000000b9';
+    const { store } = storeOf({
+      listed: row(E1),
+      ijazahRequests: { [E1]: { status: 'approved', ijazahId: IJAZAH } },
+    });
+    expect(
+      (await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toEqual({ status: 'approved', ijazahId: IJAZAH });
+    const none = storeOf({ listed: row(E1) });
+    expect(
+      (await teacherStudentOf(tx, none.store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toBeNull();
+  });
+
+  // #146 Saif r1, Major 1 (the follow-up under T010; Q-E2 (a), R-HONEST-6): a revoked ijazah is
+  // never shown to the student as issued, so the flag survives the reason's removal.
+  it('answers the student a revoked ijazah as revoked, as the teacher', async () => {
+    const IJAZAH = '0199d0a0-0000-7000-8000-0000000000b9';
+    const REVOKED: EnrollmentIjazahRequest = {
+      status: 'approved',
+      ijazahId: IJAZAH,
+      revoked: true,
+    };
+    const { store } = storeOf({ listed: row(E1), ijazahRequests: { [E1]: REVOKED } });
+    expect(
+      (await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toEqual({ status: 'approved', ijazahId: IJAZAH, revoked: true });
+    expect(
+      (await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toEqual(REVOKED);
   });
 });

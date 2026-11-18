@@ -10,7 +10,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
   - It renders a template in `apps/api/src/modules/certification/template/` (the v2 layout of ADR 0004 D2) with Amiri
     1.003 vendored beside it.
   - The case goes in as a JSON data file; the template never calls `eval` on it.
-  - The PDF goes to storage under `certificates/<ijazahId>.pdf`, the key in `ijazahs.certificate_storage_key` as text
+  - The PDF goes to storage under `certificates/<ijazahId>/<generation>.pdf` (B46's Q6 (a)), the key in `ijazahs.certificate_storage_key` as text
     (it holds no secret: the file is served only by signed link, R-SEC-3).
   - The binary's path comes from configuration (`TYPST_BIN`); a missing binary fails the job, never the request.
   - The child process runs under a timeout: a small helper `apps/api/src/platform/typst/run-typst.ts` spawns the CLI
@@ -32,7 +32,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 ## R-402 — Issue is three steps: the record in the request, the PDF in the job, the administrator's sign-off
 - **Decision.** `ijazahRequests.approve` writes, in one transaction:
   - the `ijazahs` row (number, token hash, frozen chain, printed names, dates, `request_id`, `issued_by_admin_id`,
-    `certificate_storage_key` reserved as `certificates/<id>.pdf`);
+    `certificate_storage_key` reserved as generation 0's `certificates/<id>/0.pdf`);
   - the request's status `approved`.
 
   It then enqueues `render-certificate` after commit (`addOrRetry`, `jobId` = the ijazah id and its
@@ -56,6 +56,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 - **At the request:**
   - the chain (generations of names from `isnad_entries`, origin first, the teacher appended, FR-ISNAD-7);
   - the teacher's printed name (`teacher_credentials.holder_name`, ADR 0019 D1);
+  - the credential's riwaya and tariq as printed (`riwaya_printed`, `tariq_printed`; B46's Q5 (c));
   - a copy of the teacher's signature image under the request's own storage key
     (`ijazah-requests/<id>/signature.<ext>`).
 - **At approval:** the student's printed name (`users.certificate_name`, which may arrive after the request, ADR 0019
@@ -75,7 +76,8 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
 
 ## R-404 — The request's states
 - **States:** `awaiting_student_name` → `pending` → `approved` | `rejected`; `closed` when the student's account is
-  deleted.
+  deleted; `awaiting_student_name` → `rejected` by an administrator with a reason (B46, the owner's Q-C5 (a),
+  2026-11-17: a student who never enters a name would hold the enrollment's one open request forever).
 - **Checks when sending:**
   - the teacher is active (`StandingService` reads; an applicant cannot send);
   - the enrollment is the teacher's, ijazah-track, and confirmed or completed;

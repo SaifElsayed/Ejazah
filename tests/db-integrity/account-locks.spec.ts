@@ -85,7 +85,11 @@ beforeAll(async () => {
     settings: { read: unused },
     standing,
   });
-  credentials = createCredentialReviewService({ settings: { read: unused } });
+  credentials = createCredentialReviewService({
+    settings: { read: unused },
+    // 005:T006 (rule d): the correction's re-freeze, which this spec does not assert.
+    openRequestsRefreeze: { refreeze: async () => undefined },
+  });
 });
 
 afterAll(async () => {
