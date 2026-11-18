@@ -52,7 +52,7 @@ import {
   type EnrollmentCancellationReason,
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
-import { activeHoldsByIds, lockRows } from './holds.repository.js';
+import { activeHoldsByIds, activeHoldsOf, lockRows } from './holds.repository.js';
 import { type OrderStandings, releaseHolds } from './holds.service.js';
 import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
@@ -109,7 +109,23 @@ export async function lockForConfirmation(
   parties: EnrollmentParties,
   dependencies: { readonly orders: OrderStandings },
 ): Promise<LockedEnrollment> {
-  await lockRows(tx, 'users', sortedUnique([parties.studentUserId, parties.teacherUserId]));
+  // 005:T016 (the follow-up under T016, fixed in B48): with the students of the slot's and the
+  // student's active holds, read with no lock, so the re-hold's release of another student's expired
+  // hold records that student's push holding the account already (kernel.md, «a push recorded by a
+  // producer»).
+  const around = await activeHoldsOf(tx, {
+    slotId: parties.slotId,
+    studentUserId: parties.studentUserId,
+  });
+  await lockRows(
+    tx,
+    'users',
+    sortedUnique([
+      parties.studentUserId,
+      parties.teacherUserId,
+      ...around.map(({ studentUserId }) => studentUserId),
+    ]),
+  );
   await lockRows(tx, 'availability_slots', [parties.slotId]);
   const holdIds = await activeHoldIdsAround(tx, parties);
   if (holdIds.length > 0) await lockRows(tx, 'slot_holds', holdIds);

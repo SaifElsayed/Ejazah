@@ -23,6 +23,7 @@
 // of 2026-11-18; `refuseEnrollment`). The push's row references the student's `users` row: which lock the
 // caller holds on it is kernel.md's row «a payment outcome's push» (005:T016).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { keyShareRows } from '../../platform/db/row-lock.js';
 import {
   type PaymentNoticeKind,
   paymentNoticeOf,
@@ -100,6 +101,21 @@ async function studentsOf(
     select: { id: true, studentUserId: true },
   });
   return new Map(rows.map(({ id, studentUserId }) => [id, studentUserId]));
+}
+
+/**
+ * 005:T016 (the follow-up under T016, fixed in B48 on the owner's answer of 2026-11-18): the students
+ * of `enrollmentIds`, read with no lock (an enrollment's student never changes), key-shared in one
+ * call in id order. A path that records their push and holds no lock yet takes it first, so
+ * the push's own foreign-key key share then waits on nothing while the path holds a
+ * hold, an enrollment or an order (kernel.md, «a push recorded by a producer»).
+ */
+export async function keyShareStudentsOfEnrollments(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+): Promise<void> {
+  const students = await studentsOf(tx, enrollmentIds);
+  await keyShareRows(tx, 'users', [...new Set(students.values())].sort());
 }
 
 /**

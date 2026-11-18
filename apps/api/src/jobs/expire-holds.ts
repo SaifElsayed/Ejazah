@@ -25,6 +25,7 @@ import { z } from 'zod';
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
 import {
   expiredCheckoutHoldIds,
+  keyShareStudentsOfHolds,
   type PaymentOutcomeNotices,
   releaseHolds,
   withOutcomeNotices,
@@ -61,8 +62,11 @@ export interface HoldExpirySteps {
 export function holdExpiryStepsOf(notices: PaymentOutcomeNotices): HoldExpirySteps {
   return {
     expiredHolds: expiredCheckoutHoldIds,
-    release: (tx, holdIds, at) =>
-      releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices }),
+    // 005:T016 (fixed in B48): the page's students key-shared before the release locks the holds.
+    release: async (tx, holdIds, at) => {
+      await keyShareStudentsOfHolds(tx, holdIds);
+      return releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices });
+    },
   };
 }
 

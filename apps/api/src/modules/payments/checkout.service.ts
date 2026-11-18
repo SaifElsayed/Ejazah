@@ -101,6 +101,7 @@ import {
   recordOrderFailed,
   type RetryTarget,
   retryTargetOf,
+  keyShareStudentsOfEnrollments,
   studentCheckoutEnrollment,
   withOutcomeNotices,
 } from '../booking/index.js';
@@ -247,7 +248,10 @@ export function checkoutStepsOver(
       withOutcomeNotices(
         (work) => database.$transaction(work),
         async (tx) => {
-          // The enrollment, then the order (T005), as the order event branch locks them (T038).
+          // 005:T016 (fixed in B48): the push's student key-shared first (kernel.md, «a push
+          // recorded by a producer»); then the enrollment and the order (T005), as the order event
+          // branch locks them (T038).
+          await keyShareStudentsOfEnrollments(tx, [enrollmentId]);
           await lockOrder(tx, { paymentId, enrollmentId });
           const orders = new PaymentsRepository(tx);
           if ((await orders.statusOf(paymentId)) !== 'created') return;
