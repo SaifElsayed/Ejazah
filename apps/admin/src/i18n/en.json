@@ -1749,6 +1749,90 @@
         "payoutsListed": "View teacher payouts",
         "payoutsViewed": "View a teacher's payouts"
       },
+      "payouts": {
+        "columns": {
+          "dueNow": "Due now",
+          "held": "Held",
+          "oldestDue": "Oldest due",
+          "paid": "Paid",
+          "paidThisMonth": "Paid this month",
+          "takenOff": "Taken off",
+          "teacher": "Teacher"
+        },
+        "detail": {
+          "a11y": "Teacher payouts",
+          "deductionsEmpty": "No refund is recorded on this teacher's orders.",
+          "deductionsLede": "Each refund recorded on one of the teacher's orders: the refund as recorded, and the teacher's share of it.",
+          "deductionsTitle": "Owes",
+          "dueNotWritten": "Fell due; it is written for payment on the next periodic run, then «Mark paid» appears.",
+          "dueSince": "Due since {when}, awaiting payment",
+          "heldAfterLast": "Falls due when the complaint window after the last session ends, if no complaint is opened",
+          "heldUntil": "Falls due on {when}, if no complaint is opened",
+          "heldWaitsForCase": "On hold until the case open on the enrollment is closed",
+          "noCase": "No case closed the enrollment",
+          "openCase": "Open the case",
+          "paidOn": "Paid on {when}",
+          "payoutAccount": "Payout account",
+          "payoutAccountNone": "No verified payout account",
+          "reason": "Reason: {reason}",
+          "reasonOther": "Another reason",
+          "refunded": "Refund recorded: {amount}",
+          "releasesEmpty": "Nothing is owed to this teacher yet.",
+          "releasesLede": "The teacher's share of each package or part of one, with its state.",
+          "releasesTitle": "Owed",
+          "share": "The teacher's share of it: {amount}",
+          "student": "Student: {name}"
+        },
+        "empty": {
+          "text": "No teacher has a release awaiting payment now.",
+          "title": "Nothing due now"
+        },
+        "emptyAll": {
+          "text": "Nothing has fallen due to any teacher yet, and no refund is recorded on their orders.",
+          "title": "No payouts yet"
+        },
+        "filter": {
+          "dueOnly": "Due now only"
+        },
+        "lede": "What each teacher is owed from their share: held, due now, paid, and taken off for refunds to students. Each due release is transferred by hand in Paymob's dashboard, then marked paid here.",
+        "mark": {
+          "action": "Mark paid",
+          "cancel": "Cancel",
+          "confirm": "Mark paid",
+          "effect": "The transfer is made by hand in Paymob's dashboard. This confirmation only records that you made it; it moves no money.",
+          "footer": "The mark is recorded under your name in the audit log.",
+          "lead": "{part} · {amount}",
+          "refused": {
+            "alreadyMarked": "This release was already marked paid. Nothing changed.",
+            "notFound": "This release was not found. Nothing changed."
+          },
+          "title": "Mark {teacher}'s release paid"
+        },
+        "nav": "Teacher payouts",
+        "pagerPage": "Page {page}",
+        "part": {
+          "ijazahEnd": "Ijazah: the rest at the end",
+          "ijazahHalf": "Ijazah: at half the sessions",
+          "recitationEnd": "Recitation package",
+          "studentComplaintClose": "Package closed on a complaint against the student",
+          "teacherDropout": "Package ended on the teacher's withdrawal"
+        },
+        "state": {
+          "due": "Due",
+          "held": "Held",
+          "paid": "Paid"
+        },
+        "title": "Teacher payouts",
+        "totals": {
+          "dueNow": "Due now",
+          "held": "Held",
+          "paid": "Paid (all time)",
+          "paidThisMonth": "Paid this month",
+          "takenOff": "Taken off (refunds to students)",
+          "title": "Totals for all teachers"
+        },
+        "userLink": "Teacher payouts"
+      },
       "testMode": "Test version"
     },
     "mfa": {

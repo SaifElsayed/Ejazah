@@ -137,6 +137,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.users'), '/users'],
       // T053: the payments monitor, before the settings as the board orders the group.
       [translate('ar', 'admin.nav.items.payments'), '/payments'],
+      // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
+      [translate('ar', 'admin.money.payouts.nav'), '/payouts'],
       [translate('ar', 'admin.nav.items.outages'), '/outages'],
       [translate('ar', 'admin.nav.items.settings'), '/settings/admins'],
       [translate('ar', 'admin.nav.items.audit'), '/audit'],

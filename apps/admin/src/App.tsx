@@ -9,6 +9,7 @@
 // link carries and not by a session, so it sits outside the guard, in the sign-in frame.
 //
 // T053: `/payments`, the read-only payments monitor, behind the same guard as every console page.
+// 003:T105: `/payouts`, «تحويلات المعلمين», beside it; `?teacher=` opens one teacher's detail.
 //
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
@@ -39,6 +40,7 @@ import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
 import { AdminOutages } from './pages/outages/AdminOutages';
 import { AdminPayments } from './pages/payments/AdminPayments';
+import { AdminPayouts } from './pages/payouts/AdminPayouts';
 import { AdminReview } from './pages/review/AdminReview';
 import { AdminSessions } from './pages/sessions/AdminSessions';
 import { AdminSetPassword, SET_PASSWORD_PATH } from './pages/set-password/AdminSetPassword';
@@ -99,6 +101,7 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
               <Route path="/payments" element={<AdminPayments />} />
+              <Route path="/payouts" element={<AdminPayouts />} />
               <Route path="/sessions" element={<AdminSessions />} />
               <Route path="/review" element={<AdminReview />} />
               <Route path="/outages" element={<AdminOutages />} />

@@ -413,6 +413,60 @@
     "packageEditor": {
       "teacherShare": "نصيبك من هذا السعر {amount} ج.م ({percent}٪)",
       "averagePrice": "متوسط سعر الحصة عند المعلمين الآخرين في نفس المسار والمدة {amount} ج.م"
+    },
+    "dues": {
+      "row": "مستحقاتي",
+      "title": "مستحقاتي",
+      "lede": "نصيبك من كل باقة: ما زال محجوزًا حتى يُستحق، وما استُحق ينتظر صرف الإدارة، وما صُرف لك.",
+      "totals": {
+        "held": "إجمالي المحجوز",
+        "paid": "إجمالي المصروف"
+      },
+      "releasesTitle": "نصيبك من الباقات",
+      "part": {
+        "recitationEnd": "باقة تلاوة",
+        "ijazahHalf": "إجازة: عند منتصف الحصص",
+        "ijazahEnd": "إجازة: الباقي عند الختام",
+        "teacherDropout": "باقة أُنهيت بانسحابك: الحصص التي تمت",
+        "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب"
+      },
+      "state": {
+        "held": "محجوز",
+        "due": "مستحق",
+        "paid": "مصروف"
+      },
+      "heldUntil": "يُستحق {date} الساعة {time}، إن لم تُفتح شكوى",
+      "heldAfterLast": "يُستحق بعد انقضاء مهلة الشكوى على آخر حصة، إن لم تُفتح شكوى",
+      "heldWaitsForCase": "موقوف حتى تُغلق الشكوى المفتوحة",
+      "dueAwaiting": "بانتظار صرف الإدارة",
+      "paidOn": "صُرف في {date}",
+      "deductionsTitle": "عليك",
+      "deductionsLede": "نصيبك من كل مبلغ رُدّ لطالب.",
+      "deductionsEmpty": "لم يُرَدّ لطالب شيء من طلباتك.",
+      "reasonLine": "السبب: {reason}",
+      "reason": {
+        "slotUnavailable": "لم يعد الموعد متاحًا",
+        "partyRestricted": "تقييد حساب أحد الطرفين",
+        "duplicatePayment": "دفع مكرر",
+        "absenceTermination": "إنهاء الباقة لتكرار غيابك",
+        "adminCancellation": "إلغاء من الإدارة",
+        "teacherEnded": "إنهاؤك للباقة",
+        "studentSuspended": "إيقاف حساب الطالب",
+        "studentBanned": "حظر حساب الطالب",
+        "studentFaultConfirmed": "ثبوت خطأ الطالب",
+        "refundChoice": "اختيار الطالب رد المبلغ",
+        "counterUnanswered": "اقتراح بديل لم يُرَد عليه",
+        "makeupRefused": "رفض الحصة التعويضية",
+        "adminOpenedForStudent": "حالة فتحتها الإدارة للطالب",
+        "adminOpenedForTeacher": "حالة فتحتها الإدارة لك",
+        "teacherSuspended": "إيقاف حسابك",
+        "adminEnded": "إنهاء الباقة من الإدارة",
+        "genderCorrection": "تصحيح بيانات الحساب"
+      },
+      "empty": {
+        "title": "لا مستحقات بعد",
+        "text": "تظهر هنا أول ما يُدفع طلب على إحدى باقاتك."
+      }
     }
   },
   "notifications": {
