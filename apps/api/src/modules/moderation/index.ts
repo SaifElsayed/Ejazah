@@ -1,4 +1,6 @@
 // PUBLIC ENTRY of the moderation module (T017). Other modules import this file and nothing below it (R-API-3).
+// 005:T011: the reports services' type, for `ModerationServices` and `AdminReports` (at the end).
+import type { UserReports } from './user-report.service.js';
 
 /**
  * The system's compensation case on an enrollment (T035, FR-362, FR-375, FR-DISPUTE-5): opened, or
@@ -115,3 +117,33 @@ export { openComplaintOf } from './absence-complaint.repository.js';
  * answers it, with no lock, for booking's slot hold (`slotUses`).
  */
 export { compensationCasesAmong } from './compensation-case.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T011 (FR-611, FR-612; research R-408; the note under T011): the `Pairings` port moderation
+// reads sessions' and booking's parties through, bound by `main.ts` (moderation imports neither).
+export type { Pairings, PairingParty } from './pairings.port.js';
+// The report service and its store (`user-report.service.ts`, `user-report.repository.ts`).
+export {
+  createUserReports,
+  type ReportAsked,
+  type ReportCaller,
+  type ReportDetail,
+  type ReportItem,
+  type ReportsLog,
+  type ReportsPage,
+  type UserReports,
+  type UserReportsDependencies,
+  type UserReportStore,
+  userReportStore,
+} from './user-report.service.js';
+/**
+ * What the surfaces call (the integration binds them): `AppServices.moderation.reports` for the user
+ * surface's `reports.create`, `AdminSurfaceServices.reports` for the administrator's queue; both are
+ * one `createUserReports` built by `main.ts` over the `Pairings` it binds.
+ */
+export interface ModerationServices {
+  readonly reports: Pick<UserReports, 'create'>;
+}
+export type AdminReports = Pick<UserReports, 'list' | 'get' | 'resolve'>;
+export { reportsRouter, USER_REPORT_RATE_LIMIT } from './reports.router.js';
+export { reportsAdminRouter } from './reports-admin.router.js';

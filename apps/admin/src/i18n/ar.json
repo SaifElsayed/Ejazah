@@ -197,6 +197,11 @@
         "recordVerificationCall": "تسجيل مكالمة التحقق",
         "rejectApplication": "رفض طلب انضمام",
         "removeReviewComment": "إزالة تعليق تقييم",
+        "reports": {
+          "listed": "عرض البلاغات",
+          "resolved": "البتّ في بلاغ",
+          "viewed": "عرض بلاغ"
+        },
         "requestMoreInfo": "طلب معلومات إضافية",
         "sessionCancelled": "إلغاء جلسة",
         "sessionOutcomeCorrected": "تصحيح نتيجة جلسة",
@@ -299,6 +304,7 @@
         },
         "payment": "طلب دفع",
         "providerOutage": "انقطاع الفيديو",
+        "report": "بلاغ",
         "session": "جلسة",
         "setting": "إعداد",
         "teacherApplication": "طلب انضمام",

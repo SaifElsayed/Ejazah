@@ -33,7 +33,9 @@ export type AuditTargetType =
   | 'provider_outage'
   // 005:T007 (B46, Q-C3 (a)): an ijazah request by its id, an ijazah by its certificate number.
   | 'ijazah_request'
-  | 'ijazah';
+  | 'ijazah'
+  // 005:T011 (B47; FR-612): a report by its id (`report.viewed`, `report.resolved`).
+  | 'user_report';
 
 /** The kind word of each target type: the label is this word, the separator and the identifier. */
 export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
@@ -56,6 +58,8 @@ export const auditTargetKinds: Readonly<Record<AuditTargetType, string>> = {
   // 005:T007 (B46, Q-C3 (a); docs/ERD.md:806's label «إجازة · 7K3M-Q9TD-2XWB-8HRN»).
   ijazah_request: 'طلب إجازة',
   ijazah: 'إجازة',
+  // 005:T011 (B47; FR-612).
+  user_report: 'بلاغ',
 };
 
 /** Between the kind word and the identifier (ERD §12). */

@@ -513,3 +513,29 @@ describe('T058: RATE_LIMITED on the audit log', () => {
     expect(detail.queryByText(ar('admin.common.loadError.text'))).toBeNull();
   });
 });
+
+// 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the reports queue's three
+// actions, named by the catalogue's text in Arabic and in English.
+const B47_REPORT_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['reports.listed', 'عرض البلاغات', 'View reports'],
+  ['report.viewed', 'عرض بلاغ', 'View a report'],
+  ['report.resolved', 'البتّ في بلاغ', 'Resolve a report'],
+];
+
+describe('005:T011: the reports queue’s actions by name', () => {
+  it.each(B47_REPORT_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
+describe('005:T011: a report as an audit target', () => {
+  it('names the target type user_report «بلاغ» and "Report"', () => {
+    const row = { targetType: 'user_report' as const };
+    expect(targetText(row, (key: MessageKey) => translate('ar', key))).toBe('بلاغ');
+    expect(targetText(row, (key: MessageKey) => translate('en', key))).toBe('Report');
+  });
+});
