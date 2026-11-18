@@ -58,6 +58,8 @@ model AdminUser {
   signedOffIjazahs      Ijazah[]             @relation("IjazahSignedOffBy")
   ijazahBarsImposed    IjazahBar[]           @relation("IjazahBarBarredBy")
   ijazahBarsLifted     IjazahBar[]           @relation("IjazahBarLiftedBy")
+  // 003:T105: the releases of a teacher's share an administrator marked done, a back-relation only.
+  markedShareReleases  TeacherShareRelease[]
   moderatedReviews     Review[]
   resolvedDisputes     Dispute[]
   resolvedGenderFlags  GenderFlag[]
