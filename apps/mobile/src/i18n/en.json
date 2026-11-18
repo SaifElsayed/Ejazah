@@ -895,7 +895,7 @@
       "lastSession": "Last session",
       "note": {
         "gateway": "You choose the payment method on the payment gateway's page; the platform does not store your card details.",
-        "recitation": "Recitation package: if the teacher misses a session, you choose between a make-up session and a refund of its price."
+        "recitation": "Recitation package: if the teacher misses a session, it is made up with a make-up session, with no refund."
       },
       "orderNumber": "Order number",
       "package": "Package",
@@ -1239,7 +1239,7 @@
         "refundCase": "Refund with the administration"
       },
       "text": {
-        "counter": "Your proposal awaits the teacher’s answer: if they accept it, it is booked; if they decline it while you can still choose, you may accept the proposed time or propose another, and if they decline it after that, the proposed time is booked. If they do not answer in time, the session becomes a refund the administration handles.",
+        "counter": "Your proposal awaits the teacher’s answer: if they accept it, it is booked; if they decline it while you can still choose, you may accept the proposed time or propose another, and if they decline it after that, the proposed time is booked. If they do not answer in time, the system’s proposed time is booked.",
         "proposed": "Accept the proposed make-up time, or propose another of the teacher’s times. If you have not chosen by the deadline, the proposed time is booked."
       },
       "title": "Making up this session"
@@ -1286,7 +1286,7 @@
         "joinOpens": "Joining opens {minutes, plural, one {# minute} other {# minutes}} before it",
         "makeupProposed": "Not counted · a make-up session is proposed",
         "studentNoShow": "Counted from the package",
-        "teacherNoShowChoose": "Not counted · choose a make-up session or a refund",
+        "teacherNoShowChoose": "Not counted · choose your make-up time",
         "underReview": "Connection below the threshold or a service outage · the outcome follows the review"
       }
     },
@@ -1325,7 +1325,7 @@
       "ratingOf": "{rating} from {count, plural, one {# review} other {# reviews}}",
       "remedy": {
         "ijazahTrack": "If the teacher is absent, you get a make-up session, with no refund",
-        "recitation": "If the teacher is absent, you choose a make-up session or a refund of its price"
+        "recitation": "If the teacher is absent, it is made up with a make-up session, with no refund"
       },
       "report": "Report",
       "reviewLine": "{rating} · {date}",
@@ -1544,7 +1544,7 @@
         "proposed": "Make-up proposed, awaiting the student",
         "refundCase": "Refund with the administration"
       },
-      "text": "If you do not answer by then, the session becomes a refund the administration handles.",
+      "text": "If you do not answer by then, the system’s proposed time is booked.",
       "title": "The student proposed another make-up time"
     },
     "credentials": {
