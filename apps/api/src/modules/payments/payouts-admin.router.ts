@@ -47,7 +47,13 @@ export const payoutsAdminRouter = createAdminRouter({
     },
   ),
 
-  mark: adminProcedure({ input: payoutsMarkInput, output: z.void() }).mutation(
+  // Its own limit, the administrator as subject, checked before the transaction opens (the admin
+  // actions' precedent, `enrollments.releaseSlot`'s `rate_limit_slot_release`).
+  mark: adminProcedure({
+    input: payoutsMarkInput,
+    output: z.void(),
+    rateLimit: { key: 'rate_limit_payout_mark', subject: 'caller' },
+  }).mutation(
     async ({ ctx, input }) => {
       const { teacherUserId, replayed } = await ctx.services.payouts.mark(
         ctx.tx,

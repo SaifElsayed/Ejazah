@@ -176,6 +176,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // share released at half the sessions on the ijazah track, read when an `ijazah_track` order is
   // created and kept on it.
   ['ijazah_half_release_percent', 25],
+  // 003:T105: the administrator's mark «تم الصرف», 10 per 60 s per administrator (the admin
+  // actions' precedent, `rate_limit_slot_release`).
+  ['rate_limit_payout_mark', { limit: 10, window_seconds: 60 }],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],
