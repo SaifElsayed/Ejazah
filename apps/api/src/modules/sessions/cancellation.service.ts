@@ -61,6 +61,18 @@
 // not keyed, adds `session` for the requester inside its own transaction. Both are addressed from
 // the session and the request read under the locks; the participant kind sends the list once the
 // handler resolves and drops it when it throws.
+//
+// THE PUSHES (005:T016; FR-619; SRS DEC-70 as amended by DEC-71; the note under T016, Q-N3 (a)). A
+// request records `cancellation_requested` for the counterparty and an answer
+// `cancellation_request_accepted` or `cancellation_request_declined` for the requester, through
+// the writer `main.ts` hands in (`NotificationWriter.record`), each last on its transaction with
+// the session's and the enrollment's ids only (R-HONEST-5). The writer queues its push on the
+// transaction's after-commit list, so each transaction binds the request's list to itself while it
+// runs (`bindToTransaction`, as the person's own deletion does) and unbinds it when it ends; the
+// participant kind sends it once the handler resolves, and drops it when it throws. The request's
+// is recorded inside the keyed effect, so a replay records nothing. The row references its
+// recipient, whose `users` row the transaction already holds `FOR UPDATE` (both parties, first).
+// The expiry (`cancellation-expiry.service.ts`) records none in v1.0.
 import type {
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
@@ -80,7 +92,7 @@ import {
 } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
-import type { LivePublisher } from '../../platform/live/live-publisher.js';
+import { bindToTransaction, type LivePublisher } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { sessionPartiesOf } from '../identity/index.js';
 import {
@@ -194,10 +206,31 @@ export interface CancellationServices {
   ): Promise<SessionsCancellationAnswerOutput>;
 }
 
+/** 005:T016: the kinds a request and an answer push (FR-619; DEC-71). */
+export type CancellationNoticeKind =
+  'cancellation_requested' | 'cancellation_request_accepted' | 'cancellation_request_declined';
+
+/**
+ * 005:T016: where a request and an answer record their push, on their own transaction; `main.ts`
+ * binds it to the notifications module's `NotificationWriter`.
+ */
+export interface CancellationNotices {
+  record(
+    tx: Transaction,
+    notice: {
+      readonly userId: string;
+      readonly type: CancellationNoticeKind;
+      readonly payload: { readonly sessionId: string; readonly enrollmentId: string };
+    },
+  ): Promise<unknown>;
+}
+
 export interface CancellationDependencies {
   readonly transactions: Transactions;
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   readonly enrollments: Pick<EnrollmentSide, 'lockEnrollments'>;
+  /** 005:T016: the pushes' writer. */
+  readonly notifications: CancellationNotices;
   /** T028: the make-up an acceptance owes, offered under the acceptance's locks (decision 5). */
   readonly offer: Pick<RemedyOffer, 'offerLocked'>;
   readonly store?: CancellationStore;
@@ -244,6 +277,7 @@ export function createCancellationServices({
   transactions,
   idempotency,
   enrollments,
+  notifications,
   offer,
   store = cancellationStore,
   clock = clockTimestamp,
@@ -304,11 +338,33 @@ export function createCancellationServices({
   const counterpartyOf = (session: PartySessionRow, userId: string): string =>
     session.studentUserId === userId ? session.teacherUserId : session.studentUserId;
 
+  /** 005:T016: `work` on `tx` with the request's list bound to it, unbound when it ends. */
+  async function bound<T>(tx: Transaction, live: LivePublisher, work: () => Promise<T>) {
+    const unbind = bindToTransaction(tx, live);
+    try {
+      return await work();
+    } finally {
+      unbind();
+    }
+  }
+
+  /** 005:T016: the push `type` for `to`, with the session's ids only (R-HONEST-5). */
+  const notify = (
+    tx: Transaction,
+    to: string,
+    type: CancellationNoticeKind,
+    session: PartySessionRow,
+  ) =>
+    notifications.record(tx, {
+      userId: to,
+      type,
+      payload: { sessionId: session.id, enrollmentId: session.enrollmentId },
+    });
+
   return {
     request: ({ userId }, { idempotencyKey, ...asked }, log, live) =>
-      idempotency.run(
-        { scope: SCOPE, key: idempotencyKey, actorId: userId, input: asked },
-        async (tx) => {
+      idempotency.run({ scope: SCOPE, key: idempotencyKey, actorId: userId, input: asked }, (tx) =>
+        bound(tx, live, async () => {
           const ids = { sessionId: asked.sessionId, userId };
           const seen = await store.sessionOfParty(tx, asked.sessionId, userId);
           if (seen === null) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party');
@@ -356,71 +412,82 @@ export function createCancellationServices({
           ]);
           // T066: inside the keyed effect, so a replay adds nothing.
           tell(live, counterpartyOf(session, userId), session);
+          // 005:T016: last on the keyed transaction, so a replay records nothing.
+          await notify(tx, counterpartyOf(session, userId), 'cancellation_requested', session);
           return {
             requestId,
             status: 'pending' as const,
             expiresAt: session.startsAt.toISOString(),
           };
-        },
+        }),
       ),
 
     answer: async ({ userId }, { requestId, accept }, log, live) => {
-      const answered = await transactions.run(async (tx) => {
-        const found = await store.requestOfParty(tx, requestId, userId);
-        if (found === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
-        if (found.requestedByUserId === userId) {
-          throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'own_request');
-        }
-        const seen = await store.sessionOfParty(tx, found.sessionId, userId);
-        if (seen === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
-        const ids = { requestId, sessionId: seen.id, userId };
+      const answered = await transactions.run((tx) =>
+        bound(tx, live, async () => {
+          const found = await store.requestOfParty(tx, requestId, userId);
+          if (found === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
+          if (found.requestedByUserId === userId) {
+            throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'own_request');
+          }
+          const seen = await store.sessionOfParty(tx, found.sessionId, userId);
+          if (seen === null) throw refusal(log, { requestId, userId }, 'NOT_FOUND', 'not_a_party');
+          const ids = { requestId, sessionId: seen.id, userId };
 
-        await store.lockAccounts(tx, partiesInOrder(seen));
-        if (accept) await store.lockTeacherSlots(tx, seen.teacherUserId);
-        await enrollments.lockEnrollments(tx, [seen.enrollmentId]);
-        await store.lockSessions(tx, [seen.id]);
-        if (accept) await store.lockRemediesOf(tx, seen.id);
-        await store.lockRequests(tx, [requestId]);
+          await store.lockAccounts(tx, partiesInOrder(seen));
+          if (accept) await store.lockTeacherSlots(tx, seen.teacherUserId);
+          await enrollments.lockEnrollments(tx, [seen.enrollmentId]);
+          await store.lockSessions(tx, [seen.id]);
+          if (accept) await store.lockRemediesOf(tx, seen.id);
+          await store.lockRequests(tx, [requestId]);
 
-        const request = await store.requestById(tx, requestId);
-        // A request is never deleted (data-model.md §2.6); its row stands under its own lock.
-        if (request === null) throw new Error('sessions: a locked cancellation request vanished');
-        const { session, at } = await decidable(tx, seen.id, log, ids);
-        // The answer's order (the owner's decision of 2026-11-10, B37 Q2): the start, the status,
-        // then the request no longer pending, `CONFLICT` with `details.cause` `not_pending`.
-        started(session, at, log, ids);
-        notScheduled(session, log, ids);
-        if (request.status !== 'pending') {
-          throw refusal(log, ids, 'CONFLICT', 'not_pending', {
-            details: [{ path: 'cause', code: 'not_pending' }],
-          });
-        }
+          const request = await store.requestById(tx, requestId);
+          // A request is never deleted (data-model.md §2.6); its row stands under its own lock.
+          if (request === null) throw new Error('sessions: a locked cancellation request vanished');
+          const { session, at } = await decidable(tx, seen.id, log, ids);
+          // The answer's order (the owner's decision of 2026-11-10, B37 Q2): the start, the status,
+          // then the request no longer pending, `CONFLICT` with `details.cause` `not_pending`.
+          started(session, at, log, ids);
+          notScheduled(session, log, ids);
+          if (request.status !== 'pending') {
+            throw refusal(log, ids, 'CONFLICT', 'not_pending', {
+              details: [{ path: 'cause', code: 'not_pending' }],
+            });
+          }
 
-        const status = accept ? ('accepted' as const) : ('declined' as const);
-        // Both conditional updates hold: the request is pending and the session scheduled under
-        // the locks just read.
-        await store.answerRequest(tx, requestId, status, at);
-        if (accept) await store.cancelByAgreement(tx, session.id);
-        await store.recordEvents(tx, [
-          {
-            enrollmentId: session.enrollmentId,
-            sessionId: session.id,
-            kind: accept ? 'cancellation_accepted' : 'cancellation_declined',
-            occurredAt: at,
-          },
-        ]);
-        const offered = accept ? await offer.offerLocked(tx, session.id) : null;
-        // T066: to the requester, inside this transaction.
-        tell(live, request.requestedByUserId, session);
-        return {
-          offered,
-          output: {
-            requestId,
-            status,
-            sessionStatus: accept ? ('cancelled_by_agreement' as const) : session.status,
-          },
-        };
-      });
+          const status = accept ? ('accepted' as const) : ('declined' as const);
+          // Both conditional updates hold: the request is pending and the session scheduled under
+          // the locks just read.
+          await store.answerRequest(tx, requestId, status, at);
+          if (accept) await store.cancelByAgreement(tx, session.id);
+          await store.recordEvents(tx, [
+            {
+              enrollmentId: session.enrollmentId,
+              sessionId: session.id,
+              kind: accept ? 'cancellation_accepted' : 'cancellation_declined',
+              occurredAt: at,
+            },
+          ]);
+          const offered = accept ? await offer.offerLocked(tx, session.id) : null;
+          // T066: to the requester, inside this transaction.
+          tell(live, request.requestedByUserId, session);
+          // 005:T016: last on this transaction.
+          await notify(
+            tx,
+            request.requestedByUserId,
+            accept ? 'cancellation_request_accepted' : 'cancellation_request_declined',
+            session,
+          );
+          return {
+            offered,
+            output: {
+              requestId,
+              status,
+              sessionStatus: accept ? ('cancelled_by_agreement' as const) : session.status,
+            },
+          };
+        }),
+      );
       if (answered.offered !== null) offeredLine(log, answered.offered);
       return answered.output;
     },

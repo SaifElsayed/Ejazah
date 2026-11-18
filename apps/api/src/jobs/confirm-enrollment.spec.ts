@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 import type { LockedEnrollment } from '../modules/booking/index.js';
 import type { CaseInstants } from '../modules/moderation/index.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
+import { publisherOn } from '../platform/live/live-publisher.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import {
   CONFIRM_ENROLLMENT,
@@ -68,6 +69,8 @@ interface World {
 interface Recorded {
   readonly calls: string[];
   readonly transactions: number;
+  /** 005:T016: the work each attempt queued on its own after-commit list, as it was sent. */
+  readonly sent: string[];
 }
 
 function locked(overrides: Partial<LockedEnrollment>): LockedEnrollment {
@@ -91,6 +94,7 @@ function locked(overrides: Partial<LockedEnrollment>): LockedEnrollment {
 
 function harness(world: World) {
   const calls: string[] = [];
+  const sent: string[] = [];
   const logged: [object, string][] = [];
   let transactions = 0;
   let failed = false;
@@ -130,6 +134,8 @@ function harness(world: World) {
       expect([enrollmentId, paymentId, at]).toEqual([ENROLLMENT, PAYMENT, NOW]);
       const converted = world.enrollment.activeHoldId !== null || calls.includes('rehold');
       calls.push(converted ? 'confirm' : 'confirm: no hold');
+      // 005:T016: booking's writer queues the push on the attempt's own list, as the real one does.
+      if (converted) publisherOn(_tx)?.afterCommitDo?.(() => void sent.push('payment_confirmed'));
       return converted ? 'confirmed' : 'no_active_hold';
     },
     bookablePair: async (_tx, student, teacher) => {
@@ -146,6 +152,7 @@ function harness(world: World) {
     refuse: async (_tx, enrollment, refusal, at) => {
       expect([enrollment.id, at]).toEqual([ENROLLMENT, NOW]);
       calls.push(`refuse ${refusal}`);
+      publisherOn(_tx)?.afterCommitDo?.(() => void sent.push(`refused ${refusal}`));
     },
     slotOf: async (_tx, slotId) => {
       expect(slotId).toBe(SLOT);
@@ -185,6 +192,8 @@ function harness(world: World) {
       }) as never,
     },
     settings,
+    // 005:T016: the steps are stand-ins here; the port reaches booking's writer in the real steps.
+    notices: { record: () => Promise.reject(new Error('the stand-in steps record no push')) },
     steps,
     clock: () => NOW,
     enrollments: { enrollmentFor: async () => null },
@@ -195,7 +204,7 @@ function harness(world: World) {
   });
   return {
     job,
-    recorded: (): Recorded => ({ calls: [...calls], transactions }),
+    recorded: (): Recorded => ({ calls: [...calls], transactions, sent: [...sent] }),
     logged,
   };
 }
@@ -561,5 +570,30 @@ describe('confirm-enrollment: idempotent (R-API-14)', () => {
     });
     expect(once).toEqual(['confirm', 'generate']);
     expect(twice).toEqual(once);
+  });
+});
+
+describe('confirm-enrollment: each attempt’s own after-commit list (005:T016, Q-N3 (a))', () => {
+  it('sends the confirmation’s push once its transaction has committed', async () => {
+    const recorded = await run(paid());
+    expect(recorded.sent).toEqual(['payment_confirmed']);
+  });
+
+  it('drops the push of a confirm attempt the database refuses; the refuse attempt sends only its own', async () => {
+    const recorded = await run(
+      paid({
+        failAt: { step: 'generate', error: refusedBy('23P01', 'sessions_student_no_overlap') },
+      }),
+    );
+    expect(recorded.transactions).toBe(2);
+    expect(recorded.sent).toEqual(['refused slot_unavailable']);
+  });
+
+  it('sends nothing when the attempt fails and is not refused', async () => {
+    const { job, recorded } = harness(
+      paid({ failAt: { step: 'generate', error: new Error('lost') } }),
+    );
+    await expect(job.handle({ paymentId: PAYMENT })).rejects.toThrow('lost');
+    expect(recorded().sent).toEqual([]);
   });
 });

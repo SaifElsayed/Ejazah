@@ -31,6 +31,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CONFIRM_ENROLLMENT, confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { runOnceAndTwice } from '../../apps/api/src/jobs/double-run';
 import { openCompensationCase } from '../../apps/api/src/modules/moderation/index';
+import { createNotificationWriter } from '../../apps/api/src/modules/notifications/index';
 import {
   closeDatabase,
   type Database,
@@ -50,6 +51,10 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+
+/** 005:T016: the one writer, as `worker.ts` binds it, for the double run's one push. */
+let writer: ReturnType<typeof createNotificationWriter>;
+
 let db: Db;
 let database: Database;
 
@@ -59,6 +64,11 @@ beforeAll(async () => {
     poolMax: 4,
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 60_000,
+  });
+  writer = createNotificationWriter({
+    database,
+    queue: { enqueue: async () => undefined },
+    log: { info: () => undefined, warn: () => undefined },
   });
 });
 
@@ -70,7 +80,7 @@ afterAll(async () => {
 const { person, world, order, enrollmentOf, holdsOf, sessionsOf, eventsOf, casesOf } =
   confirmationWorld(() => database);
 
-const job = () => confirmEnrollment({ database, settings, clock: () => NOW });
+const job = () => confirmEnrollment({ database, settings, notices: writer, clock: () => NOW });
 const confirm = (paymentId: string) => job().handle({ paymentId });
 
 async function resolve(caseId: string): Promise<void> {
@@ -572,9 +582,20 @@ describe('confirm-enrollment is idempotent (R-API-14, R-215)', () => {
         sessions: await sessionsOf(on.enrollmentId),
         events: (await eventsOf(on.enrollmentId)).map(({ kind }) => kind),
         cases: (await casesOf(on.enrollmentId)).length,
+        // 005:T016: one push, the confirmation's.
+        pushes: (
+          await database.notification.findMany({
+            where: { userId: on.studentId },
+            select: { type: true },
+          })
+        ).map(({ type }) => type),
       }),
     });
-    expect(once).toMatchObject({ enrollment: { status: 'confirmed' }, events: ['confirmed'] });
+    expect(once).toMatchObject({
+      enrollment: { status: 'confirmed' },
+      events: ['confirmed'],
+      pushes: ['payment_confirmed'],
+    });
     expect(twice).toEqual(once);
   });
 

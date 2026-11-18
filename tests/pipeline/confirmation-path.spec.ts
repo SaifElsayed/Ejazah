@@ -1177,7 +1177,8 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
         `write ${REPOSITORY} markConfirmed`,
         `markConfirmed ${SERVICE} confirmEnrollment`,
         `confirmEnrollment ${ENTRY} -`,
-        `confirmEnrollment ${JOB} confirmationSteps`,
+        // 005:T016 (rule d): the job's one reach, inside the steps' builder that hands booking the pushes' port.
+        `confirmEnrollment ${JOB} confirmationStepsOf`,
         `write ${SIDE_REPOSITORY} restoreEnrollment`,
         `restoreEnrollment ${SIDE_SERVICE} restore`,
       ].sort(),

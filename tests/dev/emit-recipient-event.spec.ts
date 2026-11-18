@@ -39,6 +39,9 @@ import {
 import { connect, createEmptyDatabase, type FreshDatabase, migrate } from '../seed/fresh-database';
 import { gatewayStandIn, type StandInEvent } from '../support/gateway-stand-in';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const LOCAL = {
   NODE_ENV: 'development',
   DATABASE_URL: 'postgresql://ijazah_app:secret@localhost:5432/ijazah',
@@ -298,6 +301,7 @@ describe('a replay is a no-op end to end (T079, FR-PAYG-4)', { tags: ['database'
       idleInTransactionTimeoutMs: 30_000,
     });
     const route = createPaymentWebhookRoute({
+      notices: NO_PUSH,
       database,
       payment: createPaymentPort({ PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY }),
       log: createLogger({ level: 'info', destination: { write: (line) => void lines.push(line) } }),

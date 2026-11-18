@@ -50,6 +50,9 @@ import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js'
 import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
 import { connectAsApplication, type Db } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const CAIRO = 'Africa/Cairo';
 /** Tuesday 2026-11-03 10:00 in Cairo. */
 const NOW = new Date('2026-11-03T08:00:00Z');
@@ -205,7 +208,7 @@ function placeAlone(who: string, on: Offer): Promise<string> {
           tx,
           studentOf(who),
           { packageId: on.packageId, slotId: on.slotId },
-          { terms, orders: orderStandingsOf },
+          { terms, orders: orderStandingsOf, notices: NO_PUSH },
         )
       ).holdId,
     OPTIONS,
@@ -420,7 +423,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
       tx,
       studentOf(who),
       { packageId: on.packageId, slotId: on.slotId },
-      { terms, orders: orderStandingsOf },
+      { terms, orders: orderStandingsOf, notices: NO_PUSH },
     );
 
   /** Whether `ended` is the database's deadlock refusal, anywhere in its causes. */
@@ -472,7 +475,7 @@ describe("a teacher's ban racing a booking of the teacher's slot (the note under
             tx,
             studentOf(who),
             { packageId: on.packageId, slotId: on.slotId },
-            { terms, orders: orderStandingsOf, store: pausing },
+            { terms, orders: orderStandingsOf, store: pausing, notices: NO_PUSH },
           ),
         OPTIONS,
       )

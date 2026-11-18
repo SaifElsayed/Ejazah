@@ -68,6 +68,9 @@ import {
 } from '../../apps/api/src/platform/settings/settings-reader';
 import { confirmationWorld, NOW, SETTINGS as CONFIRMATION_SETTINGS } from './confirmation-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const KEY = Buffer.alloc(32, 7).toString('base64');
 const PASSWORD = 'a long probe passphrase 31';
 const CAIRO = 'Africa/Cairo';
@@ -516,7 +519,7 @@ describe('the race: a direct end committed between the deletion’s two reads (F
         { userId: made.teacherId, role: 'teacher', status: 'active' },
       ],
     });
-    await confirmEnrollment({ database, settings, clock: () => NOW }).handle({
+    await confirmEnrollment({ database, settings, notices: NO_PUSH, clock: () => NOW }).handle({
       paymentId: await order(made.enrollmentId),
     });
     // The direct end commits right after the deletion's first read, whichever read that is.

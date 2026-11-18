@@ -40,6 +40,9 @@ import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fi
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error.js';
 import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender.js';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 let database: Database;
 
 beforeAll(() => {
@@ -306,7 +309,7 @@ const place = (
   student: { userId: string; gender: RequesterGender },
   packageId: string,
   slotId: string,
-) => placeHold(tx, student, { packageId, slotId }, { terms, orders });
+) => placeHold(tx, student, { packageId, slotId }, { terms, orders, notices: NO_PUSH });
 
 async function activeHolds(tx: Transaction, where: { slotId?: string; studentUserId?: string }) {
   return tx.slotHold.findMany({ where: { ...where, releasedAt: null } });
@@ -615,7 +618,7 @@ describe('releaseHolds with a named reason, and the re-hold (FR-363, FR-362, FR-
       const holdId = await reholdEnrollment(
         tx,
         { id: late, slotId: on.thursday, studentUserId: student },
-        { terms, orders },
+        { terms, orders, notices: NO_PUSH },
       );
       expect((await tx.slotHold.findUniqueOrThrow({ where: { id: lapsed } })).releasedAt).toEqual(
         NOW,
@@ -636,7 +639,7 @@ describe('releaseHolds with a named reason, and the re-hold (FR-363, FR-362, FR-
       const refused = await reholdEnrollment(
         tx,
         { id: late, slotId: on.thursday, studentUserId: student },
-        { terms, orders },
+        { terms, orders, notices: NO_PUSH },
       ).then(
         () => undefined,
         (error: unknown) => error,

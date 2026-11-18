@@ -441,6 +441,8 @@ describe("'sessions.join' (T011)", () => {
       video,
       enrollmentSide: {} as never,
       store: {} as SessionsStore,
+      // 005:T016: no cancellation is requested or answered here.
+      notifications: { record: () => Promise.reject(new Error('no push is recorded here')) },
       idempotency: {
         run: async () => {
           opened();

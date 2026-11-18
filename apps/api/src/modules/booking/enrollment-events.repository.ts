@@ -12,7 +12,20 @@
 // No lock: a row references its enrollment and, for an order's outcome, its payment; the caller
 // holds the enrollment's lock, and the payment's when it names one, taken in T005's order before it
 // decided on the outcome. Neither references `users`.
+//
+// THE PAYMENT PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). After
+// the rows, each payment outcome is handed to the notice port the caller passes
+// (`payment-outcome-notices.port.ts`), on the same transaction, for its enrollment's student, read
+// here in one statement: the push's row is written with its record or not at all. A payment outcome
+// with no port is refused before anything is written, so no caller loses a push silently; every
+// other outcome needs none. The push's row references the student's `users` row: which lock the
+// caller holds on it is kernel.md's row «a payment outcome's push» (005:T016).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import {
+  type PaymentNoticeKind,
+  paymentNoticeOf,
+  type PaymentOutcomeNotices,
+} from './payment-outcome-notices.port.js';
 
 /** `cancellation_reason`, as an `enrollment_events` row and an enrollment carry it (ADR 0010 D7). */
 export type EnrollmentCancellationReason =
@@ -65,11 +78,55 @@ function rowOf(outcome: EnrollmentOutcome) {
   }
 }
 
-/** Writes one row per outcome, in one statement on the caller's transaction; none for none. */
-export async function recordEnrollmentEvents(
-  tx: Pick<Transaction, 'enrollmentEvent'>,
+/** The pushes `outcomes` give, each with its enrollment (005:T016). */
+function noticesOf(
   outcomes: readonly EnrollmentOutcome[],
+): { readonly enrollmentId: string; readonly type: PaymentNoticeKind }[] {
+  return outcomes.flatMap((outcome) => {
+    const type = paymentNoticeOf(outcome);
+    return type === null ? [] : [{ enrollmentId: outcome.enrollmentId, type }];
+  });
+}
+
+/** The students of `enrollmentIds`, in one statement on the caller's transaction. */
+async function studentsOf(
+  tx: Pick<Transaction, 'enrollment'>,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  const rows = await tx.enrollment.findMany({
+    where: { id: { in: [...new Set(enrollmentIds)] } },
+    select: { id: true, studentUserId: true },
+  });
+  return new Map(rows.map(({ id, studentUserId }) => [id, studentUserId]));
+}
+
+/**
+ * Writes one row per outcome, in one statement on the caller's transaction; none for none. Then
+ * 005:T016: each payment outcome's push through `notices`, on the same transaction (this file's
+ * head); a payment outcome with no `notices` is refused before anything is written.
+ */
+export async function recordEnrollmentEvents(
+  tx: Transaction,
+  outcomes: readonly EnrollmentOutcome[],
+  notices?: PaymentOutcomeNotices,
 ): Promise<void> {
   if (outcomes.length === 0) return;
+  const due = noticesOf(outcomes);
+  if (due.length > 0 && notices === undefined) {
+    throw new Error(
+      'booking: a payment outcome is recorded with the notice port its push is written through (005:T016).',
+    );
+  }
   await tx.enrollmentEvent.createMany({ data: outcomes.map(rowOf) });
+  if (due.length === 0 || notices === undefined) return;
+  const students = await studentsOf(
+    tx,
+    due.map(({ enrollmentId }) => enrollmentId),
+  );
+  // One after another: the statements share the transaction's one connection.
+  for (const { enrollmentId, type } of due) {
+    const userId = students.get(enrollmentId);
+    if (userId === undefined) throw new Error(`booking: no enrollment ${enrollmentId} to tell`);
+    await notices.record(tx, { userId, type, payload: { enrollmentId } });
+  }
 }

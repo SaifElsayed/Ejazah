@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../platform/db/prisma.repository.js';
+import { publisherOn } from '../platform/live/live-publisher.js';
 import { runOnceAndTwice } from './double-run.js';
 import { EXPIRE_HOLDS, expireHolds, type HoldExpirySteps } from './expire-holds.js';
 
@@ -19,6 +20,12 @@ interface Hold {
 }
 
 function holdsWorld(holds: readonly Hold[]) {
+  /** 005:T016: the payment pushes' port; the steps are stand-ins, so nothing reaches it. */
+  const notices = {
+    record: () => Promise.reject(new Error('the stand-in steps record no push')),
+  };
+  /** 005:T016: whether each release ran on a transaction carrying a list that takes work. */
+  const bound: boolean[] = [];
   const transactions: string[][] = [];
   let current: string[] | undefined;
   const tx = {} as Transaction;
@@ -49,13 +56,14 @@ function holdsWorld(holds: readonly Hold[]) {
     },
     release: async (client, ids, at) => {
       expect(client).toBe(tx);
+      bound.push(publisherOn(client)?.afterCommitDo !== undefined);
       current?.push(`release ${ids.join(',')}`);
       for (const hold of holds) {
         if (ids.includes(hold.id) && hold.releasedAt === null) hold.releasedAt = at;
       }
     },
   };
-  return { holds, transactions, database, steps };
+  return { holds, transactions, database, steps, notices, bound };
 }
 
 const hold = (id: string, expiresAt: string): Hold => ({
@@ -67,7 +75,12 @@ const hold = (id: string, expiresAt: string): Hold => ({
 describe('expire-holds (T040, FR-364)', () => {
   it('runs every minute on a cron pattern in code, with no payload', () => {
     const { database, steps } = holdsWorld([]);
-    const job = expireHolds({ database, steps, clock: () => NOW });
+    const job = expireHolds({
+      database,
+      steps,
+      notices: { record: async () => undefined },
+      clock: () => NOW,
+    });
     expect(job.name).toBe(EXPIRE_HOLDS);
     expect(job.name).toBe('expire-holds');
     expect(job.schedule).toBe('* * * * *');
@@ -116,5 +129,17 @@ describe('expire-holds (T040, FR-364)', () => {
       ['b', null],
     ]);
     expect(twice).toEqual(once);
+  });
+});
+
+describe('expire-holds: the pushes (005:T016, the note under T016, Q-N3 (a))', () => {
+  it('releases each page on a transaction that carries an after-commit list of its own', async () => {
+    const world = holdsWorld([
+      hold('a', '2026-11-03T07:00:00Z'),
+      hold('b', '2026-11-03T07:30:00Z'),
+      hold('c', '2026-11-03T07:45:00Z'),
+    ]);
+    await expireHolds({ ...world, clock: () => NOW, pageSize: 2 }).handle({});
+    expect(world.bound).toEqual([true, true]);
   });
 });

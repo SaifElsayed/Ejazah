@@ -14,10 +14,21 @@
 // (FR-363). The sweep takes no lock of its own.
 //
 // IDEMPOTENT (R-API-14): a second run finds no active expired hold left to release.
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)). A hold
+// linked to an enrollment by a Pay after the page was read is released as the release says, its
+// enrollment cancelled for an expired payment with its `payment_expired` push, through the notice
+// port `worker.ts` binds (`notices`). So each page runs with an after-commit list of its own
+// (booking's `withOutcomeNotices`), as `expire-pending-payments`' pages do.
 import { z } from 'zod';
 
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
-import { expiredCheckoutHoldIds, releaseHolds } from '../modules/booking/index.js';
+import {
+  expiredCheckoutHoldIds,
+  type PaymentOutcomeNotices,
+  releaseHolds,
+  withOutcomeNotices,
+} from '../modules/booking/index.js';
 import { orderStandingsOf } from '../modules/payments/index.js';
 import { defineJob, type Job } from './job.js';
 
@@ -43,12 +54,17 @@ export interface HoldExpirySteps {
   release(tx: Transaction, holdIds: readonly string[], at: Date): Promise<unknown>;
 }
 
-/** The steps over booking's entry, the orders' standing being payments' (R-208). */
-export const holdExpirySteps: HoldExpirySteps = {
-  expiredHolds: expiredCheckoutHoldIds,
-  release: (tx, holdIds, at) =>
-    releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf }),
-};
+/**
+ * The steps over booking's entry, the orders' standing being payments' (R-208); 005:T016: a
+ * release's pushes through `notices`.
+ */
+export function holdExpiryStepsOf(notices: PaymentOutcomeNotices): HoldExpirySteps {
+  return {
+    expiredHolds: expiredCheckoutHoldIds,
+    release: (tx, holdIds, at) =>
+      releaseHolds(tx, holdIds, 'expired', { at, orders: orderStandingsOf, notices }),
+  };
+}
 
 /**
  * Runs `page` after each last id it answers until a page is shorter than `pageSize`: the paging both
@@ -68,6 +84,8 @@ export async function inPages(
 
 export interface ExpireHoldsOptions {
   readonly database: Pick<Database, '$transaction'>;
+  /** 005:T016: the payment pushes' port (`NotificationWriter`, bound by `worker.ts`). */
+  readonly notices: PaymentOutcomeNotices;
   readonly steps?: HoldExpirySteps;
   /** The clock; the system clock unless a spec sets one. */
   readonly clock?: () => Date;
@@ -76,7 +94,8 @@ export interface ExpireHoldsOptions {
 
 export function expireHolds({
   database,
-  steps = holdExpirySteps,
+  notices,
+  steps = holdExpiryStepsOf(notices),
   clock = () => new Date(),
   pageSize = EXPIRY_PAGE_SIZE,
 }: ExpireHoldsOptions): Job {
@@ -86,12 +105,16 @@ export function expireHolds({
     schedule: EVERY_MINUTE,
     run: async () => {
       const at = clock();
+      // 005:T016: each page with an after-commit list of its own (this file's head).
       await inPages(pageSize, (after) =>
-        database.$transaction(async (tx) => {
-          const ids = await steps.expiredHolds(tx, at, after, pageSize);
-          if (ids.length > 0) await steps.release(tx, ids, at);
-          return ids;
-        }),
+        withOutcomeNotices(
+          (work) => database.$transaction(work),
+          async (tx) => {
+            const ids = await steps.expiredHolds(tx, at, after, pageSize);
+            if (ids.length > 0) await steps.release(tx, ids, at);
+            return ids;
+          },
+        ),
       );
     },
   });

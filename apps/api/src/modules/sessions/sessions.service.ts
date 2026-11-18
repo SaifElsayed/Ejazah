@@ -76,6 +76,7 @@ import { sessionPartiesOf } from '../identity/index.js';
 import { type AbsenceComplaint, createAbsenceComplaint } from './absence-complaint.service.js';
 import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
 import {
+  type CancellationNotices,
   type CancellationServices,
   type CancellationStore,
   cancellationViewOf,
@@ -180,6 +181,11 @@ export interface SessionsDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   /** T021: the cancellation's store; the module's unless a spec fakes it. */
   readonly cancellationStore?: CancellationStore;
+  /**
+   * 005:T016: where a cancellation request and its answer record their push (FR-619), bound by
+   * `main.ts` to the notifications module's `NotificationWriter`.
+   */
+  readonly notifications: CancellationNotices;
   /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
   readonly disputeStore?: DisputeRaiseStore;
   /** T026: `sessions.get`'s dispute fields; `createDisputeView({ settings })` unless a spec fakes it. */
@@ -268,6 +274,7 @@ export function createSessionsServices({
   store,
   idempotency,
   cancellationStore,
+  notifications,
   disputeStore,
   disputeView = createDisputeView({ settings }),
   now = () => new Date(),
@@ -358,6 +365,7 @@ export function createSessionsServices({
       transactions,
       idempotency,
       enrollments: enrollmentSide,
+      notifications,
       offer: remedyOffer,
       clock,
       ...(cancellationStore === undefined ? {} : { store: cancellationStore }),

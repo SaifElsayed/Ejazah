@@ -65,6 +65,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   dispute_window_hours: 72,
   makeup_choice_window_days: 7,
@@ -150,7 +153,7 @@ async function confirmedWorld(track: 'recitation' | 'ijazah_track' = 'recitation
       data: { snapshotTrack: track },
     });
   }
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;

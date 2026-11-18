@@ -78,6 +78,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   admin_list_page_size: 50,
   dispute_window_hours: 72,
@@ -157,7 +160,7 @@ async function confirmedWorld(track: 'recitation' | 'ijazah_track' = 'recitation
       data: { snapshotTrack: track },
     });
   }
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;
@@ -305,6 +308,7 @@ async function holdOn(made: World): Promise<string> {
         { userId: studentId, gender: FEMALE },
         { packageId: made.packageId, slotId: made.slotId },
         {
+          notices: NO_PUSH,
           terms: {
             now: new Date(),
             ttlMinutes: 10,
@@ -660,7 +664,7 @@ describe('races (kernel.md, the direct end’s row)', () => {
     });
     const paymentId = await order(made.enrollmentId);
     const [confirmed, ended] = await Promise.allSettled([
-      confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+      confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
         paymentId,
       }),
       end(made.enrollmentId),

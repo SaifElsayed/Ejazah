@@ -75,6 +75,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 let db: Db;
 let holder: Db;
 let watcher: Db;
@@ -110,6 +113,7 @@ beforeAll(async () => {
     idleInTransactionTimeoutMs: 60_000,
   });
   services = createSessionsServices({
+    notifications: NO_PUSH,
     transactions: transactionsOver(database),
     settings,
     video: createVideoPort({

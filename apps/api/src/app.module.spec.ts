@@ -522,6 +522,8 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
       settings: { read: async (_key, schema) => schema.parse(15) },
       video: {} as never,
       enrollmentSide: {} as never,
+      // 005:T016: no cancellation is requested or answered here.
+      notifications: { record: () => Promise.reject(new Error('no push is recorded here')) },
       // No session is the caller's: `sessions.get` and `sessions.join` refuse NOT_FOUND.
       store: {
         sessionOfParty: async () => null,

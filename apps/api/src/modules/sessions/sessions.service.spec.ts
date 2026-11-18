@@ -270,6 +270,8 @@ beforeEach(() => {
     idempotency: {
       run: () => Promise.reject(new Error('no cancellation or dispute is keyed here')),
     },
+    // 005:T016: and so no cancellation's push is recorded.
+    notifications: { record: () => Promise.reject(new Error('no push is recorded here')) },
     disputeView,
     now: () => now,
     clock: async () => databaseNow,
