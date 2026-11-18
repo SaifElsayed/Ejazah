@@ -1,6 +1,8 @@
 // PUBLIC ENTRY of the moderation module (T017). Other modules import this file and nothing below it (R-API-3).
 // 005:T011: the reports services' type, for `ModerationServices` and `AdminReports` (at the end).
 import type { UserReports } from './user-report.service.js';
+// 005:T013: the gender flags' services' type, for `ModerationServices.genderFlags` (at the end).
+import type { GenderFlags } from './gender-flag.service.js';
 
 /**
  * The system's compensation case on an enrollment (T035, FR-362, FR-375, FR-DISPUTE-5): opened, or
@@ -143,6 +145,8 @@ export {
  */
 export interface ModerationServices {
   readonly reports: Pick<UserReports, 'create'>;
+  // 005:T013: the user's `genderFlags.raise`, one `createGenderFlags` built by `main.ts` (below).
+  readonly genderFlags: Pick<GenderFlags, 'raise'>;
 }
 export type AdminReports = Pick<UserReports, 'list' | 'get' | 'resolve'>;
 export { reportsRouter, USER_REPORT_RATE_LIMIT } from './reports.router.js';
@@ -158,3 +162,38 @@ export { openCompensationCasesAmong } from './compensation-case.repository.js';
 // an open `user_reports` row, read through its `enrollment_id`, with no lock; the chat purge reads it
 // beside `enrollmentsWithOpenMatterAmong`, booking's held files do not (FR-AUTH-14).
 export { enrollmentsWithOpenReportAmong } from './open-matters.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T013 (FR-613, FR-614, FR-615; SRS FR-GENDER-3, FR-GENDER-4; research R-409; the note under
+// T013, Q-G1 (a)): gender flags. Moderation holds the `gender_flags` rows; the user's
+// `genderFlags.raise` is this module's router, and the administrator's six procedures are the admin
+// module's router, over `AdminGenderFlags` and the decisions it composes (R-409). One
+// `createGenderFlags` is built by `main.ts` over the `Pairings` it binds (`paired`) and handed to
+// both surfaces, as the reports' service is.
+export {
+  type AdministratorFlagAsked,
+  createGenderFlags,
+  type FlagAsked,
+  type FlagCaller,
+  type GenderFlagDetail,
+  type GenderFlagItem,
+  type GenderFlags,
+  type GenderFlagsDependencies,
+  type GenderFlagsLog,
+  type GenderFlagsPage,
+  type GenderFlagStore,
+  genderFlagRefusal,
+  genderFlagStore,
+} from './gender-flag.service.js';
+export type {
+  GenderFlagOutcome,
+  GenderFlagResolution,
+  GenderFlagRow,
+  GenderFlagStatus,
+} from './gender-flag.repository.js';
+/** The administrator's half of the flags' service, which the admin module composes (Q-G1 (a)). */
+export type AdminGenderFlags = Pick<
+  GenderFlags,
+  'raiseByAdministrator' | 'list' | 'detail' | 'dismiss'
+>;
+export { GENDER_FLAG_RATE_LIMIT, genderFlagsRouter } from './gender-flags.router.js';

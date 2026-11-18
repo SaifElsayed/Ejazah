@@ -147,6 +147,9 @@ export const STANDING_ACTIONS = [
   'teacher.revocation_lifted',
   'application.ban',
   'user.require_identity',
+  // 005:T015 of B47 (the owner's word of 2026-11-18): the fraud ban (`genderFlags.fraudBan`), on the
+  // person with its reason.
+  'gender.fraud_banned',
 ] as const;
 
 /**

@@ -366,6 +366,42 @@ describe('releaseHolds: FR-363 and the paid order (the owner’s decision of 202
     },
   );
 
+  // 005:T014 (B47, the owner's Q-G2 (c)): a gender correction releases the corrected person's
+  // holds with the hold reason `admin` and cancels each enrollment awaiting payment with the reason
+  // it names, `gender_correction`; a paid one stays awaiting payment, as under `admin`.
+  it('releases admin holds and cancels their unpaid enrollments with the enrollment reason given', async () => {
+    const fake = storeOf({
+      holds: [
+        hold(id(1), { slotId: SLOT, studentUserId: STUDENT, enrollmentId: id(5) }),
+        hold(id(2), { slotId: ELSEWHERE, studentUserId: OTHER, enrollmentId: id(6) }),
+      ],
+      pending: [id(5), id(6)],
+      standings: new Map([[id(6), { paid: true, lastFailed: false }]]),
+    });
+    const answer = await releaseHolds(
+      tx,
+      [id(1), id(2)],
+      'admin',
+      { at: NOW, orders: fake.orders, store: fake.store },
+      'gender_correction',
+    );
+    expect(answer).toEqual({
+      released: [id(1), id(2)],
+      cancelled: [{ enrollmentId: id(5), reason: 'gender_correction' }],
+      keptPending: [id(6)],
+    });
+    expect(fake.holds.map(({ releaseReason }) => releaseReason)).toEqual(['admin', 'admin']);
+    expect([...fake.cancelled]).toEqual([[id(5), 'gender_correction']]);
+    expect(fake.events).toEqual([
+      {
+        kind: 'cancelled',
+        enrollmentId: id(5),
+        cancellationReason: 'gender_correction',
+        occurredAt: NOW,
+      },
+    ]);
+  });
+
   it("cancels a paid one slot_unavailable: FR-362's refusal of that paid order", async () => {
     const released = release(
       {

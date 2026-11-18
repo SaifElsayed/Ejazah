@@ -175,6 +175,14 @@
         "disputesListed": "View disputes",
         "documentView": "View a document",
         "enrollmentRestored": "Restore an enrollment",
+        "genderFlags": {
+          "corrected": "Correct a declared gender",
+          "dismissed": "Dismiss a gender flag",
+          "fraudBanned": "Ban for gender fraud",
+          "listed": "View gender flags",
+          "raised": "Raise a gender flag",
+          "viewed": "View a gender flag"
+        },
         "heldFileView": "View a held file",
         "ijazahReview": {
           "barLifted": "Lift a user's ijazah bar",
@@ -466,7 +474,8 @@
         "studentSuspended": "The student was suspended; the case awaits review",
         "teacherEnded": "The teacher’s approval was revoked, or they were banned or their account deleted",
         "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return",
-        "adminEnded": "The administration ended the enrollment directly"
+        "adminEnded": "The administration ended the enrollment directly",
+        "genderCorrection": "A party’s declared gender was corrected, ending the enrollment"
       },
       "status": {
         "dismissed": "Dismissed",
@@ -2765,7 +2774,8 @@
         "adminOpenedForStudent": "Opened by the administration for the student",
         "adminOpenedForTeacher": "Opened by the administration for the teacher",
         "teacherSuspended": "The teacher suspended (the enrollment paused)",
-        "adminEnded": "The administration ended the enrollment"
+        "adminEnded": "The administration ended the enrollment",
+        "genderCorrection": "Correction of a declared gender"
       },
       "caseStatus": {
         "open": "Open",

@@ -101,6 +101,15 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'reports.listed': 'admin.audit.actions.reports.listed',
   'report.viewed': 'admin.audit.actions.reports.viewed',
   'report.resolved': 'admin.audit.actions.reports.resolved',
+  // 005:T013 (B47; FR-614, FR-615): the gender-flag queue, audited on the flagged person.
+  'gender_flags.listed': 'admin.audit.actions.genderFlags.listed',
+  'gender_flag.viewed': 'admin.audit.actions.genderFlags.viewed',
+  'gender_flag.raised': 'admin.audit.actions.genderFlags.raised',
+  'gender_flag.dismissed': 'admin.audit.actions.genderFlags.dismissed',
+  // 005:T014 (B47; FR-616): the correction.
+  'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
+  // 005:T015 (B47; FR-617): the fraud ban.
+  'gender.fraud_banned': 'admin.audit.actions.genderFlags.fraudBanned',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

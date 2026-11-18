@@ -23,8 +23,8 @@
 // proving anything. The fixtures below therefore build routers holding a real procedure of each
 // kind: a pair that keeps the surfaces apart, which passes, and routers that leak, which fail, so
 // the checks are shown to bite before the real routers give them anything to read.
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { authorityAllowList, onboardingCompleteInput } from '@ijazah/contracts';
@@ -258,5 +258,95 @@ describe('no user-surface input carries gender but onboarding.complete (T029, R-
       .map(([path, { input }]) => [path, authorityFieldsOf(input)] as const)
       .filter(([, fields]) => fields.length > 0);
     expect(Object.fromEntries(taking)).toEqual({ 'onboarding.complete': ['gender', 'role'] });
+  });
+});
+
+// 005:T013 — no procedure on either router changes one's own gender (R-GENDER-6, FR-618; SRS
+// FR-GENDER-5; research R-409, «No self-service path»). Read from the live routers, not the committed
+// snapshot, so a procedure mounted since the last snapshot is read too: every input schema each
+// procedure parses is turned into its JSON Schema and every property name at any depth collected.
+// On the user surface only `onboarding.complete` takes a `gender`: the declaration made once,
+// before the account exists (T029 above). On the administrator surface no input takes one: the
+// administrators' correction and fraud ban (T014, T015) set the other declared gender from the flag,
+// never from what an administrator types, and an administrator has no declared gender of their own.
+// Red first under the mutant «a `gender` in an administrator's input» (lane D's `mutants\`).
+describe('no procedure on either router changes one’s own gender (005:T013, R-GENDER-6, FR-618)', () => {
+  /** Every property name the procedure's input schemas declare, at any depth. */
+  function inputNamesOf(procedure: AnyProcedure): Set<string> {
+    const names = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
+      }
+      if (typeof node !== 'object' || node === null) return;
+      const { properties } = node as { properties?: unknown };
+      if (typeof properties === 'object' && properties !== null) {
+        for (const name of Object.keys(properties)) names.add(name);
+      }
+      for (const value of Object.values(node)) walk(value);
+    };
+    for (const input of procedure._def.inputs as z.ZodType[]) {
+      walk(z.toJSONSchema(input, { io: 'input', unrepresentable: 'any' }));
+    }
+    return names;
+  }
+
+  /** The paths of the router whose input takes a `gender` at any depth. */
+  function takingGender(router: AnyRouter): string[] {
+    return [...proceduresOf(router)]
+      .filter(([, procedure]) => inputNamesOf(procedure).has('gender'))
+      .map(([path]) => path)
+      .sort();
+  }
+
+  it('the walk reads nested inputs: a gender under an object of an object is found', () => {
+    const nested = adminProcedure({
+      input: z.object({ person: z.object({ gender: z.enum(['male', 'female']) }) }),
+      output: z.void(),
+    }).mutation(() => undefined);
+    expect(takingGender(createAdminRouter({ people: { correct: nested } }))).toEqual([
+      'people.correct',
+    ]);
+  });
+
+  it('the user surface: only onboarding.complete takes a gender', () => {
+    expect(takingGender(appRouter)).toEqual(['onboarding.complete']);
+  });
+
+  it('the administrator surface: no procedure takes a gender', () => {
+    expect(takingGender(adminRouter)).toEqual([]);
+  });
+});
+
+// 005:T014 — only the administrators' correction and fraud ban write `users.gender` after the
+// account's creation (R-GENDER-6, FR-618; research R-409): identity's one setter,
+// `setDeclaredGender`, is reached from no file of the API but its own and the admin module's
+// gender decisions (T014's correction, T015's fraud ban), never a surface, a router or a user path.
+// Red first under the mutant «the setter called from a user path» (lane D's `mutants\`).
+describe('only the administrators’ gender decisions write a declared gender (005:T014, R-GENDER-6)', () => {
+  const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const ALLOWED = new Set([
+    'modules/identity/declared-gender.repository.ts',
+    'modules/identity/index.ts',
+    'modules/admin/gender-decisions.service.ts',
+  ]);
+
+  /** Every non-spec source file of the API, relative to `src`. */
+  function sourcesUnder(directory: string): string[] {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const full = resolve(directory, entry.name);
+      if (entry.isDirectory()) return entry.name === '__fixtures__' ? [] : sourcesUnder(full);
+      return entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts') ? [full] : [];
+    });
+  }
+
+  it('names setDeclaredGender only in identity’s writer, its entry and the admin module’s decisions', () => {
+    const naming = sourcesUnder(sourceRoot)
+      .filter((file) => readFileSync(file, 'utf8').includes('setDeclaredGender'))
+      .map((file) => relative(sourceRoot, file).split(sep).join('/'))
+      .filter((file) => !ALLOWED.has(file))
+      .sort();
+    expect(naming).toEqual([]);
   });
 });

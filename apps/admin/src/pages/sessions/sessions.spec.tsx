@@ -1177,7 +1177,10 @@ describe('the second factor', () => {
 
 describe('T058: RATE_LIMITED on /sessions', () => {
   const limited = (seconds?: string) =>
-    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+    refusal(
+      'RATE_LIMITED',
+      seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+    );
 
   it('the monitor’s search says when to try again', async () => {
     const api = fakeApi();
@@ -1654,6 +1657,15 @@ describe('T083: the restore of an enrollment an administrator ended (T073; N9)',
         expect(panel.getByText(t('admin.sessions.caseReason.adminEnded'))).toBeTruthy();
       },
     );
+  });
+
+  // 005:T014 of B47 (FR-616): a gender correction's case on the monitor.
+  it('names a `gender_correction` case as the correction of a declared gender', () => {
+    const key: MessageKey | undefined = CASE_REASON.gender_correction;
+    expect({
+      ar: key === undefined ? undefined : translate('ar', key),
+      en: key === undefined ? undefined : translate('en', key),
+    }).toEqual({ ar: 'تصحيح الجنس المعلن', en: 'Correction of a declared gender' });
   });
 
   it('names an `admin_ended` case as the administration’s end of the enrollment', () => {

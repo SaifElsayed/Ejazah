@@ -552,3 +552,27 @@ describe('005:T011: a report as an audit target', () => {
     expect(targetText(row, (key: MessageKey) => translate('en', key))).toBe('Report');
   });
 });
+
+// 005:T013 (B47; FR-614, FR-615; contracts/admin-surface.md, `genderFlags.*`): the gender-flag
+// queue's four actions, named by the catalogue's text in Arabic and in English (T083's per-action
+// pattern). Each is audited on the flagged person (`user`), so no new target type.
+const B47_GENDER_FLAG_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['gender_flags.listed', 'عرض بلاغات الجنس', 'View gender flags'],
+  ['gender_flag.viewed', 'عرض بلاغ جنس', 'View a gender flag'],
+  ['gender_flag.raised', 'رفع بلاغ جنس', 'Raise a gender flag'],
+  ['gender_flag.dismissed', 'رفض بلاغ جنس', 'Dismiss a gender flag'],
+  // 005:T014: the correction, with the gender before and after in the entry.
+  ['gender.corrected', 'تصحيح الجنس المعلن', 'Correct a declared gender'],
+  // 005:T015: the fraud ban.
+  ['gender.fraud_banned', 'حظر لتزوير الجنس', 'Ban for gender fraud'],
+];
+
+describe('005:T013: the gender-flag queue’s actions by name', () => {
+  it.each(B47_GENDER_FLAG_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});

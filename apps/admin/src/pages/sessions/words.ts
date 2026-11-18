@@ -102,6 +102,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   teacher_suspended: 'admin.sessions.caseReason.teacherSuspended',
   // B42c, T083 (Q-R7 (a)): T082's case of an administrator's direct end of the enrollment.
   admin_ended: 'admin.sessions.caseReason.adminEnded',
+  // 005:T014 of B47 (FR-616): a gender correction's case, one per enrollment it ended.
+  gender_correction: 'admin.sessions.caseReason.genderCorrection',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {
@@ -261,7 +263,8 @@ export function restoreFailure(error: unknown): ErrorMessage {
   switch (errorCodeOf(error)) {
     case 'RESTORE_REFUSED':
       return {
-        key: (cause === undefined ? undefined : RESTORE_CAUSES[cause]) ?? 'admin.dialogs.submitError',
+        key:
+          (cause === undefined ? undefined : RESTORE_CAUSES[cause]) ?? 'admin.dialogs.submitError',
       };
     case 'CONFLICT':
       return {

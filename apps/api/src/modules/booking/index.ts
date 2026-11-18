@@ -20,7 +20,8 @@ import {
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { PairingParty } from '../moderation/index.js';
 import { enrollmentTermsById } from './enrollment-side.repository.js';
-import { enrollmentPartiesAmong } from './held-files.repository.js';
+// 005:T013: `paired`'s one read on the pair (T011's follow-up).
+import { pairedEnrollmentExists } from './enrollment-side.repository.js';
 
 /**
  * What catalog's `CatalogUse` port asks of booking (T020, R-207), on the caller's transaction:
@@ -375,20 +376,12 @@ export async function partyOfEnrollment(
 }
 
 /**
- * Whether an enrollment of any status joins the two people, either as the student (ADR 0006): over
- * `userId`'s enrollments, the parties' plain indexes (`enrollmentPartiesAmong`, the held files' read).
+ * Whether an enrollment of any status joins the two people, either as the student (ADR 0006).
+ * 005:T013 settles T011's follow-up: one read of at most one row on the pair
+ * (`pairedEnrollmentExists`), no longer every enrollment of `userId`.
  */
-export async function paired(
-  tx: Transaction,
-  userId: string,
-  otherUserId: string,
-): Promise<boolean> {
-  const enrollments = await enrollmentPartiesAmong(tx, [userId]);
-  return enrollments.some(
-    ({ studentUserId, teacherUserId }) =>
-      (studentUserId === userId && teacherUserId === otherUserId) ||
-      (teacherUserId === userId && studentUserId === otherUserId),
-  );
+export function paired(tx: Transaction, userId: string, otherUserId: string): Promise<boolean> {
+  return pairedEnrollmentExists(tx, userId, otherUserId);
 }
 
 // 005:T031 of specs/005-certification (FR-630; R-414; the note under T031, Q-D1 (a)): what an
@@ -397,3 +390,9 @@ export async function paired(
 // enrollment ids, which `main.ts` composes with moderation's `openCompensationCasesAmong` into
 // identity's `OpenCases` port.
 export { enrollmentIdsOfTeacher, hasLiveEnrollment } from './ongoing-enrollments.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T013 (FR-615; research R-409; contracts/admin-surface.md, `genderFlags.get`): a person's
+// `confirmed` enrollments, as student or teacher, in id order, with no lock (a soft-deleted one
+// left out), for the admin module's preview of what a gender correction would end.
+export { confirmedEnrollmentsOf } from './termination.repository.js';

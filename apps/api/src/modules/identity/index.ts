@@ -572,3 +572,13 @@ export { certificateNameOf } from './certificate-name.repository.js';
 // (`kept_erased_at` set, at the administrator's date or «now»). Read by verification's
 // `createKeptSignatureErasure`, past the soft-delete filter (`includeDeleted`).
 export { signatureErasableOwnersAmong } from './identity.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T014 (FR-616, FR-617; SRS FR-GENDER-4; research R-409): the declared gender's read and its one
+// writer, administrators-only, which the admin module's correction (T014) and fraud ban (T015) call
+// under the person's `users` lock. No user procedure reaches it (R-GENDER-6).
+export {
+  type DeclaredGender,
+  declaredGenderOf,
+  setDeclaredGender,
+} from './declared-gender.repository.js';
