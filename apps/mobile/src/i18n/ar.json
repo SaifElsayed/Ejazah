@@ -1624,6 +1624,8 @@
         "view": "عرض الإجازة"
       },
       "ijazahRequest": {
+        "awaitingName": "بانتظار اسم الطالب",
+        "preparing": "تُجهَّز الشهادة، وتُتاح بعد اعتمادها.",
         "rejectedReason": "السبب: {reason}",
         "status": "طلب الإجازة · {status}"
       },
@@ -1664,11 +1666,22 @@
         "title": "أضف توقيعك أولًا",
         "upload": "رفع التوقيع"
       },
+      "chain": "السند",
       "completionDate": "تاريخ الإتمام",
       "enrollmentMeta": "{subject} · {count, plural, one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}} · اكتمل {date}",
+      "issueDate": "تاريخ الإصدار",
       "language": "لغة الشهادة",
       "preview": "معاينة الشهادة",
       "previewAlt": "الإجازة كما ستصدر: {student}، {subject} برواية {riwaya}، بإجازة {teacher}",
+      "refused": {
+        "alreadyIssued": "صدرت إجازة لهذا الاشتراك.",
+        "inFuture": "تاريخ الإتمام لا يكون بعد اليوم.",
+        "noCredential": "ليست لديك إجازة معتمدة في هذه المادة.",
+        "notActive": "لا يمكنك طلب إجازة وحسابك غير نشط.",
+        "notIjazahTrack": "هذا الاشتراك ليس في مسار الإجازة.",
+        "requestOpen": "لهذا الاشتراك طلب إجازة لم يُبتّ فيه بعد.",
+        "studentBarred": "لا يمكن طلب إجازة لهذا الطالب الآن."
+      },
       "riwaya": "الرواية",
       "riwayaValue": "{riwaya} · من طريق {tariq}",
       "send": "إرسال الطلب",
@@ -1694,6 +1707,8 @@
         "details": "البيانات",
         "preview": "المعاينة"
       },
+      "student": "اسم الطالب على الشهادة",
+      "studentMissing": "يُطلب من الطالب اسمه بعد إرسال الطلب.",
       "subject": "المادة",
       "title": "طلب إجازة"
     },
@@ -1874,6 +1889,7 @@
       "hint": "صورة واضحة لتوقيعك بالحبر على ورقة بيضاء، PNG أو JPG.",
       "lede": "يظهر توقيعك على كل إجازة تصدر بطلبك.",
       "previewTitle": "المعاينة",
+      "refused": "لم تُقبل الصورة. ارفع صورة PNG أو JPG أصغر حجمًا.",
       "replaceImage": "استبدال الصورة",
       "title": "صورة التوقيع",
       "upload": "رفع التوقيع",

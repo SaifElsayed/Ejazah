@@ -17,6 +17,8 @@
 // status; the server answers it with no session, so none is drawn.
 // 004:T083 (FR-514): one an administrator ended says so under the student, followed by its reason
 // (`EndedByAdmin`).
+// 005:T019 (FR-603, FR-608): an ijazah-track enrollment draws its ijazah under the chat's entry: the
+// request's status and its sheet (`IjazahRequestCard`), read again on the live channel's signal.
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -48,6 +50,7 @@ import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { isEnrollmentId, useTeacherEnrollment } from '../api';
 import { EnrollmentBadges, SessionStatusBadge } from '../components/Badges';
 import { EndedByAdmin } from '../components/EndedByAdmin';
+import { IjazahRequestCard } from '../components/IjazahRequestCard';
 import { initialOf } from '../components/StudentRow';
 import { type SessionRow, sessionRows } from '../session-rows';
 import { useInViewerZone } from '../zone';
@@ -128,6 +131,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
         <Schedule enrollment={enrollment} />
       </Card>
       <ChatEntry enrollmentId={enrollment.enrollmentId} status={enrollment.status} />
+      <IjazahRequestCard enrollment={enrollment} />
       {rows.length === 0 ? null : (
         <Section title={t('teacher.enrollment.sessions.title')}>
           <List>
