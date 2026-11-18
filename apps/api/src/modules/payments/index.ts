@@ -165,7 +165,7 @@ export type { CheckoutStudent };
 /**
  * The checkout over the process's client, the kernel's idempotency, the payment port and the column
  * cipher (T036): the gateway's orders recorded with their address encrypted (R-DB-8). 005:T016:
- * `notices`, the payment pushes' port, for the placement's releases and a cancelled order's record.
+ * `notices`, the payment pushes' port, for the placement's releases (a cancelled order pushes nothing).
  */
 export function createCheckoutServices({
   database,
