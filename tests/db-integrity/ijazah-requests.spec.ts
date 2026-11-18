@@ -11,7 +11,9 @@
 //   then freezes the corrected chain; without the lock it would freeze the old one.
 // - The correction's re-freeze (P4 (a), Q-A4 (a)): `credentials.correct` re-freezes the open
 //   request's chain, holder name, riwaya and tariq on its own transaction.
-// - The certificate name's release (T004's port, now bound): the waiting request moves to `pending`.
+// - The certificate name's release (T004's port, now bound): the waiting request moves to `pending`;
+//   005:T019 (Q-T1 (a)): its `ijazahRequest` event reaches both parties once the list flushes, on
+//   the student's own set and on an administrator's change alike.
 // - The student's deletion (Q14 (a)): the open request closed and its key cleared on the
 //   transaction, its file removed only after the commit.
 // - `EnrollmentIjazahRequests.of`: each enrollment's latest request, with its ijazah once approved.
@@ -44,6 +46,7 @@ import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fi
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
+import type { LiveMessage } from '../../apps/api/src/platform/live/live-bus';
 import { bindToTransaction, RequestLive } from '../../apps/api/src/platform/live/live-publisher';
 import {
   SettingError,
@@ -227,6 +230,28 @@ const send = (w: World) =>
     live,
   );
 
+/** 005:T019 (Q-T1): the certificate name's service over the real port of this file's requests. */
+function namesService() {
+  return createCertificateNameService({
+    idempotency: new IdempotencyService<Transaction>({
+      store: new IdempotencyRepository(database),
+      settings,
+    }),
+    log: { info: () => undefined },
+    awaitingNameRelease: { release: (tx, studentUserId) => requests.release(tx, studentUserId) },
+  });
+}
+
+/** 005:T019 (Q-T1): a request's list whose flush records what it publishes. */
+function recordingList() {
+  const published: LiveMessage[] = [];
+  const list = new RequestLive(
+    { publish: (message) => void published.push(message) },
+    { warn: () => undefined },
+  );
+  return { list, published };
+}
+
 interface RequestRow {
   readonly status: string;
   readonly chain_snapshot: unknown;
@@ -280,19 +305,50 @@ describe('send freezes the request (T006)', () => {
     const w = await world(null);
     const { requestId, status } = await send(w);
     expect(status).toBe('awaiting_student_name');
-    const names = createCertificateNameService({
-      idempotency: new IdempotencyService<Transaction>({
-        store: new IdempotencyRepository(database),
-        settings,
-      }),
-      log: { info: () => undefined },
-      awaitingNameRelease: { release: (tx, studentUserId) => requests.release(tx, studentUserId) },
-    });
-    await names.setOwn(w.studentId, {
-      name: 'مريم بنت أحمد',
-      idempotencyKey: `probe-name-${randomUUID()}`,
-    });
+    // 005:T019 (Q-T1, rule d): the student's own set is handed the request's list.
+    const { list, published } = recordingList();
+    await namesService().setOwn(
+      w.studentId,
+      { name: 'مريم بنت أحمد', idempotencyKey: `probe-name-${randomUUID()}` },
+      list,
+    );
     expect((await requestRow(requestId))?.status).toBe('pending');
+    // 005:T019 (Q-T1 (a)): the release's event to both parties, sent only once the list flushes.
+    expect(published).toEqual([]);
+    list.flush();
+    expect(published).toEqual([
+      {
+        to: [w.teacherId, w.studentId],
+        event: { type: 'ijazahRequest', enrollmentId: w.enrollmentId },
+      },
+    ]);
+  });
+
+  it("publishes the release on an administrator's change too, through the kind's list (005:T019, Q-T1)", async () => {
+    const w = await world(null);
+    await send(w);
+    const { list, published } = recordingList();
+    // As the administrator kind runs `users.setCertificateName` (surfaces/procedures.ts:715).
+    await database.$transaction(async (tx) => {
+      const unbind = bindToTransaction(tx, list);
+      try {
+        await namesService().setByAdministrator(tx, w.adminId, {
+          targetUserId: w.studentId,
+          name: 'مريم بنت أحمد',
+          reason: 'طلب الطالبة تصحيح الاسم عبر الدعم',
+          idempotencyKey: `probe-name-${randomUUID()}`,
+        });
+      } finally {
+        unbind();
+      }
+    }, OPTIONS);
+    list.flush();
+    expect(published).toEqual([
+      {
+        to: [w.teacherId, w.studentId],
+        event: { type: 'ijazahRequest', enrollmentId: w.enrollmentId },
+      },
+    ]);
   });
 
   it('refuses a second send request_open and writes nothing, its copy removed', async () => {

@@ -114,7 +114,10 @@ export async function latestRequestsAmong(
   );
 }
 
-/** The student's open requests, id order, with their copies' keys. */
+/**
+ * The student's open requests, id order, with their copies' keys; 005:T019 (Q-T1): with each one's
+ * enrollment and teacher, whom the release's event names.
+ */
 export function openRequestsOfStudent(
   tx: Client,
   studentUserId: string,
@@ -122,7 +125,13 @@ export function openRequestsOfStudent(
   return tx.ijazahRequest.findMany({
     where: { studentUserId, status: { in: [...OPEN] } },
     orderBy: { id: 'asc' },
-    select: { id: true, status: true, signatureStorageKey: true },
+    select: {
+      id: true,
+      enrollmentId: true,
+      teacherUserId: true,
+      status: true,
+      signatureStorageKey: true,
+    },
   });
 }
 

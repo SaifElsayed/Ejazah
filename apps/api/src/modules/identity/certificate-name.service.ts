@@ -27,6 +27,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import { bindToTransaction, type LivePublisher } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import { certificateNameHolderOf, writeCertificateName } from './certificate-name.repository.js';
 import { lockAccount } from './standing.repository.js';
@@ -68,10 +69,17 @@ export class CertificateNameService {
     this.#dependencies = dependencies;
   }
 
-  /** `account.certificateName.set`: the student's own name, once. */
+  /**
+   * `account.certificateName.set`: the student's own name, once. 005:T019 (Q-T1 (a)): the request's
+   * list `live` is bound to the keyed transaction while its work runs, so the port publishes the
+   * released requests' events on it (sent once the procedure resolves, after the commit), and is
+   * unbound when the work ends, refused or not (sessions/cancellation.service.ts' `bound`). A
+   * replay runs no work, so it publishes nothing.
+   */
   async setOwn(
     studentUserId: string,
     { name, idempotencyKey }: CertificateNameSetInput,
+    live: LivePublisher,
   ): Promise<CertificateNameSetOutput> {
     return this.#dependencies.idempotency.run(
       {
@@ -81,17 +89,22 @@ export class CertificateNameService {
         input: { name },
       },
       async (tx) => {
-        const holder = await this.#lockedStudent(tx, studentUserId, { userId: studentUserId });
-        if (holder.certificateName !== null) {
-          this.#refusal({ userId: studentUserId }, 'already_set');
-          throw markRefusalLogged(
-            new DomainError('CONFLICT', undefined, {
-              details: [{ path: 'certificateName', code: 'already_set' }],
-            }),
-          );
+        const unbind = bindToTransaction(tx, live);
+        try {
+          const holder = await this.#lockedStudent(tx, studentUserId, { userId: studentUserId });
+          if (holder.certificateName !== null) {
+            this.#refusal({ userId: studentUserId }, 'already_set');
+            throw markRefusalLogged(
+              new DomainError('CONFLICT', undefined, {
+                details: [{ path: 'certificateName', code: 'already_set' }],
+              }),
+            );
+          }
+          await this.#setLocked(tx, studentUserId, name);
+          return { name };
+        } finally {
+          unbind();
         }
-        await this.#setLocked(tx, studentUserId, name);
-        return { name };
       },
     );
   }

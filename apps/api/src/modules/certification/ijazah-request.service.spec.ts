@@ -17,12 +17,16 @@
 //   answers each enrollment's latest request in one read; the deletion's consequence closes the
 //   student's open requests, clears each copy's key on its transaction and removes the file after
 //   the commit, a failed removal logged by ids.
+// - 005:T019 (Q-T1 (a)): the release publishes `ijazahRequest` to both parties of each released
+//   request through the list its caller bound to the transaction; with requests waiting and no list
+//   bound it is refused before any write; with none waiting it needs no list.
 import { randomUUID } from 'node:crypto';
 
 import type { LiveEvent } from '@ijazah/contracts';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { bindToTransaction } from '../../platform/live/live-publisher.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import {
   type CredentialChain,
@@ -165,7 +169,13 @@ class MemoryStore implements IjazahRequestStore {
           one.studentUserId === studentUserId &&
           (one.status === 'pending' || one.status === 'awaiting_student_name'),
       )
-      .map(({ id, status, signatureStorageKey }) => ({ id, status, signatureStorageKey }));
+      .map(({ id, enrollmentId, teacherUserId, status, signatureStorageKey }) => ({
+        id,
+        enrollmentId,
+        teacherUserId,
+        status,
+        signatureStorageKey,
+      }));
   }
   async openOfCredential(_tx: Transaction, teacherUserId: string, subjectId: string) {
     return this.requests
@@ -403,6 +413,16 @@ describe('send: the refusals of FR-603, each logged with ids and its reason (T00
   });
 });
 
+/** 005:T019: a transaction its caller bound a list to, as the kinds and the setter bind theirs. */
+function boundTransaction() {
+  const tx = {} as Transaction;
+  const events: { to: readonly string[]; event: LiveEvent }[] = [];
+  bindToTransaction(tx, {
+    afterCommit: (to: readonly string[], event: LiveEvent) => void events.push({ to, event }),
+  });
+  return { tx, events };
+}
+
 function openRow(): NewIjazahRequest {
   return {
     id: '0199d0a0-0000-7000-8000-0000000000f0',
@@ -583,9 +603,68 @@ describe('the ports (T006)', () => {
       ijazahId: null,
       reason: null,
     });
-    await w.service.release(TX, STUDENT);
+    // 005:T019 (Q-T1, rule d): the setter's transaction carries its caller's list.
+    const { tx } = boundTransaction();
+    await w.service.release(tx, STUDENT);
     expect(w.store.calls).toEqual([`lock requests ${openRow().id}`, `release ${openRow().id}`]);
     expect(w.store.requests[0]?.status).toBe('pending');
+  });
+
+  it('AwaitingNameRelease publishes ijazahRequest to both parties of each released request, after the commit (005:T019, Q-T1)', async () => {
+    const w = world();
+    const second = '0199d0a0-0000-7000-8000-0000000000e2';
+    w.store.requests.push(
+      { ...openRow(), status: 'awaiting_student_name', ijazahId: null, reason: null },
+      {
+        ...openRow(),
+        id: '0199d0a0-0000-7000-8000-0000000000f8',
+        enrollmentId: second,
+        teacherUserId: OTHER_TEACHER,
+        status: 'awaiting_student_name',
+        ijazahId: null,
+        reason: null,
+      },
+      {
+        ...openRow(),
+        id: '0199d0a0-0000-7000-8000-0000000000f7',
+        enrollmentId: '0199d0a0-0000-7000-8000-0000000000e3',
+        ijazahId: null,
+        reason: null,
+      },
+    );
+    const { tx, events } = boundTransaction();
+    await w.service.release(tx, STUDENT);
+    expect(events).toEqual([
+      { to: [TEACHER, STUDENT], event: { type: 'ijazahRequest', enrollmentId: ENROLLMENT } },
+      { to: [OTHER_TEACHER, STUDENT], event: { type: 'ijazahRequest', enrollmentId: second } },
+    ]);
+  });
+
+  it('AwaitingNameRelease refuses waiting requests on a transaction with no list bound, before any write (005:T019, Q-T1)', async () => {
+    const w = world();
+    w.store.requests.push({
+      ...openRow(),
+      status: 'awaiting_student_name',
+      ijazahId: null,
+      reason: null,
+    });
+    const unbound = {} as Transaction;
+    await expect(w.service.release(unbound, STUDENT)).rejects.toThrow(/after-commit list/);
+    expect(w.store.calls).toEqual([]);
+    expect(w.store.requests[0]?.status).toBe('awaiting_student_name');
+    expect(w.lines).toContainEqual({
+      level: 'info',
+      fields: { studentUserId: STUDENT, reason: 'no_after_commit_list' },
+      message: 'An ijazah request release was refused',
+    });
+  });
+
+  it('AwaitingNameRelease needs no list and publishes nothing when nothing waits (005:T019, Q-T1)', async () => {
+    const w = world();
+    w.store.requests.push({ ...openRow(), ijazahId: null, reason: null });
+    const unbound = {} as Transaction;
+    await expect(w.service.release(unbound, STUDENT)).resolves.toBeUndefined();
+    expect(w.store.calls).toEqual([]);
   });
 
   it("OpenRequestsRefreeze re-freezes the credential's open requests and leaves a decided one", async () => {
