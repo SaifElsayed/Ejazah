@@ -60,6 +60,7 @@ import {
   createPaymentPort,
   type PaymentConfig,
 } from '../../apps/api/src/platform/ports/payment/index';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
 import { addMinutes } from '../../packages/time/src/index';
 import { CAIRO, confirmationWorld, EARLIER, NOW, settings } from './confirmation-world';
@@ -477,7 +478,7 @@ describe('a placement releasing another student’s expired checkout (that stude
         },
         () =>
           checkoutServices().hold(
-            { userId: newcomer, gender: 'female' },
+            { userId: newcomer, gender: 'female' as RequesterGender },
             { packageId: on.packageId, slotId: on.slotId, idempotencyKey: randomUUID() },
           ),
       );

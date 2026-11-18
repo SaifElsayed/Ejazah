@@ -47,6 +47,7 @@ import {
   createPaymentPort,
   type PaymentConfig,
 } from '../../apps/api/src/platform/ports/payment/index';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
 import { addMinutes } from '../../packages/time/src/index';
 import {
@@ -398,7 +399,7 @@ describe('the checkout pushes (005:T016)', () => {
     const stale = await checkoutOn(on, -30);
     const newcomer = await person('female');
     await checkoutServices().hold(
-      { userId: newcomer, gender: 'female' },
+      { userId: newcomer, gender: 'female' as RequesterGender },
       { packageId: on.packageId, slotId: on.slotId, idempotencyKey: randomUUID() },
     );
     expect(await enrollmentOf(stale.enrollmentId)).toMatchObject({
@@ -419,11 +420,11 @@ describe('the checkout pushes (005:T016)', () => {
     const own = await checkoutOn(first, 15);
     const services = checkoutServices();
     await services.retry(
-      { userId: own.studentId, gender: 'female' },
+      { userId: own.studentId, gender: 'female' as RequesterGender },
       { enrollmentId: own.enrollmentId, idempotencyKey: randomUUID() },
     );
     await services.hold(
-      { userId: own.studentId, gender: 'female' },
+      { userId: own.studentId, gender: 'female' as RequesterGender },
       { packageId: second.packageId, slotId: second.slotId, idempotencyKey: randomUUID() },
     );
     expect(await enrollmentOf(own.enrollmentId)).toMatchObject({
