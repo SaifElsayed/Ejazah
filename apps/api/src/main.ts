@@ -52,6 +52,8 @@ const [
   certification,
   // T007 of specs/005-certification: approve's after-commit enqueue of the certificate's render.
   { RENDER_CERTIFICATE, renderCertificatePayload },
+  // 005:T011 (B47): the report service and the `Pairings` port it reads parties through.
+  moderation,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -87,6 +89,7 @@ const [
   import('./platform/guards/upload.middleware.js'),
   import('./modules/certification/index.js'),
   import('./jobs/render-certificate.js'),
+  import('./modules/moderation/index.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -236,6 +239,18 @@ const imageTurns = new identity.PhotoTurns({
   atOnce: PHOTOS_PROCESSED_AT_ONCE,
   waitMs: PHOTO_TURN_WAIT_MS,
 });
+// 005:T011 (B47; FR-611, FR-612; research R-408; the note under T011): one report service for both
+// surfaces, over the `Pairings` port bound here to sessions' and booking's entries, so moderation
+// imports neither.
+const userReports = moderation.createUserReports({
+  idempotency,
+  pairings: {
+    partyOfSession: sessionsModule.partyOfSession,
+    partyOfEnrollment: booking.partyOfEnrollment,
+    paired: booking.paired,
+  },
+  settings,
+});
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -375,6 +390,8 @@ const services = {
       log,
     }),
   },
+  // `reports.create` (005:T011, B47): the report service above.
+  moderation: { reports: userReports },
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -470,7 +487,7 @@ const routes = {
 
 // The admin module's services behind the administrator surface (T067), bound to the surface's port.
 // `admins.add` queues `deliver-admin-invite` with the id alone (R-110), on the queue above.
-const adminServices = createAdminServices({
+const adminModuleServices = createAdminServices({
   database,
   settings,
   encryptionKey: config.ENCRYPTION_KEY,
@@ -518,6 +535,8 @@ const adminServices = createAdminServices({
   // after its commit; T032's `ijazahs.rerender` the raised generation (the queue above).
   ijazahRenders: certificateRenders,
 });
+// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
+const adminServices = { ...adminModuleServices, reports: userReports };
 
 const application = await createApplication({
   log,

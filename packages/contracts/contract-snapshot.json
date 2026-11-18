@@ -53,6 +53,8 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "reportContext": ["chat", "profile", "session"],
+      "reportCreateRefusal": ["open_exists", "self"],
       "role": ["student", "teacher"],
       "sessionLengthMinutes": ["30", "45", "60"],
       "sessionStatus": [
@@ -537,6 +539,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           }
@@ -565,6 +568,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -602,6 +606,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -1465,6 +1470,7 @@
               "setting",
               "teacher_application",
               "user",
+              "user_report",
               "verification_request"
             ]
           },
@@ -1917,6 +1923,83 @@
           "$.items[].teacherShare_piasters": { "type": "integer" },
           "$.nextCursor": { "type": "string" }
         }
+      },
+      "reports.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.createdAt": { "required": true, "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "null|string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportId": { "required": true, "type": "string" },
+          "$.reportedUserId": { "required": true, "type": "string" },
+          "$.reporterUserId": { "required": true, "type": "string" },
+          "$.resolution": { "required": true, "type": "null|object" },
+          "$.resolution.note": { "required": true, "type": "null|string" },
+          "$.resolution.outcome": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed"]
+          },
+          "$.resolution.resolvedAt": { "required": true, "type": "string" },
+          "$.resolution.resolvedByAdminId": { "required": true, "type": "string" },
+          "$.sessionId": { "required": true, "type": "null|string" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed", "open"]
+          }
+        }
+      },
+      "reports.list": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.status": { "type": "string", "values": ["actioned", "dismissed", "open"] }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.items[].createdAt": { "required": true, "type": "string" },
+          "$.items[].enrollmentId": { "required": true, "type": "null|string" },
+          "$.items[].reportId": { "required": true, "type": "string" },
+          "$.items[].reportedUserId": { "required": true, "type": "string" },
+          "$.items[].reporterUserId": { "required": true, "type": "string" },
+          "$.items[].sessionId": { "required": true, "type": "null|string" },
+          "$.items[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["actioned", "dismissed", "open"]
+          },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "reports.resolve": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.note": { "required": true, "type": "string" },
+          "$.outcome": { "required": true, "type": "string", "values": ["actioned", "dismissed"] },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
       },
       "sessions.cancel": {
         "input": {
@@ -3933,6 +4016,27 @@
           "$.supportEmail": { "required": true, "type": "string" },
           "$.teacherSharePercent": { "required": true, "type": "integer" },
           "$.termsVersion": { "required": true, "type": "string" }
+        }
+      },
+      "reports.create": {
+        "caller": "user",
+        "input": {
+          "$": { "type": "object" },
+          "$.context": {
+            "required": true,
+            "type": "string",
+            "values": ["chat", "profile", "session"]
+          },
+          "$.enrollmentId": { "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.reportedUserId": { "required": true, "type": "string" },
+          "$.sessionId": { "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.received": { "required": true, "type": "boolean", "values": ["true"] }
         }
       },
       "sessions.cancellation.answer": {

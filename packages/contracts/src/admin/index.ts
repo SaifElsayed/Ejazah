@@ -22,3 +22,5 @@ export * from './disputes.js';
 export * from './users.js';
 // T070 of specs/004-sessions: the `enrollments` namespace, `enrollments.releaseSlot`.
 export * from './enrollments.js';
+// 005:T011 (B47): the `reports` namespace, the administrators' queue of reports.
+export * from './reports.js';

@@ -22,6 +22,7 @@ import {
 import {
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -153,6 +154,7 @@ function callerAs(session: UserSession | null): Caller {
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;

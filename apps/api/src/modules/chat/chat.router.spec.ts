@@ -29,6 +29,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
   unusedIdentityServices,
@@ -142,6 +143,7 @@ function callerAs(session: UserSession | null): Caller {
     sessions: unusedSessionsServices,
     chat,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
   } satisfies AppServices;
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = {
@@ -362,6 +364,7 @@ describe("'chat.send': the request's live list (T066)", () => {
       sessions: unusedSessionsServices,
       chat: adding,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     } satisfies AppServices;
     const caller = callerFor(
       createAppContext({

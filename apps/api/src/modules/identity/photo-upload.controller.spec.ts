@@ -36,6 +36,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -125,6 +126,7 @@ const services = {
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
   certification: unusedCertificationServices,
+  moderation: unusedModerationServices,
 };
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const storage = storageStub();

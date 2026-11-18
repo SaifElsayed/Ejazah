@@ -18,6 +18,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -87,6 +88,7 @@ function fixture(
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
   };
   const router = createAppRouter({ platform: platformRouter });
   const caller = createAppCallerFactory(router)(

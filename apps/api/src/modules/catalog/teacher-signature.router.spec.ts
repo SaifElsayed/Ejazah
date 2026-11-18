@@ -15,6 +15,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -89,6 +90,7 @@ function callerAs(session: UserSession | null): Caller {
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
     catalog,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });

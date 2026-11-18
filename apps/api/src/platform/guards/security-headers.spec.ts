@@ -28,6 +28,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -58,6 +59,7 @@ const services = {
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
   certification: unusedCertificationServices,
+  moderation: unusedModerationServices,
 };
 
 // No administrator session is resolved over HTTP yet, so no call here reaches auditing; T099 tests

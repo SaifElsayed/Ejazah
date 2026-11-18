@@ -34,6 +34,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -77,6 +78,7 @@ const services = {
   sessions: unusedSessionsServices,
   chat: unusedChatServices,
   certification: unusedCertificationServices,
+  moderation: unusedModerationServices,
 };
 const records: string[] = [];
 const log = createLogger({ level: 'info', destination: { write: (line) => records.push(line) } });

@@ -201,6 +201,8 @@ import type { ChatServices } from '../modules/chat/index.js';
 // T006 of specs/005-certification (the owner's Q-A2 (a)): the ijazah request's services.
 import type { CertificationServices } from '../modules/certification/index.js';
 import type { IdentityServices } from '../modules/identity/index.js';
+// 005:T011 (B47): `reports.create` and the administrators' `reports.*`, the moderation module's.
+import type { AdminReports, ModerationServices } from '../modules/moderation/index.js';
 import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
 import type { SessionsServices } from '../modules/sessions/index.js';
@@ -347,6 +349,11 @@ export interface AppServices {
    * certification module's request service, built once by `main.ts`.
    */
   readonly certification: CertificationServices;
+  /**
+   * 005:T011 (B47; FR-611, R-408): `reports.create`, the moderation module's report service, built
+   * once by `main.ts` over the `Pairings` it binds to sessions' and booking's entries.
+   */
+  readonly moderation: ModerationServices;
 }
 
 /** The context of the user surface. `caller` is null for an anonymous request. */
@@ -915,6 +922,11 @@ export interface AdminSurfaceServices {
       input: z.output<typeof adminIjazahsRerenderInput>,
     ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
   };
+  /**
+   * 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the administrators' queue of
+   * reports, the same moderation service as `AppServices.moderation`, on the kind's transaction.
+   */
+  readonly reports: AdminReports;
 }
 
 /**

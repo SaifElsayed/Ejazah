@@ -28,6 +28,7 @@ import {
   unusedBookingServices,
   unusedCatalogServices,
   unusedCertificationServices,
+  unusedModerationServices,
   unusedChatServices,
   unusedCheckoutServices,
   unusedDiscoveryServices,
@@ -253,6 +254,7 @@ function callerAs(session: UserSession | null): Caller {
     sessions,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
+    moderation: unusedModerationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
   const rateLimiter = { check: vi.fn(async () => undefined) } as unknown as RateLimiter;
@@ -472,6 +474,7 @@ describe("'sessions.join' (T011)", () => {
       sessions: realSessions,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     };
     const log = createLogger({ level: 'info', destination: { write: () => undefined } });
     const caller = callerFor(
@@ -1071,6 +1074,7 @@ describe("'sessions.complaint.raise' (T060)", () => {
       sessions,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     };
     const caller = callerFor(
       createAppContext({
@@ -1135,6 +1139,7 @@ describe("'sessions.cancellation': the request's live list (T066)", () => {
       sessions: adding,
       chat: unusedChatServices,
       certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
     };
     const caller = callerFor(
       createAppContext({

@@ -186,7 +186,7 @@ Discovery is not a module: a module owning no tables would have to read another 
 | booking                                     | identity, catalog, sessions                                                    |
 | payments                                    | identity, booking                                                              |
 | sessions                                    | none                                                                           |
-| moderation                                  | none                                                                           |
+| moderation                                  | identity (005:T011, B47: `visibleTeachers` for a profile report, R-408)        |
 | chat, certification, reviews, notifications | none (no code before Phases 3 and 4)                                           |
 | admin                                       | any (today identity, verification, catalog, payments); no module imports admin |
 

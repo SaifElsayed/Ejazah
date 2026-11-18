@@ -31,7 +31,8 @@ export const reportsAdminRouter = createAdminRouter({
     const { adminId } = ctx.administrator;
     const page = await ctx.services.reports.list(ctx.tx, adminId, input, ctx.log);
     ctx.audit.record({ action: 'reports.listed', targetType: 'admin', targetId: adminId });
-    return page;
+    // The contract's array is mutable; the service answers a readonly one (B47 integration).
+    return { ...page, items: [...page.items] };
   }),
 
   get: adminProcedure({
