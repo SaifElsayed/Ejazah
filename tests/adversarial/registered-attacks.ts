@@ -13,6 +13,8 @@ import { bookingAttacks } from './booking.attacks.js';
 import { certificatesAttacks } from './certificates.attacks.js';
 // 005:T011 (B47): `reports.create`.
 import { reportsAttacks } from './reports.attacks.js';
+// 005:T013 (B47): `genderFlags.raise`.
+import { genderFlagsAttacks } from './gender-flags.attacks.js';
 // T037 of specs/004-sessions: `chat.list` and `chat.send`; T038 `chat.attachmentLink`.
 import { chatAttacks, chatDocumentAttacks } from './chat.attacks.js';
 import { checkoutAttacks } from './checkout.attacks.js';
@@ -51,4 +53,6 @@ export const registeredAttacks: readonly Registration[] = [
   ...certificatesAttacks,
   // 005:T011 (B47), registered with the integration's mount of `reports`.
   ...reportsAttacks,
+  // 005:T013 (B47), registered with the integration's mount of `genderFlags`.
+  ...genderFlagsAttacks,
 ];

@@ -121,6 +121,8 @@ export function surfaceOf(
     ijazahs: unusedAdminServices.ijazahs,
     // 005:T011 (B47): the reports have their own router spec (`moderation/reports-admin.router.spec.ts`).
     reports: unusedAdminServices.reports,
+    // 005:T013 to T015 (B47): the gender flags have their own router spec (`admin/gender-flags.router.spec.ts`).
+    genderFlags: unusedAdminServices.genderFlags,
   };
   const administration = {
     transactions: transactionsOver(database),

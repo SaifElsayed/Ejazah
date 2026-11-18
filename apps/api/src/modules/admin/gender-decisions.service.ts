@@ -478,7 +478,11 @@ export function createGenderDecisions({
       flagId,
       reason,
       applicantNote,
-    }: { readonly flagId: string; readonly reason: string; readonly applicantNote?: string },
+    }: {
+      readonly flagId: string;
+      readonly reason: string;
+      readonly applicantNote?: string | undefined;
+    },
   ): Promise<FraudBan> => {
     let found: { readonly role: BanRole; readonly accountStatus: string } | undefined;
     const { person, from, to } = await corrected(

@@ -33,6 +33,8 @@ import {
 import { certificatesRouter, ijazahRequestsRouter } from '../modules/certification/index.js';
 // 005:T011 (B47): moderation's `reports`.
 import { reportsRouter } from '../modules/moderation/index.js';
+// 005:T013 (B47): moderation's `genderFlags`.
+import { genderFlagsRouter } from '../modules/moderation/index.js';
 // T037 of specs/004-sessions: the chat module's `chat`.
 import { chatRouter } from '../modules/chat/index.js';
 import {
@@ -89,6 +91,8 @@ export const appRouter = createAppRouter({
   live: liveRouter,
   // 005:T011 (B47): a user's report of another user from a session, a chat or a profile.
   reports: reportsRouter,
+  // 005:T013 (B47): a user's flag of the declared gender of someone they are paired with or shown.
+  genderFlags: genderFlagsRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */

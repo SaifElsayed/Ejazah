@@ -14,6 +14,8 @@
 // since B39. Its anonymous procedures are exactly
 // the six of `auth.*` that sign an administrator in (`admin.router.spec.ts`).
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
+// 005:T013 to T015 (B47; Q-G1 (a)): the admin module's `genderFlags`, over moderation's flags.
+import { genderFlagsAdminRouter } from '../modules/admin/index.js';
 // T070 of specs/004-sessions: booking's `enrollments` namespace.
 import { enrollmentsAdminRouter } from '../modules/booking/index.js';
 // T007 of specs/005-certification: certification's `ijazahRequests`; T010 and T032 its `ijazahs`.
@@ -54,6 +56,8 @@ export const adminRouter = createAdminRouter({
   ijazahs: ijazahsAdminRouter,
   // 005:T011 (B47): the administrators' queue of reports, their detail and resolution.
   reports: reportsAdminRouter,
+  // 005:T013 to T015 (B47): the gender flags' queue, the correction and the fraud ban.
+  genderFlags: genderFlagsAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

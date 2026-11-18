@@ -251,6 +251,13 @@ const userReports = moderation.createUserReports({
   },
   settings,
 });
+// 005:T013 (B47; FR-613 to FR-615; research R-409; the note under T013, Q-G1 (a)): one gender-flag
+// service for both surfaces, over the `Pairings` port's `paired`, bound here to booking's entry.
+const genderFlags = moderation.createGenderFlags({
+  idempotency,
+  pairings: { paired: booking.paired },
+  settings,
+});
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -405,8 +412,8 @@ const services = {
       log,
     }),
   },
-  // `reports.create` (005:T011, B47): the report service above.
-  moderation: { reports: userReports },
+  // `reports.create` (005:T011, B47) and `genderFlags.raise` (005:T013, B47): the services above.
+  moderation: { reports: userReports, genderFlags },
 };
 
 // The two upload routes (T024, public-pages.md "The uploads route"), each over the surfaces' upload
@@ -549,6 +556,10 @@ const adminModuleServices = createAdminServices({
   // T007 of specs/005-certification (Q6 (a)): `ijazahRequests.approve` enqueues generation 0's render
   // after its commit; T032's `ijazahs.rerender` the raised generation (the queue above).
   ijazahRenders: certificateRenders,
+  // 005:T013 to T015 (B47; Q-G1 (a)): the administrators' `genderFlags.*`, over the same flag service
+  // as the user surface's; the correction's hold release reads payments' order standing (Q-G2 (c)).
+  genderFlags,
+  orders: payments.orderStandingsOf,
 });
 // 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
 const adminServices = { ...adminModuleServices, reports: userReports };

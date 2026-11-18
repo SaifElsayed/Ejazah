@@ -30,3 +30,4 @@ The rules live in the services: `admin-auth.service.ts` (sign-in, the lockout, t
 - FR-174 (the admins page and the invite): `admins.service.ts`, `admin-invite.ts`, `admins.router.ts`.
 - FR-176 (the admin home): `home.service.ts`, `home.router.ts`.
 - FR-180, FR-181 (the audit label and the name resolved at read time): `labels/`, `audit.repository.ts`, `audit-query.service.ts`.
+- FR-614 to FR-617 (the gender flags' queue, the correction and the fraud ban, composed over moderation's flags, identity's administrators-only gender setter, booking's enrollment side and holds, certification's re-render of a party's unsigned ijazahs and the standing service's bans; 005:T013 to T015, B47): `gender-decisions.service.ts`, `gender-flags.router.ts`.

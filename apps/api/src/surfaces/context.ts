@@ -183,6 +183,15 @@ import type {
   // 005:T032 (B46): the sign-off and the re-render.
   adminIjazahsRerenderInput,
   adminIjazahsSignOffInput,
+  // 005:T013 to T015 (B47): the administrators' gender flags, the correction and the fraud ban.
+  adminGenderFlagsCorrectInput,
+  adminGenderFlagsDismissInput,
+  adminGenderFlagsFraudBanInput,
+  adminGenderFlagsGetInput,
+  adminGenderFlagsGetOutput,
+  adminGenderFlagsListInput,
+  adminGenderFlagsListOutput,
+  adminGenderFlagsRaiseInput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -935,6 +944,54 @@ export interface AdminSurfaceServices {
    * reports, the same moderation service as `AppServices.moderation`, on the kind's transaction.
    */
   readonly reports: AdminReports;
+  /**
+   * 005:T013 to T015 (B47; FR-614 to FR-617; R-409; Q-G1 (a)): the administrators' gender flags,
+   * the admin module's decisions over moderation's flag rows, on the kind's transaction.
+   */
+  readonly genderFlags: {
+    list(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsListInput>,
+    ): Answer<typeof adminGenderFlagsListOutput>;
+    get(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsGetInput>,
+    ): Answer<typeof adminGenderFlagsGetOutput>;
+    raise(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsRaiseInput>,
+    ): Promise<{ readonly flagId: string; readonly replayed: boolean }>;
+    dismiss(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsDismissInput>,
+    ): Promise<{ readonly flaggedUserId: string; readonly replayed: boolean }>;
+    correct(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsCorrectInput>,
+    ): Promise<{
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly endedEnrollments: number;
+      readonly replayed: boolean;
+    }>;
+    fraudBan(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminGenderFlagsFraudBanInput>,
+    ): Promise<{
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly accountStatus: string;
+      readonly replayed: boolean;
+    }>;
+  };
 }
 
 /**
