@@ -27,6 +27,9 @@ import { TeacherProfile } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
+// 005:T021: the report's idempotency key.
+let mockKey = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));
 
 const mockNavigate = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -409,5 +412,73 @@ describe('TeacherProfile', () => {
       expect(await screen.findByText(full.displayName)).toBeTruthy();
       expect(screen.queryByText(/اختيار الموعد/)).toBeNull();
     });
+  });
+});
+
+// 005:T021 (FR-611, FR-614; B47's Q-R4 (a)): the report from a teacher's profile, the student's only
+// (the profile is a student's screen); `discovery.teacher`'s `teacherId` names the teacher. An
+// unknown teacher offers no report.
+describe('the report from the profile (005:T021)', () => {
+  const create = jest.fn(async (_input: unknown) => ({ received: true }));
+  const raise = jest.fn(async (_input: unknown) => ({ received: true }));
+  beforeEach(() => {
+    create.mockClear();
+    raise.mockClear();
+    Object.assign(mockApi.api, {
+      reports: { create: { mutate: create } },
+      genderFlags: { raise: { mutate: raise } },
+    });
+  });
+
+  it('reports the teacher from the profile, naming neither a session nor an enrollment', async () => {
+    await inBothDirections(profile, async (_rendered, direction) => {
+      expect(await screen.findByText(full.displayName)).toBeTruthy();
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'student.teacherProfile.report') }),
+      );
+      expect(
+        screen.getByText(said(direction, 'student.report.title', { teacher: full.displayName })),
+      ).toBeTruthy();
+      await fireEvent.press(
+        screen.getByRole('radio', { name: said(direction, 'student.report.reasons.other') }),
+      );
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'student.report.submit') }),
+      );
+      expect(await screen.findByText(said(direction, 'common.toast.reportSent'))).toBeTruthy();
+      expect(create).toHaveBeenLastCalledWith({
+        reportedUserId: TEACHER_ID,
+        context: 'profile',
+        reason: said(direction, 'student.report.reasons.other'),
+        idempotencyKey: expect.any(String),
+      });
+    });
+    expect(raise).not.toHaveBeenCalled();
+  });
+
+  it('flags the teacher’s declared gender from the profile', async () => {
+    await renderIn('rtl', profile());
+    expect(await screen.findByText(full.displayName)).toBeTruthy();
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('student.teacherProfile.report') }),
+    );
+    await fireEvent.press(
+      screen.getByRole('radio', { name: ar('student.report.reasons.wrongGender') }),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: ar('student.report.submit') }));
+    expect(await screen.findByText(ar('common.toast.reportSent'))).toBeTruthy();
+    expect(raise).toHaveBeenCalledWith({
+      flaggedUserId: TEACHER_ID,
+      reason: ar('student.report.reasons.wrongGender'),
+      idempotencyKey: expect.any(String),
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('offers no report on an unknown teacher', async () => {
+    mockApi.api.discovery.teacher.query.mockRejectedValue(apiError('NOT_FOUND'));
+    await renderIn('rtl', profile());
+    expect(await screen.findByText(ar('student.teacherProfile.notFound.title'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: ar('student.teacherProfile.report') })).toBeNull();
   });
 });

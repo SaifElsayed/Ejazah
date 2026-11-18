@@ -447,8 +447,16 @@ function studentItemOf(row: ListedEnrollmentRow, context: ItemContext): StudentE
 function teacherItemOf(row: ListedEnrollmentRow, context: ItemContext): TeacherStudentItem {
   return {
     ...coreOf(row, context),
-    student: partyNameOf(context.names, row.studentUserId),
+    student: studentOf(context.names, row.studentUserId),
   };
+}
+
+/** The teacher's student: the name, and the user id the report sheet names (005:T021, Q-T4 (a)). */
+function studentOf(
+  names: ReadonlyMap<string, string>,
+  studentUserId: string,
+): TeacherStudentItem['student'] {
+  return { studentId: studentUserId, ...partyNameOf(names, studentUserId) };
 }
 
 /** By next session, those with none after them, newest first (this file's head). */
@@ -687,7 +695,7 @@ export async function teacherTodayOf(
         {
           ...listedSessionOf(session, pending, remedies),
           enrollmentId: row.id,
-          student: partyNameOf(names, row.studentUserId),
+          student: studentOf(names, row.studentUserId),
           summary: termsOf(row, subjects),
         },
       ];

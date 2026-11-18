@@ -5,8 +5,9 @@
 // `enrollments.ts`, the active one by next session; `query` is the start of the student's name,
 // folded by the server in either tab (FR-391, ADR 0021 D6, R-203). `teacher.students.get` is one of
 // them with every session; `teacher.today` the sessions of the teacher's local day. A student is
-// named by display name alone: no id, photo, date of birth, minor flag, document or dispute history
-// reaches the teacher (FR-395, R-HONEST-4), and zod strips any field the schemas do not name.
+// named by display name, with their user id for the report and flag sheet (005:T021, Q-T4 (a)): no
+// other id, photo, date of birth, minor flag, document or dispute history reaches the teacher
+// (FR-395, R-HONEST-4), and zod strips any field the schemas do not name.
 import { z } from 'zod';
 
 import { enrollmentStatus } from './checkout.js';
@@ -24,9 +25,12 @@ import { calendarDate, timeZone } from './onboarding.js';
 
 /**
  * The student as the teacher's screens draw them: a name, its initial the avatar; a deleted
- * student's stand-in (T007, FR-426).
+ * student's stand-in (T007, FR-426). 005:T021 (FR-611, FR-614; Q-T4 (a)): and their user id, which
+ * the teacher's report and flag sheet names, a deleted student's too, as the student's
+ * `teacher.teacherId` (`enrollments.ts:123`); the server still checks the pairing. Additive
+ * (R-API-9).
  */
-const listedStudent = listedPartyName;
+const listedStudent = z.object({ studentId: z.uuid(), ...listedPartyName.shape });
 
 export const teacherStudentsListInput = z.object({
   tab: enrollmentListTab,

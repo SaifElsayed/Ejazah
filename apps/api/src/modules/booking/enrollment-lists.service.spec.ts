@@ -14,6 +14,8 @@
 //     outcome beside it (R-308);
 //   - a party absent from identity's names (a deleted account) is answered deleted, with no name
 //     and the deprecated name empty, on every list and detail (T007, FR-426);
+//   - the teacher's student carries the student's user id, a deleted student's too, on «طلابي»,
+//     the enrollment and «اليوم» (005:T021, Q-T4 (a));
 //   - every session carries `pendingCancellation`, sessions' read of its sessions at the read's
 //     instant (004:T021, FR-456, FR-495; contracts/app-surface.md, "Phase 2's lists");
 //   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495);
@@ -119,6 +121,12 @@ const named = (name: string) => ({ displayName: name, displayNameOrNull: name, d
 
 /** A deleted party (T007, FR-426): no name, deleted, the deprecated field empty for an older phone. */
 const DELETED = { displayName: '', displayNameOrNull: null, deleted: true };
+
+/** The teacher's student (005:T021, Q-T4 (a)): the student's user id beside the name, deleted too. */
+const studentOf = (studentId: string, name: string | null) => ({
+  studentId,
+  ...(name === null ? DELETED : named(name)),
+});
 
 interface Asked {
   readonly ended: { party: ListParty; page: unknown }[];
@@ -446,8 +454,8 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
     });
     const answer = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS);
     expect(answer.items.map(({ enrollmentId, student }) => [enrollmentId, student])).toEqual([
-      [E2, named('زياد حسن')],
-      [E1, named('يوسف علي')],
+      [E2, studentOf(OTHER_STUDENT, 'زياد حسن')],
+      [E1, studentOf(STUDENT, 'يوسف علي')],
     ]);
     expect(asked.prefix).toEqual([]);
     expect(Object.keys(answer.items[0] ?? {})).not.toContain('teacher');
@@ -518,7 +526,7 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
     });
     const answer = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
     expect(asked.listed).toEqual([{ enrollmentId: E1, party: { teacherUserId: TEACHER } }]);
-    expect(answer.student).toEqual(named('يوسف علي'));
+    expect(answer.student).toEqual(studentOf(STUDENT, 'يوسف علي'));
     expect(answer.sessions).toHaveLength(1);
   });
 
@@ -533,11 +541,11 @@ describe('the teacher’s students (FR-391, FR-392, FR-395)', () => {
     const active = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS);
     expect(
       Object.fromEntries(active.items.map(({ enrollmentId, student }) => [enrollmentId, student])),
-    ).toEqual({ [E1]: named('يوسف علي'), [E2]: DELETED });
+    ).toEqual({ [E1]: studentOf(STUDENT, 'يوسف علي'), [E2]: studentOf(OTHER_STUDENT, null) });
     const ended = await teacherStudentsOf(tx, store, TEACHER, { tab: 'ended' }, CLOCK, WINDOWS);
-    expect(ended.items.map(({ student }) => student)).toEqual([DELETED]);
+    expect(ended.items.map(({ student }) => student)).toEqual([studentOf(OTHER_STUDENT, null)]);
     const detail = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E2 }, NOW, WINDOWS);
-    expect(detail.student).toEqual(DELETED);
+    expect(detail.student).toEqual(studentOf(OTHER_STUDENT, null));
   });
 
   it('answers NOT_FOUND for an enrollment that is not the teacher’s', async () => {
@@ -569,8 +577,8 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     expect(
       answer.sessions.map((one) => [one.enrollmentId, one.student, one.sequenceNumber, one.status]),
     ).toEqual([
-      [E1, named('يوسف علي'), 3, 'scheduled'],
-      [E2, named('زياد حسن'), 1, 'done'],
+      [E1, studentOf(STUDENT, 'يوسف علي'), 3, 'scheduled'],
+      [E2, studentOf(OTHER_STUDENT, 'زياد حسن'), 1, 'done'],
     ]);
     expect(answer.sessions.map(({ sessionId }) => sessionId)).toEqual([
       sessionIdOf('2026-11-09T07:00:00Z'),
@@ -596,7 +604,7 @@ describe('«اليوم» (FR-391, FR-393)', () => {
       new Date('2026-11-09T06:00:00Z'),
       WINDOWS,
     );
-    expect(answer.sessions.map(({ student }) => student)).toEqual([DELETED]);
+    expect(answer.sessions.map(({ student }) => student)).toEqual([studentOf(OTHER_STUDENT, null)]);
   });
 
   it('reads the day in another zone the teacher lives by', async () => {

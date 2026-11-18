@@ -100,7 +100,7 @@ const got = {
   endsAt: '2026-11-12T08:00:00.000Z',
   lengthMinutes: 60 as const,
   status: 'scheduled' as const,
-  counterparty: { displayName: 'أحمد سالم', deleted: false },
+  counterparty: { userId: OTHER, displayName: 'أحمد سالم', deleted: false },
   join: { opensAt: '2026-11-12T06:45:00.000Z', closesAt: '2026-11-12T08:00:00.000Z' },
   // T065: required by the output schema.
   counterpartyInRoom: false,
@@ -1031,7 +1031,10 @@ describe("'sessions.complaint.raise' (T060)", () => {
       );
     }
     expect(calls).toEqual([]);
-    await raise(callerAs(sessionOf('student')), { enrollmentId: ENROLLMENT, reason: 'x'.repeat(500) });
+    await raise(callerAs(sessionOf('student')), {
+      enrollmentId: ENROLLMENT,
+      reason: 'x'.repeat(500),
+    });
     expect(calls).toHaveLength(1);
   });
 

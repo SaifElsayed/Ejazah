@@ -8,7 +8,8 @@
 // start and zone beside its instants, so the phone shows it in the session's zone and the viewer's
 // (FR-494, ADR 0009 D5); the join's period is answered as two instants. The counterparty is named as
 // every new output of this phase names a party, `{ displayName: string | null, deleted: boolean }`
-// (contracts/README.md, "A deleted party"; the note under T007), and by nothing else: no date of
+// (contracts/README.md, "A deleted party"; the note under T007), with its user id for the report
+// and flag sheet (005:T021, Q-T4 (a)), and by nothing else: no date of
 // birth, minor flag, document or dispute history reaches the other party (R-HONEST-4, FR-499).
 //
 // `cancellation`, `remedy`, `dispute`, `canRaiseDispute` and `disputeClosesAt` are optional: T021,
@@ -37,6 +38,12 @@ export const sessionsJoinInput = z.object({ sessionId: z.uuid() });
  * deleted account has no name, and the phone draws its stand-in.
  */
 export const sessionParty = z.object({
+  /**
+   * 005:T021 (FR-611, FR-614; Q-T4 (a)): the party's user id, which the report and flag sheet names;
+   * the server still checks the pairing. A deleted party's too: an id is no name, as a student's
+   * `teacher.teacherId` stays (`enrollments.ts:123`). Additive (R-API-9).
+   */
+  userId: z.uuid(),
   /** The party's display name; null for a deleted party. */
   displayName: z.string().nullable(),
   /** The party's account was deleted (FR-426). */

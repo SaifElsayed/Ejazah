@@ -57,7 +57,11 @@ export function session(of: Partial<SessionRead> = {}): SessionRead {
     endsAt: '2026-11-11T16:45:00.000Z',
     lengthMinutes: 45,
     status: 'scheduled',
-    counterparty: { displayName: 'يوسف أحمد', deleted: false },
+    counterparty: {
+      userId: '0193a6f0-0000-7000-8000-0000000000b8',
+      displayName: 'يوسف أحمد',
+      deleted: false,
+    },
     join: { opensAt: '2026-11-11T15:45:00.000Z', closesAt: '2026-11-11T16:45:00.000Z' },
     counterpartyInRoom: false,
     ...of,

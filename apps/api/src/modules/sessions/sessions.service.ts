@@ -343,10 +343,11 @@ export function createSessionsServices({
           endsAt: session.endsAt.toISOString(),
           lengthMinutes: terms.durationMinutes as SessionsGetOutput['lengthMinutes'],
           status: session.status,
+          // 005:T021 (Q-T4 (a)): the counterparty's user id for the report sheet, deleted or not.
           counterparty:
             counterparty === undefined
-              ? { displayName: null, deleted: true }
-              : { displayName: counterparty.displayName, deleted: false },
+              ? { userId: counterpartyId, displayName: null, deleted: true }
+              : { userId: counterpartyId, displayName: counterparty.displayName, deleted: false },
           join: {
             opensAt: opensAtOf(session, lead).toISOString(),
             closesAt: session.endsAt.toISOString(),

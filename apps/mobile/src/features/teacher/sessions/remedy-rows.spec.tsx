@@ -65,7 +65,12 @@ function sessionsWith(
 function enrollment(sessions: ListedSession[]): TeacherStudentsGetOutput {
   return {
     enrollmentId: ENROLLMENT_ID,
-    student: { displayName: 'يوسف أحمد', displayNameOrNull: 'يوسف أحمد', deleted: false },
+    student: {
+      studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+      displayName: 'يوسف أحمد',
+      displayNameOrNull: 'يوسف أحمد',
+      deleted: false,
+    },
     summary: {
       subject: {
         id: '0193a6f0-0000-7000-8000-0000000000a1',

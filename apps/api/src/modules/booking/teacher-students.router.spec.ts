@@ -97,7 +97,12 @@ const summary = {
 
 const item = {
   enrollmentId: OWN,
-  student: { displayName: 'يوسف علي', displayNameOrNull: 'يوسف علي', deleted: false },
+  student: {
+    studentId: STUDENT,
+    displayName: 'يوسف علي',
+    displayNameOrNull: 'يوسف علي',
+    deleted: false,
+  },
   summary,
   status: 'confirmed' as const,
   next: session,
@@ -315,7 +320,7 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
   });
 
   it('answers a deleted student deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
-    const deleted = { displayName: '', displayNameOrNull: null, deleted: true };
+    const deleted = { studentId: STUDENT, displayName: '', displayNameOrNull: null, deleted: true };
     const answer = await callerAs(sessionOf('approved'), {
       ...booking,
       students: async () => ({ items: [{ ...item, student: { ...deleted, ...leaked } }] }) as never,

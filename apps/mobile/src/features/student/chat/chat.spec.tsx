@@ -32,6 +32,9 @@ import { STUDENT_CHAT_ROUTE, StudentChat } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
+// 005:T021: the report's idempotency key.
+let mockKey = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -252,6 +255,52 @@ describe('the chat’s entry on the enrollment’s detail (T045, Q8)', () => {
       async (direction) => {
         await screen.findByText(TEACHER);
         expect(screen.queryByText(said(direction, 'chat.thread.title'))).toBeNull();
+      },
+    );
+  });
+});
+
+// 005:T021 (FR-611; the note under T021, Q-T4 (a)): the report from the chat, on the teacher
+// `enrollments.get` names (`teacher.teacherId`), naming the chat's enrollment.
+describe('the report from the chat (005:T021, FR-611)', () => {
+  it('reports the teacher, naming the enrollment, and answers «received» only', async () => {
+    let create = jest.fn(async (_input: unknown) => ({ received: true }));
+    await inEach(
+      () => {
+        create = jest.fn(async (_input: unknown) => ({ received: true }));
+        Object.assign(mockApi.api, {
+          reports: { create: { mutate: create } },
+          genderFlags: { raise: { mutate: jest.fn(async () => ({ received: true })) } },
+        });
+        mockApi.api.enrollments.get.query.mockResolvedValue(enrollment());
+      },
+      () => <StudentChat />,
+      async (direction) => {
+        expect(await screen.findByText('أهلًا بك')).toBeTruthy();
+        await fireEvent.press(
+          screen.getByRole('button', { name: said(direction, 'common.a11y.report') }),
+        );
+        expect(
+          screen.getByText(said(direction, 'student.report.title', { teacher: TEACHER })),
+        ).toBeTruthy();
+        await fireEvent.press(
+          screen.getByRole('radio', { name: said(direction, 'student.report.reasons.fraud') }),
+        );
+        await fireEvent.press(
+          screen.getByRole('button', { name: said(direction, 'student.report.submit') }),
+        );
+        expect(await screen.findByText(said(direction, 'common.toast.reportSent'))).toBeTruthy();
+        expect(create.mock.calls).toEqual([
+          [
+            {
+              reportedUserId: TEACHER_ID,
+              context: 'chat',
+              enrollmentId: ENROLLMENT_ID,
+              reason: said(direction, 'student.report.reasons.fraud'),
+              idempotencyKey: expect.any(String),
+            },
+          ],
+        ]);
       },
     );
   });

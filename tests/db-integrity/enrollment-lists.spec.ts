@@ -265,6 +265,12 @@ const named = (name: string) => ({ displayName: name, displayNameOrNull: name, d
 /** A deleted party (T007, FR-426): no name, deleted, the deprecated field empty. */
 const DELETED = { displayName: '', displayNameOrNull: null, deleted: true };
 
+/** The teacher's student (005:T021, Q-T4 (a)): the student's user id beside the name, deleted too. */
+const studentOf = (studentId: string, name: string | null) => ({
+  studentId,
+  ...(name === null ? DELETED : named(name)),
+});
+
 /**
  * The account soft-deleted with its personal fields erased, the row as identity's deletion leaves
  * it (T082's `eraseAccount`, `apps/api/src/modules/identity/identity.repository.ts`; FR-141).
@@ -463,7 +469,7 @@ describe(
   () => {
     it('answers the teacher’s own confirmed students by next session, never one awaiting payment, nothing of another teacher’s', async () => {
       await rolledBack(async (tx) => {
-        const { t1, t2, enrollments } = await world(tx);
+        const { t1, t2, students, enrollments } = await world(tx);
         const active = await teacherStudentsOf(
           tx,
           store,
@@ -474,9 +480,9 @@ describe(
         );
         expect(idsOf(active)).toEqual([enrollments.sooner, enrollments.later, enrollments.zainabs]);
         expect(active.items.map(({ student }) => student)).toEqual([
-          named('يُسْرى عليّ'),
-          named('يُسْرى عليّ'),
-          named('زينب حسن'),
+          studentOf(students.yusra, 'يُسْرى عليّ'),
+          studentOf(students.yusra, 'يُسْرى عليّ'),
+          studentOf(students.zainab, 'زينب حسن'),
         ]);
         const other = await teacherStudentsOf(
           tx,
@@ -562,6 +568,7 @@ describe(
           'deleted',
           'displayName',
           'displayNameOrNull',
+          'studentId',
         ]);
         expect(own.sessions).toHaveLength(3);
         for (const enrollmentId of [
@@ -616,9 +623,9 @@ describe(
           WINDOWS,
         );
         expect(active.items.map(({ student }) => student)).toEqual([
-          named('يُسْرى عليّ'),
-          named('يُسْرى عليّ'),
-          DELETED,
+          studentOf(students.yusra, 'يُسْرى عليّ'),
+          studentOf(students.yusra, 'يُسْرى عليّ'),
+          studentOf(students.zainab, null),
         ]);
         const ended = await teacherStudentsOf(tx, store, t1.id, { tab: 'ended' }, clock(), WINDOWS);
         expect(
@@ -626,9 +633,9 @@ describe(
             ended.items.map(({ enrollmentId, student }) => [enrollmentId, student]),
           ),
         ).toEqual({
-          [enrollments.completed]: named('يُسْرى عليّ'),
-          [enrollments.cancelledLater]: named('يُسْرى عليّ'),
-          [enrollments.asmaas]: DELETED,
+          [enrollments.completed]: studentOf(students.yusra, 'يُسْرى عليّ'),
+          [enrollments.cancelledLater]: studentOf(students.yusra, 'يُسْرى عليّ'),
+          [enrollments.asmaas]: studentOf(students.asmaa, null),
         });
         const detail = await teacherStudentOf(
           tx,
@@ -638,7 +645,7 @@ describe(
           NOW,
           WINDOWS,
         );
-        expect(detail.student).toEqual(DELETED);
+        expect(detail.student).toEqual(studentOf(students.zainab, null));
         const today = await teacherTodayOf(
           tx,
           store,
@@ -647,8 +654,8 @@ describe(
           WINDOWS,
         );
         expect(today.sessions.map(({ student }) => student)).toEqual([
-          named('يُسْرى عليّ'),
-          DELETED,
+          studentOf(students.yusra, 'يُسْرى عليّ'),
+          studentOf(students.zainab, null),
         ]);
         for (const tab of ['active', 'ended'] as const) {
           const found = await teacherStudentsOf(
