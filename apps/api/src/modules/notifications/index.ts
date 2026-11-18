@@ -47,3 +47,16 @@ export function createNotificationDeliveries(database: Pick<Database, 'notificat
     markPushed: (notificationId, at) => repository.markPushed(notificationId, at),
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// 005:T017 (FR-619, FR-622; research R-407; SRS DEC-74): what `send-reminder` reads and writes, each
+// on the sweep's transaction: the `session_reminders` rows of some sessions, one row written after
+// its notification (the primary key refusing a second, so a rerun or a concurrent run records
+// nothing), and a page of the notifications whose push was never marked, for the re-send.
+export {
+  insertSessionReminder,
+  remindersOf,
+  type SessionReminderKey,
+  type SessionReminderRow,
+  unpushedCreatedWithin,
+} from './notifications.repository.js';
