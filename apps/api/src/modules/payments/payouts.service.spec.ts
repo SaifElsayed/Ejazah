@@ -138,8 +138,10 @@ const written: ReleaseRow[] = [
 function store(overrides: Partial<PayoutsStore> = {}): {
   readonly store: PayoutsStore;
   readonly marks: unknown[];
+  readonly unmarks: string[];
 } {
   const marks: unknown[] = [];
+  const unmarks: string[] = [];
   const byIds = <T>(ids: readonly string[], pick: (f: Fixture) => T) =>
     new Map(
       fixtures.filter((f) => ids.includes(f.enrollmentId)).map((f) => [f.enrollmentId, pick(f)]),
@@ -182,12 +184,17 @@ function store(overrides: Partial<PayoutsStore> = {}): {
     namesOf: async (_tx, ids) => new Map(ids.map((one) => [one, `name-${one.slice(-3)}`])),
     payoutReferenceOf: async (_tx, teacherUserId) => (teacherUserId === T1 ? 'rcp_00001234' : null),
     releaseById: async (_tx, releaseId) => written.find((row) => row.id === releaseId) ?? null,
+    // 003:T105's undo: true only while the release is marked (`WHERE marked_at IS NOT NULL`).
+    unmarkRelease: async (_tx, releaseId) => {
+      unmarks.push(releaseId);
+      return (written.find((row) => row.id === releaseId)?.markedAt ?? null) !== null;
+    },
     markRelease: async (_tx, mark) => {
       marks.push(mark);
       return written.find((row) => row.id === mark.releaseId)?.markedAt === null;
     },
   };
-  return { store: { ...base, ...overrides }, marks };
+  return { store: { ...base, ...overrides }, marks, unmarks };
 }
 
 /** An idempotency that runs the effect, or replays when told to. */
@@ -200,7 +207,7 @@ const runOnce = (replay = false) => ({
 
 function payouts(overrides: Partial<PayoutsStore> = {}, replay = false) {
   const lines: unknown[][] = [];
-  const { store: s, marks } = store(overrides);
+  const { store: s, marks, unmarks } = store(overrides);
   const service = createPayouts({
     settings,
     idempotency: runOnce(replay) as never,
@@ -208,7 +215,7 @@ function payouts(overrides: Partial<PayoutsStore> = {}, replay = false) {
     log: { info: (...line: unknown[]) => void lines.push(line) },
     clock: async () => NOW,
   });
-  return { service, lines, marks };
+  return { service, lines, marks, unmarks };
 }
 
 describe('teacher.dues.get: «مستحقاتي» (DEC-89)', () => {
@@ -425,6 +432,68 @@ describe('payouts.mark: «تم الصرف»', () => {
       await service.mark(tx, ADMIN, { releaseId: id(502), idempotencyKey: 'k'.repeat(16) }),
     ).toEqual({ teacherUserId: T1, replayed: true });
     expect(marks).toEqual([]);
+  });
+});
+
+describe('payouts.unmark: a mark made in error undone (DEC-89, the owner of 2026-11-18)', () => {
+  const REASON = 'marked by mistake: the transfer did not go through';
+  const KEY = 'u'.repeat(16);
+
+  it('unmarks a marked release and answers its teacher, its one line of ids carrying no reason', async () => {
+    const { service, lines, unmarks } = payouts();
+    const undone = await service.unmark(tx, ADMIN, {
+      releaseId: id(501),
+      reason: REASON,
+      idempotencyKey: KEY,
+    });
+
+    expect(undone).toEqual({ teacherUserId: T1, replayed: false });
+    expect(unmarks).toEqual([id(501)]);
+    expect(lines).toEqual([
+      [
+        { adminId: ADMIN, releaseId: id(501), enrollmentId: id(101), teacherUserId: T1 },
+        "A release of the teacher's share was unmarked",
+      ],
+    ]);
+    expect(JSON.stringify(lines)).not.toContain('mistake');
+  });
+
+  it('refuses an unknown release NOT_FOUND, logging ids and the reason code', async () => {
+    const { service, lines } = payouts();
+    const refused = await service
+      .unmark(tx, ADMIN, { releaseId: id(599), reason: REASON, idempotencyKey: KEY })
+      .catch((error: unknown) => error);
+
+    expect((refused as DomainError).code).toBe('NOT_FOUND');
+    expect(lines).toEqual([
+      [
+        { adminId: ADMIN, releaseId: id(599), errorCode: 'NOT_FOUND', reason: 'no_release' },
+        "A payout release's unmark was refused",
+      ],
+    ]);
+  });
+
+  it('refuses a release not marked CONFLICT', async () => {
+    const { service, lines } = payouts();
+    const refused = await service
+      .unmark(tx, ADMIN, { releaseId: id(502), reason: REASON, idempotencyKey: KEY })
+      .catch((error: unknown) => error);
+
+    expect((refused as DomainError).code).toBe('CONFLICT');
+    expect(lines).toEqual([
+      [
+        { adminId: ADMIN, releaseId: id(502), errorCode: 'CONFLICT', reason: 'not_marked' },
+        "A payout release's unmark was refused",
+      ],
+    ]);
+  });
+
+  it('answers a replay from the key, unmarking nothing again', async () => {
+    const { service, unmarks } = payouts({}, true);
+    expect(
+      await service.unmark(tx, ADMIN, { releaseId: id(501), reason: REASON, idempotencyKey: KEY }),
+    ).toEqual({ teacherUserId: T1, replayed: true });
+    expect(unmarks).toEqual([]);
   });
 });
 

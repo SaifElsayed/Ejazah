@@ -9,13 +9,15 @@
 // («عليه»: the refund as recorded and his share of it, with the enrollment's closing case), and his
 // payout account masked. `payouts.mark`: «تم الصرف», the mark that a due release was executed by
 // hand in the gateway's dashboard; keyed (`idempotent-procedures.ts`), it records a fact and moves
-// no money (FR-PAYG-11). Every read writes its audit entry (`payouts.listed`, `payouts.viewed`).
+// no money (FR-PAYG-11); `payouts.unmark` undoes a mark made in error, with a mandatory reason.
+// Every read writes its audit entry (`payouts.listed`, `payouts.viewed`).
 //
 // No gateway amount word crosses here (`eslint.boundaries.js`'s leave is `payments.ts` alone): the
 // figures are shares, releases and refunds. Money crosses as `_piasters` integers (R-MONEY-1).
 import { z } from 'zod';
 
 import { idempotencyKey } from '../idempotency-key.js';
+import { adminReason } from './admins.js';
 import { shareReleaseMilestone, shareReleaseState } from '../teacher-dues.js';
 
 /** A whole number of piasters (ERD §0). */
@@ -100,6 +102,18 @@ export const payoutsGetOutput = z.object({
 
 export const payoutsMarkInput = z.object({ releaseId: z.uuid(), idempotencyKey });
 
+/**
+ * The undo of a mark made in error (the owner's «موافق على الاتنين», 2026-11-18; SRS DEC-89): the
+ * reason is mandatory and reaches the audit log as written; the release is due again. Keyed
+ * (`idempotent-procedures.ts`), allowed at any time, refused NOT_FOUND for an unknown release and
+ * CONFLICT for one not marked.
+ */
+export const payoutsUnmarkInput = z.object({
+  releaseId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
 export type PayoutFigures = z.infer<typeof payoutFigures>;
 export type PayoutsListInput = z.infer<typeof payoutsListInput>;
 export type PayoutsListItem = z.infer<typeof payoutsListItem>;
@@ -109,3 +123,4 @@ export type PayoutRelease = z.infer<typeof payoutRelease>;
 export type PayoutDeduction = z.infer<typeof payoutDeduction>;
 export type PayoutsGetOutput = z.infer<typeof payoutsGetOutput>;
 export type PayoutsMarkInput = z.infer<typeof payoutsMarkInput>;
+export type PayoutsUnmarkInput = z.infer<typeof payoutsUnmarkInput>;

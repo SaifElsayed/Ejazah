@@ -30,6 +30,7 @@ import type {
   PayoutsListItem,
   PayoutsListOutput,
   PayoutsMarkInput,
+  PayoutsUnmarkInput,
 } from '@ijazah/contracts/admin';
 import type {
   ShareReleaseMilestone,
@@ -53,6 +54,7 @@ import type { EnrollmentCase } from '../moderation/index.js';
 import { displayNamesOf, payoutRecipientOf } from '../identity/index.js';
 import {
   markRelease,
+  unmarkRelease,
   type ReleaseRow,
   releaseById,
   releasesAfter,
@@ -85,6 +87,7 @@ const MASK_KEEP = 4;
 const MASK = '••••';
 
 const MARK_SCOPE = 'payouts.mark';
+const UNMARK_SCOPE = 'payouts.unmark';
 
 /** One release of an enrollment as both pages read it. */
 export interface ReleaseLine {
@@ -204,6 +207,8 @@ export interface PayoutsStore {
     tx: Transaction,
     mark: { readonly releaseId: string; readonly adminId: string; readonly at: Date },
   ): Promise<boolean>;
+  /** The undo of a mark: true when this call cleared it. */
+  unmarkRelease(tx: Transaction, releaseId: string): Promise<boolean>;
 }
 
 /** The store over payments' queries and the owners' entries; the cipher decrypts the reference. */
@@ -219,10 +224,11 @@ export function payoutsStoreOver(cipher: Pick<ColumnCipher, 'decrypt'>): Payouts
     payoutReferenceOf: (tx, teacherUserId) => payoutRecipientOf(tx, cipher, teacherUserId),
     releaseById,
     markRelease,
+    unmarkRelease,
   };
 }
 
-/** The teacher's read and the administrator's three procedures. */
+/** The teacher's read and the administrator's four procedures. */
 export interface Payouts {
   /** `teacher.dues.get`: the caller's own releases and his share of each refund. */
   teacherDues(tx: Transaction, teacherUserId: string): Promise<TeacherDuesGetOutput>;
@@ -235,6 +241,12 @@ export interface Payouts {
     tx: Transaction,
     adminId: string,
     input: PayoutsMarkInput,
+  ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
+  /** `payouts.unmark`, keyed; a mark made in error undone; the teacher, for the audit entry. */
+  unmark(
+    tx: Transaction,
+    adminId: string,
+    input: PayoutsUnmarkInput,
   ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
 }
 
@@ -275,9 +287,10 @@ export function createPayouts({
   const refusal = (
     ids: Readonly<Record<string, string>>,
     code: 'NOT_FOUND' | 'CONFLICT',
-    reason: 'no_release' | 'already_marked',
+    reason: 'no_release' | 'already_marked' | 'not_marked',
+    call: 'mark' | 'unmark' = 'mark',
   ): DomainError => {
-    log.info({ ...ids, errorCode: code, reason }, "A payout release's mark was refused");
+    log.info({ ...ids, errorCode: code, reason }, `A payout release's ${call} was refused`);
     return markRefusalLogged(
       new DomainError(
         code,
@@ -497,6 +510,38 @@ export function createPayouts({
               teacherUserId: release.teacherUserId,
             },
             "A release of the teacher's share was marked paid",
+          );
+          return { teacherUserId: release.teacherUserId };
+        },
+      );
+      return { teacherUserId: outcome.teacherUserId, replayed };
+    },
+
+    unmark: async (tx, adminId, { releaseId, reason, idempotencyKey }) => {
+      const { outcome, replayed } = await idempotency.runOn<{ teacherUserId: string }>(
+        tx,
+        {
+          scope: UNMARK_SCOPE,
+          key: idempotencyKey,
+          actorId: adminId,
+          input: { releaseId, reason },
+        },
+        async (on) => {
+          const ids = { adminId, releaseId };
+          const release = await store.releaseById(on, releaseId);
+          if (release === null) throw refusal(ids, 'NOT_FOUND', 'no_release', 'unmark');
+          if (!(await store.unmarkRelease(on, releaseId))) {
+            throw refusal(ids, 'CONFLICT', 'not_marked', 'unmark');
+          }
+          // Ids only: the reason is the audit entry's, never a log line's.
+          log.info(
+            {
+              adminId,
+              releaseId,
+              enrollmentId: release.enrollmentId,
+              teacherUserId: release.teacherUserId,
+            },
+            "A release of the teacher's share was unmarked",
           );
           return { teacherUserId: release.teacherUserId };
         },

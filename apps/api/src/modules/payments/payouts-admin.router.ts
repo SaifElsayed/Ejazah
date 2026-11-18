@@ -16,6 +16,7 @@ import {
   payoutsListInput,
   payoutsListOutput,
   payoutsMarkInput,
+  payoutsUnmarkInput,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
@@ -53,22 +54,45 @@ export const payoutsAdminRouter = createAdminRouter({
     input: payoutsMarkInput,
     output: z.void(),
     rateLimit: { key: 'rate_limit_payout_mark', subject: 'caller' },
-  }).mutation(
-    async ({ ctx, input }) => {
-      const { teacherUserId, replayed } = await ctx.services.payouts.mark(
-        ctx.tx,
-        ctx.administrator.adminId,
-        input,
-      );
-      if (replayed) {
-        ctx.audit.replayed();
-        return;
-      }
-      ctx.audit.record({
-        action: 'payout_release.marked',
-        targetType: 'user',
-        targetId: teacherUserId,
-      });
-    },
-  ),
+  }).mutation(async ({ ctx, input }) => {
+    const { teacherUserId, replayed } = await ctx.services.payouts.mark(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'payout_release.marked',
+      targetType: 'user',
+      targetId: teacherUserId,
+    });
+  }),
+
+  // The undo of a mark made in error (DEC-89; the owner's «موافق على الاتنين», 2026-11-18): keyed, a
+  // mandatory reason that reaches the audit entry as written, under the mark's own limit. The mark's
+  // entry stays; the release is due again.
+  unmark: adminProcedure({
+    input: payoutsUnmarkInput,
+    output: z.void(),
+    rateLimit: { key: 'rate_limit_payout_mark', subject: 'caller' },
+  }).mutation(async ({ ctx, input }) => {
+    const { teacherUserId, replayed } = await ctx.services.payouts.unmark(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'payout_release.unmarked',
+      targetType: 'user',
+      targetId: teacherUserId,
+      reason: input.reason,
+    });
+  }),
 });
