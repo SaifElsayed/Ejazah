@@ -130,7 +130,8 @@ export {
 /**
  * T073 of specs/004-sessions (FR-507; the note under T073, Q4 (a), Q6 (a), N3): payments' answer to
  * the restore's `EnrollmentPayments` port (sessions' `enrollment-payments.port.ts`), whether any order
- * of an enrollment is `refunded`, read with no lock on the restore's transaction, which holds the
+ * of an enrollment is `refunded` or, since 003:T102 (Q-3 (a)), has any refund recorded
+ * (`refunded_piasters > 0`), read with no lock on the restore's transaction, which holds the
  * enrollment's lock that every order move takes first. `main.ts` hands it to the admin module's
  * `createAdminServices` (`enrollmentPayments`), so sessions reads no payment table (R-301).
  */
