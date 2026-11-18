@@ -644,6 +644,7 @@ describe('EnrollmentDetail', () => {
     const next = settledSessions[7]!;
     mockApi.api.enrollments.get.query.mockResolvedValue({
       ...ongoing,
+      ijazahRequest: null,
       next,
       completed: 6,
       upcoming: 1,
@@ -672,6 +673,7 @@ describe('EnrollmentDetail', () => {
     const pressed = { ...sessions[0]!, status: 'disputed' } as ListedSession;
     mockApi.api.enrollments.get.query.mockResolvedValue({
       ...ongoing,
+      ijazahRequest: null,
       sessions: [pressed, ...sessions.slice(1)],
     });
     await renderIn('rtl', within(<EnrollmentDetail />)());
@@ -685,7 +687,11 @@ describe('EnrollmentDetail', () => {
   it('a Confirming enrollment is read on the schedule, then FR-384’s message', async () => {
     jest.useFakeTimers();
     mockParams = { id: SECOND_ENROLLMENT_ID };
-    mockApi.api.enrollments.get.query.mockResolvedValue({ ...confirming, sessions: [] });
+    mockApi.api.enrollments.get.query.mockResolvedValue({
+      ...confirming,
+      sessions: [],
+      ijazahRequest: null,
+    });
     await renderIn('rtl', within(<EnrollmentDetail />)());
     expect(await screen.findByText(ar('status.enrollment.confirming'))).toBeTruthy();
     await elapse(WINDOW_MS);
@@ -737,7 +743,11 @@ describe.each<[string, () => ReactElement]>([
 ])('%s: a pending enrollment’s last order', (_name, ui) => {
   const answer = (item: StudentEnrollmentItem) => {
     mockApi.api.enrollments.list.query.mockResolvedValue(list(item));
-    mockApi.api.enrollments.get.query.mockResolvedValue({ ...item, sessions: [] });
+    mockApi.api.enrollments.get.query.mockResolvedValue({
+      ...item,
+      sessions: [],
+      ijazahRequest: null,
+    });
   };
   const orderIs = (status: CheckoutStatusOutput['lastOrder']['status']): CheckoutStatusOutput => ({
     ...statusOf,

@@ -90,6 +90,7 @@ function enrollment(of: Partial<EnrollmentsGetOutput> = {}): EnrollmentsGetOutpu
     remaining: 1,
     sessions: [session],
     complaintOpen: false,
+    ijazahRequest: null,
     ...of,
   } as EnrollmentsGetOutput;
 }

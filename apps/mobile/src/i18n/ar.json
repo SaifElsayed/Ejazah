@@ -881,6 +881,10 @@
       "fullName": "الاسم كاملًا",
       "hint": "يُكتب مرة واحدة، ولتعديله تواصل مع الدعم",
       "preview": "هكذا يظهر في الإجازة",
+      "refused": {
+        "alreadySet": "اسمك في الإجازة مسجّل بالفعل، ولتعديله تواصل مع الدعم.",
+        "invalid": "اكتب اسمك كاملًا بالحروف، من حرفين إلى 80 حرفًا."
+      },
       "save": "حفظ",
       "title": "اسمك كما يُكتب في الإجازة"
     },
@@ -992,6 +996,10 @@
       "kind": "إجازة بالسند",
       "number": "رقم الشهادة",
       "numberInline": "رقم الشهادة: {number}",
+      "preparing": "قيد الإعداد",
+      "refused": {
+        "notReady": "لم تُعتمد الإجازة بعد، وتجدها هنا حين تجهز."
+      },
       "riwaya": "{riwaya} · من طريق {tariq}",
       "teacherCompleted": "{teacher} · أُتمّ {date}",
       "teacherIssued": "{teacher} · {date}",
@@ -1177,6 +1185,11 @@
       },
       "upcomingEnrollment": "{teacher} · تبدأ {date} {time}",
       "welcome": "أهلًا بك"
+    },
+    "ijazahRequest": {
+      "awaitingName": "بانتظار اسمك",
+      "awaitingNameText": "طلب معلمك إجازة لك. أدخل اسمك كما يُكتب فيها.",
+      "enterName": "أدخل اسمك"
     },
     "makeupChoice": {
       "legend": "التعويض",

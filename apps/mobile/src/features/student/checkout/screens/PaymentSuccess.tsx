@@ -6,6 +6,8 @@
 // late and the first session is not the one the student was shown, it says so with both dates
 // (the slot's local dates, FR-368). The board's date-time row and «view enrollment» wait: the
 // status carries no confirmation instant, and the enrollment's page is T050's.
+// 005:T020 (FR-623): a confirmed booking is where a push first matters, so the push permission is
+// asked once the server reports it confirmed (`useAskForPush`, never at sign-in).
 import type { CheckoutStatusOutput, EnrollmentSession } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { router } from 'expo-router';
@@ -25,6 +27,7 @@ import { tokens } from '../../../../design/tokens';
 import { useLocale, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { formatPounds, useFormatters, weekdayIn } from '../../../../lib/formatters';
+import { useAskForPush } from '../../../shared/push';
 import {
   EnrollmentValue,
   OrderReference,
@@ -45,6 +48,7 @@ export function PaymentSuccess() {
   const me = useMe();
   const outcome = status.data === undefined ? undefined : outcomeOf(status.data);
   useLeaveFor(outcome, 'confirmed', enrollmentId);
+  useAskForPush(outcome === 'confirmed');
 
   const zone = me.data?.timezone;
   if (status.data === undefined || outcome !== 'confirmed' || zone === undefined) {

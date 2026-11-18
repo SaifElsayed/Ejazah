@@ -881,6 +881,10 @@
       "fullName": "Full name",
       "hint": "Written once; to change it, contact support",
       "preview": "This is how it appears on the ijazah",
+      "refused": {
+        "alreadySet": "Your name for the ijazah is already set; to change it, contact support.",
+        "invalid": "Write your full name in letters, from 2 to 80 characters."
+      },
       "save": "Save",
       "title": "Your name as written on the ijazah"
     },
@@ -992,6 +996,10 @@
       "kind": "Ijazah with isnad",
       "number": "Certificate number",
       "numberInline": "Certificate number: {number}",
+      "preparing": "Being prepared",
+      "refused": {
+        "notReady": "The ijazah is not signed off yet; you’ll find it here once it is ready."
+      },
       "riwaya": "{riwaya} · by way of {tariq}",
       "teacherCompleted": "{teacher} · completed {date}",
       "teacherIssued": "{teacher} · {date}",
@@ -1177,6 +1185,11 @@
       },
       "upcomingEnrollment": "{teacher} · starts {date}, {time}",
       "welcome": "Welcome"
+    },
+    "ijazahRequest": {
+      "awaitingName": "Awaiting your name",
+      "awaitingNameText": "Your teacher requested an ijazah for you. Enter your name as it is written on it.",
+      "enterName": "Enter your name"
     },
     "makeupChoice": {
       "legend": "Compensation",
