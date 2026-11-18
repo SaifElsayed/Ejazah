@@ -409,6 +409,9 @@ enum PaymentEventType {
   refunded
   recipient_verified
   recipient_rejected
+  // 003:T102 (Q-2 (a)'s safety net, DEC-82; ERD changelog row 56): a refund the gateway flagged on
+  // the original payment, which reports no amount.
+  refund_reported
 
   @@map("payment_event_type")
 }

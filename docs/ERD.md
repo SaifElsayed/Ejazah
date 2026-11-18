@@ -557,8 +557,10 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | net_piasters | bigint, nullable | Settled to the teacher; `gross − fee`, as reported, never computed here (R-MONEY-5) |
 | teacher_share_rate_percent | smallint, nullable | The teacher's share rate read from the setting `teacher_share_percent` when the order was created, whole percent, kept so a later change of the setting reaches new orders only (SRS FR-PAYG-1 as amended, DEC-80; ADR 0025 D1; T104; changelog row 46). NULL on an order created before the commission; both or neither (§15 rule 52) |
 | teacher_share_piasters | bigint, nullable | The teacher's share it gave: the gross times the rate, rounded up to the piaster by `packages/money`'s `teacherShare`, sent to the gateway as the split (ADR 0025 D1; T104; changelog row 46). From 0 to the gross (§15 rule 52) |
+| refunded_piasters | bigint, NOT NULL, default 0 | The order's refunded total: the sum, by `packages/money`, of the refunds the gateway's signed child events reported, each added under the order's lock while the order is `paid`; a total past the gross is refused and reported, nothing recorded (SRS DEC-82; ADR 0025 D3; T102; changelog row 56). From 0 to the gross (§15 rule 61) |
+| refund_reported_at | timestamptz, nullable | When the gateway first flagged a refund on the original payment (`refund_reported`), which reports no amount; set once, adds no money and moves nothing, so an administrator sees a refund whose child event never came (SRS DEC-82; T102, Q-2 (a); changelog row 56) |
 | currency | char(3) | |
-| status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10) |
+| status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10). *(Amended 2026-11-18, T102: an order becomes `refunded` when its `refunded_piasters` reaches the gross; a partial refund leaves it `paid`, DEC-82.)* |
 | expires_at | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry and by FR-BOOK-12's "still payable" (v1.12) |
 | checkout_url_encrypted | bytea, nullable | The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), kept so FR-BOOK-12 (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Decrypted only by `checkout.continue`, for the student who owns the order's enrollment, while the order is `created` and `expires_at` is in the future; never logged (`specs/003-booking/data-model.md` §2.4.1). Reached by the `reencrypt-columns` job through the payments repository (v1.12) |
 | created_at / updated_at | timestamptz | |
@@ -572,7 +574,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | id | uuid | PK |
 | payment_id | FK → payments, nullable | NULL exactly when `event_type` is `recipient_verified` or `recipient_rejected`: those report on a teacher's payout account, not a gateway order, and are recorded here so the unique `provider_event_id` makes their replay a no-op too (FR-PAYG-4, FR-PAYG-15, §15.20) |
 | provider_event_id | text, unique, NOT NULL | Idempotency — a replayed webhook cannot double-insert (FR-PAYG-4, R-MONEY-8) |
-| event_type | enum paid · failed · expired · refunded · recipient_verified · recipient_rejected | |
+| event_type | enum paid · failed · expired · refunded · recipient_verified · recipient_rejected · refund_reported | `refunded`: a refund child transaction, its signed amount added to the order's `refunded_piasters`. `refund_reported` (T102, changelog row 56): a refund flagged on the original payment, which records no money and sets `payments.refund_reported_at` once (DEC-82) |
 | signature_verified_at | timestamptz | Set by the signature guard before the row is written (R-MONEY-9). A row cannot exist for an unverified event |
 | payload_hash | text | Hash of the raw body, for audit; the body itself is never stored (R-SEC-2) |
 | received_at | timestamptz | |
@@ -1049,6 +1051,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 59. `user_reports`: `(status = 'open') = (resolved_at IS NULL) AND (resolved_at IS NULL) = (resolved_by_admin_id IS NULL)` — check `user_reports_resolved_check`: an open report has no resolution instant and no resolving administrator, an `actioned` or `dismissed` one both (B47, the owner's Q-R3 (a); changelog row 53).
 
+61. `payments`: `refunded_piasters >= 0 AND refunded_piasters <= gross_piasters` — check `payments_refunded_check`: the refunded total from 0 to the order's gross, so a refund that would pass it cannot be recorded even if the service's refusal were skipped (SRS DEC-82; T102; changelog row 56).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1400,3 +1404,9 @@ Amended on 2026-11-18 by B47 of `specs/005-certification/tasks.md` (the note und
 |---|---|---|
 | 53 | §10 `user_reports.resolution_notes` (text, nullable; the table held no row on `ijazah_integrity`); §15 rule 59, the check `user_reports_resolved_check` | `20261118062524_user_report_resolution` |
 | 54 | `compensation_cases.reason` gains `gender_correction` (005:T014: one case per `confirmed` enrollment a gender correction ends, FR-616, R-409; `reason` is text, the closed list is `COMPENSATION_REASONS` in code) | none |
+
+Amended on 2026-11-18 by T102 of `specs/003-booking/tasks.md` (B-M2), on the owner's money rules of 2026-11-16/17 (ADR 0025 D3, SRS DEC-82: a partial refund recorded with its amount) and the owner's decisions of 2026-11-18 on B-M2's conflict check (Q-2 (a) with its safety net); `C:\Users\amrkn\Documents\ejazah-tools\track2\owner-words.md`. No table is added:
+
+| # | Change | Migration |
+|---|---|---|
+| 56 | §7 `payments.refunded_piasters` (bigint, NOT NULL, default 0) and `payments.refund_reported_at` (timestamptz, nullable), and §15 rule 61, check `payments_refunded_check`: the order's refunded total within 0 and the gross, the order `refunded` when it reaches the gross, an order already `refunded` taking its gross as its total in the migration; §7 `payment_events.event_type` gains `refund_reported` at its end, a refund flagged on the original payment with no amount (SRS FR-PAYG-7 as amended) | `20261118142403_payments_refunded_total` (B-M2) |
