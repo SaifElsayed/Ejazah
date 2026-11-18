@@ -1743,6 +1743,11 @@
       "title": "الإجازات"
     },
     "money": {
+      "audit": {
+        "payoutReleaseMarked": "تسجيل صرف مستحق لمعلم",
+        "payoutsListed": "عرض تحويلات المعلمين",
+        "payoutsViewed": "عرض تحويلات معلم"
+      },
       "testMode": "نسخة تجريبية"
     },
     "mfa": {
