@@ -72,6 +72,9 @@ and one with `context <> 'profile'` has an `enrollment_id`.
 - `user_reports.enrollment_id` uuid FK → `enrollments`, nullable; required for a session or chat report (the check
   above), set by the server (for a session report, from the session through `Pairings.partyOfSession`); the chat purge
   reads it (R-408).
+- `user_reports.resolution_notes` text, nullable (the administrator's note on `reports.resolve`, FR-612), and the
+  check `(status = 'open') = (resolved_at IS NULL) AND (resolved_at IS NULL) = (resolved_by_admin_id IS NULL)`
+  (`ijazah_requests_decided_check`'s form) (B47, the owner's Q-R3 (a), 2026-11-18; B47's migration).
 - `gender_flags.reason` text NOT NULL (the raiser's reason) and `gender_flags.report_id` uuid FK → `user_reports`,
   nullable (an administrator's flag raised from a report).
 
