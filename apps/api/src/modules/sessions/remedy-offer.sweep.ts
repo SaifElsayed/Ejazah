@@ -121,7 +121,7 @@ export const remedyAdvanceStore: RemedyAdvanceStore = {
 export interface AdvanceRun {
   readonly offered: readonly string[];
   readonly reoffered: readonly string[];
-  /** T032: the remedies handed to a case, `counter_unanswered` or `makeup_refused`. */
+  /** T032: the remedies handed to a `makeup_refused` case (003:T111: no `counter_unanswered` any more). */
   readonly handedOff: readonly string[];
   /** T032: the proposals booked at their choice window's end (H5). */
   readonly booked: readonly string[];
