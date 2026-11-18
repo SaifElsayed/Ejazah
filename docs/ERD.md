@@ -709,8 +709,9 @@ FR-SESS-15 — report from any session or profile.
 | enrollment_id | FK → enrollments, nullable | The enrollment of a session or chat report, set by the server; the chat purge reads it (R-408; Phase 4, changelog row 49). Required unless the context is `profile`, and `session_id` required for a session report (§15 rule 56) |
 | reason | text | |
 | status | enum open · actioned · dismissed | One open report per reporter, reported user and context; never on oneself (§15 rule 56; Phase 4) |
-| resolved_by_admin_id | FK → admin_users, nullable | |
-| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution |
+| resolution_notes | text, nullable | The administrator's note on `reports.resolve` (FR-612; B47, changelog row 53) |
+| resolved_by_admin_id | FK → admin_users, nullable | Set on resolution, with `resolved_at` (§15 rule 59) |
+| created_at / resolved_at | timestamptz; `resolved_at` nullable | `resolved_at` is set on resolution: an open report has neither it nor `resolved_by_admin_id`, a resolved one both (§15 rule 59) |
 
 ## 11. Notifications
 
@@ -1045,6 +1046,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 57. `gender_flags`: one open flag per user — partial unique `gender_flags_one_open_per_user_key` on `(flagged_user_id) WHERE status = 'open'` (R-409; changelog row 49).
 
 58. `ijazah_requests` and `ijazahs`: `riwaya_printed <> ''` — checks `ijazah_requests_riwaya_printed_check`, `ijazahs_riwaya_printed_check`; `tariq_printed IS NULL OR tariq_printed <> ''` — checks `ijazah_requests_tariq_printed_check`, `ijazahs_tariq_printed_check`. The two on `ijazahs` are NOT VALID: the test databases' `probe-` rows written before them hold the backfilled '' (B46; changelog row 52).
+
+59. `user_reports`: `(status = 'open') = (resolved_at IS NULL) AND (resolved_at IS NULL) = (resolved_by_admin_id IS NULL)` — check `user_reports_resolved_check`: an open report has no resolution instant and no resolving administrator, an `actioned` or `dismissed` one both (B47, the owner's Q-R3 (a); changelog row 53).
 
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
@@ -1390,3 +1393,9 @@ Amended on 2026-11-17 by B46 of `specs/005-certification/tasks.md` (the note und
 | # | Change | Migration |
 |---|---|---|
 | 52 | §8 `ijazah_requests.riwaya_printed` (text NOT NULL; the table held no row) and `tariq_printed` (text, nullable); `ijazahs.riwaya_printed` (text NOT NULL, added with a default of '' dropped in the same migration, since test databases hold `probe-` rows a DB spec cannot delete) and `tariq_printed` (text, nullable); §15 rule 58, the four checks, NOT VALID on `ijazahs` | `20261117131114_certification_printed_riwaya_tariq` |
+
+Amended on 2026-11-18 by B47 of `specs/005-certification/tasks.md` (the note under T011), on the owner's decisions of 2026-11-18 on B47's conflict check (Q-R3 (a): `reports.resolve`'s note in a column, with the resolved-pair check; Q-X2 (a): track 1 takes rows 53 to 55 and rules 59 and 60); `ejazah-tools47owner-words.md`:
+
+| # | Change | Migration |
+|---|---|---|
+| 53 | §10 `user_reports.resolution_notes` (text, nullable; the table held no row on `ijazah_integrity`); §15 rule 59, the check `user_reports_resolved_check` | `20261118062524_user_report_resolution` |

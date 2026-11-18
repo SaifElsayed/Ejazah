@@ -519,9 +519,11 @@ describe('ERD §15 rule 56: a report’s context and one open report per subject
       const report = { reporter_user_id: reporter, reported_user_id: reported, context: 'profile' };
       expect(await tryReport(report)).toBeNull();
       expect(await tryReport(report)).toBe(SQLSTATE.uniqueViolation);
+      // B47 (Q-R3 (a), ERD §15 rule 59): a resolution names its administrator too.
       await db.query(
-        `UPDATE user_reports SET status = 'dismissed', resolved_at = now() WHERE reporter_user_id = $1`,
-        [reporter],
+        `UPDATE user_reports SET status = 'dismissed', resolved_at = now(), resolved_by_admin_id = $2
+          WHERE reporter_user_id = $1`,
+        [reporter, await makeAdmin(db)],
       );
       expect(await tryReport(report)).toBeNull();
     });

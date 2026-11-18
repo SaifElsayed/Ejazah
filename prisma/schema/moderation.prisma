@@ -101,6 +101,9 @@ model UserReport {
   enrollmentId      String?           @map("enrollment_id") @db.Uuid
   reason            String
   status            UserReportStatus
+  // B47 (005:T011, the owner's Q-R3 (a)): the note `reports.resolve` takes (FR-612). Open ⇔ no
+  // `resolved_at` ⇔ no `resolved_by_admin_id` (`user_reports_resolved_check`, ERD §15 rule 59).
+  resolutionNotes   String?           @map("resolution_notes")
   resolvedByAdminId String?           @map("resolved_by_admin_id") @db.Uuid
   createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt        DateTime?         @map("resolved_at") @db.Timestamptz(6)
