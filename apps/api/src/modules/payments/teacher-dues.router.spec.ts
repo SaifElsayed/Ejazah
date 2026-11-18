@@ -4,7 +4,7 @@
 // id from the input, and the answer is the output schema's: no order, enrollment or student id and no
 // name. A surface built without the service fails closed. What the service answers is
 // `payouts.service.spec.ts`'s; another teacher's rows never answered over the real tables is
-// `tests/adversarial/teacher-dues.spec.ts`'s.
+// `tests/adversarial/teacher-dues.spec.ts`'s. The dispute window crosses as the service read it (72 or 48).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
@@ -70,12 +70,16 @@ const ANSWER = {
     },
   ],
   deductions: [{ share_piasters: 70_000, paymentId: '0199d0a0-0000-7000-8000-000000000901' }],
+  disputeWindowHours: 72,
 };
+
+let served: typeof ANSWER = ANSWER;
 
 let asked: string[];
 
 beforeEach(() => {
   asked = [];
+  served = ANSWER;
 });
 
 function callerAs(session: UserSession | null, wired = true): Caller {
@@ -99,7 +103,7 @@ function callerAs(session: UserSession | null, wired = true): Caller {
           teacherDues: {
             get: async (teacherUserId: string) => {
               asked.push(teacherUserId);
-              return ANSWER as never;
+              return served as never;
             },
           },
         }
@@ -144,7 +148,15 @@ describe('teacher.dues.get (003:T105)', () => {
         },
       ],
       deductions: [{ share_piasters: 70_000 }],
+      disputeWindowHours: 72,
     });
+  });
+
+  it('answers the dispute window the service read, 48 hours as well as 72 (the owner, 2026-11-18)', async () => {
+    served = { ...ANSWER, disputeWindowHours: 48 };
+    const dues = await callerAs(sessionOf('approved')).teacher.dues.get({});
+
+    expect(dues.disputeWindowHours).toBe(48);
   });
 
   it('refuses an input naming another teacher', async () => {

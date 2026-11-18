@@ -2,7 +2,9 @@
 // «مستحقاتي», the teacher's own share as `teacher.dues.get` answers it, pushed from «حسابي». Two
 // totals on top, held and paid; one row per part (a recitation package; the ijazah half; the ijazah
 // rest; a close's release), each with its amount and its state: held, with when it falls due in the
-// account's zone «if no complaint is opened», or waiting for an open complaint; due, awaiting the
+// account's zone «if no complaint is opened» (with no date yet, the dispute window's hours as
+// `teacher.dues.get` read them: «بعد آخر حصة بـ 72 ساعة»), or waiting for an open complaint; due,
+// awaiting the
 // administration; or paid, with its date. «عليك» (the owner's «عليه»): his own share of each refund,
 // with the reason when one is given. The answer carries no order line and no student's name, and
 // the screen draws none. Amounts are the server's, formatted only (`formatPounds`).
@@ -39,13 +41,13 @@ export function TeacherDues() {
   const zone = me.data?.timezone ?? 'UTC';
   const pounds = (amount_piasters: Piasters) => formatPounds(amount_piasters, locale);
 
-  /** When the release falls due, waits, or was paid. */
-  const stateLine = (release: TeacherDuesRelease): string => {
+  /** When the release falls due (`hours` after the last session with no date yet), waits, or was paid. */
+  const stateLine = (release: TeacherDuesRelease, hours: number): string => {
     switch (release.state) {
       case 'held':
         if (release.waitsForCase) return t('money.dues.heldWaitsForCase');
         return release.fallsDueAt === undefined
-          ? t('money.dues.heldAfterLast')
+          ? t('money.dues.heldAfterLast', { hours })
           : t('money.dues.heldUntil', {
               date: format.date(release.fallsDueAt, zone),
               time: format.time(release.fallsDueAt, zone),
@@ -59,7 +61,7 @@ export function TeacherDues() {
     }
   };
 
-  const releaseRow = (release: TeacherDuesRelease, index: number) => {
+  const releaseRow = (release: TeacherDuesRelease, index: number, hours: number) => {
     const state = STATE[release.state];
     return (
       <ListRow
@@ -70,7 +72,7 @@ export function TeacherDues() {
               {t(PART[release.part])}
             </Text>
             <Text variant="caption" tone="muted">
-              {stateLine(release)}
+              {stateLine(release, hours)}
             </Text>
           </View>
         }
@@ -142,7 +144,11 @@ export function TeacherDues() {
               text={t('money.dues.empty.text')}
             />
           ) : (
-            <List header={t('money.dues.releasesTitle')}>{dues.releases.map(releaseRow)}</List>
+            <List header={t('money.dues.releasesTitle')}>
+              {dues.releases.map((release, index) =>
+                releaseRow(release, index, dues.disputeWindowHours),
+              )}
+            </List>
           )}
           <View style={{ gap: tokens.space['2'] }}>
             <List header={t('money.dues.deductionsTitle')}>

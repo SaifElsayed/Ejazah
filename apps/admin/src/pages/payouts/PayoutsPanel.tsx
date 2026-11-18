@@ -5,7 +5,8 @@
 // date), and the order and the student behind it (the order opens on the payments monitor); «عليه»,
 // one row per refund on his orders with the refund as recorded, his share of it, and the closing
 // case's reason with its link (`/cases?case=`). Each release row ends with its actions: «تم الصرف»
-// on a written due row (`MarkDialog`); a due release the sweep has not written yet says it will be.
+// on a written due row (`MarkDialog`); a due release the sweep has not written yet says it will be;
+// «التراجع عن الصرف» on a written paid row (`UnmarkDialog`; the owner's «موافق», 2026-11-18).
 import { type Piasters, piasters } from '@ijazah/money';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -24,6 +25,7 @@ import { errorMessageKey } from '../../lib/error-message';
 import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { MarkDialog } from './MarkDialog';
+import { UnmarkDialog } from './UnmarkDialog';
 import {
   type PayoutDeductionRow,
   type PayoutReleaseRow,
@@ -47,8 +49,9 @@ export function PayoutsPanel({ teacherUserId }: { readonly teacherUserId: string
   return <Skeleton shape="block" />;
 }
 
-/** The release open in «تم الصرف»'s dialog, with its words. */
+/** The release open in «تم الصرف»'s or «التراجع عن الصرف»'s dialog, with its words. */
 interface Marking {
+  readonly kind: 'mark' | 'unmark';
   readonly releaseId: string;
   readonly lead: string;
 }
@@ -90,28 +93,30 @@ function TeacherPayoutsPanel({ detail }: { readonly detail: PayoutsDetail }) {
 
   /** What the administrator can do on a release row, by its state. */
   const actionsOf = (release: PayoutReleaseRow) => {
-    if (release.state !== 'due') return null;
+    if (release.state === 'held') return null;
     if (release.releaseId === undefined) {
-      return (
+      return release.state === 'due' ? (
         <span className="text-caption tone-muted">
           {t('admin.money.payouts.detail.dueNotWritten')}
         </span>
-      );
+      ) : null;
     }
     const { releaseId } = release;
-    return (
+    const lead = t('admin.money.payouts.mark.lead', {
+      part: t(PART[release.part]),
+      amount: pounds(piasters(release.amount_piasters)),
+    });
+    return release.state === 'due' ? (
       <Button
         label={t('admin.money.payouts.mark.action')}
         variant="primary"
-        onPress={() =>
-          setMarking({
-            releaseId,
-            lead: t('admin.money.payouts.mark.lead', {
-              part: t(PART[release.part]),
-              amount: pounds(piasters(release.amount_piasters)),
-            }),
-          })
-        }
+        onPress={() => setMarking({ kind: 'mark', releaseId, lead })}
+      />
+    ) : (
+      <Button
+        label={t('admin.money.payouts.unmark.action')}
+        variant="secondary"
+        onPress={() => setMarking({ kind: 'unmark', releaseId, lead })}
       />
     );
   };
@@ -247,14 +252,22 @@ function TeacherPayoutsPanel({ detail }: { readonly detail: PayoutsDetail }) {
           )}
         </section>
       </Panel>
-      {marking === null ? null : (
+      {marking?.kind === 'mark' ? (
         <MarkDialog
           releaseId={marking.releaseId}
           teacher={detail.teacher.displayName}
           lead={marking.lead}
           onClose={() => setMarking(null)}
         />
-      )}
+      ) : null}
+      {marking?.kind === 'unmark' ? (
+        <UnmarkDialog
+          releaseId={marking.releaseId}
+          teacher={detail.teacher.displayName}
+          lead={marking.lead}
+          onClose={() => setMarking(null)}
+        />
+      ) : null}
     </>
   );
 }

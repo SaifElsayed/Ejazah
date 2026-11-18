@@ -6,8 +6,11 @@
 // with its date) and the order and student behind it; «عليه» with each refund's reason, its case's
 // link, the refund as recorded and the teacher's share; the payout account masked. «تم الصرف» on a
 // written due row only: its confirmation says the transfer is made by hand in Paymob's dashboard,
-// and it sends `payouts.mark` once with a key; a refusal is said in words. The sidebar's entry right
-// after the payments monitor, and the link on a teacher's record in `/users`.
+// and it sends `payouts.mark` once with a key; a refusal is said in words. «التراجع عن الصرف» on a
+// written paid row only (the owner's «موافق», 2026-11-18): a mandatory reason, trimmed, 1 to the
+// contract's 1,000 characters, sent once with a key through `payouts.unmark`; a refusal in words.
+// The sidebar's entry right after the payments monitor, and the link on a teacher's record in
+// `/users`.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -193,7 +196,7 @@ const studentRecord = {
 
 function fakeApi() {
   const api = {
-    payouts: { list: query(), get: query(), mark: mutation() },
+    payouts: { list: query(), get: query(), mark: mutation(), unmark: mutation() },
     users: { list: query(), get: query() },
     home: { summary: query() },
     auth: { me: query() },
@@ -206,6 +209,7 @@ function fakeApi() {
   });
   api.payouts.get.query.mockResolvedValue(detail);
   api.payouts.mark.mutate.mockResolvedValue(undefined);
+  api.payouts.unmark.mutate.mockResolvedValue(undefined);
   api.users.list.query.mockResolvedValue({ items: [] });
   api.users.get.query.mockImplementation(async (input) =>
     (input as { targetUserId: string }).targetUserId === T1 ? teacherRecord : studentRecord,
@@ -494,6 +498,100 @@ describe('«تم الصرف» (DEC-89)', () => {
     fireEvent.click(dialog.getByRole('button', { name: ar('admin.money.payouts.mark.confirm') }));
     expect(await dialog.findByText(ar(key, values))).toBeTruthy();
     expect(api.payouts.mark.mutate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('«التراجع عن الصرف» (DEC-89; the owner’s «موافق», 2026-11-18)', () => {
+  /** Opens the undo's sheet on the paid row; the sheet. */
+  async function openedUndo(api = fakeApi()) {
+    open(api, `/payouts?teacher=${T1}`);
+    const panel = await detailPanel();
+    fireEvent.click(panel.getByRole('button', { name: ar('admin.money.payouts.unmark.action') }));
+    return within(await screen.findByRole('dialog'));
+  }
+  const reasonField = (dialog: ReturnType<typeof within>) =>
+    dialog.getByLabelText(ar('admin.money.payouts.unmark.reasonLabel'));
+  const confirmOf = (dialog: ReturnType<typeof within>) =>
+    dialog.getByRole('button', { name: ar('admin.money.payouts.unmark.confirm') });
+
+  it('is offered on the written paid row only', async () => {
+    open(fakeApi(), `/payouts?teacher=${T1}`);
+    const panel = await detailPanel();
+    const buttons = panel.getAllByRole('button', { name: ar('admin.money.payouts.unmark.action') });
+    expect(buttons).toHaveLength(1);
+    expect(
+      within(releaseRow(panel, ar('admin.money.payouts.part.teacherDropout'))).getByRole('button', {
+        name: ar('admin.money.payouts.unmark.action'),
+      }),
+    ).toBe(buttons[0]);
+  });
+
+  it('asks for a reason: nothing is sent while it is empty, spaces only, or past 1,000 characters', async () => {
+    const api = fakeApi();
+    const dialog = await openedUndo(api);
+    expect(dialog.getByText(ar('admin.money.payouts.unmark.effect'))).toBeTruthy();
+    expect(confirmOf(dialog).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(reasonField(dialog), { target: { value: '   ' } });
+    expect(confirmOf(dialog).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(reasonField(dialog), { target: { value: 'x'.repeat(1001) } });
+    expect(confirmOf(dialog).hasAttribute('disabled')).toBe(true);
+    expect(
+      dialog.getByText(ar('admin.money.payouts.unmark.reasonTooLong', { max: 1000 })),
+    ).toBeTruthy();
+    fireEvent.click(confirmOf(dialog));
+    fireEvent.change(reasonField(dialog), { target: { value: 'x'.repeat(1000) } });
+    expect(confirmOf(dialog).hasAttribute('disabled')).toBe(false);
+    expect(api.payouts.unmark.mutate).not.toHaveBeenCalled();
+  });
+
+  it('sends the undo once with the trimmed reason and a key, then reads the page again', async () => {
+    const api = fakeApi();
+    const dialog = await openedUndo(api);
+    fireEvent.change(reasonField(dialog), { target: { value: '  سُجّل على المعلم الخطأ  ' } });
+    fireEvent.click(confirmOf(dialog));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.payouts.unmark.mutate).toHaveBeenCalledTimes(1);
+    expect(api.payouts.unmark.mutate).toHaveBeenCalledWith({
+      releaseId: R2,
+      reason: 'سُجّل على المعلم الخطأ',
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+    expect(api.payouts.mark.mutate).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.payouts.get.query).toHaveBeenCalledTimes(2));
+  });
+
+  it('closes with nothing sent on «إلغاء»', async () => {
+    const api = fakeApi();
+    const dialog = await openedUndo(api);
+    fireEvent.change(reasonField(dialog), { target: { value: 'سبب' } });
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.money.payouts.unmark.cancel') }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.payouts.unmark.mutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['NOT_FOUND', [], 'admin.money.payouts.unmark.refused.notFound', undefined],
+    [
+      'CONFLICT',
+      [{ path: 'releaseId', code: 'not_marked' }],
+      'admin.money.payouts.unmark.refused.notMarked',
+      undefined,
+    ],
+    ['CONFLICT', [], 'admin.shared.keyReused', undefined],
+    [
+      'RATE_LIMITED',
+      [{ path: 'retryAfterSeconds', code: '61' }],
+      'admin.common.rateLimitedIn',
+      { count: 2 },
+    ],
+  ] as const)('a refusal %s %j is said in words', async (code, details, key, values) => {
+    const api = fakeApi();
+    api.payouts.unmark.mutate.mockRejectedValue(refusal(code, details));
+    const dialog = await openedUndo(api);
+    fireEvent.change(reasonField(dialog), { target: { value: 'سبب' } });
+    fireEvent.click(confirmOf(dialog));
+    expect(await dialog.findByText(ar(key, values))).toBeTruthy();
+    expect(api.payouts.unmark.mutate).toHaveBeenCalledTimes(1);
   });
 });
 

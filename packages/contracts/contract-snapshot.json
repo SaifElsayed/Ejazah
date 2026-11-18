@@ -4847,6 +4847,7 @@
           "$.deductions[]": { "type": "object" },
           "$.deductions[].caseReason": { "type": "string" },
           "$.deductions[].share_piasters": { "required": true, "type": "integer" },
+          "$.disputeWindowHours": { "required": true, "type": "integer" },
           "$.held_piasters": { "required": true, "type": "integer" },
           "$.paid_piasters": { "required": true, "type": "integer" },
           "$.releases": { "required": true, "type": "array" },

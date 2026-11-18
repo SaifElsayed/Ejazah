@@ -1832,6 +1832,21 @@
           "takenOff": "Taken off (refunds to students)",
           "title": "Totals for all teachers"
         },
+        "unmark": {
+          "action": "Undo the payment mark",
+          "cancel": "Cancel",
+          "confirm": "Undo the payment mark",
+          "effect": "The payment mark is removed and the release is due again, awaiting payment. This moves no money in Paymob.",
+          "footer": "The undo and its reason are recorded under your name in the audit log.",
+          "reasonHint": "From 1 to {max} characters.",
+          "reasonLabel": "Reason for the undo",
+          "reasonTooLong": "The reason is longer than {max} characters.",
+          "refused": {
+            "notFound": "This release was not found. Nothing changed.",
+            "notMarked": "This release is not marked paid. Nothing changed."
+          },
+          "title": "Undo the payment mark of {teacher}'s release"
+        },
         "userLink": "Teacher payouts"
       },
       "caseAmount": {

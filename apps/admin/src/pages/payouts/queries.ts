@@ -51,3 +51,14 @@ export function useMarkPaid(releaseId: string, idempotencyKey: string) {
     onSuccess: () => queries.invalidateQueries({ queryKey: PAYOUTS }),
   });
 }
+
+/** «التراجع عن الصرف» on one marked release, with its reason, under the key its sheet minted. */
+export function useUnmarkPaid(releaseId: string, idempotencyKey: string) {
+  const { client } = useAdmin();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) =>
+      client.api.payouts.unmark.mutate({ releaseId, reason, idempotencyKey }),
+    onSuccess: () => queries.invalidateQueries({ queryKey: PAYOUTS }),
+  });
+}

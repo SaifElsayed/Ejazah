@@ -281,7 +281,7 @@ export function createPayouts({
     const byEnrollment = new Map(own.map((one) => [one.facts.enrollment.enrollmentId, one]));
     // His own refunded orders only, as his own releases.
     const ownRefunded = refunded.filter(({ enrollmentId }) => byEnrollment.has(enrollmentId));
-    return { lines, refunded: ownRefunded, byEnrollment, now };
+    return { lines, refunded: ownRefunded, byEnrollment, now, windowHours };
   };
 
   const refusal = (
@@ -302,7 +302,10 @@ export function createPayouts({
 
   return {
     teacherDues: async (tx, teacherUserId) => {
-      const { lines, refunded, byEnrollment } = await teacherPicture(tx, teacherUserId);
+      const { lines, refunded, byEnrollment, windowHours } = await teacherPicture(
+        tx,
+        teacherUserId,
+      );
       return {
         held_piasters: toPlainNumber(amountsIn(lines, 'held')),
         paid_piasters: toPlainNumber(amountsIn(lines, 'paid')),
@@ -321,6 +324,8 @@ export function createPayouts({
             ...(closing === undefined ? {} : { caseReason: closing.reason }),
           };
         }),
+        // The window as read at this request (the owner, 2026-11-18): the held line's hours.
+        disputeWindowHours: windowHours,
       };
     },
 

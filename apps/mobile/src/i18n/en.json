@@ -436,7 +436,7 @@
         "paid": "Paid"
       },
       "heldUntil": "Falls due on {date} at {time}, if no complaint is opened",
-      "heldAfterLast": "Falls due when the complaint window after the last session ends, if no complaint is opened",
+      "heldAfterLast": "Falls due {hours, plural, one {# hour} other {# hours}} after the last session, if no complaint is opened",
       "heldWaitsForCase": "On hold until the open complaint is closed",
       "dueAwaiting": "Awaiting the administration's payment",
       "paidOn": "Paid on {date}",

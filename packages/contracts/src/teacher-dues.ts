@@ -53,6 +53,12 @@ export const teacherDuesGetOutput = z.object({
   paid_piasters: amountPiasters,
   releases: z.array(teacherDuesRelease),
   deductions: z.array(teacherDuesDeduction),
+  /**
+   * The dispute window in hours (SRS §3.14, `dispute_window_hours`, 72 by default), read at this
+   * request: what a held release with no date yet says («بعد آخر حصة بـ 72 ساعة»; the owner,
+   * 2026-11-18). Added, additively (R-API-9).
+   */
+  disputeWindowHours: z.int().min(1),
 });
 
 export type ShareReleaseMilestone = z.infer<typeof shareReleaseMilestone>;
