@@ -8,16 +8,12 @@
 //   `standing_reason_unmatched` of the ids, the status and the action, never the reason's text: a
 //   standing set by a case ruling (`complaint.decided`, `dispute.resolved`, which target the
 //   dispute, not the user) leaves an older entry newest, whose reason would be stale.
-// - `latestStandingReasonOf` reads the newest entry targeting the user among the standing actions,
-//   another user's entries and other actions left out (on ijazah_integrity, rolled back).
-import { randomUUID } from 'node:crypto';
+// - `latestStandingReasonOf` over `audit_logs` is proven in `audit.repository.spec.ts`, admin's
+//   repository spec (R-API-6; #146's CI, the follow-up under T009 and T007).
+import { describe, expect, it } from 'vitest';
 
-import { afterAll, describe, expect, it } from 'vitest';
-
-import { closeDatabase, type Transaction } from '../../platform/db/prisma.repository.js';
+import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { RequestDetail } from '../certification/index.js';
-import { openSpecDatabase, rolledBack } from './__fixtures__/admin.js';
-import { latestStandingReasonOf } from './audit.repository.js';
 import {
   composeIjazahRequests,
   type IjazahRequestsComposition,
@@ -151,57 +147,5 @@ describe("ijazahRequests.get's standing reason (FR-628, Q-C4 (a))", () => {
       action: null,
       reason: 'standing_reason_unmatched',
     });
-  });
-});
-
-describe('latestStandingReasonOf over audit_logs (Q-C4 (a))', { tags: ['database'] }, () => {
-  const database = openSpecDatabase();
-  afterAll(() => closeDatabase(database));
-
-  async function administrator(tx: Transaction): Promise<string> {
-    const { id } = await tx.adminUser.create({
-      data: {
-        email: `probe-${randomUUID()}@example.invalid`,
-        mfaSecretEncrypted: Buffer.from('probe'),
-        displayName: 'Probe',
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    return id;
-  }
-
-  async function entry(
-    tx: Transaction,
-    adminId: string,
-    action: string,
-    targetType: string,
-    targetId: string,
-    reason: string | null,
-  ): Promise<void> {
-    await tx.auditLog.create({
-      data: { adminId, action, targetType, targetId, targetLabel: `probe · ${targetId}`, reason },
-    });
-  }
-
-  it('answers the newest standing entry on the user, with its action and reason', async () => {
-    const teacher = randomUUID();
-    const answer = await rolledBack(database, async (tx) => {
-      const adminId = await administrator(tx);
-      await entry(tx, adminId, 'teacher.suspend', 'user', teacher, 'أول');
-      await entry(tx, adminId, 'teacher.reinstate', 'user', teacher, 'ثان');
-      await entry(tx, adminId, 'user.viewed', 'user', teacher, null);
-      await entry(tx, adminId, 'dispute.resolved', 'dispute', randomUUID(), 'حكم');
-      await entry(tx, adminId, 'teacher.ban', 'user', randomUUID(), 'غيره');
-      return latestStandingReasonOf(tx, teacher);
-    });
-    expect(answer).toEqual({ action: 'teacher.reinstate', reason: 'ثان' });
-  });
-
-  it('answers null for a user with no standing entry', async () => {
-    const answer = await rolledBack(database, async (tx) =>
-      latestStandingReasonOf(tx, randomUUID()),
-    );
-    expect(answer).toBeNull();
   });
 });

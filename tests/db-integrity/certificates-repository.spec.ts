@@ -13,23 +13,30 @@
 //
 // Observed red: every case against the stub; the filters against the named mutants of
 // `certificates.repository.ts` (ejazah-tools\b46\runs\lane-d\mutants\).
+//
+// Moved here from `apps/api/src/modules/certification/certificates.repository.spec.ts` (#146's CI,
+// the follow-up under T009 and T007): its world writes identity's, admin's, catalog's and
+// booking's tables, which only a file outside `apps/api` may do (R-API-6). It reads through
+// certification's entry (R-API-3): `certificatesStore.ofParty` and `.byId` are the repository's
+// `certificatesOfParty` and `certificateById`, bound as the service reads them.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  certificatesStore,
+  publicCredentialsOf,
+} from '../../apps/api/src/modules/certification/index';
+import {
   closeDatabase,
   type Database,
   openDatabase,
   type Transaction,
-} from '../../platform/db/prisma.repository.js';
-import { specDatabaseUrl } from '../../platform/db/spec-database.fixtures.js';
-import {
-  certificateById,
-  certificatesOfParty,
-  publicCredentialsOf,
-} from './certificates.repository.js';
+} from '../../apps/api/src/platform/db/prisma.repository';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
+
+const { ofParty: certificatesOfParty, byId: certificateById } = certificatesStore;
 
 let database: Database;
 
