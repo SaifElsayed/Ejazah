@@ -1872,6 +1872,26 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "payments.caseAmount": {
+        "input": { "$": { "type": "object" }, "$.caseId": { "required": true, "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.amount": { "type": "object" },
+          "$.amount.cause": {
+            "required": true,
+            "type": "string",
+            "values": ["ijazah_dropout", "recitation_dropout", "student_complaint_close"]
+          },
+          "$.amount.held_piasters": { "required": true, "type": "integer" },
+          "$.amount.platformPart_piasters": { "required": true, "type": "integer" },
+          "$.amount.refund_piasters": { "required": true, "type": "integer" },
+          "$.amount.refunded_piasters": { "required": true, "type": "integer" },
+          "$.amount.release_piasters": { "required": true, "type": "integer" },
+          "$.amount.released_piasters": { "required": true, "type": "integer" },
+          "$.amount.total_piasters": { "required": true, "type": "integer" }
+        }
+      },
       "payments.get": {
         "input": {
           "$": { "type": "object" },

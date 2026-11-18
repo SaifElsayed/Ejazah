@@ -4,13 +4,16 @@
 // audit entry described, the output parsed by its schema (R-API-1), which strips any field it does
 // not name.
 //
-// TWO READS AND NOTHING ELSE (FR-401). Both are queries; no procedure here creates, moves, refunds
+// READS AND NOTHING ELSE (FR-401); 003:T110 adds the third, `caseAmount`. All are queries; no
+// procedure here creates, moves, refunds
 // or confirms an order or an enrollment, and none ever will (FR-PAYG-8, FR-PAYG-11). Each call
 // writes its one audit entry, as every administrator call must (`adminProcedure`, plan.md point 2):
 // `payments.listed` naming the reader, a list having no single target, and `payments.viewed` naming
 // the order. The actor is the session's administrator, never the input's (FR-402).
 // Mounted under `payments` by `admin.router.ts`.
 import {
+  paymentsCaseAmountInput,
+  paymentsCaseAmountOutput,
   paymentsGetInput,
   paymentsGetOutput,
   paymentsListInput,
@@ -38,4 +41,19 @@ export const paymentsAdminRouter = createAdminRouter({
       return ctx.services.payments.get(ctx.tx, input.paymentId);
     },
   ),
+
+  // 003:T110 (ADR 0025 D4, SRS DEC-85, DEC-86): what a compensation case that closes an enrollment
+  // shows, a third read. Audited `payments.case_amount_viewed` on the case (`dispute`), as
+  // `case.viewed` names it; it moves no money (DEC-82).
+  caseAmount: adminProcedure({
+    input: paymentsCaseAmountInput,
+    output: paymentsCaseAmountOutput,
+  }).query(({ ctx, input }) => {
+    ctx.audit.record({
+      action: 'payments.case_amount_viewed',
+      targetType: 'dispute',
+      targetId: input.caseId,
+    });
+    return ctx.services.payments.caseAmount(ctx.tx, input.caseId);
+  }),
 });

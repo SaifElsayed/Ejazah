@@ -597,3 +597,17 @@ describe('003:T105: the payouts page’s actions by name', () => {
     },
   );
 });
+
+// 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): `payments.caseAmount`'s read, audited on the case
+// (`dispute`, as `case.viewed`), so no new target type.
+describe('003:T110: the case amount’s read by name', () => {
+  it('payments.case_amount_viewed reads «عرض مبلغ حالة تعويض» and "View a case’s amount", never the stored code', () => {
+    const action = 'payments.case_amount_viewed';
+    expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(
+      'عرض مبلغ حالة تعويض',
+    );
+    expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(
+      'View a case’s amount',
+    );
+  });
+});

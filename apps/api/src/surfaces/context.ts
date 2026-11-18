@@ -218,6 +218,8 @@ import type { TeacherProfileServices } from '../modules/identity/index.js';
 import type { CheckoutServices } from '../modules/payments/index.js';
 // 003:T105: the teacher's «مستحقاتي» and the administrators' «تحويلات المعلمين», payments'.
 import type { AdminPayouts, TeacherDues } from '../modules/payments/index.js';
+// 003:T110: `payments.caseAmount`, what a compensation case that closes an enrollment shows.
+import type { paymentsCaseAmountOutput } from '@ijazah/contracts/admin';
 import type { SessionsServices } from '../modules/sessions/index.js';
 import type { VerificationServices } from '../modules/verification/index.js';
 
@@ -583,6 +585,8 @@ export interface AdminSurfaceServices {
       query: z.output<typeof paymentsListInput>,
     ): Answer<typeof paymentsListOutput>;
     get(tx: Transaction, paymentId: string): Answer<typeof paymentsGetOutput>;
+    // 003:T110 (ADR 0025 D4): the case's amount, a third read on the call's transaction.
+    caseAmount(tx: Transaction, caseId: string): Answer<typeof paymentsCaseAmountOutput>;
   };
   /** An approved teacher's standing (FR-165; T068), the identity module's. */
   readonly teachers: {

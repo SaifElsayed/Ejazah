@@ -344,6 +344,25 @@ describe('the closes that release (Q-5 (a))', () => {
     }
   });
 
+  it('releases a missed session’s share too on a recitation dropout (003:T110, Q-C3 (b): 4 done + 1 missed = 5 × 700 EGP)', () => {
+    const sessions = sessionsWith(4).map((one) =>
+      one.sequenceNumber === 5
+        ? { ...one, outcome: 'student_no_show' }
+        : one.sequenceNumber > 5
+          ? { ...one, outcome: 'cancelled_by_admin' }
+          : one,
+    );
+    expect(plan(closed('teacher_ended', sessions))).toEqual([
+      {
+        milestone: 'teacher_dropout',
+        amount: 350_000,
+        dueAt: windowAfter(5),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
   it('releases the delivered and missed sessions’ share on a complaint against the student', () => {
     const sessions = [
       at(1, 'done'),

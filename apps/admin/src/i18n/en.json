@@ -1744,6 +1744,7 @@
     },
     "money": {
       "audit": {
+        "caseAmountViewed": "View a case’s amount",
         "payoutReleaseMarked": "Mark a teacher's release paid",
         "payoutReleaseUnmarked": "Undo a teacher's release paid mark",
         "payoutsListed": "View teacher payouts",
@@ -1832,6 +1833,22 @@
           "title": "Totals for all teachers"
         },
         "userLink": "Teacher payouts"
+      },
+      "caseAmount": {
+        "title": "The amount closing the enrollment gives",
+        "cause": {
+          "ijazahDropout": "The teacher’s dropout on the ijazah track: the student gets back all they paid.",
+          "recitationDropout": "The teacher’s dropout on recitation: the sessions not taken are refunded to the student, and the teacher is released the share of those taken.",
+          "studentComplaintClose": "Closed on a complaint against the student: the sessions after the close are refunded to the student, and the teacher is released the share of the sessions attended and missed up to the close."
+        },
+        "total": "Refunded to the student in all",
+        "held": "The teacher’s share the gateway still holds (refunded through the gateway)",
+        "platformPart": "The platform’s part (refunded through the gateway)",
+        "released": "The teacher’s share already released (paid by the administration outside the app)",
+        "refund": "Refunded to the student",
+        "release": "Released to the teacher",
+        "refundedSoFar": "Refunded so far",
+        "note": "An administrator decides the case and executes the amount by hand in the gateway’s dashboard; nothing here moves money."
       },
       "testMode": "Test version"
     },
