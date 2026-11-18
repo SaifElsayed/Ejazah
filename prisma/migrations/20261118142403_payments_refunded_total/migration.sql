@@ -10,8 +10,11 @@
 -- flag's own event, at its end. Members are permanent (R-API-9).
 --
 -- Every existing row takes the default 0, which the check admits (the gross is never negative), so
--- nothing it would refuse exists before it runs. No statement here uses the new member, so it needs
--- no COMMIT of its own.
+-- nothing it would refuse exists before it runs. Then an order already `refunded` (a whole refund
+-- recorded before this, T073's) takes its gross as its total, so «`refunded` ⇔ the total is the
+-- gross» holds on old rows too; the update touches only rows that exist when it runs, and
+-- `gross_piasters` is NOT NULL, so it needs no guard. No statement here uses the new member, so it
+-- needs no COMMIT of its own.
 
 -- AlterEnum
 ALTER TYPE "payment_event_type" ADD VALUE 'refund_reported';
@@ -19,6 +22,9 @@ ALTER TYPE "payment_event_type" ADD VALUE 'refund_reported';
 -- AlterTable
 ALTER TABLE "payments" ADD COLUMN     "refund_reported_at" TIMESTAMPTZ(6),
 ADD COLUMN     "refunded_piasters" BIGINT NOT NULL DEFAULT 0;
+
+-- Hand-written: an order refunded before the total existed refunded its whole gross.
+UPDATE "payments" SET "refunded_piasters" = "gross_piasters" WHERE "status" = 'refunded';
 
 -- Hand-written: rule 61. The refunded total from 0 to the order's gross.
 ALTER TABLE "payments" ADD CONSTRAINT "payments_refunded_check"

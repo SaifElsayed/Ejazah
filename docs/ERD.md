@@ -1409,4 +1409,4 @@ Amended on 2026-11-18 by T102 of `specs/003-booking/tasks.md` (B-M2), on the own
 
 | # | Change | Migration |
 |---|---|---|
-| 56 | §7 `payments.refunded_piasters` (bigint, NOT NULL, default 0) and `payments.refund_reported_at` (timestamptz, nullable), and §15 rule 61, check `payments_refunded_check`: the order's refunded total within 0 and the gross, the order `refunded` when it reaches the gross; §7 `payment_events.event_type` gains `refund_reported` at its end, a refund flagged on the original payment with no amount (SRS FR-PAYG-7 as amended) | `20261118142403_payments_refunded_total` (B-M2) |
+| 56 | §7 `payments.refunded_piasters` (bigint, NOT NULL, default 0) and `payments.refund_reported_at` (timestamptz, nullable), and §15 rule 61, check `payments_refunded_check`: the order's refunded total within 0 and the gross, the order `refunded` when it reaches the gross, an order already `refunded` taking its gross as its total in the migration; §7 `payment_events.event_type` gains `refund_reported` at its end, a refund flagged on the original payment with no amount (SRS FR-PAYG-7 as amended) | `20261118142403_payments_refunded_total` (B-M2) |
