@@ -11,6 +11,7 @@ import type { ShareReleaseMilestone } from '@ijazah/contracts';
 import { type Piasters, piasters, toPlainNumber } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { keyShareRows } from '../../platform/db/row-lock.js';
 
 type Client = Pick<Transaction, 'payment' | 'teacherShareRelease'>;
 
@@ -253,12 +254,19 @@ export async function releasesAfter(
 /**
  * Writes the due releases, each at most once (rule 62, `ON CONFLICT DO NOTHING`); answers the rows
  * this call wrote, none of those another write had already made.
+ *
+ * T005 rule 2 (PR #149's review, round 1, Major 1; kernel.md, the sweep's insert row): the rows'
+ * foreign keys key-share the enrollment before the account, so the teachers' accounts are
+ * key-shared first, one call in id order, as the video webhook's participant event does; the
+ * insert's own key-share on the enrollment then comes after the account, in the one order.
  */
 export async function insertDueReleases(
-  tx: Client,
+  tx: Transaction,
   releases: readonly DueRelease[],
 ): Promise<readonly ReleaseRow[]> {
   if (releases.length === 0) return [];
+  const teachers = [...new Set(releases.map(({ teacherUserId }) => teacherUserId))].toSorted();
+  await keyShareRows(tx, 'users', teachers);
   const rows = await tx.teacherShareRelease.createManyAndReturn({
     data: releases.map(({ enrollmentId, teacherUserId, milestone, amount_piasters, dueAt }) => ({
       enrollmentId,
