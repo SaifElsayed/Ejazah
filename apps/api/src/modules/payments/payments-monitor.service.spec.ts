@@ -51,6 +51,8 @@ function order(n: number, overrides: Partial<MonitorOrderRow> = {}): MonitorOrde
     netPiasters: null,
     teacherShareRatePercent: null,
     teacherSharePiasters: null,
+    refundedPiasters: 0n,
+    refundReportedAt: null,
     currency: 'EGP',
     createdAt: new Date(CREATED[n - 1] ?? '2026-11-09T10:00:00Z'),
     ...overrides,
@@ -247,6 +249,7 @@ describe('payments.list', () => {
         gross_piasters: piasters(120_000),
         gatewayFee_piasters: piasters(3_480),
         net_piasters: piasters(116_520),
+        refunded_piasters: piasters(0),
         status: 'paid',
         enrollmentCancelled: true,
       },
@@ -256,6 +259,7 @@ describe('payments.list', () => {
         createdAt: '2026-11-01T10:00:00.000Z',
         student: { displayName: 'آمال علي' },
         gross_piasters: piasters(120_000),
+        refunded_piasters: piasters(0),
         status: 'created',
         enrollmentCancelled: false,
       },
@@ -271,6 +275,15 @@ describe('payments.list', () => {
     });
     expect(answer.items[1]).not.toHaveProperty('teacherShareRatePercent');
     expect(answer.items[1]).not.toHaveProperty('teacherShare_piasters');
+  });
+
+  it('answers each order’s refunded total, a partly refunded order still paid (003:T102, DEC-82)', async () => {
+    const partly = order(2, { status: 'paid', refundedPiasters: 30_000n });
+    const answer = await serviceOver(storeOf([order(1), partly])).list(tx, {});
+    expect(answer.items.map((item) => [item.status, item.refunded_piasters])).toEqual([
+      ['paid', piasters(30_000)],
+      ['created', piasters(0)],
+    ]);
   });
 
   it('says a cancelled enrollment only on a paid order: an unpaid one of it is just unpaid', async () => {
@@ -359,6 +372,7 @@ describe('payments.get', () => {
       gross_piasters: piasters(120_000),
       gatewayFee_piasters: piasters(3_480),
       net_piasters: piasters(116_520),
+      refunded_piasters: piasters(0),
       currency: 'EGP',
       student: { displayName: 'آمال علي' },
       enrollment: {
@@ -423,6 +437,22 @@ describe('payments.get', () => {
     const before = await serviceOver(storeOf(orders)).get(tx, orderId(1));
     expect(before).not.toHaveProperty('teacherShareRatePercent');
     expect(before).not.toHaveProperty('teacherShare_piasters');
+  });
+
+  it('answers the refunded total and, once set, when the gateway flagged a refund with no amount (003:T102, Q-2 (a))', async () => {
+    const flagged = order(3, {
+      status: 'paid',
+      refundedPiasters: 30_000n,
+      refundReportedAt: new Date('2026-11-18T09:00:00Z'),
+    });
+    const answer = await serviceOver(storeOf([orders[0]!, flagged, refunded])).get(tx, orderId(3));
+    expect(answer).toMatchObject({
+      status: 'paid',
+      refunded_piasters: piasters(30_000),
+      refundReportedAt: '2026-11-18T09:00:00.000Z',
+    });
+    const unflagged = await serviceOver(storeOf(orders)).get(tx, orderId(3));
+    expect(unflagged).not.toHaveProperty('refundReportedAt');
   });
 
   it('answers an unpaid order with no fee, no net and no transaction', async () => {

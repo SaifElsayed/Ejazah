@@ -26,6 +26,9 @@ export interface MonitorOrderRow {
   /** 003:T104: the rate and the teacher's share kept on the order; null before the commission. */
   readonly teacherShareRatePercent: number | null;
   readonly teacherSharePiasters: bigint | null;
+  /** 003:T102 (DEC-82): the refunded total, and when a refund was first flagged with no amount. */
+  readonly refundedPiasters: bigint;
+  readonly refundReportedAt: Date | null;
   readonly currency: string;
   readonly createdAt: Date;
 }
@@ -73,6 +76,8 @@ export function orderPage(
       netPiasters: true,
       teacherShareRatePercent: true,
       teacherSharePiasters: true,
+      refundedPiasters: true,
+      refundReportedAt: true,
       currency: true,
       createdAt: true,
     },
@@ -97,6 +102,8 @@ export function monitoredOrderOf(
       netPiasters: true,
       teacherShareRatePercent: true,
       teacherSharePiasters: true,
+      refundedPiasters: true,
+      refundReportedAt: true,
       currency: true,
       createdAt: true,
     },
@@ -137,6 +144,8 @@ export function paidOrdersOf(
       netPiasters: true,
       teacherShareRatePercent: true,
       teacherSharePiasters: true,
+      refundedPiasters: true,
+      refundReportedAt: true,
       currency: true,
       createdAt: true,
     },

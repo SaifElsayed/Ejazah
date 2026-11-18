@@ -19,7 +19,9 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // T104 (ADR 0025 D1, SRS DEC-80, amending ADR 0007 D1's 0% commission) names `teacherShare`: the
 // teacher's share of an order, sent to the gateway as the split and kept on the order. T113 (SRS
 // DEC-88) names `average`: the package editor's average price per session of other teachers'
-// packages, for display only.
+// packages, for display only. 003:T102 (SRS DEC-82, ADR 0025 D3; the owner's «موافق (أ)» of
+// 2026-11-18) names `refundedTotal`: an order's refunded total after one more refund, refused past
+// the order's amount.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -169,6 +171,40 @@ export function average(amounts_piasters: readonly [Piasters, ...Piasters[]]): P
   );
   const whole = sum / count;
   return piasters(Number((sum % count) * 2n >= count ? whole + 1n : whole));
+}
+
+/** A refund that would take an order's refunded total past its gross (003:T102, DEC-82). */
+export class RefundPastGrossError extends Error {
+  constructor(
+    readonly total_piasters: Piasters,
+    readonly refund_piasters: Piasters,
+    readonly order_piasters: Piasters,
+  ) {
+    super(
+      `refundedTotal: a refund of ${String(refund_piasters)} on a refunded total of ` +
+        `${String(total_piasters)} passes the order's ${String(order_piasters)}`,
+    );
+    this.name = 'RefundPastGrossError';
+  }
+}
+
+/**
+ * An order's refunded total after one more refund (003:T102, ADR 0025 D3, SRS DEC-82): the total
+ * plus the refund, which the caller compares with the order's amount (`order_piasters`, its gross)
+ * to learn whether the whole order is refunded. A sum past the order's amount is refused with
+ * `RefundPastGrossError`, so nothing is recorded (ERD §15 rule 61 holds it in the database too).
+ * Exact in `bigint`, so a sum past the safe range is compared, never rounded.
+ */
+export function refundedTotal(
+  total_piasters: Piasters,
+  refund_piasters: Piasters,
+  order_piasters: Piasters,
+): Piasters {
+  const sum = BigInt(total_piasters) + BigInt(refund_piasters);
+  if (sum > BigInt(order_piasters)) {
+    throw new RefundPastGrossError(total_piasters, refund_piasters, order_piasters);
+  }
+  return piasters(Number(sum));
 }
 
 function refusalReason(value: number): string {

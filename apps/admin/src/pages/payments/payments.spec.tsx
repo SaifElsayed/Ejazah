@@ -44,6 +44,8 @@ const reported = {
   // 003:T104: the rate and the teacher's share kept on the order.
   teacherShareRatePercent: 70,
   teacherShare_piasters: 84_000,
+  // 003:T102: a partial refund recorded; the order stays paid.
+  refunded_piasters: 30_000,
   status: 'paid',
   enrollmentCancelled: false,
 } as const;
@@ -54,6 +56,7 @@ const unreported = {
   createdAt: '2026-11-02T10:00:00.000Z',
   student: { displayName: 'Huda Samir' },
   gross_piasters: 95_000,
+  refunded_piasters: 0,
   status: 'paid',
   enrollmentCancelled: true,
 } as const;
@@ -63,6 +66,7 @@ const created = {
   createdAt: '2026-11-01T10:00:00.000Z',
   student: { displayName: 'آمال علي' },
   gross_piasters: 120_000,
+  refunded_piasters: 0,
   status: 'created',
   enrollmentCancelled: false,
 } as const;
@@ -75,6 +79,7 @@ const detail = {
   status: 'paid',
   createdAt: '2026-11-02T10:00:00.000Z',
   gross_piasters: 95_000,
+  refunded_piasters: 0,
   currency: 'EGP',
   student: { displayName: 'Huda Samir' },
   enrollment: {
@@ -182,6 +187,7 @@ describe('AdminPayments (FR-400)', () => {
           'fee',
           'net',
           'teacherShare',
+          'refunded',
           'status',
         ] as const) {
           expect(
@@ -209,8 +215,9 @@ describe('AdminPayments (FR-400)', () => {
   it('draws a dash for the fee and the net of a paid order whose gateway reported neither, never 0, and marks its cancelled enrollment', async () => {
     open();
     const row = within(await rowOf(unreported.gatewayOrderId));
-    // The fee, the net and (003:T104) the teacher's share of an order created before the commission.
-    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(3);
+    // The fee, the net, (003:T104) the teacher's share of an order created before the commission,
+    // and (003:T102) a refunded total of 0.
+    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(4);
     expect(row.queryByText(ar('admin.common.amount', { amount: '0.00' }))).toBeNull();
     expect(row.getByText(ar('admin.common.amount', { amount: '950.00' }))).toBeTruthy();
     expect(row.getByText(ar('admin.status.payment.paid'))).toBeTruthy();
@@ -231,6 +238,17 @@ describe('AdminPayments (FR-400)', () => {
             }),
           ),
         ).toBeTruthy();
+      },
+    );
+  });
+
+  it('shows each order’s refunded total, a partly refunded order still paid (003:T102, DEC-82)', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const paid = within(await rowOf(reported.gatewayOrderId));
+        expect(paid.getByText(t('admin.common.amount', { amount: '300.00' }))).toBeTruthy();
+        expect(paid.getByText(t('admin.status.payment.paid'))).toBeTruthy();
       },
     );
   });
@@ -315,7 +333,8 @@ describe('an order’s detail (FR-400, FR-401)', () => {
     const { api, panel } = await opened();
     expect(api.payments.get.query).toHaveBeenCalledWith({ paymentId: P3 });
     expect(panel.getByText(ar('admin.common.amount', { amount: '950.00' }))).toBeTruthy();
-    expect(panel.getAllByText(ar('admin.payments.dash'))).toHaveLength(2);
+    // The fee, the net and (003:T102) a refunded total of 0.
+    expect(panel.getAllByText(ar('admin.payments.dash'))).toHaveLength(3);
     expect(panel.getByText('txn_9931')).toBeTruthy();
     expect(panel.getAllByText('paymob_order_3').length).toBeGreaterThan(0);
     expect(
@@ -440,6 +459,54 @@ describe('an order’s detail (FR-400, FR-401)', () => {
     });
     await within(aside).findByText(ar('admin.payments.detail.amountsTitle'));
     expect(within(aside).queryByText(ar('admin.payments.detail.teacherShare'))).toBeNull();
+  });
+
+  // 003:T102 (DEC-82; Q-2 (a)'s safety net): the refunded total, and, once the gateway flagged a
+  // refund with no amount, a line saying so; the timeline names the flag apart from a refund.
+  it('shows the refunded total and the gateway’s reported refund, in both languages (003:T102)', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        api.payments.get.query.mockResolvedValue({
+          ...detail,
+          refunded_piasters: 30_000,
+          refundReportedAt: '2026-11-03T09:00:00.000Z',
+          events: [
+            { eventType: 'paid', receivedAt: '2026-11-02T10:04:00.000Z' },
+            { eventType: 'refunded', receivedAt: '2026-11-03T08:00:00.000Z' },
+            { eventType: 'refund_reported', receivedAt: '2026-11-03T09:00:00.000Z' },
+          ],
+        });
+        return open(api, `/payments?payment=${P3}`);
+      },
+      async (t) => {
+        const aside = within(
+          await screen.findByRole('complementary', { name: t('admin.payments.detail.a11y') }),
+        );
+        expect(await aside.findByText(t('admin.payments.detail.refundedTotal'))).toBeTruthy();
+        expect(aside.getByText(t('admin.common.amount', { amount: '300.00' }))).toBeTruthy();
+        expect(aside.getByText(t('admin.payments.detail.refundReported'))).toBeTruthy();
+        const history = within(
+          aside.getByRole('region', { name: t('admin.payments.detail.a11yEvents') }),
+        );
+        const titles = history
+          .getAllByRole('listitem')
+          .map((item) => item.querySelector('strong')?.textContent);
+        expect(
+          titles.filter((title) => title === t('admin.payments.detail.events.refunded')),
+        ).toHaveLength(1);
+        expect(titles).toContain(t('admin.payments.detail.events.refundReported'));
+      },
+    );
+  });
+
+  it('draws no reported-refund line while the gateway has flagged none (003:T102)', async () => {
+    open(fakeApi(), `/payments?payment=${P3}`);
+    const aside = await screen.findByRole('complementary', {
+      name: ar('admin.payments.detail.a11y'),
+    });
+    expect(await within(aside).findByText(ar('admin.payments.detail.refundedTotal'))).toBeTruthy();
+    expect(within(aside).queryByText(ar('admin.payments.detail.refundReported'))).toBeNull();
   });
 
   it('says an enrollment with no hold has none', async () => {

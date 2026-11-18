@@ -65,9 +65,28 @@ export type GatewayEvent =
       readonly currency: string;
     }
   | {
-      readonly type: 'failed' | 'expired' | 'refunded';
+      readonly type: 'failed' | 'expired';
       readonly providerEventId: string;
       readonly gatewayOrderId: string;
+    }
+  | {
+      /**
+       * 003:T102 (Q-2 (a)'s safety net, DEC-82): a refund the gateway flagged on the original
+       * payment, which reports no signed refunded amount, so it carries none.
+       */
+      readonly type: 'refund_reported';
+      readonly providerEventId: string;
+      readonly gatewayOrderId: string;
+    }
+  | {
+      readonly type: 'refunded';
+      readonly providerEventId: string;
+      readonly gatewayOrderId: string;
+      /**
+       * 003:T102 (DEC-82, ADR 0025 D3): the refund's signed amount as the gateway reported it, a
+       * part of the order or all of it; `whole_order` for a void, which ends the whole order.
+       */
+      readonly refunded_piasters: Piasters | 'whole_order';
     }
   | {
       readonly type: 'recipient_verified';

@@ -47,7 +47,8 @@ const WEBHOOK_PATH = '/webhooks/payment';
 /** How long the page waits for the webhook's answer before it gives up. */
 const DELIVERY_TIMEOUT_MS = 10_000;
 
-type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded';
+// 003:T102 (DEC-82): `refund_reported` is a refund flagged on the original payment, with no amount.
+type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded' | 'refund_reported';
 
 /** The hosted page's three buttons: «ادفع», «فشل الدفع», «إلغاء». */
 export const STAND_IN_ACTIONS = ['pay', 'fail', 'cancel'] as const;
@@ -114,6 +115,14 @@ export interface PaidEventOptions extends EventOptions {
   readonly net_piasters?: Piasters | null;
 }
 
+export interface OrderEventOptions extends PaidEventOptions {
+  /**
+   * 003:T102 (DEC-82): a refunded event's amount, as a refund child reports it; `whole_order` as a
+   * void reports it. The order's whole amount by default.
+   */
+  readonly refunded_piasters?: Piasters | 'whole_order';
+}
+
 interface Order {
   readonly gross_piasters: Piasters;
   readonly currency: string;
@@ -139,8 +148,14 @@ const eventBody = z.discriminatedUnion('type', [
   }),
   z.object({
     id: z.string().min(1),
-    type: z.enum(['failed', 'expired', 'refunded']),
+    type: z.enum(['failed', 'expired', 'refund_reported']),
     order: z.string().min(1),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('refunded'),
+    order: z.string().min(1),
+    refunded_piasters: z.union([amount, z.literal('whole_order')]),
   }),
   z.object({
     id: z.string().min(1),
@@ -306,9 +321,16 @@ export class FakePaymentAdapter
           net_piasters: body.net_piasters,
           currency: body.currency,
         });
+      case 'refunded':
+        return Promise.resolve({
+          type: body.type,
+          providerEventId: body.id,
+          gatewayOrderId: body.order,
+          refunded_piasters: body.refunded_piasters,
+        });
       case 'failed':
       case 'expired':
-      case 'refunded':
+      case 'refund_reported':
         return Promise.resolve({
           type: body.type,
           providerEventId: body.id,
@@ -352,7 +374,7 @@ export class FakePaymentAdapter
   orderEvent(
     gatewayOrderId: string,
     type: OrderEventType,
-    options: PaidEventOptions = {},
+    options: OrderEventOptions = {},
   ): SignedEvent {
     const order = this.#orders.get(gatewayOrderId);
     if (order === undefined) throw new Error('unknown order: the stand-in did not create it.');
@@ -373,8 +395,16 @@ export class FakePaymentAdapter
               options.net_piasters === undefined ? order.gross_piasters : options.net_piasters,
             currency: order.currency,
           }
-        : { id, type, order: gatewayOrderId };
-    if (options.signature !== 'invalid') order.status = type;
+        : type === 'refunded'
+          ? {
+              id,
+              type,
+              order: gatewayOrderId,
+              refunded_piasters: options.refunded_piasters ?? order.gross_piasters,
+            }
+          : { id, type, order: gatewayOrderId };
+    // A reported refund moves nothing (003:T102): the order keeps its state.
+    if (options.signature !== 'invalid' && type !== 'refund_reported') order.status = type;
     return this.#signed(body, options);
   }
 

@@ -41,6 +41,8 @@ const ITEM = {
   createdAt: '2026-11-03T10:00:00.000Z',
   student: { displayName: 'آمال علي' },
   gross_piasters: 120_000,
+  // 003:T102: the refunded total, 0 until a refund is recorded.
+  refunded_piasters: 0,
   status: 'created',
   enrollmentCancelled: false,
 } as const;
@@ -51,6 +53,7 @@ const DETAIL = {
   status: 'created',
   createdAt: '2026-11-03T10:00:00.000Z',
   gross_piasters: 120_000,
+  refunded_piasters: 0,
   currency: 'EGP',
   student: { displayName: 'آمال علي' },
   enrollment: {

@@ -10,6 +10,8 @@ import {
   lowest,
   perSession,
   piasters,
+  RefundPastGrossError,
+  refundedTotal,
   teacherShare,
   toPlainNumber,
   type Piasters,
@@ -214,6 +216,54 @@ describe('teacherShare (T104, ADR 0025 D1, SRS DEC-80)', () => {
       expect(() => teacherShare(piasters(100), rate)).toThrow(RangeError);
       expect(() => teacherShare(piasters(100), rate)).toThrow(/teacherShare/);
     }
+  });
+});
+
+describe('refundedTotal (003:T102, ADR 0025 D3, SRS DEC-82)', () => {
+  it('adds a refund to the order’s refunded total', () => {
+    expect(toPlainNumber(refundedTotal(piasters(0), piasters(7_500), piasters(25_000)))).toBe(
+      7_500,
+    );
+    expect(toPlainNumber(refundedTotal(piasters(7_500), piasters(5_000), piasters(25_000)))).toBe(
+      12_500,
+    );
+  });
+
+  it('reaches the gross exactly, which the caller reads as the whole order refunded', () => {
+    expect(toPlainNumber(refundedTotal(piasters(10_000), piasters(15_000), piasters(25_000)))).toBe(
+      25_000,
+    );
+  });
+
+  it('refuses a refund that would pass the gross, naming the three amounts', () => {
+    const refusal = (() => {
+      try {
+        refundedTotal(piasters(20_000), piasters(5_001), piasters(25_000));
+      } catch (error: unknown) {
+        return error;
+      }
+      return undefined;
+    })();
+
+    expect(refusal).toBeInstanceOf(RefundPastGrossError);
+    expect(refusal).toMatchObject({
+      name: 'RefundPastGrossError',
+      total_piasters: 20_000,
+      refund_piasters: 5_001,
+      order_piasters: 25_000,
+    });
+  });
+
+  it('stays exact at the top of the safe range, and refuses a sum past it as past the gross', () => {
+    const top_piasters = piasters(Number.MAX_SAFE_INTEGER);
+    expect(
+      toPlainNumber(
+        refundedTotal(piasters(Number.MAX_SAFE_INTEGER - 1), piasters(1), top_piasters),
+      ),
+    ).toBe(Number.MAX_SAFE_INTEGER);
+    expect(() => refundedTotal(top_piasters, piasters(1), top_piasters)).toThrow(
+      RefundPastGrossError,
+    );
   });
 });
 
