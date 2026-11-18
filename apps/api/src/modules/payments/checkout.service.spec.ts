@@ -54,6 +54,8 @@ const settings: SettingsReader = {
         first_session_lead_hours: 24,
         slot_release_buffer_weeks: 0,
         teacher_share_percent: 70,
+        // 003:T105: the ijazah half's percent, the seed's.
+        ijazah_half_release_percent: 25,
       }[key],
     ),
 };
@@ -166,6 +168,10 @@ interface World {
   readonly payTargetError?: Error;
   /** T104: the teacher's share setting, when not the seed's 70. */
   readonly sharePercent?: number;
+  /** 003:T105: the enrollment a retry reads, when not the recitation one. */
+  readonly retryEnrollment?: CheckoutEnrollmentRow;
+  /** 003:T105: the ijazah half's percent setting, when not the seed's 25. */
+  readonly halfPercent?: number;
   /** T101: the teacher's verified payout recipient; none by default. */
   readonly recipient?: string | null;
 }
@@ -193,7 +199,10 @@ function setUp(world: World = {}) {
     retryTarget: async () => {
       log.push(['read target']);
       if (world.targetError !== undefined) throw world.targetError;
-      return { enrollment: enrollmentRow, hold: world.hold === undefined ? holdRow : world.hold };
+      return {
+        enrollment: world.retryEnrollment ?? enrollmentRow,
+        hold: world.hold === undefined ? holdRow : world.hold,
+      };
     },
     lockOrderTarget: async (_tx, target, stillPayable) => {
       log.push(['lock target', target.holdId, stillPayable(HOLD_EXPIRES)]);
@@ -312,10 +321,15 @@ function setUp(world: World = {}) {
   const reported: Error[] = [];
   const service = new CheckoutService({
     settings: {
-      read: (key, schema) =>
-        key === 'teacher_share_percent' && world.sharePercent !== undefined
-          ? Promise.resolve(schema.parse(world.sharePercent))
-          : settings.read(key, schema),
+      read: (key, schema) => {
+        if (key === 'teacher_share_percent' && world.sharePercent !== undefined) {
+          return Promise.resolve(schema.parse(world.sharePercent));
+        }
+        if (key === 'ijazah_half_release_percent' && world.halfPercent !== undefined) {
+          return Promise.resolve(schema.parse(world.halfPercent));
+        }
+        return settings.read(key, schema);
+      },
     },
     idempotency: idempotency.service,
     payment,
@@ -354,6 +368,45 @@ describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR
 
   it('refuses a setting outside 0 to 100 before the gateway, creating no order (fails closed)', async () => {
     const { service, log, inserted } = setUp({ sharePercent: 101 });
+    await expect(service.retry(student, retryInput)).rejects.toThrow();
+
+    expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+  });
+});
+
+describe('the ijazah half kept on the order (003:T105; ADR 0025 D2, D6, SRS DEC-81; Q-4 (a))', () => {
+  const ijazahEnrollment: CheckoutEnrollmentRow = { ...enrollmentRow, snapshotTrack: 'ijazah_track' };
+
+  it('records the setting’s percent on an ijazah_track order a retry creates', async () => {
+    const { service, inserted } = setUp({ retryEnrollment: ijazahEnrollment });
+    await service.retry(student, retryInput);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ halfReleaseRatePercent: 25 });
+  });
+
+  it('records the percent on an ijazah_track order a payment creates, as the setting holds it now', async () => {
+    const { service, inserted } = setUp({ halfPercent: 40 });
+    await service.pay(student, {
+      ...payInput,
+      quoted: { ...payInput.quoted, track: 'ijazah_track' as const },
+    });
+
+    expect(inserted[0]).toMatchObject({ halfReleaseRatePercent: 40 });
+  });
+
+  it('records no percent on a recitation order', async () => {
+    const { service, inserted } = setUp();
+    await service.pay(student, payInput);
+    await service.retry(student, { ...retryInput, idempotencyKey: id(99) });
+
+    expect(inserted).toHaveLength(2);
+    expect(inserted.map((order) => order.halfReleaseRatePercent)).toEqual([null, null]);
+  });
+
+  it('refuses a setting outside 0 to 100 on an ijazah_track order before the gateway (fails closed)', async () => {
+    const { service, log, inserted } = setUp({ retryEnrollment: ijazahEnrollment, halfPercent: 101 });
     await expect(service.retry(student, retryInput)).rejects.toThrow();
 
     expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
