@@ -46,6 +46,15 @@
 //
 // IDEMPOTENT (R-API-14). A second run meets the first's outcome under the same locks: a confirmed
 // enrollment naming this order (2), or the case the refusal, 2 or 3 opened, which covers it (1).
+//
+// THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a), Q-N3 (a)).
+// Booking records each outcome's push through the notice port `worker.ts` binds (`notices`), with
+// the outcome, on the attempt's transaction: `payment_confirmed` with the confirmation, and
+// `payment_expired` for another student's enrollment the re-hold's release cancels for an expired
+// payment; a refusal's own record pushes nothing (Q-A1 (b), the owner's answer of 2026-11-18). Each
+// attempt runs with an after-commit list of its own (`withOutcomeNotices`), so a `'confirm'` attempt
+// the database refuses drops its push with everything else it wrote. A second run records no second
+// outcome, so no second push.
 import { z } from 'zod';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';
@@ -59,6 +68,7 @@ import type {
   EnrollmentToHold,
   HoldTerms,
   LockedEnrollment,
+  PaymentOutcomeNotices,
   Refusal,
 } from '../modules/booking/index.js';
 import { readSlot } from '../modules/catalog/index.js';
@@ -94,7 +104,7 @@ export type SlotTime = EnrollmentToSchedule['slot'];
 
 /**
  * What the job asks of the modules, each through its public entry and on the job's transaction
- * (R-API-6). `confirmationSteps` binds them; a spec hands in its own.
+ * (R-API-6). `confirmationStepsOf` binds them; a spec hands in its own.
  */
 export interface ConfirmationSteps {
   orderEnrollmentOf(tx: Transaction, paymentId: string): Promise<string | null>;
@@ -128,29 +138,39 @@ export interface ConfirmationSteps {
   ): Promise<unknown>;
 }
 
-/** The steps over the modules' entries, the orders' locks and standing being payments'. */
-export const confirmationSteps: ConfirmationSteps = {
-  orderEnrollmentOf,
-  partiesOf: booking.confirmationPartiesOf,
-  lock: (tx, parties) => booking.lockForConfirmation(tx, parties, { orders: orderStandingsOf }),
-  paidOrderOf,
-  casesOf: caseInstantsOf,
-  openCase: openCompensationCase,
-  confirm: booking.confirmEnrollment,
-  bookablePair: isBookablePair,
-  rehold: (tx, enrollment, terms) =>
-    booking.reholdEnrollment(tx, enrollment, { terms, orders: orderStandingsOf }),
-  refuse: (tx, enrollment, refusal, at) =>
-    booking.refuseEnrollment(tx, enrollment, refusal, { at, orders: orderStandingsOf }),
-  slotOf: readSlot,
-  reservedTimesOf,
-  generate: generateForEnrollment,
-};
+/**
+ * The steps over the modules' entries, the orders' locks and standing being payments'; 005:T016:
+ * booking's writes hand their pushes to `notices`.
+ */
+export function confirmationStepsOf(notices: PaymentOutcomeNotices): ConfirmationSteps {
+  return {
+    orderEnrollmentOf,
+    partiesOf: booking.confirmationPartiesOf,
+    lock: (tx, parties) => booking.lockForConfirmation(tx, parties, { orders: orderStandingsOf }),
+    paidOrderOf,
+    casesOf: caseInstantsOf,
+    openCase: openCompensationCase,
+    confirm: (tx, confirmation) => booking.confirmEnrollment(tx, confirmation, notices),
+    bookablePair: isBookablePair,
+    rehold: (tx, enrollment, terms) =>
+      booking.reholdEnrollment(tx, enrollment, { terms, orders: orderStandingsOf, notices }),
+    refuse: (tx, enrollment, refusal, at) =>
+      booking.refuseEnrollment(tx, enrollment, refusal, { at, orders: orderStandingsOf, notices }),
+    slotOf: readSlot,
+    reservedTimesOf,
+    generate: generateForEnrollment,
+  };
+}
 
 export interface ConfirmEnrollmentOptions {
   readonly database: Pick<Database, '$transaction'>;
   /** The hold's terms and `first_session_lead_hours`, read before the transaction (R-MONEY-12). */
   readonly settings: SettingsReader;
+  /**
+   * 005:T016: the payment pushes' port (`NotificationWriter`, bound by `worker.ts`), through which
+   * booking records each outcome's push.
+   */
+  readonly notices: PaymentOutcomeNotices;
   readonly steps?: ConfirmationSteps;
   /** The clock; the system clock unless a spec sets one. */
   readonly clock?: () => Date;
@@ -304,7 +324,8 @@ function scheduleOf(enrollment: LockedEnrollment, slot: SlotTime): EnrollmentToS
 export function confirmEnrollment({
   database,
   settings,
-  steps = confirmationSteps,
+  notices,
+  steps = confirmationStepsOf(notices),
   clock = () => new Date(),
   enrollments = booking.createEnrollmentSide({ settings }),
   log,
@@ -315,8 +336,12 @@ export function confirmEnrollment({
     run: async ({ paymentId }) => {
       const terms = await booking.readHoldTerms(settings, clock());
       const confirmer = new Confirmer(steps, terms, enrollments, log);
+      // 005:T016: each attempt with an after-commit list of its own (this file's head).
       const settle = (attempt: Attempt) =>
-        database.$transaction((tx) => confirmer.settle(tx, paymentId, attempt));
+        booking.withOutcomeNotices(
+          (work) => database.$transaction(work),
+          (tx) => confirmer.settle(tx, paymentId, attempt),
+        );
       try {
         await settle('confirm');
       } catch (error) {

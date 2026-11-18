@@ -62,13 +62,15 @@ const [
   { closeSlotHolds },
   { eraseKeptData },
   // T005 of specs/005-certification: the push delivery job, its module and the generated copy.
-  { deliverNotification, pushCopyRenderer },
+  { deliverNotification, pushCopyRenderer, DELIVER_NOTIFICATION },
   notifications,
   { copyOf },
   // T008 of specs/005-certification: the certificate's rendering.
   { certificateRenderSteps, renderCertificate },
   // 003:T105 (track 2, B-M2): the due sweep of the releases of the teachers' shares.
   { releaseTeacherShares },
+  // 005:T017 (B48): the reminder sweep and the re-send of a lost enqueue.
+  { sendReminder },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -113,6 +115,7 @@ const [
   import('./jobs/render-certificate.js'),
   // 003:T105 (track 2, B-M2).
   import('./jobs/release-teacher-shares.js'),
+  import('./jobs/send-reminder.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -202,6 +205,22 @@ const confirmations = {
       log,
     ),
 };
+// 005:T016, T017 (B48): the push producers' one writer, as main.ts binds it: each push enqueued after
+// its producer's commit under the notification's id (`addOrRetry`), the same queue `send-reminder`'s
+// re-send uses for a lost enqueue.
+const notificationQueue = {
+  enqueue: (notificationId: string) =>
+    queueing.addOrRetry(
+      queue,
+      { name: DELIVER_NOTIFICATION, data: { notificationId }, jobId: notificationId },
+      log,
+    ),
+};
+const notificationWriter = notifications.createNotificationWriter({
+  database,
+  queue: notificationQueue,
+  log,
+});
 
 // Sessions' port to booking's enrollments (T008, the note under T015), bound once as main.ts binds
 // it, and T015's completion check over it, which every path that settles calls.
@@ -225,12 +244,14 @@ const jobs: readonly Job[] = [
   deliverAdminInvite({ invites: adminInvites, email: ports.email, marks: inviteMarks }),
   // A paid order's confirmation (T039, R-215): the modules' entries on the job's transactions, the
   // hold's terms and the first session's lead read through the settings reader.
-  confirmEnrollment({ database, settings, log }),
+  // 005:T016: each attempt records `payment_confirmed` on its own transaction's list.
+  confirmEnrollment({ database, settings, notices: notificationWriter, log }),
   // The expiry sweeps (T040, FR-364), every minute: the holds with no enrollment, booking's; the
   // orders past their expiry, the holds with an enrollment, and the hand-off of a paid order whose
   // confirmation was lost, payments', reading `checkout_confirmation_timeout_seconds`.
-  expireHolds({ database }),
-  expirePendingPayments({ database, settings, confirmations }),
+  // 005:T016: a page's `payment_expired` pushes on that page's transaction.
+  expireHolds({ database, notices: notificationWriter }),
+  expirePendingPayments({ database, settings, confirmations, notices: notificationWriter }),
   // The time zone re-resolution (T048, R-210, ADR 0009 D3), daily and once at start below: it runs
   // when `process.versions.tz` differs from its last run's, kept by the kernel in `idempotency_keys`.
   reresolveSessionInstants({ database, runs: jobRunsOver(database), settings }),
@@ -291,6 +312,16 @@ const jobs: readonly Job[] = [
   // one info line of ids and the milestone. ⚠️ automatic: it records a release as due for an
   // administrator to execute in the gateway's dashboard; it moves no money and calls no gateway (N1).
   releaseTeacherShares({ database, settings, log }),
+  // 005:T017 (FR-619, FR-622, FR-BOOK-8; R-407; SRS DEC-74), every minute ⚠️ automatic: each party's
+  // reminder once per (session, user, offset) from the committed instants, then the unpushed
+  // notifications between `notification_requeue_after_minutes` and `_max_age_minutes` old queued again.
+  sendReminder({
+    database,
+    settings,
+    writer: notificationWriter,
+    queue: notificationQueue,
+    log,
+  }),
 ];
 
 await queueing.scheduleSweeps(queue, jobs);

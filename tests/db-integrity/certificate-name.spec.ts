@@ -58,6 +58,8 @@ let db: Db;
 let database: Database;
 let names: CertificateNames;
 const released: { readonly tx: Transaction; readonly studentUserId: string }[] = [];
+/** 005:T019 (Q-T1, rule d): the request's list the student's own set is handed; the port here records only. */
+const live = { afterCommit: () => undefined };
 
 beforeAll(async () => {
   db = await connectAsApplication();
@@ -170,7 +172,7 @@ describe('an administrator’s change of the certificate name (ADR 0019 D1)', ()
   it('changes the account’s name and never rewrites an issued certificate’s printed name', async () => {
     const world = await studentWorld();
     const adminId = await makeAdmin(db);
-    await names.setOwn(world.studentId, { name: FIRST_NAME, idempotencyKey: randomUUID() });
+    await names.setOwn(world.studentId, { name: FIRST_NAME, idempotencyKey: randomUUID() }, live);
     const ijazahId = await issuedIjazah(world, FIRST_NAME, adminId);
 
     await expect(changeByAdministrator(adminId, world.studentId, CORRECTED_NAME)).resolves.toEqual({
@@ -187,10 +189,10 @@ describe('the student’s own name, once', () => {
   it('refuses a second set as CONFLICT already_set and keeps the first name', async () => {
     const world = await studentWorld();
     await expect(
-      names.setOwn(world.studentId, { name: FIRST_NAME, idempotencyKey: randomUUID() }),
+      names.setOwn(world.studentId, { name: FIRST_NAME, idempotencyKey: randomUUID() }, live),
     ).resolves.toEqual({ name: FIRST_NAME });
     const refusal: unknown = await names
-      .setOwn(world.studentId, { name: CORRECTED_NAME, idempotencyKey: randomUUID() })
+      .setOwn(world.studentId, { name: CORRECTED_NAME, idempotencyKey: randomUUID() }, live)
       .then(
         () => undefined,
         (error: unknown) => error,

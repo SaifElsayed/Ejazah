@@ -58,6 +58,9 @@ import {
   type StandInEvent,
 } from '../support/gateway-stand-in';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const ENCRYPTION_KEY = randomBytes(32).toString('base64');
 const PAY_BY = new Date('2099-01-01T00:00:00Z');
 
@@ -173,6 +176,7 @@ beforeAll(async () => {
   config = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY, API_PUBLIC_ORIGIN: origin };
   payment = createPaymentPort(config);
   route = createPaymentWebhookRoute({
+    notices: NO_PUSH,
     database,
     payment: createPaymentPort(config),
     log,

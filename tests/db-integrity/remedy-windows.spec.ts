@@ -65,6 +65,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   idempotency_key_ttl_hours: 24,
   first_session_lead_hours: 24,
@@ -113,6 +116,7 @@ beforeAll(async () => {
     idleInTransactionTimeoutMs: 60_000,
   });
   services = createSessionsServices({
+    notifications: NO_PUSH,
     transactions: transactionsOver(database),
     settings,
     video: {} as never,

@@ -28,6 +28,7 @@ import { expireHolds } from '../../apps/api/src/jobs/expire-holds';
 import { expirePendingPayments } from '../../apps/api/src/jobs/expire-pending-payments';
 import { releaseExpiredHolds, releaseHolds } from '../../apps/api/src/modules/booking/index';
 import { openCompensationCase } from '../../apps/api/src/modules/moderation/index';
+import { createNotificationWriter } from '../../apps/api/src/modules/notifications/index';
 import { orderStandingsOf } from '../../apps/api/src/modules/payments/index';
 import {
   closeDatabase,
@@ -46,6 +47,12 @@ import {
   type Webhook,
 } from './expiry-world';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
+/** 005:T016: the one writer, as `worker.ts` binds it, for the double run's one push. */
+let writer: ReturnType<typeof createNotificationWriter>;
+
 let database: Database;
 let webhook: Webhook;
 /** Every order the sweep handed to `confirm-enrollment`, in order. */
@@ -56,6 +63,11 @@ beforeAll(async () => {
     poolMax: 4,
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 60_000,
+  });
+  writer = createNotificationWriter({
+    database,
+    queue: { enqueue: async () => undefined },
+    log: { info: () => undefined, warn: () => undefined },
   });
   // The webhook's enqueue dropped: the paid event is committed and nothing is queued.
   webhook = await listenWebhook(database, { enqueue: async () => undefined });
@@ -78,6 +90,7 @@ const confirmations = {
 /** One run of `expire-pending-payments` at `at`. */
 function sweep(at: Date = sweepInstant()): Promise<void> {
   return expirePendingPayments({
+    notices: writer,
     database,
     settings: expirySettings,
     confirmations,
@@ -87,7 +100,7 @@ function sweep(at: Date = sweepInstant()): Promise<void> {
 
 /** One run of `expire-holds` at `at`. */
 function sweepHolds(at: Date = sweepInstant()): Promise<void> {
-  return expireHolds({ database, clock: () => at }).handle({});
+  return expireHolds({ database, notices: NO_PUSH, clock: () => at }).handle({});
 }
 
 /** The sweep, then `confirm-enrollment` for the order when the sweep handed it on. */
@@ -95,7 +108,7 @@ async function sweepThenConfirm(paymentId: string): Promise<void> {
   handedOff.length = 0;
   await sweep();
   expect(handedOff).toContain(paymentId);
-  await confirmEnrollment({ database, settings: expirySettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: expirySettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId,
   });
 }
@@ -225,7 +238,11 @@ describe('a paid event whose enqueue was dropped, then the sweep (M2, round 2 N1
     // FR-351: another student's placement releases the expired hold on the slot, then holds it.
     const other = await person('female');
     await database.$transaction(async (tx) => {
-      await releaseExpiredHolds(tx, { slotId: on.slotId }, { at: NOW, orders: orderStandingsOf });
+      await releaseExpiredHolds(
+        tx,
+        { slotId: on.slotId },
+        { at: NOW, orders: orderStandingsOf, notices: NO_PUSH },
+      );
       await tx.slotHold.create({
         data: {
           slotId: on.slotId,
@@ -405,7 +422,7 @@ describe('expire-pending-payments hands on only what awaits confirmation', () =>
   it('not a paid order whose enrollment is confirmed', async () => {
     const on = await world();
     const paid = await order(on.enrollmentId);
-    await confirmEnrollment({ database, settings: expirySettings, clock: () => NOW }).handle({
+    await confirmEnrollment({ database, settings: expirySettings, notices: NO_PUSH, clock: () => NOW }).handle({
       paymentId: paid,
     });
     handedOff.length = 0;
@@ -509,6 +526,13 @@ describe('expire-pending-payments runs twice as once (R-API-14)', () => {
           paying: await enrollmentOf(paying.enrollmentId),
           payingEvents: await eventsOf(paying.enrollmentId),
           queued,
+          // 005:T016: one push, the expired payment's.
+          pushes: (
+            await database.notification.findMany({
+              where: { userId: { in: [failing.studentId, paying.studentId] } },
+              select: { type: true },
+            })
+          ).map(({ type }) => type),
         };
       },
     });
@@ -519,6 +543,7 @@ describe('expire-pending-payments runs twice as once (R-API-14)', () => {
       paying: { status: 'pending_payment' },
       payingEvents: [],
       queued: true,
+      pushes: ['payment_expired'],
     });
     expect(twice).toEqual(once);
   });

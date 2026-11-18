@@ -11,6 +11,8 @@
 // (R-HONEST; the key stays in the catalogue).
 // 003:T105 (DEC-89; the owner's «تمام موافق» of 2026-11-17): «مستحقاتي», for an approved teacher,
 // directly under «حساب الاستلام», to the teacher's own share held, due and paid.
+// 005:T019 (FR-601): «صورة التوقيع», for an approved teacher (the one `teacher.signature.get`
+// admits), after the payout row, to the signature screen.
 import type { PayoutState } from '@ijazah/contracts';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -37,6 +39,7 @@ import { useCredentials } from '../../credentials';
 import { DUES_ROUTE } from '../../dues';
 import { PAYOUT_ROUTE, usePayout } from '../../payout';
 import { PROFILE_ROUTE } from '../../profile';
+import { SIGNATURE_ROUTE } from '../../signature';
 import { DELETE_ACCOUNT_TEACHER_ROUTE } from '../navigation';
 
 /** The payout row's badge for each state; none while no account is configured (T115). */
@@ -145,6 +148,10 @@ export function TeacherAccount() {
                 <PayoutRow />
                 {/* 003:T105 (DEC-89): «مستحقاتي», directly under «حساب الاستلام». */}
                 <ListRow label={t('money.dues.row')} onPress={() => router.push(DUES_ROUTE)} />
+                <ListRow
+                  label={t('teacher.account.signature')}
+                  onPress={() => router.push(SIGNATURE_ROUTE)}
+                />
               </>
             ) : null}
           </List>

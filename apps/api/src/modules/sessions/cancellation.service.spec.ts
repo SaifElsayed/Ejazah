@@ -20,7 +20,12 @@
 //     SESSION_NOT_SCHEDULED and at or after the start CANCELLATION_EXPIRED, each read under the
 //     locks, nothing written; a request no longer pending CONFLICT;
 //   - one `session_events` row per request and answer, at the clock read under the locks;
-//   - every refusal one info line with the ids, the code and the reason, nothing else.
+//   - every refusal one info line with the ids, the code and the reason, nothing else;
+//   - 005:T016 (FR-619; the note under T016, Q-N3 (a)): a request records `cancellation_requested`
+//     to the other party, an answer `cancellation_request_accepted` or `_declined` to the
+//     requester, each last on its transaction with the request's list bound to it; a refusal and a
+//     replay record nothing. That each commits with its row is
+//     tests/db-integrity/cancellation-notices.spec.ts'.
 import { Writable } from 'node:stream';
 
 import { addSeconds } from '@ijazah/time';
@@ -32,7 +37,11 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotentRequest } from '../../platform/idempotency/idempotency.service.js';
 import type { LiveBus, LiveMessage } from '../../platform/live/live-bus.js';
-import { type LivePublisher, RequestLive } from '../../platform/live/live-publisher.js';
+import {
+  type LivePublisher,
+  publisherOn,
+  RequestLive,
+} from '../../platform/live/live-publisher.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
 import type { CancellationRequestRow } from './cancellation.repository.js';
 import {
@@ -106,6 +115,27 @@ let log: Logger;
 let services: CancellationServices;
 
 const tx = {} as Transaction;
+
+/** 005:T016: a push as the service hands it, with the list bound to its transaction then. */
+interface Notice {
+  readonly userId: string;
+  readonly type: string;
+  readonly payload: unknown;
+  readonly bound: LivePublisher | undefined;
+}
+let notices: Notice[];
+
+/** 005:T016: the writer as the service sees it (`NotificationWriter.record`, bound by `main.ts`). */
+const notifications = {
+  record: async (
+    on: Transaction,
+    notice: { readonly userId: string; readonly type: string; readonly payload: unknown },
+  ) => {
+    trace.push(`notify ${notice.type} for ${notice.userId}`);
+    notices.push({ ...notice, bound: publisherOn(on) });
+    return { notificationId: '0199d0a0-0000-7000-8000-00000000f001' };
+  },
+};
 
 const transactions: Transactions = {
   run: async (work) => {
@@ -225,6 +255,7 @@ beforeEach(() => {
     [STRANGER, 'female'],
   ]);
   events = [];
+  notices = [];
   written = [];
   underLock = undefined;
   insertRefusal = undefined;
@@ -253,6 +284,7 @@ beforeEach(() => {
     idempotency,
     enrollments,
     store,
+    notifications,
     // T028: the make-up an acceptance owes, offered on its transaction under its locks.
     offer: {
       offerLocked: async (_tx, sessionId) => {
@@ -341,6 +373,8 @@ describe('sessions.cancellation.request: admitted (FR-456, R-310)', () => {
       'clock',
       `insert request on ${SESSION} by ${STUDENT}`,
       'record cancellation_requested',
+      // 005:T016: the push, last on the transaction.
+      `notify cancellation_requested for ${TEACHER}`,
       'commit',
     ]);
   });
@@ -535,6 +569,8 @@ describe('sessions.cancellation.answer: admitted (FR-457, FR-458, R-310)', () =>
       'clock',
       `answer ${REQUEST} declined`,
       'record cancellation_declined',
+      // 005:T016: the push, last on the transaction.
+      `notify cancellation_request_declined for ${STUDENT}`,
       'commit',
     ]);
   });
@@ -580,6 +616,8 @@ describe('sessions.cancellation.answer: admitted (FR-457, FR-458, R-310)', () =>
       'record cancellation_accepted',
       // T028: the make-up it owes, offered in its transaction, under the same locks.
       `offer ${SESSION}`,
+      // 005:T016: the push, last on the transaction.
+      `notify cancellation_request_accepted for ${STUDENT}`,
       'commit',
     ]);
   });
@@ -865,6 +903,7 @@ describe('sessions.cancellation: the live events (T066)', () => {
       },
       enrollments,
       store,
+      notifications,
       offer: { offerLocked: async () => offerAnswer },
       clock: async () => now,
     });
@@ -904,6 +943,7 @@ describe('sessions.cancellation: the live events (T066)', () => {
       },
       enrollments,
       store,
+      notifications,
       offer: { offerLocked: async () => offerAnswer },
       clock: async () => now,
     });
@@ -925,5 +965,100 @@ describe('sessions.cancellation: the live events (T066)', () => {
     await asUserKind((live) => ask(STUDENT, SESSION, live));
     expect(lines.length).toBeGreaterThan(0);
     expect(JSON.stringify(lines)).not.toContain('سفر طارئ');
+  });
+});
+
+describe('sessions.cancellation: the pushes (005:T016, FR-619; SRS DEC-71)', () => {
+  /** The user kind's list (`ctx.live`), which takes work after the commit. */
+  const listed = (): RequestLive =>
+    new RequestLive({ publish: () => undefined }, { warn: () => undefined });
+
+  const ids = { sessionId: SESSION, enrollmentId: ENROLLMENT };
+
+  it.each([
+    ['the student', STUDENT, TEACHER],
+    ['the teacher', TEACHER, STUDENT],
+  ])(
+    'a request by %s records cancellation_requested to the counterparty, ids only, last on its transaction with the request’s list bound',
+    async (_name, asker, counterparty) => {
+      const live = listed();
+      await ask(asker, SESSION, live);
+      expect(notices).toEqual([
+        { userId: counterparty, type: 'cancellation_requested', payload: ids, bound: live },
+      ]);
+      expect(trace.slice(-2)).toEqual([
+        `notify cancellation_requested for ${counterparty}`,
+        'commit',
+      ]);
+      expect(publisherOn(tx), 'unbound once the transaction ends').toBeUndefined();
+    },
+  );
+
+  it.each([
+    ['accepted', 'cancellation_request_accepted', true],
+    ['declined', 'cancellation_request_declined', false],
+  ])(
+    'an answer (%s) records %s to the requester, ids only, last on its transaction with the request’s list bound',
+    async (_name, type, accept) => {
+      requests.set(REQUEST, request({ requestedByUserId: STUDENT }));
+      const live = listed();
+      await answer(TEACHER, accept, REQUEST, live);
+      expect(notices).toEqual([{ userId: STUDENT, type, payload: ids, bound: live }]);
+      expect(trace.slice(-2)).toEqual([`notify ${String(type)} for ${STUDENT}`, 'commit']);
+      expect(publisherOn(tx), 'unbound once the transaction ends').toBeUndefined();
+    },
+  );
+
+  it('the teacher’s request answered by the student is told to the teacher', async () => {
+    requests.set(REQUEST, request({ requestedByUserId: TEACHER }));
+    await answer(STUDENT, false, REQUEST, listed());
+    expect(notices.map(({ userId, type }) => [userId, type])).toEqual([
+      [TEACHER, 'cancellation_request_declined'],
+    ]);
+  });
+
+  it('a refused request or answer records nothing, and leaves no list bound', async () => {
+    sessions.set(SESSION, session({ status: 'cancelled_by_admin' }));
+    await refusalOf(ask(STUDENT, SESSION, listed()));
+    requests.set(REQUEST, request());
+    await refusalOf(answer(TEACHER, true, REQUEST, listed()));
+    await refusalOf(answer(STUDENT, true, REQUEST, listed()));
+    expect(notices).toEqual([]);
+    expect(publisherOn(tx)).toBeUndefined();
+  });
+
+  it('a replay of the same request key runs no effect and records nothing', async () => {
+    const outcomes = new Map<string, unknown>();
+    const replaying = createCancellationServices({
+      transactions,
+      idempotency: {
+        run: async <T>(
+          keyedRequest: IdempotentRequest,
+          effect: (tx: Transaction) => Promise<T>,
+        ) => {
+          if (outcomes.has(keyedRequest.key)) return outcomes.get(keyedRequest.key) as T;
+          const outcome = await transactions.run(effect);
+          outcomes.set(keyedRequest.key, outcome);
+          return outcome;
+        },
+      },
+      enrollments,
+      store,
+      notifications,
+      offer: { offerLocked: async () => offerAnswer },
+      clock: async () => now,
+    });
+    const call = () =>
+      replaying.request(
+        { userId: STUDENT },
+        { sessionId: SESSION, reason: 'سفر', idempotencyKey: KEY },
+        log,
+        listed(),
+      );
+    await call();
+    await call();
+    expect(notices.map(({ userId, type }) => [userId, type])).toEqual([
+      [TEACHER, 'cancellation_requested'],
+    ]);
   });
 });

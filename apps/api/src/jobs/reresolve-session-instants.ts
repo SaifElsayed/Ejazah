@@ -28,9 +28,9 @@
 // `RERESOLUTION_ATTEMPTS` times in all, and after that it fails for the queue's retry (T171). Any
 // other failure fails at once, for the queue.
 //
-// AFTER. Reminders are rescheduled from the new instants after the commit, still in this run (ADR
-// 0009 D3); they arrive with Phase 4 (`send-reminder`, FR-NOTIF-1), which hooks in where the comment
-// below says. Only then is the version recorded, so a run that stopped before it runs again, which
+// AFTER. Nothing is rescheduled for the reminders (ADR 0009 D3; 005:T017, research R-407): the
+// `send-reminder` sweep reads the committed instants every minute, so a moved session is reminded
+// from its new start. Then the version is recorded, so a run that stopped before it runs again, which
 // is harmless: the recomputation is a function of the stored local fields (R-API-14).
 import { addHours } from '@ijazah/time';
 import { z } from 'zod';
@@ -178,8 +178,8 @@ export function reresolveSessionInstants({
       const { restored } = await committedRun(database, steps);
 
       if (restored.length > 0) report(new SessionsKeptAtPreviousInstants(version, restored));
-      // Phase 4 (FR-NOTIF-1, `send-reminder`): the moved sessions' reminders are rescheduled here,
-      // from the committed instants, before the version is recorded (ADR 0009 D3).
+      // 005:T017 (R-407): no reminder is rescheduled here; `send-reminder` reads the committed
+      // instants, so the moved sessions are reminded from their new starts (ADR 0009 D3).
       await runs.record({
         scope: TZDATA_RERESOLVE_SCOPE,
         key: version,

@@ -74,7 +74,12 @@ const SESSIONS = [1, 2, 3, 4, 5].map((n) => wednesday(n));
 function enrollment(of: Partial<TeacherStudentsGetOutput> = {}): TeacherStudentsGetOutput {
   return {
     enrollmentId: ENROLLMENT_ID,
-    student: { displayName: 'يوسف أحمد', displayNameOrNull: 'يوسف أحمد', deleted: false },
+    student: {
+      studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+      displayName: 'يوسف أحمد',
+      displayNameOrNull: 'يوسف أحمد',
+      deleted: false,
+    },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 5, sessionDurationMinutes: 45 },
     status: 'confirmed',
     paused: false,
@@ -258,7 +263,12 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
     const pressed = { ...wednesday(1), status: 'disputed' } as ListedSession;
     get().mockResolvedValue(
       enrollment({
-        summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
+        summary: {
+          subject: QURAN,
+          track: 'recitation',
+          sessionCount: 8,
+          sessionDurationMinutes: 45,
+        },
         sessions: [pressed],
         last: pressed,
         upcoming: 0,
@@ -298,7 +308,12 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
     );
     get().mockResolvedValue(
       enrollment({
-        summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
+        summary: {
+          subject: QURAN,
+          track: 'recitation',
+          sessionCount: 8,
+          sessionDurationMinutes: 45,
+        },
         sessions: settled,
         next: settled[7],
         last: settled[7],
@@ -329,7 +344,14 @@ describe('TeacherEnrollment (FR-391, FR-393)', () => {
   // no letter.
   it('draws a deleted student by the stand-in text, the avatar with no letter', async () => {
     get().mockResolvedValue(
-      enrollment({ student: { displayName: '', displayNameOrNull: null, deleted: true } }),
+      enrollment({
+        student: {
+          studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+          displayName: '',
+          displayNameOrNull: null,
+          deleted: true,
+        },
+      }),
     );
     await inBothDirections(detail, async (_rendered, direction) => {
       const standIn = said(direction, 'common.party.deletedStudent');
@@ -358,6 +380,7 @@ describe('TeacherEnrollment reads since it opened (the owner’s decision of 202
     get().mockResolvedValue(
       enrollment({
         student: {
+          studentId: '0193a6f0-0000-7000-8000-0000000000b9',
           displayName: 'يوسف أحمد علي',
           displayNameOrNull: 'يوسف أحمد علي',
           deleted: false,

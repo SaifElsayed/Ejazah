@@ -60,6 +60,9 @@ import {
 import { addMinutes, addSeconds } from '../../packages/time/src/index.js';
 import { type GatewayStandIn, gatewayStandIn } from '../support/gateway-stand-in';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const CAIRO = 'Africa/Cairo';
 const CHECKOUT_URL_COLUMN = 'payments.checkout_url_encrypted';
 
@@ -119,6 +122,7 @@ beforeAll(() => {
   stand = gatewayStandIn({ origin: 'http://127.0.0.1:9', config, payment: gateway });
   cipher = new ColumnCipher(randomBytes(32).toString('base64'));
   checkout = createCheckoutServices({
+    notices: NO_PUSH,
     database,
     settings,
     idempotency: new IdempotencyService<Transaction>({
@@ -148,6 +152,7 @@ beforeAll(() => {
 /** The services as `beforeAll` binds them, with the clock stopped at `at`. */
 function servicesAt(at: Date): CheckoutServices {
   return createCheckoutServices({
+    notices: NO_PUSH,
     database,
     settings,
     idempotency: new IdempotencyService<Transaction>({

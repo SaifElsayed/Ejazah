@@ -74,6 +74,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin, makeUser } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const SETTINGS: Record<string, number> = {
   admin_list_page_size: 50,
   dispute_window_hours: 72,
@@ -135,7 +138,7 @@ async function confirmedWorld(): Promise<World> {
       { userId: made.teacherId, role: 'teacher', status: 'active' },
     ],
   });
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;
@@ -437,6 +440,7 @@ describe('SC-416: a restore against another student’s hold on the same slot', 
           { userId: other, gender: 'female' as RequesterGender },
           { packageId: w.packageId, slotId: w.slotId },
           {
+            notices: NO_PUSH,
             terms: {
               now: RESTORED,
               ttlMinutes: 10,
@@ -509,6 +513,7 @@ describe('T073: the restore’s amendments (FR-454 as amended, FR-507; R-322 ste
         { userId: other, gender: 'female' as RequesterGender },
         { packageId: w.packageId, slotId: w.slotId },
         {
+          notices: NO_PUSH,
           terms: {
             now: RESTORED,
             ttlMinutes: 10,

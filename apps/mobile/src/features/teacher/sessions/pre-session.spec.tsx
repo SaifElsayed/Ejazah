@@ -16,6 +16,9 @@ import { CAIRO, roomApi, SESSION_ID, session } from '../../shared/room/__tests__
 import { TeacherPreSession, TEACHER_ROOM_ROUTE } from './index';
 
 jest.mock('livekit-client', () => require('../../shared/room/__tests__/fake-room'));
+// 005:T021: the report's idempotency key.
+let mockKey = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));
 
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
@@ -56,7 +59,13 @@ afterEach(() => {
 describe('TeacherPreSession (FR-434)', () => {
   it('names a deleted counterparty by the stand-in, and opens the teacher’s room', async () => {
     mockApi.sessions.get.query.mockResolvedValue(
-      session({ counterparty: { displayName: null, deleted: true } }),
+      session({
+        counterparty: {
+          userId: '0193a6f0-0000-7000-8000-0000000000b8',
+          displayName: null,
+          deleted: true,
+        },
+      }),
     );
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(said(direction, 'common.party.deletedStudent'))).toBeTruthy();
@@ -70,5 +79,47 @@ describe('TeacherPreSession (FR-434)', () => {
     });
     expect(TEACHER_ROOM_ROUTE).toBe('/(teacher)/sessions/room');
     expect(mockApi.sessions.join.mutate).not.toHaveBeenCalled();
+  });
+});
+
+// 005:T021 (FR-614; the note under T021, Q-T4 (a), Q-T5 (a)): from a session, the teacher's
+// «gender incorrect» files a gender flag on the student `sessions.get`'s `counterparty.userId`
+// names, never a report.
+describe('the report from the session (005:T021, FR-614)', () => {
+  it('flags the student’s declared gender, and answers «received» only', async () => {
+    const read = session();
+    const create = jest.fn(async (_input: unknown) => ({ received: true }));
+    const raise = jest.fn(async (_input: unknown) => ({ received: true }));
+    Object.assign(mockApi.api, {
+      reports: { create: { mutate: create } },
+      genderFlags: { raise: { mutate: raise } },
+    });
+    mockApi.sessions.get.query.mockResolvedValue(read);
+    await inBothDirections(ui, async (_rendered, direction) => {
+      const name = read.counterparty.displayName ?? '';
+      expect(await screen.findByText(name)).toBeTruthy();
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'common.a11y.report') }),
+      );
+      const locale = direction === 'rtl' ? 'ar' : 'en';
+      expect(
+        screen.getByText(translate(locale, 'teacher.report.title', { student: name })),
+      ).toBeTruthy();
+      await fireEvent.press(
+        screen.getByRole('radio', {
+          name: said(direction, 'teacher.report.reasons.genderIncorrect'),
+        }),
+      );
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'teacher.report.submit') }),
+      );
+      expect(await screen.findByText(said(direction, 'common.toast.reportSent'))).toBeTruthy();
+      expect(raise).toHaveBeenLastCalledWith({
+        flaggedUserId: read.counterparty.userId,
+        reason: said(direction, 'teacher.report.reasons.genderIncorrect'),
+        idempotencyKey: expect.any(String),
+      });
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 });

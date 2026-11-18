@@ -69,7 +69,12 @@ function item(
 ): TeacherStudentItem {
   return {
     enrollmentId: `0193a6f0-0000-7000-8000-0000000000${id}`,
-    student: { displayName: student, displayNameOrNull: student, deleted: false },
+    student: {
+      studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+      displayName: student,
+      displayNameOrNull: student,
+      deleted: false,
+    },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 8, sessionDurationMinutes: 45 },
     paused: false,
     upcoming: 5,
@@ -178,7 +183,12 @@ describe('TeacherStudents (FR-391, FR-393)', () => {
   it('draws a deleted student by the stand-in text, the avatar with no letter', async () => {
     const deleted: TeacherStudentItem = {
       ...NOOR,
-      student: { displayName: '', displayNameOrNull: null, deleted: true },
+      student: {
+        studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+        displayName: '',
+        displayNameOrNull: null,
+        deleted: true,
+      },
     };
     answering(() => ({ items: [deleted] }));
     await inBothDirections(active, async (_rendered, direction) => {

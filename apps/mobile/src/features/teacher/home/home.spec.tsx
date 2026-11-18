@@ -55,7 +55,12 @@ function session(
 ): TeacherTodaySession {
   return {
     enrollmentId: `0193a6f0-0000-7000-8000-0000000000${enrollment}`,
-    student: { displayName: student, displayNameOrNull: student, deleted: false },
+    student: {
+      studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+      displayName: student,
+      displayNameOrNull: student,
+      deleted: false,
+    },
     summary: {
       subject: QURAN,
       track: 'recitation',
@@ -170,7 +175,12 @@ describe('TeacherHome (FR-391, FR-393)', () => {
   it('draws a deleted student by the stand-in text', async () => {
     const deleted: TeacherTodaySession = {
       ...NEXT,
-      student: { displayName: '', displayNameOrNull: null, deleted: true },
+      student: {
+        studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+        displayName: '',
+        displayNameOrNull: null,
+        deleted: true,
+      },
     };
     today().mockResolvedValue(day([deleted]));
     await inBothDirections(home, async (_rendered, direction) => {

@@ -50,7 +50,12 @@ const SESSIONS = [1, 2, 3, 4, 5].map((n) => wednesday(n, { pendingCancellation: 
 
 const enrollment: TeacherStudentsGetOutput = {
   enrollmentId: ENROLLMENT_ID,
-  student: { displayName: 'يوسف أحمد', displayNameOrNull: 'يوسف أحمد', deleted: false },
+  student: {
+    studentId: '0193a6f0-0000-7000-8000-0000000000b9',
+    displayName: 'يوسف أحمد',
+    displayNameOrNull: 'يوسف أحمد',
+    deleted: false,
+  },
   summary: {
     subject: { id: '0193a6f0-0000-7000-8000-0000000000a1', nameAr: 'حفظ القرآن', nameEn: 'Quran' },
     track: 'recitation',

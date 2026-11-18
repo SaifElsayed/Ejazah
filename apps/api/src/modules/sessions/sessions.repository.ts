@@ -9,7 +9,7 @@
 // enrollments, and the sessions of a teacher's day (FR-390, FR-391); read-only, no lock. T011 of
 // specs/004-sessions: a session as its party reads it, by its id and the party together, and the
 // join's one lock, the session's two accounts in one `lockRows` call (kernel.md's `sessions.join`
-// row).
+// row). 005:T017: the reminder sweep's page of scheduled sessions by end time; read-only, no lock.
 import type { SessionStatus } from '@ijazah/contracts';
 import { calendarDateOf, type LocalDate, type LocalTime, localTimeOf } from '@ijazah/time';
 
@@ -357,4 +357,49 @@ export async function lockSessionParties(
   userIds: readonly string[],
 ): Promise<void> {
   await lockRows(tx, 'users', userIds);
+}
+
+/** 005:T017: a scheduled session as the reminder sweep reads it (R-407). */
+export interface SessionToRemind {
+  readonly id: string;
+  readonly enrollmentId: string;
+  readonly teacherUserId: string;
+  readonly studentUserId: string;
+  readonly startsAt: Date;
+}
+
+/**
+ * 005:T017 (R-407): a page of the `scheduled` sessions whose `scheduled_end_at` lies in
+ * `(after, upTo]`, in id order after `cursor`, at most `limit`; no lock. Served by ERD §14's partial
+ * index `sessions_scheduled_end_at_scheduled_idx` (`WHERE status = 'scheduled'`), so no index is added
+ * (R-DB-9); the caller filters on the start instant. A soft-deleted session is left out by the
+ * client's extension (T148). The instants are the committed ones, so a start recomputed by
+ * `reresolve-session-instants` is read as it now stands.
+ */
+export async function scheduledEndingWithin(
+  tx: Pick<Transaction, 'session'>,
+  window: { readonly after: Date; readonly upTo: Date },
+  cursor: string | undefined,
+  limit: number,
+): Promise<readonly SessionToRemind[]> {
+  const rows = await tx.session.findMany({
+    where: {
+      status: 'scheduled',
+      scheduledEndAt: { gt: window.after, lte: window.upTo },
+      ...(cursor === undefined ? {} : { id: { gt: cursor } }),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: {
+      id: true,
+      enrollmentId: true,
+      teacherUserId: true,
+      studentUserId: true,
+      scheduledStartAt: true,
+    },
+  });
+  return rows.map(({ scheduledStartAt, ...session }) => ({
+    ...session,
+    startsAt: scheduledStartAt,
+  }));
 }

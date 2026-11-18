@@ -33,6 +33,8 @@ export function ApiProvider({ children }: { readonly children: ReactNode }) {
       documentsUploadUrl: `${apiOrigin()}/uploads/documents`,
       photosUploadUrl: `${apiOrigin()}/uploads/photos`,
       chatUploadUrl: `${apiOrigin()}/uploads/chat`,
+      // 005:T019 (FR-601): the teacher's signature image.
+      signatureUploadUrl: `${apiOrigin()}/uploads/signature`,
       sessions,
       // A refused refresh has already cleared the tokens; the guard lands the person on welcome.
       onSignedOut: () => setSession({ kind: 'signed-out' }),

@@ -13,6 +13,7 @@ import type { RequesterGender } from '../../platform/guards/requester-gender.js'
 import type { BookablePackage, OfferedSlot } from '../catalog/index.js';
 import type { SessionTime } from '../sessions/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
+import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 import {
   type HeldRow,
   type HoldsStore,
@@ -26,6 +27,11 @@ import {
 import type { SlotOccupancy } from './slot-occupancy.service.js';
 
 const tx = {} as Transaction;
+
+/** 005:T016: the payment pushes' port a caller hands in; the fake store records what reaches it. */
+const NOTICES: PaymentOutcomeNotices = {
+  record: () => Promise.reject(new Error('the fake store records the port; nothing is recorded')),
+};
 const female = 'female' as RequesterGender;
 const CAIRO = 'Africa/Cairo';
 
@@ -83,6 +89,7 @@ function storeOf(world: World) {
   const pending = new Set(world.pending ?? []);
   const cancelled = new Map<string, string>();
   const events: EnrollmentOutcome[] = [];
+  const ports: (PaymentOutcomeNotices | undefined)[] = [];
   const inserted: Hold[] = [];
   const active = (hold: Hold) => hold.releasedAt === null;
   const store: HoldsStore = {
@@ -128,9 +135,11 @@ function storeOf(world: World) {
         cancelled.set(one, reason);
       }
     },
-    recordEvents: async (_tx, outcomes) => {
+    recordEvents: async (_tx, outcomes, notices) => {
       log.push(['events', outcomes.length]);
       events.push(...outcomes);
+      // 005:T016: the port the release was handed, as booking's writer receives it.
+      if (outcomes.length > 0) ports.push(notices);
     },
     enrollmentTerms: async () => ({ packageId: PACKAGE, sessionCount: 4 }),
     insertHold: async (_tx, hold) => {
@@ -149,7 +158,7 @@ function storeOf(world: World) {
       ),
     );
   };
-  return { store, orders, log, holds, pending, cancelled, events, inserted };
+  return { store, orders, log, holds, pending, cancelled, events, ports, inserted };
 }
 
 const terms: HoldTerms = {
@@ -173,6 +182,7 @@ function place(world: World, request = { packageId: PACKAGE, slotId: SLOT }) {
     terms,
     orders: fake.orders,
     store: fake.store,
+    notices: NOTICES,
   });
   return { ...fake, answer };
 }
@@ -216,7 +226,7 @@ describe("placeHold: FR-353's refusals write nothing", () => {
 });
 
 describe('placeHold: the order (FR-351, T005)', () => {
-  it('locks both accounts in one call, then the slot, the expired holds, their enrollments, then asks their orders; releases, then inserts', async () => {
+  it('locks both accounts with the students of the slot’s and the student’s holds in one call (005:T016), then the slot, the expired holds, their enrollments, then asks their orders; releases, then inserts', async () => {
     const placing = place({
       holds: [
         hold(id(3), { slotId: ELSEWHERE, studentUserId: STUDENT, enrollmentId: id(6) }),
@@ -228,7 +238,8 @@ describe('placeHold: the order (FR-351, T005)', () => {
     expect(
       placing.log.map(([kind, ...rest]) => (kind === 'insert' ? [kind] : [kind, ...rest])),
     ).toEqual([
-      ['lock', 'users', [STUDENT, TEACHER]],
+      // 005:T016: OTHER, whose expired hold the placement releases with its push, locked first.
+      ['lock', 'users', [STUDENT, TEACHER, OTHER].sort()],
       ['lock', 'availability_slots', [SLOT]],
       ['lock', 'slot_holds', [id(1), id(3)]],
       ['lock', 'enrollments', [id(5), id(6)]],
@@ -517,7 +528,7 @@ describe('reholdEnrollment: FR-PAYG-19’s new hold (for T039)', () => {
     const holdId = await reholdEnrollment(
       tx,
       { id: id(5), slotId: SLOT, studentUserId: STUDENT },
-      { terms, orders: fake.orders, store: fake.store },
+      { terms, orders: fake.orders, store: fake.store, notices: NOTICES },
     );
     expect(fake.log.filter(([kind]) => kind === 'lock')).toEqual([
       ['lock', 'slot_holds', [id(1)]],
@@ -535,5 +546,55 @@ describe('reholdEnrollment: FR-PAYG-19’s new hold (for T039)', () => {
     ]);
     expect(holdId).toBe(fake.inserted[0]?.id);
     expect(fake.holds.find((one) => one.id === id(1))?.releaseReason).toBe('expired');
+  });
+});
+
+describe('the payment pushes reach booking’s writer (005:T016, the note under T016, Q-N1 (a))', () => {
+  const expiredWithEnrollment = () =>
+    storeOf({
+      holds: [hold(id(1), { slotId: SLOT, studentUserId: OTHER, enrollmentId: id(7) })],
+      pending: [id(7)],
+    });
+
+  it('a placement hands its port to the release of the expired holds it finds', async () => {
+    const fake = expiredWithEnrollment();
+    await placeHold(
+      tx,
+      { userId: STUDENT, gender: female },
+      { packageId: PACKAGE, slotId: SLOT },
+      { terms, orders: fake.orders, store: fake.store, notices: NOTICES },
+    );
+    expect(fake.events).toEqual([
+      {
+        kind: 'cancelled',
+        enrollmentId: id(7),
+        cancellationReason: 'payment_expired',
+        occurredAt: NOW,
+      },
+    ]);
+    expect(fake.ports).toEqual([NOTICES]);
+  });
+
+  it('a re-hold hands its port to the release of the expired holds it finds', async () => {
+    const fake = expiredWithEnrollment();
+    await reholdEnrollment(
+      tx,
+      { id: id(5), slotId: SLOT, studentUserId: STUDENT },
+      { terms, orders: fake.orders, store: fake.store, notices: NOTICES },
+    );
+    expect(fake.ports).toEqual([NOTICES]);
+  });
+
+  it('a release hands the port it was given, and none when given none', async () => {
+    const given = expiredWithEnrollment();
+    await releaseHolds(tx, [id(1)], 'expired', {
+      at: NOW,
+      orders: given.orders,
+      store: given.store,
+      notices: NOTICES,
+    });
+    const none = expiredWithEnrollment();
+    await releaseHolds(tx, [id(1)], 'admin', { at: NOW, orders: none.orders, store: none.store });
+    expect([given.ports, none.ports]).toEqual([[NOTICES], [undefined]]);
   });
 });

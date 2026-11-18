@@ -228,6 +228,11 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['rate_limit_ijazah_decision', { limit: 10, window_seconds: 60 }],
   ['rate_limit_gender_decision', { limit: 10, window_seconds: 60 }],
   ['rate_limit_settings_update', { limit: 10, window_seconds: 60 }],
+  // T017 of specs/005-certification (SRS DEC-74, §3.14; the note under T017, Q-N4 (a)): a
+  // notification whose push was not queued after its commit is queued again by `send-reminder` from
+  // 5 minutes old, and no longer sent once it is 30 minutes old.
+  ['notification_requeue_after_minutes', 5],
+  ['notification_requeue_max_age_minutes', 30],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

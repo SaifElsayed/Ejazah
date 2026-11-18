@@ -10,7 +10,8 @@
 // two rows of the room's close in the same table (T067), the seven rows of a ban's lift, a held
 // slot's release, the kept data and an administrator's deletion (T069, with the restore window's
 // default 14, SRS DEC-66), the one of an administrator's direct end (T082), Phase 4's six rate limits
-// (005:T001, data-model.md «Settings»), and one administrator, each with a fixed identifier and a fixed instant;
+// (005:T001, data-model.md «Settings»), the two of a notification queued again (005:T017, SRS DEC-74),
+// and one administrator, each with a fixed identifier and a fixed instant;
 // every other table stays empty.
 //
 // THE ADMINISTRATOR'S CREDENTIAL. No secret is committed (R-SEC-1), so the seed knows no password:
@@ -156,6 +157,9 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_ijazah_decision: { limit: 10, window_seconds: 60 },
   rate_limit_gender_decision: { limit: 10, window_seconds: 60 },
   rate_limit_settings_update: { limit: 10, window_seconds: 60 },
+  // 005:T017 (SRS DEC-74, §3.14): a notification whose push was not queued after its commit.
+  notification_requeue_after_minutes: 5,
+  notification_requeue_max_age_minutes: 30,
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -363,7 +367,8 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM settings)::text AS settings,
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
-    // 003:T105 (rule d): 89 + ijazah_half_release_percent + rate_limit_payout_mark.
-    expect(counts).toEqual([{ subjects: '5', settings: '91', admins: '1' }]);
+    // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
+    // re-enqueue settings, merged from develop: 89 + 2 + 2.
+    expect(counts).toEqual([{ subjects: '5', settings: '93', admins: '1' }]);
   });
 });

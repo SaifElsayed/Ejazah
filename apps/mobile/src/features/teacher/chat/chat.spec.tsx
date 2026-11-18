@@ -22,6 +22,9 @@ import { TEACHER_CHAT_ROUTE, TeacherChat } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
+// 005:T021: the report's idempotency key.
+let mockKey = 0;
+jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -33,6 +36,7 @@ jest.mock('expo-router', () => ({
 
 const ENROLLMENT_ID = '0193a6f0-0000-7000-8000-0000000000e1';
 const STUDENT = 'يوسف أحمد';
+const STUDENT_ID = '0193a6f0-0000-7000-8000-0000000000d2';
 const QURAN = {
   id: '0193a6f0-0000-7000-8000-0000000000a1',
   nameAr: 'حفظ القرآن',
@@ -56,7 +60,12 @@ const session: ListedSession = {
 function enrollment(of: Partial<TeacherStudentsGetOutput> = {}): TeacherStudentsGetOutput {
   return {
     enrollmentId: ENROLLMENT_ID,
-    student: { displayName: STUDENT, displayNameOrNull: STUDENT, deleted: false },
+    student: {
+      studentId: STUDENT_ID,
+      displayName: STUDENT,
+      displayNameOrNull: STUDENT,
+      deleted: false,
+    },
     summary: { subject: QURAN, track: 'recitation', sessionCount: 1, sessionDurationMinutes: 45 },
     status: 'confirmed',
     next: session,
@@ -222,6 +231,54 @@ describe('the chat’s entry on the teacher’s enrollment (T045, Q8)', () => {
       async (direction) => {
         await screen.findByText(STUDENT);
         expect(screen.queryByText(said(direction, 'chat.thread.title'))).toBeNull();
+      },
+    );
+  });
+});
+
+// 005:T021 (FR-611; the note under T021, Q-T4 (a)): the report from the chat, on the student
+// `teacher.students.get` names (`student.studentId`), naming the chat's enrollment.
+describe('the report from the chat (005:T021, FR-611)', () => {
+  it('reports the student, naming the enrollment, and answers «received» only', async () => {
+    let create = jest.fn(async (_input: unknown) => ({ received: true }));
+    await inEach(
+      () => {
+        create = jest.fn(async (_input: unknown) => ({ received: true }));
+        Object.assign(mockApi.api, {
+          reports: { create: { mutate: create } },
+          genderFlags: { raise: { mutate: jest.fn(async () => ({ received: true })) } },
+        });
+        get().mockResolvedValue(enrollment());
+      },
+      () => <TeacherChat />,
+      async (direction) => {
+        expect(await screen.findByText('متى نبدأ سورة البقرة؟')).toBeTruthy();
+        await fireEvent.press(
+          screen.getByRole('button', { name: said(direction, 'common.a11y.report') }),
+        );
+        expect(
+          screen.getByText(said(direction, 'teacher.report.title', { student: STUDENT })),
+        ).toBeTruthy();
+        await fireEvent.press(
+          screen.getByRole('radio', {
+            name: said(direction, 'teacher.report.reasons.offPlatform'),
+          }),
+        );
+        await fireEvent.press(
+          screen.getByRole('button', { name: said(direction, 'teacher.report.submit') }),
+        );
+        expect(await screen.findByText(said(direction, 'common.toast.reportSent'))).toBeTruthy();
+        expect(create.mock.calls).toEqual([
+          [
+            {
+              reportedUserId: STUDENT_ID,
+              context: 'chat',
+              enrollmentId: ENROLLMENT_ID,
+              reason: said(direction, 'teacher.report.reasons.offPlatform'),
+              idempotencyKey: expect.any(String),
+            },
+          ],
+        ]);
       },
     );
   });

@@ -70,6 +70,9 @@ import {
 } from './confirmation-world';
 import { connectAsApplication, type Db, makeAdmin } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 // 005:T006 (rule d): the enrollment reads' ijazah request through a stand-in port, none held.
 const listsStore: EnrollmentListsStore = {
   ...enrollmentListsStore,
@@ -165,7 +168,7 @@ async function confirmedWorld(): Promise<World> {
     ],
     skipDuplicates: true,
   });
-  await confirmEnrollment({ database, settings: worldSettings, clock: () => NOW }).handle({
+  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;

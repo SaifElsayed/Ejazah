@@ -85,6 +85,9 @@ import {
   makeUser,
 } from './harness';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const CONFIG: VideoConfig = {
   VIDEO_PROVIDER: 'fake',
   ENCRYPTION_KEY: randomBytes(32).toString('base64'),
@@ -250,6 +253,7 @@ beforeAll(async () => {
   });
   const participantSide = createEnrollmentSide({ settings });
   services = createSessionsServices({
+    notifications: NO_PUSH,
     transactions: stoppable('participant'),
     settings,
     video: createVideoPort(CONFIG),

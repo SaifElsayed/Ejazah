@@ -10,8 +10,8 @@
 // database refuses or writes is tests/db-integrity/session-join.spec.ts'.
 //
 //   - a party reads the session in its zone, its length, its join period and the counterparty's
-//     name or the deleted stand-in; a non-party, a nonexistent session and a counterparty of the
-//     other gender by the server's records answer one NOT_FOUND;
+//     user id (005:T021) and name or the deleted stand-in; a non-party, a nonexistent session and
+//     a counterparty of the other gender by the server's records answer one NOT_FOUND;
 //   - the join from `startsAt − early_join_lead_minutes` until `endsAt`, for a `scheduled` session,
 //     both accounts active and the teacher approved, both of one gender, each refusal its code and
 //     no video call, one log line with ids and the reason only;
@@ -270,6 +270,8 @@ beforeEach(() => {
     idempotency: {
       run: () => Promise.reject(new Error('no cancellation or dispute is keyed here')),
     },
+    // 005:T016: and so no cancellation's push is recorded.
+    notifications: { record: () => Promise.reject(new Error('no push is recorded here')) },
     disputeView,
     now: () => now,
     clock: async () => databaseNow,
@@ -310,7 +312,7 @@ const studentSees: SessionsGetOutput = {
   endsAt: ENDS.toISOString(),
   lengthMinutes: 45,
   status: 'scheduled',
-  counterparty: { displayName: 'المعلمة سارة', deleted: false },
+  counterparty: { userId: TEACHER, displayName: 'المعلمة سارة', deleted: false },
   join: { opensAt: OPENS.toISOString(), closesAt: ENDS.toISOString() },
   canRaiseDispute: false,
   counterpartyInRoom: false,
@@ -327,7 +329,7 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
     const seen = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
     expect(seen).toEqual({
       ...studentSees,
-      counterparty: { displayName: 'يُسْرى عليّ', deleted: false },
+      counterparty: { userId: STUDENT, displayName: 'يُسْرى عليّ', deleted: false },
     });
   });
 
@@ -346,7 +348,7 @@ describe('sessions.get (FR-434, FR-494, R-HONEST-4)', () => {
   it('names a deleted counterparty with the stand-in, as T007 answers it (FR-426)', async () => {
     parties.delete(TEACHER);
     const seen = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
-    expect(seen.counterparty).toEqual({ displayName: null, deleted: true });
+    expect(seen.counterparty).toEqual({ userId: TEACHER, displayName: null, deleted: true });
   });
 
   it('answers a non-party, a nonexistent session and the other gender with one NOT_FOUND (R-GENDER-2)', async () => {

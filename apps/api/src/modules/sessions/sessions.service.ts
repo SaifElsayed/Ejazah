@@ -76,6 +76,7 @@ import { sessionPartiesOf } from '../identity/index.js';
 import { type AbsenceComplaint, createAbsenceComplaint } from './absence-complaint.service.js';
 import { type CancellationRequestRow, latestRequestOf } from './cancellation.repository.js';
 import {
+  type CancellationNotices,
   type CancellationServices,
   type CancellationStore,
   cancellationViewOf,
@@ -180,6 +181,11 @@ export interface SessionsDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   /** T021: the cancellation's store; the module's unless a spec fakes it. */
   readonly cancellationStore?: CancellationStore;
+  /**
+   * 005:T016: where a cancellation request and its answer record their push (FR-619), bound by
+   * `main.ts` to the notifications module's `NotificationWriter`.
+   */
+  readonly notifications: CancellationNotices;
   /** T026: the raise's store; `disputeRaiseStore` unless a spec narrows it. */
   readonly disputeStore?: DisputeRaiseStore;
   /** T026: `sessions.get`'s dispute fields; `createDisputeView({ settings })` unless a spec fakes it. */
@@ -268,6 +274,7 @@ export function createSessionsServices({
   store,
   idempotency,
   cancellationStore,
+  notifications,
   disputeStore,
   disputeView = createDisputeView({ settings }),
   now = () => new Date(),
@@ -336,10 +343,11 @@ export function createSessionsServices({
           endsAt: session.endsAt.toISOString(),
           lengthMinutes: terms.durationMinutes as SessionsGetOutput['lengthMinutes'],
           status: session.status,
+          // 005:T021 (Q-T4 (a)): the counterparty's user id for the report sheet, deleted or not.
           counterparty:
             counterparty === undefined
-              ? { displayName: null, deleted: true }
-              : { displayName: counterparty.displayName, deleted: false },
+              ? { userId: counterpartyId, displayName: null, deleted: true }
+              : { userId: counterpartyId, displayName: counterparty.displayName, deleted: false },
           join: {
             opensAt: opensAtOf(session, lead).toISOString(),
             closesAt: session.endsAt.toISOString(),
@@ -358,6 +366,7 @@ export function createSessionsServices({
       transactions,
       idempotency,
       enrollments: enrollmentSide,
+      notifications,
       offer: remedyOffer,
       clock,
       ...(cancellationStore === undefined ? {} : { store: cancellationStore }),

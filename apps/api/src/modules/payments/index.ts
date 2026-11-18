@@ -34,7 +34,7 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
-import { recordOrderFailed } from '../booking/index.js';
+import { type PaymentOutcomeNotices, recordOrderFailed } from '../booking/index.js';
 import {
   lockPayoutHolder,
   markPayoutRejected,
@@ -57,7 +57,9 @@ export type { ConfirmationQueue };
 
 /**
  * `POST /webhooks/payment` (T077, T038), over the payment port, the identity module's two entries,
- * booking's `recordOrderFailed`, and the queue `confirm-enrollment` is enqueued on.
+ * booking's `recordOrderFailed`, and the queue `confirm-enrollment` is enqueued on. 005:T016:
+ * `notices`, the payment pushes' port (`NotificationWriter`, bound by `main.ts`), through which a
+ * failed order's outcome records its `payment_failed` push.
  */
 export function createPaymentWebhookRoute({
   database,
@@ -65,6 +67,7 @@ export function createPaymentWebhookRoute({
   log,
   maxBodyBytes,
   confirmations,
+  notices,
   report,
 }: {
   readonly database: Database;
@@ -74,6 +77,8 @@ export function createPaymentWebhookRoute({
   readonly maxBodyBytes: number;
   /** Enqueues `confirm-enrollment({ paymentId })` under the job id `paymentId` (R-214). */
   readonly confirmations: ConfirmationQueue;
+  /** 005:T016: the payment pushes' port. */
+  readonly notices: PaymentOutcomeNotices;
   /** The process's error reporting by default (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
 }): NodeHandler {
@@ -89,7 +94,10 @@ export function createPaymentWebhookRoute({
       }),
       orders: new OrderEventsService({
         database,
-        booking: { recordOrderFailed },
+        booking: {
+          recordOrderFailed: (tx, enrollmentId, paymentId, occurredAt) =>
+            recordOrderFailed(tx, enrollmentId, paymentId, occurredAt, notices),
+        },
         confirmations,
         log,
         ...reporting,
@@ -165,7 +173,8 @@ export type { CheckoutStudent };
 
 /**
  * The checkout over the process's client, the kernel's idempotency, the payment port and the column
- * cipher (T036): the gateway's orders recorded with their address encrypted (R-DB-8).
+ * cipher (T036): the gateway's orders recorded with their address encrypted (R-DB-8). 005:T016:
+ * `notices`, the payment pushes' port, for the placement's releases (a cancelled order pushes nothing).
  */
 export function createCheckoutServices({
   database,
@@ -174,6 +183,7 @@ export function createCheckoutServices({
   payment,
   cipher,
   gateway,
+  notices,
   now,
 }: {
   readonly database: Database;
@@ -182,6 +192,8 @@ export function createCheckoutServices({
   readonly payment: Pick<PaymentPort, 'createCheckout' | 'cancelCheckout'>;
   readonly cipher: Pick<ColumnCipher, 'encrypt' | 'decrypt'>;
   readonly gateway: PaymentGateway;
+  /** 005:T016: the payment pushes' port. */
+  readonly notices: PaymentOutcomeNotices;
   readonly now?: () => Date;
 }): CheckoutServices {
   const service = new CheckoutService({
@@ -190,7 +202,7 @@ export function createCheckoutServices({
     payment,
     cipher,
     gateway,
-    steps: checkoutStepsOver(database, cipher, now),
+    steps: checkoutStepsOver(database, cipher, notices, now),
     ...(now === undefined ? {} : { now }),
   });
   return {
@@ -297,3 +309,9 @@ export function createPayoutServices({
 // paid orders with a share, with no lock; `payments.caseAmount` reads it on the call's transaction
 // (`createPaymentsMonitorService` above), and the database spec reads it here.
 export { caseOrdersOf } from './case-amount.repository.js';
+
+// 005:T016 (the follow-up under T016 on the push's key share, fixed in B48): the checkout's steps over
+// the process's client, which `createCheckoutServices` composes; exported so the gateway-cancelled
+// order's transaction (`recordCancelled`) is reached alone by
+// `tests/db-integrity/payment-notices-race.spec.ts` (R-API-3).
+export { checkoutStepsOver } from './checkout.service.js';

@@ -42,7 +42,13 @@ beforeEach(() => {
   jest.useFakeTimers({ now: new Date('2026-11-11T16:00:00.000Z') });
   mockApi = roomApi();
   mockApi.sessions.get.query.mockResolvedValue(
-    session({ counterparty: { displayName: null, deleted: true } }),
+    session({
+      counterparty: {
+        userId: '0193a6f0-0000-7000-8000-0000000000b8',
+        displayName: null,
+        deleted: true,
+      },
+    }),
   );
   mockApi.sessions.join.mutate.mockResolvedValue(grant());
   resetRooms();

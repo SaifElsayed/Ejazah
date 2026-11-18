@@ -76,6 +76,9 @@ import {
   type SessionProcedureAttacks,
 } from './procedure-harness.js';
 
+// 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
+const NO_PUSH = { record: async () => undefined };
+
 const HOLDS = 'FR-428, FR-496, R-SEC-2, R-324';
 
 type Gender = Direction['requester'];
@@ -298,6 +301,7 @@ function cancellationOver(settings: SettingsReader) {
     recordEvents: async () => undefined,
   };
   return createSessionsServices({
+    notifications: NO_PUSH,
     transactions,
     settings,
     video: {} as Parameters<typeof createSessionsServices>[0]['video'],
