@@ -270,24 +270,55 @@ describe("mapping Paymob's transaction states to the port's events", () => {
     ).resolves.toMatchObject({ type: 'failed', providerEventId: 'paymob:7:failed' });
   });
 
-  it('a refunded or voided transaction is a refunded order', async () => {
+  // 003:T102 (B-M2, Q-2 (a) with its safety net; DEC-82): a parent flagged refunded or voided
+  // reports its own original amount, and the refunded amount is not among the signed fields, so it
+  // records no money: it is its own event, `refund_reported`, with no amount.
+  it('a parent transaction flagged refunded or voided is a reported refund, with no amount', async () => {
     await expect(eventOf(transaction({ is_refunded: true }))).resolves.toEqual({
-      type: 'refunded',
-      providerEventId: 'paymob:192036465:refunded',
+      type: 'refund_reported',
+      providerEventId: 'paymob:192036465:refund_reported',
       gatewayOrderId: '217503754',
     });
-    await expect(eventOf(transaction({ is_voided: true }))).resolves.toMatchObject({
-      type: 'refunded',
+    await expect(eventOf(transaction({ is_voided: true }))).resolves.toEqual({
+      type: 'refund_reported',
+      providerEventId: 'paymob:192036465:refund_reported',
+      gatewayOrderId: '217503754',
     });
   });
 
-  it("a successful child transaction is the order's refund, or its payment when it is a capture", async () => {
+  // 003:T102 (DEC-82, ADR 0025 D3): only a child transaction carries a refund, its signed
+  // `amount_cents`; a void child is the whole order.
+  it("a successful child transaction is the order's refund of its signed amount, or its payment when it is a capture", async () => {
     await expect(
-      eventOf(transaction({ id: 9, has_parent_transaction: true, is_standalone_payment: false })),
+      eventOf(
+        transaction({
+          id: 9,
+          amount_cents: 30_000,
+          has_parent_transaction: true,
+          is_standalone_payment: false,
+        }),
+      ),
     ).resolves.toEqual({
       type: 'refunded',
       providerEventId: 'paymob:9:refunded',
       gatewayOrderId: '217503754',
+      refunded_piasters: piasters(30_000),
+    });
+    await expect(
+      eventOf(
+        transaction({
+          id: 11,
+          amount_cents: 100_000,
+          has_parent_transaction: true,
+          is_voided: true,
+          is_standalone_payment: false,
+        }),
+      ),
+    ).resolves.toEqual({
+      type: 'refunded',
+      providerEventId: 'paymob:11:refunded',
+      gatewayOrderId: '217503754',
+      refunded_piasters: 'whole_order',
     });
     await expect(
       eventOf(
@@ -299,6 +330,23 @@ describe("mapping Paymob's transaction states to the port's events", () => {
         }),
       ),
     ).resolves.toMatchObject({ type: 'paid', gatewayTransactionId: '10' });
+  });
+
+  it('refuses, as a signed body it cannot read, a refund child whose amount is not a piaster amount', async () => {
+    await expect(
+      eventOf(transaction({ id: 12, amount_cents: 10.5, has_parent_transaction: true })),
+    ).rejects.toThrow(MalformedEventError);
+  });
+
+  // 003:T103 (DEC-82, ADR 0025 D3): a failed refund or void is not the order's failure; it is
+  // acknowledged and nothing is recorded.
+  it('answers a failed child transaction, a refund or a void, as not final', async () => {
+    for (const obj of [
+      transaction({ id: 13, success: false, has_parent_transaction: true }),
+      transaction({ id: 14, success: false, has_parent_transaction: true, is_voided: true }),
+    ]) {
+      await expect(eventOf(obj)).rejects.toThrow(NonFinalEventError);
+    }
   });
 
   it('the same transaction reported twice carries the same provider event id, so the second is a replay (R-MONEY-8)', async () => {

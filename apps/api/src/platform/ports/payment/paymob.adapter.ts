@@ -382,31 +382,49 @@ function eventOf(transaction: SignedTransaction): GatewayEvent {
   const transactionId = String(transaction.id);
   const providerEventId = (type: GatewayEvent['type']): string => `paymob:${transactionId}:${type}`;
   if (transaction.pending) throw new NonFinalEventError();
+  // 003:T103 (DEC-82): a failed refund or void is not the order's failure; acknowledged, nothing
+  // recorded.
+  if (!transaction.success && transaction.has_parent_transaction) throw new NonFinalEventError();
   if (!transaction.success) {
     return { type: 'failed', providerEventId: providerEventId('failed'), gatewayOrderId };
   }
-  const refunded = transaction.has_parent_transaction
-    ? !transaction.is_capture
-    : transaction.is_refunded || transaction.is_voided;
-  if (refunded) {
-    return { type: 'refunded', providerEventId: providerEventId('refunded'), gatewayOrderId };
+  // 003:T102 (Q-2 (a), DEC-82): only a child carries a refund, its signed amount, a void child the
+  // whole order. A parent's flag reports its own original amount, never the refunded one (Paymob's
+  // HMAC leaves `refunded_amount_cents` out), so it is reported with no money.
+  if (transaction.has_parent_transaction && !transaction.is_capture) {
+    return {
+      type: 'refunded',
+      providerEventId: providerEventId('refunded'),
+      gatewayOrderId,
+      refunded_piasters: transaction.is_voided ? 'whole_order' : signedAmount(transaction),
+    };
+  }
+  if (!transaction.has_parent_transaction && (transaction.is_refunded || transaction.is_voided)) {
+    return {
+      type: 'refund_reported',
+      providerEventId: providerEventId('refund_reported'),
+      gatewayOrderId,
+    };
   }
   // An authorisation alone has taken nothing yet; its capture is the payment.
   if (transaction.is_auth && !transaction.is_capture) throw new NonFinalEventError();
-  let gross_piasters: Piasters;
-  try {
-    gross_piasters = piasters(transaction.amount_cents);
-  } catch {
-    throw new MalformedEventError();
-  }
   return {
     type: 'paid',
     providerEventId: providerEventId('paid'),
     gatewayOrderId,
     gatewayTransactionId: transactionId,
-    gross_piasters,
+    gross_piasters: signedAmount(transaction),
     gateway_fee_piasters: null,
     net_piasters: null,
     currency: transaction.currency,
   };
+}
+
+/** The transaction's signed `amount_cents` as piasters; a body this port does not record otherwise. */
+function signedAmount(transaction: SignedTransaction): Piasters {
+  try {
+    return piasters(transaction.amount_cents);
+  } catch {
+    throw new MalformedEventError();
+  }
 }

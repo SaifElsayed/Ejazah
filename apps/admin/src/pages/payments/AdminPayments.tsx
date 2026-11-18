@@ -136,6 +136,8 @@ export function AdminPayments() {
           { key: 'net', header: t('admin.payments.columns.net'), numeric: true },
           // 003:T104 (ADR 0025 D1): the teacher's share kept on the order, with its rate.
           { key: 'teacherShare', header: t('admin.payments.columns.teacherShare'), numeric: true },
+          // 003:T102 (DEC-82): the refunded total; a dash while nothing is refunded.
+          { key: 'refunded', header: t('admin.payments.columns.refunded'), numeric: true },
           { key: 'status', header: t('admin.payments.columns.status'), end: true },
         ]}
         rows={listed.items.map((row) => ({
@@ -171,6 +173,11 @@ export function AdminPayments() {
                     amount: formatPounds(piasters(row.teacherShare_piasters), locale),
                     percent: row.teacherShareRatePercent,
                   }),
+            refunded: amountOrDash(
+              row.refunded_piasters === 0 ? undefined : piasters(row.refunded_piasters),
+              locale,
+              t,
+            ),
             status: (
               <span className="row wrap gap-2">
                 <Badge

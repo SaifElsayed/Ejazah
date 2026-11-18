@@ -34,9 +34,21 @@
 // order event names its payment (ERD §15 rule 20): it is answered, written nowhere, and reported.
 // The log line and the report name the provider event id and the type, never the order id or the
 // body (R-SEC-2).
+//
+// A REFUND (003:T102; ADR 0025 D3, SRS DEC-82; the owner's decisions of 2026-11-18, Q-2 (a) with its
+// safety net). A refund child reports its signed amount, a void the whole order. Under the order's
+// lock, while the order is `paid`, `packages/money`'s `refundedTotal` adds it to the order's
+// `refunded_piasters`; the order becomes `refunded` when the total reaches its gross, and a partial
+// refund leaves it `paid`. A total past the gross is refused as T056's mismatch is: logged with
+// ids and a reason, reported (the gateway's order id, the provider event id and the amounts), the
+// event refused with `VALIDATION_FAILED`, nothing recorded. A replay adds nothing (the event is
+// recorded first, under its unique provider event id). `refund_reported`, a refund flagged on the
+// original payment with no signed amount, is recorded, adds no money and moves nothing; it sets
+// `refund_reported_at` the first time (`WHERE refund_reported_at IS NULL`), with one log line of ids
+// and a reason, so the monitor shows an administrator a refund whose child event never came.
 import { createHash } from 'node:crypto';
 
-import { toPlainNumber } from '@ijazah/money';
+import { type Piasters, RefundPastGrossError, refundedTotal, toPlainNumber } from '@ijazah/money';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { reportError } from '../../platform/errors/reporting.js';
@@ -45,6 +57,7 @@ import type { GatewayEvent } from '../../platform/ports/payment/payment.port.js'
 import {
   lockOrder,
   type OrderEventType,
+  type OrderRefunds,
   type OrderRef,
   type OrderStatus,
   orderNamed,
@@ -125,6 +138,7 @@ const MOVES_FROM: Readonly<Record<OrderEventType, readonly OrderStatus[]>> = {
   failed: ['created'],
   expired: ['created'],
   refunded: ['paid'],
+  refund_reported: [],
 };
 
 export class OrderEventsService {
@@ -192,6 +206,13 @@ export class OrderEventsService {
       receivedAt: receipt.receivedAt,
     });
     if (!recorded) return 'replayed';
+    if (event.type === 'refunded' || event.type === 'refund_reported') {
+      return applyRefund(payments, order, event, {
+        log: this.#log,
+        report: this.#report,
+        now: this.#now,
+      });
+    }
     const status = await payments.statusOf(order.paymentId);
     if (!MOVES_FROM[event.type].includes(status)) return 'unchanged';
     await payments.moveOrder(order.paymentId, event.type, reportedBy(event));
@@ -230,4 +251,110 @@ function reportedBy(event: OrderEvent): ReportedPayment | undefined {
     gateway_fee_piasters: event.gateway_fee_piasters,
     net_piasters: event.net_piasters,
   };
+}
+
+/** 003:T102: what the refund functions use of the service: its log, its reporting and its clock. */
+interface RefundContext {
+  readonly log: Pick<Logger, 'warn'>;
+  readonly report: (error: Error) => void;
+  readonly now: () => Date;
+}
+
+/** 003:T102: a refund that would take its order's refunded total past the gross; ids and amounts. */
+export interface RefundPastOrder {
+  readonly gatewayOrderId: string;
+  readonly providerEventId: string;
+  readonly refund: number;
+  readonly refunded: number;
+  readonly order: number;
+}
+
+/** A refund past its order's gross; nothing of it was recorded (T056's precedent). */
+export class RefundPastOrderError extends Error {
+  constructor(readonly details: RefundPastOrder) {
+    const { gatewayOrderId, providerEventId, refund, refunded, order } = details;
+    super(
+      `The refund event ${providerEventId} of gateway order ${gatewayOrderId} reports ` +
+        `${String(refund)} on a refunded total of ${String(refunded)} for an order of ` +
+        `${String(order)}; nothing was recorded.`,
+    );
+    this.name = 'RefundPastOrderError';
+  }
+}
+
+/**
+ * 003:T102: applies a recorded refund event under the order's lock (`lockOrder`, held by the caller,
+ * T005's rule 1). A refund adds its amount only while the order is `paid`, and moves the order to
+ * `refunded` when the total reaches the gross; a reported flag adds and moves nothing.
+ */
+async function applyRefund(
+  payments: PaymentsRepository,
+  order: OrderRef,
+  event: Extract<OrderEvent, { readonly type: 'refunded' | 'refund_reported' }>,
+  context: RefundContext,
+): Promise<OrderOutcome> {
+  if (event.type === 'refund_reported') return reportRefund(payments, order, event, context);
+  const refunds = await payments.refundsOf(order.paymentId);
+  if (refunds.status !== 'paid') return 'unchanged';
+  const total_piasters =
+    event.refunded_piasters === 'whole_order'
+      ? refunds.gross_piasters
+      : totalAfter(refunds, order, event, event.refunded_piasters, context);
+  await payments.recordRefundedTotal(order.paymentId, total_piasters);
+  if (total_piasters !== refunds.gross_piasters) return 'unchanged';
+  await payments.moveOrder(order.paymentId, 'refunded', undefined);
+  return 'moved';
+}
+
+/** The refunded total after `refund_piasters`; refused, logged and reported past the gross. */
+function totalAfter(
+  refunds: OrderRefunds,
+  order: OrderRef,
+  event: OrderEvent,
+  refund_piasters: Piasters,
+  { log, report }: RefundContext,
+): Piasters {
+  try {
+    return refundedTotal(refunds.refunded_piasters, refund_piasters, refunds.gross_piasters);
+  } catch (error: unknown) {
+    if (!(error instanceof RefundPastGrossError)) throw error;
+    log.warn(
+      {
+        paymentId: order.paymentId,
+        providerEventId: event.providerEventId,
+        reason: 'refund_past_gross',
+      },
+      'A refund event passes its order’s gross; nothing was recorded',
+    );
+    report(
+      new RefundPastOrderError({
+        gatewayOrderId: event.gatewayOrderId,
+        providerEventId: event.providerEventId,
+        refund: toPlainNumber(refund_piasters),
+        refunded: toPlainNumber(refunds.refunded_piasters),
+        order: toPlainNumber(refunds.gross_piasters),
+      }),
+    );
+    throw new DomainError('VALIDATION_FAILED', 'The refund event passes its order’s amount.');
+  }
+}
+
+/** A refund flagged with no amount: its instant set once, one log line, no money, no move. */
+async function reportRefund(
+  payments: PaymentsRepository,
+  order: OrderRef,
+  event: OrderEvent,
+  { log, now }: RefundContext,
+): Promise<OrderOutcome> {
+  if (await payments.markRefundReported(order.paymentId, now())) {
+    log.warn(
+      {
+        paymentId: order.paymentId,
+        providerEventId: event.providerEventId,
+        reason: 'refund_flag_without_amount',
+      },
+      'The gateway flagged a refund with no amount; no money was recorded',
+    );
+  }
+  return 'unchanged';
 }

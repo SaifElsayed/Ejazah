@@ -21,6 +21,8 @@ const ITEM = {
   createdAt: '2026-11-03T10:00:00.000Z',
   student: { displayName: 'آمال علي' },
   gross_piasters: 120_000,
+  // 003:T102: the refunded total, 0 until a refund is recorded.
+  refunded_piasters: 0,
   status: 'created',
   enrollmentCancelled: false,
 };
@@ -73,5 +75,14 @@ describe('a listed order', () => {
     expect(paymentsListItem.parse(unreported)).toEqual(unreported);
     expect(paymentsListItem.safeParse({ ...ITEM, gross_piasters: -1 }).success).toBe(false);
     expect(paymentsListItem.safeParse({ ...ITEM, net_piasters: 1.5 }).success).toBe(false);
+  });
+
+  it('always carries its refunded total, never negative or fractional (003:T102, DEC-82)', () => {
+    const partly = { ...ITEM, status: 'paid', refunded_piasters: 30_000 };
+    expect(paymentsListItem.parse(partly)).toEqual(partly);
+    const { refunded_piasters: _absent, ...without } = ITEM;
+    expect(paymentsListItem.safeParse(without).success).toBe(false);
+    expect(paymentsListItem.safeParse({ ...ITEM, refunded_piasters: -1 }).success).toBe(false);
+    expect(paymentsListItem.safeParse({ ...ITEM, refunded_piasters: 0.5 }).success).toBe(false);
   });
 });

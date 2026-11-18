@@ -1878,7 +1878,8 @@
         "order": "الطلب",
         "status": "الحالة",
         "student": "الطالب",
-        "teacherShare": "نصيب المعلم"
+        "teacherShare": "نصيب المعلم",
+        "refunded": "المسترد"
       },
       "dash": "—",
       "detail": {
@@ -1898,6 +1899,7 @@
           "orderFailed": "سُجّل فشل الطلب على الاشتراك",
           "paid": "أبلغت البوابة بنجاح الدفع",
           "refunded": "أبلغت البوابة بالاسترداد",
+          "refundReported": "أشارت البوابة إلى استرداد على الدفعة الأصلية دون مبلغ",
           "transaction": "رقم المعاملة {id}",
           "enrollmentCompleted": "اكتمل الاشتراك",
           "enrollmentTerminatedNoShow": "انتهى الاشتراك لغياب المعلم",
@@ -1922,7 +1924,9 @@
         "holdReleased": "حُرّر {released} · {reason}",
         "holdNotReleased": "لم يُحرَّر",
         "holdReasonNotRecorded": "السبب لم يُسجَّل",
-        "teacherShare": "نصيب المعلم"
+        "teacherShare": "نصيب المعلم",
+        "refundedTotal": "المسترد حتى الآن",
+        "refundReported": "أبلغت البوابة باسترداد على هذا الطلب دون مبلغه؛ المسترد أعلاه يحسب فقط الاستردادات التي وصل مبلغها."
       },
       "empty": {
         "text": "جرّب مرجعًا أو اسمًا آخر، أو أزل فلترًا.",

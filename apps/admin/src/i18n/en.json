@@ -1878,7 +1878,8 @@
         "order": "Order",
         "status": "Status",
         "student": "Student",
-        "teacherShare": "Teacher share"
+        "teacherShare": "Teacher share",
+        "refunded": "Refunded"
       },
       "dash": "—",
       "detail": {
@@ -1898,6 +1899,7 @@
           "orderFailed": "The failed order was recorded on the enrollment",
           "paid": "Gateway reported the payment succeeded",
           "refunded": "The gateway reported a refund",
+          "refundReported": "The gateway flagged a refund on the original payment, with no amount",
           "transaction": "Transaction number {id}",
           "enrollmentCompleted": "The enrollment was completed",
           "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
@@ -1922,7 +1924,9 @@
         "holdReleased": "Released {released} · {reason}",
         "holdNotReleased": "Not released",
         "holdReasonNotRecorded": "reason not recorded",
-        "teacherShare": "Teacher share"
+        "teacherShare": "Teacher share",
+        "refundedTotal": "Refunded so far",
+        "refundReported": "The gateway reported a refund on this order without its amount; the refunded total above counts only the refunds whose amount arrived."
       },
       "empty": {
         "text": "Try another reference or name, or remove a filter.",

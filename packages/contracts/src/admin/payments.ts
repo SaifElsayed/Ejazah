@@ -55,6 +55,8 @@ export const paymentsListItem = z.object({
   /** 003:T104: the rate and the teacher's share kept on the order; absent before the commission. */
   teacherShareRatePercent: teacherSharePercent.optional(),
   teacherShare_piasters: reportedPiasters.optional(),
+  /** 003:T102 (DEC-82): the order's refunded total, 0 until a refund is recorded. Additive (R-API-9). */
+  refunded_piasters: reportedPiasters,
   status: paymentStatus,
   /** The order is paid and its enrollment was cancelled (a `slot_unavailable` refusal, FR-PAYG-19). */
   enrollmentCancelled: z.boolean(),
@@ -69,7 +71,14 @@ export const paymentsListOutput = z.object({
 export const paymentsGetInput = z.object({ paymentId: z.uuid() });
 
 /** ERD `payment_event_type`, of a gateway order: its signed events. */
-export const paymentEventType = z.enum(['paid', 'failed', 'expired', 'refunded']);
+export const paymentEventType = z.enum([
+  'paid',
+  'failed',
+  'expired',
+  'refunded',
+  // 003:T102 (Q-2 (a)'s safety net, DEC-82): a refund flagged on the original payment, no amount.
+  'refund_reported',
+]);
 
 /**
  * ERD `enrollment_event_kind`: an outcome booking recorded for the enrollment (R-216); Phase 3's
@@ -148,6 +157,13 @@ export const paymentsGetOutput = z.object({
   /** 003:T104: as on the list. */
   teacherShareRatePercent: teacherSharePercent.optional(),
   teacherShare_piasters: reportedPiasters.optional(),
+  /** 003:T102 (DEC-82): as on the list. */
+  refunded_piasters: reportedPiasters,
+  /**
+   * 003:T102 (Q-2 (a)'s safety net): when the gateway first flagged a refund on the original
+   * payment, which reports no amount; absent while it has not. Additive (R-API-9).
+   */
+  refundReportedAt: z.iso.datetime().optional(),
   currency: z.string().length(3),
   student: namedPerson,
   /** Absent only for an enrollment no ordinary read returns (a soft-deleted one, ERD §0). */
