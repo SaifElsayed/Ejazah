@@ -58,6 +58,8 @@ export const NAV_GROUPS: readonly {
       { path: '/users', label: 'admin.nav.items.users', icon: 'users' },
       // T053: the payments monitor, before the settings as the board orders the group.
       { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
+      // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
+      { path: '/payouts', label: 'admin.money.payouts.nav', icon: 'landmark' },
       // B42 (the note under T048, Q4): the video outages.
       { path: '/outages', label: 'admin.nav.items.outages', icon: 'video-off' },
       { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },

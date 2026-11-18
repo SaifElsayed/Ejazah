@@ -18,6 +18,7 @@
 // none, as the server answers it `NOT_FOUND`. None of the board's date of birth, sign-in method,
 // time zone, enrollments' summary, identity requests, «require an identity proof», «bar from
 // ijazahs» or a teacher's standing actions (the note under T058, Q2).
+// 003:T105 (DEC-89): a teacher's record links to his «تحويلات المعلمين» (`/payouts?teacher=`).
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -106,6 +107,7 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
   const yesNo = (value: boolean) => t(value ? 'admin.common.yes' : 'admin.common.no');
   const actions = standingActions(record);
   const lifts = liftActions(record);
+  const payoutsHref = `/payouts?teacher=${record.userId}`;
 
   return (
     <>
@@ -126,6 +128,14 @@ function UserRecordPanel({ record }: { readonly record: UserRecord }) {
                   status: t(status.label),
                 })}
               </span>
+              {/* 003:T105 (DEC-89): a teacher's record links to his «تحويلات المعلمين». */}
+              {record.role === 'teacher' ? (
+                <TextLink
+                  label={t('admin.money.payouts.userLink')}
+                  href={payoutsHref}
+                  onPress={() => void navigate(payoutsHref)}
+                />
+              ) : null}
             </span>
           </span>
         }
