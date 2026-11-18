@@ -158,6 +158,8 @@ import type {
   // T077 of specs/004-sessions: a deleted teacher's kept data.
   teachersKeptDocumentLinkInput,
   teachersKeptDocumentLinkOutput,
+  teachersKeptSignatureLinkInput,
+  teachersKeptSignatureLinkOutput,
   teachersKeptEraseDateInput,
   teachersKeptEraseNowInput,
   // T082 of specs/004-sessions: an administrator's direct end of an enrollment.
@@ -580,6 +582,12 @@ export interface AdminSurfaceServices {
         actorId: string,
         input: z.output<typeof teachersKeptDocumentLinkInput>,
       ): Answer<typeof teachersKeptDocumentLinkOutput>;
+      // 005:T031 (B47, Q-D2 (a)): the kept signature, one signed link per press, with a reason.
+      signatureLink(
+        tx: Transaction,
+        actorId: string,
+        input: z.output<typeof teachersKeptSignatureLinkInput>,
+      ): Answer<typeof teachersKeptSignatureLinkOutput>;
       setEraseDate(
         tx: Transaction,
         actorId: string,

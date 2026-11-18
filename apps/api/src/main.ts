@@ -275,6 +275,9 @@ const services = {
       consequences,
       fileErasures: [
         verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
+        // 005:T031 (B47, Q-D3 (a), Q-D4 (a)): a never-approved teacher's signature, erased after the
+        // deletion's commit; an approved teacher's waits for the kept data's erasure (worker.ts).
+        verification.createKeptSignatureErasure({ database, storage: ports.storage }),
       ],
       // T004 of specs/004-sessions (FR-487, R-327): identity's `FileHold` port, bound to booking's
       // entry, so identity imports no booking.
@@ -285,6 +288,18 @@ const services = {
       // T080 of specs/004-sessions (FR-511): the deletion's count of ongoing enrollments, booking's,
       // asked on the deletion's own transaction after the account's lock, so identity imports no booking.
       ongoingEnrollments: booking.createOngoingEnrollments({ settings }),
+      // 005:T031 (B47; FR-630; R-414; the note under T031, Q-D1 (a)): a teacher's deletion waits for
+      // their open ijazah requests (certification's count) and, by an administrator, their open
+      // compensation cases (booking's enrollment ids composed with moderation's count), on the
+      // deletion's transaction after the account's lock; identity imports neither module.
+      openIjazahRequests: { count: certification.openRequestCountOfTeacher },
+      openCases: {
+        count: async (tx, teacherUserId) =>
+          moderation.openCompensationCasesAmong(
+            tx,
+            await booking.enrollmentIdsOfTeacher(tx, teacherUserId),
+          ),
+      },
     }),
     // T004 of specs/005-certification (FR-602): the certificate name. Its `AwaitingNameRelease` is
     // bound to certification's request service (T006), so identity imports no module.

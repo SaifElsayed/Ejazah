@@ -2678,6 +2678,20 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "teachers.keptData.signatureLink": {
+        "input": {
+          "$": { "type": "object" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.teacherUserId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.expiresAt": { "required": true, "type": "string" },
+          "$.pageCount": { "type": "integer" },
+          "$.url": { "required": true, "type": "string" }
+        }
+      },
       "teachers.liftBan": {
         "input": {
           "$": { "type": "object" },
@@ -2808,6 +2822,8 @@
           "$.keptData.eraseAt": { "required": true, "type": "null|string" },
           "$.keptData.erasedAt": { "required": true, "type": "null|string" },
           "$.keptData.payoutKept": { "required": true, "type": "boolean" },
+          "$.keptData.signature": { "required": true, "type": "null|object" },
+          "$.keptData.signature.uploadedAt": { "required": true, "type": "string" },
           "$.payoutKeptOnDeletedTeacher": { "type": "boolean" },
           "$.profile": { "required": true, "type": "object" },
           "$.profile.deleted": { "required": true, "type": "boolean" },

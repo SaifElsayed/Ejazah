@@ -167,6 +167,9 @@ const unreferencedDocuments = verification.createUnreferencedDocuments({
 const erasedFiles = [
   verification.createDocumentErasure({ database, cipher, storage: ports.storage }),
   identity.createErasedPhotos(database),
+  // 005:T031 (B47, Q-D3 (a)): a teacher's kept signature, the file then the row, once the kept data's
+  // erasure is set (the administrator's date or «now»), never at an approved teacher's deletion.
+  verification.createKeptSignatureErasure({ database, storage: ports.storage }),
 ];
 
 // The administrator's invite (T066, R-110): the admin module prepares each mail, the link pointing

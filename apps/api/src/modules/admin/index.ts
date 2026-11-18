@@ -173,7 +173,8 @@ export interface AdminServices {
      * T077 of specs/004-sessions (FR-509; SRS FR-ADMIN-21; Q-R3 (a)): `teachers.keptData.*`,
      * verification's kept-data service, keyed on the call's transaction (`runOn`).
      */
-    readonly keptData: Pick<KeptData, 'documentLink' | 'setEraseDate' | 'eraseNow'>;
+    // 005:T031 (B47, Q-D2 (a)): `signatureLink`, the kept signature.
+    readonly keptData: Pick<KeptData, 'documentLink' | 'signatureLink' | 'setEraseDate' | 'eraseNow'>;
   };
   /** A student's standing, identity's (T005 of specs/004-sessions, `002:T144`). */
   readonly students: Pick<
