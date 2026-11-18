@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { closeCase, openCompensationCase } from './compensation-case.service.js';
+// 005:T014: the correction's reason.
+import { COMPENSATION_REASONS, COVERING_REASONS } from './compensation-case.service.js';
 
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000000e1';
 const CASE = '0199d0a0-0000-7000-8000-0000000000c1';
@@ -141,5 +143,16 @@ describe('closeCase', () => {
       '$queryRaw',
       'updateMany',
     ]);
+  });
+});
+
+// 005:T014 (B47; FR-616, FR-GENDER-7; research R-409; data-model.md: a closed list in code, no
+// migration): a gender correction's case, at the list's end; never a covering reason (Phase 2's
+// three only). Written before the list changed, run red first.
+describe('COMPENSATION_REASONS: the gender correction (005:T014)', () => {
+  it('ends with gender_correction, which covers no second paid order', () => {
+    expect(COMPENSATION_REASONS.at(-1)).toBe('gender_correction');
+    expect(COMPENSATION_REASONS.at(-2)).toBe('admin_ended');
+    expect(COVERING_REASONS).not.toContain('gender_correction');
   });
 });

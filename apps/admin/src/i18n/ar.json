@@ -176,6 +176,7 @@
         "documentView": "عرض وثيقة",
         "enrollmentRestored": "استعادة اشتراك",
         "genderFlags": {
+          "corrected": "تصحيح الجنس المعلن",
           "dismissed": "رفض بلاغ جنس",
           "listed": "عرض بلاغات الجنس",
           "raised": "رفع بلاغ جنس",

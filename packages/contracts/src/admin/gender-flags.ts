@@ -106,3 +106,21 @@ export type AdminGenderFlagsGetOutput = z.infer<typeof adminGenderFlagsGetOutput
 export type AdminGenderFlagsRaiseInput = z.infer<typeof adminGenderFlagsRaiseInput>;
 export type AdminGenderFlagsRaiseOutput = z.infer<typeof adminGenderFlagsRaiseOutput>;
 export type AdminGenderFlagsDismissInput = z.infer<typeof adminGenderFlagsDismissInput>;
+
+// 005:T014 (FR-616; SRS FR-GENDER-7; research R-409; the note under T014): the correction of an
+// honest error. It takes the flag, a reason and a key, never a gender: the person's declared gender
+// becomes the other one, the server's reading of the flag (no administrator types a gender, the
+// R-GENDER-6 CI test). It answers how many confirmed enrollments it ended (never restorable,
+// DEC-69). ⚠️ Irreversible ends.
+export const adminGenderFlagsCorrectInput = z.object({
+  flagId: z.uuid(),
+  reason: adminReason,
+  idempotencyKey,
+});
+
+export const adminGenderFlagsCorrectOutput = z.object({
+  endedEnrollments: z.int().nonnegative(),
+});
+
+export type AdminGenderFlagsCorrectInput = z.infer<typeof adminGenderFlagsCorrectInput>;
+export type AdminGenderFlagsCorrectOutput = z.infer<typeof adminGenderFlagsCorrectOutput>;

@@ -366,3 +366,15 @@ export type { IjazahsService };
 
 /** 005:T010: the `ijazahs` namespace of the administrator surface, mounted by `admin.router.ts`. */
 export { ijazahsAdminRouter } from './ijazahs-admin.router.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T014 (B47; Q-G4 (a); SC-604): a party's unsigned ijazahs re-rendered after a change of their
+// declared gender, last on the correction's (T014) and the fraud ban's (T015) transaction, enqueued
+// after the commit. The admin module builds it over `main.ts`'s `ijazahRenders`.
+export {
+  createPartyRerender,
+  type PartyRerender,
+  type PartyRerenderDependencies,
+  type PartyRerenderStore,
+  partyRerenderStore,
+} from './party-rerender.service.js';

@@ -23,8 +23,8 @@
 // proving anything. The fixtures below therefore build routers holding a real procedure of each
 // kind: a pair that keeps the surfaces apart, which passes, and routers that leak, which fail, so
 // the checks are shown to bite before the real routers give them anything to read.
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { authorityAllowList, onboardingCompleteInput } from '@ijazah/contracts';
@@ -316,5 +316,37 @@ describe('no procedure on either router changes one’s own gender (005:T013, R-
 
   it('the administrator surface: no procedure takes a gender', () => {
     expect(takingGender(adminRouter)).toEqual([]);
+  });
+});
+
+// 005:T014 — only the administrators' correction and fraud ban write `users.gender` after the
+// account's creation (R-GENDER-6, FR-618; research R-409): identity's one setter,
+// `setDeclaredGender`, is reached from no file of the API but its own and the admin module's
+// gender decisions (T014's correction, T015's fraud ban), never a surface, a router or a user path.
+// Red first under the mutant «the setter called from a user path» (lane D's `mutants\`).
+describe('only the administrators’ gender decisions write a declared gender (005:T014, R-GENDER-6)', () => {
+  const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const ALLOWED = new Set([
+    'modules/identity/declared-gender.repository.ts',
+    'modules/identity/index.ts',
+    'modules/admin/gender-decisions.service.ts',
+  ]);
+
+  /** Every non-spec source file of the API, relative to `src`. */
+  function sourcesUnder(directory: string): string[] {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const full = resolve(directory, entry.name);
+      if (entry.isDirectory()) return entry.name === '__fixtures__' ? [] : sourcesUnder(full);
+      return entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts') ? [full] : [];
+    });
+  }
+
+  it('names setDeclaredGender only in identity’s writer, its entry and the admin module’s decisions', () => {
+    const naming = sourcesUnder(sourceRoot)
+      .filter((file) => readFileSync(file, 'utf8').includes('setDeclaredGender'))
+      .map((file) => relative(sourceRoot, file).split(sep).join('/'))
+      .filter((file) => !ALLOWED.has(file))
+      .sort();
+    expect(naming).toEqual([]);
   });
 });

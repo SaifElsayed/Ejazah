@@ -249,6 +249,9 @@ export const compensationCaseReason = z.enum([
   'teacher_suspended',
   // T082 (FR-513; SRS FR-CANCEL-10): an administrator's direct end; added, additively (R-API-9).
   'admin_ended',
+  // 005:T014 (B47; FR-616, FR-GENDER-7): a gender correction's end, one case per enrollment it
+  // ended; added, additively (R-API-9).
+  'gender_correction',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
@@ -502,6 +505,9 @@ export const restoreRefusalCause = z.enum([
   'time_taken',
   // T073 (FR-507; the note under T073, Q4 (a)): any order of the enrollment refunded.
   'refunded',
+  // 005:T014 (B47; FR-617; research R-409): step 3, the pairing's two declared genders differ,
+  // whatever closed the enrollment (DEC-69); added, additively (R-API-9).
+  'gender_mismatch',
 ]);
 
 export const sessionsRestoreInput = z.object({

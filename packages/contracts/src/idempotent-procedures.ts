@@ -88,6 +88,8 @@ export const idempotentProcedures = [
   // own (`(scope, actor_id, key)`, ERD §15 rule 26), so a user and an administrator never share one.
   'genderFlags.raise',
   'genderFlags.dismiss',
+  // 005:T014 (admin-surface.md, `genderFlags.correct`): on the kind's transaction (runOn).
+  'genderFlags.correct',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

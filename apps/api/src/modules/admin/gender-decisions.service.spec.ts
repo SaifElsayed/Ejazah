@@ -90,7 +90,19 @@ const flags: AdminGenderFlags = {
   },
 };
 
-const decisions = createGenderDecisions({ flags, log, reads });
+/** T013's cases reach none of the correction's dependencies (005:T014). */
+const unreached = (): never => {
+  throw new Error('the correction is not this case');
+};
+const decisions = createGenderDecisions({
+  flags,
+  log,
+  reads,
+  enrollments: { enrollmentFor: unreached, lockEnrollments: unreached, cancel: unreached },
+  idempotency: { runOn: unreached },
+  orders: unreached,
+  rerenderOfParty: unreached,
+});
 
 function worldOf(person: Gender) {
   const other = otherGender(person);

@@ -104,6 +104,8 @@ import {
 } from '../certification/index.js';
 // 005:T010 of specs/005-certification: an administrator's ijazahs, their revocation and the bar.
 import { createIjazahsService, type IjazahsService } from '../certification/index.js';
+// 005:T014 (B47; Q-G4 (a)): a corrected person's unsigned ijazahs re-rendered.
+import { createPartyRerender } from '../certification/index.js';
 // 005:T013 (B47): the gender-flag queue, moderation's flags composed here (R-409, Q-G1 (a)).
 import type { AdminGenderFlags } from '../moderation/index.js';
 // 005:T014 (B47): the correction's hold release reads payments' order standing (Q-G2 (c)).
@@ -566,8 +568,19 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       // 005:T032 of B46: a re-render's job, on the approval's queue (`main.ts`'s `ijazahRenders`).
       renders: dependencies.ijazahRenders,
     }),
-    // 005:T013 of B47: the gender-flag queue.
-    genderFlags: createGenderDecisions({ flags: dependencies.genderFlags, log: dependencies.log }),
+    // 005:T013 of B47: the gender-flag queue; 005:T014: the correction over the bound enrollment
+    // side, the kernel's idempotency, payments' order standing and certification's re-render.
+    genderFlags: createGenderDecisions({
+      flags: dependencies.genderFlags,
+      log: dependencies.log,
+      enrollments: dependencies.enrollmentSide,
+      idempotency: dependencies.idempotency,
+      orders: dependencies.orders,
+      rerenderOfParty: createPartyRerender({
+        renders: dependencies.ijazahRenders,
+        log: dependencies.log,
+      }).rerenderOfParty,
+    }),
   };
 }
 

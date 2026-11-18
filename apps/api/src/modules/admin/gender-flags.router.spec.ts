@@ -81,6 +81,11 @@ function surface({
       reached.push(['dismiss', tx, adminId, input]);
       return { flaggedUserId: FLAGGED, replayed };
     },
+    // 005:T014.
+    correct: async (tx: unknown, adminId: string, input: unknown) => {
+      reached.push(['correct', tx, adminId, input]);
+      return { flaggedUserId: FLAGGED, from: 'male', to: 'female', endedEnrollments: 2, replayed };
+    },
   };
   const services = new Proxy(unusedAdminServices, {
     get: (target, name, receiver) =>
@@ -146,6 +151,9 @@ const calls = {
     caller.genderFlags.raise({ targetUserId: FLAGGED, reason: REASON, idempotencyKey: KEY }),
   'genderFlags.dismiss': (caller: Caller) =>
     caller.genderFlags.dismiss({ flagId: FLAG, reason: REASON, idempotencyKey: KEY }),
+  // 005:T014.
+  'genderFlags.correct': (caller: Caller) =>
+    caller.genderFlags.correct({ flagId: FLAG, reason: REASON, idempotencyKey: KEY }),
 } as const;
 
 type Path = keyof typeof calls;
@@ -156,6 +164,7 @@ const limits: Record<Path, string> = {
   'genderFlags.get': 'rate_limit_signed_in_default',
   'genderFlags.raise': 'rate_limit_gender_decision',
   'genderFlags.dismiss': 'rate_limit_gender_decision',
+  'genderFlags.correct': 'rate_limit_gender_decision',
 };
 
 describe('the administrator kind', () => {
@@ -277,5 +286,37 @@ describe('genderFlags.raise and .dismiss (FR-614, FR-615)', () => {
       ),
     ).toBe('VALIDATION_FAILED');
     expect(s.reached).toEqual([]);
+  });
+});
+
+// 005:T014 (FR-616; research R-409; the note under T014, Q-G6 (a)): the correction answers how many
+// enrollments it ended and nothing else; its audit entry, `gender.corrected` on the person with the
+// reason, carries the declared gender before and after (the evidence, Q-G6 (a); never a log line)
+// and the flag (ruling 3(1)); a replay records none. Written before the procedure, run red.
+describe('genderFlags.correct (FR-616)', () => {
+  it('corrects through the service, answers the count, audited on the person with the gender before and after', async () => {
+    const s = surface();
+    expect(await calls['genderFlags.correct'](s.verified())).toEqual({ endedEnrollments: 2 });
+    expect(s.reached).toEqual([
+      ['correct', TX, ADMIN, { flagId: FLAG, reason: REASON, idempotencyKey: KEY }],
+    ]);
+    expect(s.written).toEqual([
+      {
+        action: 'gender.corrected',
+        targetType: 'user',
+        targetId: FLAGGED,
+        reason: REASON,
+        before: { gender: 'male' },
+        after: { gender: 'female', flagId: FLAG },
+        adminId: ADMIN,
+      },
+    ]);
+  });
+
+  it('a replayed correction records no second entry', async () => {
+    const s = surface({ replayed: true });
+    await calls['genderFlags.correct'](s.verified());
+    expect(s.reached).toHaveLength(1);
+    expect(s.written).toEqual([]);
   });
 });

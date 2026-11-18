@@ -104,6 +104,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'gender_flag.viewed': 'admin.audit.actions.genderFlags.viewed',
   'gender_flag.raised': 'admin.audit.actions.genderFlags.raised',
   'gender_flag.dismissed': 'admin.audit.actions.genderFlags.dismissed',
+  // 005:T014 (B47; FR-616): the correction.
+  'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

@@ -286,7 +286,9 @@ async function lockAll(
 function cancellationOf(
   reason: ReleaseReason,
   standing: OrderStanding | undefined,
+  enrollmentReason: EnrollmentCancellationReason | undefined,
 ): EnrollmentCancellationReason {
+  if (enrollmentReason !== undefined) return enrollmentReason;
   if (reason !== 'expired') return reason;
   return standing?.lastFailed === true ? 'payment_failed' : 'payment_expired';
 }
@@ -298,6 +300,7 @@ async function release(
   reason: ReleaseReason,
   dependencies: ReleaseDependencies,
   alsoLocked: readonly string[],
+  enrollmentReason?: EnrollmentCancellationReason,
 ): Promise<ReleasedHolds> {
   const store = dependencies.store ?? holdRows;
   const { at } = dependencies;
@@ -324,7 +327,7 @@ async function release(
     .filter((enrollmentId) => !keepsPaid(enrollmentId))
     .map((enrollmentId) => ({
       enrollmentId,
-      reason: cancellationOf(reason, standings.get(enrollmentId)),
+      reason: cancellationOf(reason, standings.get(enrollmentId), enrollmentReason),
     }));
   for (const why of new Set(cancelled.map((one) => one.reason))) {
     const ids = cancelled.filter((one) => one.reason === why).map((one) => one.enrollmentId);
@@ -348,14 +351,19 @@ async function release(
  * Under `'expired'` only a hold expired at `at` is released. An enrollment with a paid order stays
  * awaiting payment, with no row, except under `'slot_unavailable'`. Locks the holds, then their
  * enrollments, then (through `orders`) their orders; the caller holds nothing after the slot.
+ * 005:T014 of B47 (the owner's Q-G2 (c)): `enrollmentReason`, when given, is the enrollment's
+ * cancellation reason in place of the one the hold's reason gives (a gender correction releases its
+ * holds `admin` and cancels their enrollments `gender_correction`); the hold's own reason is
+ * unchanged, so `hold_release_reason` gains nothing.
  */
 export function releaseHolds(
   tx: Transaction,
   holdIds: readonly string[],
   reason: ReleaseReason,
   dependencies: ReleaseDependencies,
+  enrollmentReason?: EnrollmentCancellationReason,
 ): Promise<ReleasedHolds> {
-  return release(tx, holdIds, reason, dependencies, []);
+  return release(tx, holdIds, reason, dependencies, [], enrollmentReason);
 }
 
 /**

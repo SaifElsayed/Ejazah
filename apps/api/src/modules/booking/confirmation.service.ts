@@ -55,6 +55,9 @@ const TERMINATION_REASONS: ReadonlySet<EnrollmentCancellationReason> = new Set([
   'admin',
   'teacher_suspended',
   'account_deleted',
+  // 005:T014 of B47 (the owner's Q-G2 (c)): a gender correction cancels a pending enrollment with
+  // its own reason, so a paid event landing after it takes branch 4's `party_restricted` case.
+  'gender_correction',
 ]);
 
 /** The states an enrollment reaches only by a confirmation. */

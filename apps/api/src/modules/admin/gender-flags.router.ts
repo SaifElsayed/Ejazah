@@ -16,6 +16,8 @@
 // `after: { flagId }` (the review's ruling 3(1)). No entry and no line carries a gender.
 // Mounted under `genderFlags` by `admin.router.ts` (the integration's line).
 import {
+  adminGenderFlagsCorrectInput,
+  adminGenderFlagsCorrectOutput,
   adminGenderFlagsDismissInput,
   adminGenderFlagsGetInput,
   adminGenderFlagsGetOutput,
@@ -106,5 +108,28 @@ export const genderFlagsAdminRouter = createAdminRouter({
       reason: input.reason,
       after: { flagId: input.flagId },
     });
+  }),
+
+  // 005:T014 (FR-616; the note under T014, Q-G6 (a)): ⚠️ irreversible ends. The entry carries the
+  // declared gender before and after (the evidence; never a log line) and the flag.
+  correct: adminProcedure({
+    input: adminGenderFlagsCorrectInput,
+    output: adminGenderFlagsCorrectOutput,
+    rateLimit: GENDER_DECISION_LIMIT,
+  }).mutation(async ({ ctx, input }) => {
+    const { flaggedUserId, from, to, endedEnrollments, replayed } =
+      await ctx.services.genderFlags.correct(ctx.tx, ctx.administrator.adminId, input);
+    if (replayed) ctx.audit.replayed();
+    else {
+      ctx.audit.record({
+        action: 'gender.corrected',
+        targetType: PERSON_TARGET,
+        targetId: flaggedUserId,
+        reason: input.reason,
+        before: { gender: from },
+        after: { gender: to, flagId: input.flagId },
+      });
+    }
+    return { endedEnrollments };
   }),
 });

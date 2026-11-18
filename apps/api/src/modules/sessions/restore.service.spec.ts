@@ -247,7 +247,9 @@ function restoreOf(overrides: Partial<RestoreDependencies> = {}) {
         calls.push(['enrollmentFor']);
         // Once `restore` has answered true, the row reads `confirmed`, as the database would.
         const restored = calls.some(([name]) => name === 'restore') && given.restored;
-        return restored && given.terms !== null ? { ...given.terms, status: 'confirmed' } : given.terms;
+        return restored && given.terms !== null
+          ? { ...given.terms, status: 'confirmed' }
+          : given.terms;
       },
       lockEnrollments: async (_tx, ids) => void calls.push(['lockEnrollments', ids]),
       eventsOf: async () => given.events,
@@ -538,6 +540,22 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
     if (standing === undefined) given.parties.delete(userId);
     else given.parties.set(userId, standing);
     await expectRefused('party_restricted');
+  });
+
+  // 005:T014 (FR-617; research R-409, «The restore's pairing check»; DEC-69): a pairing whose two
+  // declared genders now differ is refused, whatever closed it, in both directions. Red first.
+  it.each([
+    ['the student corrected to male', STUDENT, party({ gender: 'male' })],
+    ['the teacher corrected to male', TEACHER, party({ gender: 'male', teacherApproved: true })],
+  ] as const)('gender_mismatch: %s', async (_name, userId, standing) => {
+    given.parties.set(userId, standing);
+    await expectRefused('gender_mismatch');
+  });
+
+  it('gender_mismatch never logs a gender, only ids and the cause', async () => {
+    given.parties.set(STUDENT, party({ gender: 'male' }));
+    await restore().catch(() => undefined);
+    expect(JSON.stringify(lines)).not.toContain('male');
   });
 
   it('slot_inactive: the slot deactivated', async () => {

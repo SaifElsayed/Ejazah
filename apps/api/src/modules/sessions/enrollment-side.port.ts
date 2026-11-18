@@ -164,9 +164,15 @@ export interface EnrollmentSide {
    * `confirmed` → `cancelled` with the reason `admin`, with one `cancelled` row naming it: a
    * suspended student's fault confirmed (T036, R-313); and (T082, Q-R15 (a)) an administrator's
    * direct end, `partyReason` written as `admin_end_reason`, the reason both parties are shown (rule
-   * 51). A restore clears it.
+   * 51). A restore clears it. 005:T014 of B47 (FR-616; research R-409): `gender_correction`, a
+   * gender correction's end, with one `cancelled` row naming it; never restored (DEC-69).
    */
-  cancel(tx: Transaction, id: string, reason: 'admin', partyReason?: string): Promise<boolean>;
+  cancel(
+    tx: Transaction,
+    id: string,
+    reason: 'admin' | 'gender_correction',
+    partyReason?: string,
+  ): Promise<boolean>;
   /**
    * T082 (the note under T082, Q-R15 (a)): booking's release core (`slot-release.service.ts`'
    * `releaseHeldSlot`), with no key, audit, limit or log: T070's locks (`lockKey('teacher-slots')`,

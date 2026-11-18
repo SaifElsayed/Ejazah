@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 
 import { isIdempotentProcedure } from '../idempotent-procedures.js';
 import {
+  adminGenderFlagsCorrectInput,
+  adminGenderFlagsCorrectOutput,
   adminGenderFlagsDismissInput,
   adminGenderFlagsGetInput,
   adminGenderFlagsGetOutput,
@@ -137,5 +139,28 @@ describe('genderFlags.dismiss', () => {
       adminGenderFlagsDismissInput.safeParse({ flagId: FLAG, idempotencyKey: KEY }).success,
     ).toBe(false);
     expect(isIdempotentProcedure('genderFlags.dismiss')).toBe(true);
+  });
+});
+
+// 005:T014 (FR-616; research R-409; admin-surface.md, `genderFlags.correct`): the correction takes the
+// flag, a reason and a key, never a gender (the other declared gender is the server's, from the
+// flag), and answers how many enrollments it ended.
+describe('genderFlags.correct', () => {
+  it('takes the flag, a reason and a key, strips a gender, and is keyed by the kernel', () => {
+    const input = { flagId: FLAG, reason: REASON, idempotencyKey: KEY };
+    expect(adminGenderFlagsCorrectInput.parse({ ...input, gender: 'female', to: 'male' })).toEqual(
+      input,
+    );
+    expect(
+      adminGenderFlagsCorrectInput.safeParse({ flagId: FLAG, idempotencyKey: KEY }).success,
+    ).toBe(false);
+    expect(isIdempotentProcedure('genderFlags.correct')).toBe(true);
+  });
+
+  it('answers the number of enrollments it ended, a whole number, and nothing else', () => {
+    expect(adminGenderFlagsCorrectOutput.parse({ endedEnrollments: 2, from: 'male' })).toEqual({
+      endedEnrollments: 2,
+    });
+    expect(adminGenderFlagsCorrectOutput.safeParse({ endedEnrollments: -1 }).success).toBe(false);
   });
 });

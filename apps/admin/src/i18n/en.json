@@ -176,6 +176,7 @@
         "documentView": "View a document",
         "enrollmentRestored": "Restore an enrollment",
         "genderFlags": {
+          "corrected": "Correct a declared gender",
           "dismissed": "Dismiss a gender flag",
           "listed": "View gender flags",
           "raised": "Raise a gender flag",
