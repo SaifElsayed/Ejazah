@@ -18,7 +18,9 @@
 // (`payment-outcome-notices.port.ts`), on the same transaction, for its enrollment's student, read
 // here in one statement: the push's row is written with its record or not at all. A payment outcome
 // with no port is refused before anything is written, so no caller loses a push silently; every
-// other outcome needs none. The push's row references the student's `users` row: which lock the
+// other outcome needs none. A caller that records a payment outcome that must not be pushed says so
+// with `'without_push'`: a refused late payment's `cancelled` record (Q-A1 (b), the owner's answer
+// of 2026-11-18; `refuseEnrollment`). The push's row references the student's `users` row: which lock the
 // caller holds on it is kernel.md's row «a payment outcome's push» (005:T016).
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
@@ -103,12 +105,13 @@ async function studentsOf(
 /**
  * Writes one row per outcome, in one statement on the caller's transaction; none for none. Then
  * 005:T016: each payment outcome's push through `notices`, on the same transaction (this file's
- * head); a payment outcome with no `notices` is refused before anything is written.
+ * head); a payment outcome with no `notices` is refused before anything is written, and
+ * `'without_push'` records the rows and pushes nothing (Q-A1 (b)).
  */
 export async function recordEnrollmentEvents(
   tx: Transaction,
   outcomes: readonly EnrollmentOutcome[],
-  notices?: PaymentOutcomeNotices,
+  notices?: PaymentOutcomeNotices | 'without_push',
 ): Promise<void> {
   if (outcomes.length === 0) return;
   const due = noticesOf(outcomes);
@@ -118,7 +121,7 @@ export async function recordEnrollmentEvents(
     );
   }
   await tx.enrollmentEvent.createMany({ data: outcomes.map(rowOf) });
-  if (due.length === 0 || notices === undefined) return;
+  if (due.length === 0 || notices === undefined || notices === 'without_push') return;
   const students = await studentsOf(
     tx,
     due.map(({ enrollmentId }) => enrollmentId),

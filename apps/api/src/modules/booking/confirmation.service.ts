@@ -32,9 +32,10 @@
 //
 // THE PUSHES (005:T016 of specs/005-certification; the note under T016, Q-N1 (a)). Each outcome's
 // record hands its push to the notice port the job passes (`payment-outcome-notices.port.ts`), on
-// the job's transaction: `confirmed` → `payment_confirmed`; a refusal's `cancelled` → a push only for
-// `payment_expired`. The push's row references the student, whose `users` row the job holds
-// `FOR UPDATE` (`lockForConfirmation`, first).
+// the job's transaction: `confirmed` → `payment_confirmed`. The push's row references the student, whose `users` row the job holds
+// `FOR UPDATE` (`lockForConfirmation`, first). A refusal's own `cancelled` record pushes nothing
+// (Q-A1 (b), the owner's answer of 2026-11-18), even with the reason `payment_expired` it keeps;
+// its release, under `slot_unavailable`, pushes nothing either.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   type EnrollmentParties,
@@ -191,7 +192,7 @@ export async function refuseEnrollment(
   dependencies: {
     readonly at: Date;
     readonly orders: OrderStandings;
-    /** 005:T016: the pushes of what the refusal records. */
+    /** 005:T016: handed to the release; a refusal itself pushes nothing (Q-A1 (b)). */
     readonly notices: PaymentOutcomeNotices;
   },
 ): Promise<EnrollmentCancellationReason> {
@@ -219,7 +220,9 @@ export async function refuseEnrollment(
         occurredAt: dependencies.at,
       },
     ],
-    dependencies.notices,
+    // Q-A1 (b), the owner's answer of 2026-11-18: the refused paid event's record pushes nothing,
+    // so an enrollment already cancelled for an expired payment is not told so twice.
+    'without_push',
   );
   return reason;
 }
