@@ -128,8 +128,9 @@ async function remindedAt(testCase: Case, now: string): Promise<string[]> {
   };
   const job = sendReminder({
     database: {
+      // `$queryRaw`: the parties' key share (#148 Saif r1, Major 1), which locks nothing here.
       $transaction: (async (work: (tx: Transaction) => Promise<unknown>) =>
-        work({} as Transaction)) as never,
+        work({ $queryRaw: async () => [] } as unknown as Transaction)) as never,
     },
     settings: settingsOf(testCase.offset),
     writer: { record: async () => ({ notificationId: '0199f6a0-0000-7000-8000-00000000c001' }) },

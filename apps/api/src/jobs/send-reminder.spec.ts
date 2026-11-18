@@ -76,6 +76,7 @@ interface Reminder {
 interface Staged {
   readonly notifications: Notification[];
   readonly reminders: Reminder[];
+  readonly trace: string[];
 }
 
 let counter = 0;
@@ -166,11 +167,18 @@ function sweepWorld({
   let enqueuedDuringTransaction = 0;
   let open = 0;
 
+  /** Each transaction's key shares and notifications, in the order it took them (#148 Major 1). */
+  const traces: string[][] = [];
   const stagedOf = (tx: Transaction): Staged => (tx as unknown as { staged: Staged }).staged;
   const database = {
     $transaction: (async (work: (client: Transaction) => Promise<unknown>) => {
-      const staged: Staged = { notifications: [], reminders: [] };
-      const tx = { staged } as unknown as Transaction;
+      const staged: Staged = { notifications: [], reminders: [], trace: [] };
+      // `keyShareRows`' one statement, its ids the first value.
+      const $queryRaw = async (_sql: TemplateStringsArray, ids: readonly string[]) => {
+        staged.trace.push(`key share ${ids.join(' ')}`);
+        return [];
+      };
+      const tx = { staged, $queryRaw } as unknown as Transaction;
       transactions += 1;
       open += 1;
       try {
@@ -180,6 +188,7 @@ function sweepWorld({
         return result;
       } finally {
         open -= 1;
+        if (staged.trace.length > 0) traces.push(staged.trace);
       }
     }) as never,
   };
@@ -252,6 +261,7 @@ function sweepWorld({
     repository: {
       insert: async (tx, row) => {
         const id = randomUUID();
+        stagedOf(tx as Transaction).trace.push(`notification ${row.userId}`);
         stagedOf(tx as Transaction).notifications.push({
           id,
           userId: row.userId,
@@ -285,6 +295,7 @@ function sweepWorld({
     logs,
     asked,
     settings: settingsReader,
+    traces,
     transactions: () => transactions,
     enqueuedDuringTransaction: () => enqueuedDuringTransaction,
     /** Lets the after-commit enqueues (fire-and-forget in the writer) settle. */
@@ -403,6 +414,24 @@ describe('send-reminder (005:T017)', () => {
       );
       expect(notification?.userId).toBe(reminder.userId);
     }
+  });
+
+  it('key-shares both parties first in each transaction, in id order, in one call (#148 Saif r1, Major 1)', async () => {
+    const LATER_TEACHER = '0199f6a0-0000-7000-8000-0000000000c1';
+    const first = session(at(20 * MINUTE));
+    const second = { ...session(at(20 * MINUTE)), teacherUserId: LATER_TEACHER };
+    const world = sweepWorld({ sessions: [first, second], settings: { offsets: [1440] } });
+
+    await run(world);
+
+    expect(world.traces).toEqual([
+      [`key share ${TEACHER} ${STUDENT}`, `notification ${TEACHER}`, `notification ${STUDENT}`],
+      [
+        `key share ${STUDENT} ${LATER_TEACHER}`,
+        `notification ${LATER_TEACHER}`,
+        `notification ${STUDENT}`,
+      ],
+    ]);
   });
 
   it('queues each reminder’s push under its notification’s id, only after its commit', async () => {

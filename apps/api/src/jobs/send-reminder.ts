@@ -29,15 +29,19 @@
 // ONE TRANSACTION PER (SESSION, OFFSET), bound to its own after-commit list (`bindToTransaction`, as
 // `identity/deletion.service.ts` binds its own), so `NotificationWriter.record` writes each party's
 // notification on it and its push is queued only after the commit, dropped on a rollback. Each
-// party's row is written after its notification (the row references it). THE KEY, NOT A LOCK: the
-// reads take no lock, and the primary key `(session_id, user_id, offset_minutes)` makes a rerun or a
-// concurrent run write nothing: a run that reads before another commits writes its row with
-// `ON CONFLICT DO NOTHING`, which waits for the other's uncommitted key and then writes nothing, and
-// the run then rolls its transaction back with its notification (`already_reminded`, logged). Both
-// parties are written in one order, the teacher's first, so two runs never wait on each other in
-// opposite orders. The notification and the row reference the session and the two users, rows the
-// application role cannot DELETE (`20261007000100_roles_and_privileges/migration.sql:34`), so no lock
-// holds them. The transactions run one after another, so a page holds one connection of the pool.
+// party's row is written after its notification (the row references it). THE PARTIES FIRST (#148
+// Saif r1, Major 1; kernel.md's `send-reminder` row): each transaction's first statement takes both
+// parties' `users` rows `FOR KEY SHARE`, in id order, in one call (`keyShareRows`), the lock the
+// notifications' foreign keys take later. So the row's own key share on the session comes after
+// every account, and a path that holds an account `FOR UPDATE` and then asks for the other account
+// or the session never closes a cycle with a reminder (T005's rule 2, `platform/db/row-lock.ts`).
+// THE KEY, NOT A LOCK: the reads take no lock, and the primary key
+// `(session_id, user_id, offset_minutes)` makes a rerun or a concurrent run write nothing: a run that
+// reads before another commits writes its row with `ON CONFLICT DO NOTHING`, which waits for the
+// other's uncommitted key and then writes nothing, and the run then rolls its transaction back with
+// its notification (`already_reminded`, logged). Both parties are written in one order, the
+// teacher's first, so two runs never wait on each other in opposite orders. The transactions run one
+// after another, so a page holds one connection of the pool.
 //
 // TIME (T018, R-TIME-1). The window is computed from instants only (`addMinutes` of `packages/time`),
 // never from a session's local date and time: across a clock change each offset is that many
@@ -63,6 +67,7 @@ import {
 } from '../modules/notifications/index.js';
 import { scheduledEndingWithin, type SessionToRemind } from '../modules/sessions/index.js';
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
+import { keyShareRows } from '../platform/db/row-lock.js';
 import { bindToTransaction, RequestLive, unboundBus } from '../platform/live/live-publisher.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import { EVERY_MINUTE, EXPIRY_PAGE_SIZE, inPages } from './expire-holds.js';
@@ -197,6 +202,8 @@ export function sendReminder({
       await database.$transaction(async (tx) => {
         const unbind = bindToTransaction(tx, live);
         try {
+          // Both parties first, id order, one call (the file's head; kernel.md).
+          await keyShareRows(tx, 'users', [session.teacherUserId, session.studentUserId].sort());
           for (const userId of userIds) {
             const { notificationId } = await writer.record(tx, {
               userId,

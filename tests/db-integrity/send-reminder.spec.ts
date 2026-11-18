@@ -10,9 +10,13 @@
 //     reads the committed instants, R-407);
 //   - a cancelled session is reminded never;
 //   - the re-send's window over `notifications.created_at`: `[now − 30, now − 5)` minutes, edges
-//     included and excluded as written, a pushed row never.
+//     included and excluded as written, a pushed row never;
+//   - THE LOCK ORDER (#148 Saif r1, Major 1; kernel.md's `send-reminder` row): a path holding the
+//     student's account `FOR UPDATE` and then asking for the teacher's account, or for the session,
+//     never deadlocks with a reminder, because each reminder's transaction key-shares both parties
+//     first, in id order, before its inserts key-share the session (Saif's probe, both shapes).
 //
-// Each case runs at an instant of its own in 2061 or 2062 (winter, Cairo +02:00), so the sweep, which
+// Each case runs at an instant of its own in 2061 to 2063 (winter, Cairo +02:00), so the sweep, which
 // reads every scheduled session of the database ending in its window, meets only that case's rows.
 // Parents and sessions are committed through the application role and removed after the suite by the
 // OWNER role, as `reresolve-session-instants.spec.ts` does.
@@ -55,6 +59,10 @@ import {
 const CAIRO = 'Africa/Cairo';
 
 let setup: Db;
+/** The lock-order race's other path and its watcher (Major 1). */
+let other: Db;
+let watch: Db;
+let otherPid: number;
 let database: Database;
 const users: string[] = [];
 const subjects: string[] = [];
@@ -62,7 +70,13 @@ const versions: string[] = [];
 
 beforeAll(async () => {
   specDatabaseUrl('DATABASE_URL_OWNER');
-  setup = await connectAsApplication();
+  [setup, other, watch] = await Promise.all([
+    connectAsApplication(),
+    connectAsApplication(),
+    connectAsApplication(),
+  ]);
+  const { rows } = await other.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+  otherPid = rows[0]?.pid ?? 0;
   database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
     poolMax: 4,
     statementTimeoutMs: 30_000,
@@ -71,7 +85,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await Promise.all([setup?.end(), database === undefined ? undefined : closeDatabase(database)]);
+  await Promise.all([
+    setup?.end(),
+    other?.end(),
+    watch?.end(),
+    database === undefined ? undefined : closeDatabase(database),
+  ]);
   const owner = new pg.Client({
     connectionString: specDatabaseUrl('DATABASE_URL_OWNER'),
     connectionTimeoutMillis: 5_000,
@@ -121,6 +140,17 @@ async function committedEnrollment(): Promise<Enrollment> {
   subjects.push(offer.subjectId);
   const studentId = await makeUser(setup);
   users.push(studentId);
+  const id = await insertRow(setup, 'enrollments', enrollmentValues(offer, studentId));
+  return { id, teacherId: offer.teacherId, studentId };
+}
+
+/** As `committedEnrollment`, the student made first, so the student's id sorts before the teacher's. */
+async function studentFirstEnrollment(): Promise<Enrollment> {
+  const studentId = await makeUser(setup);
+  users.push(studentId);
+  const offer = await makeOffer(setup);
+  users.push(offer.teacherId);
+  subjects.push(offer.subjectId);
   const id = await insertRow(setup, 'enrollments', enrollmentValues(offer, studentId));
   return { id, teacherId: offer.teacherId, studentId };
 }
@@ -357,6 +387,110 @@ describe('send-reminder over the real tables (005:T017, R-407)', () => {
 
     expect(await remindersOf(sessionId, enrollment)).toEqual([]);
     expect(await reminderNotificationsOf(enrollment)).toBe(0);
+  });
+});
+
+type Outcome = { readonly ok: true } | { readonly ok: false; readonly code: unknown };
+
+const settle = (run: Promise<unknown>): Promise<Outcome> =>
+  run.then(
+    () => ({ ok: true }) as const,
+    (error: unknown) => {
+      const refusal = error as { code?: unknown; cause?: { code?: unknown } } | null;
+      return { ok: false, code: refusal?.code ?? refusal?.cause?.code ?? 'unknown' } as const;
+    },
+  );
+
+/** Whether some backend waits on a lock `pid` holds. */
+async function blocking(pid: number): Promise<boolean> {
+  const { rows } = await watch.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))',
+    [pid],
+  );
+  return (rows[0]?.n ?? 0) > 0;
+}
+
+/** Polls until `check` holds; fails after a few seconds. */
+async function until(check: () => Promise<boolean>, what: string): Promise<void> {
+  for (let look = 0; look < 300; look += 1) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`never seen: ${what}`);
+}
+
+/**
+ * The other path holds the student's account `FOR UPDATE`; the sweep runs and is seen waiting on
+ * it; the other path then takes `next` (`FOR UPDATE`) and commits, or is rolled back if refused.
+ */
+async function raceHoldingStudent(
+  student: string,
+  next: string,
+  nextId: string,
+  now: string,
+): Promise<{ readonly reminder: Outcome; readonly other: Outcome }> {
+  await other.query('BEGIN');
+  await other.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [student]);
+  const reminder = settle(sweepAt(now).run());
+  let otherRun: Promise<Outcome>;
+  try {
+    await until(() => blocking(otherPid), 'the reminder waiting on the other path');
+  } finally {
+    otherRun = settle(
+      (async () => {
+        try {
+          await other.query(`SELECT 1 FROM ${next} WHERE id = $1 FOR UPDATE`, [nextId]);
+          await other.query('COMMIT');
+        } catch (error: unknown) {
+          await other.query('ROLLBACK').catch(() => undefined);
+          throw error;
+        }
+      })(),
+    );
+  }
+  return { reminder: await reminder, other: await otherRun };
+}
+
+describe('send-reminder against a path holding the student first (#148 Saif r1, Major 1)', () => {
+  it('a two-account lock in id order (the student, then the teacher): both commit, the reminders written', async () => {
+    const enrollment = await studentFirstEnrollment();
+    expect(enrollment.studentId < enrollment.teacherId).toBe(true);
+    const sessionId = await committedSession(enrollment, {
+      day: '2063-01-16',
+      startLocal: '10:10:00',
+      startsAt: '2063-01-16T08:10:00Z',
+      endsAt: '2063-01-16T09:10:00Z',
+    });
+
+    const settled = await raceHoldingStudent(
+      enrollment.studentId,
+      'users',
+      enrollment.teacherId,
+      '2063-01-16T08:00:00Z',
+    );
+
+    expect(settled).toEqual({ reminder: { ok: true }, other: { ok: true } });
+    expect(await remindersOf(sessionId, enrollment)).toEqual(bothOffsets(sessionId, enrollment.id));
+  });
+
+  it('the student’s account, then the session (a ban’s or a deletion’s order): both commit, the reminders written', async () => {
+    const enrollment = await studentFirstEnrollment();
+    const sessionId = await committedSession(enrollment, {
+      day: '2063-02-16',
+      startLocal: '10:10:00',
+      startsAt: '2063-02-16T08:10:00Z',
+      endsAt: '2063-02-16T09:10:00Z',
+    });
+
+    const settled = await raceHoldingStudent(
+      enrollment.studentId,
+      'sessions',
+      sessionId,
+      '2063-02-16T08:00:00Z',
+    );
+
+    expect(settled).toEqual({ reminder: { ok: true }, other: { ok: true } });
+    expect(await remindersOf(sessionId, enrollment)).toEqual(bothOffsets(sessionId, enrollment.id));
   });
 });
 
