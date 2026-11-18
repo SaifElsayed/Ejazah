@@ -13,6 +13,7 @@ import {
   adminGenderFlagsCorrectInput,
   adminGenderFlagsCorrectOutput,
   adminGenderFlagsDismissInput,
+  adminGenderFlagsFraudBanInput,
   adminGenderFlagsGetInput,
   adminGenderFlagsGetOutput,
   adminGenderFlagsListInput,
@@ -50,6 +51,8 @@ describe('the statuses', () => {
       'already_resolved',
       'open_exists',
       'report_target_mismatch',
+      // 005:T015 (Q-G5 (b)): an applicant's fraud ban without the note the applicant sees.
+      'applicant_note_required',
     ]);
   });
 });
@@ -162,5 +165,25 @@ describe('genderFlags.correct', () => {
       endedEnrollments: 2,
     });
     expect(adminGenderFlagsCorrectOutput.safeParse({ endedEnrollments: -1 }).success).toBe(false);
+  });
+});
+
+// 005:T015 (FR-617; SRS FR-GENDER-6; research R-409; the note under T015, Q-G5 (b)): the fraud ban
+// takes the flag, a reason, an optional note the applicant sees (`applications.ban`'s `note`) and
+// a key, never a gender; it answers nothing.
+describe('genderFlags.fraudBan', () => {
+  it('takes the flag, a reason, an optional applicant note and a key, strips a gender, keyed', () => {
+    const input = { flagId: FLAG, reason: REASON, idempotencyKey: KEY };
+    expect(adminGenderFlagsFraudBanInput.parse({ ...input, gender: 'male' })).toEqual(input);
+    expect(
+      adminGenderFlagsFraudBanInput.parse({ ...input, applicantNote: ' تم رفض الطلب ' }),
+    ).toEqual({ ...input, applicantNote: 'تم رفض الطلب' });
+    expect(adminGenderFlagsFraudBanInput.safeParse({ ...input, applicantNote: ' ' }).success).toBe(
+      false,
+    );
+    expect(
+      adminGenderFlagsFraudBanInput.safeParse({ flagId: FLAG, idempotencyKey: KEY }).success,
+    ).toBe(false);
+    expect(isIdempotentProcedure('genderFlags.fraudBan')).toBe(true);
   });
 });

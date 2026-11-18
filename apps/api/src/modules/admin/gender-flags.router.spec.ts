@@ -86,6 +86,17 @@ function surface({
       reached.push(['correct', tx, adminId, input]);
       return { flaggedUserId: FLAGGED, from: 'male', to: 'female', endedEnrollments: 2, replayed };
     },
+    // 005:T015.
+    fraudBan: async (tx: unknown, adminId: string, input: unknown) => {
+      reached.push(['fraudBan', tx, adminId, input]);
+      return {
+        flaggedUserId: FLAGGED,
+        from: 'female',
+        to: 'male',
+        accountStatus: 'active',
+        replayed,
+      };
+    },
   };
   const services = new Proxy(unusedAdminServices, {
     get: (target, name, receiver) =>
@@ -154,6 +165,9 @@ const calls = {
   // 005:T014.
   'genderFlags.correct': (caller: Caller) =>
     caller.genderFlags.correct({ flagId: FLAG, reason: REASON, idempotencyKey: KEY }),
+  // 005:T015.
+  'genderFlags.fraudBan': (caller: Caller) =>
+    caller.genderFlags.fraudBan({ flagId: FLAG, reason: REASON, idempotencyKey: KEY }),
 } as const;
 
 type Path = keyof typeof calls;
@@ -165,6 +179,7 @@ const limits: Record<Path, string> = {
   'genderFlags.raise': 'rate_limit_gender_decision',
   'genderFlags.dismiss': 'rate_limit_gender_decision',
   'genderFlags.correct': 'rate_limit_gender_decision',
+  'genderFlags.fraudBan': 'rate_limit_gender_decision',
 };
 
 describe('the administrator kind', () => {
@@ -316,6 +331,50 @@ describe('genderFlags.correct (FR-616)', () => {
   it('a replayed correction records no second entry', async () => {
     const s = surface({ replayed: true });
     await calls['genderFlags.correct'](s.verified());
+    expect(s.reached).toHaveLength(1);
+    expect(s.written).toEqual([]);
+  });
+});
+
+// 005:T015 (FR-617; the note under T015, Q-G5 (b), Q-G6 (a)): the fraud ban answers nothing; its
+// entry, `gender.fraud_banned` on the person with the reason (so the teacher's standing reason
+// reads it), carries the gender and the account status before and after, and the flag; never the
+// applicant's note. A replay records none. Written before the procedure, run red.
+describe('genderFlags.fraudBan (FR-617)', () => {
+  it('bans through the service, audited on the person with the gender and the standing before and after', async () => {
+    const s = surface();
+    expect(
+      await s.verified().genderFlags.fraudBan({
+        flagId: FLAG,
+        reason: REASON,
+        applicantNote: 'تم رفض الطلب',
+        idempotencyKey: KEY,
+      }),
+    ).toBeUndefined();
+    expect(s.reached).toEqual([
+      [
+        'fraudBan',
+        TX,
+        ADMIN,
+        { flagId: FLAG, reason: REASON, applicantNote: 'تم رفض الطلب', idempotencyKey: KEY },
+      ],
+    ]);
+    expect(s.written).toEqual([
+      {
+        action: 'gender.fraud_banned',
+        targetType: 'user',
+        targetId: FLAGGED,
+        reason: REASON,
+        before: { gender: 'female', accountStatus: 'active' },
+        after: { gender: 'male', accountStatus: 'banned', flagId: FLAG },
+        adminId: ADMIN,
+      },
+    ]);
+  });
+
+  it('a replayed fraud ban records no second entry', async () => {
+    const s = surface({ replayed: true });
+    await calls['genderFlags.fraudBan'](s.verified());
     expect(s.reached).toHaveLength(1);
     expect(s.written).toEqual([]);
   });

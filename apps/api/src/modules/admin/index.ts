@@ -580,6 +580,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
         renders: dependencies.ijazahRenders,
         log: dependencies.log,
       }).rerenderOfParty,
+      // 005:T015: the fraud ban's bans, the one standing service above.
+      standing,
     }),
   };
 }

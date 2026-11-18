@@ -550,6 +550,8 @@ const B47_GENDER_FLAG_ACTIONS: readonly (readonly [string, string, string])[] = 
   ['gender_flag.dismissed', 'رفض بلاغ جنس', 'Dismiss a gender flag'],
   // 005:T014: the correction, with the gender before and after in the entry.
   ['gender.corrected', 'تصحيح الجنس المعلن', 'Correct a declared gender'],
+  // 005:T015: the fraud ban.
+  ['gender.fraud_banned', 'حظر لتزوير الجنس', 'Ban for gender fraud'],
 ];
 
 describe('005:T013: the gender-flag queue’s actions by name', () => {

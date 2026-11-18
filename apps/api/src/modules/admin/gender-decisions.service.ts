@@ -40,9 +40,27 @@
 // - the live `account` event to the person and `enrollment` to both parties of each ended
 //   enrollment, after the commit; no push (Q-G7 (a), a v1.1 item).
 // ⚠️ Irreversible: the ends are never restored. One info line of ids and counts; never a gender.
+//
+// GENDERFLAGS.FRAUDBAN (T015; FR-617; SRS FR-GENDER-6; research R-409; the note under T015, Q-G5 (b),
+// with Q-G4 (a) and Q-G6 (a)). On the administrator kind's transaction, keyed `genderFlags.fraudBan`
+// (`runOn`); the limit and the audit (`gender.fraud_banned` on the person, with the reason, the
+// gender and the standing before and after) are the router's. The person's `users` row first, then
+// the standing read under it: an applicant (a teacher neither approved nor revoked) with no
+// `applicantNote` is refused CONFLICT `applicant_note_required` before anything is written (Q-G5
+// (b)). Then the flag claimed `fraud_ban` and the declared gender written the other one by the
+// correction's setter, without its closings, BEFORE the ban, so the ban's lift compares the
+// corrected genders (`ban-lift.service.ts:250-260`); then `StandingService`'s ban by role, on the
+// same transaction, with its own closings and reasons (`student_banned`, `teacher_ended`):
+// `banStudent`, a teacher's `ban`, an applicant's `ban` with the note the applicant sees (the
+// ban takes the person's row again, then `teacher_profiles`, then its consequences' locks); last,
+// the person's unsigned ijazahs re-rendered after the commit (Q-G4 (a)). `kindsOf`, `END_REASONS`
+// and `KIND_OF` are unchanged. The ban's own live `account` event follows the commit.
+// ⚠️ Liftable: `students.liftBan` and `teachers.liftBan` restore only the pairings the corrected
+// genders allow. One info line of ids and the role; never a gender, the reason or the note.
 import type {
   AdminGenderFlagsCorrectInput,
   AdminGenderFlagsDismissInput,
+  AdminGenderFlagsFraudBanInput,
   AdminGenderFlagsGetInput,
   AdminGenderFlagsGetOutput,
   AdminGenderFlagsListInput,
@@ -74,8 +92,10 @@ import { lockTeacherSlots } from '../catalog/index.js';
 import {
   declaredGenderOf,
   lockAccount,
+  readStanding,
   sessionPartiesOf,
   setDeclaredGender,
+  type StandingService,
 } from '../identity/index.js';
 import {
   type AdminGenderFlags,
@@ -147,6 +167,8 @@ export interface CorrectionSteps {
   flagOf(tx: Transaction, flagId: string): Promise<GenderFlagRow | null>;
   /** Identity's: the person's `users` row, `FOR UPDATE`. */
   lockAccount(tx: Transaction, userId: string): Promise<void>;
+  /** 005:T015: identity's standing of the live person, read under the lock; null for none. */
+  standingOf(tx: Transaction, userId: string): Promise<PersonStanding | null>;
   /** Moderation's: the flag closed by one conditional update `WHERE status = 'open'`. */
   resolveFlag(tx: Transaction, resolution: GenderFlagResolution): Promise<boolean>;
   declaredGenderOf(tx: Transaction, userId: string): Promise<Gender | null>;
@@ -183,10 +205,20 @@ export interface CorrectionSteps {
   ): Promise<{ readonly released: readonly string[] }>;
 }
 
+/** 005:T015: a person's standing as the fraud ban chooses its ban by (identity's `Standing`). */
+export interface PersonStanding {
+  readonly accountStatus: string;
+  readonly teacher: {
+    readonly verificationStatus: string;
+    readonly applicationStatus: string | null;
+  } | null;
+}
+
 /** The steps over the owners' entries. */
 export const correctionSteps: CorrectionSteps = {
   flagOf: (tx, flagId) => genderFlagStore.flagOf(tx, flagId),
   lockAccount,
+  standingOf: readStanding,
   resolveFlag: (tx, resolution) => genderFlagStore.resolve(tx, resolution),
   declaredGenderOf,
   setDeclaredGender,
@@ -216,10 +248,20 @@ export interface GenderDecisionsDependencies {
   readonly orders: OrderStandings;
   /** 005:T014: certification's `rerenderOfParty` (Q-G4 (a)). */
   readonly rerenderOfParty: (tx: Transaction, userId: string) => Promise<readonly unknown[]>;
+  /** 005:T015: identity's `StandingService`, the one the admin module builds (its bans). */
+  readonly standing: Pick<StandingService, 'ban' | 'banStudent'>;
   /** The database's clock on the call's transaction (`clockTimestamp`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly steps?: CorrectionSteps;
 }
+
+/** 005:T015: what a fraud ban did, for the router's audit (the gender and the standing before). */
+export type FraudBan = {
+  readonly flaggedUserId: string;
+  readonly from: Gender;
+  readonly to: Gender;
+  readonly accountStatus: string;
+};
 
 /** 005:T014: what a correction did, for the router's audit (Q-G6: the gender before and after). */
 export type Correction = {
@@ -257,12 +299,30 @@ export interface GenderDecisions {
     adminId: string,
     input: AdminGenderFlagsCorrectInput,
   ): Promise<Correction & { readonly replayed: boolean }>;
+  /** 005:T015: `genderFlags.fraudBan` (this file's head). */
+  fraudBan(
+    tx: Transaction,
+    adminId: string,
+    input: AdminGenderFlagsFraudBanInput,
+  ): Promise<FraudBan & { readonly replayed: boolean }>;
 }
 
 const CORRECT_SCOPE = 'genderFlags.correct';
+const FRAUD_BAN_SCOPE = 'genderFlags.fraudBan';
 
 /** Why a decision was refused, as its one line names it. */
-type DecisionRefusal = 'no_flag' | 'no_person' | 'already_resolved';
+type DecisionRefusal = 'no_flag' | 'no_person' | 'already_resolved' | 'applicant_note_required';
+
+/** 005:T015: how the fraud ban bans the person (Q-G5 (b)): by role, an applicant apart. */
+type BanRole = 'student' | 'teacher' | 'applicant';
+
+function banRoleOf({ teacher }: PersonStanding): BanRole {
+  if (teacher === null) return 'student';
+  const { verificationStatus } = teacher;
+  return verificationStatus === 'approved' || verificationStatus === 'revoked'
+    ? 'teacher'
+    : 'applicant';
+}
 
 /** Logs the refusal with ids and its reason only, and answers the error to throw, marked logged. */
 function decisionRefusal(
@@ -289,6 +349,7 @@ export function createGenderDecisions({
   orders,
   rerenderOfParty,
   clock = clockTimestamp,
+  standing,
   steps = correctionSteps,
 }: GenderDecisionsDependencies): GenderDecisions {
   /** The preview: the person's confirmed enrollments a correction would end now (this file's head). */
@@ -312,16 +373,18 @@ export function createGenderDecisions({
     adminId: string,
     flagId: string,
     reason: string,
+    outcome: 'corrected' | 'fraud_ban' = 'corrected',
+    underLock: (person: string) => Promise<void> = async () => undefined,
   ): Promise<{ readonly person: string; readonly from: Gender; readonly to: Gender }> => {
     const ids = { adminId, flagId };
     const seen = await steps.flagOf(tx, flagId);
     if (seen === null) throw decisionRefusal(log, ids, 'NOT_FOUND', 'no_flag');
     const person = seen.flaggedUserId;
     await steps.lockAccount(tx, person);
+    // T015: the fraud ban's refusals, read under the person's lock, before any write.
+    await underLock(person);
     const at = await clock(tx);
-    if (
-      !(await steps.resolveFlag(tx, { flagId, outcome: 'corrected', note: reason, adminId, at }))
-    ) {
+    if (!(await steps.resolveFlag(tx, { flagId, outcome, note: reason, adminId, at }))) {
       throw decisionRefusal(log, ids, 'CONFLICT', 'already_resolved', [
         { path: 'flagId', code: 'already_resolved' },
       ]);
@@ -407,6 +470,49 @@ export function createGenderDecisions({
     return { flaggedUserId: person, from, to, endedEnrollments: endedIds.length };
   };
 
+  /** 005:T015: the fraud ban on the keyed transaction (this file's head). */
+  const fraudBanLocked = async (
+    tx: Transaction,
+    adminId: string,
+    {
+      flagId,
+      reason,
+      applicantNote,
+    }: { readonly flagId: string; readonly reason: string; readonly applicantNote?: string },
+  ): Promise<FraudBan> => {
+    let found: { readonly role: BanRole; readonly accountStatus: string } | undefined;
+    const { person, from, to } = await corrected(
+      tx,
+      adminId,
+      flagId,
+      reason,
+      'fraud_ban',
+      async (userId) => {
+        const read = await steps.standingOf(tx, userId);
+        if (read === null)
+          throw decisionRefusal(log, { adminId, flagId }, 'NOT_FOUND', 'no_person');
+        const role = banRoleOf(read);
+        if (role === 'applicant' && applicantNote === undefined) {
+          throw decisionRefusal(log, { adminId, flagId }, 'CONFLICT', 'applicant_note_required', [
+            { path: 'applicantNote', code: 'applicant_note_required' },
+          ]);
+        }
+        found = { role, accountStatus: read.accountStatus };
+      },
+    );
+    if (found === undefined) throw new Error('fraud ban: no standing read under the lock');
+    const { role, accountStatus } = found;
+    if (role === 'student') await standing.banStudent(tx, adminId, person);
+    else if (role === 'teacher') await standing.ban(tx, adminId, person);
+    else await standing.ban(tx, adminId, person, { applicantNote: applicantNote ?? '' });
+    await rerenderOfParty(tx, person);
+    log.info(
+      { adminId, flagId, userId: person, role },
+      'A declared gender was found fraudulent and the account banned',
+    );
+    return { flaggedUserId: person, from, to, accountStatus };
+  };
+
   return {
     list: async (tx, adminId, input) => {
       const page = await flags.list(tx, adminId, input, log);
@@ -424,6 +530,14 @@ export function createGenderDecisions({
         tx,
         { scope: CORRECT_SCOPE, key: idempotencyKey, actorId: adminId, input: asked },
         (keyed) => correctLocked(keyed, adminId, asked),
+      );
+      return { ...outcome, replayed };
+    },
+    fraudBan: async (tx, adminId, { idempotencyKey, ...asked }) => {
+      const { outcome, replayed } = await idempotency.runOn(
+        tx,
+        { scope: FRAUD_BAN_SCOPE, key: idempotencyKey, actorId: adminId, input: asked },
+        (keyed) => fraudBanLocked(keyed, adminId, asked),
       );
       return { ...outcome, replayed };
     },

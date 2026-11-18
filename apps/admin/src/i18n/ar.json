@@ -178,6 +178,7 @@
         "genderFlags": {
           "corrected": "تصحيح الجنس المعلن",
           "dismissed": "رفض بلاغ جنس",
+          "fraudBanned": "حظر لتزوير الجنس",
           "listed": "عرض بلاغات الجنس",
           "raised": "رفع بلاغ جنس",
           "viewed": "عرض بلاغ جنس"

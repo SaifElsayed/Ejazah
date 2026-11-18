@@ -114,6 +114,9 @@ const steps: CorrectionSteps = {
       : null;
   },
   lockAccount: async (_tx, userId) => void order.push(['lockAccount', userId]),
+  standingOf: async () => {
+    throw new Error('the correction reads no standing');
+  },
   resolveFlag: async (_tx, resolution) => {
     order.push(['resolveFlag', resolution]);
     return claim;
@@ -212,6 +215,10 @@ const decisions = () =>
     rerenderOfParty: async (_tx, userId) => {
       order.push(['rerenderOfParty', userId]);
       return [];
+    },
+    standing: {
+      ban: async () => Promise.reject(new Error('the correction bans nobody')),
+      banStudent: async () => Promise.reject(new Error('the correction bans nobody')),
     },
     clock: async () => AT,
     steps,

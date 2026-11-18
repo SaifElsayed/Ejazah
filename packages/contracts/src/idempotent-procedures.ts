@@ -90,6 +90,8 @@ export const idempotentProcedures = [
   'genderFlags.dismiss',
   // 005:T014 (admin-surface.md, `genderFlags.correct`): on the kind's transaction (runOn).
   'genderFlags.correct',
+  // 005:T015 (admin-surface.md, `genderFlags.fraudBan`): on the kind's transaction (runOn).
+  'genderFlags.fraudBan',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

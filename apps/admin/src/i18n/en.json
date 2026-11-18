@@ -178,6 +178,7 @@
         "genderFlags": {
           "corrected": "Correct a declared gender",
           "dismissed": "Dismiss a gender flag",
+          "fraudBanned": "Ban for gender fraud",
           "listed": "View gender flags",
           "raised": "Raise a gender flag",
           "viewed": "View a gender flag"

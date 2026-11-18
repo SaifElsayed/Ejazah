@@ -102,6 +102,7 @@ const decisions = createGenderDecisions({
   idempotency: { runOn: unreached },
   orders: unreached,
   rerenderOfParty: unreached,
+  standing: { ban: unreached, banStudent: unreached },
 });
 
 function worldOf(person: Gender) {

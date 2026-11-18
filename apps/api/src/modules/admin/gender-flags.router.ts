@@ -19,6 +19,7 @@ import {
   adminGenderFlagsCorrectInput,
   adminGenderFlagsCorrectOutput,
   adminGenderFlagsDismissInput,
+  adminGenderFlagsFraudBanInput,
   adminGenderFlagsGetInput,
   adminGenderFlagsGetOutput,
   adminGenderFlagsListInput,
@@ -131,5 +132,29 @@ export const genderFlagsAdminRouter = createAdminRouter({
       });
     }
     return { endedEnrollments };
+  }),
+
+  // 005:T015 (FR-617; the note under T015, Q-G5 (b), Q-G6 (a)): ⚠️ a ban. The entry is on the person
+  // with the reason, so the teacher's standing reason reads it (T007), and carries the gender and
+  // the account status before and after, and the flag; never the applicant's note.
+  fraudBan: adminProcedure({
+    input: adminGenderFlagsFraudBanInput,
+    output: z.void(),
+    rateLimit: GENDER_DECISION_LIMIT,
+  }).mutation(async ({ ctx, input }) => {
+    const { flaggedUserId, from, to, accountStatus, replayed } =
+      await ctx.services.genderFlags.fraudBan(ctx.tx, ctx.administrator.adminId, input);
+    if (replayed) {
+      ctx.audit.replayed();
+      return;
+    }
+    ctx.audit.record({
+      action: 'gender.fraud_banned',
+      targetType: PERSON_TARGET,
+      targetId: flaggedUserId,
+      reason: input.reason,
+      before: { gender: from, accountStatus },
+      after: { gender: to, accountStatus: 'banned', flagId: input.flagId },
+    });
   }),
 });

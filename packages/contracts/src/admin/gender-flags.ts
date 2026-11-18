@@ -31,6 +31,8 @@ export const genderFlagDecisionRefusal = z.enum([
   'already_resolved',
   'open_exists',
   'report_target_mismatch',
+  // 005:T015 (Q-G5 (b)): an applicant's fraud ban without the note the applicant sees.
+  'applicant_note_required',
 ]);
 
 export const adminGenderFlagsListInput = z.object({
@@ -124,3 +126,18 @@ export const adminGenderFlagsCorrectOutput = z.object({
 
 export type AdminGenderFlagsCorrectInput = z.infer<typeof adminGenderFlagsCorrectInput>;
 export type AdminGenderFlagsCorrectOutput = z.infer<typeof adminGenderFlagsCorrectOutput>;
+
+// 005:T015 (FR-617; SRS FR-GENDER-6; research R-409; the note under T015, Q-G5 (b)): the fraud ban.
+// It takes the flag, a reason, a key and, for an applicant, the note the applicant sees
+// (`applications.ban`'s `note`, `admin/applications.ts`): required when the person is an
+// applicant, refused CONFLICT `applicant_note_required` otherwise, writing nothing. Never a gender:
+// the declared gender becomes the other one, the server's reading of the flag. It answers nothing.
+// ⚠️ A ban, liftable with every pairing checked against the corrected genders (DEC-69).
+export const adminGenderFlagsFraudBanInput = z.object({
+  flagId: z.uuid(),
+  reason: adminReason,
+  applicantNote: adminReason.optional(),
+  idempotencyKey,
+});
+
+export type AdminGenderFlagsFraudBanInput = z.infer<typeof adminGenderFlagsFraudBanInput>;
