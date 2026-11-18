@@ -624,13 +624,21 @@ export async function teacherStudentOf(
   };
 }
 
-/** 005:T006 (FR-608): the student's read of the request, the rejection's reason being the teacher's. */
+/**
+ * 005:T006 (FR-608): the student's read of the request, the rejection's reason being the teacher's.
+ * A revoked ijazah keeps its `revoked: true` (005:T010, Q-E2 (a), R-HONEST-6; #146 Saif r1, Major 1):
+ * the fields are named one by one, so the reason is never copied and the flag never dropped.
+ */
 function withoutReason(
   request: EnrollmentIjazahRequest | undefined,
 ): Omit<EnrollmentIjazahRequest, 'reason'> | null {
   if (request === undefined) return null;
-  const { status, ijazahId } = request;
-  return ijazahId === undefined ? { status } : { status, ijazahId };
+  const { status, ijazahId, revoked } = request;
+  return {
+    status,
+    ...(ijazahId === undefined ? {} : { ijazahId }),
+    ...(revoked === undefined ? {} : { revoked }),
+  };
 }
 
 /** `teacher.today`: the sessions of the teacher's local day, by start (FR-391, FR-393). */

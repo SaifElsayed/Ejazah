@@ -19,7 +19,8 @@
 //   - every session carries `disputed`, its status `disputed` (004:T026, FR-473, FR-495);
 //   - each detail carries `ijazahRequest`, the enrollment's latest ijazah request read through
 //     booking's port `EnrollmentIjazahRequests` in one call (005:T006, FR-608; the note under T006,
-//     Q4 (a), Q-A3 (a)): the reason to the teacher only, null without a request.
+//     Q4 (a), Q-A3 (a)): the reason to the teacher only, null without a request; a revoked
+//     ijazah's `revoked: true` to both parties (005:T010, Q-E2 (a); #146 Saif r1, Major 1).
 import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
@@ -1237,5 +1238,25 @@ describe("the details' ijazah request (005:T006)", () => {
       (await teacherStudentOf(tx, none.store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS))
         .ijazahRequest,
     ).toBeNull();
+  });
+
+  // #146 Saif r1, Major 1 (the follow-up under T010; Q-E2 (a), R-HONEST-6): a revoked ijazah is
+  // never shown to the student as issued, so the flag survives the reason's removal.
+  it('answers the student a revoked ijazah as revoked, as the teacher', async () => {
+    const IJAZAH = '0199d0a0-0000-7000-8000-0000000000b9';
+    const REVOKED: EnrollmentIjazahRequest = {
+      status: 'approved',
+      ijazahId: IJAZAH,
+      revoked: true,
+    };
+    const { store } = storeOf({ listed: row(E1), ijazahRequests: { [E1]: REVOKED } });
+    expect(
+      (await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toEqual({ status: 'approved', ijazahId: IJAZAH, revoked: true });
+    expect(
+      (await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS))
+        .ijazahRequest,
+    ).toEqual(REVOKED);
   });
 });
