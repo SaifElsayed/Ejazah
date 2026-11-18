@@ -152,3 +152,9 @@ export { reportsAdminRouter } from './reports-admin.router.js';
 // compensation cases among some enrollments, which `main.ts` composes with booking's teacher
 // enrollment ids into identity's `OpenCases` port (an administrator's deletion of a teacher).
 export { openCompensationCasesAmong } from './compensation-case.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T012 (FR-492, SRS FR-SESS-13; the note under T012, Q-R1 (a)): of some enrollments, those with
+// an open `user_reports` row, read through its `enrollment_id`, with no lock; the chat purge reads it
+// beside `enrollmentsWithOpenMatterAmong`, booking's held files do not (FR-AUTH-14).
+export { enrollmentsWithOpenReportAmong } from './open-matters.repository.js';

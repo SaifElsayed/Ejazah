@@ -9,13 +9,16 @@
 // `chat_retention_days` has passed by the database's
 // clock (`clockTimestamp`), and no `disputes` row of any kind is open on it, a session dispute, a
 // compensation case or a complaint of the teacher's absence (moderation's
-// `enrollmentsWithOpenMatterAmong`, R-301). An enrollment no ordinary read returns, or with no
+// `enrollmentsWithOpenMatterAmong`, R-301), and no `user_reports` row is open on it, a session or
+// chat report (moderation's `enrollmentsWithOpenReportAmong`; 005:T012, the note under T012,
+// Q-R1 (a): the store reads the union). An enrollment no ordinary read returns, or with no
 // session, is left as it is. Each read is the owner's, never a table of another module (R-API-6).
 //
 // THE LOCK (B40's conflict check, F13; T005 rule 1). Each page is first narrowed with no lock, then
 // each enrollment left is purged in its own transaction: the enrollment's row locked first (the lock
 // every case opening takes), every condition read again under it, then the one update. A case opened
-// while the purge waited is read and keeps the chat. No other lock: a send locks its sender, then the
+// while the purge waited is read and keeps the chat; so is a report raised (005:T012), whose
+// insert locks the enrollment first (kernel.md's row «a report raised»). No other lock: a send locks its sender, then the
 // enrollment, and refuses an enrollment that has ended.
 //
 // THE FILES (Q2 (a)). The update keeps each attachment's key; after the commit each file is removed
@@ -45,7 +48,10 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { orderEnrollmentPartiesAmong } from '../booking/index.js';
-import { enrollmentsWithOpenMatterAmong } from '../moderation/index.js';
+import {
+  enrollmentsWithOpenMatterAmong,
+  enrollmentsWithOpenReportAmong,
+} from '../moderation/index.js';
 import {
   DISPUTE_WINDOW_SETTING,
   disputeWindowHours,
@@ -93,7 +99,7 @@ export interface ChatPurgeStore {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, Date>>;
-  /** Moderation's: those with an open `disputes` row of any kind. */
+  /** Moderation's: those with an open `disputes` row of any kind or an open report (005:T012). */
   openMattersAmong(tx: Transaction, enrollmentIds: readonly string[]): Promise<ReadonlySet<string>>;
   purgeMessagesOf(tx: Transaction, enrollmentId: string, at: Date): Promise<PurgedMessages>;
   heldFilesAfter(
@@ -132,6 +138,19 @@ async function lastScheduledEndsAmong(
   return ends;
 }
 
+/**
+ * Moderation's two reads as one set (005:T012, Q-R1 (a)): an open `disputes` row of any kind, or an
+ * open `user_reports` row on the enrollment. Both on the caller's transaction, after its lock.
+ */
+async function openMattersAmong(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  const matters = await enrollmentsWithOpenMatterAmong(tx, enrollmentIds);
+  const reports = await enrollmentsWithOpenReportAmong(tx, enrollmentIds);
+  return new Set([...matters, ...reports]);
+}
+
 /** The store over chat's queries and the owners' entries (R-API-6). */
 export const chatPurgeStore: ChatPurgeStore = {
   unpurgedEnrollmentsAfter,
@@ -141,7 +160,7 @@ export const chatPurgeStore: ChatPurgeStore = {
     return new Map([...parties].map(([id, { status }]) => [id, status] as const));
   },
   lastScheduledEndsAmong,
-  openMattersAmong: enrollmentsWithOpenMatterAmong,
+  openMattersAmong,
   purgeMessagesOf,
   heldFilesAfter,
   clearKey: clearPurgedKey,
