@@ -1,9 +1,9 @@
 // T020 of specs/005-certification (FR-602, FR-605, FR-607, FR-608; R-HONEST-6): the ijazah request
 // as the student reads it on the enrollment. Waiting for the student's certificate name (the student
 // enters it here), pending the administrator's decision, issued (with the certificate once an
-// administrator signed it off, being prepared before), or revoked. The student's read carries no
-// reason (`enrollments.get` omits it), and a rejected or closed request is the teacher's to read
-// (FR-608), so the student sees none. `certificateName.set` is keyed: one key per name sent, reused
+// administrator signed it off, being prepared before), revoked, or rejected (FR-608: both parties
+// learn of it; the reason is the teacher's, and `enrollments.get` omits it). A closed request (the
+// student's deletion) shows nothing. `certificateName.set` is keyed: one key per name sent, reused
 // when the same name is sent again after a failure; `already_set` and a refused name have their
 // own words. The server decides; this reads its answers.
 import type { CertificateItem, EnrollmentsGetOutput } from '@ijazah/contracts';
@@ -18,7 +18,7 @@ import { certificateStateOf } from '../certificates';
 
 /** What the enrollment shows of its ijazah request. */
 export type StudentRequestState =
-  'none' | 'awaitingName' | 'pending' | 'preparing' | 'issued' | 'revoked';
+  'none' | 'awaitingName' | 'pending' | 'rejected' | 'preparing' | 'issued' | 'revoked';
 
 /** The request's state, with the student's certificates read to know whether it is signed off. */
 export function studentRequestStateOf(
@@ -28,7 +28,7 @@ export function studentRequestStateOf(
   if (request === null) return 'none';
   if (request.status === 'awaiting_student_name') return 'awaitingName';
   if (request.status === 'pending') return 'pending';
-  if (request.status !== 'approved') return 'none';
+  if (request.status !== 'approved') return request.status === 'rejected' ? 'rejected' : 'none';
   if (request.revoked === true) return 'revoked';
   const certificate = certificates?.find(({ ijazahId }) => ijazahId === request.ijazahId);
   if (certificate === undefined) return 'preparing';

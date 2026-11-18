@@ -3,8 +3,8 @@
 // اسمك» and the name's sheet, the name shown as it will print, saved once through
 // `account.certificateName.set` (keyed), the enrollment read again; `already_set` and a refused name
 // said in place. Pending: «قيد المراجعة». Issued: «صدرت» and the certificate opened through its
-// signed link, or «قيد الإعداد» until it is signed off. Revoked: «مسحوبة», never opened. A rejected
-// or closed request shows nothing to the student, and no reason anywhere.
+// signed link, or «قيد الإعداد» until it is signed off. Revoked: «مسحوبة», never opened. Rejected:
+// «مرفوض» (FR-608; Q-D1 (b)); a closed request shows nothing to the student; no reason anywhere.
 import type {
   CertificateItem,
   EnrollmentsGetOutput,
@@ -200,8 +200,28 @@ describe('EnrollmentDetail: the ijazah request (T020, FR-608)', () => {
     expect(link).not.toHaveBeenCalled();
   });
 
-  it.each(['rejected', 'closed'] as const)('%s: nothing shown to the student', async (status) => {
-    get().mockResolvedValue(detail({ status }));
+  it('rejected: «مرفوض», with no reason, no name asked and nothing to open (Q-D1 (b))', async () => {
+    const reason = 'سبب الرفض للمعلم وحده';
+    get().mockResolvedValue(
+      detail({ status: 'rejected', reason } as EnrollmentsGetOutput['ijazahRequest']),
+    );
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await loaded();
+      expect(screen.getByText(said(direction, 'student.certificate.title'))).toBeTruthy();
+      expect(screen.getByText(said(direction, 'status.ijazah.rejected'))).toBeTruthy();
+      expect(screen.queryByText(reason)).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: said(direction, 'student.ijazahRequest.enterName') }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: said(direction, 'student.credentials.view') }),
+      ).toBeNull();
+    });
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('closed (the student deleted, data-model.md:103): nothing shown to the student', async () => {
+    get().mockResolvedValue(detail({ status: 'closed' }));
     await inBothDirections(ui, async (_rendered, direction) => {
       await loaded();
       expect(screen.queryByText(said(direction, 'student.certificate.title'))).toBeNull();

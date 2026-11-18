@@ -2,8 +2,9 @@
 // ijazah request, as the student reads it. Awaiting the student's name: «بانتظار اسمك», what the
 // teacher asked, and the name's sheet; pending: «قيد المراجعة»; issued: «صدرت» and the certificate,
 // opened through its signed link, or «قيد الإعداد» until an administrator signs it off; revoked:
-// «مسحوبة», never opened, with no reason. The certificates are read under a key holding the
-// enrollment, so the request's live event reads them again with it.
+// «مسحوبة», never opened, with no reason; rejected: «مرفوض», with no reason (FR-608; the reason is
+// the teacher's). The certificates are read under a key holding the enrollment, so the request's
+// live event reads them again with it.
 import type { EnrollmentsGetOutput } from '@ijazah/contracts';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -22,6 +23,7 @@ import { CertificateNameSheet } from './CertificateNameSheet';
 const BADGE = {
   awaitingName: { label: 'student.ijazahRequest.awaitingName', tone: 'warning' },
   pending: { label: 'status.ijazah.pending', tone: 'neutral' },
+  rejected: { label: 'status.ijazah.rejected', tone: 'danger' },
   preparing: { label: 'student.credentials.preparing', tone: 'neutral' },
   issued: { label: 'status.ijazah.issued', tone: 'success' },
   revoked: { label: 'status.ijazah.revoked', tone: 'danger' },
