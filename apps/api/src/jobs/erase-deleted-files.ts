@@ -19,6 +19,12 @@
 // holds them. Each page's owners are asked once through `held` (booking's `heldFileOwnersAmong`,
 // bound in `worker.ts`); a held owner's files are neither removed nor reported, and the page goes
 // on in id order, so the first run after the owner's last matter closes removes them.
+//
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D3 (a)) ⚠️ final: a
+// third store, verification's `createKeptSignatureErasure` (bound in `worker.ts`), answers a deleted
+// teacher's signature once it is no longer kept (the kept data erased at its date or «now», or a
+// teacher never approved); its `clearKey` deletes the row where it still holds the key, so the file
+// goes first and the row after it, and a file that could not be removed keeps its row.
 import { z } from 'zod';
 
 import { reportError } from '../platform/errors/reporting.js';

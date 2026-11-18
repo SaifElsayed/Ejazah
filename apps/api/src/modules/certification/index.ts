@@ -366,3 +366,10 @@ export type { IjazahsService };
 
 /** 005:T010: the `ijazahs` namespace of the administrator surface, mounted by `admin.router.ts`. */
 export { ijazahsAdminRouter } from './ijazahs-admin.router.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-630; R-414; DEC-72; the note under T031): a teacher's
+// undecided ijazah requests, which `main.ts` binds to identity's `OpenIjazahRequests` port (a
+// teacher's own deletion and an administrator's are refused while one is open), as
+// `OngoingEnrollments` is bound to booking.
+export { openRequestCountOfTeacher } from './ijazah-request.repository.js';

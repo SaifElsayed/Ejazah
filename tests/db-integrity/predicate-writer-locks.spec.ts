@@ -162,6 +162,9 @@ beforeAll(async () => {
     report: () => undefined,
     // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
     ongoingEnrollments: createOngoingEnrollments({ settings }),
+    // 005:T031 (rule d): a teacher's two counts, none in this spec's worlds.
+    openIjazahRequests: { count: async () => 0 },
+    openCases: { count: async () => 0 },
   }).payout;
   webhook = await listenWebhook(holdable, { enqueue: async () => undefined });
 }, 60_000);

@@ -62,3 +62,16 @@ export const teachersKeptEraseNowInput = z.object({
 export type TeachersKeptDocumentLinkInput = z.infer<typeof teachersKeptDocumentLinkInput>;
 export type TeachersKeptEraseDateInput = z.infer<typeof teachersKeptEraseDateInput>;
 export type TeachersKeptEraseNowInput = z.infer<typeof teachersKeptEraseNowInput>;
+
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D2 (a)):
+// `teachers.keptData.signatureLink`, the kept signature of a deleted teacher ever approved opened as a
+// kept document is, one signed link per press, valid `document_link_ttl_seconds`, with a mandatory
+// reason; audited on the person (`kept_signature.view`), under `rate_limit_kept_document_link`.
+export const teachersKeptSignatureLinkInput = z.object({
+  teacherUserId: z.uuid(),
+  reason: adminReason,
+});
+
+export const teachersKeptSignatureLinkOutput = documentsLinkOutput;
+
+export type TeachersKeptSignatureLinkInput = z.infer<typeof teachersKeptSignatureLinkInput>;

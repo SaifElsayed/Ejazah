@@ -115,3 +115,9 @@ export { openComplaintOf } from './absence-complaint.repository.js';
  * answers it, with no lock, for booking's slot hold (`slotUses`).
  */
 export { compensationCasesAmong } from './compensation-case.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-630; R-414; the note under T031, Q-D1 (a)): the open
+// compensation cases among some enrollments, which `main.ts` composes with booking's teacher
+// enrollment ids into identity's `OpenCases` port (an administrator's deletion of a teacher).
+export { openCompensationCasesAmong } from './compensation-case.repository.js';

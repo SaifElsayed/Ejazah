@@ -147,6 +147,8 @@ describe('users.get: the kept data (T077)', () => {
     payoutKept: true,
     eraseAt: '2026-12-01T08:00:00.000Z',
     erasedAt: null,
+    // 005:T031 (rule d): the kept signature's field, required beside the two dates.
+    signature: null,
   };
   const DELETED = {
     ...TEACHER_RECORD,
@@ -189,12 +191,58 @@ describe('users.get: the kept data (T077)', () => {
       'payoutKept',
       'eraseAt',
       'erasedAt',
+      'signature',
     ]);
   });
 
   it.each([
     ['a kept document of another kind', { documents: [{ ...KEPT.documents[0], kind: 'other' }] }],
     ['an erasure date that is no instant', { eraseAt: 'soon' }],
+  ])('refuses %s', (_name, change) => {
+    expect(usersGetOutput.safeParse({ ...DELETED, keptData: { ...KEPT, ...change } }).success).toBe(
+      false,
+    );
+  });
+});
+
+// 005:T031 (FR-631; R-411; the note under T031, Q-D2 (a)): a deleted teacher ever approved keeps their
+// signature image with the kept documents; `users.get` lists it by its upload instant only, never a
+// key or a link (the link is `teachers.keptData.signatureLink`, one per press with a reason), and
+// null when none is kept.
+describe('users.get: the kept signature (005:T031)', () => {
+  const KEPT = {
+    documents: [],
+    payoutKept: true,
+    eraseAt: null,
+    erasedAt: null,
+    signature: { uploadedAt: '2026-10-03T08:00:00.000Z' },
+  };
+  const DELETED = {
+    ...TEACHER_RECORD,
+    profile: { ...TEACHER_RECORD.profile, displayName: null, email: null, deleted: true },
+    keptData: KEPT,
+  };
+
+  it('answers the kept signature by its upload instant', () => {
+    expect(usersGetOutput.parse(DELETED).keptData?.signature).toEqual({
+      uploadedAt: '2026-10-03T08:00:00.000Z',
+    });
+  });
+
+  it('answers null when no signature is kept', () => {
+    const none = { ...DELETED, keptData: { ...KEPT, signature: null } };
+    expect(usersGetOutput.parse(none).keptData?.signature).toBeNull();
+  });
+
+  it('never answers its key or a link: an extra field a service would add is dropped', () => {
+    const signature = { ...KEPT.signature, storageKey: 'k.png', url: 'https://storage.invalid/s' };
+    const leaked = usersGetOutput.parse({ ...DELETED, keptData: { ...KEPT, signature } });
+    expect(leaked.keptData?.signature).toEqual({ uploadedAt: '2026-10-03T08:00:00.000Z' });
+  });
+
+  it.each([
+    ['a signature whose instant is no instant', { signature: { uploadedAt: 'yesterday' } }],
+    ['no signature field', { signature: undefined }],
   ])('refuses %s', (_name, change) => {
     expect(usersGetOutput.safeParse({ ...DELETED, keptData: { ...KEPT, ...change } }).success).toBe(
       false,

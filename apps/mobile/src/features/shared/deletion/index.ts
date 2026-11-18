@@ -4,5 +4,7 @@
 export { confirmationOf, type DeletionConfirmation, useAccountDeletion } from './api';
 // T080 of specs/004-sessions: the refusal of an ongoing enrollment, told apart from other failures.
 export { isOngoingRefusal } from './api';
+// 005:T031 of specs/005-certification: each refusal by its cause (an undecided ijazah request too).
+export { type DeletionRefusal, deletionRefusalOf } from './api';
 export { type DeletionCopy, DeletionScreen } from './components/DeletionScreen';
 export { DeletionSheet, type DeletionSheetCopy } from './components/DeletionSheet';

@@ -49,7 +49,10 @@ export async function insertCase(
 
 /** The enrollment a case of any kind belongs to, with no lock; null for no such row. */
 export async function caseEnrollmentOf(tx: Client, caseId: string): Promise<string | null> {
-  const row = await tx.dispute.findUnique({ where: { id: caseId }, select: { enrollmentId: true } });
+  const row = await tx.dispute.findUnique({
+    where: { id: caseId },
+    select: { enrollmentId: true },
+  });
   return row?.enrollmentId ?? null;
 }
 
@@ -427,4 +430,27 @@ export async function latestCaseOf(
     select: { id: true },
   });
   return row?.id ?? null;
+}
+
+/**
+ * 005:T031 of specs/005-certification (FR-630; R-414; the note under T031, Q-D1 (a)): how many
+ * compensation cases are open on `enrollmentIds`, with no lock: identity's `OpenCases` count for a
+ * teacher, which `main.ts` composes with booking's `enrollmentIdsOfTeacher`. A session dispute and a
+ * case resolved or dismissed count nothing. One statement over `disputes_enrollment_id_idx`, bounded
+ * by the enrollments asked; none for no enrollment. An administrator's deletion reads it after
+ * booking's `live` (`identity/deletion.service.ts`, «THE RACE»): a path that ends an enrollment and
+ * opens its case without the teacher's lock commits both together, so one of the two reads sees it.
+ */
+export async function openCompensationCasesAmong(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<number> {
+  if (enrollmentIds.length === 0) return 0;
+  return tx.dispute.count({
+    where: {
+      enrollmentId: { in: [...enrollmentIds] },
+      kind: 'compensation_case',
+      status: 'open',
+    },
+  });
 }

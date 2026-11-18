@@ -21,6 +21,12 @@
 // changed) or `.erase_date_cleared` on the person, the date before and after; `eraseNow` ⚠️ final
 // `teacher.kept_data.erased` on the person, what it erased in `after` (a count and whether a payout
 // reference went, never a value). The two writes are keyed through `runOn`; a replay records none.
+//
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D2 (a)):
+// `teachers.keptData.signatureLink` opens a deleted teacher's kept signature by one signed link per
+// press, under `rate_limit_kept_document_link` (the documents' limit, the administrator as subject),
+// audited `kept_signature.view` on the person with the reason: a signature is no document, so the
+// entry's target is the user, as the kept data's other entries are.
 import {
   banLiftOutput,
   teachersActionInput,
@@ -28,6 +34,8 @@ import {
   teachersKeptDocumentLinkOutput,
   teachersKeptEraseDateInput,
   teachersKeptEraseNowInput,
+  teachersKeptSignatureLinkInput,
+  teachersKeptSignatureLinkOutput,
   teachersLiftInput,
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
@@ -271,6 +279,26 @@ export const teachersRouter = createAdminRouter({
         reason: input.reason,
         after: { documents, payout },
       });
+    }),
+
+    // 005:T031 (this file's head).
+    signatureLink: adminProcedure({
+      input: teachersKeptSignatureLinkInput,
+      output: teachersKeptSignatureLinkOutput,
+      rateLimit: { key: 'rate_limit_kept_document_link', subject: 'caller' },
+    }).mutation(async ({ ctx, input }) => {
+      const link = await ctx.services.teachers.keptData.signatureLink(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+      );
+      ctx.audit.record({
+        action: 'kept_signature.view',
+        targetType: 'user',
+        targetId: input.teacherUserId,
+        reason: input.reason,
+      });
+      return link;
     }),
   }),
 });

@@ -259,3 +259,27 @@ async function rerenderedWith(
 function chainJson(chain: readonly (readonly string[])[]): Prisma.InputJsonValue {
   return chain.map((names) => [...names]);
 }
+
+/**
+ * 005:T031 (FR-630; R-414; DEC-72; the note under T031, research.md:264-265): how many of the
+ * teacher's requests are undecided: `awaiting_student_name` or `pending`, and `approved` ones whose
+ * ijazah is neither signed off nor revoked (a soft-deleted ijazah left out, R-DB-3: a to-one relation
+ * takes no filter of its own). Identity's `OpenIjazahRequests` port, bound by `main.ts`; asked on the
+ * deletion's transaction after the teacher's `users` lock, which every path adding such a request
+ * takes first (the send, the approval), so no lock of its own. One statement over
+ * `ijazah_requests_teacher_user_id_idx`.
+ */
+export function openRequestCountOfTeacher(tx: Client, teacherUserId: string): Promise<number> {
+  return tx.ijazahRequest.count({
+    where: {
+      teacherUserId,
+      OR: [
+        { status: { in: [...OPEN] } },
+        {
+          status: 'approved',
+          ijazah: { is: { signedOffAt: null, revokedAt: null, deletedAt: null } },
+        },
+      ],
+    },
+  });
+}

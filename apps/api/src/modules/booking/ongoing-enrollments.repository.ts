@@ -46,14 +46,7 @@ export async function hasOngoingEnrollment(
   userId: string,
   windowDays: WindowDays,
 ): Promise<boolean> {
-  const live = await tx.enrollment.findFirst({
-    where: {
-      OR: [{ studentUserId: userId }, { teacherUserId: userId }],
-      status: { in: ['pending_payment', 'confirmed'] },
-    },
-    select: { id: true },
-  });
-  if (live !== null) return true;
+  if (await hasLiveEnrollment(tx, userId)) return true;
   const closed = await tx.enrollment.findMany({
     where: {
       status: 'cancelled',
@@ -90,6 +83,8 @@ export async function hasOngoingEnrollment(
 /** Booking's count as identity's `OngoingEnrollments` port takes it. */
 export interface OngoingEnrollmentsCount {
   hasOngoing(tx: Transaction, userId: string): Promise<boolean>;
+  /** 005:T031: an enrollment `pending_payment` or `confirmed` only (`hasLiveEnrollment`). */
+  live(tx: Transaction, userId: string): Promise<boolean>;
 }
 
 /** The count over the settings' two windows, bound once by `main.ts`. */
@@ -99,5 +94,46 @@ export function createOngoingEnrollments({
   readonly settings: Pick<SettingsReader, 'read'>;
 }): OngoingEnrollmentsCount {
   const windowDays = windowDaysOf(settings);
-  return { hasOngoing: (tx, userId) => hasOngoingEnrollment(tx, userId, windowDays) };
+  return {
+    hasOngoing: (tx, userId) => hasOngoingEnrollment(tx, userId, windowDays),
+    live: hasLiveEnrollment,
+  };
+}
+
+/**
+ * Whether `userId` has an enrollment `pending_payment` or `confirmed` (a paused one is `confirmed`),
+ * as student or teacher: the one statement over the two parties' indexes that ends T080's question
+ * when it finds one, and (005:T031 of specs/005-certification; FR-630; the note under T031) the
+ * `live` an administrator's deletion of a teacher asks first, with no closing counted. No lock of
+ * its own: every path that makes an enrollment live locks the account first (this file's head).
+ */
+export async function hasLiveEnrollment(tx: Transaction, userId: string): Promise<boolean> {
+  const live = await tx.enrollment.findFirst({
+    where: {
+      OR: [{ studentUserId: userId }, { teacherUserId: userId }],
+      status: { in: ['pending_payment', 'confirmed'] },
+    },
+    select: { id: true },
+  });
+  return live !== null;
+}
+
+/**
+ * 005:T031 (FR-630; the note under T031, Q-D1 (a)): the ids of every enrollment the person teaches,
+ * id order, for identity's `OpenCases` port, which `main.ts` composes with moderation's
+ * `openCompensationCasesAmong` (a case may stay open on an enrollment of any status). Read once by an
+ * administrator's deletion of a teacher, on its transaction, over `enrollments_teacher_user_id_idx`:
+ * ids only and bounded by the one teacher's enrollments, so it is read whole, never paged. No lock
+ * of its own: the open cases are read after `live` (identity's `deletion.service.ts`, «THE RACE»).
+ */
+export async function enrollmentIdsOfTeacher(
+  tx: Transaction,
+  teacherUserId: string,
+): Promise<readonly string[]> {
+  const rows = await tx.enrollment.findMany({
+    where: { teacherUserId },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+  return rows.map(({ id }) => id);
 }

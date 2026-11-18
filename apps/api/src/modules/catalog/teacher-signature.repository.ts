@@ -39,3 +39,39 @@ export function writeSignature(client: Client, write: SignatureWrite): Promise<S
     select: { id: true, storageKey: true, uploadedAt: true },
   });
 }
+
+/** 005:T031: a signature row as the kept data's erasure reads it: its owner and its file's key. */
+export interface SignatureFileRow {
+  readonly id: string;
+  readonly teacherUserId: string;
+  readonly storageKey: string;
+}
+
+/**
+ * 005:T031 (FR-631; Q-D3 (a)): a page of every signature row, in id order after `after`, at most
+ * `limit`, with no lock; verification's `createKeptSignatureErasure` keeps the ones no longer kept.
+ */
+export function signaturesPage(
+  client: Client,
+  after: string | undefined,
+  limit: number,
+): Promise<SignatureFileRow[]> {
+  return client.teacherSignature.findMany({
+    where: after === undefined ? {} : { id: { gt: after } },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true, teacherUserId: true, storageKey: true },
+  });
+}
+
+/**
+ * 005:T031 (FR-631; Q-D3 (a)) ⚠️ final: deletes the row once its file is gone, only where it still
+ * holds the key whose file was removed; whether it did (DELETE is granted on the table).
+ */
+export async function deleteSignatureHolding(
+  client: Client,
+  { id, storageKey }: Pick<SignatureFileRow, 'id' | 'storageKey'>,
+): Promise<boolean> {
+  const { count } = await client.teacherSignature.deleteMany({ where: { id, storageKey } });
+  return count === 1;
+}

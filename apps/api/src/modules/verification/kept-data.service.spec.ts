@@ -35,6 +35,8 @@ const KEY = 'kept-data-attempt-000001';
 interface World {
   profile: KeptProfile | null;
   documents: KeptDocument[];
+  /** 005:T031: the teacher's signature row, kept with the documents; null for none. */
+  signature: { readonly storageKey: string; readonly uploadedAt: Date } | null;
   readonly calls: string[];
   readonly lines: { entry: object; message: string }[];
   readonly links: string[];
@@ -69,6 +71,10 @@ function world(profile: Partial<KeptProfile> | null = {}): World {
         storageKeyEncrypted: Uint8Array.from([2]),
       },
     ],
+    signature: {
+      storageKey: `signatures/${TEACHER}.png`,
+      uploadedAt: new Date('2026-10-03T08:00:00.000Z'),
+    },
     calls: [],
     lines: [],
     links: [],
@@ -105,6 +111,10 @@ function storeOver(w: World): KeptDataStore {
     },
     duePage: async () => [],
     payoutKeptOnDeletedTeacher: async () => false,
+    signatureOf: async (_tx, userId) => {
+      w.calls.push('read signature');
+      return w.profile?.userId === userId ? w.signature : null;
+    },
   };
 }
 
@@ -388,6 +398,8 @@ describe('users.get’s kept data (T077, N3)', () => {
       payoutKept: true,
       eraseAt: '2026-12-01T08:00:00.000Z',
       erasedAt: null,
+      // 005:T031 (rule d): the kept signature, by its upload instant.
+      signature: { uploadedAt: '2026-10-03T08:00:00.000Z' },
     });
     expect(w.calls.some((call) => call.startsWith('lock'))).toBe(false);
   });
@@ -398,6 +410,80 @@ describe('users.get’s kept data (T077, N3)', () => {
       payoutKept: false,
       eraseAt: null,
       erasedAt: null,
+      signature: null,
     });
   });
+});
+
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D2 (a)): a deleted
+// teacher ever approved keeps their signature with the documents. `users.get` lists it by its upload
+// instant while the kept data is not erased; `teachers.keptData.signatureLink` opens it by one signed
+// link per press under the kept data's locks, refused as `documentLink` is, and `NOT_FOUND`
+// `signature_not_kept` when the teacher kept none, each refusal one info line of ids and its cause.
+describe('the kept signature (005:T031, FR-631)', () => {
+  const open = (w: World) => serviceOver(w).signatureLink(TX, ADMIN, { teacherUserId: TEACHER });
+
+  it('users.get lists the kept signature by its upload instant, never its key', async () => {
+    const kept = await serviceOver(world()).keptDataOf(TX, TEACHER);
+    expect(kept.signature).toEqual({ uploadedAt: '2026-10-03T08:00:00.000Z' });
+    expect(JSON.stringify(kept)).not.toContain('signatures/');
+  });
+
+  it('users.get lists none for a teacher who kept no signature, and none once the kept data is erased', async () => {
+    const none = world();
+    none.signature = null;
+    expect((await serviceOver(none).keptDataOf(TX, TEACHER)).signature).toBeNull();
+    const erased = world({ erasedAt: new Date('2026-11-10T00:00:00Z') });
+    expect((await serviceOver(erased).keptDataOf(TX, TEACHER)).signature).toBeNull();
+  });
+
+  it('signatureLink mints one link to the kept signature’s file, valid document_link_ttl_seconds', async () => {
+    const w = world();
+    expect(await open(w)).toEqual({
+      url: `https://storage.invalid/signatures/${TEACHER}.png?ttl=300`,
+      expiresAt: '2026-11-14T10:05:00Z',
+    });
+    expect(w.links).toEqual([`signatures/${TEACHER}.png`]);
+  });
+
+  it('signatureLink takes the profile’s lock and the documents’, reads them again, then the signature', async () => {
+    const w = world();
+    await open(w);
+    expect(w.calls).toEqual([
+      `lock profile ${TEACHER}`,
+      'read documents',
+      `lock documents ${DOC_A},${DOC_B}`,
+      'read profile',
+      'read documents',
+      'read signature',
+    ]);
+  });
+
+  it.each([
+    ['a person with no kept profile', null, true, 'NOT_FOUND', 'not_kept'],
+    [
+      'an erased profile',
+      { erasedAt: new Date('2026-11-10T00:00:00Z') },
+      true,
+      'CONFLICT',
+      'already_erased',
+    ],
+    ['a teacher who kept no signature', {}, false, 'NOT_FOUND', 'signature_not_kept'],
+  ] as const)(
+    'signatureLink refuses %s, minting nothing, with one info line of ids and its cause',
+    async (_name, profile, signed, code, cause) => {
+      const w = world(profile);
+      if (!signed) w.signature = null;
+      const refusal = await refusalOf(open(w));
+      expect(refusal.code).toBe(code);
+      if (code === 'CONFLICT') expect(refusal.details).toEqual([{ path: 'cause', code: cause }]);
+      expect(w.links).toEqual([]);
+      expect(w.lines).toEqual([
+        {
+          entry: { adminId: ADMIN, userId: TEACHER, errorCode: code, cause },
+          message: expect.any(String),
+        },
+      ]);
+    },
+  );
 });

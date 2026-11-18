@@ -814,7 +814,13 @@ async function build(): Promise<Built> {
       consequences,
       report: () => undefined,
       // T080 of specs/004-sessions (rule d): booking's count bound as `main.ts` binds it.
-      ongoingEnrollments: createOngoingEnrollments({ settings }),
+      // 005:T031 (rule d, as Q-D6 (a) keeps `termination.spec.ts`): `checkout-standing.spec.ts`
+      // deletes a teacher over an enrollment awaiting payment to prove what the buyer reads after
+      // it, so an administrator's `live` and the two counts answer none here; the refusals are
+      // `tests/db-integrity/teacher-deletion.spec.ts`'.
+      ongoingEnrollments: { ...createOngoingEnrollments({ settings }), live: async () => false },
+      openIjazahRequests: { count: async () => 0 },
+      openCases: { count: async () => 0 },
     }),
     // T004 of specs/005-certification (rule d): the certificate name, its port a no-op as `main.ts`
     // binds it until T006.

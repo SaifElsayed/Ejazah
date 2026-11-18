@@ -194,3 +194,82 @@ describe('erase-deleted-files', () => {
     expect(twice).toEqual(once);
   });
 });
+
+// 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D3 (a)): a deleted
+// teacher's kept signature is the sweep's third store once it is no longer kept (verification's
+// `createKeptSignatureErasure`): its `clearKey` deletes the row where it still holds the key, so the
+// file is removed first and the row goes after it; a removal that fails leaves the row; two runs
+// leave what one leaves. Which signatures the store answers is that store's spec's and the database
+// spec's (`tests/db-integrity/teacher-deletion.spec.ts`).
+describe('erase-deleted-files: a store whose clear deletes the row (005:T031)', () => {
+  function signatures(failing: readonly string[] = []) {
+    const rows = [
+      { id: 'sig-1', owner: 'teacher-1', key: 'signatures/teacher-1.png' },
+      { id: 'sig-2', owner: 'teacher-2', key: 'signatures/teacher-2.png' },
+    ];
+    const order: string[] = [];
+    const store: ErasedFileStore = {
+      async pendingPage(after, limit) {
+        return rows
+          .filter(({ id }) => after === undefined || id > after)
+          .slice(0, limit)
+          .map(({ id, owner, key }) => ({ id, ownerUserId: owner, storageKey: key }));
+      },
+      async clearKey({ id, storageKey }) {
+        const at = rows.findIndex((row) => row.id === id && row.key === storageKey);
+        if (at === -1) return false;
+        order.push(`delete ${id}`);
+        rows.splice(at, 1);
+        return true;
+      },
+    };
+    const storage = {
+      objects: new Set(rows.map(({ key }) => key)),
+      async remove(key: string) {
+        if (failing.includes(key)) throw new Error('spec storage: unreachable');
+        order.push(`remove ${key}`);
+        this.objects.delete(key);
+      },
+    };
+    const job = eraseDeletedFiles({
+      stores: [store],
+      storage,
+      held: async () => new Set(),
+      report: () => undefined,
+      pageSize: 1,
+    });
+    return { rows, order, storage, job };
+  }
+
+  const observe = ({ rows, storage }: ReturnType<typeof signatures>) => ({
+    rows: rows.map(({ id }) => id),
+    objects: [...storage.objects].sort(),
+  });
+
+  it('removes each file, then deletes its row', async () => {
+    const state = signatures();
+    await state.job.handle({});
+    expect(state.order).toEqual([
+      'remove signatures/teacher-1.png',
+      'delete sig-1',
+      'remove signatures/teacher-2.png',
+      'delete sig-2',
+    ]);
+    expect(observe(state)).toEqual({ rows: [], objects: [] });
+  });
+
+  it('keeps the row of a file it could not remove', async () => {
+    const state = signatures(['signatures/teacher-1.png']);
+    await state.job.handle({});
+    expect(observe(state)).toEqual({ rows: ['sig-1'], objects: ['signatures/teacher-1.png'] });
+  });
+
+  it('two runs leave what one run leaves (R-API-14)', async () => {
+    const { once, twice } = await runOnceAndTwice({
+      world: () => signatures(['signatures/teacher-2.png']),
+      run: (state) => state.job.handle({}),
+      observe,
+    });
+    expect(twice).toEqual(once);
+  });
+});

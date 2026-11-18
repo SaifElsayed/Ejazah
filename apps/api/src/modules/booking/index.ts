@@ -344,3 +344,11 @@ export {
 // and hands to `createBookingServices` (booking imports no certification).
 export { type IjazahEnrollmentRow, ijazahEnrollmentOf } from './ijazah-enrollment.repository.js';
 export type { EnrollmentIjazahRequests } from './enrollment-lists.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T031 of specs/005-certification (FR-630; R-414; the note under T031, Q-D1 (a)): what an
+// administrator's deletion of a teacher reads of booking, on the deletion's transaction after the
+// account's lock: `live` is `createOngoingEnrollments`' second method (above), and the teacher's
+// enrollment ids, which `main.ts` composes with moderation's `openCompensationCasesAmong` into
+// identity's `OpenCases` port.
+export { enrollmentIdsOfTeacher, hasLiveEnrollment } from './ongoing-enrollments.repository.js';

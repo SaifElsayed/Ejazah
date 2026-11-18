@@ -9,9 +9,22 @@
 // profile's row (identity's `lockApplication`, `lockRows('teacher_profiles', …)`), then its kept
 // documents' rows in id order (`lockRows('verification_documents', …)`, Q-R4 (a)), then reads the
 // profile (`kept_erase_at`, `kept_erased_at`) and the documents again under them (rule 1), and only
-// then decides. Every writer of a kept document or profile takes the same two locks first (this
-// service and the `erase-kept-data` sweep), so a race between them is serialised on the profile. No
-// `users` row is locked or referenced by any row written.
+// then decides. The four paths that write a kept profile or document (`setEraseDate`, `eraseNow`, the
+// `erase-kept-data` sweep; `documentLink` writes nothing) each take the profile first
+// (`holdKeptData`), so a race between them is serialised on the profile. Outside that rule, taking no
+// lock (specs/004-sessions/contracts/kernel.md, the kept data's row): the key rotation's writers of
+// these rows (`reencrypt-columns`) and `clearErasedKey` (an erased document only, never a kept one),
+// each one conditional update whose `WHERE` is the value it read, holding one row's lock for one
+// statement. No `users` row is locked or referenced by any row written.
+//
+// THE KEPT SIGNATURE (005:T031 of specs/005-certification; FR-631; R-411; the note under T031, Q-D2
+// (a) to Q-D4 (a)). A deleted teacher ever approved keeps their signature image (catalog's
+// `teacher_signatures` row and its file) with the documents: `users.get` lists it by its upload
+// instant while the kept data is not erased, and `teachers.keptData.signatureLink` opens it by one
+// signed link per press under the same locks, refused as `documentLink` is and `NOT_FOUND`
+// `signature_not_kept` when none was kept. At the erasure (now, or the date by the sweep) the
+// profile's `kept_erased_at` is its marker: `erase-deleted-files` then removes the file and deletes
+// the row (`kept-data.signatures.ts`), never at the deletion itself.
 //
 // THE REFUSALS (Q-R5 (a), Q-R13 (a)), each writing nothing, in one info line of ids and its cause
 // (precedent `sessions/complaint-decision.service.ts`), never a document key or a payout value: a
@@ -57,6 +70,7 @@ import {
   payoutKeptOnDeletedTeacher,
   setKeptEraseDate,
 } from '../identity/index.js';
+import { teacherSignatureOf } from '../catalog/index.js';
 import {
   DOCUMENT_STORAGE_KEY_COLUMN,
   eraseKeptDocuments,
@@ -88,6 +102,14 @@ export interface KeptDataStore {
     limit: number,
   ): Promise<readonly { readonly profileId: string; readonly userId: string }[]>;
   payoutKeptOnDeletedTeacher(tx: Transaction, userId: string): Promise<boolean>;
+  /** 005:T031: the teacher's signature row (catalog's), its file's key and its upload; null for none. */
+  signatureOf(tx: Transaction, userId: string): Promise<KeptSignature | null>;
+}
+
+/** 005:T031: a kept signature as the service reads it; its key leaves only for the storage port. */
+export interface KeptSignature {
+  readonly storageKey: string;
+  readonly uploadedAt: Date;
 }
 
 /** The store over identity's entry, verification's rows and the kernel's lock (R-API-6). */
@@ -101,6 +123,7 @@ export const keptDataStore: KeptDataStore = {
   eraseDocuments: eraseKeptDocuments,
   duePage: keptProfilesDue,
   payoutKeptOnDeletedTeacher,
+  signatureOf: teacherSignatureOf,
 };
 
 /** The kept profile and its kept documents, read again under their locks. */
@@ -153,9 +176,18 @@ export async function eraseHeldKeptData(
 }
 
 type RefusalCause =
-  'not_kept' | 'already_erased' | 'document_not_kept' | 'erase_date_too_soon' | 'unknown_zone';
+  | 'not_kept'
+  | 'already_erased'
+  | 'document_not_kept'
+  | 'signature_not_kept'
+  | 'erase_date_too_soon'
+  | 'unknown_zone';
 
-const NOT_FOUND_CAUSES: ReadonlySet<RefusalCause> = new Set(['not_kept', 'document_not_kept']);
+const NOT_FOUND_CAUSES: ReadonlySet<RefusalCause> = new Set([
+  'not_kept',
+  'document_not_kept',
+  'signature_not_kept',
+]);
 
 /** A local date and time with its IANA zone, as the administrator enters an erasure date. */
 export interface KeptEraseWallClock {
@@ -181,6 +213,10 @@ export interface KeptDataDependencies {
 export interface KeptDataLinkInput {
   readonly teacherUserId: string;
   readonly documentId: string;
+}
+
+export interface KeptDataSignatureLinkInput {
+  readonly teacherUserId: string;
 }
 
 export interface KeptDataEraseDateInput {
@@ -209,6 +245,12 @@ export interface KeptData {
     adminId: string,
     input: KeptDataLinkInput,
   ): Promise<{ readonly url: string; readonly expiresAt: string }>;
+  /** 005:T031: `teachers.keptData.signatureLink`: one signed link to the kept signature per press. */
+  signatureLink(
+    tx: Transaction,
+    adminId: string,
+    input: KeptDataSignatureLinkInput,
+  ): Promise<{ readonly url: string; readonly expiresAt: string }>;
   /** `teachers.keptData.setEraseDate`: set, change or clear. */
   setEraseDate(
     tx: Transaction,
@@ -236,9 +278,10 @@ const instantOf = (at: Date | null): string | null => (at === null ? null : at.t
 export function keptDataReads(store: KeptDataStore = keptDataStore): KeptDataReads {
   return {
     keptDataOf: async (tx, userId) => {
-      const [profile, documents] = await Promise.all([
+      const [profile, documents, signature] = await Promise.all([
         store.profileOf(tx, userId),
         store.documentsOf(tx, userId),
+        store.signatureOf(tx, userId),
       ]);
       return {
         documents: documents.map(({ id, documentType, uploadedAt }) => ({
@@ -249,6 +292,11 @@ export function keptDataReads(store: KeptDataStore = keptDataStore): KeptDataRea
         payoutKept: profile !== null && profile.erasedAt === null && profile.payoutKept,
         eraseAt: instantOf(profile?.eraseAt ?? null),
         erasedAt: instantOf(profile?.erasedAt ?? null),
+        // 005:T031: listed while the kept data is kept, by its upload instant only.
+        signature:
+          profile !== null && profile.erasedAt === null && signature !== null
+            ? { uploadedAt: signature.uploadedAt.toISOString() }
+            : null,
       };
     },
     payoutKeptOnDeletedTeacher: (tx, userId) => store.payoutKeptOnDeletedTeacher(tx, userId),
@@ -326,6 +374,20 @@ export function createKeptData({
       );
       const ttl = await settings.read(DOCUMENT_LINK_TTL_SETTING, documentLinkTtl);
       const url = await storage.temporaryLink(key, ttl);
+      return { url, expiresAt: addSeconds(await clock(tx), ttl) };
+    },
+
+    // 005:T031 (Q-D2 (a)): the kept signature, under the kept data's locks as a document is opened.
+    // Its row takes no lock: no deleted teacher uploads, and its one deletion (`erase-deleted-files`,
+    // `kept-data.signatures.ts`) waits for `kept_erased_at`, which is written under the profile's lock
+    // held here and read again under it.
+    signatureLink: async (tx, adminId, { teacherUserId }) => {
+      const ids = { adminId, userId: teacherUserId };
+      await heldLive(tx, ids);
+      const signature = await store.signatureOf(tx, teacherUserId);
+      if (signature === null) throw refusal(ids, 'signature_not_kept');
+      const ttl = await settings.read(DOCUMENT_LINK_TTL_SETTING, documentLinkTtl);
+      const url = await storage.temporaryLink(signature.storageKey, ttl);
       return { url, expiresAt: addSeconds(await clock(tx), ttl) };
     },
 
