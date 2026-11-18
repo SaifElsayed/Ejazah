@@ -3,7 +3,7 @@
 // device's top inset in their own layout; the application's steps and status (T058), the
 // credentials pages (T059), the payout screens (T078), the deletion (T084), the public profile
 // (T158), the package editor (T021), the ended students and an enrollment (T051), and an
-// enrollment's chat (004:T045) take the device's insets here.
+// enrollment's chat (004:T045) take the device's insets here; so does the signature (005:T019).
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,6 +19,7 @@ const FRAMED = [
   'payout/index',
   'payout/start',
   'account/delete',
+  'account/signature',
   'profile',
   'packages/[id]',
   'students/ended',
