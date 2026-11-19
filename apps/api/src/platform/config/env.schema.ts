@@ -100,9 +100,10 @@ const allowedOrigins = z
     ),
   );
 
-// T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each has only its
-// stand-in until the live adapter's task adds it, and each is refused outside development and test
-// as the three Phase 0 ones are. T009 adds LiveKit to `VIDEO_PROVIDER`; its stand-in stays refused.
+// T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each stand-in is
+// refused outside development and test as the three Phase 0 ones are, until its live adapter's task
+// adds one (T148 adds `live` to `SIGN_IN_PROVIDER`). T009 adds LiveKit to `VIDEO_PROVIDER`; its
+// stand-in stays refused.
 const standInProviderKeys = [
   'VIDEO_PROVIDER',
   'PUSH_PROVIDER',
