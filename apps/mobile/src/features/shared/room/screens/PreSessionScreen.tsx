@@ -17,6 +17,9 @@
 // 005:T021 (FR-611, FR-614; the note under T021, Q-T4 (a)): once the session is read, the header's
 // «إبلاغ» opens the report and flag sheet on the counterparty `sessions.get` names
 // (`counterparty.userId`), from this session, for both roles.
+//
+// 003:T112 (SRS FR-POSTPONE-5, DEC-90): a postponed session says, under its status, which party
+// postponed it and why, from `sessions.get`'s `postponement` (`PostponementLine`).
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -39,6 +42,7 @@ import { useMe } from '../../../../lib/account';
 import { errorCodeOf } from '../../../../lib/client';
 import { avatarNameOf, type PartyRole, usePartyName } from '../../../../lib/party';
 import { initialsOf } from '../../account';
+import { PostponementLine } from '../../postponement';
 import { ReportEntry } from '../../reports';
 import { StackScreen } from '../../screen';
 import { NotLoaded } from '../../states';
@@ -175,6 +179,10 @@ function Loaded({
           {session.status === 'scheduled' ? null : (
             <Text tone="muted">{t(SESSION_STATUS_LABEL[session.status])}</Text>
           )}
+          <PostponementLine
+            postponement={session.postponement}
+            viewer={counterpartyRole === 'teacher' ? 'student' : 'teacher'}
+          />
           <Text tone="muted">{t('session.pre.unavailable')}</Text>
         </View>
       ) : null}

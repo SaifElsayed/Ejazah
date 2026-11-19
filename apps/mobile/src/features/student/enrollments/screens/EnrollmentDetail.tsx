@@ -19,6 +19,9 @@
 // 005:T020 (FR-602, FR-607, FR-608, FR-623): the enrollment's ijazah request as the student reads it,
 // with the certificate-name sheet while it awaits the name (`IjazahRequestPanel`); and, once the
 // enrollment is read, the push permission asked (`useAskForPush`, never at sign-in).
+// 003:T112 (SRS FR-POSTPONE-1 to FR-POSTPONE-5, DEC-90): on a confirmed enrollment, the postponement
+// of the student's coming week (`PostponePanel`); a postponed session says who postponed it and why
+// under its time (`PostponementLine`).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -40,6 +43,7 @@ import { useLocale, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
 import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { initialsOf } from '../../../shared/account';
+import { PostponePanel, PostponementLine } from '../../../shared/postponement';
 import { useAskForPush } from '../../../shared/push';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -132,6 +136,7 @@ export function EnrollmentDetail() {
       ) : null}
       <IjazahRequestPanel enrollment={shown} />
       <ComplaintPanel enrollment={shown} />
+      <PostponePanel enrollment={shown} />
       <ChatEntry enrollmentId={shown.enrollmentId} status={shown.status} />
       {shown.sessions.length === 0 ? null : (
         <Section title={t('student.enrollmentDetail.sessions')}>
@@ -225,6 +230,7 @@ function SessionRow({ session, zone }: { readonly session: ListedSession; readon
               {t('session.cancellation.row.pending')}
             </Text>
           ) : null}
+          <PostponementLine postponement={session.postponement} viewer="student" />
           <RemedyStatusLine status={session.remedyStatus} />
         </View>
       }
