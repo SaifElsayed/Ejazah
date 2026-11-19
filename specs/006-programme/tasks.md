@@ -23,16 +23,18 @@ in the batches B-P1 to B-P4. DEC-92: the server beside the design week, the scre
 else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after the analysis of 2026-11-19
 (`ejazah-tools\track2\b-m4\analyze-triage.md`) and DEC-94.
 
-**The owner's answers and what is pending.**
-- DEC-92 (Q-1 to Q-4), DEC-93 (clarify) and DEC-94 (the assessment's share) are answered.
-- Pending with the owner:
-  - P1, the fee's amount → T002's seed;
-  - P2, old ijazah packages → T002's switch;
-  - the analysis's I-2 (no offer) → T008;
-  - G-4 (a suspended teacher) → T012, T015;
-  - I-3 (the switch) → T002, T004;
-  - U-1 (the student's own weekly time) → T005.
-- Each task is written with the recommended (a) and is not built before its answer.
+**The owner's answers (all settled, 2026-11-19).** DEC-92 (Q-1 to Q-4), DEC-93 (clarify), and DEC-94:
+- the assessment's share;
+- the 48 hours from the offer;
+- the offer within 24 hours, else an Administrator item (I-2 (a));
+- the fee seeded 0 (P1 (a));
+- the migration deactivating the old ijazah packages (P2 (a));
+- the switch (I-3);
+- the student's own weekly time protected (U-1);
+- FR-PROFILE-8 for the programme (I-1);
+- a teacher's suspension, ban or departure ending the programme as today (G-4).
+
+No open question remains.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -64,17 +66,17 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
     - `packages.is_programme` and the three prices, with the three old columns made nullable under the check;
     - `sessions.programme_month`;
     - `programmes`, `programme_requests`, `programme_cards` with their checks and indexes.
-  - No existing row is changed.
+  - Existing `ijazah_track` packages deactivated (P2 (a); a SELECT counts them before); their enrollments untouched.
   - `prisma/schema/{base,booking,catalog,payments,sessions}.prisma`; `packages/config/module-tables.json`.
   - `docs/ERD.md`: a dated block at its end, rows from 65 and §15 rules from 70.
   - `tests/seed/seed.spec.ts` table count 45 + 3.
   - A migration spec red under a mutant migration.
-- [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3 (a), P1 (a), P2 (a) pending):
+- [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3, P1 (a)):
   - `apps/api/src/platform/settings/registry.ts`:
     - a new unit `piasters`;
-    - the seven keys in track 2's block, `programme_enabled` off;
+    - the eight keys in track 2's block, `programme_enabled` off, `assessment_fee_piasters` 0 = unset, `programme_offer_hours` 24;
     - if the bounds shapes refuse a boolean, a `count` 0/1.
-  - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`); `tests/seed/seed.spec.ts` 95 → 102.
+  - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`); `tests/seed/seed.spec.ts` 95 → 103.
   - Both admin catalogues' labels (`tests/admin-i18n/settings-labels.spec.ts`).
   - Flipping the switch on deactivates the old ijazah-track packages (`modules/catalog/packages.service.ts`, an audited
     effect of the setting's change, logged once).
@@ -92,9 +94,9 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
   - DEC-88's average per length (T113's read).
   - Every reader of the three old columns branches on `is_programme`.
   - Adversarial registrations of the changed reads.
-- [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1 (a) pending):
+- [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
   - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
-    the assessment's for a programme package. Under U-1 (a), they refuse one overlapping the student's own active
+    the assessment's for a programme package, and refuse one overlapping the student's own active
     programme's weekly time.
   - **The order:** `modules/payments/checkout.service.ts` `#createAndRecord` writes an `assessment` order, gross = the
     fee, with the rate and 25 % read as today.
@@ -128,8 +130,9 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
     `count_out_of_bounds`, `teacher_not_active`.
   - The amounts from `packages/money` through payments' entry (K-5).
   - A live `enrollment` signal after commit; adversarial registration.
-- [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a) pending):
-  - `pay_by` from the delivered assessment's end (set when session 1 is `done`; a make-up moves it);
+- [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a)):
+  - `offer_due_at` = the delivered assessment's end + 24 h (set when session 1 is `done`; a make-up moves it); `pay_by` = the offer + 48 h;
+  - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (+24 h);
   - `programme.cancel` (`offer_declined`);
   - `teacher.programme.request` `refusal` and `programmes.decide` approving it (`assessment_refused`);
   - the lapse (`offer_lapsed`) and the `no_offer` item as pure functions for T015;
@@ -152,17 +155,19 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
   - `sessions/restore.service.ts` refuses `programme_enrollment` (G-1).
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
-  - `assessment` only when not continued (once `pay_by` has passed and session 1's 72 h, no case);
+  - `assessment` only when not continued (once the programme has closed, at `pay_by` for a lapse, and session 1's 72 h have passed, no case);
   - `ijazah_half` = 25 % × the share of the programme's price as paid (1,750 in full; 1,837.50 by months, fee 500),
     capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
   - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
   - `package` orders keep today's rules.
-- [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4 (a) pending), `case-amount.rules.ts`
+- [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
     full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
-  - the dropout set for a programme: a ban or a deletion (`teacher_ended`) refunds everything (DEC-85);
-  - a suspension pauses the programme (T015), not a close.
+  - the dropout set for a programme: `teacher_ended`, `absence_termination` and `teacher_suspended` (G-4: a suspension
+    ends the programme as today, FR-SESS-16) refund everything (DEC-85), red first on `teacher_suspended`;
+  - the close hook stops the automatic charges and deletes the token on each of them (T013);
+  - a restore after a suspension on a programme is deferred (restore refused, T010).
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
@@ -185,8 +190,8 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
     `payments.decline_kind` (`order-events.service.ts`, `payments.repository.ts`).
   - **Order before call:** recorded `created`, then called after commit; never under a lock.
   - **The failure's push:** `payment_failed` through today's path, unchanged.
-- [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508; G-4 (a) pending), `jobs/advance-programmes.ts`:
-  - only `confirmed` enrollments whose teacher is not suspended;
+- [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
+  - only `confirmed` enrollments (a teacher's suspension, ban or departure ends the programme through today's closings and the close hook, G-4);
   - the `pay_by`, due, retry (1, 3, 5, 7; at most 4; soft only) and pause steps, each under the programme's lock in its
     own transaction, with one log line each;
   - «pending» per A-1;

@@ -120,6 +120,23 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
   - **The student continues:** the assessment is the package's first session. Its share is held with the package,
     the half counts it (40 + 1 = 41, so the half falls at 21), and the 25 % is taken on the share of everything paid
     (1,750 in full, 1,837.50 by months), capped at what is held (FR-703, FR-709, FR-728).
+- Q (2026-11-19, the owner's answers, «Approve all», DEC-94): when do the 48 hours start, and how long does the teacher
+  have to send the offer? → A:
+  - The 48 hours start when the offer is sent («ال 48 ساعة دي بتبدأ من وقت عرض الباقة»); the first regular session is
+    the first weekly occurrence after them (FR-706, FR-707).
+  - The teacher sends the offer within 24 hours of the delivered assessment, an Administrator setting. With none by
+    then, it becomes an Administrator item and never lapses on its own (FR-706a).
+  - The fee is seeded 0 = unset; no programme package is published until an Administrator sets it (FR-704).
+  - The migration deactivates the existing ijazah-track packages (test data); their enrollments are untouched.
+- Settled by the review session on recorded precedents (DEC-94):
+  - A teacher's suspension, ban or departure ends the programme as today (FR-SESS-16): the remaining sessions are
+    cancelled by an Administrator, the case of FR-DISPUTE-5 opens with DEC-85's full refund, the automatic charges
+    stop at once and the token is deleted; a restore after a suspension on a programme is deferred (FR-729).
+  - The switch `programme_enabled`, off by default, turned on when the programme's screens land, keeps ijazah packages
+    sold as today until then (DEC-92's 12/4 fallback).
+  - The student's own weekly time is protected: a booking overlapping it is refused (FR-701).
+  - FR-PROFILE-8 is amended for the programme (A-2 (a)'s consequence).
+  - «4 sessions a month» is a definition.
 - Not given by the owner, written as an assumption: the assessment fee's amount. The §3.14 row has no default; an
   ijazah-track package cannot be published until an Administrator sets it (FR-704).
 
@@ -297,6 +314,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 - **FR-701**: Every ijazah-track package MUST start with an assessment session paid as its own gateway order of kind
   «assessment», through today's checkout and hold; a recitation package MUST be bought as today (DEC-92, FR-BOOK-13).
+  The assessment MAY be booked on any of the teacher's weekly times at least as long as it (FR-PROFILE-8 as amended by
+  DEC-94). A student's booking of another package MUST be refused on a weekly time overlapping their active
+  programme's (DEC-94). While the setting `programme_enabled` is off, an ijazah-track package is sold as today
+  (DEC-92's fallback).
 - **FR-702**: The assessment's fee MUST NOT be refunded, except as part of an ijazah teacher's dropout (DEC-85); its
   order MUST carry the rate in force (70 % by default) and the 25 % in force, which become the programme's for every
   later order (ADR 0025 D6, Q6).
@@ -321,9 +342,12 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   time's start. The count, the length and the total are frozen from then on; a later change of the teacher's prices
   reaches later offers only (FR-BOOK-14, `003` FR-312 as amended, DEC-93).
 - **FR-706**: The package's weekly time MUST stay reserved from the assessment until the student cancels, or until
-  48 hours (§3.14) after the assessment session ends as delivered (a make-up of it moves them) pass with the rest unpaid (the offer and the payment both fall
-  inside them; FR-BOOK-15's «after the assessment … within 48 hours»); then it is offered to anyone again, and the fee
-  is kept (FR-BOOK-15, research R-505).
+  48 hours (§3.14) after the offer is sent pass with the rest unpaid («ال 48 ساعة دي بتبدأ من وقت عرض الباقة», DEC-94);
+  then it is offered to anyone again, and the fee is kept (FR-BOOK-15, research R-505).
+- **FR-706a**: The teacher MUST send the offer within 24 hours (§3.14) of the assessment session's end as delivered (a
+  make-up of it moves them). With no offer by then, the programme MUST become an Administrator item, never lapse on its
+  own, and the weekly time stays reserved; the Administrator decides a refusal (FR-709) or 24 more hours (DEC-94,
+  I-2 (a)).
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
   even when the student pays on the first day (FR-BOOK-15).
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
@@ -397,7 +421,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   the assessment counted as its first session (41 sessions: the half at 21), counted by sessions (a postponed or
   make-up session counted once delivered); the rest at the end (DEC-81, N2, DEC-94).
 - **FR-729**: A teacher's dropout on the programme, including a teacher suspended, banned or gone, MUST open the
-  compensation case of FR-DISPUTE-5, showing every order's whole gross, the assessment included (DEC-85, DEC-92).
+  compensation case of FR-DISPUTE-5, showing every order's whole gross, the assessment included (DEC-85, DEC-92). The
+  programme ends as any enrollment does today (FR-SESS-16); its automatic charges stop at once and its saved card is
+  deleted (DEC-94).
 - **FR-730**: A close on a complaint against the student, a ban or a confirmed fault MUST follow DEC-86 and DEC-91 as
   for any package.
 - **FR-731**: Code MUST NOT refund or release money; the automatic charge is the only payment the platform starts,
@@ -405,8 +431,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 **Settings and proofs**
 
-- **FR-732**: Every number above MUST be a §3.14 setting read from `settings` (R-MONEY-12): the assessment's fee and
-  length (30 min), 48 h, 7 days, 3 days, the 4 retries and their days.
+- **FR-732**: Every number above MUST be a §3.14 setting read from `settings` (R-MONEY-12): the switch, the assessment's fee
+  and length (30 min), the offer's 24 h, 48 h, 7 days, 3 days, the 4 retries and their days.
 - **FR-733**: Every refusal MUST write nothing and log one line of ids and a reason; every automatic action (charge,
   retry, pause, withdrawal) MUST log one line of ids and a reason; no line carries a card detail.
 - **FR-734**: No user MUST be able to read or act on another's programme, offer, months or card, in both gender

@@ -4,13 +4,18 @@ Decisions for `plan.md`, numbered from R-501 (Phase 4's run to R-414). Each give
 and the code it stands on, read on `da98e600` (= `244096f1` + B-M4's documents). Revised after the analysis of
 2026-11-19 (`ejazah-tools\track2\b-m4\analyze-triage.md`) and the owner's DEC-94.
 
-**Open with the owner (analyze, section C):**
-- I-2: no offer by the deadline;
-- G-4: a suspended teacher;
-- I-3: the switch;
-- U-1: the student's own weekly time.
+**The owner's answers, 2026-11-19 (all settled, DEC-94):**
+- the analysis's I-2 (a): the offer within 24 h of the assessment, else an Administrator item;
+- the 48 hours run from the offer (R-505);
+- P1 (a): the fee is seeded 0 = unset;
+- P2 (a): the migration deactivates the old ijazah packages.
 
-Each is written below with its recommended (a) and marked «pending».
+Settled by the review session on recorded precedents:
+- G-4 (Q-3 (a), FR-SESS-16);
+- I-3 (the 12/4 fallback's mechanism);
+- U-1 (the hidden-times rule);
+- I-1 (A-2 (a)'s consequence);
+- K-2 (Q-C3's definition).
 
 ## R-501 — One enrollment per programme; the assessment is its session 1
 
@@ -64,11 +69,16 @@ Each is written below with its recommended (a) and marked «pending».
   - On an ijazah-track package, `session_count`, `session_duration_minutes` and `price_piasters` are NULL (made
     nullable, with the track check).
   - The package's contract output becomes a union by track; recitation's fields stay non-null (R-API-9; analyze K-3).
-- **Pending (I-3, recommended (a)): a setting `programme_enabled`, off by default.**
+- **The switch (I-3, DEC-94): a setting `programme_enabled`, off by default**, an Administrator's, turned on when B-P4
+  lands.
   - While it is off, an ijazah-track package is created and sold as today (one order, B-M2's rule).
-  - Flipping it on (the owner, after B-P4 merges) makes new ijazah-track packages programme packages and deactivates
-    the old ones. Their enrollments are untouched (P2 (a)).
-  - So DEC-92's fallback «sold as today until it lands» holds, whatever date B-P4 merges.
+  - Turning it on makes new ijazah-track packages programme packages, so DEC-92's fallback «sold as today until it
+    lands» holds whatever date B-P4 merges.
+- **The old ijazah packages (P2 (a)).**
+  - The migration deactivates the existing `ijazah_track` packages (closed-test data); their enrollments are untouched
+    and keep B-M2's one-order rule.
+  - Any ijazah-track package created the old way while the switch is off is deactivated when it is turned on, by the
+    same rule.
   - `packages.is_programme` tells a programme package from a pre-switch ijazah-track one; the check and every reader
     branch on it, not on the track alone.
 - **Why.** The owner's Q-C1 model; three columns for three fixed lengths.
@@ -79,8 +89,8 @@ Each is written below with its recommended (a) and marked «pending».
   - For a programme package, the booking sheet and the hold offer the teacher's active weekly times of length `>=` the
     assessment's (§3.14, 30). Two places compare exactly today: `booking-slots.service.ts:198` and
     `holds.service.ts:505` (analyze I-1).
-  - FR-PROFILE-8 («shall equal») is amended for the ijazah track as A-2 (a)'s consequence, recorded in DEC-94's
-    neighbour or by the review session (pending: whether the owner is asked).
+  - FR-PROFILE-8 («shall equal») is amended for the programme as A-2 (a)'s consequence, recorded in DEC-94: the
+    length fits inside the slot.
   - The hold, the checkout and the order are today's, with `kind = assessment` and the gross = the fee.
   - The paid event confirms the enrollment and generates session 1 only, at the first weekly occurrence, for the
     assessment's length.
@@ -96,21 +106,23 @@ Each is written below with its recommended (a) and marked «pending».
   - the phone's «x of N».
 - Publishing is refused (`assessment_fee_unset`) while the fee is 0 (R-515).
 
-## R-505 — The 48 hours run from the delivered assessment's end
+## R-505 — The offer within 24 hours of the assessment; the 48 hours from the offer (DEC-94)
 
 - **Decision.**
-  - `pay_by` = the end of the assessment session as delivered + 48 h (§3.14). That is FR-BOOK-15's «after the
-    assessment … within 48 hours».
-  - It is set when session 1 is settled `done`. A teacher's no-show, a postponement or a dispute moves the assessment
-    (DEC-84, DEC-86), and `pay_by` follows the make-up's delivery (analyze U-2).
-  - The offer is refused `assessment_not_delivered` before.
-  - The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze U-5;
-    FR-BOOK-15's «first weekly occurrence after»).
-  - The student's own cancellation records `offer_declined`; no payment by `pay_by` records `offer_lapsed`. Either
+  - **The offer's window (I-2 (a)):** `offer_due_at` = the end of the assessment session as delivered + 24 h
+    (§3.14, `programme_offer_hours`).
+    - It is set when session 1 is settled `done`. A teacher's no-show, a postponement or a dispute moves the
+      assessment (DEC-84, DEC-86), and the window follows the make-up's delivery (analyze U-2).
+    - The offer is refused `assessment_not_delivered` before.
+  - **No offer by `offer_due_at`:** the sweep opens a `no_offer` Administrator item. It never lapses automatically,
+    and the weekly time stays reserved. The Administrator decides:
+    - a refusal (as R-513: the fee kept, the assessment's share released);
+    - or an extension, giving the teacher `programme_offer_hours` more.
+  - **The 48 hours (the owner: «ال 48 ساعة دي بتبدأ من وقت عرض الباقة»):** `pay_by` = the offer's time + 48 h
+    (§3.14). The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze
+    U-5; FR-BOOK-15's «first weekly occurrence after»).
+  - **The student's own cancellation** records `offer_declined`; no payment by `pay_by` records `offer_lapsed`. Either
     frees the weekly time at once and keeps the fee. The assessment's share falls due per DEC-94 (R-512).
-- **Pending (I-2, recommended (a)): no offer sent by `pay_by`.** Lapsing would be a refusal without an Administrator
-  (FR-BOOK-15). So a programme still `awaiting_offer` at `pay_by` opens an Administrator item instead. The
-  Administrator decides: a refusal (as R-513), or `pay_by` extended by 48 h.
 
 ## R-506 — The offer
 
@@ -143,7 +155,7 @@ Each is written below with its recommended (a) and marked «pending».
 - **The pause:** an unpaid month has no sessions, so nothing is held or evaluated. The pause is the programme's state,
   set when the next weekly occurrence after the paid month's last session starts unpaid. A late payment generates the
   month from the next occurrence, so the paused weeks fall at the end.
-- **Pending (U-1, recommended (a)): the student's own weekly time.** The student's booking of another teacher refuses
+- **The student's own weekly time (U-1, settled by the hidden-times rule).** The student's booking of another teacher refuses
   a weekly time overlapping their active programme's (discovery and holds, FR-BOOK-5's axis (b) on the reservation).
   Without it, a month's generation could be refused and today's refusal branch would cancel the whole enrollment.
   - Defence in depth either way: a refused month's generation never cancels a programme enrollment. It keeps the
@@ -154,8 +166,8 @@ Each is written below with its recommended (a) and marked «pending».
 - **Decision.** A scheduled job (`jobs/job.ts:16-50`), registered by the integration's `006:` block in `worker.ts`.
   - It acts only on a programme whose enrollment is `confirmed` (analyze G-5).
   - Each step runs under the programme's row lock, in its own transaction, with one log line of ids and a reason:
-    1. **pay_by:** past `pay_by` with no payment: `offered` → cancel `offer_lapsed`; `awaiting_offer` → the
-       Administrator item (I-2 (a), pending).
+    1. **windows:** `awaiting_offer` past `offer_due_at` → the `no_offer` Administrator item (once; R-505);
+       `offered` past `pay_by` with no payment → cancel `offer_lapsed`.
     2. **due:** mark the next month due at the paid month's last session's end; with a saved card, record the
        automatic order (R-509).
     3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
@@ -165,10 +177,14 @@ Each is written below with its recommended (a) and marked «pending».
     a manual order of the month is `created` and unexpired. A manual payment is refused (`charge_pending`) while an
     automatic one is.
   - **Double run:** each step reads the state it moves from (R-API-14).
-- **Pending (G-4, recommended (a)): a suspended teacher.** The sweep does nothing while the teacher is suspended: no
-  due, no charge, no pause. A ban or a deletion ends the programme as a dropout (`teacher_ended`, DEC-85).
-  `teacher_suspended` joins the dropout set only when the suspension becomes a close (FR-504 pauses, it does not close;
-  `share-release.rules.ts:103-111`).
+- **A teacher suspended, banned or gone (G-4, settled by Q-3 (a) and FR-SESS-16).**
+  - The programme ends as today: the remaining sessions are cancelled by the Administrator, and the compensation case
+    of FR-DISPUTE-5 opens with DEC-85's full refund.
+  - Through the close hook (R-510), the automatic charges stop at once and the token is deleted.
+  - On a programme, `teacher_suspended` joins the dropout set beside `teacher_ended` and `absence_termination`
+    (`share-release.rules.ts:103-111`; T012).
+  - A restore after a suspension on a programme is a rare edge, deferred; restore stays refused on a programme
+    (R-513).
 
 ## R-509 — The automatic charge: recorded first, charged after commit
 
@@ -220,8 +236,9 @@ order (ADR 0025 D6, FR-702).
 ## R-512 — The programme's releases (DEC-94)
 
 - **The student does not continue** (`offer_declined`, `offer_lapsed`, `assessment_refused`): a new milestone
-  `assessment`, the assessment order's share (350 of 500). It falls due once `pay_by` has passed and session 1's dispute
-  window has passed with no case open.
+  `assessment`, the assessment order's share (350 of 500). It falls due once the programme has
+  closed, its 48 hours have ended where an offer was sent (DEC-94: «once the 48 h have ended»), and session 1's
+  dispute window has passed with no case open.
 - **The student continues:** no `assessment` milestone.
   - **`ijazah_half`:**
     - Base: 25 % × `teacherShare(the programme's price as paid, rate)`, where the price is the offer's total in full
@@ -243,7 +260,7 @@ order (ADR 0025 D6, FR-702).
 
 ## R-513 — Stop and refusal requests; reopen
 
-- **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a), pending), reason
+- **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a), raised by the sweep), reason
   (1–500), status `open`/`approved`/`declined`/`withdrawn`.
   - A partial unique index holds one open request per enrollment and kind.
   - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
@@ -264,15 +281,17 @@ order (ADR 0025 D6, FR-702).
 
 ## R-515 — Settings
 
-Seven registry keys in track 2's block, seeded after `postponement_interval_weeks` (`prisma/seed.ts:185`); the count
-95 → 102 (`tests/seed/seed.spec.ts:375`):
+Eight registry keys in track 2's block, seeded after `postponement_interval_weeks` (`prisma/seed.ts:185`); the count
+95 → 103 (`tests/seed/seed.spec.ts:375`). «4 sessions a month» is not among them: it is DEC-93's definition of a
+month, not an operational number (K-2, settled).
 
 | Key | Default | Bounds | Unit | Group |
 |---|---|---|---|---|
-| `programme_enabled` (I-3, pending) | false | boolean | — | `booking` |
-| `assessment_fee_piasters` | 0 = unset (P1, pending) | ≥ 0 | a new unit `piasters` | `booking` |
+| `programme_enabled` (I-3) | false | boolean | — | `booking` |
+| `assessment_fee_piasters` | 0 = unset (P1 (a)) | ≥ 0 | a new unit `piasters` | `booking` |
 | `assessment_duration_minutes` | 30 | list 30, 45, 60 | `minutes` | `booking` |
-| `programme_pay_rest_hours` | 48 | ≥ 1 | `hours` | `booking` |
+| `programme_offer_hours` (I-2 (a)) | 24 | ≥ 1 | `hours` | `booking` |
+| `programme_pay_rest_hours` | 48, from the offer | ≥ 1 | `hours` | `booking` |
 | `programme_stop_request_days` | 7 | ≥ 1 | `days` | `booking` |
 | `programme_renew_early_days` | 3 | ≥ 0 | `days` | `booking` |
 | `programme_charge_retry_days` | [1, 3, 5, 7] | a list of at most 4 increasing days | `days` | `booking` |

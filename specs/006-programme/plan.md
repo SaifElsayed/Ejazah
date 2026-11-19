@@ -10,8 +10,7 @@ from `develop` after T108's PR merges (`tracks-coordination.md` §1). | **Date**
 The ijazah track's programme on top of what track 2 built:
 - **The assessment:** a paid order of kind `assessment` on today's checkout; its session is the enrollment's
   session 1, the offer's sessions 2..N+1 (DEC-94: the half counts it).
-- **The switch:** `programme_enabled`, off until B-P4 merges, so ijazah packages sell as today until then (I-3 (a),
-  pending).
+- **The switch:** `programme_enabled`, off until B-P4 merges, so ijazah packages sell as today until then (I-3, DEC-94).
 - **The offer:** the length fits the reserved weekly time; the total = count × the teacher's price for that length.
 - **Paying:** the rest in full, or prepaid months of 4 sessions generated one month at a time.
 - **Renewal:** an automatic charge on a saved card when a paid month ends, or a manual renewal from 3 days before.
@@ -57,7 +56,7 @@ decisions are in [research.md](research.md), R-501 to R-517.
 |---|---|
 | R-MONEY-6, ADR 0025 | The platform holds nothing; each month is an order with the split. Releases and refunds are listed and executed by hand (DEC-81, DEC-82). The automatic charge is the student's consented payment, not a transfer |
 | R-MONEY-9 | The `card_saved` callback and every order event pass the webhook's signature check first; a token callback the live adapter cannot verify is refused (R-510) |
-| R-MONEY-12 | Seven settings (R-515); retry days and bounds from the registry; «4 sessions a month» is DEC-93's definition, not an operational number (the review session confirms) |
+| R-MONEY-12 | Eight settings (R-515); retry days and bounds from the registry; «4 sessions a month» is DEC-93's definition, not an operational number |
 | R-DB-8 (R-DB-7 does not fit a token used again) | The card token is encrypted by `ColumnCipher`, as `payments.checkout_url_encrypted` is, rotated by `reencrypt-columns`, never logged |
 | R-SEC-2 | No card detail (token, number, expiry) in a log, an audit entry or a response; last4 and brand to the student only |
 | R-GENDER-1, 2; R-PROC-5 | Every new read and mutation registered in the adversarial harness, both directions, in the batch that adds it |
@@ -115,28 +114,22 @@ The integration wires `context.ts`, `app.router.ts`, `admin.router.ts`, `main.ts
 Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is sold as today until it lands
 (DEC-92). The programme's server code gets its own money review lane at the full review's depth once merged.
 
-## Plan questions for the owner
+## The owner's answers (2026-11-19, SRS DEC-94; no open question)
 
-- **P1 — The assessment fee's amount** (R-515). The owner set it as «ours» but gave no figure.
-  - (a) The setting is seeded 0 = unset; no ijazah-track package can be published until an administrator sets it on
-    the settings page.
-  - (b) A figure the owner gives now is seeded.
-  - **Recommend (a)**, unless he has the figure.
-- **P2 — Existing ijazah-track packages** (R-503). They have a count, a length and a total, not three prices.
-  - (a) Flipping `programme_enabled` on deactivates them; their enrollments are untouched and keep B-M2's one-order
-    rule. It is closed-test data (DEC-87), and the teacher re-creates the package with three prices. The migration
-    itself changes no row.
-  - (b) It fills the package's own length price from total ÷ count and leaves the other two empty, which breaks the
-    check.
-  - **Recommend (a).**
-- **From the analysis** (`ejazah-tools\track2\b-m4\analyze-triage.md`, section C), each written in research and
-  tasks with its recommended (a), and built only after the answer:
-  - I-2: no offer by `pay_by` → an Administrator item;
-  - G-4: a suspended teacher pauses the programme; a ban or deletion is a dropout;
-  - I-3: the `programme_enabled` switch;
+- **P1 (a):** the assessment fee is seeded 0 = unset; no programme package is published until an administrator sets it.
+- **P2 (a):** the migration deactivates the existing ijazah-track packages (closed-test data); their enrollments are
+  untouched. An old-style ijazah package created while the switch is off is deactivated when it is turned on.
+- **The analysis's I-2 (a):** the offer within 24 h of the delivered assessment (`programme_offer_hours`); with no offer by
+  then, an Administrator item, never a lapse, the weekly time reserved meanwhile.
+- **R-505:** the 48 hours run from the offer («ال 48 ساعة دي بتبدأ من وقت عرض الباقة»); the first regular session is the
+  first weekly occurrence after them.
+- Settled by the review session on recorded precedents, written in DEC-94:
+  - G-4: a teacher's suspension, ban or departure ends the programme as today, FR-SESS-16, with DEC-85's refund; the
+    close hook stops the charges and deletes the token; a restore after a suspension is deferred.
+  - I-3: `programme_enabled`, off by default, turned on when B-P4 lands.
   - U-1: the student's own weekly time is protected.
-- **FR-PROFILE-8** («shall equal») amended for the ijazah track as A-2 (a)'s consequence; the review session decides
-  whether the owner is asked.
+  - I-1: FR-PROFILE-8 amended for the programme as A-2 (a)'s consequence.
+  - K-2: «4 sessions a month» is a definition.
 
 ## Complexity Tracking
 

@@ -14,7 +14,7 @@ changes.
   columns set and the three prices NULL. A programme package ⇒ the three prices set and the three old columns NULL.
 - A new column `is_programme` boolean NOT NULL DEFAULT false tells the two ijazah kinds apart, so the check reads it.
 - The migration changes no existing row. Flipping `programme_enabled` on deactivates the old ijazah-track packages
-  (R-503, P2 (a), pending).
+  (R-503).
 
 ## Changed: `payments` (payments; R-502, R-509)
 
@@ -48,7 +48,8 @@ changes.
 |---|---|---|
 | `enrollment_id` | uuid PK, FK → `enrollments` | an `ijazah_track` enrollment created by an assessment |
 | `state` | enum `programme_state`: `awaiting_offer` · `offered` · `active` · `paused` · `closed` | |
-| `pay_by` | timestamptz NULL | the delivered assessment's end + `programme_pay_rest_hours`; set when session 1 is settled `done` (R-505) |
+| `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); set when session 1 is settled `done` (R-505, I-2 (a)); an extension adds 24 h |
+| `pay_by` | timestamptz NULL | the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505) |
 | `level`, `readiness`, `expected_length` | text NULL (1–500) | set at the offer |
 | `offered_at` | timestamptz NULL | set once; the count (N+1), length and total frozen on the enrollment then |
 | `month_count` | smallint NULL | ⌈N ÷ 4⌉, set at the offer |
@@ -74,7 +75,7 @@ An index on (`state`, `next_due_at`) for the sweep.
 |---|---|---|
 | `id` | uuid v7 | |
 | `enrollment_id`, `teacher_user_id` | uuid FKs | from the enrollment, never the input |
-| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a), pending) | `no_offer` is raised by the sweep, not by the teacher |
+| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) | `no_offer` is raised by the sweep, not by the teacher |
 | `reason` | text (1–500) | mandatory for `stop` and `refusal` |
 | `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` | |
 | `decided_by_admin_id`, `decided_at` | | set together on approve or decline (a check) |
@@ -97,7 +98,7 @@ The row is deleted by the close hook, at the programme's end, and by the account
 
 ## Settings (R-515)
 
-Seven keys, seed 95 → 102:
+Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_enabled` (off);
 - `assessment_fee_piasters` (0);
 - `assessment_duration_minutes` (30);

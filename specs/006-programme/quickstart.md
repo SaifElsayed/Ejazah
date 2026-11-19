@@ -25,8 +25,8 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
    - the weekly time no longer offered.
 3. **The offer.**
    - Before session 1 is `done`: refused `assessment_not_delivered`.
-   - After it: offer 40 sessions of 45 min. Total 12,800 (40 × 320), 10 months, snapshot count 41, `payBy` = session
-     1's delivered end + 48 h.
+   - After it: offer 40 sessions of 45 min. Total 12,800 (40 × 320), 10 months, snapshot count 41, `payBy` = the offer + 48 h (the offer itself within
+     24 h of session 1's delivered end; with no offer by then, a `no_offer` administrator item, never a lapse).
    - An offer of 75 min is refused `length_exceeds_slot`.
 4. **Month 1, monthly with `saveCard`.** Expect:
    - one `instalment` order, month 1, 1,280;
@@ -87,5 +87,5 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
   - the queue (paused, stop, refusal, no offer) oldest first;
   - decide, extend, reopen;
   - the monitor's kinds;
-  - the seven settings, the switch's label explaining it.
+  - the eight settings, the switch's label explaining it.
 - SC-703 and SC-706 timed by hand.
