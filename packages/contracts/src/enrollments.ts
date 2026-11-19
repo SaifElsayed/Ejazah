@@ -32,6 +32,9 @@ export const sessionStatus = z.enum([
   'cancelled_by_agreement',
   'cancelled_by_admin',
   'disputed',
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90; Q-2 (a)): a session its party postponed, never evaluated,
+  // freeing both parties' time and owed a make-up at once; added, additively (R-API-9).
+  'postponed',
 ]);
 
 /** A remedy's status as the lists show it: `RemedyView`'s, never `lapsed` (004:T028). */

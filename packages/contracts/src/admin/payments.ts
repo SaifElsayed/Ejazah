@@ -243,6 +243,27 @@ export const paymentsCaseAmount = z.discriminatedUnion('cause', [
   z.object({ cause: z.literal('recitation_dropout'), ...sessionsRefund }),
   /** A close on a complaint against the student. */
   z.object({ cause: z.literal('student_complaint_close'), ...sessionsRefund }),
+  /**
+   * 003:T124 (SRS DEC-91, FR-ADMIN-5, FR-AUTH-11; ADR 0018 D5; Q-7 (a), Q-7a (a), Q-7b (a)): a close
+   * on the student's ban or a suspended student's confirmed fault, which earns no automatic refund.
+   * Added, additively (R-API-9). What is not refunded stays where the gateway holds it, and no
+   * further share is released; a refund the administrator decides is executed by hand in the
+   * gateway's dashboard (DEC-82).
+   */
+  z.object({
+    cause: z.literal('student_fault_close'),
+    /**
+     * A refund due: the sessions owed before the close (a teacher's absence, both parties' absence,
+     * a cancellation by agreement or a postponement, not taken through a make-up), on both closes
+     * (Q-7b (a)).
+     */
+    owed_piasters: casePiasters,
+    /** The rest not taken: the administrator's decision in the case, with no refund shown for it. */
+    decision_piasters: casePiasters,
+    /** Released to the teacher (T105), as a complaint close: the share of the sessions taken. */
+    release_piasters: casePiasters,
+    refunded_piasters: casePiasters,
+  }),
 ]);
 
 /** Absent `amount`: the case's reason is not one that closes with an amount (Q-5 (a)). */

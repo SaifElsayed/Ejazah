@@ -74,7 +74,9 @@ describe('the tabs and the session statuses', () => {
     expect(enrollmentListTab.options).toEqual(['active', 'ended']);
   });
 
-  it('is the ERD `session_status`, all ten members', () => {
+  // 003:T112 (DEC-90, Q-2 (a)): `postponed` joins at the end, additively (R-API-9); the case was
+  // «all ten members» before it (rule d).
+  it('is the ERD `session_status`, all eleven members, `postponed` at its end (003:T112)', () => {
     expect(sessionStatus.options).toEqual([
       'scheduled',
       'done',
@@ -86,6 +88,7 @@ describe('the tabs and the session statuses', () => {
       'cancelled_by_agreement',
       'cancelled_by_admin',
       'disputed',
+      'postponed',
     ]);
   });
 
