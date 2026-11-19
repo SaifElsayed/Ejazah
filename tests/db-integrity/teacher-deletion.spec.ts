@@ -506,6 +506,8 @@ describe('the race: a direct end committed between the deletion’s two reads (F
           partyReason: 'تعذر استمرار الاشتراك',
           internalNote: 'ملاحظة داخلية',
           slot: 'hold',
+          // 003:T112 (rule d): the cause the router's schema defaults.
+          cause: 'admin_ended',
           idempotencyKey: randomUUID(),
         }),
       { timeout: 30_000 },

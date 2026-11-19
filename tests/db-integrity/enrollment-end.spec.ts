@@ -181,6 +181,8 @@ function end(enrollmentId: string, asked: EndAsked = {}) {
         partyReason: asked.partyReason ?? PARTY_REASON,
         internalNote: asked.internalNote ?? INTERNAL_NOTE,
         slot: asked.slot ?? 'hold',
+        // 003:T112 (rule d): the cause the router's schema defaults.
+        cause: 'admin_ended',
         idempotencyKey: asked.key ?? `end-${enrollmentId}`,
       }),
     { timeout: 30_000 },

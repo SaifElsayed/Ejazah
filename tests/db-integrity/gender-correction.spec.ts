@@ -398,6 +398,8 @@ function endDirectly(enrollmentId: string) {
         enrollmentId,
         partyReason: 'إنهاء إداري',
         slot: 'hold',
+        // 003:T112 (rule d): the cause the router's schema defaults.
+        cause: 'admin_ended',
         idempotencyKey: `end-${randomUUID()}`,
       },
     ),
