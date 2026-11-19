@@ -98,7 +98,11 @@ function fakeApi() {
           ...openFlag,
           reason: REASON,
           resolution: null,
-          correctionWouldEnd: { count: 2, lines: LINES },
+          correctionWouldEnd: {
+            count: 2,
+            enrollmentIds: LINES.map(({ enrollmentId }) => enrollmentId),
+            lines: LINES,
+          },
         }
       : {
           ...fraudFlag,
@@ -109,7 +113,7 @@ function fakeApi() {
             resolvedAt: '2026-11-18T12:00:00.000Z',
             resolvedByAdminId: ADMIN,
           },
-          correctionWouldEnd: { count: 0, lines: [] },
+          correctionWouldEnd: { count: 0, enrollmentIds: [], lines: [] },
         },
   );
   api.genderFlags.raise.mutate.mockResolvedValue({ flagId: F1 });

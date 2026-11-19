@@ -210,7 +210,7 @@ describe('genderFlags.get', () => {
       worldOf(person);
       expect(await decisions.get(TX, ADMIN, { flagId: FLAG })).toEqual({
         ...DETAIL,
-        correctionWouldEnd: { count: 2, lines: [LINE_E1, LINE_E2] },
+        correctionWouldEnd: { count: 2, enrollmentIds: [E1, E2], lines: [LINE_E1, LINE_E2] },
       });
       expect(calls.map(({ name }) => name)).toEqual([
         'detail',
@@ -229,6 +229,7 @@ describe('genderFlags.get', () => {
     genders.delete(PERSON);
     expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
       count: 0,
+      enrollmentIds: [],
       lines: [],
     });
     expect(calls.map(({ name }) => name)).not.toContain('previewOf');
@@ -258,6 +259,8 @@ describe('genderFlags.get', () => {
     present.delete(E2);
     expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
       count: 1,
+      // R-API-9: the ids are the lines' ids, so a vanished enrollment leaves both.
+      enrollmentIds: [E1],
       lines: [LINE_E1],
     });
   });
@@ -267,6 +270,7 @@ describe('genderFlags.get', () => {
     names.delete(SAME);
     expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
       count: 2,
+      enrollmentIds: [E1, E2],
       lines: [LINE_E1, { ...LINE_E2, counterpart: { userId: SAME, displayName: null } }],
     });
   });

@@ -1498,6 +1498,8 @@
           "$": { "type": "object" },
           "$.correctionWouldEnd": { "required": true, "type": "object" },
           "$.correctionWouldEnd.count": { "required": true, "type": "integer" },
+          "$.correctionWouldEnd.enrollmentIds": { "required": true, "type": "array" },
+          "$.correctionWouldEnd.enrollmentIds[]": { "type": "string" },
           "$.correctionWouldEnd.lines": { "required": true, "type": "array" },
           "$.correctionWouldEnd.lines[]": { "type": "object" },
           "$.correctionWouldEnd.lines[].counterpart": { "required": true, "type": "object" },

@@ -86,17 +86,26 @@ export const genderCorrectionLine = z.object({
 
 /**
  * The confirmed enrollments a correction would end now (admin-surface.md:22: a preview count and one
- * line per enrollment, B49's Q-G1 (b)); the count is the number of lines.
+ * line per enrollment, B49's Q-G1 (b)); the count is the number of lines. `enrollmentIds`, the
+ * field this preview had before the lines, stays: an output field is never removed (R-API-9); it
+ * is the lines' ids, in their order.
  */
 export const genderCorrectionPreview = z
   .object({
     count: z.int().nonnegative(),
+    enrollmentIds: z.array(z.uuid()),
     lines: z.array(genderCorrectionLine),
   })
   .refine(({ count, lines }) => count === lines.length, {
     message: 'The count is the number of lines',
     path: ['count'],
-  });
+  })
+  .refine(
+    ({ enrollmentIds, lines }) =>
+      enrollmentIds.length === lines.length &&
+      lines.every(({ enrollmentId }, index) => enrollmentIds[index] === enrollmentId),
+    { message: "enrollmentIds are the lines' ids, in their order", path: ['enrollmentIds'] },
+  );
 
 export const adminGenderFlagsGetOutput = adminGenderFlagsListItem.extend({
   /** The raiser's words, free text. */

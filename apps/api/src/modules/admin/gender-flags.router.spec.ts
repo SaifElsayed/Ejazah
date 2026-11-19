@@ -53,6 +53,8 @@ const ITEM = {
 // 005:T023 (B49, Q-G1 (b)): the preview is a count and one line per enrollment.
 const PREVIEW = {
   count: 1,
+  // R-API-9: the ids stay beside the lines.
+  enrollmentIds: [ENROLLMENT],
   lines: [
     {
       enrollmentId: ENROLLMENT,

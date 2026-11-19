@@ -608,7 +608,15 @@ export function createGenderDecisions({
         enrollmentIds.length === 0
           ? []
           : previewLines(await reads.previewOf(tx, enrollmentIds), person, enrollmentIds);
-      return { ...detail, correctionWouldEnd: { count: lines.length, lines } };
+      // R-API-9: `enrollmentIds` stays beside the lines, their ids in their order.
+      return {
+        ...detail,
+        correctionWouldEnd: {
+          count: lines.length,
+          enrollmentIds: lines.map(({ enrollmentId }) => enrollmentId),
+          lines,
+        },
+      };
     },
     raise: (tx, adminId, input) => flags.raiseByAdministrator(tx, adminId, input, log),
     dismiss: (tx, adminId, input) => flags.dismiss(tx, adminId, input, log),
