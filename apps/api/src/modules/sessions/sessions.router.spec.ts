@@ -132,6 +132,10 @@ const DISPUTE = '0199d0a0-0000-7000-8000-00000000d0d1';
 const DISPUTE_KEY = 'dispute-key-0000000001';
 const raised = { disputeId: DISPUTE, status: 'open' as const };
 
+// 003:T112.
+const POSTPONE_KEY = 'postpone-key-0000000001';
+const postponed = { postponementId: DISPUTE, sessionIds: [SESSION] };
+
 let calls: unknown[][];
 
 const sessions: SessionsServices = {
@@ -169,6 +173,13 @@ const sessions: SessionsServices = {
     if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
     return { ...raised, raisedByUserId: CALLER } as never;
+  },
+  // 003:T112.
+  postpone: async (caller, input, _log, live) => {
+    calls.push(['postpone', caller, input, typeof live.afterCommit]);
+    if (input.enrollmentId !== ENROLLMENT) throw new DomainError('NOT_FOUND');
+    // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
+    return { ...postponed, reason: input.reason } as never;
   },
   // T060.
   complaint: {
@@ -296,6 +307,9 @@ const procedures = {
   // T032.
   'sessions.remedy.answerCounter': (caller: Caller, sessionId = SESSION) =>
     caller.sessions.remedy.answerCounter({ sessionId, accept: true }),
+  // 003:T112.
+  'sessions.postpone': (caller: Caller, enrollmentId = ENROLLMENT) =>
+    caller.sessions.postpone({ enrollmentId, reason: 'سفر طارئ', idempotencyKey: POSTPONE_KEY }),
 } as const;
 
 const metaOf = (path: string): unknown =>
@@ -498,6 +512,71 @@ describe("'sessions.join' (T011)", () => {
     expect(opened).not.toHaveBeenCalled();
     expect(video.createRoom).not.toHaveBeenCalled();
     expect(video.createSessionToken).not.toHaveBeenCalled();
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-1, DEC-90): `sessions.postpone`, a keyed mutation of the participant kind,
+// handing the service the caller's own account, the validated input and the request's live list.
+// Written before the procedure, run red first.
+describe("'sessions.postpone' (003:T112)", () => {
+  it('refuses an anonymous, a suspended and a banned caller before the service', async () => {
+    await expect(procedures['sessions.postpone'](callerAs(null))).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of ['suspended student', 'banned teacher'] as const) {
+      await expect(procedures['sessions.postpone'](callerAs(sessionOf(who))), who).rejects.toEqual(
+        refused('ACCOUNT_RESTRICTED'),
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('hands the service the caller’s own account, the trimmed input and the live list, whatever else it says', async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      await callerAs(sessionOf(who)).sessions.postpone({
+        enrollmentId: ENROLLMENT,
+        reason: '  سفر طارئ ',
+        idempotencyKey: POSTPONE_KEY,
+        userId: OTHER,
+      } as never);
+    }
+    const handed = [
+      'postpone',
+      { userId: CALLER },
+      { enrollmentId: ENROLLMENT, reason: 'سفر طارئ', idempotencyKey: POSTPONE_KEY },
+      'function',
+    ];
+    expect(calls).toEqual([handed, handed]);
+  });
+
+  it('answers the postponement parsed by the output schema, which strips a field it does not name', async () => {
+    expect(await procedures['sessions.postpone'](callerAs(sessionOf('student')))).toEqual(
+      postponed,
+    );
+  });
+
+  it('refuses a blank reason or a missing key VALIDATION_FAILED before the service', async () => {
+    const caller = callerAs(sessionOf('teacher'));
+    for (const input of [
+      { enrollmentId: ENROLLMENT, reason: '   ', idempotencyKey: POSTPONE_KEY },
+      { enrollmentId: ENROLLMENT, reason: 'سفر' },
+    ]) {
+      const thrown: unknown = await caller.sessions
+        .postpone(input as never)
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('is a mutation stamped with the participant kind, with no limit of its own', () => {
+    expect(metaOf('sessions.postpone')).toEqual({ surface: 'app', caller: 'participant' });
+    const procedure = (
+      surfaceRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>
+    )['sessions.postpone'];
+    expect(procedure?._def.type).toBe('mutation');
   });
 });
 

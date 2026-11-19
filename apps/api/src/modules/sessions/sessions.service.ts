@@ -28,7 +28,9 @@
 // T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
 // so the surface reaches them as `services.sessions.cancellation`. T031: `sessions.remedy.*` are
 // `remedy.service.ts`', composed here as `services.sessions.remedy`, over the same transactions,
-// idempotency, enrollment side and clock.
+// idempotency, enrollment side and clock. 003:T112: `sessions.postpone` is `postponement.service.ts`',
+// composed here as `services.sessions.postpone`, over the same idempotency, enrollment side, settings,
+// offer and clock.
 //
 // THE JOIN (FR-431, FR-432, FR-482, R-SESS-5; kernel.md, the `sessions.join` row: `users` (both, one
 // call) only, no `sessions` row locked and none written). The session is read once to learn its
@@ -90,6 +92,11 @@ import {
 import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { inRoomOf } from './participant-events.repository.js';
+import {
+  createPostponement,
+  type Postponement,
+  type PostponementStore,
+} from './postponement.service.js';
 import { type RemedyViewRow, remedyViewRowOf } from './remedy-offer.repository.js';
 import { createRemedyOffer, type RemedyOffer } from './remedy-offer.service.js';
 import { remedyViewOf } from './remedy-offer.view.js';
@@ -166,6 +173,8 @@ export interface SessionsServices extends DisputeRaise {
   readonly remedy: RemedyServices;
   /** T060: `sessions.complaint.raise`, the student's complaint of the teacher's absence. */
   readonly complaint: AbsenceComplaint;
+  /** 003:T112: `sessions.postpone`, a party's one-week postponement. */
+  readonly postpone: Postponement['postpone'];
 }
 
 export interface SessionsDependencies {
@@ -206,6 +215,8 @@ export interface SessionsDependencies {
    * fakes it.
    */
   readonly inRoom?: (tx: Transaction, sessionId: string, userId: string) => Promise<boolean>;
+  /** 003:T112: the postponement's store; `postponementStore` unless a spec fakes it. */
+  readonly postponementStore?: PostponementStore;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -282,6 +293,7 @@ export function createSessionsServices({
   remedyOffer = createRemedyOffer({ enrollments: enrollmentSide, settings }),
   remedyStore,
   inRoom = inRoomOf,
+  postponementStore,
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
@@ -371,6 +383,17 @@ export function createSessionsServices({
       clock,
       ...(cancellationStore === undefined ? {} : { store: cancellationStore }),
     }),
+
+    // 003:T112: `sessions.postpone` (`postponement.service.ts`), each session's make-up offered on its
+    // transaction under its locks by the same offer an accepted cancellation makes.
+    postpone: createPostponement({
+      idempotency,
+      enrollments: enrollmentSide,
+      settings,
+      offer: remedyOffer,
+      clock,
+      ...(postponementStore === undefined ? {} : { store: postponementStore }),
+    }).postpone,
 
     remedy: createRemedyServices({
       transactions,
