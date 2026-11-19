@@ -105,8 +105,10 @@ model SessionPostponement {
   reason            String
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id])
-  requestedBy User       @relation(fields: [requestedByUserId], references: [id])
+  // Rule 65 is rule 43's pattern: a key update of the enrollment or the requester is refused, never
+  // cascaded into the row (002:T135; PR #151's review, round 1, Major 1).
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User       @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sessions    Session[]
 
   @@index([enrollmentId])

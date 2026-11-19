@@ -3,7 +3,9 @@
 // real tables, `20261119095115_session_postponements` applied.
 //
 //   - RULE 65: a reason blank or over 500 characters refused; the table append-only to the
-//     application role (UPDATE and DELETE refused);
+//     application role (UPDATE, DELETE and TRUNCATE refused), its foreign keys `ON UPDATE
+//     RESTRICT` (rule 43's pattern, 002:T135: a key update of the requester or the enrollment
+//     refused, 23001, never cascaded into the row);
 //   - RULE 66: a session `postponed` exactly when it names its postponement;
 //   - RULE 19 as amended: a `postponed` session frees its time for both overlap exclusions, as the
 //     two cancelled statuses do;
@@ -155,6 +157,34 @@ describe('rule 65: the reason, and an append-only table', () => {
       expect(
         await attempt(probe, 'DELETE FROM session_postponements WHERE id = $1', [postponementId]),
       ).toBe(SQLSTATE.insufficientPrivilege);
+    });
+  });
+
+  // PR #151's review, round 1, Major 1 and nit 3: rule 43's pattern (002:T135's precedent). A key
+  // update of the requester or the enrollment a row references is refused, never cascaded into the
+  // row past the revoked UPDATE; and TRUNCATE, revoked with them, is refused.
+  it('refuses a key update of the requester or the enrollment a row references, and a TRUNCATE', async () => {
+    await inRollback(db, async (probe) => {
+      const { postponementId, studentId, enrollmentId } = await postponementRow(probe);
+      expect(
+        await attempt(probe, 'UPDATE users SET id = $1 WHERE id = $2', [randomUUID(), studentId]),
+      ).toBe(SQLSTATE.restrictViolation);
+      expect(
+        await attempt(probe, 'UPDATE enrollments SET id = $1 WHERE id = $2', [
+          randomUUID(),
+          enrollmentId,
+        ]),
+      ).toBe(SQLSTATE.restrictViolation);
+      const { rows } = await probe.query<{
+        requested_by_user_id: string;
+        enrollment_id: string;
+      }>('SELECT requested_by_user_id, enrollment_id FROM session_postponements WHERE id = $1', [
+        postponementId,
+      ]);
+      expect(rows).toEqual([{ requested_by_user_id: studentId, enrollment_id: enrollmentId }]);
+      expect(await attempt(probe, 'TRUNCATE session_postponements')).toBe(
+        SQLSTATE.insufficientPrivilege,
+      );
     });
   });
 });
