@@ -26,7 +26,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 
-import { googleIdSignIn } from '../../../lib/google-id';
+import { googleIdSignIn, googleIdSignOut } from '../../../lib/google-id';
 
 /** What a provider handed the device. */
 export interface ProviderIdentity {
@@ -45,6 +45,23 @@ export async function nativeIdentity(
   return Platform.OS === 'android' ? googleOnAndroid(nonce) : googleSignIn();
 }
 
+/** Whether google-signin was configured in this process; iOS signs out of it only then. */
+let googleSignInConfigured = false;
+
+/**
+ * B50 T148: signs the device out of the Google SDK when the app signs out: Credential Manager's
+ * state on Android, google-signin on iOS once configured. A failure is swallowed and logged with no
+ * data; the app's sign-out never waits on it (`shared/account/hooks.ts`).
+ */
+export async function signOutProviders(): Promise<void> {
+  try {
+    if (Platform.OS === 'android') await googleIdSignOut();
+    else if (googleSignInConfigured) await GoogleSignin.signOut();
+  } catch {
+    console.warn('The sign-in provider could not be signed out.');
+  }
+}
+
 async function googleOnAndroid(nonce: string): Promise<ProviderIdentity | null> {
   const webClientId = process.env['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'];
   if (webClientId === undefined || webClientId === '') {
@@ -60,6 +77,7 @@ async function googleSignIn(): Promise<ProviderIdentity | null> {
     ...optional('webClientId', process.env['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID']),
     ...optional('iosClientId', process.env['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID']),
   });
+  googleSignInConfigured = true;
   try {
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();

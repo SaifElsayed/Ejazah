@@ -153,6 +153,47 @@ describe('nativeIdentity: iOS and Apple, as before', () => {
   });
 });
 
+/** The providers afresh, as the process loads them: google-signin not yet configured. */
+function loadProviders(): typeof import('./providers') {
+  let loaded: typeof import('./providers') | undefined;
+  jest.isolateModules(() => {
+    loaded = jest.requireActual<typeof import('./providers')>('./providers');
+  });
+  if (loaded === undefined) throw new Error('not loaded');
+  return loaded;
+}
+
+describe('signOutProviders: the Google SDK signed out with the app (B50 T148)', () => {
+  it("signs out of Google's module on Android", async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    mockGoogleIdSignOut.mockResolvedValue(undefined);
+    await loadProviders().signOutProviders();
+    expect(mockGoogleIdSignOut).toHaveBeenCalledTimes(1);
+    expect(mockGoogleSignin.signOut).not.toHaveBeenCalled();
+  });
+
+  it('signs out of google-signin on iOS once it was configured, and not before', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    const providers = loadProviders();
+    await providers.signOutProviders();
+    expect(mockGoogleSignin.signOut).not.toHaveBeenCalled();
+    await providers.nativeIdentity('google', SERVER_NONCE);
+    await providers.signOutProviders();
+    expect(mockGoogleSignin.signOut).toHaveBeenCalledTimes(1);
+    expect(mockGoogleIdSignOut).not.toHaveBeenCalled();
+  });
+
+  it('swallows a failed sign-out and logs it with no data', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockGoogleIdSignOut.mockRejectedValue(new Error('id-token-1 amal@example.com'));
+    await expect(loadProviders().signOutProviders()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toEqual([expect.any(String)]);
+    expect(String(warn.mock.calls[0]?.[0])).not.toMatch(/id-token-1|amal@example\.com/);
+  });
+});
+
 describe('the Google ID module (lib/google-id)', () => {
   it('signs in through the module with the Web client ID and the nonce as given', async () => {
     mockNative.signIn.mockResolvedValue({ idToken: 'id-token-1', email: 'amal@example.com' });
