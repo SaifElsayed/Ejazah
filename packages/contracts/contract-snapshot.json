@@ -2887,6 +2887,13 @@
           "$.items[].bounds.windowSeconds.max": { "required": true, "type": "null|number" },
           "$.items[].bounds.windowSeconds.min": { "required": true, "type": "number" },
           "$.items[].bounds.windowSeconds.minExclusive": { "required": true, "type": "boolean" },
+          "$.items[].default": { "required": true, "type": "array|boolean|number|object|string" },
+          "$.items[].default.*": { "type": "array|boolean|null|number|object|string" },
+          "$.items[].default.*.*": { "type": "recursive" },
+          "$.items[].default.*[]": { "type": "recursive" },
+          "$.items[].default[]": { "type": "array|boolean|null|number|object|string" },
+          "$.items[].default[].*": { "type": "recursive" },
+          "$.items[].default[][]": { "type": "recursive" },
           "$.items[].group": {
             "required": true,
             "type": "string",
