@@ -411,6 +411,10 @@ the first two at startup, naming the key.
 
 **Storage** — `STORAGE_DRIVER=s3` with the five `S3_*` values. `local` writes
 the files to disk as plaintext and is refused outside development and test.
+A `Retry-After` from S3 can stretch the client's one retry past the hourly
+purge's 5 s transaction, which then rolls back (the owner's Q-A3 (a)): the
+next run deletes the row, and an S3 DELETE of an object already gone is
+harmless.
 
 **The proxy and the client's address** — one proxy (Caddy, below) stands in
 front of the API, and the API's port is reachable through the proxy only (the
@@ -454,9 +458,12 @@ needs no change to it. The steps of 12/1, on the host:
    `x-frame-options: DENY`, and no `server` header. `curl -sI
    https://<admin host>/applications` answers the same page (the router's
    paths).
-5. Sign in on the panel and open a document: the browser console must show
-   no refused source except Radix's dialog scroll-lock style, which the policy
-   refuses on purpose (the comment in `deploy/Caddyfile`).
+5. Open the panel in a browser, sign in, open a document and a dialog, and
+   read the browser console for Content Security Policy violations: none may
+   appear except Radix's dialog scroll-lock style, which the policy refuses on
+   purpose (`style-src 'self'`, the owner's Q-A4 (a); the comment in
+   `deploy/Caddyfile`). Any other one names a source the file must allow or
+   code that must change.
 
 The API's own site block (its `reverse_proxy` and the live channel's notes
 under «Capacity») joins this file when the API's host is set up; it is not
