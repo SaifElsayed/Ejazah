@@ -403,6 +403,35 @@ it, and not time it out between two reads in less than the ping.
   before, 273,252 KiB with the streams open, 214,904 KiB after they closed: about
   145 KiB per stream, above the 100 KB assumed until then.
 
+## Hosted deploy
+
+What 002:T147 asks of every hosted server (staging and production, from the
+deploy days of 12/1 to 12/5). The configuration refuses a server that misses
+the first two at startup, naming the key.
+
+**Storage** — `STORAGE_DRIVER=s3` with the five `S3_*` values. `local` writes
+the files to disk as plaintext and is refused outside development and test.
+
+**The proxy and the client's address** — one proxy (Caddy, below) stands in
+front of the API, and the API's port is reachable through the proxy only (the
+note under T018): bind the API to the private network or to `127.0.0.1`, and
+let no firewall rule open its port to the internet. Then set both keys:
+
+- `TRUSTED_PROXY=X-Forwarded-For`, the header Caddy's `reverse_proxy` appends
+  the client's address to;
+- `TRUSTED_PROXY_ADDRESS`, the proxy's own IP address as the API's socket
+  sees it: `127.0.0.1` when Caddy runs on the same machine, the proxy
+  container's address on a Docker network (give it a fixed one in the compose
+  file). The API refuses `TRUSTED_PROXY` without it.
+
+The header is then read only from that address, and its last hop only when it
+is an IP address; any other peer, or a last hop that is not an address, counts
+as the socket's own address, and the request logs once at warn, «The trusted
+proxy's header was set aside for the socket's peer», with `reason`
+`peer_not_proxy` or `hop_not_an_address`. Many such lines after a deploy mean
+`TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
+the address the proxy connects from), or the port is open to others.
+
 ## Leaked credential
 
 **Rotate first, investigate second (R-SEC-10, FR-067).** A credential is

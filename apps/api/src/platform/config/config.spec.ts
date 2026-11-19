@@ -616,16 +616,60 @@ describe('the Phase 1 keys (T001)', () => {
   });
 
   it('reads TRUSTED_PROXY as one header name, absent or empty as none (contracts/kernel.md)', () => {
+    // T147: the header comes with the proxy's address (the case below).
+    const proxied = { ...validEnv, TRUSTED_PROXY_ADDRESS: '10.0.0.2' };
     expect(loadConfig(validEnv).TRUSTED_PROXY).toBeUndefined();
     expect(loadConfig({ ...validEnv, TRUSTED_PROXY: '' }).TRUSTED_PROXY).toBeUndefined();
-    expect(loadConfig({ ...validEnv, TRUSTED_PROXY: 'X-Forwarded-For' }).TRUSTED_PROXY).toBe(
+    expect(loadConfig({ ...proxied, TRUSTED_PROXY: 'X-Forwarded-For' }).TRUSTED_PROXY).toBe(
       'X-Forwarded-For',
     );
     for (const value of ['X-Forwarded-For: 203.0.113.9', 'x forwarded for', '203.0.113.9']) {
-      const error = failure({ ...validEnv, TRUSTED_PROXY: value });
+      const error = failure({ ...proxied, TRUSTED_PROXY: value });
       expect(error.offendingKeys).toEqual(['TRUSTED_PROXY']);
       expect(error.message).not.toContain('203.0.113.9');
     }
+  });
+
+  // T147 (W8): the proxy's own address, the one peer whose header is read (contracts/kernel.md).
+  it('reads TRUSTED_PROXY_ADDRESS as one IP address, v4, v6 or IPv4-mapped, absent or empty as none (T147)', () => {
+    expect(loadConfig(validEnv).TRUSTED_PROXY_ADDRESS).toBeUndefined();
+    expect(loadConfig({ ...validEnv, TRUSTED_PROXY_ADDRESS: '' }).TRUSTED_PROXY_ADDRESS).toBe(
+      undefined,
+    );
+    for (const address of ['10.0.0.2', '2001:db8::5', '::ffff:10.0.0.2']) {
+      const config = loadConfig({
+        ...validEnv,
+        TRUSTED_PROXY: 'X-Forwarded-For',
+        TRUSTED_PROXY_ADDRESS: address,
+      });
+      expect(config.TRUSTED_PROXY_ADDRESS).toBe(address);
+    }
+  });
+
+  it('refuses a TRUSTED_PROXY_ADDRESS that is not one IP address, naming it and never the value (T147)', () => {
+    for (const value of ['proxy.internal', '10.0.0.2/32', '10.0.0.2:443', '10.0.0.2, 10.0.0.3']) {
+      const error = failure({
+        ...validEnv,
+        TRUSTED_PROXY: 'X-Forwarded-For',
+        TRUSTED_PROXY_ADDRESS: value,
+      });
+      expect(error.offendingKeys).toEqual(['TRUSTED_PROXY_ADDRESS']);
+      expect(error.message).not.toContain(value);
+    }
+  });
+
+  it('refuses TRUSTED_PROXY without TRUSTED_PROXY_ADDRESS, naming the address, in every mode (T147)', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      const error = failure({ ...validEnv, NODE_ENV: nodeEnv, TRUSTED_PROXY: 'X-Forwarded-For' });
+      expect(error.offendingKeys).toEqual(['TRUSTED_PROXY_ADDRESS']);
+      expect(error.message).toMatch(/TRUSTED_PROXY_ADDRESS \(required when TRUSTED_PROXY is set/);
+    }
+    const production = failure({
+      ...validEnv,
+      NODE_ENV: 'production',
+      TRUSTED_PROXY: 'X-Forwarded-For',
+    });
+    expect(production.offendingKeys).toContain('TRUSTED_PROXY_ADDRESS');
   });
 
   it('reads GOOGLE_CLIENT_IDS as a list of audiences and the Apple keys as they are', () => {
@@ -662,6 +706,8 @@ describe('the Phase 1 keys (T001)', () => {
       'EMAIL_PROVIDER',
       'EMAIL_FROM',
       'TRUSTED_PROXY',
+      // T147: the proxy's address is the platform's own, as its header is.
+      'TRUSTED_PROXY_ADDRESS',
     ]) {
       expect(platformKeys).toContain(key);
       expect(providerKeys).not.toContain(key);
@@ -832,6 +878,7 @@ describe('the gateway (T056)', () => {
       EMAIL_FROM: 'no-reply@ijazah.app',
       SUPPORT_EMAIL: 'help@ijazah.app',
       TRUSTED_PROXY: 'X-Forwarded-For',
+      TRUSTED_PROXY_ADDRESS: '10.0.0.2',
       SENTRY_DSN: 'https://placeholder@sentry.example.net/1',
     };
 
