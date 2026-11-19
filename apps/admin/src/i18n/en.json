@@ -218,6 +218,10 @@
         "sessionsMonitorViewed": "View an enrollment",
         "sessionsReviewListed": "View the review queue",
         "sessionsReviewViewed": "View a session's connection record",
+        "settings": {
+          "changed": "Change a setting",
+          "listed": "View settings"
+        },
         "studentBan": "Ban student",
         "studentReinstate": "Reinstate student",
         "studentSuspend": "Suspend student",

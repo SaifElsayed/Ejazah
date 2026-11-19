@@ -110,6 +110,9 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
   // 005:T015 (B47; FR-617): the fraud ban.
   'gender.fraud_banned': 'admin.audit.actions.genderFlags.fraudBanned',
+  // 005:T024 (B49; FR-624): the settings page's read, on the reader, and its change, on the key.
+  'settings.listed': 'admin.audit.actions.settings.listed',
+  'setting.changed': 'admin.audit.actions.settings.changed',
   // 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين», its two reads and the mark «تم الصرف»,
   // each on the reader or the teacher (`admin`, `user`), so no new target type.
   'payouts.listed': 'admin.money.audit.payoutsListed',

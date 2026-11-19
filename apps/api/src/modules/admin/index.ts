@@ -122,6 +122,8 @@ import { AuditRepository, latestStandingReasonOf } from './audit.repository.js';
 import { HomeService } from './home.service.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
+// 005:T024 (B49; FR-624; R-410): the panel's `settings.list` and `settings.update`.
+import { createSettingsAdministration, type SettingsAdministration } from './settings.service.js';
 
 /** The four namespaces of the administrator surface, mounted by `admin.router.ts` (T067). */
 export { adminsRouter } from './admins.router.js';
@@ -131,6 +133,9 @@ export { homeRouter } from './home.router.js';
 // 005:T013 (B47; Q-G1 (a)): the administrators' `genderFlags.*`, served by this module's router.
 export { GENDER_DECISION_LIMIT, genderFlagsAdminRouter } from './gender-flags.router.js';
 export type { GenderDecisions } from './gender-decisions.service.js';
+// 005:T024 (B49; FR-624; R-410): the administrators' `settings.*`, served by this module's router.
+export { SETTINGS_UPDATE_LIMIT, settingsAdminRouter } from './settings.router.js';
+export type { SettingsAdministration } from './settings.service.js';
 
 /** The administrator's session resolver, bound by `main.ts` for the HTTP application (T066). */
 export { resolveAdminSession, type ResolvedAdminSession } from './admin-session.service.js';
@@ -286,6 +291,12 @@ export interface AdminServices {
    * with `get`'s preview composed here from booking's and identity's entries.
    */
   readonly genderFlags: GenderDecisions;
+  /**
+   * 005:T024 of B49 (FR-624; SRS FR-ADMIN-9; R-410): the panel's settings, the registry's keys
+   * with their stored values and a change through this module's one writer, keyed on the call's
+   * transaction.
+   */
+  readonly settings: SettingsAdministration;
 }
 
 export interface AdminServiceDependencies extends AdminSessionDependencies {
@@ -583,6 +594,13 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       }).rerenderOfParty,
       // 005:T015: the fraud ban's bans, the one standing service above.
       standing,
+    }),
+    // 005:T024 of B49: the panel's settings, keyed through `runOn` on the call's transaction,
+    // written by this module's one writer on that transaction.
+    settings: createSettingsAdministration({
+      idempotency: dependencies.idempotency,
+      log: dependencies.log,
+      writerOn: (tx) => new SettingsRepository(tx),
     }),
   };
 }
