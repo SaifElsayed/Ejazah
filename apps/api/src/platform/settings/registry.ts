@@ -541,12 +541,14 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'hours',
     'sessions',
     'Postponement notice before a session (hours, at least 1)',
+    12,
   ),
   postponement_interval_weeks: whole(
     positiveWhole,
     'weeks',
     'sessions',
     'Postponement interval per party (weeks, at least 1)',
+    4,
   ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,

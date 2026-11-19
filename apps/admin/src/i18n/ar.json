@@ -2627,6 +2627,8 @@
         "otp_code_ttl_minutes": "صلاحية رمز التحقق",
         "otp_max_attempts": "محاولات رمز التحقق قبل إبطاله",
         "otp_purge_after_hours": "حذف رموز التحقق بعد",
+        "postponement_interval_weeks": "المدة بين تأجيلين لكل طرف",
+        "postponement_notice_hours": "مهلة التأجيل قبل الجلسة",
         "price_average_min_teachers": "أقل عدد من المعلمين لمتوسط السعر",
         "provider_nonce_ttl_minutes": "صلاحية رمز الدخول عبر مزوّد الهوية",
         "push_token_stale_days": "حذف رموز الإشعارات غير المستخدمة بعد",

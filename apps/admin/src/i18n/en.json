@@ -2627,6 +2627,8 @@
         "otp_code_ttl_minutes": "One-time code validity",
         "otp_max_attempts": "One-time code attempts before it is void",
         "otp_purge_after_hours": "One-time codes deleted after",
+        "postponement_interval_weeks": "Interval between postponements, per party",
+        "postponement_notice_hours": "Postponement notice before a session",
         "price_average_min_teachers": "Fewest teachers for the average price",
         "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
         "push_token_stale_days": "Unused push tokens deleted after",
