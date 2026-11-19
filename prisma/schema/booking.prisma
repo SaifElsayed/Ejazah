@@ -105,6 +105,8 @@ model Enrollment {
   userReports    UserReport[]
   // 003:T105: payments' releases of the teacher's share, a back-relation only.
   teacherShareReleases TeacherShareRelease[]
+  // 003:T112: sessions' postponements, a back-relation only.
+  sessionPostponements SessionPostponement[]
   review        Review?
   disputes      Dispute[]
   events        EnrollmentEvent[]

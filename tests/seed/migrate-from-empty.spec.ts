@@ -4,11 +4,11 @@
 // An empty database of this file's own (tests/seed/fresh-database.ts) is migrated by one
 // `prisma migrate deploy`, as `pnpm db:migrate` runs it, with no step before or after. The run must
 // exit 0, every migration directory under prisma/migrations must be recorded as applied and none
-// rolled back, and the tables in `public` must be exactly the model's: the 47 of
+// rolled back, and the tables in `public` must be exactly the model's: the 48 of
 // packages/config/module-tables.json (ERD §1; the six of Phase 1 by T003, created by the
 // migrations of T009 to T012; the one each of T094 and T097; `enrollment_events` of Phase 2's
 // T004; `session_events` and `provider_outages` of Phase 3's T001; `ijazah_requests` and
-// `session_reminders` of Phase 4's T001; `teacher_share_releases` of 003:T105), plus `_prisma_migrations`, the migration tool's own record of what it
+// `session_reminders` of Phase 4's T001; `teacher_share_releases` of 003:T105; `session_postponements` of 003:T112), plus `_prisma_migrations`, the migration tool's own record of what it
 // applied, which is not a table of the model.
 //
 // Observed red before commit by two mutations, each since removed: a migration creating a table
@@ -93,7 +93,7 @@ describe('the migration history applied to an empty database (T073)', () => {
       [MIGRATION_TABLE],
     );
     const tables = rows.map((row) => row.table_name).sort();
-    expect(modelTables()).toHaveLength(47);
+    expect(modelTables()).toHaveLength(48);
     expect(tables).toEqual(modelTables());
   });
 });
