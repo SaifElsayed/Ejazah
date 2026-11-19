@@ -16,10 +16,11 @@ never a name (FR-ADMIN-17).
 | `ijazahs.rerender` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.rerendered`; refused once signed off or revoked |
 | `ijazahs.revoke` | `{ ijazahId, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `ijazah.revoked` |
 | `ijazahs.bar` / `ijazahs.liftBar` | `{ targetUserId, reason, idempotencyKey }` (B46: the no-authority-in-input lint refuses `userId`; `admin/documents.ts:18-19`'s precedent) | void | `rate_limit_ijazah_decision` | `ijazah_bar.set` / `ijazah_bar.lifted` |
+| `ijazahs.barred` | `{ cursor? }` | page of `{ barId, student, reason, barredAt, barredBy }`, the open bars, newest first (B49, Q-P2 (b)) | default | `ijazah_bars.listed` |
 | `users.setCertificateName` | `{ targetUserId, name, reason, idempotencyKey }` | void | `rate_limit_ijazah_decision` | `user.certificate_name_set` (no name in the entry) |
 | `reports.list` / `reports.get` | `{ status?, cursor? }` / `{ reportId }` | queue and detail, links to the session or enrollment | default | `reports.listed` / `report.viewed` |
 | `reports.resolve` | `{ reportId, outcome: 'actioned' \| 'dismissed', note, idempotencyKey }` | void | default | `report.resolved` |
-| `genderFlags.list` / `genderFlags.get` | queue / `{ flagId }` | the flag; on `get`, the enrollments a correction would end (a preview count and ids), composed in the admin module (R-409) | default | `gender_flags.listed` / `gender_flag.viewed` |
+| `genderFlags.list` / `genderFlags.get` | queue / `{ flagId }` | the flag; on `get`, the enrollments a correction would end (a preview count and one line per enrollment: subject, sessions, the other party; B49, Q-G1 (b)), composed in the admin module (R-409) | default | `gender_flags.listed` / `gender_flag.viewed` |
 | `genderFlags.raise` | `{ userId, reason, reportId?, idempotencyKey }` | `{ flagId }` | `rate_limit_gender_decision` | `gender_flag.raised` |
 | `genderFlags.dismiss` | `{ flagId, reason, idempotencyKey }` | void | `rate_limit_gender_decision` | `gender_flag.dismissed` |
 | `genderFlags.correct` | `{ flagId, reason, idempotencyKey }` | `{ endedEnrollments: number }` | `rate_limit_gender_decision` | `gender.corrected` ⚠️ irreversible ends |

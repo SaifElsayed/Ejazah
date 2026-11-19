@@ -38,9 +38,14 @@
 // enqueue is logged by ids and leaves the ijazah unrendered and visible as such, a second re-render
 // its fix.
 //
+// 005:T022 (B49, Q-P2 (b)). BARRED (`ijazahs.barred`): the open bars, newest first, paged by
+// `admin_list_page_size`; read with no lock; the administrators' names handed in by the admin module.
+//
 // Every line names ids and a reason, never a name, the chain, a key or the reason's text (R-SEC-2).
 import type {
   AdminIjazahBarInput,
+  AdminIjazahsBarredInput,
+  AdminIjazahsBarredOutput,
   AdminIjazahsGetInput,
   AdminIjazahsGetOutput,
   AdminIjazahsListInput,
@@ -109,6 +114,31 @@ export interface NewIjazahBar {
   readonly barredAt: Date;
 }
 
+/** 005:T022: an open bar as the barred list reads it (ERD §8, `ijazah_bars`, `lifted_at` null). */
+export interface OpenIjazahBar {
+  readonly id: string;
+  readonly userId: string;
+  readonly reason: string;
+  readonly barredByAdminId: string;
+  readonly barredAt: Date;
+}
+
+/** 005:T022: one page of the open bars, newest first, before a cursor. */
+export interface OpenBarPageQuery {
+  readonly after?: string | undefined;
+  readonly take: number;
+}
+
+/**
+ * 005:T022 (Q-P2 (b)): the administrators' display names by id, the admin module's (`admin_users` is
+ * its table, R-API-6), handed in by it as sessions' outage list takes them (`AdminNames`); an id it
+ * does not answer is named by an empty string.
+ */
+export type IjazahsAdminNames = (
+  tx: Transaction,
+  adminIds: readonly string[],
+) => Promise<ReadonlyMap<string, string>>;
+
 /** What the ijazahs' service reads, locks and writes, each on the call's transaction. */
 export interface IjazahsStore {
   ijazahOf(tx: Transaction, ijazahId: string): Promise<IjazahRecord | null>;
@@ -138,6 +168,8 @@ export interface IjazahsStore {
   markSignedOff(tx: Transaction, ijazahId: string, adminId: string, at: Date): Promise<boolean>;
   /** `render_generation` + 1 and `rendered_at` cleared on an unsigned, unrevoked ijazah. */
   markRerendered(tx: Transaction, ijazahId: string): Promise<boolean>;
+  // 005:T022: the barred list.
+  openBars(tx: Transaction, query: OpenBarPageQuery): Promise<readonly OpenIjazahBar[]>;
 }
 
 /** The lines the service writes: ids and a reason. */
@@ -158,6 +190,8 @@ export interface IjazahsDependencies {
   readonly log: IjazahsLog;
   /** 005:T032: `render-certificate`, enqueued after a re-render's commit (contracts/jobs.md). */
   readonly renders: RenderQueue;
+  /** 005:T022: the barred list's administrators' names (Q-P2 (b)). */
+  readonly adminNames: IjazahsAdminNames;
 }
 
 export const REVOKE_SCOPE: IdempotentProcedure = 'ijazahs.revoke';
@@ -236,6 +270,40 @@ export class IjazahsService {
       tariq: ijazah.tariqPrinted,
       revokedReason: ijazah.revokedReason,
       pdfLink,
+    };
+  }
+
+  /**
+   * 005:T022 `ijazahs.barred` (B49, Q-P2 (b)): the open bars, newest first, before a cursor; each
+   * student's name null once the account is deleted; the barring administrator by the names the
+   * admin module hands in. No lock: the read decides nothing.
+   */
+  async barred(
+    tx: Transaction,
+    _adminId: string,
+    { cursor }: AdminIjazahsBarredInput,
+  ): Promise<AdminIjazahsBarredOutput> {
+    const { store, settings, adminNames } = this.#dependencies;
+    const pageSize = await settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+    const read = await store.openBars(tx, { after: cursor, take: pageSize + 1 });
+    const page = read.slice(0, pageSize);
+    const [parties, names] = await Promise.all([
+      store.partiesOf(tx, [...new Set(page.map(({ userId }) => userId))]),
+      adminNames(tx, [...new Set(page.map(({ barredByAdminId }) => barredByAdminId))]),
+    ]);
+    const last = page.at(-1);
+    return {
+      items: page.map((bar) => ({
+        barId: bar.id,
+        student: { userId: bar.userId, displayName: parties.get(bar.userId)?.displayName ?? null },
+        reason: bar.reason,
+        barredAt: bar.barredAt.toISOString(),
+        barredBy: {
+          adminId: bar.barredByAdminId,
+          displayName: names.get(bar.barredByAdminId) ?? '',
+        },
+      })),
+      ...(read.length > pageSize && last !== undefined ? { nextCursor: last.id } : {}),
     };
   }
 

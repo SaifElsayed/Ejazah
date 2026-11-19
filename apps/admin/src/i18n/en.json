@@ -218,6 +218,10 @@
         "sessionsMonitorViewed": "View an enrollment",
         "sessionsReviewListed": "View the review queue",
         "sessionsReviewViewed": "View a session's connection record",
+        "settings": {
+          "changed": "Change a setting",
+          "listed": "View settings"
+        },
         "studentBan": "Ban student",
         "studentReinstate": "Reinstate student",
         "studentSuspend": "Suspend student",
@@ -801,6 +805,14 @@
           },
           "title": "Accept {name}’s document"
         },
+        "actionReport": {
+          "confirm": "Mark action taken",
+          "effects": {
+            "closed": "The report is closed as “action taken”. The action itself is taken from the account’s own page."
+          },
+          "reasonLabel": "What was done (required)",
+          "title": "Mark the report as action taken"
+        },
         "approveApplication": {
           "confirm": "Approve",
           "effects": {
@@ -833,7 +845,8 @@
           "effects": {
             "blocked": "No teacher can request an ijazah for them, and open requests are rejected.",
             "kept": "Their issued ijazahs stay valid; revoking one is a separate action.",
-            "listed": "They appear in the barred list on the Ijazahs page, where the bar is lifted."
+            "listed": "They appear in the barred list on the Ijazahs page, where the bar is lifted.",
+            "notApproved": "No teacher can send an ijazah request for them, and an open request of theirs is not approved until the bar is lifted."
           },
           "reasonLabel": "Reason for the bar (required)",
           "title": "Bar {name} from receiving ijazahs"
@@ -848,6 +861,19 @@
           "reasonLabel": "Reason for cancellation (required)",
           "subtitle": "{student} with {teacher} · {package}",
           "title": "Cancel session {number} · {date}"
+        },
+        "changeSetting": {
+          "confirm": "Save the change",
+          "effects": {
+            "everyRead": "The new value applies at once to every later read of this setting, for every user and every job.",
+            "withinMinute": "This limit is held for up to 60 seconds after each read, so the new value applies within 60 seconds."
+          },
+          "limitLabel": "Requests per window",
+          "listHint": "Numbers separated by commas",
+          "subtitle": "Now: {value}",
+          "title": "Change {setting}",
+          "valueLabel": "New value",
+          "windowLabel": "Window (seconds)"
         },
         "common": {
           "cancel": "Cancel",
@@ -884,6 +910,7 @@
             "notified": "The reporter is notified that the report was dismissed.",
             "unchanged": "The declared gender stays as it is, and the report is closed."
           },
+          "heading": "Dismiss the gender flag",
           "reasonLabel": "Reason for dismissal (required)",
           "title": "Dismiss the gender report on {name}"
         },
@@ -893,6 +920,7 @@
             "chat": "The administration’s access to the enrollment’s chat ends when the report is closed.",
             "closed": "The report is closed as “dismissed” with no action on the account."
           },
+          "heading": "Dismiss the report",
           "reasonLabel": "Reason for dismissal (required)",
           "title": "Dismiss {reporter}’s report on {reported}"
         },
@@ -902,8 +930,10 @@
             "banned": "The account is banned. The ban can be lifted at any time and its enrollments come back once each pairing is checked: surely within {days, plural, one {# day} other {# days}}, and after that where their slot is still free.",
             "cases": "A compensation case opens for every counterparty in their enrollments.",
             "enrollments": "All their enrollments and upcoming sessions are cancelled as “cancelled by the administration”.",
+            "liftable": "The ban can be lifted at any time; each pairing is checked against the corrected genders before it returns.",
             "notified": "Every affected party is notified."
           },
+          "heading": "Ban for falsifying gender",
           "reasonLabel": "Reason for the ban (required)",
           "title": "Ban {name} for falsifying gender"
         },
@@ -915,6 +945,7 @@
             "notified": "Both parties of every affected enrollment are notified.",
             "record": "The declared gender is corrected from now on in search and sessions."
           },
+          "heading": "Correct the declared gender",
           "reasonLabel": "Reason for the correction (required)",
           "title": "Correct {name}’s gender to {gender}"
         },
@@ -948,7 +979,8 @@
             "immutable": "It cannot be edited once issued; revoking it is a separate action with a reason.",
             "issued": "The ijazah is issued now with its number, with the names as entered: grantor {grantor}, grantee {grantee}.",
             "notified": "{teacher} and {student} are notified.",
-            "public": "It appears as valid on the public verification page and in the student’s ijazahs."
+            "public": "It appears as valid on the public verification page and in the student’s ijazahs.",
+            "signOff": "The parties see it only once an administrator opens its rendered PDF and signs it off on the Ijazahs page."
           },
           "notePlaceholder": "e.g. the chain matches the teacher’s verified credential and the names match the documents",
           "subtitle": "{student} · {subject} · riwaya {riwaya} · from {teacher}",
@@ -962,6 +994,15 @@
           },
           "reasonLabel": "Reason for lifting the bar (required)",
           "title": "Lift the bar on {name}"
+        },
+        "raiseGenderFlag": {
+          "confirm": "Raise the flag",
+          "effects": {
+            "queued": "The flag joins the gender flags queue, open, to be decided with a reason.",
+            "unchanged": "The declared gender stays authoritative until a decision is issued."
+          },
+          "reasonLabel": "Why the flag is raised (required)",
+          "title": "Raise a gender flag"
         },
         "reactivateAccount": {
           "confirm": "Reactivate",
@@ -1033,6 +1074,15 @@
           "reasonLabel": "What the teacher must provide (required)",
           "title": "Request another document from {teacher}"
         },
+        "rerenderIjazah": {
+          "confirm": "Render again",
+          "effects": {
+            "notShown": "The parties still do not see it until it is signed off.",
+            "rendered": "The certificate is rendered again from its frozen record, and shows as being prepared until then."
+          },
+          "reasonLabel": "Reason for rendering again (required)",
+          "title": "Render ijazah {code} again"
+        },
         "saveCredentialCorrection": {
           "confirm": "Save the correction",
           "effects": {
@@ -1042,6 +1092,14 @@
           },
           "reasonLabel": "Reason for the correction (required)",
           "title": "Save the correction to {teacher}’s chain"
+        },
+        "signOffIjazah": {
+          "confirm": "Sign off",
+          "effects": {
+            "final": "Final: nothing changes the certificate after it; revoking it stays possible, with a reason.",
+            "shown": "Both parties see the certificate, and its PDF is served to them."
+          },
+          "title": "Sign off ijazah {code}"
         },
         "suspendDisputeParty": {
           "confirm": "Suspend the account",
@@ -1564,6 +1622,8 @@
       "detail": {
         "a11y": "Dispute details",
         "affectedEnrollments": "Active enrollments affected by the correction · {count}",
+        "applicantNoteHint": "Used only when the person is an applicant not yet approved.",
+        "applicantNoteLabel": "Note the applicant sees (required for an applicant)",
         "ban": "Ban (falsification)",
         "banLabel": "Ban",
         "banText": "The account is banned, all its enrollments are cancelled, and a compensation case opens for each affected enrollment",
@@ -1571,20 +1631,30 @@
         "correct": "Correct (honest error)",
         "correctLabel": "Correct",
         "correctText": "The gender is corrected, the remaining sessions in non-compliant enrollments are cancelled, and a compensation case opens for each enrollment. No ban",
+        "decidedOn": "Decided on {date}",
+        "decision": "Decision",
         "declaredGender": "Declared gender",
         "declaredGenderValue": "{gender} · confirmed at sign-up",
         "dismiss": "Dismiss the dispute",
         "dismissLabel": "Dismiss the dispute",
         "dismissReasonLabel": "Reason for dismissing the dispute (required)",
         "dismissText": "Closes the dispute without any change",
-        "enrollmentLine": "{subject} · {sessions} · {teacher}",
+        "enrollmentLine": "{subject} · {sessions} · {counterpart}",
         "enrollmentMeta": "{status} · {done} of {total} · {day} {time}",
+        "flagged": "Flagged person",
         "footer": "No decision is issued without a reason. Correction cancels the non-compliant enrollments and opens compensation cases for them; a ban cancels all enrollments and opens compensation cases. The reason is recorded in the audit log.",
+        "fromReport": "From the report",
         "idDocument": "Identity document · view only",
         "idDocumentMeta": "Requested {requestedDate} · uploaded {uploadedDate} {uploadedTime}",
         "incompatible": "Non-compliant after correction",
+        "neverRestored": "These enrollments are ended and can never be restored.",
+        "noEnrollments": "A correction now ends no enrollment.",
+        "note": "Reason",
+        "openReport": "Open the report",
         "raisedBy": "Raised by",
+        "raisedByAdmin": "An administrator",
         "raisedByValue": "{name} · {role}",
+        "reason": "The raiser’s words",
         "reasonPlaceholder": "Recorded with the decision in the audit log",
         "reportTitle": "Dispute",
         "subtitle": "{role} · {status} · dispute from {date} · {time}"
@@ -1594,17 +1664,36 @@
         "text": "Every report has been decided. Each report on a declared gender appears here.",
         "title": "No open gender reports"
       },
+      "emptyTab": {
+        "text": "No flag has this status.",
+        "title": "No flags here"
+      },
+      "explain": "Every flag on a declared gender. The declared gender stays authoritative until a decision is issued with a reason: a dismissal, a correction or a ban for fraud.",
       "lede": "{count, plural, one {# open dispute} other {# open disputes}}. The declared gender stays authoritative in search and sessions until a decision is issued, and changes only from here.",
       "ledeEmpty": "No open reports now. The declared gender changes only from here.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · open first",
+      "raise": "Raise a gender flag",
+      "raiseTargetHint": "From the user’s record on the users page.",
+      "raiseTargetLabel": "The person’s account id",
       "raisedByAdminFromChatReport": "{role} · from a chat report",
+      "refused": {
+        "alreadyResolved": "This flag was already decided, so nothing changed. Open it again to see its decision.",
+        "applicantNoteRequired": "This person is an applicant, so the ban needs the note they see. Write it, then try again. Nothing changed.",
+        "notFound": "This flag or this account was not found.",
+        "openExists": "This person already has an open gender flag, so no other was raised. Open the open flag.",
+        "reportTargetMismatch": "This report is about another person, so no gender flag was raised."
+      },
       "search": {
         "label": "Search",
         "placeholder": "Name or email"
       },
       "tabs": {
         "all": "All",
+        "corrected": "Corrected",
         "decided": "Decided",
+        "dismissed": "Dismissed",
+        "fraudBan": "Banned for fraud",
         "open": "Open"
       },
       "title": "Gender disputes",
@@ -1638,6 +1727,7 @@
     "ijazahRequests": {
       "columns": {
         "completion": "Completion",
+        "standing": "Teacher's standing",
         "status": "Status",
         "subjectRiwaya": "Subject and riwaya",
         "submitted": "Submitted",
@@ -1647,9 +1737,11 @@
         "a11y": "Request details",
         "a11yCertificate": "The certificate as it will be issued",
         "approve": "Approve and issue",
+        "barTitle": "Barring the student from ijazahs",
         "certificateName": "Student's name on the ijazah",
         "certificateNameMeta": "Entered by the student {date}",
         "chainNote": "The chain ({generations}) comes from the teacher's verified ijazah, and is not edited here.",
+        "chainTitle": "Chain",
         "checks": {
           "credentialVerified": "The teacher's {subject} ijazah is verified",
           "notBarred": "The student is not barred from receiving ijazahs",
@@ -1661,10 +1753,18 @@
         "enrollmentValue": "{subject} · {sessions} · completed {date}",
         "footer": "On approval the ijazah is issued with its number, and a notification reaches the teacher and the student. Your decision is recorded under your name in the audit log.",
         "language": "Certificate language",
+        "noCertificateName": "The student has not entered their name on the ijazah yet.",
+        "openIjazah": "Open the ijazah",
         "reject": "Reject",
+        "rejectionReason": "Reason for rejection: {reason}",
+        "signature": "Teacher's signature",
+        "signatureErased": "The signature's copy is erased: the request is closed.",
+        "standing": "Teacher's standing now",
+        "standingReason": "Reason: {reason}",
         "student": "Student",
         "subject": "Subject",
         "subjectValue": "{subject} · {riwaya} · via {tariq}",
+        "subjectValueNoTariq": "{subject} · {riwaya}",
         "subtitle": "From {teacher} · {date} · {time}",
         "teacher": "Teacher",
         "title": "Ijazah request · {student}",
@@ -1675,15 +1775,34 @@
         "text": "Every request has been decided. Each request a teacher sends for their student appears here.",
         "title": "No open ijazah requests"
       },
+      "explain": "The teacher requests the ijazah for their student, and it is issued on your approval.",
       "issuedOn": "Issued · {date}",
       "lede": "{count, plural, one {# request awaits a decision} other {# requests await a decision}}. The teacher requests the ijazah for their student, and it is issued on your approval.",
       "ledeEmpty": "No requests await a decision now. The teacher requests the ijazah for their student, and it is issued on your approval.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "pair": "{teacher} to {student}",
+      "refused": {
+        "notFound": "This request was not found.",
+        "notPending": "This request was already decided, so nothing changed. Open it again to see its decision.",
+        "studentBarred": "The student is barred from receiving ijazahs, so nothing was issued. Lift the bar first if it is mistaken."
+      },
       "rejectedOn": "Rejected · {date}",
       "search": {
         "label": "Search",
         "placeholder": "Teacher or student name"
+      },
+      "standing": {
+        "active": "Active",
+        "banned": "Banned",
+        "deleted": "Account deleted",
+        "revoked": "Approval revoked",
+        "suspended": "Suspended",
+        "verificationRequired": "Awaiting proof of identity"
+      },
+      "status": {
+        "awaitingStudentName": "Awaiting the student's name",
+        "closed": "Closed"
       },
       "tabs": {
         "all": "All",
@@ -1693,8 +1812,12 @@
       "title": "Ijazah requests"
     },
     "ijazahs": {
+      "audit": {
+        "barsListed": "View the students barred from ijazahs"
+      },
       "barred": {
         "a11y": "Barred from receiving ijazahs",
+        "heading": "Barred from receiving ijazahs",
         "lift": "Lift the bar",
         "meta": "Since {date} · {admin} · reason: {reason}",
         "note": "No ijazah request is sent for a barred student. Lifting the bar also asks for a reason, and the bar and its lifting stay in the audit log.",
@@ -1706,6 +1829,7 @@
       },
       "columns": {
         "certificateNo": "Certificate number",
+        "issued": "Issued",
         "parties": "Student and teacher",
         "request": "Request",
         "status": "Status"
@@ -1715,12 +1839,19 @@
         "bar": "Bar from receiving ijazahs",
         "chainEllipsis": "… {generations}",
         "chainTitle": "Chain · {generations} · via {tariq}",
+        "chainTitleNoTariq": "Chain · {generations}",
+        "completionDate": "Completion date",
         "footer": "Revocation does not bar the student from later ijazahs; barring is a separate action. Every action here asks for a reason and is recorded in the audit log.",
         "grantor": "Grantor",
         "issued": "Issued {date} · approved by {admin}",
+        "language": "Certificate language",
+        "openRequest": "Open the request",
         "request": "Request",
         "requestValue": "Sent by the teacher {date}",
+        "rerender": "Render again",
         "revoke": "Revoke ijazah",
+        "revokedReason": "Reason for revocation: {reason}",
+        "signOff": "Sign off",
         "student": "Student",
         "subtitle": "{subject} · riwaya {riwaya}",
         "verifyPage": "Public verification page",
@@ -1730,16 +1861,49 @@
         "text": "Try another number or name, or remove a filter.",
         "title": "No ijazahs match the search"
       },
+      "emptyTab": {
+        "text": "Each ijazah in this state appears here.",
+        "title": "No ijazahs here"
+      },
+      "explain": "Every ijazah was issued at its teacher’s request; those waiting for sign-off come first. An ijazah is revoked, never deleted.",
       "issuedCell": "{subject} · issued {date}",
       "lede": "Every ijazah was issued at its teacher's request. An ijazah is revoked, never deleted, and its number keeps showing its status on the verification page.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "partiesCell": "{student} from {teacher}",
+      "pdf": {
+        "notRendered": "The certificate is not rendered yet: it is being prepared. It shows here once rendered, and neither party sees it before your sign-off.",
+        "title": "The certificate as rendered"
+      },
+      "refused": {
+        "alreadyBarred": "This student is already barred from receiving ijazahs, so nothing changed.",
+        "alreadyRevoked": "This ijazah was already revoked, so nothing changed.",
+        "alreadySignedOff": "This ijazah was already signed off, and nothing changes after the sign-off.",
+        "notBarred": "This student is not barred from receiving ijazahs, so there is no bar to lift.",
+        "notFound": "This ijazah or this account was not found.",
+        "notRendered": "The certificate is not rendered yet, and what was not opened is not signed off. Wait for it to render, open it, then sign it off.",
+        "revoked": "This ijazah is revoked, so it is neither signed off nor rendered again.",
+        "studentBarred": "The student is barred from receiving ijazahs, so it was not signed off. Lift the bar if it is mistaken, or revoke the ijazah."
+      },
       "requestCell": "Requested {date}",
       "requestsLink": "Ijazah requests · {count}",
       "revokedOn": "Revoked · {date}",
       "search": {
         "label": "Search",
         "placeholder": "Certificate number or student name"
+      },
+      "status": {
+        "preparing": "Being prepared",
+        "rendered": "Waiting for sign-off",
+        "signedOff": "Signed off"
+      },
+      "tabs": {
+        "all": "All",
+        "barred": "Barred",
+        "preparing": "Being prepared",
+        "revoked": "Revoked",
+        "signedOff": "Signed off",
+        "waitingSignOff": "Waiting for sign-off"
       },
       "title": "Ijazahs"
     },
@@ -2097,6 +2261,7 @@
     "reports": {
       "columns": {
         "context": "Context",
+        "date": "Date",
         "reason": "Reason",
         "reported": "Reported",
         "reporter": "Reporter",
@@ -2109,16 +2274,25 @@
       },
       "detail": {
         "a11y": "Report details",
+        "action": "Mark action taken",
         "chatHint": "Available to the admin while the report is open",
+        "context": "Context",
         "contextSession": "Context · session",
+        "decidedOn": "Settled on {date}",
+        "decision": "Decision",
         "dismiss": "Dismiss report",
         "enrollmentLine": "{subject} · {sessions} · {status}",
+        "evidence": "Evidence",
         "footer": "Dismissing sets the report to \"Dismissed\", and any other action sets it to \"Action taken\". The reason is required and recorded in the audit log, and the reported user is not told of a dismissal.",
+        "note": "Note",
         "openChat": "Open enrollment chat",
+        "openEnrollment": "Open the enrollment",
         "openGenderFlag": "Open a gender dispute",
+        "reason": "The reporter’s words",
         "reasonLabel": "Reason for the decision (required)",
         "reasonPlaceholder": "Recorded with the decision in the audit log",
         "reportTitle": "Report",
+        "reported": "Reported",
         "reporter": "Reporter",
         "reporterValue": "{name} · {role}",
         "requireId": "Require ID",
@@ -2132,15 +2306,25 @@
         "text": "All reports have been settled. Every new report a student or teacher raises from a session, a profile or a chat appears here.",
         "title": "No open reports"
       },
+      "emptyTab": {
+        "text": "No report has this status.",
+        "title": "No reports here"
+      },
+      "explain": "Every report a student or teacher raises from a session, a chat or a profile. A report is settled as action taken or dismissed, with a note recorded in the audit log.",
       "lede": "{count, plural, one {# open report} other {# open reports}} on sessions, profiles and chats. The decision needs a reason and is recorded in the audit log.",
       "ledeEmpty": "No open reports right now. The decision on any report needs a reason and is recorded in the audit log.",
       "openSince": "{days, plural, one {# day ago} other {# days ago}}",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "reasons": {
         "impersonation": "Account impersonation",
         "misleadingPhoto": "Misleading photo",
         "offPlatformContact": "Off-platform contact",
         "verbalAbuse": "Verbal abuse"
+      },
+      "refused": {
+        "alreadyResolved": "This report was already settled, so nothing changed. Open it again to see its decision.",
+        "notFound": "This report was not found."
       },
       "search": {
         "label": "Search",
@@ -2325,11 +2509,22 @@
     "settings": {
       "adminsLink": "Admins · {count}",
       "attendanceThreshold": {
-        "error": "Enter a number from 1 to 100. The current value is {value}%.",
+        "error": "Enter a number above 0, up to 100. The current value is {value}%.",
         "label": "Attendance threshold",
         "unit": "%"
       },
       "banner": "Any change applies to upcoming sessions and bookings only, and never re-evaluates a session or dispute already settled. Every change is recorded with its value before and after and its reason in the audit log.",
+      "bounds": {
+        "above": "Above {min}",
+        "aboveUpTo": "Above {min}, up to {max}",
+        "atLeast": "At least {min}",
+        "between": "From {min} to {max}",
+        "each": "Each: {bound}",
+        "none": "No numeric bounds",
+        "rateLimit": "Requests: {limit} · Window in seconds: {window}"
+      },
+      "change": "Change",
+      "changeA11y": "Change {setting}",
       "chatRetention": {
         "hint": "After the dispute window closes the chat is deleted, unless a dispute or report stays open.",
         "label": "Chat retention",
@@ -2339,6 +2534,14 @@
         "hint": "How long the payment page lasts, with the slot held for the student throughout.",
         "label": "Payment window",
         "unit": "minutes"
+      },
+      "columns": {
+        "action": "Change",
+        "bounds": "Bounds",
+        "default": "Default",
+        "setting": "Setting",
+        "srsRow": "SRS row",
+        "value": "Value"
       },
       "confirmationTimeout": {
         "hint": "After this the student is told the payment is taking longer, and gets a notification when it completes.",
@@ -2362,9 +2565,12 @@
         "unit": "minutes"
       },
       "groups": {
+        "accounts": "Accounts and sign-in",
+        "admin": "Administrator accounts",
         "booking": "Booking and payment",
         "general": "General",
         "notifications": "Notifications and chat",
+        "rateLimits": "Rate limits",
         "sessions": "Sessions"
       },
       "holdGrace": {
@@ -2381,6 +2587,101 @@
         "hint": "Whoever joins later than this after the session starts counts as absent.",
         "label": "Join window",
         "unit": "minutes"
+      },
+      "keys": {
+        "admin_home_latest_actions": "Latest actions on the home page",
+        "admin_invite_ttl_hours": "Admin invite link validity",
+        "admin_list_page_size": "Rows per list page",
+        "admin_lockout_attempts": "Admin sign-in attempts before lock",
+        "admin_lockout_minutes": "Lock duration",
+        "admin_recovery_code_count": "Admin recovery codes issued",
+        "admin_session_idle_minutes": "Admin idle timeout",
+        "admin_session_max_hours": "Admin sign-in maximum length",
+        "attendance_threshold_pct": "Attendance threshold",
+        "ban_restore_window_days": "Ban restore window",
+        "cancellation_requests_recent_days": "Recent cancellation requests period",
+        "chat_page_size": "Messages per chat page",
+        "chat_retention_days": "Chat retention",
+        "checkout_confirmation_timeout_seconds": "Payment confirmation timeout",
+        "checkout_confirming_poll_seconds": "Payment status check while confirming",
+        "checkout_confirming_poll_window_minutes": "Payment confirmation check window",
+        "checkout_processing_poll_seconds": "Payment status check while processing",
+        "discovery_page_size": "Teachers per discovery page",
+        "dispute_window_hours": "Dispute window",
+        "document_link_ttl_seconds": "Document link validity",
+        "document_unreferenced_max_per_user": "Unused documents per person",
+        "document_unreferenced_purge_after_hours": "Unused uploaded documents deleted after",
+        "early_join_lead_minutes": "Early join",
+        "enrollment_restore_window_days": "Enrollment restore window",
+        "first_session_lead_hours": "First session lead after confirmation",
+        "idempotency_key_ttl_hours": "Duplicate-payment guard",
+        "ijazah_half_release_percent": "Ijazah track: share released at half the sessions",
+        "join_window_minutes": "Join window",
+        "live_channel_max_connections_per_user": "Live channel connections per user",
+        "makeup_choice_window_days": "Make-up choice window",
+        "makeup_counter_answer_hours": "Make-up counter-proposal answer window",
+        "minimum_connection_seconds": "Minimum connection",
+        "notification_requeue_after_minutes": "Wait before a lost notification is queued again",
+        "notification_requeue_max_age_minutes": "Age after which a lost notification is no longer sent",
+        "onboarding_token_ttl_minutes": "Onboarding token validity",
+        "otp_code_ttl_minutes": "One-time code validity",
+        "otp_max_attempts": "One-time code attempts before it is void",
+        "otp_purge_after_hours": "One-time codes deleted after",
+        "price_average_min_teachers": "Fewest teachers for the average price",
+        "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
+        "push_token_stale_days": "Unused push tokens deleted after",
+        "rate_limit_absence_complaint": "Absence complaints",
+        "rate_limit_admin_authentication": "Admin sign-in requests",
+        "rate_limit_admin_authentication_budget": "Admin sign-ins, platform-wide",
+        "rate_limit_admin_user_delete": "An administrator's account deletions",
+        "rate_limit_authentication": "Sign-in requests",
+        "rate_limit_authentication_budget": "Sign-ins, platform-wide",
+        "rate_limit_ban_lift": "Ban lifts",
+        "rate_limit_chat_message": "Chat messages",
+        "rate_limit_dispute_revision": "Dispute ruling revisions",
+        "rate_limit_enrollment_end": "Enrollment ends",
+        "rate_limit_enrollment_restore": "Enrollment restores",
+        "rate_limit_gender_decision": "Gender decisions",
+        "rate_limit_gender_flag": "Gender flags",
+        "rate_limit_ijazah_decision": "Ijazah decisions",
+        "rate_limit_ijazah_request": "Ijazah requests",
+        "rate_limit_kept_data_erase_date": "Kept data: erasure date",
+        "rate_limit_kept_data_erase_now": "Kept data: erase now",
+        "rate_limit_kept_document_link": "Kept data: document link",
+        "rate_limit_live_channel": "Live channel openings",
+        "rate_limit_manual_compensation_case": "Manual compensation cases",
+        "rate_limit_one_time_code": "One-time code requests",
+        "rate_limit_one_time_code_budget": "One-time codes, platform-wide",
+        "rate_limit_outcome_correction": "Session outcome corrections",
+        "rate_limit_payment_initiation": "Payment starts",
+        "rate_limit_payout_mark": "Payout release marks and undos",
+        "rate_limit_provider_nonce": "Provider nonce requests",
+        "rate_limit_provider_nonce_budget": "Provider nonces, platform-wide",
+        "rate_limit_public_page": "Public page requests",
+        "rate_limit_search": "Searches",
+        "rate_limit_settings_update": "Settings changes",
+        "rate_limit_signed_in_default": "Signed-in default requests",
+        "rate_limit_slot_release": "Held slot releases",
+        "rate_limit_token_refresh": "Token refreshes",
+        "rate_limit_upload": "Uploads",
+        "rate_limit_user_report": "User reports",
+        "reminder_offsets_minutes": "Reminder times",
+        "repeated_absence_flag_count": "Teacher absences before a flag",
+        "room_close_grace_minutes": "Room close grace after the end",
+        "room_close_retry_minutes": "Room close retries",
+        "session_access_ttl_minutes": "Access token validity",
+        "session_evaluation_delay_minutes": "Session evaluation delay",
+        "session_purge_after_days": "Expired sign-ins deleted after",
+        "session_refresh_grace_seconds": "Refresh token reuse grace",
+        "session_refresh_ttl_days": "Refresh token validity",
+        "slot_hold_grace_minutes": "Extra time for the slot",
+        "slot_hold_ttl_minutes": "Payment window",
+        "slot_release_buffer_weeks": "Slot re-release",
+        "teacher_share_percent": "Teacher's share of each payment",
+        "terms_version": "Terms of service version in force",
+        "upload_max_bytes": "Upload size limit",
+        "video_departure_timeout_seconds": "Video room departure timeout",
+        "video_empty_timeout_seconds": "Empty video room timeout"
       },
       "lede": "The values the platform runs on. Each value explains what it changes.",
       "lockoutAttempts": {
@@ -2404,13 +2705,13 @@
         "unit": "seconds"
       },
       "modified": "Modified",
-      "noShowTermination": {
-        "hint": "At that point the enrollment ends and a compensation case opens for the student.",
-        "label": "Enrollment ends on teacher absence",
-        "unit": "times"
-      },
       "reasonLabel": "Reason for the change (required)",
       "reasonPlaceholder": "Recorded with the change in the audit log",
+      "refused": {
+        "invalid": "The value is not in this setting's form: a number, a list of numbers separated by commas, a limit with a window, or a text. Nothing changed.",
+        "outOfBounds": "The value is outside this setting's bounds: {bounds}. Nothing changed.",
+        "unknown": "The platform does not know this setting. Nothing changed; read the page again."
+      },
       "reminderOffsets": {
         "hint": "Before every session a reminder reaches both parties at these times.",
         "label": "Reminder times"
@@ -2421,7 +2722,22 @@
         "label": "Slot re-release",
         "unit": "weeks"
       },
-      "title": "Settings"
+      "title": "Settings",
+      "units": {
+        "bytes": "{value, plural, one {# byte} other {# bytes}}",
+        "count": "{value}",
+        "days": "{value, plural, one {# day} other {# days}}",
+        "hours": "{value, plural, one {# hour} other {# hours}}",
+        "minutes": "{value, plural, one {# minute} other {# minutes}}",
+        "percent": "{value}%",
+        "seconds": "{value, plural, one {# second} other {# seconds}}",
+        "weeks": "{value, plural, one {# week} other {# weeks}}"
+      },
+      "value": {
+        "missing": "Not set",
+        "rateLimit": "{limit} per {window} s"
+      },
+      "withinMinute": "Applies within 60 s"
     },
     "shared": {
       "correction": {
@@ -2560,6 +2876,7 @@
       "genderFlag": {
         "corrected": "Corrected",
         "dismissed": "Dismissed",
+        "fraudBan": "Banned for fraud",
         "open": "Open"
       },
       "ijazah": {
@@ -2981,7 +3298,8 @@
           "timeTaken": "A session the restore would create overlaps a session, an open hold or a reserved make-up time of either party. Nothing changed.",
           "noFreeWeek": "No free week was found for a remedy the closing's case held, so the case stays open. Nothing changed.",
           "notFound": "This enrollment was not found. Nothing changed.",
-          "refunded": "This enrollment's payment was refunded through the payment gateway, so it is not restored; the student books anew. Nothing changed."
+          "refunded": "This enrollment's payment was refunded through the payment gateway, so it is not restored; the student books anew. Nothing changed.",
+          "genderMismatch": "Left ended: its student and teacher are not of the same gender. Nothing changed."
         },
         "released": "This enrollment's slot was released on {when}, so the restore succeeds while the slot is still free."
       },

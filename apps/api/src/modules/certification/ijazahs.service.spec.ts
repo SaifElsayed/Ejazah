@@ -12,6 +12,10 @@
 // - Bar and liftBar: the user's `users` row locked, then the open bar read under it; one open bar per
 //   user (`already_barred`), a lift only of an open bar (`not_barred`); NOT_FOUND for an account
 //   that is not there; keyed. Every refusal one info line of ids and its reason.
+// - 005:T022 (B49, Q-P2 (b)) barred: the open bars as the store answers them (newest first), by
+//   `admin_list_page_size` before the cursor; each with the student's name (null once deleted), the
+//   reason, the instant and the administrator by the names the admin module hands in; one read of
+//   each, no lock, no line.
 import type { LiveEvent } from '@ijazah/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -26,6 +30,7 @@ import {
   IjazahsService,
   type IjazahsStore,
   type NewIjazahBar,
+  type OpenBarPageQuery,
 } from './ijazahs.service.js';
 
 const ADMIN = '0199d0a0-0000-7000-8000-0000000000ad';
@@ -38,6 +43,10 @@ const IJAZAH = '0199d0a0-0000-7000-8000-0000000000b1';
 const SECOND = '0199d0a0-0000-7000-8000-0000000000b2';
 const THIRD = '0199d0a0-0000-7000-8000-0000000000b3';
 const BAR = '0199d0a0-0000-7000-8000-0000000000d1';
+// 005:T022: two later bars and a second administrator.
+const BAR_2 = '0199d0a0-0000-7000-8000-0000000000d2';
+const BAR_3 = '0199d0a0-0000-7000-8000-0000000000d3';
+const OTHER_ADMIN = '0199d0a0-0000-7000-8000-0000000000ae';
 const NUMBER = '7K3MQ9TD2XWB8HRN';
 const KEY = 'decision-key-for-the-spec-0001';
 const OTHER_KEY = 'decision-key-for-the-spec-0002';
@@ -172,6 +181,14 @@ class MemoryStore implements IjazahsStore {
     Object.assign(one, { renderGeneration: one.renderGeneration + 1, renderedAt: null });
     return true;
   }
+  // 005:T022: the open bars, newest first (the repository's order), before the cursor.
+  async openBars(_tx: Transaction, { after, take }: OpenBarPageQuery) {
+    this.calls.push(`page open bars after ${after ?? '-'} take ${take}`);
+    return this.bars
+      .filter((bar) => bar.liftedAt === null && (after === undefined || bar.id < after))
+      .sort((a, b) => (a.id < b.id ? 1 : -1))
+      .slice(0, take);
+  }
 }
 
 /** The kind's after-commit list, flushed by the spec as the kind does once it commits. */
@@ -198,6 +215,12 @@ function world() {
   const links: [string, number][] = [];
   const enqueued: [string, number][] = [];
   const state = { enqueueFails: false };
+  // 005:T022: the administrators' names the admin module hands in, and each read of them.
+  const adminNamesAsked: string[][] = [];
+  const adminNameOf = new Map([
+    [ADMIN, 'أحمد'],
+    [OTHER_ADMIN, 'خالد'],
+  ]);
   const tx = {} as Transaction;
   const list = new AfterCommitList();
   bindToTransaction(tx, list);
@@ -242,8 +265,12 @@ function world() {
         enqueued.push([ijazahId, generation]);
       },
     },
+    adminNames: async (_tx, adminIds) => {
+      adminNamesAsked.push([...adminIds]);
+      return new Map(adminIds.map((id) => [id, adminNameOf.get(id) ?? '']));
+    },
   });
-  return { store, service, tx, list, lines, links, enqueued, state };
+  return { store, service, tx, list, lines, links, enqueued, state, adminNamesAsked };
 }
 
 async function refusalOf(work: Promise<unknown>): Promise<DomainError> {
@@ -698,3 +725,71 @@ describe('ijazahs.rerender (FR-629, R-402)', () => {
 
 /** Lets the after-commit actions' promises settle. */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// 005:T022 (B49, Q-P2 (b)): the barred list, so a student barred with no ijazah has a page to lift
+// the bar from.
+describe('ijazahs.barred (FR-610, Q-P2 (b))', () => {
+  const heldBar = (id: string, change: Partial<HeldBar> = {}): HeldBar => ({
+    id,
+    userId: STUDENT,
+    reason: 'تزوير',
+    barredByAdminId: ADMIN,
+    barredAt: NOW,
+    liftedAt: null,
+    liftedByAdminId: null,
+    ...change,
+  });
+
+  it("answers each open bar: the student's name, the reason, when, and the administrator by name", async () => {
+    w.store.bars = [heldBar(BAR)];
+    expect(await w.service.barred(w.tx, ADMIN, {})).toEqual({
+      items: [
+        {
+          barId: BAR,
+          student: { userId: STUDENT, displayName: 'مريم' },
+          reason: 'تزوير',
+          barredAt: NOW.toISOString(),
+          barredBy: { adminId: ADMIN, displayName: 'أحمد' },
+        },
+      ],
+    });
+  });
+
+  it("names the barring administrator, not the reader, nor the student's teacher", async () => {
+    w.store.bars = [heldBar(BAR, { barredByAdminId: OTHER_ADMIN })];
+    const [row] = (await w.service.barred(w.tx, ADMIN, {})).items;
+    expect(row?.barredBy).toEqual({ adminId: OTHER_ADMIN, displayName: 'خالد' });
+  });
+
+  it("keeps a deleted student's bar, the name null", async () => {
+    w.store.parties.delete(STUDENT);
+    w.store.bars = [heldBar(BAR)];
+    const [row] = (await w.service.barred(w.tx, ADMIN, {})).items;
+    expect(row?.student).toEqual({ userId: STUDENT, displayName: null });
+  });
+
+  it('pages by `admin_list_page_size`, newest first, the cursor handed to the store', async () => {
+    w.store.bars = [heldBar(BAR), heldBar(BAR_2, { userId: TEACHER }), heldBar(BAR_3)];
+    const first = await w.service.barred(w.tx, ADMIN, {});
+    expect(first.items.map(({ barId }) => barId)).toEqual([BAR_3, BAR_2]);
+    expect(first.nextCursor).toBe(BAR_2);
+    const second = await w.service.barred(w.tx, ADMIN, { cursor: BAR_2 });
+    expect(second.items.map(({ barId }) => barId)).toEqual([BAR]);
+    expect(second).not.toHaveProperty('nextCursor');
+    expect(w.store.calls.filter((call) => call.startsWith('page open bars'))).toEqual([
+      'page open bars after - take 3',
+      `page open bars after ${BAR_2} take 3`,
+    ]);
+  });
+
+  it('reads the students and the administrators once each, takes no lock and writes no line', async () => {
+    w.store.bars = [heldBar(BAR), heldBar(BAR_2)];
+    await w.service.barred(w.tx, ADMIN, {});
+    expect(w.adminNamesAsked).toEqual([[ADMIN]]);
+    expect(w.store.calls.filter((call) => call.startsWith('read parties'))).toEqual([
+      `read parties ${STUDENT}`,
+    ]);
+    expect(w.store.calls.some((call) => call.startsWith('lock'))).toBe(false);
+    expect(w.lines).toEqual([]);
+  });
+});

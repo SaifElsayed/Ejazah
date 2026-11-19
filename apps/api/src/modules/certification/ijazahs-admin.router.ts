@@ -12,8 +12,11 @@
 // opening of it and records `ijazah.viewed`. Mounted under `ijazahs` by `admin.router.ts` (the
 // integration's line). 005:T032 adds `signOff` (`ijazah.signed_off`) and `rerender`
 // (`ijazah.rerendered` with the reason), each on the ijazah by its number, keyed and counted alike.
+// 005:T022 (B49, Q-P2 (b)) adds `barred`, the open bars, audited `ijazah_bars.listed` on the reader.
 import {
   adminIjazahBarInput,
+  adminIjazahsBarredInput,
+  adminIjazahsBarredOutput,
   adminIjazahsGetInput,
   adminIjazahsGetOutput,
   adminIjazahsListInput,
@@ -157,5 +160,17 @@ export const ijazahsAdminRouter = createAdminRouter({
       targetId: certificateNumber,
       reason: input.reason,
     });
+  }),
+
+  // 005:T022 (B49, Q-P2 (b)): the open bars, so a student barred with no ijazah has a page to lift
+  // the bar from; the default limit; audited on the reader, as `list`.
+  barred: adminProcedure({
+    input: adminIjazahsBarredInput,
+    output: adminIjazahsBarredOutput,
+  }).query(async ({ ctx, input }) => {
+    const { adminId } = ctx.administrator;
+    const page = await ctx.services.ijazahs.barred(ctx.tx, adminId, input);
+    ctx.audit.record({ action: 'ijazah_bars.listed', targetType: 'admin', targetId: adminId });
+    return page;
   }),
 });

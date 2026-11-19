@@ -260,9 +260,11 @@ const RESTORE_CAUSES: Readonly<Record<string, MessageKey>> = {
   time_taken: 'admin.sessions.restore.refused.timeTaken',
   // B42b, T075 (N11): T073's ninth cause, an order of the enrollment refunded at the gateway.
   refunded: 'admin.sessions.restore.refused.refunded',
+  // 005:T023 (the follow-up under T023): 005:T014's step-3 cause, a pairing of two declared genders.
+  gender_mismatch: 'admin.sessions.restore.refused.genderMismatch',
 };
 
-/** The words of a refused restore (FR-454): its nine causes, `no_free_week`, the key reused. */
+/** The words of a refused restore (FR-454): its ten causes (005:T023 added `gender_mismatch`), `no_free_week`, the key reused. */
 export function restoreFailure(error: unknown): ErrorMessage {
   const cause = detailOf(error, 'cause');
   switch (errorCodeOf(error)) {

@@ -10,6 +10,7 @@
 // - Bar: one open bar per user under the user's `users` lock: two bars at once under two keys leave
 //   one open row and refuse the other `already_barred` (`ijazah_bars` has no partial unique); a lift
 //   keeps the row as history, and a second bar after it is a second row.
+// - 005:T022 (B49, Q-P2 (b)) the barred list: an open bar listed, newest first, a lifted one left out.
 //
 // The services are certification's factories over the real stores and the kernel's idempotency, on
 // an in-memory storage port; each action runs on a transaction bound to an after-commit list, as the
@@ -132,7 +133,15 @@ beforeAll(async () => {
     renders: { enqueue: async () => undefined },
     log,
   });
-  ijazahs = createIjazahsService({ storage, settings, idempotency, log, renders });
+  ijazahs = createIjazahsService({
+    storage,
+    settings,
+    idempotency,
+    log,
+    renders,
+    // 005:T022 (B49): the admin module's names stood in for, as outages.spec.ts's.
+    adminNames: async (_tx, ids) => new Map(ids.map((id) => [id, 'Probe administrator'])),
+  });
 });
 
 afterAll(async () => {
@@ -685,5 +694,54 @@ describe("the ports' re-freeze of an ijazah (T032, R-403, SC-604)", () => {
     await corrected(w, 'اسم آخر');
     await renamed(w, 'اسم آخر للطالبة');
     expect(await printed(w.ijazahId)).toEqual(before);
+  });
+});
+
+// 005:T022 (B49, Q-P2 (b)): the barred list over the real `ijazah_bars`, read as the application role.
+describe('ijazahs.barred lists the open bars, newest first (T022, Q-P2 (b))', () => {
+  /** Every row of `barred`'s pages, newest first, down to the page that passes `downTo`. */
+  async function barredDownTo(adminId: string, downTo: string) {
+    const rows: { barId: string; student: unknown; reason: string; barredBy: unknown }[] = [];
+    let cursor: string | undefined;
+    for (let pages = 0; pages < 50; pages += 1) {
+      const { answer } = await acted((tx) =>
+        ijazahs.barred(tx, adminId, cursor === undefined ? {} : { cursor }),
+      );
+      rows.push(...answer.items);
+      const last = answer.items.at(-1);
+      if (answer.nextCursor === undefined || last === undefined || last.barId < downTo) return rows;
+      cursor = answer.nextCursor;
+    }
+    throw new Error('the barred list never passed the bars of this case');
+  }
+
+  it('lists an open bar and leaves out a lifted one', async () => {
+    const adminId = await makeAdmin(db);
+    const [lifted, older, newer] = [await makeUser(db), await makeUser(db), await makeUser(db)];
+    await bar(adminId, lifted);
+    await lift(adminId, lifted);
+    await bar(adminId, older);
+    await bar(adminId, newer);
+    const { rows: ours } = await db.query<{ id: string; user_id: string }>(
+      `SELECT id::text, user_id::text FROM ijazah_bars WHERE user_id = ANY($1::uuid[]) ORDER BY id`,
+      [[lifted, older, newer]],
+    );
+    const idOf = (userId: string) => ours.find(({ user_id }) => user_id === userId)?.id ?? '';
+    const listed = (await barredDownTo(adminId, idOf(lifted))).filter(({ barId }) =>
+      ours.some(({ id }) => id === barId),
+    );
+    expect(listed).toEqual([
+      {
+        barId: idOf(newer),
+        student: { userId: newer, displayName: 'Probe user' },
+        reason: 'تزوير',
+        barredAt: expect.any(String),
+        barredBy: { adminId, displayName: 'Probe administrator' },
+      },
+      expect.objectContaining({
+        barId: idOf(older),
+        student: expect.objectContaining({ userId: older }),
+      }),
+    ]);
   });
 });

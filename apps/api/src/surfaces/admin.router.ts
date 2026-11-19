@@ -16,6 +16,8 @@
 import { adminsRouter, auditRouter, authRouter, homeRouter } from '../modules/admin/index.js';
 // 005:T013 to T015 (B47; Q-G1 (a)): the admin module's `genderFlags`, over moderation's flags.
 import { genderFlagsAdminRouter } from '../modules/admin/index.js';
+// 005:T024 (B49; FR-624; R-410): the admin module's `settings`.
+import { settingsAdminRouter } from '../modules/admin/index.js';
 // T070 of specs/004-sessions: booking's `enrollments` namespace.
 import { enrollmentsAdminRouter } from '../modules/booking/index.js';
 // T007 of specs/005-certification: certification's `ijazahRequests`; T010 and T032 its `ijazahs`.
@@ -60,6 +62,8 @@ export const adminRouter = createAdminRouter({
   reports: reportsAdminRouter,
   // 005:T013 to T015 (B47): the gender flags' queue, the correction and the fraud ban.
   genderFlags: genderFlagsAdminRouter,
+  // 005:T024 (B49): the settings page's list and change.
+  settings: settingsAdminRouter,
   // 003:T105: the releases of the teachers' shares, their detail and the mark «تم الصرف».
   payouts: payoutsAdminRouter,
 });

@@ -59,6 +59,8 @@ const unreached = (): never => {
 const reads: GenderDecisionReads = {
   confirmedEnrollmentsOf: unreached,
   gendersOf: unreached,
+  // 005:T023 (rule d): the preview's lines are `get`'s only.
+  previewOf: unreached,
 };
 
 const steps: CorrectionSteps = {

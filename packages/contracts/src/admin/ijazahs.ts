@@ -218,3 +218,30 @@ export const adminIjazahsRerenderInput = z.object({
 export type IjazahSignOffRefusal = z.infer<typeof ijazahSignOffRefusal>;
 export type AdminIjazahsSignOffInput = z.infer<typeof adminIjazahsSignOffInput>;
 export type AdminIjazahsRerenderInput = z.infer<typeof adminIjazahsRerenderInput>;
+
+// 005:T022 (B49; FR-610; the note under T022, Q-P2 (b)): `ijazahs.barred`. A barred student gets no
+// new request, so a student barred with no ijazah would have no page to lift the bar from: this read
+// answers a page of the open bars (`lifted_at` null), newest first (a bar's id is a UUIDv7), each with
+// the student, the reason, the instant and the administrator who barred, by id and display name.
+
+export const adminIjazahsBarredInput = z.object({
+  /** The last bar id of the previous page; the next page holds the older bars. */
+  cursor: z.uuid().optional(),
+});
+
+export const adminIjazahsBarredItem = z.object({
+  barId: z.uuid(),
+  student: party,
+  reason: z.string(),
+  barredAt: z.iso.datetime(),
+  barredBy: z.object({ adminId: z.uuid(), displayName: z.string() }),
+});
+
+export const adminIjazahsBarredOutput = z.object({
+  items: z.array(adminIjazahsBarredItem),
+  nextCursor: z.uuid().optional(),
+});
+
+export type AdminIjazahsBarredInput = z.infer<typeof adminIjazahsBarredInput>;
+export type AdminIjazahsBarredItem = z.input<typeof adminIjazahsBarredItem>;
+export type AdminIjazahsBarredOutput = z.input<typeof adminIjazahsBarredOutput>;
