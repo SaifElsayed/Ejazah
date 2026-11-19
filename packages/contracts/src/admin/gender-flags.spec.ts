@@ -96,7 +96,7 @@ const LINE = {
 };
 
 /** A preview of `lines`: the count, the lines' ids in their order (R-API-9) and the lines. */
-const previewOf = (lines: readonly (typeof LINE)[]) => ({
+const previewOf = <Line extends { readonly enrollmentId: string }>(lines: readonly Line[]) => ({
   count: lines.length,
   enrollmentIds: lines.map(({ enrollmentId }) => enrollmentId),
   lines,
@@ -155,9 +155,7 @@ describe('genderFlags.get', () => {
   });
 
   it('refuses a line without its enrollment, subject, sessions or other party', () => {
-    expect(
-      adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE]))).success,
-    ).toBe(true);
+    expect(adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE]))).success).toBe(true);
     for (const line of [
       { ...LINE, enrollmentId: 'enrollment' },
       { ...LINE, subject: { id: SUBJECT.id, nameAr: 'التجويد' } },
@@ -174,9 +172,9 @@ describe('genderFlags.get', () => {
   });
 
   it('refuses a count that is not the number of lines', () => {
-    expect(
-      adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE, LINE]))).success,
-    ).toBe(true);
+    expect(adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE, LINE]))).success).toBe(
+      true,
+    );
     for (const preview of [
       { ...previewOf([LINE]), count: 2 },
       { ...previewOf([LINE]), count: 0 },
