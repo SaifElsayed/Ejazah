@@ -67,9 +67,12 @@ let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
 // 003:T115: `publicConfig()` keeps its first answer for the launch, as lib/client.ts does (a
 // failure is not kept), while `platform.publicConfig` asks the server each time; both answer
 // with `mockPublicConfig`.
+// 002:T148 (B50): the options the root's client was built with, so a refused refresh can be played.
+let mockClientOptions: { readonly onSignedOut?: () => void } = {};
 jest.mock('../lib/client', () => ({
   ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
-  createApiClient: () => {
+  createApiClient: (options: { readonly onSignedOut?: () => void }) => {
+    mockClientOptions = options;
     let kept: ReturnType<typeof mockPublicConfig> | null = null;
     return {
       api: { ...mockApi, platform: { publicConfig: { query: () => mockPublicConfig() } } },
@@ -86,7 +89,10 @@ let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
 
 // The account tabs lead to the deletion, whose proof loads the providers' native modules (T084).
-jest.mock('../features/shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
+jest.mock('../features/shared/auth/providers', () => ({
+  nativeIdentity: jest.fn(),
+  signOutProviders: jest.fn(async () => undefined),
+}));
 
 // The system's scheme, as React Native's hook reads it from the Appearance module (T078).
 const mockSystemScheme = jest.fn<() => 'light' | 'dark' | null>(() => 'light');
@@ -384,6 +390,19 @@ describe('the root layout', () => {
     expect(await screen.findByText('student deletion')).toBeTruthy();
     await act(async () => setSession({ kind: 'signed-out' }));
     expect(await screen.findByText('welcome')).toBeTruthy();
+  });
+
+  it('signs the phone out of Google too when a refused refresh ends the session (002:T148, B50)', async () => {
+    const { signOutProviders } = jest.requireMock<{ signOutProviders: jest.Mock }>(
+      '../features/shared/auth/providers',
+    );
+    signOutProviders.mockClear();
+    setSession({ kind: 'signed-in', landing: 'teacher_home' });
+    await renderRouter(routes, { initialUrl: '/(teacher)/(tabs)' });
+    expect(await screen.findByText('لا جلسات في هذا اليوم')).toBeTruthy();
+    await act(async () => mockClientOptions.onSignedOut?.());
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await waitFor(() => expect(signOutProviders).toHaveBeenCalledTimes(1));
   });
 
   it('moves the person when the session changes', async () => {
