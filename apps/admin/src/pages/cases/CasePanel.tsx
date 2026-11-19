@@ -13,6 +13,9 @@
 // `HeldFilesSection`, with this case's id). The footer offers what the server's answer allows: an
 // open compensation case resolved or dismissed, an open complaint decided (never resolved or
 // dismissed here), and on any case a manual case on its enrollment (lane S's `ManualCaseDialog`).
+// 003:T124 (SRS DEC-91): a close on the student's ban or confirmed fault shows no refund: the
+// sessions owed before it, owed to the student; the rest, the administration's decision, refunded
+// only if it decides so; the teacher's release. 003:T112: a covered postponed session reads «مؤجلة».
 import { piasters } from '@ijazah/money';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -317,7 +320,48 @@ const CAUSE: Readonly<Record<CaseAmount['cause'], MessageKey>> = {
   ijazah_dropout: 'admin.money.caseAmount.cause.ijazahDropout',
   recitation_dropout: 'admin.money.caseAmount.cause.recitationDropout',
   student_complaint_close: 'admin.money.caseAmount.cause.studentComplaintClose',
+  // 003:T124 (SRS DEC-91, FR-ADMIN-5; ADR 0018 D5): a close on the student's ban or confirmed fault.
+  student_fault_close: 'admin.money.caseAmount.cause.studentFaultClose',
 };
+
+/** One part of the amount: its words and its value, written in pounds. */
+interface Part {
+  readonly label: MessageKey;
+  readonly value: string;
+}
+
+/**
+ * The amount's parts by its cause, each written by `pounds`. 003:T124 (Q-7a (a), Q-7b (a)): a ban's
+ * or a confirmed fault's close shows the sessions owed before it as owed to the student, the rest
+ * not taken as the administration's decision, and the teacher's release; no part of it is labelled
+ * a refund.
+ */
+function partsOf(amount: CaseAmount, pounds: (value: number) => string): readonly Part[] {
+  switch (amount.cause) {
+    case 'ijazah_dropout':
+      return [
+        { label: 'admin.money.caseAmount.total', value: pounds(amount.total_piasters) },
+        { label: 'admin.money.caseAmount.held', value: pounds(amount.held_piasters) },
+        {
+          label: 'admin.money.caseAmount.platformPart',
+          value: pounds(amount.platformPart_piasters),
+        },
+        { label: 'admin.money.caseAmount.released', value: pounds(amount.released_piasters) },
+      ];
+    case 'student_fault_close':
+      return [
+        { label: 'admin.money.caseAmount.owed', value: pounds(amount.owed_piasters) },
+        { label: 'admin.money.caseAmount.decision', value: pounds(amount.decision_piasters) },
+        { label: 'admin.money.caseAmount.release', value: pounds(amount.release_piasters) },
+      ];
+    case 'recitation_dropout':
+    case 'student_complaint_close':
+      return [
+        { label: 'admin.money.caseAmount.refund', value: pounds(amount.refund_piasters) },
+        { label: 'admin.money.caseAmount.release', value: pounds(amount.release_piasters) },
+      ];
+  }
+}
 
 function useCaseAmount(caseId: string) {
   const { client } = useAdmin();
@@ -335,21 +379,10 @@ function CaseAmountSection({ caseId }: { readonly caseId: string }) {
   const amount = useCaseAmount(caseId).data?.amount;
   if (amount === undefined) return null;
   const pounds = (value: number) => formatPounds(piasters(value), locale);
-  const parts =
-    amount.cause === 'ijazah_dropout'
-      ? [
-          { label: t('admin.money.caseAmount.total'), value: pounds(amount.total_piasters) },
-          { label: t('admin.money.caseAmount.held'), value: pounds(amount.held_piasters) },
-          {
-            label: t('admin.money.caseAmount.platformPart'),
-            value: pounds(amount.platformPart_piasters),
-          },
-          { label: t('admin.money.caseAmount.released'), value: pounds(amount.released_piasters) },
-        ]
-      : [
-          { label: t('admin.money.caseAmount.refund'), value: pounds(amount.refund_piasters) },
-          { label: t('admin.money.caseAmount.release'), value: pounds(amount.release_piasters) },
-        ];
+  const parts = partsOf(amount, pounds).map((part) => ({
+    label: t(part.label),
+    value: part.value,
+  }));
   return (
     <section className="section" aria-label={t('admin.money.caseAmount.title')}>
       <h2 className="group-label">{t('admin.money.caseAmount.title')}</h2>
@@ -363,6 +396,9 @@ function CaseAmountSection({ caseId }: { readonly caseId: string }) {
           },
         ]}
       />
+      {amount.cause === 'student_fault_close' ? (
+        <p className="text-caption tone-muted">{t('admin.money.caseAmount.decisionNote')}</p>
+      ) : null}
       <p className="text-caption tone-muted">{t('admin.money.caseAmount.note')}</p>
     </section>
   );

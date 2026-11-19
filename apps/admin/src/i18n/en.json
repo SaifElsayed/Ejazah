@@ -1855,7 +1855,8 @@
         "cause": {
           "ijazahDropout": "The teacher’s dropout on the ijazah track: the student gets back all they paid.",
           "recitationDropout": "The teacher’s dropout on recitation: the sessions not taken are refunded to the student, and the teacher is released the share of those taken.",
-          "studentComplaintClose": "Closed on a complaint against the student: the sessions after the close are refunded to the student, and the teacher is released the share of the sessions attended and missed up to the close."
+          "studentComplaintClose": "Closed on a complaint against the student: the sessions after the close are refunded to the student, and the teacher is released the share of the sessions attended and missed up to the close.",
+          "studentFaultClose": "Closed on the student’s ban or confirmed fault: nothing is refunded automatically; the sessions owed to the student before the close are refunded, the teacher is released the share of the sessions attended and missed, and the administration decides the rest not taken."
         },
         "total": "Refunded to the student in all",
         "held": "The teacher’s share the gateway still holds (refunded through the gateway)",
@@ -1863,6 +1864,9 @@
         "released": "The teacher’s share already released (paid by the administration outside the app)",
         "refund": "Refunded to the student",
         "release": "Released to the teacher",
+        "owed": "Owed to the student",
+        "decision": "The administration’s decision",
+        "decisionNote": "«The administration’s decision» is refunded to the student only if the administration decides so in the case; what is not refunded stays where the gateway holds it, and none of it is released to the teacher.",
         "refundedSoFar": "Refunded so far",
         "note": "An administrator decides the case and executes the amount by hand in the gateway’s dashboard; nothing here moves money."
       },
