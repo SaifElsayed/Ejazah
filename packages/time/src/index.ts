@@ -314,6 +314,20 @@ export function addDays(from: Date, days: number): UtcInstant {
   return addSeconds(from, days * SECONDS_PER_DAY);
 }
 
+const DAYS_PER_WEEK = 7;
+
+/**
+ * The instant `weeks` weeks of seven days of 24 hours after `from` (003:T112: a postponement's week
+ * and its interval per party, SRS FR-POSTPONE-1 and FR-POSTPONE-4). An instant's week, never a
+ * wall-clock week: a clock change in between does not move it.
+ */
+export function addWeeks(from: Date, weeks: number): UtcInstant {
+  if (!Number.isSafeInteger(weeks)) {
+    throw new TimeError('weeks', String(weeks), 'expected a whole number of weeks');
+  }
+  return addDays(from, weeks * DAYS_PER_WEEK);
+}
+
 const MILLISECONDS_PER_SECOND = 1_000;
 
 /**
