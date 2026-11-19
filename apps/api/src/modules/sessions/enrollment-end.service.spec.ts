@@ -87,8 +87,9 @@ function world(given: Given = {}) {
       calls.push(['openComplaintOf', enrollmentId]);
       return given.complaint ?? null;
     },
-    openEndCase: async (_tx, enrollmentId) => {
-      calls.push(['openEndCase', enrollmentId]);
+    openEndCase: async (_tx, enrollmentId, reason) => {
+      // 003:T112 (rule d): the case's reason, the end's cause.
+      calls.push(['openEndCase', enrollmentId, reason]);
       return { caseId: NEW_CASE, opened: true };
     },
     cancelRemaining: async (_tx, enrollmentIds, now, caseOf) => {
@@ -162,6 +163,8 @@ function world(given: Given = {}) {
       partyReason: PARTY_REASON,
       internalNote: INTERNAL_NOTE,
       slot: 'hold',
+      // 003:T112 (rule d): the cause the router's schema defaults.
+      cause: 'admin_ended',
       idempotencyKey: KEY,
       ...input,
     });
@@ -188,6 +191,7 @@ const REQUEST = {
     partyReason: PARTY_REASON,
     internalNote: INTERNAL_NOTE,
     slot: 'hold',
+    cause: 'admin_ended',
   },
 };
 
@@ -213,7 +217,7 @@ describe('sessions.endEnrollment with slot hold (FR-513)', () => {
       ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
       ['clock'],
       ['cancelRemaining', [ENROLLMENT], AT],
-      ['openEndCase', ENROLLMENT],
+      ['openEndCase', ENROLLMENT, 'admin_ended'],
       ['pausedCaseOf', ENROLLMENT],
     ]);
     expect(one.lines).toEqual([
@@ -266,7 +270,7 @@ describe('sessions.endEnrollment with slot release (FR-513; T070’s release in 
       ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
       ['clock'],
       ['cancelRemaining', [ENROLLMENT], AT],
-      ['openEndCase', ENROLLMENT],
+      ['openEndCase', ENROLLMENT, 'admin_ended'],
       ['releaseHeldSlot', ENROLLMENT],
       ['pausedCaseOf', ENROLLMENT],
     ]);
@@ -442,5 +446,27 @@ describe('sessions.endEnrollment: the live event (T066)', () => {
     expect(added).toEqual([]);
     const rolledBack = world();
     expect(await asAdministratorKind((tx) => rolledBack.ask({}, tx), true)).toEqual([]);
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the end on a teacher's complaint against the student,
+// `cause: 'student_complaint_ended'`, opens its case under that reason, which T105's release and
+// T110's amounts read as a complaint close; a paused enrollment's case closed by it names it. Written
+// before the cause was read, run red first.
+describe('sessions.endEnrollment on a complaint against the student (003:T112)', () => {
+  it('opens the student_complaint_ended case and hands the sessions and remedies to it', async () => {
+    const one = world();
+    expect(await one.ask({ cause: 'student_complaint_ended' })).toEqual({
+      answer: { enrollmentId: ENROLLMENT, caseId: NEW_CASE, slot: 'hold', cancelledSessions: 1 },
+      replayed: false,
+    });
+    expect(one.calls).toContainEqual(['openEndCase', ENROLLMENT, 'student_complaint_ended']);
+    expect(one.calls).not.toContainEqual(['openEndCase', ENROLLMENT, 'admin_ended']);
+  });
+
+  it('names the cause when it closes a paused enrollment’s case', async () => {
+    const one = world({ pausedCase: PAUSED_CASE });
+    await one.ask({ cause: 'student_complaint_ended' });
+    expect(one.lines[0]).toEqual(expect.objectContaining({ end: 'student_complaint_ended' }));
   });
 });

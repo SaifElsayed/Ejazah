@@ -102,7 +102,8 @@ describe('sessions.endEnrollment (FR-513)', () => {
   it('ends with the actor, the slot held by default, and audits enrollment.ended_by_admin with both texts and the slot', async () => {
     const { as, written, reached } = surface(ENDED);
     expect(await as(VERIFIED).sessions.endEnrollment(ASKED)).toEqual(ENDED.answer);
-    expect(reached).toEqual([[SPEC_ADMIN, { ...ASKED, slot: 'hold' }]]);
+    // 003:T112 (rule d): the cause the schema defaults, today's end.
+    expect(reached).toEqual([[SPEC_ADMIN, { ...ASKED, slot: 'hold', cause: 'admin_ended' }]]);
     expect(written).toEqual([ENTRY]);
   });
 
