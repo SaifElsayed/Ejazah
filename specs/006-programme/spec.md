@@ -31,8 +31,10 @@ On the ijazah track that changes:
   pays the full month, and the sessions missed in the pause are added at the end.
 - The money follows Phase 2's and track 2's rules unchanged. Each payment is an ordinary gateway order carrying the
   split. The teacher's share is **70 %** of each order, held at the gateway. Releases:
-  - the assessment's share after its **72-hour** dispute window;
-  - **25 %** of the teacher's share of the programme's price at half the sessions delivered;
+  - the assessment's share on its own only when the student does not continue, after the 48 hours and its
+    **72-hour** dispute window; when the student continues, the assessment is the package's first session;
+  - **25 %** of the teacher's share of everything paid, the assessment included, at half the sessions delivered (the
+    assessment counted);
   - the rest at the end, or at a close as DEC-81 lists.
 
 **Scope boundary.** The programme is the **ijazah track's** (DEC-92): every ijazah-track package starts with the
@@ -100,7 +102,7 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
   month takes the remainder (42 sessions = 10 × 1,000 + a last month of 2 sessions, 500) (FR-711).
 - Q: What is the base of the 25 % released at half? → A: (a) The offer's total, the assessment excluded:
   25 % × 70 % × 10,000 = 1,750, the same in full or by months, capped at what is held. The assessment's share is
-  released on its own after its 72 hours (FR-728).
+  released on its own after its 72 hours (FR-728). *(Superseded by the owner's re-answer below, DEC-94.)*
 - Q: An Administrator approves a teacher's refusal after the assessment: the fee? → A: (a) Kept: the assessment was
   delivered (FR-BOOK-13), and its teacher share (70 % of F) is released after its 72 hours (FR-709).
 - Assumption approved (A-1): the assessment session's own length is an Administrator's §3.14 setting beside the fee,
@@ -108,6 +110,16 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
 - Assumption approved (A-2 (a)): the offer may pick only a length that fits inside the reserved weekly time (60 → 30, 45
   or 60; 45 → 30 or 45; 30 → 30), each session from the time's start; the reservation, the overlap refusals and the
   release stay as built (FR-705).
+- Q (the owner's re-answer, recorded as SRS DEC-94; it replaces the Q-C4 answer above and the 11/17 rule N3 (a)): when
+  is the teacher paid for the assessment? → A: «المعلم مبياخدش فلوس جلسة الاختبار الا في حالة واحدة لو العرض اترفض من
+  الطالب ومكملش … انما لو هيكمل ودفع هو بالنسباله كانها من ضمن الباقة … وحساب النص بيتحسب من ضمنه حصة الاختبار», and
+  «Approve» on the reading and on the refusal case.
+  - **The student does not continue** (declines, does not pay within the 48 hours, or an Administrator approves the
+    teacher's refusal): the assessment's order is released as any order, 350 of a 500 fee, once the 48 hours have
+    ended and its 72 hours have passed with no case open. The fee is never refunded.
+  - **The student continues:** the assessment is the package's first session. Its share is held with the package,
+    the half counts it (40 + 1 = 41, so the half falls at 21), and the 25 % is taken on the share of everything paid
+    (1,750 in full, 1,837.50 by months), capped at what is held (FR-703, FR-709, FR-728).
 - Not given by the owner, written as an assumption: the assessment fee's amount. The §3.14 row has no default; an
   ijazah-track package cannot be published until an Administrator sets it (FR-704).
 
@@ -130,8 +142,9 @@ its fee through today's checkout. The weekly time is held, then reserved for the
    time is reserved for this enrollment.
 2. **Given** a recitation package, **When** the student buys it, **Then** nothing changes from today: one order, every
    session generated, no assessment.
-3. **Given** a paid assessment whose session ends with no case open, **When** 72 hours pass, **Then** its share (70 % of
-   the fee) is listed as a release due.
+3. **Given** a paid assessment and a student who does not continue, **When** the 48 hours have ended and the session's
+   72 hours have passed with no case open, **Then** its share (70 % of the fee) is listed as a release due; **Given** a
+   student who continues, **Then** no assessment release is listed: its share is held with the package (DEC-94).
 4. **Given** a teacher's three prices (30: 250, 45: 320, 60: 400), **When** the student opens the profile, **Then** they
    see the assessment's fee and «250 – 400 للحصة» before booking.
 
@@ -222,8 +235,8 @@ compensation amounts follow DEC-81 and DEC-85.
 
 **Why this priority**: Money rules are the owner's firmest (ADR 0025); a wrong release cannot be taken back in code.
 
-**Independent Test**: For a 10,000 EGP offer at 250 a session, paid monthly: the assessment's 70 % share is due after its window;
-1,750 at the 20th session delivered, capped at what is held; the rest at the end; on a teacher's dropout the case shows
+**Independent Test**: For a 10,000 EGP offer at 250 a session, paid monthly with a 500 fee: no assessment release;
+1,837.50 (25 % × 70 % × 10,500) once the assessment and 20 sessions are delivered (21 of 41), capped at what is held; the rest at the end; on a teacher's dropout the case shows
 every order's whole gross.
 
 **Acceptance Scenarios**:
@@ -231,8 +244,8 @@ every order's whole gross.
 1. **Given** a programme started at 70 % and 25 %, **When** an administrator later sets 65 % or 30 %, **Then** every later
    order of this programme still carries 70 % and 25 %.
 2. **Given** half the sessions delivered with no case open, **When** the 72 hours after the session that reached half have
-   passed, **Then** 25 % of the teacher's share of the programme's price is due, capped at what the gateway holds of the
-   orders paid by then.
+   passed, **Then** 25 % of the teacher's share of everything paid for the programme, the assessment included, is due,
+   capped at what the gateway holds of the orders paid by then; the half counts the assessment (DEC-94).
 3. **Given** a teacher's dropout on the programme, **When** the case opens, **Then** it shows all the money paid back,
    the assessment fee included (DEC-85); a teacher suspended, banned or gone opens this case too (DEC-92).
 4. **Given** a close on a complaint against the student, or a ban, **When** the case opens, **Then** DEC-86's and
@@ -285,8 +298,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-702**: The assessment's fee MUST NOT be refunded, except as part of an ijazah teacher's dropout (DEC-85); its
   order MUST carry the rate in force (70 % by default) and the 25 % in force, which become the programme's for every
   later order (ADR 0025 D6, Q6).
-- **FR-703**: The assessment's teacher share MUST be listed as a release due once its session's dispute window (72 h)
-  has passed with no case open (DEC-81, N3).
+- **FR-703**: The assessment's teacher share MUST be listed as a release due on its own only when the student does not
+  continue (the offer declined or unpaid within the 48 hours, or an approved refusal), once the 48 hours have ended and
+  its session's dispute window (72 h) has passed with no case open. When the student continues, the assessment is the
+  package's first session and its share is held with the package (DEC-94).
 - **FR-704**: The assessment's fee MUST be one platform-wide amount and its session length one length, both §3.14
   settings an Administrator sets (the length 30 minutes by default; the fee with no default). An ijazah-track package
   MUST NOT be published while the fee is unset. The teacher's ijazah-track package MUST set a price per session for
@@ -312,8 +327,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
 - **FR-709**: A teacher MUST NOT refuse a student on their own after the assessment; they MAY send an administrator a
   refusal request with a mandatory reason, and the administrator decides; an approved refusal ends the programme before
-  any offer, freeing the time. The assessment fee is kept, and its teacher share is released after its 72 hours
-  (DEC-93).
+  any offer, freeing the time. The assessment fee is kept, and its teacher share is released once the 48 hours have
+  ended and its 72 hours have passed (DEC-93, DEC-94).
 
 **Paying: in full or monthly, prepaid**
 
@@ -373,10 +388,11 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 **Money**
 
-- **FR-728**: The 25 % release MUST be 25 % of the teacher's share of the offer's total, the assessment excluded
-  (1,750 on a 10,000 offer at 70 %, in full or by months), capped at what the gateway holds of the orders paid by then, at half the
-  sessions delivered with no case open, counted by sessions (a postponed or make-up session counted once delivered); the
-  rest at the end (DEC-81, N2).
+- **FR-728**: The 25 % release MUST be 25 % of the teacher's share of everything paid for the programme, the
+  assessment included (1,750 on a 10,000 offer paid in full; 1,837.50 by months with a 500 fee; at 70 %), capped at
+  what the gateway holds of the orders paid by then, at half the programme's sessions delivered with no case open,
+  the assessment counted as its first session (41 sessions: the half at 21), counted by sessions (a postponed or
+  make-up session counted once delivered); the rest at the end (DEC-81, N2, DEC-94).
 - **FR-729**: A teacher's dropout on the programme, including a teacher suspended, banned or gone, MUST open the
   compensation case of FR-DISPUTE-5, showing every order's whole gross, the assessment included (DEC-85, DEC-92).
 - **FR-730**: A close on a complaint against the student, a ban or a confirmed fault MUST follow DEC-86 and DEC-91 as
@@ -419,7 +435,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **SC-703**: A student renews a month by hand in under one minute from the notice.
 - **SC-704**: In 100 % of failed charges, the student is notified within two minutes, and a hard decline is never retried.
 - **SC-705**: Every release and every compensation amount of the programme equals DEC-81's and DEC-85's rule on a worked
-  example of 10,000 EGP at 250 a session (70 % of the fee, 1,750, the rest; the full refund on a dropout).
+  example of 10,000 EGP at 250 a session (350 of a 500 fee only when the student does not continue; 1,750 in full or 1,837.50 by months at the 21st of 41
+  sessions; the rest; the full refund on a dropout).
 - **SC-706**: Administrators find every paused package and stop request, oldest first, and decide one in under one minute.
 - **SC-707**: No card detail appears in any log, response or audit entry, in 100 % of the adversarial suite's attempts.
 
