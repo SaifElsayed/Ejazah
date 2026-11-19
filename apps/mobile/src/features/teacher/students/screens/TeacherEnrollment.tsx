@@ -19,6 +19,9 @@
 // (`EndedByAdmin`).
 // 005:T019 (FR-603, FR-608): an ijazah-track enrollment draws its ijazah under the chat's entry: the
 // request's status and its sheet (`IjazahRequestCard`), read again on the live channel's signal.
+// 003:T112 (SRS FR-POSTPONE-1 to FR-POSTPONE-5, DEC-90): on a confirmed enrollment, the postponement
+// of the teacher's coming week (`PostponePanel`); a postponed session says who postponed it and why
+// on its row (`PostponementLine`).
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -41,6 +44,7 @@ import { useFormatters, weekdayIn } from '../../../../lib/formatters';
 import { useOnline } from '../../../../lib/online';
 import { avatarNameOf, usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
+import { PostponePanel, PostponementLine } from '../../../shared/postponement';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { ChatEntry } from '../../chat';
@@ -132,6 +136,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
       </Card>
       <ChatEntry enrollmentId={enrollment.enrollmentId} status={enrollment.status} />
       <IjazahRequestCard enrollment={enrollment} />
+      <PostponePanel enrollment={enrollment} />
       {rows.length === 0 ? null : (
         <Section title={t('teacher.enrollment.sessions.title')}>
           <List>
@@ -233,6 +238,7 @@ function SessionLine({ row }: { readonly row: SessionRow }) {
               {t('session.cancellation.row.pending')}
             </Text>
           ) : null}
+          <PostponementLine postponement={session.postponement} viewer="teacher" />
           <TeacherRemedyStatusLine status={session.remedyStatus} />
         </View>
       }

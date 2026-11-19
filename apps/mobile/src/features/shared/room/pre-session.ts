@@ -21,6 +21,8 @@ export const SESSION_STATUS_LABEL: Readonly<Record<SessionStatus, MessageKey>> =
   cancelled_by_agreement: 'status.session.cancelledByAgreement',
   cancelled_by_admin: 'status.session.cancelledByAdmin',
   disputed: 'status.session.disputed',
+  // 003:T112 (FR-POSTPONE-5): a session its party postponed.
+  postponed: 'status.session.postponed',
 };
 
 export interface PreSession {

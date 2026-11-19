@@ -43,4 +43,6 @@ export const SESSION_STATUS: Readonly<Record<SessionStatus, StatusBadge>> = {
   cancelled_by_agreement: { label: 'status.session.cancelledByAgreement', tone: 'neutral' },
   cancelled_by_admin: { label: 'status.session.cancelledByAdmin', tone: 'danger' },
   disputed: { label: 'status.session.disputed', tone: 'warning' },
+  // 003:T112 (FR-POSTPONE-5): a session its party postponed, owed a make-up.
+  postponed: { label: 'status.session.postponed', tone: 'neutral' },
 };

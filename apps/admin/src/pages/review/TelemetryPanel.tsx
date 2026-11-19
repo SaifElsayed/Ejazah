@@ -49,6 +49,7 @@ export const SESSION_STATUS: Readonly<
   disputed: { label: 'admin.status.session.disputed', tone: 'danger' },
   cancelled_by_agreement: { label: 'admin.status.session.cancelledByAgreement', tone: 'neutral' },
   cancelled_by_admin: { label: 'admin.status.session.cancelledByAdmin', tone: 'neutral' },
+  postponed: { label: 'admin.status.session.postponed', tone: 'neutral' },
 };
 
 /** The statuses `sessions.review.resolve` settles (R-SESS-6). */

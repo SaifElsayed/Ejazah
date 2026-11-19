@@ -4,6 +4,11 @@
 // released; a recitation dropout's refund and release; the refunds already recorded beside it
 // (Q-C1 (a)). A case the read gives no amount draws nothing, and a complaint is never asked. No
 // button moves money (DEC-82).
+// 003:T124 (SRS DEC-91, FR-ADMIN-5, FR-AUTH-11; ADR 0018 D5; Q-7, Q-7a (a), Q-7b (a)): a close on the
+// student's ban or a confirmed fault (`student_fault_close`) shows no refund: of 8 sessions of 1,000
+// EGP, 3 delivered, 1 missed by the student, 1 by the teacher and 3 cancelled by the close, the 125
+// owed to the student, the 375 the administration's decision (refunded only if it decides so), and
+// the 350 released to the teacher at a 70 % share; never the «refund» label.
 import { piasters } from '@ijazah/money';
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -62,6 +67,15 @@ const RECITATION = {
   refund_piasters: EGP(5_000),
   release_piasters: EGP(3_500),
   refunded_piasters: EGP(1_000),
+};
+
+/** 003:T124's example: 125 owed, 375 the administration's decision, 350 to the teacher. */
+const FAULT = {
+  cause: 'student_fault_close',
+  owed_piasters: EGP(125),
+  decision_piasters: EGP(375),
+  release_piasters: EGP(350),
+  refunded_piasters: EGP(0),
 };
 
 function fakeApi(answer: unknown, reason = 'teacher_ended') {
@@ -177,5 +191,46 @@ describe('the case’s amount (003:T110)', () => {
       },
     );
     expect(api.payments.caseAmount.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('a close on the student’s ban or confirmed fault (003:T124, DEC-91)', () => {
+  it.each(['student_banned', 'student_fault_confirmed'])(
+    'draws a %s close as 125 owed + 375 the administration’s decision + 350 to the teacher, with the decision’s note',
+    async (reason) => {
+      const api = fakeApi({ amount: FAULT }, reason);
+      await inBothLocales(
+        () => open(api),
+        async (t, locale) => {
+          const section = await screen.findByRole('region', {
+            name: t('admin.money.caseAmount.title'),
+          });
+          const pounds = (value: number) => formatPounds(piasters(value), locale);
+          expect(
+            within(section).getByText(t('admin.money.caseAmount.cause.studentFaultClose')),
+          ).toBeTruthy();
+          expectPart(section, t('admin.money.caseAmount.owed'), pounds(EGP(125)));
+          expectPart(section, t('admin.money.caseAmount.decision'), pounds(EGP(375)));
+          expectPart(section, t('admin.money.caseAmount.release'), pounds(EGP(350)));
+          expectPart(section, t('admin.money.caseAmount.refundedSoFar'), pounds(EGP(0)));
+          expect(within(section).getByText(t('admin.money.caseAmount.decisionNote'))).toBeTruthy();
+          expect(within(section).queryAllByRole('button')).toEqual([]);
+        },
+      );
+    },
+  );
+
+  it('shows no «refund» for this cause: no part is labelled as refunded to the student', async () => {
+    const api = fakeApi({ amount: FAULT }, 'student_banned');
+    await inBothLocales(
+      () => open(api),
+      async (t) => {
+        const section = await screen.findByRole('region', {
+          name: t('admin.money.caseAmount.title'),
+        });
+        expect(within(section).queryByText(t('admin.money.caseAmount.refund'))).toBeNull();
+        expect(within(section).queryByText(t('admin.money.caseAmount.total'))).toBeNull();
+      },
+    );
   });
 });
