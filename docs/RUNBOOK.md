@@ -417,8 +417,8 @@ front of the API, and the API's port is reachable through the proxy only (the
 note under T018): bind the API to the private network or to `127.0.0.1`, and
 let no firewall rule open its port to the internet. Then set both keys:
 
-- `TRUSTED_PROXY=X-Forwarded-For`, the header Caddy's `reverse_proxy` appends
-  the client's address to;
+- `TRUSTED_PROXY=X-Forwarded-For`, the header Caddy's `reverse_proxy` sends
+  with the client's address as its last hop;
 - `TRUSTED_PROXY_ADDRESS`, the proxy's own IP address as the API's socket
   sees it: `127.0.0.1` when Caddy runs on the same machine, the proxy
   container's address on a Docker network (give it a fixed one in the compose
@@ -431,6 +431,36 @@ proxy's header was set aside for the socket's peer», with `reason`
 `peer_not_proxy` or `hop_not_an_address`. Many such lines after a deploy mean
 `TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
 the address the proxy connects from), or the port is open to others.
+
+**The panel's host** — `deploy/Caddyfile` is the panel's site block (research
+R-18): Caddy serves the panel's build as static files with the browser
+security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
+file names its four values as environment placeholders, so the final domain
+needs no change to it. The steps of 12/1, on the host:
+
+1. Build the panel with the API's origin: `VITE_API_URL=https://<api host>
+   pnpm --filter @ijazah/admin build` (the build lands in `apps/admin/build`;
+   without the value the panel refuses to start).
+2. Set the four values in the Caddy service's environment: `ADMIN_SITE` (the
+   panel's host, e.g. `admin.<domain>`), `ADMIN_BUILD_ROOT` (the build's path
+   on the host), `API_ORIGIN` and `STORAGE_ORIGIN` (each `https://` and a
+   host, no path).
+3. `caddy validate --config deploy/Caddyfile` with those values set: it must
+   answer «Valid configuration». Then reload Caddy.
+4. `curl -sI https://<admin host>/` and check each header the file sends:
+   `content-security-policy` exactly as in the file with the two origins
+   filled in, `x-content-type-options: nosniff`, `referrer-policy:
+   no-referrer`, `strict-transport-security: max-age=31536000`,
+   `x-frame-options: DENY`, and no `server` header. `curl -sI
+   https://<admin host>/applications` answers the same page (the router's
+   paths).
+5. Sign in on the panel and open a document: the browser console must show
+   no refused source except Radix's dialog scroll-lock style, which the policy
+   refuses on purpose (the comment in `deploy/Caddyfile`).
+
+The API's own site block (its `reverse_proxy` and the live channel's notes
+under «Capacity») joins this file when the API's host is set up; it is not
+part of T147.
 
 ## Leaked credential
 
