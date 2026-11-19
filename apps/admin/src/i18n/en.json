@@ -475,7 +475,8 @@
         "teacherEnded": "The teacher’s approval was revoked, or they were banned or their account deleted",
         "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return",
         "adminEnded": "The administration ended the enrollment directly",
-        "genderCorrection": "A party’s declared gender was corrected, ending the enrollment"
+        "genderCorrection": "A party’s declared gender was corrected, ending the enrollment",
+        "studentComplaintEnded": "The administration ended the enrollment on a complaint against the student"
       },
       "status": {
         "dismissed": "Dismissed",
@@ -2598,6 +2599,7 @@
         "cancelledByAgreement": "Cancelled by agreement",
         "disputed": "Disputed",
         "done": "Done",
+        "postponed": "Postponed",
         "providerOutage": "Service outage",
         "scheduled": "Upcoming",
         "studentNoShow": "Student absent",
@@ -2989,6 +2991,16 @@
           "slotNotHeld": "This enrollment's slot is no longer held for it: the hold ended, it was already released, or its closing can no longer be restored. Read the page again. Nothing changed.",
           "notFound": "This enrollment was not found. Nothing changed."
         }
+      },
+      "endCause": {
+        "legend": "Why the enrollment ends",
+        "adminEnded": "A direct end",
+        "studentComplaintEnded": "A complaint against the student",
+        "studentComplaintEffect": "On the teacher’s report: the sessions the student missed up to the end stay the student’s absences, the teacher is released their share and that of the sessions attended, and the sessions after the end are refunded to the student.",
+        "caseReason": "The administration ended the enrollment on a complaint against the student"
+      },
+      "postponement": {
+        "event": "The session was postponed"
       },
       "end": {
         "title": "End the enrollment",
