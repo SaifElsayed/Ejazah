@@ -22,18 +22,40 @@
 // Observed red: every case against the service stub; the completion date against the mutant «no
 // `completionDate` in `insertIjazah`», the copy's key against «`signatureStorageKey: null` dropped
 // from `markRejected`» (lane C's red table).
+//
+// Quickstart §2.3 (B49 lane H; FR-628): a teacher holding a pending request is banned through the
+// administrator surface's `teachers.ban` (identity's router), its `StandingService` built as
+// `createAdminServices` builds it, its consequences subscribed as `main.ts` subscribes booking's
+// termination and the requests' deletion consequence. The request stays `pending`, certification's
+// half of `ijazahRequests.get` (`detail`) answers the standing `banned`, and the ban's audit entry,
+// on the teacher, carries the reason the admin module's `get` reads back. The admin module's own
+// half (`composeIjazahRequests` over `latestStandingReasonOf`) is out of this file's reach (R-API-4);
+// it is `apps/api/src/modules/admin/ijazah-requests.spec.ts`'s and `audit.repository.spec.ts`'s.
+// Red first under the mutant «the ban closes the teacher's open requests» (the deletion consequence
+// admitting `banned`, its read taking the teacher's requests; lane H's `runs\lane-h\`).
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { LiveEvent } from '../../packages/contracts/src/index.js';
+import { terminationSubscriber } from '../../apps/api/src/modules/booking/index';
+import { revokeSubjects } from '../../apps/api/src/modules/catalog/index';
 import {
   createIjazahDecisionService,
   createIjazahRequestService,
   type IjazahDecisionService,
   type IjazahRequestService,
 } from '../../apps/api/src/modules/certification/index';
+import {
+  AccountConsequences,
+  StandingService,
+  standingStoreOver,
+  teachersRouter,
+} from '../../apps/api/src/modules/identity/index';
+import { orderStandingsOf } from '../../apps/api/src/modules/payments/index';
+import { openRequestOf } from '../../apps/api/src/modules/verification/index';
+import type { AuditRecord } from '../../apps/api/src/platform/audit/audit-writer';
 import {
   closeDatabase,
   type Database,
@@ -42,13 +64,21 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error';
+import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
 import { bindToTransaction, RequestLive } from '../../apps/api/src/platform/live/live-publisher';
+import { createLogger } from '../../apps/api/src/platform/logging/logger';
 import {
   SettingError,
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader';
+import { type AdminSurfaceServices, createAdminContext } from '../../apps/api/src/surfaces/context';
+import {
+  createAdminCallerFactory,
+  createAdminRouter,
+} from '../../apps/api/src/surfaces/procedures';
+import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures';
 import {
   connectAsApplication,
   type Db,
@@ -507,5 +537,95 @@ describe('reject (T007, FR-604, Q14 (a))', () => {
     expect(await codeOf(Promise.reject(refused[0]?.reason))).toBe('not_pending');
     const { status } = (await requestRow(w.requestId)) ?? {};
     expect(await ijazahsOf(w.requestId)).toHaveLength(status === 'approved' ? 1 : 0);
+  });
+});
+
+describe('a ban of the teacher leaves the request pending (quickstart §2.3, FR-628)', () => {
+  const BAN_REASON = 'مخالفة جسيمة لشروط المنصة';
+  const log = createLogger({ level: 'info', destination: { write: () => undefined } });
+  const callerFor = createAdminCallerFactory(createAdminRouter({ teachers: teachersRouter }));
+
+  /**
+   * `teachers.ban` through the administrator surface on a committed transaction of its own: the
+   * standing as `createAdminServices` builds it, its consequences as `main.ts` subscribes them
+   * (booking's termination, the requests' deletion consequence). The audit entries it hands the
+   * writer.
+   */
+  async function banThroughSurface(adminId: string, teacherUserId: string): Promise<AuditRecord[]> {
+    const consequences = new AccountConsequences();
+    consequences.subscribe(terminationSubscriber({ orders: orderStandingsOf, log }));
+    consequences.subscribe(requests.deletionConsequence());
+    const standing = new StandingService({
+      store: standingStoreOver(database),
+      consequences,
+      revokeSubjects,
+      hasOpenIdentityRequest: async (tx, userId) => (await openRequestOf(tx, userId)) !== null,
+    });
+    const written: AuditRecord[] = [];
+    const services = new Proxy(unusedAdminServices, {
+      get: (target, name, receiver) =>
+        name === 'teachers'
+          ? { ban: standing.ban.bind(standing) }
+          : Reflect.get(target, name, receiver),
+    }) as AdminSurfaceServices;
+    await callerFor(
+      createAdminContext({
+        session: { adminId, sessionId: adminId, mfaVerified: true },
+        log,
+        administration: {
+          transactions: {
+            run: <T>(work: (tx: Transaction) => Promise<T>): Promise<T> =>
+              database.$transaction((tx: Transaction) => work(tx), OPTIONS),
+          },
+          auditWriter: {
+            write: async (_tx, record) => {
+              written.push(record);
+            },
+          },
+        },
+        services,
+        // Every administrator call is counted by the signed-in default since T062 (FR-470).
+        rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+        clientAddress: '203.0.113.9',
+      }),
+    ).teachers.ban({ teacherUserId, reason: BAN_REASON });
+    return written;
+  }
+
+  it('the request stays pending, the review answers the standing banned, the ban recorded with its reason', async () => {
+    const w = await world();
+    const written = await banThroughSurface(w.adminId, w.teacherId);
+    expect(
+      (
+        await database.user.findUniqueOrThrow({
+          where: { id: w.teacherId },
+          select: { accountStatus: true },
+        })
+      ).accountStatus,
+    ).toBe('banned');
+    expect(await requestRow(w.requestId)).toMatchObject({
+      status: 'pending',
+      decided_by_admin_id: null,
+      decided_at: null,
+    });
+    const detail = await database.$transaction(
+      (tx) => decisions.detail(tx, w.adminId, { requestId: w.requestId }),
+      OPTIONS,
+    );
+    expect(detail).toMatchObject({
+      requestId: w.requestId,
+      status: 'pending',
+      teacherStanding: { status: 'banned' },
+      teacherUserId: w.teacherId,
+    });
+    expect(written).toEqual([
+      expect.objectContaining({
+        adminId: w.adminId,
+        action: 'teacher.ban',
+        targetType: 'user',
+        targetId: w.teacherId,
+        reason: BAN_REASON,
+      }),
+    ]);
   });
 });

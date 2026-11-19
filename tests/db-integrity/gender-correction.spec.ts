@@ -17,6 +17,12 @@
 // - 005:T023 (B49, Q-G1 (b)): `genderFlags.get`'s preview lines, a flagged student and a flagged
 //   teacher: the enrollment's subject, its sessions and the other party, nothing written
 //   (`previewAsComposed`, red first on its stub).
+// - quickstart §3.3 (B49 lane H, both directions): a student with two confirmed enrollments, each
+//   with a teacher of the gender the correction leaves behind: both end `gender_correction`, a case
+//   each, and `sessions.restore` refuses each `not_restorable`. Red first under the mutant «booking's
+//   `confirmedEnrollmentsOf` reads one row (`take: 1`)», the read both this file's composition and
+//   `gender-decisions.service.ts` decide the ending enrollments by: the correction then ends only the
+//   first (lane H's `runs\lane-h\`).
 //
 // THE CORRECTION HERE. R-API-3 and R-API-4 keep this file from importing the admin module (only the
 // composition roots may), so `correctAsComposed` below takes the admin composition's calls, in the
@@ -306,6 +312,51 @@ async function confirmedWorld(gender: Gender): Promise<World> {
   return made;
 }
 
+/** Thursday 11:00 Cairo, so the student's two weekly sessions never overlap (FR-BOOK-5). */
+const THURSDAY_1100 = new Date('1970-01-01T11:00:00Z');
+
+/**
+ * Quickstart §3.3: one student of `gender` with two four-session enrollments confirmed by the job,
+ * each with a teacher of `gender` and of their own: once the first is confirmed (a student holds one
+ * active hold at a time), the second world's enrollment and hold moved to the first world's student
+ * before its payment, its slot at 11:00. Every party's role active.
+ */
+async function twoEnrollmentsOf(gender: Gender) {
+  const confirm = async (enrollmentId: string) =>
+    confirmEnrollment({
+      database,
+      settings: worldSettings,
+      notices: NO_PUSH,
+      clock: () => NOW,
+    }).handle({ paymentId: await order(enrollmentId) });
+  const first = await world({ gender });
+  await database.userRole.createMany({
+    data: [
+      { userId: first.studentId, role: 'student', status: 'active' },
+      { userId: first.teacherId, role: 'teacher', status: 'active' },
+    ],
+  });
+  await confirm(first.enrollmentId);
+  const second = await world({ gender });
+  await database.availabilitySlot.update({
+    where: { id: second.slotId },
+    data: { startTimeLocal: THURSDAY_1100 },
+  });
+  await database.enrollment.update({
+    where: { id: second.enrollmentId },
+    data: { studentUserId: first.studentId },
+  });
+  await database.slotHold.update({
+    where: { id: second.holdId },
+    data: { studentUserId: first.studentId },
+  });
+  await database.userRole.create({
+    data: { userId: second.teacherId, role: 'teacher', status: 'active' },
+  });
+  await confirm(second.enrollmentId);
+  return { studentId: first.studentId, enrollmentIds: [first.enrollmentId, second.enrollmentId] };
+}
+
 async function flagOn(userId: string): Promise<string> {
   const { id } = await database.genderFlag.create({
     data: { flaggedUserId: userId, raisedByUserId: null, reason: 'بلاغ', status: 'open' },
@@ -426,6 +477,38 @@ describe('genderFlags.correct over the real tables (FR-616, FR-GENDER-7)', () =>
           select: { status: true, resolutionNotes: true, resolvedByAdminId: true },
         }),
       ).toEqual({ status: 'corrected', resolutionNotes: REASON, resolvedByAdminId: admin });
+    },
+  );
+
+  // Quickstart §3.3: two enrollments of one student, each ended with its own case, neither restorable.
+  it.each(['female', 'male'] as const)(
+    'corrects a %s student with two enrollments: both ended gender_correction, a case each, neither restorable',
+    async (gender) => {
+      const { studentId, enrollmentIds } = await twoEnrollmentsOf(gender);
+      const answer = await correct(await flagOn(studentId));
+      expect(answer).toEqual({
+        flaggedUserId: studentId,
+        from: gender,
+        to: other(gender),
+        endedEnrollments: 2,
+      });
+      for (const enrollmentId of enrollmentIds) {
+        const state = await stateOf(enrollmentId);
+        expect(state.enrollment, enrollmentId).toEqual({
+          status: 'cancelled',
+          cancellationReason: 'gender_correction',
+        });
+        expect(state.sessions.length, enrollmentId).toBeGreaterThan(0);
+        expect(new Set(state.sessions.map(({ status }) => status)), enrollmentId).toEqual(
+          new Set(['cancelled_by_admin']),
+        );
+        expect(state.cases, enrollmentId).toEqual([
+          { kind: 'compensation_case', reason: 'gender_correction', status: 'open' },
+        ]);
+      }
+      for (const enrollmentId of enrollmentIds) {
+        expect(await causeOf(restore(enrollmentId)), enrollmentId).toBe('not_restorable');
+      }
     },
   );
 
