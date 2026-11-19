@@ -87,7 +87,7 @@ class GoogleIdModule : Module() {
       val google = GoogleIdTokenCredential.createFrom(credential.data)
       // `id` is the address of the account the person chose.
       promise.resolve(mapOf("idToken" to google.idToken, "email" to google.id))
-    } catch (_: GoogleIdTokenParsingException) {
+    } catch (e: GoogleIdTokenParsingException) {
       promise.reject(ERR_UNEXPECTED, "The Google ID token could not be read.", null)
     }
   }
