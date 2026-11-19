@@ -43,6 +43,8 @@ export const NAV_GROUPS: readonly {
         icon: 'file-text',
         queue: 'credentials',
       },
+      // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
+      { path: '/ijazah-requests', label: 'admin.nav.items.ijazahRequests', icon: 'book' },
       // B42 (the notes under T048, T049 and T050, Q4): Phase 3's three queues.
       { path: '/review', label: 'admin.nav.items.sessionReview', icon: 'activity' },
       { path: '/disputes', label: 'admin.nav.items.disputes', icon: 'flag' },
@@ -56,6 +58,8 @@ export const NAV_GROUPS: readonly {
       { path: '/sessions', label: 'admin.nav.items.enrollments', icon: 'calendar' },
       // B42 (the note under T058, Q4): the user directory.
       { path: '/users', label: 'admin.nav.items.users', icon: 'users' },
+      // 005:T022 (B49, Q-X2 (a)): the ijazahs and the barred list.
+      { path: '/ijazahs', label: 'admin.nav.items.ijazahs', icon: 'award' },
       // T053: the payments monitor, before the settings as the board orders the group.
       { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
       // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.

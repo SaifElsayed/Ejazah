@@ -7,6 +7,7 @@
 // `ijazah_bar.lifted` on the user with the reason; a replayed write records none. The three writes are
 // counted under `rate_limit_ijazah_decision` before any transaction opens and need a reason; the
 // outputs keep no key and no token hash. What the actions do is `ijazahs.service.spec.ts`'s.
+// 005:T022 (B49, Q-P2 (b)): `barred`, the open bars, audited `ijazah_bars.listed` on the reader.
 import { describe, expect, it } from 'vitest';
 
 import type { AuditRecord } from '../../platform/audit/audit-writer.js';
@@ -36,6 +37,15 @@ const SUBJECT = '0199d0a0-0000-7000-8000-0000000000c1';
 const NUMBER = '7K3MQ9TD2XWB8HRN';
 const KEY = 'decision-key-for-the-spec-0001';
 const TX = { tx: 'admin' };
+// 005:T022.
+const BAR = '0199d0a0-0000-7000-8000-0000000000d1';
+const BARRED_ROW = {
+  barId: BAR,
+  student: { userId: STUDENT, displayName: 'مريم' },
+  reason: 'تزوير',
+  barredAt: '2026-11-19T09:00:00.000Z',
+  barredBy: { adminId: ADMIN, displayName: 'أحمد' },
+};
 
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const router = createAdminRouter({ ijazahs: ijazahsAdminRouter });
@@ -105,6 +115,11 @@ function surface({ replayed = false } = {}) {
     rerender: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['rerender', tx, adminId, input]);
       return { certificateNumber: NUMBER, replayed };
+    },
+    // 005:T022.
+    barred: async (tx: unknown, adminId: string, input: unknown) => {
+      reached.push(['barred', tx, adminId, input]);
+      return { items: [{ ...BARRED_ROW, barredByAdminId: ADMIN, liftedAt: null }] };
     },
   };
   const services = new Proxy(unusedAdminServices, {
@@ -176,6 +191,8 @@ const calls = {
     caller.ijazahs.signOff({ ijazahId: IJAZAH, idempotencyKey: KEY }),
   'ijazahs.rerender': (caller: Caller) =>
     caller.ijazahs.rerender({ ijazahId: IJAZAH, reason: 'الخط', idempotencyKey: KEY }),
+  // 005:T022 (B49, Q-P2 (b)).
+  'ijazahs.barred': (caller: Caller) => caller.ijazahs.barred({}),
 } as const;
 
 const writes = ['revoke', 'bar', 'liftBar', 'signOff', 'rerender'] as const;
@@ -329,5 +346,25 @@ describe('ijazahs.signOff and .rerender (FR-629)', () => {
     const s = surface();
     expect(await codeOf(s.verified().ijazahs[name](input as never))).toBe('VALIDATION_FAILED');
     expect(s.reached).toEqual([]);
+  });
+});
+
+// 005:T022 (B49, Q-P2 (b)): the barred list, an administrator read on the default limit.
+describe('ijazahs.barred (FR-610, Q-P2 (b))', () => {
+  it('lists the open bars through the service, audited `ijazah_bars.listed` on the reader', async () => {
+    const s = surface();
+    const page = await s.verified().ijazahs.barred({ cursor: BAR });
+    expect(page).toEqual({ items: [BARRED_ROW] });
+    expect(s.reached).toEqual([['barred', TX, ADMIN, { cursor: BAR }]]);
+    expect(s.written).toEqual([
+      { action: 'ijazah_bars.listed', targetType: 'admin', targetId: ADMIN, adminId: ADMIN },
+    ]);
+  });
+
+  it('refuses a cursor that is not a bar id as VALIDATION_FAILED, reaching nothing', async () => {
+    const s = surface();
+    expect(await codeOf(s.verified().ijazahs.barred({ cursor: 'x' }))).toBe('VALIDATION_FAILED');
+    expect(s.reached).toEqual([]);
+    expect(s.written).toEqual([]);
   });
 });

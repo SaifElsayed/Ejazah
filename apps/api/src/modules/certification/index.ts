@@ -88,8 +88,15 @@ import {
   markRevoked,
   markSignedOff,
   openBarOf,
+  // 005:T022 (B49, Q-P2 (b)): the barred list.
+  openBarPage,
 } from './ijazahs.repository.js';
-import { type IjazahsLog, IjazahsService, type IjazahsStore } from './ijazahs.service.js';
+import {
+  type IjazahsAdminNames,
+  type IjazahsLog,
+  IjazahsService,
+  type IjazahsStore,
+} from './ijazahs.service.js';
 
 /**
  * The request's store: this module's rows and locks, and the reads of booking (the enrollment),
@@ -327,6 +334,8 @@ export const ijazahsStore: IjazahsStore = {
   hasOpenBar,
   markSignedOff,
   markRerendered,
+  // 005:T022 (B49, Q-P2 (b)): the open bars, newest first.
+  openBars: openBarPage,
 };
 
 /** What the ijazahs' service is built over, bound once by `main.ts` through the admin module. */
@@ -338,11 +347,16 @@ export interface IjazahsServiceDependencies {
   readonly log: IjazahsLog;
   /** 005:T032: `render-certificate`, enqueued after a re-render's commit (the approval's queue). */
   readonly renders: RenderQueue;
+  /**
+   * 005:T022 (B49, Q-P2 (b)): the barred list's administrators' names, the admin module's
+   * `readAdministratorNames` (`admin_users` is its table, R-API-6), handed in against the arrows.
+   */
+  readonly adminNames: IjazahsAdminNames;
 }
 
 /**
  * The ijazahs' service (T010): `ijazahs.list`, `.get`, `.revoke`, `.bar`, `.liftBar`; T032 adds
- * `.signOff` and `.rerender`.
+ * `.signOff` and `.rerender`; 005:T022 (B49) adds `.barred`.
  */
 export function createIjazahsService({
   storage,
@@ -350,6 +364,7 @@ export function createIjazahsService({
   idempotency,
   log,
   renders,
+  adminNames,
 }: IjazahsServiceDependencies): IjazahsService {
   return new IjazahsService({
     store: ijazahsStore,
@@ -360,6 +375,7 @@ export function createIjazahsService({
     clock: clockTimestamp,
     log,
     renders,
+    adminNames,
   });
 }
 export type { IjazahsService };

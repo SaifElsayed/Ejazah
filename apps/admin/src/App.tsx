@@ -10,6 +10,7 @@
 //
 // T053: `/payments`, the read-only payments monitor, behind the same guard as every console page.
 // 003:T105: `/payouts`, «تحويلات المعلمين», beside it; `?teacher=` opens one teacher's detail.
+// 005:T022 (B49, Q-X2 (a)): `/ijazah-requests` (`?request=` opens one) and `/ijazahs` (`?ijazah=`).
 //
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
@@ -35,6 +36,8 @@ import { AdminCases } from './pages/cases/AdminCases';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
 import { AdminDisputes } from './pages/disputes/AdminDisputes';
 import { AdminHome } from './pages/home/AdminHome';
+import { AdminIjazahRequests } from './pages/ijazah-requests/AdminIjazahRequests';
+import { AdminIjazahs } from './pages/ijazahs/AdminIjazahs';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
@@ -100,6 +103,9 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path={HOME_PATH} element={<AdminHome />} />
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
+              {/* 005:T022 (B49): the ijazah requests and the ijazahs. */}
+              <Route path="/ijazah-requests" element={<AdminIjazahRequests />} />
+              <Route path="/ijazahs" element={<AdminIjazahs />} />
               <Route path="/payments" element={<AdminPayments />} />
               <Route path="/payouts" element={<AdminPayouts />} />
               <Route path="/sessions" element={<AdminSessions />} />

@@ -9,7 +9,13 @@ import type { Prisma } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockRows } from '../../platform/db/row-lock.js';
-import type { IjazahPageQuery, IjazahRecord, NewIjazahBar } from './ijazahs.service.js';
+import type {
+  IjazahPageQuery,
+  IjazahRecord,
+  NewIjazahBar,
+  OpenBarPageQuery,
+  OpenIjazahBar,
+} from './ijazahs.service.js';
 
 type Client = Pick<Transaction, 'ijazah' | 'ijazahBar'>;
 
@@ -123,6 +129,23 @@ export async function openBarOf(tx: Client, userId: string): Promise<string | nu
     select: { id: true },
   });
   return row?.id ?? null;
+}
+
+/**
+ * 005:T022 (B49, Q-P2 (b)): one page of the open bars (`lifted_at` null), newest first (a bar's id
+ * is a UUIDv7), before `after`. No lock: the read decides nothing. No index is added: the open bars
+ * are few and the read is paged (the note under T022).
+ */
+export function openBarPage(
+  tx: Client,
+  { after, take }: OpenBarPageQuery,
+): Promise<readonly OpenIjazahBar[]> {
+  return tx.ijazahBar.findMany({
+    where: { liftedAt: null, ...(after === undefined ? {} : { id: { lt: after } }) },
+    orderBy: { id: 'desc' },
+    take,
+    select: { id: true, userId: true, reason: true, barredByAdminId: true, barredAt: true },
+  });
 }
 
 /** Writes a bar (FR-610). */

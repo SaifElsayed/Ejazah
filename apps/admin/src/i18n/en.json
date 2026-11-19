@@ -832,7 +832,8 @@
           "effects": {
             "blocked": "No teacher can request an ijazah for them, and open requests are rejected.",
             "kept": "Their issued ijazahs stay valid; revoking one is a separate action.",
-            "listed": "They appear in the barred list on the Ijazahs page, where the bar is lifted."
+            "listed": "They appear in the barred list on the Ijazahs page, where the bar is lifted.",
+            "notApproved": "No teacher can send an ijazah request for them, and an open request of theirs is not approved until the bar is lifted."
           },
           "reasonLabel": "Reason for the bar (required)",
           "title": "Bar {name} from receiving ijazahs"
@@ -947,7 +948,8 @@
             "immutable": "It cannot be edited once issued; revoking it is a separate action with a reason.",
             "issued": "The ijazah is issued now with its number, with the names as entered: grantor {grantor}, grantee {grantee}.",
             "notified": "{teacher} and {student} are notified.",
-            "public": "It appears as valid on the public verification page and in the student’s ijazahs."
+            "public": "It appears as valid on the public verification page and in the student’s ijazahs.",
+            "signOff": "The parties see it only once an administrator opens its rendered PDF and signs it off on the Ijazahs page."
           },
           "notePlaceholder": "e.g. the chain matches the teacher’s verified credential and the names match the documents",
           "subtitle": "{student} · {subject} · riwaya {riwaya} · from {teacher}",
@@ -1032,6 +1034,15 @@
           "reasonLabel": "What the teacher must provide (required)",
           "title": "Request another document from {teacher}"
         },
+        "rerenderIjazah": {
+          "confirm": "Render again",
+          "effects": {
+            "notShown": "The parties still do not see it until it is signed off.",
+            "rendered": "The certificate is rendered again from its frozen record, and shows as being prepared until then."
+          },
+          "reasonLabel": "Reason for rendering again (required)",
+          "title": "Render ijazah {code} again"
+        },
         "saveCredentialCorrection": {
           "confirm": "Save the correction",
           "effects": {
@@ -1041,6 +1052,14 @@
           },
           "reasonLabel": "Reason for the correction (required)",
           "title": "Save the correction to {teacher}’s chain"
+        },
+        "signOffIjazah": {
+          "confirm": "Sign off",
+          "effects": {
+            "final": "Final: nothing changes the certificate after it; revoking it stays possible, with a reason.",
+            "shown": "Both parties see the certificate, and its PDF is served to them."
+          },
+          "title": "Sign off ijazah {code}"
         },
         "suspendDisputeParty": {
           "confirm": "Suspend the account",
@@ -1637,6 +1656,7 @@
     "ijazahRequests": {
       "columns": {
         "completion": "Completion",
+        "standing": "Teacher's standing",
         "status": "Status",
         "subjectRiwaya": "Subject and riwaya",
         "submitted": "Submitted",
@@ -1646,9 +1666,11 @@
         "a11y": "Request details",
         "a11yCertificate": "The certificate as it will be issued",
         "approve": "Approve and issue",
+        "barTitle": "Barring the student from ijazahs",
         "certificateName": "Student's name on the ijazah",
         "certificateNameMeta": "Entered by the student {date}",
         "chainNote": "The chain ({generations}) comes from the teacher's verified ijazah, and is not edited here.",
+        "chainTitle": "Chain",
         "checks": {
           "credentialVerified": "The teacher's {subject} ijazah is verified",
           "notBarred": "The student is not barred from receiving ijazahs",
@@ -1660,10 +1682,18 @@
         "enrollmentValue": "{subject} · {sessions} · completed {date}",
         "footer": "On approval the ijazah is issued with its number, and a notification reaches the teacher and the student. Your decision is recorded under your name in the audit log.",
         "language": "Certificate language",
+        "noCertificateName": "The student has not entered their name on the ijazah yet.",
+        "openIjazah": "Open the ijazah",
         "reject": "Reject",
+        "rejectionReason": "Reason for rejection: {reason}",
+        "signature": "Teacher's signature",
+        "signatureErased": "The signature's copy is erased: the request is closed.",
+        "standing": "Teacher's standing now",
+        "standingReason": "Reason: {reason}",
         "student": "Student",
         "subject": "Subject",
         "subjectValue": "{subject} · {riwaya} · via {tariq}",
+        "subjectValueNoTariq": "{subject} · {riwaya}",
         "subtitle": "From {teacher} · {date} · {time}",
         "teacher": "Teacher",
         "title": "Ijazah request · {student}",
@@ -1674,15 +1704,34 @@
         "text": "Every request has been decided. Each request a teacher sends for their student appears here.",
         "title": "No open ijazah requests"
       },
+      "explain": "The teacher requests the ijazah for their student, and it is issued on your approval.",
       "issuedOn": "Issued · {date}",
       "lede": "{count, plural, one {# request awaits a decision} other {# requests await a decision}}. The teacher requests the ijazah for their student, and it is issued on your approval.",
       "ledeEmpty": "No requests await a decision now. The teacher requests the ijazah for their student, and it is issued on your approval.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "pair": "{teacher} to {student}",
+      "refused": {
+        "notFound": "This request was not found.",
+        "notPending": "This request was already decided, so nothing changed. Open it again to see its decision.",
+        "studentBarred": "The student is barred from receiving ijazahs, so nothing was issued. Lift the bar first if it is mistaken."
+      },
       "rejectedOn": "Rejected · {date}",
       "search": {
         "label": "Search",
         "placeholder": "Teacher or student name"
+      },
+      "standing": {
+        "active": "Active",
+        "banned": "Banned",
+        "deleted": "Account deleted",
+        "revoked": "Approval revoked",
+        "suspended": "Suspended",
+        "verificationRequired": "Awaiting proof of identity"
+      },
+      "status": {
+        "awaitingStudentName": "Awaiting the student's name",
+        "closed": "Closed"
       },
       "tabs": {
         "all": "All",
@@ -1692,8 +1741,12 @@
       "title": "Ijazah requests"
     },
     "ijazahs": {
+      "audit": {
+        "barsListed": "View the students barred from ijazahs"
+      },
       "barred": {
         "a11y": "Barred from receiving ijazahs",
+        "heading": "Barred from receiving ijazahs",
         "lift": "Lift the bar",
         "meta": "Since {date} · {admin} · reason: {reason}",
         "note": "No ijazah request is sent for a barred student. Lifting the bar also asks for a reason, and the bar and its lifting stay in the audit log.",
@@ -1705,6 +1758,7 @@
       },
       "columns": {
         "certificateNo": "Certificate number",
+        "issued": "Issued",
         "parties": "Student and teacher",
         "request": "Request",
         "status": "Status"
@@ -1714,12 +1768,19 @@
         "bar": "Bar from receiving ijazahs",
         "chainEllipsis": "… {generations}",
         "chainTitle": "Chain · {generations} · via {tariq}",
+        "chainTitleNoTariq": "Chain · {generations}",
+        "completionDate": "Completion date",
         "footer": "Revocation does not bar the student from later ijazahs; barring is a separate action. Every action here asks for a reason and is recorded in the audit log.",
         "grantor": "Grantor",
         "issued": "Issued {date} · approved by {admin}",
+        "language": "Certificate language",
+        "openRequest": "Open the request",
         "request": "Request",
         "requestValue": "Sent by the teacher {date}",
+        "rerender": "Render again",
         "revoke": "Revoke ijazah",
+        "revokedReason": "Reason for revocation: {reason}",
+        "signOff": "Sign off",
         "student": "Student",
         "subtitle": "{subject} · riwaya {riwaya}",
         "verifyPage": "Public verification page",
@@ -1729,16 +1790,49 @@
         "text": "Try another number or name, or remove a filter.",
         "title": "No ijazahs match the search"
       },
+      "emptyTab": {
+        "text": "Each ijazah in this state appears here.",
+        "title": "No ijazahs here"
+      },
+      "explain": "Every ijazah was issued at its teacher’s request; those waiting for sign-off come first. An ijazah is revoked, never deleted.",
       "issuedCell": "{subject} · issued {date}",
       "lede": "Every ijazah was issued at its teacher's request. An ijazah is revoked, never deleted, and its number keeps showing its status on the verification page.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "partiesCell": "{student} from {teacher}",
+      "pdf": {
+        "notRendered": "The certificate is not rendered yet: it is being prepared. It shows here once rendered, and neither party sees it before your sign-off.",
+        "title": "The certificate as rendered"
+      },
+      "refused": {
+        "alreadyBarred": "This student is already barred from receiving ijazahs, so nothing changed.",
+        "alreadyRevoked": "This ijazah was already revoked, so nothing changed.",
+        "alreadySignedOff": "This ijazah was already signed off, and nothing changes after the sign-off.",
+        "notBarred": "This student is not barred from receiving ijazahs, so there is no bar to lift.",
+        "notFound": "This ijazah or this account was not found.",
+        "notRendered": "The certificate is not rendered yet, and what was not opened is not signed off. Wait for it to render, open it, then sign it off.",
+        "revoked": "This ijazah is revoked, so it is neither signed off nor rendered again.",
+        "studentBarred": "The student is barred from receiving ijazahs, so it was not signed off. Lift the bar if it is mistaken, or revoke the ijazah."
+      },
       "requestCell": "Requested {date}",
       "requestsLink": "Ijazah requests · {count}",
       "revokedOn": "Revoked · {date}",
       "search": {
         "label": "Search",
         "placeholder": "Certificate number or student name"
+      },
+      "status": {
+        "preparing": "Being prepared",
+        "rendered": "Waiting for sign-off",
+        "signedOff": "Signed off"
+      },
+      "tabs": {
+        "all": "All",
+        "barred": "Barred",
+        "preparing": "Being prepared",
+        "revoked": "Revoked",
+        "signedOff": "Signed off",
+        "waitingSignOff": "Waiting for sign-off"
       },
       "title": "Ijazahs"
     },
