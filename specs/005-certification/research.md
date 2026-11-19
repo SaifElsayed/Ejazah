@@ -223,7 +223,7 @@ alternatives, and the code it stands on (read on `d1cefb45`). The owner answered
     audited with before and after).
   - `settings.update` writes through a new `settings.repository` writer, a lift of R-PROC-11's «this file reads it
     and never writes it», so the admin module's repository gains the one writer.
-  - The panel's catalogue (`apps/admin/src/i18n/*.json`, `settings`, :2155-2255) already holds the labels.
+  - The panel's catalogue (`apps/admin/src/i18n/*.json`, `settings`, :2320-2420) already holds the labels.
 - **Rationale.** FR-ADMIN-9. No registry with bounds exists: each key's schema lives at its read site.
 - **Who builds it.** A «light item»: either track, on the owner's word by name (`tracks-coordination.md` §2).
 
