@@ -35,6 +35,14 @@ export const S3_CONNECTION_TIMEOUT_MS = 800;
 export const S3_REQUEST_TIMEOUT_MS = 1_200;
 /** How many attempts one call makes at most: the first and one retry. */
 export const S3_MAX_ATTEMPTS = 2;
+// The owner's Q-A2 (a), 2026-11-19: a `put` passes its own request timeout with the call. The
+// request timer is total, not idle (@smithy/node-http-handler 4.12.1, `setRequestTimeout`: one
+// timer from the request's start to the answer's headers), so it must cover sending the whole
+// body. Uploads reach S3 from the API (multipart to the API, then `storage.put`), so the phone's
+// own link is not under this timeout, only the API's link to S3. The bound is a 10 MiB file
+// (`upload_max_bytes`, 10,485,760). `remove` and `exists`, the purge's calls, keep 1,200 ms.
+/** How long one `put` attempt may take, from its start to the answer's headers. */
+export const S3_PUT_REQUEST_TIMEOUT_MS = 30_000;
 
 export interface S3ClientOptions {
   readonly endpoint: string;
@@ -80,6 +88,7 @@ export class S3StorageAdapter implements StoragePort {
         ContentType: contentType,
         ServerSideEncryption: 'AES256',
       }),
+      { requestTimeout: S3_PUT_REQUEST_TIMEOUT_MS },
     );
   }
 

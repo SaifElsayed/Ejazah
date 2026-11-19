@@ -11,6 +11,7 @@ import {
   createS3Client,
   S3_CONNECTION_TIMEOUT_MS,
   S3_MAX_ATTEMPTS,
+  S3_PUT_REQUEST_TIMEOUT_MS,
   S3_REQUEST_TIMEOUT_MS,
   S3StorageAdapter,
 } from './s3.adapter.js';
@@ -125,5 +126,25 @@ describe('the remote storage ends every call in bounded time (T147)', () => {
         (S3_MAX_ATTEMPTS - 1) * worstBackoffMs +
         rowDeleteShareMs,
     ).toBeLessThan(purgeTransactionMs);
+  });
+
+  // The owner's Q-A2 (a), 2026-11-19: an upload of up to 10 MiB takes longer than the client's
+  // 1,200 ms, so `put` alone passes its own timeout with the call; `remove` and `exists`, the
+  // purge's calls, keep the client's.
+  it('gives a put its own 30 s, and leaves remove and exists on the client’s timeout', async () => {
+    const options: unknown[] = [];
+    const built = client();
+    built.send = ((_command: unknown, callOptions?: unknown) => {
+      options.push(callOptions);
+      return Promise.resolve({});
+    }) as S3Client['send'];
+    const adapter = new S3StorageAdapter(built, 'documents');
+
+    await adapter.put('documents/a.pdf', new Uint8Array([1]), 'application/pdf');
+    await adapter.remove('documents/a.pdf');
+    await adapter.exists('documents/a.pdf');
+
+    expect(S3_PUT_REQUEST_TIMEOUT_MS).toBe(30_000);
+    expect(options).toEqual([{ requestTimeout: S3_PUT_REQUEST_TIMEOUT_MS }, undefined, undefined]);
   });
 });
