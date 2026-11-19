@@ -195,6 +195,10 @@ import type {
   adminGenderFlagsListInput,
   adminGenderFlagsListOutput,
   adminGenderFlagsRaiseInput,
+  // 005:T024 (B49): the settings page's list and change.
+  adminSettingsListOutput,
+  adminSettingsUpdateInput,
+  adminSettingsUpdateOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -1015,6 +1019,20 @@ export interface AdminSurfaceServices {
       readonly from: Gender;
       readonly to: Gender;
       readonly accountStatus: string;
+      readonly replayed: boolean;
+    }>;
+  };
+  /** 005:T024 (B49; FR-624; R-410): the panel's settings, the admin module's, on the kind's transaction. */
+  readonly settings: {
+    list(tx: Transaction, adminId: string): Answer<typeof adminSettingsListOutput>;
+    update(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminSettingsUpdateInput>,
+    ): Promise<{
+      readonly key: string;
+      readonly before: z.input<typeof adminSettingsUpdateOutput>['value'];
+      readonly after: z.input<typeof adminSettingsUpdateOutput>['value'];
       readonly replayed: boolean;
     }>;
   };

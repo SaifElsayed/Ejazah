@@ -2846,6 +2846,93 @@
           }
         }
       },
+      "settings.list": {
+        "input": { "$": { "type": "unknown" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].bounds": { "required": true, "type": "object" },
+          "$.items[].bounds.each": { "required": true, "type": "object" },
+          "$.items[].bounds.each.max": { "required": true, "type": "null|number" },
+          "$.items[].bounds.each.min": { "required": true, "type": "number" },
+          "$.items[].bounds.each.minExclusive": { "required": true, "type": "boolean" },
+          "$.items[].bounds.limit": { "required": true, "type": "object" },
+          "$.items[].bounds.limit.max": { "required": true, "type": "null|number" },
+          "$.items[].bounds.limit.min": { "required": true, "type": "number" },
+          "$.items[].bounds.limit.minExclusive": { "required": true, "type": "boolean" },
+          "$.items[].bounds.shape": {
+            "required": true,
+            "type": "string",
+            "values": ["list", "number", "rate_limit", "text"]
+          },
+          "$.items[].bounds.value": { "required": true, "type": "object" },
+          "$.items[].bounds.value.max": { "required": true, "type": "null|number" },
+          "$.items[].bounds.value.min": { "required": true, "type": "number" },
+          "$.items[].bounds.value.minExclusive": { "required": true, "type": "boolean" },
+          "$.items[].bounds.windowSeconds": { "required": true, "type": "object" },
+          "$.items[].bounds.windowSeconds.max": { "required": true, "type": "null|number" },
+          "$.items[].bounds.windowSeconds.min": { "required": true, "type": "number" },
+          "$.items[].bounds.windowSeconds.minExclusive": { "required": true, "type": "boolean" },
+          "$.items[].group": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "accounts",
+              "admin",
+              "booking",
+              "general",
+              "notifications",
+              "rateLimits",
+              "sessions"
+            ]
+          },
+          "$.items[].key": { "required": true, "type": "string" },
+          "$.items[].srsRow": { "required": true, "type": "string" },
+          "$.items[].unit": {
+            "required": true,
+            "type": "string",
+            "values": [
+              "bytes",
+              "count",
+              "days",
+              "hours",
+              "minutes",
+              "percent",
+              "rate_limit",
+              "seconds",
+              "version",
+              "weeks"
+            ]
+          },
+          "$.items[].value": {
+            "required": true,
+            "type": "array|boolean|null|number|object|string"
+          },
+          "$.items[].value.*": { "type": "recursive" },
+          "$.items[].value[]": { "type": "recursive" }
+        }
+      },
+      "settings.update": {
+        "input": {
+          "$": { "type": "object" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.key": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" },
+          "$.value": { "required": true, "type": "array|boolean|null|number|object|string" },
+          "$.value.*": { "type": "recursive" },
+          "$.value[]": { "type": "recursive" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.key": { "required": true, "type": "string" },
+          "$.value": { "required": true, "type": "array|boolean|null|number|object|string" },
+          "$.value.*": { "type": "recursive" },
+          "$.value[]": { "type": "recursive" }
+        }
+      },
       "students.ban": {
         "input": {
           "$": { "type": "object" },
