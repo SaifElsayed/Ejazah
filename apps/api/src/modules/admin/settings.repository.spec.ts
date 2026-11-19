@@ -20,19 +20,26 @@
 // administrator, and its `setting.changed` row carries the reason, before and after; the same key
 // again writes nothing more; a value outside the registry's bounds changes nothing and writes no
 // row; two changes of one key at once, the second reads the first's value as «before». The two keys
-// it may change are restored in its own teardown; its administrators, audit rows and idempotency
-// keys stay, as every committed probe's do (the audit log is append-only).
+// it reads are planted where no row holds them (`plantSettings`: CI migrates and never seeds),
+// restored in its own teardown, and deleted there if it planted them; its other administrators,
+// audit rows and idempotency keys stay, as every committed probe's do (the audit log is
+// append-only).
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { AuditWriter } from '../../platform/audit/audit-writer.js';
 import { ColumnCipher } from '../../platform/crypto/encryption.js';
-import { closeDatabase, type Transaction } from '../../platform/db/prisma.repository.js';
+import {
+  closeDatabase,
+  type Database,
+  type Transaction,
+} from '../../platform/db/prisma.repository.js';
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
 import { IdempotencyRepository } from '../../platform/idempotency/idempotency.repository.js';
 import { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import { createLogger } from '../../platform/logging/logger.js';
+import { SETTINGS_REGISTRY } from '../../platform/settings/registry.js';
 import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
 import { type AdminSurfaceServices, createAdminContext } from '../../surfaces/context.js';
 import {
@@ -76,6 +83,44 @@ async function stored(tx: Transaction, key: string, value: number, adminId: stri
     create: { key, value, updatedByAdminId: adminId },
     update: { value },
   });
+}
+
+/**
+ * The rows `keys` names, planted where none holds them: CI migrates its database and never seeds
+ * it (`.github/workflows/ci.yml:115`; CI run 44507509934; #150 Saif r1, Major 1). Each key is
+ * upserted create-only (`update: {}`) at the registry's default, named to an administrator
+ * `administrator` commits, so a row already there is never changed; a row naming that
+ * administrator is one this run created. `remove` deletes only those rows, then that administrator
+ * once no row names it.
+ */
+async function plantSettings(
+  database: Database,
+  keys: readonly string[],
+  administrator: () => Promise<string>,
+): Promise<{ remove(): Promise<void> }> {
+  const planter = await administrator();
+  const created: string[] = [];
+  for (const key of keys) {
+    const entry = SETTINGS_REGISTRY[key];
+    if (entry === undefined) throw new Error(`No registry entry to plant ${key} at`);
+    const { updatedByAdminId } = await database.setting.upsert({
+      where: { key },
+      create: { key, value: entry.default, updatedByAdminId: planter },
+      update: {},
+      select: { updatedByAdminId: true },
+    });
+    if (updatedByAdminId === planter) created.push(key);
+  }
+  return {
+    async remove() {
+      if (created.length > 0) {
+        await database.setting.deleteMany({ where: { key: { in: created } } });
+      }
+      if ((await database.setting.count({ where: { updatedByAdminId: planter } })) === 0) {
+        await database.adminUser.delete({ where: { id: planter } });
+      }
+    },
+  };
 }
 
 function everyRow(tx: Transaction) {
@@ -222,13 +267,14 @@ describe(
   'settings.update through the administrator surface over the real tables (005:T024)',
   { tags: ['database'] },
   () => {
-    /** A seeded key no other probe changes; its schema is a whole number from 1. */
+    /** A key no other probe changes; its schema is a whole number from 1. */
     const KEY = REGISTERED;
-    /** A seeded key whose bound is not its schema's: a percent, at most 100 (the registry). */
+    /** A key whose bound is not its schema's: a percent, at most 100 (the registry). */
     const BOUNDED_KEY = 'attendance_threshold_pct';
     const REASON = 'تعديل للاختبار';
     const database = openSpecDatabase();
     const originals = new Map<string, { value: unknown; updatedByAdminId: string }>();
+    let planted: { remove(): Promise<void> } | undefined;
     const log = createLogger({ level: 'info', destination: { write: () => undefined } });
     const callerFor = createAdminCallerFactory(
       createAdminRouter({ settings: settingsAdminRouter }),
@@ -242,21 +288,26 @@ describe(
       });
 
     beforeAll(async () => {
+      planted = await plantSettings(database, [KEY, BOUNDED_KEY], committedAdministrator);
       for (const key of [KEY, BOUNDED_KEY]) originals.set(key, await rowOf(key));
     });
 
     afterAll(async () => {
       // Restored even where a case was refused, so a mutant that writes leaves nothing behind; a
-      // row left as it was is not touched, so its `updated_at` stays too.
-      for (const [key, { value, updatedByAdminId }] of originals) {
-        const now = await rowOf(key);
-        if (now.value === value && now.updatedByAdminId === updatedByAdminId) continue;
-        await database.setting.update({
-          where: { key },
-          data: { value: value as number, updatedByAdminId },
-        });
+      // row left as it was is not touched, so its `updated_at` stays too. Then the planted rows go.
+      try {
+        for (const [key, { value, updatedByAdminId }] of originals) {
+          const now = await rowOf(key);
+          if (now.value === value && now.updatedByAdminId === updatedByAdminId) continue;
+          await database.setting.update({
+            where: { key },
+            data: { value: value as number, updatedByAdminId },
+          });
+        }
+        await planted?.remove();
+      } finally {
+        await closeDatabase(database);
       }
-      await closeDatabase(database);
     });
 
     async function committedAdministrator(): Promise<string> {

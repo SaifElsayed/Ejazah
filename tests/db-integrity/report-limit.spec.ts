@@ -10,7 +10,9 @@
 // and the limiter's first refusal is logged with ids only. The settings reader here reads the table
 // (the admin module's reader is out of this file's reach, R-API-4); the counter's key is the
 // subject's HMAC under a key drawn for this file, so no earlier run's count is met, and it expires
-// with its window. Its rows are committed, accounts of its own; nothing is deleted.
+// with its window. Its rows are committed, accounts of its own; nothing is deleted but what
+// `plantSettings` planted: the settings rows it reads, where no row held them (CI migrates and
+// never seeds; CI run 44507509934), and their administrator.
 //
 // Red first under the mutant «the report limit's key is `rate_limit_ijazah_request`» (ten an hour)
 // in `reports.router.ts`: the sixth report is received (lane H's `runs\lane-h\`).
@@ -28,8 +30,12 @@ import {
   rateLimitSetting,
 } from '../../apps/api/src/platform/guards/rate-limit.guard';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
-import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
+import {
+  IDEMPOTENCY_RETENTION_SETTING,
+  IdempotencyService,
+} from '../../apps/api/src/platform/idempotency/idempotency.service';
 import { createLogger } from '../../apps/api/src/platform/logging/logger';
+import { SETTINGS_REGISTRY } from '../../apps/api/src/platform/settings/registry';
 import {
   SettingError,
   type SettingsReader,
@@ -58,14 +64,58 @@ const REPORT_LIMIT_KEY = 'rate_limit_user_report';
 const REASON = 'كلام غير لائق';
 
 let database: Database;
+let planted: { remove(): Promise<void> } | undefined;
 const lines: string[] = [];
 
-beforeAll(() => {
+/**
+ * The rows `keys` names, planted where none holds them: CI migrates its database and never seeds
+ * it (`.github/workflows/ci.yml:115`; CI run 44507509934; #150 Saif r1, Major 1). Each key is
+ * upserted create-only (`update: {}`) at the registry's default, named to an administrator of this
+ * file's own, so a row already there is never changed; a row naming that administrator is one this
+ * run created. `remove` deletes only those rows, then that administrator once no row names it.
+ */
+async function plantSettings(keys: readonly string[]): Promise<{ remove(): Promise<void> }> {
+  const planter = await worldOn(database as unknown as Transaction).admin();
+  const created: string[] = [];
+  for (const key of keys) {
+    const entry = SETTINGS_REGISTRY[key];
+    if (entry === undefined) throw new Error(`No registry entry to plant ${key} at`);
+    const { updatedByAdminId } = await database.setting.upsert({
+      where: { key },
+      create: { key, value: entry.default, updatedByAdminId: planter },
+      update: {},
+      select: { updatedByAdminId: true },
+    });
+    if (updatedByAdminId === planter) created.push(key);
+  }
+  return {
+    async remove() {
+      if (created.length > 0) {
+        await database.setting.deleteMany({ where: { key: { in: created } } });
+      }
+      if ((await database.setting.count({ where: { updatedByAdminId: planter } })) === 0) {
+        await database.adminUser.delete({ where: { id: planter } });
+      }
+    },
+  };
+}
+
+beforeAll(async () => {
   database = openSpecDatabase();
+  // Every key `tableSettings` is asked for on this path: the limit the router declares (the
+  // limiter's only read, `rate-limit.guard.ts:263`; the signed-in default is not read for a
+  // procedure that declares its own, `procedures.ts:590-592`) and the retention the idempotency
+  // service reads (`idempotency.service.ts:215`, `:273`).
+  planted = await plantSettings([REPORT_LIMIT_KEY, IDEMPOTENCY_RETENTION_SETTING]);
 });
 
 afterAll(async () => {
-  if (database !== undefined) await closeDatabase(database);
+  if (database === undefined) return;
+  try {
+    await planted?.remove();
+  } finally {
+    await closeDatabase(database);
+  }
 });
 
 function redisUrl(): string {
