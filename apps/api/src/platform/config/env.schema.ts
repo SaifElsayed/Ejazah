@@ -483,6 +483,17 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     }
   }
 
+  // 002:T147 (M6): local storage writes the documents and certificates to disk as plaintext, with
+  // no encryption at rest, so it is refused where the stand-ins are; the default stays `local`.
+  if (!standInsAllowed && env.STORAGE_DRIVER === 'local') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['STORAGE_DRIVER'],
+      message:
+        'local storage writes the files to disk as plaintext; refused outside development and test, set STORAGE_DRIVER=s3 (T147)',
+    });
+  }
+
   // T023: a reserved address is for development and test only; the key is named, never the value.
   if (!standInsAllowed) {
     for (const key of addressKeys) {

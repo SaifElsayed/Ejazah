@@ -137,6 +137,58 @@ describe('env.schema (T015, FR-039)', () => {
     },
   );
 
+  // 002:T147 (M6): local storage writes the PDFs to disk as plaintext, so it is refused outside
+  // development and test as the stand-ins are, with its own message; the default stays `local`, so
+  // a configuration that names no driver is refused there too.
+  it('refuses STORAGE_DRIVER=local, named or by default, in every mode but development and test, with its own message (T147)', () => {
+    for (const nodeEnv of modesOutsideDevelopmentAndTest) {
+      for (const env of [
+        { ...validEnv, NODE_ENV: nodeEnv },
+        without({ ...validEnv, NODE_ENV: nodeEnv }, 'STORAGE_DRIVER'),
+      ]) {
+        let failure: unknown;
+        try {
+          loadConfig(env);
+        } catch (error: unknown) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(ConfigError);
+        expect((failure as ConfigError).offendingKeys).toContain('STORAGE_DRIVER');
+        expect((failure as ConfigError).message).toMatch(
+          /STORAGE_DRIVER \(local storage writes the files to disk as plaintext/,
+        );
+      }
+    }
+  });
+
+  it('takes STORAGE_DRIVER=local in development and test, and s3 with its keys in every mode (T147)', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).STORAGE_DRIVER).toBe('local');
+      expect(
+        loadConfig(without({ ...validEnv, NODE_ENV: nodeEnv }, 'STORAGE_DRIVER')).STORAGE_DRIVER,
+      ).toBe('local');
+    }
+    const s3 = {
+      STORAGE_DRIVER: 's3',
+      S3_ENDPOINT: 'https://s3.storage-placeholder.example.net',
+      S3_BUCKET: 'ijazah-placeholder',
+      S3_REGION: 'eu-west-3',
+      S3_ACCESS_KEY_ID: 'AKIAPLACEHOLDER',
+      S3_SECRET_ACCESS_KEY: 'secret-placeholder',
+    };
+    for (const nodeEnv of ['development', 'test', ...modesOutsideDevelopmentAndTest]) {
+      let offending: readonly string[] = [];
+      try {
+        expect(loadConfig({ ...validEnv, ...s3, NODE_ENV: nodeEnv }).STORAGE_DRIVER).toBe('s3');
+      } catch (error: unknown) {
+        if (!(error instanceof ConfigError)) throw error;
+        // Production also refuses the other ports' stand-ins (T153); none of them is storage's.
+        offending = error.offendingKeys;
+      }
+      for (const key of Object.keys(s3)) expect(offending, nodeEnv).not.toContain(key);
+    }
+  });
+
   // T168 (review finding SEC-1): a configuration copied onto a server without NODE_ENV used to
   // default to development, where every stand-in is accepted. There is no default now.
   it('refuses a configuration without NODE_ENV, naming it, and one naming a mode it does not know', () => {

@@ -280,7 +280,10 @@ membership in the owner role.
 `STORAGE_DRIVER=s3`) and restart. No code change; every adapter is chosen in
 `platform/ports/ports.module.ts`, including the payment gateway adapter
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
-and confirms enrollments from signed webhooks (ADR 0007).
+and confirms enrollments from signed webhooks (ADR 0007). Storage is `local`
+by default, which writes the documents to disk as plaintext: outside
+development and test it is refused at startup, naming `STORAGE_DRIVER` (002:T147),
+so a hosted server sets `STORAGE_DRIVER=s3` with the five `S3_*` values.
 
 **Switch the payment mode to live** (003:T109; SRS DEC-87, ADR 0025 D7) —
 `PAYMENT_MODE` is required, `test` or `live`. In `test`, the closed test's
