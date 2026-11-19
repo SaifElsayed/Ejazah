@@ -44,6 +44,11 @@ import {
   type UploadKind,
   uploadMaxBytes,
 } from '../platform/guards/upload.middleware.js';
+import {
+  logProxyFallback,
+  readClientAddress,
+  type TrustedProxy,
+} from '../platform/http/client-address.js';
 import { firstFileOf } from '../platform/http/multipart.js';
 import type { LiveBus } from '../platform/live/live-bus.js';
 import { type LivePublisher, RequestLive, unboundBus } from '../platform/live/live-publisher.js';
@@ -52,7 +57,6 @@ import type { NodeHandler } from '../platform/web/route.js';
 import {
   type AccountStatus,
   bearerOf,
-  clientAddressOf,
   type Role,
   type SessionResolver,
   type TeacherStanding,
@@ -69,7 +73,8 @@ export interface UploadRouteDependencies {
   /** T020's kinds guard: the settings reader and the limiter. */
   readonly guard: UploadGuard;
   readonly log: Logger;
-  readonly trustedProxyHeader?: string;
+  /** `TRUSTED_PROXY` and `TRUSTED_PROXY_ADDRESS`, when set (T017, T147). */
+  readonly trustedProxy?: TrustedProxy;
   /**
    * The process's live bus (T063 of specs/004-sessions): what a handler adds to its upload's
    * after-commit list is sent once the handler has resolved, its transaction committed, and nothing
@@ -191,16 +196,17 @@ function declaredLengthOf(request: IncomingMessage): number | undefined {
 }
 
 export function uploadRoute<TKind extends UploadKind>(
-  { sessions, guard, log, trustedProxyHeader, live }: UploadRouteDependencies,
+  { sessions, guard, log, trustedProxy, live }: UploadRouteDependencies,
   route: UploadRoute<TKind>,
 ): NodeHandler {
   return (request, response) => {
     const correlationId = randomUUID();
-    const clientAddress = clientAddressOf(
+    const { address: clientAddress, fallback } = readClientAddress(
       { remoteAddress: request.socket.remoteAddress, headers: request.headers },
-      trustedProxyHeader,
+      trustedProxy,
     );
     const requestLog = requestLogger(log, correlationId).child({ clientAddress });
+    logProxyFallback(requestLog, fallback);
     const afterCommit = new RequestLive(live ?? unboundBus, requestLog);
     // T038: what the route's refusal hook is handed, once the caller and the fields are known.
     let heard: RefusedUpload | undefined;

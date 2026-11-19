@@ -7,7 +7,13 @@ import {
   S3ServiceException,
 } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
-import { createS3Client, S3StorageAdapter } from './s3.adapter.js';
+import {
+  createS3Client,
+  S3_CONNECTION_TIMEOUT_MS,
+  S3_MAX_ATTEMPTS,
+  S3_REQUEST_TIMEOUT_MS,
+  S3StorageAdapter,
+} from './s3.adapter.js';
 
 function recorded(answer: (command: unknown) => Promise<unknown> = () => Promise.resolve({})): {
   client: S3Client;
@@ -73,5 +79,51 @@ describe('the remote storage (T116, FR-055)', () => {
     await expect(new S3StorageAdapter(denied.client, 'documents').exists('a.pdf')).rejects.toBe(
       forbidden,
     );
+  });
+});
+
+// 002:T147 (M7): the built client's own configuration, read without a request. The HTTP handler
+// resolves its options behind a promise it keeps privately (@smithy/node-http-handler 4.12.1), so
+// the spec awaits that promise; the retry count is the client's resolved provider.
+describe('the remote storage ends every call in bounded time (T147)', () => {
+  const client = (): S3Client =>
+    createS3Client({
+      endpoint: 'http://127.0.0.1:9',
+      region: 'eu-central-1',
+      accessKeyId: 'adapter-test',
+      secretAccessKey: 'adapter-test',
+    });
+
+  /** The handler's resolved options, as it applies them to every attempt. */
+  async function handlerOptions(built: S3Client): Promise<Record<string, unknown>> {
+    const handler = built.config.requestHandler as unknown as {
+      readonly configProvider: Promise<Record<string, unknown>>;
+    };
+    return handler.configProvider;
+  }
+
+  it('abandons a connection and an attempt at their timeouts, and fails on the attempt’s rather than warn', async () => {
+    const options = await handlerOptions(client());
+    expect(options['connectionTimeout']).toBe(S3_CONNECTION_TIMEOUT_MS);
+    expect(options['requestTimeout']).toBe(S3_REQUEST_TIMEOUT_MS);
+    expect(options['throwOnRequestTimeout']).toBe(true);
+  });
+
+  it('makes S3_MAX_ATTEMPTS attempts at most, fewer than the SDK’s default three', async () => {
+    expect(await client().config.maxAttempts()).toBe(S3_MAX_ATTEMPTS);
+    expect(S3_MAX_ATTEMPTS).toBeLessThan(3);
+  });
+
+  it('keeps every attempt and the backoff inside the purge transaction’s 5 s, the row’s delete given its rest', () => {
+    // Prisma's interactive transaction ends after 5,000 ms by default; `transaction.repository.ts`
+    // sets no other. The SDK's standard retry waits at most 500 ms once (after throttling).
+    const purgeTransactionMs = 5_000;
+    const worstBackoffMs = 500;
+    const rowDeleteShareMs = 300;
+    expect(
+      S3_MAX_ATTEMPTS * (S3_CONNECTION_TIMEOUT_MS + S3_REQUEST_TIMEOUT_MS) +
+        (S3_MAX_ATTEMPTS - 1) * worstBackoffMs +
+        rowDeleteShareMs,
+    ).toBeLessThan(purgeTransactionMs);
   });
 });

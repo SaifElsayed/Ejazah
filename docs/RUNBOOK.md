@@ -280,7 +280,10 @@ membership in the owner role.
 `STORAGE_DRIVER=s3`) and restart. No code change; every adapter is chosen in
 `platform/ports/ports.module.ts`, including the payment gateway adapter
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
-and confirms enrollments from signed webhooks (ADR 0007).
+and confirms enrollments from signed webhooks (ADR 0007). Storage is `local`
+by default, which writes the documents to disk as plaintext: outside
+development and test it is refused at startup, naming `STORAGE_DRIVER` (002:T147),
+so a hosted server sets `STORAGE_DRIVER=s3` with the five `S3_*` values.
 
 **Switch the payment mode to live** (003:T109; SRS DEC-87, ADR 0025 D7) —
 `PAYMENT_MODE` is required, `test` or `live`. In `test`, the closed test's
@@ -399,6 +402,65 @@ it, and not time it out between two reads in less than the ping.
   the process's working set, 500 streams of one account, no event sent): 200,528 KiB
   before, 273,252 KiB with the streams open, 214,904 KiB after they closed: about
   145 KiB per stream, above the 100 KB assumed until then.
+
+## Hosted deploy
+
+What 002:T147 asks of every hosted server (staging and production, from the
+deploy days of 12/1 to 12/5). The configuration refuses a server that misses
+the first two at startup, naming the key.
+
+**Storage** — `STORAGE_DRIVER=s3` with the five `S3_*` values. `local` writes
+the files to disk as plaintext and is refused outside development and test.
+
+**The proxy and the client's address** — one proxy (Caddy, below) stands in
+front of the API, and the API's port is reachable through the proxy only (the
+note under T018): bind the API to the private network or to `127.0.0.1`, and
+let no firewall rule open its port to the internet. Then set both keys:
+
+- `TRUSTED_PROXY=X-Forwarded-For`, the header Caddy's `reverse_proxy` sends
+  with the client's address as its last hop;
+- `TRUSTED_PROXY_ADDRESS`, the proxy's own IP address as the API's socket
+  sees it: `127.0.0.1` when Caddy runs on the same machine, the proxy
+  container's address on a Docker network (give it a fixed one in the compose
+  file). The API refuses `TRUSTED_PROXY` without it.
+
+The header is then read only from that address, and its last hop only when it
+is an IP address; any other peer, or a last hop that is not an address, counts
+as the socket's own address, and the request logs once at warn, «The trusted
+proxy's header was set aside for the socket's peer», with `reason`
+`peer_not_proxy` or `hop_not_an_address`. Many such lines after a deploy mean
+`TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
+the address the proxy connects from), or the port is open to others.
+
+**The panel's host** — `deploy/Caddyfile` is the panel's site block (research
+R-18): Caddy serves the panel's build as static files with the browser
+security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
+file names its four values as environment placeholders, so the final domain
+needs no change to it. The steps of 12/1, on the host:
+
+1. Build the panel with the API's origin: `VITE_API_URL=https://<api host>
+   pnpm --filter @ijazah/admin build` (the build lands in `apps/admin/build`;
+   without the value the panel refuses to start).
+2. Set the four values in the Caddy service's environment: `ADMIN_SITE` (the
+   panel's host, e.g. `admin.<domain>`), `ADMIN_BUILD_ROOT` (the build's path
+   on the host), `API_ORIGIN` and `STORAGE_ORIGIN` (each `https://` and a
+   host, no path).
+3. `caddy validate --config deploy/Caddyfile` with those values set: it must
+   answer «Valid configuration». Then reload Caddy.
+4. `curl -sI https://<admin host>/` and check each header the file sends:
+   `content-security-policy` exactly as in the file with the two origins
+   filled in, `x-content-type-options: nosniff`, `referrer-policy:
+   no-referrer`, `strict-transport-security: max-age=31536000`,
+   `x-frame-options: DENY`, and no `server` header. `curl -sI
+   https://<admin host>/applications` answers the same page (the router's
+   paths).
+5. Sign in on the panel and open a document: the browser console must show
+   no refused source except Radix's dialog scroll-lock style, which the policy
+   refuses on purpose (the comment in `deploy/Caddyfile`).
+
+The API's own site block (its `reverse_proxy` and the live channel's notes
+under «Capacity») joins this file when the API's host is set up; it is not
+part of T147.
 
 ## Leaked credential
 

@@ -457,13 +457,19 @@ const documentReferences = [
   identity.createDocumentReferences(database),
   catalog.createDocumentReferences(database),
 ];
+// T147: the one proxy's header, read only from the proxy's own address; the configuration refuses
+// the header without the address.
+const trustedProxy =
+  config.TRUSTED_PROXY === undefined || config.TRUSTED_PROXY_ADDRESS === undefined
+    ? {}
+    : { trustedProxy: { header: config.TRUSTED_PROXY, address: config.TRUSTED_PROXY_ADDRESS } };
 const uploads = {
   sessions: sessions.user,
   guard: { settings, rateLimiter },
   log,
   // T063: an upload's after-commit point flushes over the bus.
   live: liveBus,
-  ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
+  ...trustedProxy,
 };
 const routes = {
   [verification.DOCUMENTS_UPLOAD_PATH]: verification.createDocumentsUploadRoute({
@@ -536,7 +542,7 @@ const routes = {
     payment: ports.payment,
     rateLimiter,
     log,
-    ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
+    ...trustedProxy,
   }),
 };
 
@@ -624,8 +630,9 @@ const application = await createApplication({
     }),
   },
   routes,
-  // The one proxy header whose last hop is the client's address; unset before a host is chosen.
-  ...(config.TRUSTED_PROXY === undefined ? {} : { trustedProxyHeader: config.TRUSTED_PROXY }),
+  // The one proxy header whose last hop is the client's address, from the proxy's own address;
+  // unset before a host is chosen.
+  ...trustedProxy,
 });
 await application.listen(config.PORT);
 log.info({ port: config.PORT }, 'Listening');
