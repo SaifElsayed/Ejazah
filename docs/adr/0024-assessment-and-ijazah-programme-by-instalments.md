@@ -1,6 +1,6 @@
 # ADR 0024 — The assessment and the ijazah programme paid by instalments
 
-**Status:** accepted · **Date:** 2026-11-10 · **Decided by:** the owner, 2026-11-03, 2026-11-04, 2026-11-05 and 2026-11-09 (the decisions B37's tasks commit records; `PLAN.md`, «The road to the store») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D2 (one gateway order confirms an enrollment and generates all of its sessions) and D4 (`payments` holds one row per gateway order, now several per enrollment); SRS FR-BOOK-3, FR-BOOK-4, FR-BOOK-10, FR-PAYG-19, §3.14, §14, §16 (adds §3.5.1, FR-BOOK-13 to FR-BOOK-19, DEC-63 and OPEN-12) · **Leaves for later:** ADR 0007 D1 (0% commission, no per-session deferred share) and R-MONEY-6 are **not** amended here: the commission (`specs/003-booking/tasks.md` T104) and the teacher's share released session by session (T105) wait for their own ADR (the notes under T104 and T105) · **Amended by:** SRS DEC-83 (2026-11-16, the owner's decision: D4's open point closed, no return after a close); what it leaves for later is settled by [ADR 0025](0025-commission-teacher-share-held-to-milestones-and-payment-mode.md)
+**Status:** accepted · **Date:** 2026-11-10 · **Decided by:** the owner, 2026-11-03, 2026-11-04, 2026-11-05 and 2026-11-09 (the decisions B37's tasks commit records; `PLAN.md`, «The road to the store») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D2 (one gateway order confirms an enrollment and generates all of its sessions) and D4 (`payments` holds one row per gateway order, now several per enrollment); SRS FR-BOOK-3, FR-BOOK-4, FR-BOOK-10, FR-PAYG-19, §3.14, §14, §16 (adds §3.5.1, FR-BOOK-13 to FR-BOOK-19, DEC-63 and OPEN-12) · **Leaves for later:** ADR 0007 D1 (0% commission, no per-session deferred share) and R-MONEY-6 are **not** amended here: the commission (`specs/003-booking/tasks.md` T104) and the teacher's share released session by session (T105) wait for their own ADR (the notes under T104 and T105) · **Amended by:** SRS DEC-83 (2026-11-16, the owner's decision: D4's open point closed, no return after a close); SRS DEC-92 (2026-11-19, the owner's decisions on B-M4's conflict check: D2's instalments are prepaid orders, not a subscription; D3.1's pause starts at an unpaid month's first session; D3.7's «no case» means no return request); what it leaves for later is settled by [ADR 0025](0025-commission-teacher-share-held-to-milestones-and-payment-mode.md)
 
 ## Context
 
@@ -49,11 +49,17 @@ session length once it has an enrollment.
   settlement to the teacher stands). That the split applies under the subscription service is the gateway's verbal
   answer only; its written answer is awaited (SRS OPEN-11). What the gateway documents and what it said only verbally
   are recorded in OPEN-11 and in the open point on the gateway's answers (`PLAN.md`, «The road to the store»).
+- *(Amended 2026-11-19, the owner's decisions, SRS DEC-92:)* no subscription service. Each month is a prepaid gateway
+  order with the split. The first is paid at acceptance and saves the card; each later month is charged to it right
+  after the paid month's last session, or renewed by hand. A failed charge is retried on a soft decline only, at most
+  4 times, then paid by hand. A month unpaid at its first session pauses the package (D3.1), and a late renewal pays
+  the full month with the paused sessions added at the end.
 
 ### D3 — Renewal: the grace stays open, and only an administrator closes
 
 1. The grace stays open. The package is paused, its slots stay reserved, and the student can renew at any time. There
    are no extensions, no student requests and no timers; nothing closes by force, and no automatic close exists.
+   *(Amended 2026-11-19, SRS DEC-92:)* the pause starts at the unpaid month's first session.
 2. A paused package has no release, and its paused sessions never reach the attendance sweep as no-shows.
 3. On renewal, the sessions that fell inside the pause are added at the end of the package, at the same weekly times;
    they move the final session, and with it the slot's release (FR-BOOK-10).
@@ -69,7 +75,8 @@ session length once it has an enrollment.
    request, logs one line with ids and a reason.
 7. A teacher who is suspended, banned or gone: a closed package offers no return and opens no case for an
    administrator; the app says the teacher is unavailable; sessions already paid and not taken stay under Phase 3's
-   termination and remedy rules.
+   termination and remedy rules. *(Amended 2026-11-19, SRS DEC-92:)* «opens no case» means no return request; the
+   compensation case of FR-DISPUTE-5 opens with DEC-85's amount.
 
 ### D4 — What stays open
 

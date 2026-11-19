@@ -55,7 +55,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 | about 12/28 | Google's answer (usually seven days or less, by its own page) |
 | **2027-01-01** | **On the store** |
 
-Nothing of the programme or of T104 may slide past 11/19 into the design week or Phase 6, which add no feature (R-PROC-6).
+Nothing of the programme or of T104 may slide past 11/19 into the design week or Phase 6, which add no feature (R-PROC-6). *(Amended 2026-11-19, the owner's decision on B-M4's conflict check, Q-1, «تمام اقتراحك»: the programme's Spec Kit cycle runs on 11/19. Its server code, B-P batches by `specs/006-programme/tasks.md`, runs beside the design week (11/21–11/25), which does not touch it. Its screens are built after the design week, on the new design. Everything is merged by 12/4; what is not merged and green by then moves to v1.1, and the ijazah package is sold as today (one order, 25% at half) until it lands. The programme's server code gets its own money lane at the full review's depth once merged; it is not in the 11/20 full review.)*
 
 **The owner's own steps.**
 
