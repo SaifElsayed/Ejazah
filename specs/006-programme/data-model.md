@@ -96,7 +96,8 @@ queue.
 | `consented_at` | timestamptz | the student's consent at the payment that saved it |
 | `created_at`, `updated_at` | | |
 
-The row is deleted by the close hook, at the programme's end, and by the account's erasure.
+The row is deleted by the close hook, at the programme's end, by the account's erasure, when the student turns the
+automatic renewal off (DEC-95), and at a teacher's suspension, ban or departure (DEC-94).
 
 ## Settings (R-515)
 

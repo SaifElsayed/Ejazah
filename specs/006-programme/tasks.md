@@ -186,10 +186,13 @@ No open question remains.
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
     full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
-  - the dropout set for a programme names the closings, not the case reason: an enrollment ended by a teacher's ban,
-    revocation or departure (cancelled `teacher_suspended`, the case `teacher_ended`), an `absence_termination`, or an
-    Administrator's end of a suspended programme refunds everything (DEC-85). An open `teacher_suspended` case is a
-    pause and is never in the set (PR #153 r1 Major 1), red first on «a suspension shows no refund»;
+  - the dropout set for a programme: the case `teacher_ended` (a teacher's ban, revocation or departure, the enrollment
+    cancelled `teacher_suspended`, `termination.subscriber.ts:352`), `absence_termination`, and the case `admin_ended`
+    only when it covered an open `teacher_suspended` case (an Administrator's end of a suspended programme,
+    `sessions/enrollment-end.service.ts`'s `closePausedCaseOnEnd`); a direct end of an unsuspended programme is not in
+    the set. Each refunds everything (DEC-85). An open `teacher_suspended` case is a pause and is never in the set (PR
+    #153 r1 Major 1, r2 Minor 3), red first on «a suspension shows no refund» and on «an administrator's end of a
+    suspended programme shows it»;
   - the dropout amount shown only once the enrollment is ended (cancelled `teacher_suspended`, `teacher_ended`); an
     open suspension case is a pause and shows none (analyze N-1);
   - at a teacher's suspension, ban or departure, booking's `termination.subscriber.ts` calls payments'
@@ -225,13 +228,16 @@ No open question remains.
     answer counts as a soft decline (`first_failure_at` set, «pay now» shown, the retries start; PR #153 r1 Minor 1),
     red first.
   - **The payee guard (PR #153 r1 Major 3):** in live mode `chargeSavedCard` refuses a charge naming no payee
-    (`paymob.adapter.ts`, as `createCheckout` does at `:220-222`), the Moto intention carries `split_amounts`, and the
-    sweep records the refusal as a failure the student pays past by hand; a spec red first for each.
+    (`paymob.adapter.ts`, as `createCheckout` does at `:220-222`) and the Moto intention carries `split_amounts`. The
+    sweep records the refusal as a `failed` order with `declineKind` `hard`, with no gateway call and no retry; the
+    month pauses until the teacher's payout account is verified, since a manual payment is refused the same way
+    (`checkout.service.ts:507-508`) (PR #153 r2 Minor 2). A spec red first for each.
   - **The failure's push:** `payment_failed` through today's path, unchanged.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
-  - the `pay_by`, due, retry (1, 3, 5, 7; at most 4; soft only) and pause steps, each under the programme's lock in its
+  - the `pay_by`, due, retry (1, 3, 5, 7; at most 4; soft only; only while a saved card exists, otherwise the month is by hand) and
+    pause steps, each under the programme's lock in its
     own transaction, with one log line each;
   - «pending» per A-1;
   - after commit, `chargeSavedCard` for each `created` automatic order;
@@ -244,8 +250,10 @@ No open question remains.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
-  - `programme.autoRenewOff` (the student, at any time) deletes the card; later months by hand under the same rules; a
-    charge already `created` stays (DEC-95; PR #153 r1 Major 4 (a)), red first;
+  - `programme.autoRenewOff` (the student, at any time) deletes the card under the programme's row lock (kernel.md's
+    order, programme → enrollment → payment), the lock the sweep's due step reads the card under, so the two cannot
+    race; later months by hand under the same rules; a charge already `created` stays (DEC-95, settled by the review session as the reading of the owner's (a): a charge already sent cannot be recalled; PR #153 r1
+    Major 4 (a), r2 Minor 1), red first, with a race spec against the due step;
   - refused `party_suspended` while a suspension case is open (PR #153 r1 Minor 2);
   - open from `programme_renew_early_days` for a student without a card; refused `charge_pending` while an automatic
     order is `created`;
@@ -268,7 +276,9 @@ No open question remains.
   > subtracts every written release (`share-release.rules.ts:251-254`). With a first stop releasing 2,800, a reopen and
   > 1,000 more paid, an end built to the letter would release the 2,800 again and a second stop nothing for the new
   > month's 700. The fix: «− every release written», and a release per stop. Rare; not scheduled.
-- [ ] T018 [US2] [US6] The reads (FR-726, FR-727):
+- [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
+  `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/enrollments-admin.router.ts`, and
+  `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19), with its
     adversarial registration;
   - `programmes.queue` (paused, stop, refusal, no_offer; oldest first, how late, the reason) and `programmes.get`
@@ -284,6 +294,9 @@ No open question remains.
   - pay in full or monthly with the consent line;
   - months paid and next due;
   - «renew now», «pay now», «change card»;
+  - the automatic renewal on/off while a card is saved (`programme.autoRenewOff`, FR-713a), and after turning it off,
+    the month's renewal by hand; while `chargePending` is true, a line that this month's charge is already under way
+    (PR #153 r2 Major 1, Minor 1);
   - paused;
   - «the teacher is unavailable» (FR-BOOK-19).
   - i18n in a `programme` group.

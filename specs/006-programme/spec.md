@@ -377,7 +377,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   student MAY instead choose to renew by hand each month.
 - **FR-713a**: The student MUST be able to turn the automatic renewal off at any time. Turning it off deletes the
   saved card; every later month is renewed by hand under the same due point, early renewal and pause rules (FR-714 to
-  FR-722). A charge already recorded for the month stays as it is (the owner's decision of 2026-11-20, DEC-95).
+  FR-722) (the owner's decision of 2026-11-20, DEC-95). A charge already recorded for the month stays as it is (settled by the review session as the reading of the owner's (a): a charge already sent cannot be recalled),
+  and the screen says so while it is under way.
 
 **Renewal**
 
@@ -396,10 +397,13 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   FR-PAYG-19's unexpected payment: recorded, the enrollment unchanged, a compensation case opened (`003` FR-375 as
   amended).
 - **FR-719**: The saved card's token MUST be stored encrypted, never logged, never sent to the app, and deleted at a
-  close, at the programme's end and at the account's deletion (DEC-92).
+  close, at the programme's end, at the account's deletion (DEC-92), when the student turns the automatic renewal off
+  (DEC-95), and at a teacher's suspension, ban or departure (DEC-94).
 - **FR-720**: The automatic charge MUST run on the payment stand-in until the gateway's written answers are in (OPEN-11:
   the saved-card integration, the split on such a charge, the token's issue and its signed callback, retry fees and
-  decline codes); every month MUST be renewable by hand in any environment.
+  decline codes); every month MUST be renewable by hand in any environment while the teacher's payout account is
+  verified. In live mode, with none, both the automatic charge (a hard decline, no retry) and the manual payment are
+  refused and the month pauses (R-MONEY-6).
 
 **The pause and the stop request**
 

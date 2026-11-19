@@ -128,11 +128,11 @@ Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is
 - Settled by the review session on recorded precedents, written in DEC-94:
   - G-4: as today (FR-SESS-16), a suspension pauses (no due, no charge, no retry, no pause; the card deleted); a ban, a departure or an Administrator's end of a suspended programme ends it, with DEC-85's full refund; a restore after a suspension is deferred.
   - I-3: `programme_enabled`, off by default, turned on when B-P4 lands.
-- **PR #153's review, round 1 (the owner's «Approve all», 2026-11-20):** the student can turn the automatic renewal
-  off at any time, which deletes the card (Major 4 (a), DEC-95).
   - U-1: the student's own weekly time is protected.
   - I-1: FR-PROFILE-8 amended for the programme as A-2 (a)'s consequence.
   - K-2: «4 sessions a month» is a definition.
+- **PR #153's review, round 1 (the owner's «Approve all», 2026-11-20):** the student can turn the automatic renewal
+  off at any time, which deletes the card (Major 4 (a), DEC-95).
 
 ## Complexity Tracking
 

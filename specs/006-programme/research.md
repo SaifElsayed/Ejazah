@@ -178,7 +178,8 @@ Settled by the review session on recorded precedents:
     2. **due:** mark the next month due at the paid month's last session's end; with a saved card, record the
        automatic order (R-509).
     3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
-       at most 4.
+       at most 4, only while a saved card exists; with none (turned off, or deleted at a suspension), the month is by
+       hand (PR #153 r2 Minor 1).
     4. **pause:** set `paused_at` when the next occurrence starts with the month unpaid; a live `enrollment` signal to
        both parties after commit (analyze N-15).
   - **«Pending» (analyze A-1)** is an automatic order of the month in `created` and unexpired. Steps 2 and 3 skip while
@@ -194,8 +195,11 @@ Settled by the review session on recorded precedents:
   - At a teacher's suspension, ban or departure the saved card is deleted at once (DEC-94: «the automatic charges stop
     at once and the token is deleted»), through payments' `deleteProgrammeCard` called from booking's termination
     subscriber. After a reinstatement the student renews by hand.
-  - DEC-85's full refund is shown only once the enrollment is ended. On a programme, `teacher_suspended` joins the
-    dropout set as a closing reason (cancelled `teacher_suspended`), not while the case is a pause (T012).
+  - DEC-85's full refund is shown only once the enrollment is ended. A ban, a revocation or a departure already opens
+    the case `teacher_ended` (the enrollment cancelled `teacher_suspended`, `termination.subscriber.ts:352`). The
+    closing the set lacks is an Administrator's end of a suspended programme: the case `admin_ended` that covered the
+    open `teacher_suspended` case (`enrollment-end.service.ts`, `closePausedCaseOnEnd`). On a programme it joins the
+    dropout set only then; a direct end of an unsuspended programme stays outside (T012; PR #153 r2 Minor 3).
   - A restore after a suspension on a programme is a rare edge, deferred; restore stays refused on a programme
     (R-513).
 
@@ -226,7 +230,9 @@ Settled by the review session on recorded precedents:
     card is offered for saving and every month is manual.
   - **The payee guard (PR #153 r1 Major 3):** in live mode `chargeSavedCard` refuses a charge that names no payee, as
     `createCheckout` does (`paymob.adapter.ts:220-222`), and the Moto intention carries `split_amounts`. The sweep
-    records the refusal as a failure the student pays past by hand. Without it, a live 1,000 EGP month with no split
+    records the refusal as a `failed` order with `declineKind` `hard`: no gateway call, no retry. The month pauses
+    until the teacher's payout account is verified, since a manual payment is refused the same way
+    (`checkout.service.ts:507-508`; PR #153 r2 Minor 2). Without it, a live 1,000 EGP month with no split
     would settle whole into the platform's account, the teacher's 700 with it (R-MONEY-6).
   - No gateway call while holding a database lock.
 - **R-514 corrected (analyze I-6).** `booking.recordOrderFailed` never cancels today. `holds.service.ts:330` only picks
@@ -248,9 +254,11 @@ Settled by the review session on recorded precedents:
     transaction, beside the `payment_events` row. It never travels in a job payload (the jobs README's identifiers-only
     payloads), and a spec asserts the enqueued payload carries ids only.
   - **Turning the automatic renewal off (PR #153 r1 Major 4 (a), DEC-95):** `programme.autoRenewOff`, the student only,
-    at any time, deletes the card row. Later months renew by hand under the same due point, early renewal and pause
-    rules. A charge already recorded `created` stays as it is. The consent words at the first payment say it can be
-    turned off.
+    at any time, deletes the card row under the programme's row lock, the lock the sweep's due step reads the card
+    under, so an «off» that has answered is never followed by a charge (r2 Minor 1). Later months renew by hand under
+    the same due point, early renewal and pause rules. A charge already recorded `created` stays as it is (settled by the review session as the reading of the owner's (a): a charge already sent cannot be recalled),
+    and the screen says so while `chargePending` is true. The consent words at the first payment say it can be turned
+    off.
 - **«Card detail»** (analyze I-5) = the token, the PAN, the expiry: never in a log, an audit entry or a response.
   `last4` and the brand may be returned, to the student only.
 - **One close hook** (analyze G-5, N-6): booking's cancel path, for every closing reason (today's and the programme's),

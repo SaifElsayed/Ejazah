@@ -66,6 +66,8 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
     - Restore on it is refused `programme_enrollment`.
 13. **A ban of the teacher on a programme.** The case shows every order's gross, the assessment included (DEC-85). A
     complaint close values each untaken session by its own order (1,280 ÷ 4 = 320 for a month's session).
+14. **The automatic renewal off.** On a programme with a saved card, `programme.autoRenewOff`. Expect: the card row
+    gone; at the next month's end no automatic order; «renew now» from 3 days before (FR-713a, DEC-95).
 
 ## 3. The phone and the panel (after the design week)
 
@@ -76,6 +78,7 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
   - pay in full or monthly, with the consent line;
   - months paid and next due;
   - «renew now» (3 days before, no card), «pay now» and «change card» after a failure;
+  - turn the automatic renewal off: the card gone, the next month by hand; while a charge is under way, the line saying so;
   - paused;
   - «the teacher is unavailable».
 - **Teacher:**
