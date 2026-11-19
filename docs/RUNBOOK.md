@@ -51,6 +51,8 @@ bundles:
 ```bash
 EXPO_PUBLIC_API_URL=http://<this machine's LAN address>:3000   # the API's origin; without it the app stops at launch
 EXPO_PUBLIC_DEV_SIGN_IN=true                                   # the fake provider, below
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=                              # the Web OAuth client's ID: Google sign-in, below
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=                              # the iOS OAuth client's ID; unused until iOS ships
 ```
 
 With `pnpm dev` running and the device on the same network:
@@ -91,6 +93,30 @@ accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
 `EXPO_PUBLIC_DEV_SIGN_IN=true` adds «دخول تجريبي للتطوير» to the welcome screen
 (`features/shared/auth/dev-sign-in.ts`), which signs in as one fixed person,
 `dev-phone@ijazah.test`; a release build never shows it (`__DEV__` is false).
+
+**Google sign-in for real (002:T148).** On Android the phone asks Credential
+Manager for Google's ID token through the local module `modules/google-id`,
+with the server's nonce in it, and the API's `SIGN_IN_PROVIDER=live` verifies
+the token against Google's published keys. Apple waits for iOS. The owner's
+steps, once:
+
+1. In Google Cloud, set up the project's OAuth consent screen.
+2. Create a **Web** OAuth client. Its ID is the API's `GOOGLE_CLIENT_IDS` (root
+   `.env`) and the phone's `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   (`apps/mobile/.env`).
+3. Create an **Android** OAuth client for `com.ijazah.app` with the SHA-1 of
+   every key that signs the app: the local debug keystore
+   (`keytool -list -v -keystore ~/.android/debug.keystore`) and the EAS key (`npx eas-cli credentials`, Android,
+   `development`). The phone sends this client's ID nowhere; Google matches it
+   by the package and the SHA-1.
+4. Put the values in the two `.env` files yourself; they are never printed or
+   committed.
+5. Make a new development build (the module is native; see «A new native
+   module means a new development build» above) and install it.
+6. Start the API with `SIGN_IN_PROVIDER=live` to try it.
+
+The store key's SHA-1 is added to the Android client later, with the
+production profile (`eas.json` has only `development` today).
 
 **Where the mails land.** With `NODE_ENV=development` and
 `EMAIL_PROVIDER=fake`, the email stand-in sends nothing and writes each mail,

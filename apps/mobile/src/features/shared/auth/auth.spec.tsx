@@ -44,8 +44,31 @@ jest.mock('expo-router', () => ({
 
 const mockIdentity = jest.fn<(provider: string, nonce: string) => Promise<unknown>>();
 let mockDevEnabled = false;
+// B50 T148: one case runs the real providers over Google's mocked module, end to end.
+let mockRealProviders = false;
 jest.mock('./providers', () => ({
-  nativeIdentity: (provider: string, nonce: string) => mockIdentity(provider, nonce),
+  nativeIdentity: (provider: 'google' | 'apple', nonce: string) =>
+    mockRealProviders
+      ? jest
+          .requireActual<typeof import('./providers')>('./providers')
+          .nativeIdentity(provider, nonce)
+      : mockIdentity(provider, nonce),
+}));
+const mockGoogleIdSignIn = jest.fn<(webClientId: string, nonce: string) => Promise<unknown>>();
+jest.mock('../../../lib/google-id', () => ({
+  googleIdSignIn: (webClientId: string, nonce: string) => mockGoogleIdSignIn(webClientId, nonce),
+  googleIdSignOut: () => Promise.resolve(),
+}));
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: () => undefined,
+    hasPlayServices: () => Promise.resolve(true),
+    signIn: () => Promise.reject(new Error('google-signin is not the Android path')),
+    signOut: () => Promise.resolve(null),
+  },
+  isErrorWithCode: () => false,
+  isSuccessResponse: () => false,
+  statusCodes: { SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED' },
 }));
 jest.mock('./dev-sign-in', () => ({
   ...jest.requireActual<typeof import('./dev-sign-in')>('./dev-sign-in'),
@@ -61,6 +84,8 @@ beforeEach(() => {
   mockNavigate.mockReset();
   mockParams = {};
   mockIdentity.mockReset();
+  mockRealProviders = false;
+  mockGoogleIdSignIn.mockReset();
   mockDevEnabled = false;
   setSession({ kind: 'signed-out' });
   mockApi.api.auth.providerNonce.mutate.mockResolvedValue({
@@ -125,6 +150,36 @@ describe('Welcome', () => {
     expect(mockApi.sessions.current()).toEqual(tokens);
   });
 
+  it("carries the server's nonce unhashed to Google's module on Android and back with the token (B50 T148)", async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    process.env['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'] = 'web-client-id';
+    mockRealProviders = true;
+    mockApi.api.auth.providerNonce.mutate.mockResolvedValue({
+      nonce: 'server-nonce-7f3a',
+      expiresAt: '2026-10-21T10:05:00Z',
+    });
+    mockGoogleIdSignIn.mockResolvedValue({ idToken: 'google-id-token', email: 'amal@example.com' });
+    mockApi.api.auth.signInWithProvider.mutate.mockResolvedValue({
+      outcome: 'session',
+      ...tokens,
+      landing: 'student_home',
+    });
+    try {
+      await renderIn('rtl', <Welcome />);
+      await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
+      await waitFor(() => expect(getSession()).toEqual({ kind: 'restoring' }));
+      expect(mockGoogleIdSignIn).toHaveBeenCalledWith('web-client-id', 'server-nonce-7f3a');
+      expect(mockApi.api.auth.signInWithProvider.mutate).toHaveBeenCalledWith({
+        provider: 'google',
+        identityToken: 'google-id-token',
+        nonce: 'server-nonce-7f3a',
+      });
+    } finally {
+      delete process.env['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'];
+      jest.restoreAllMocks();
+    }
+  });
+
   it('starts the onboarding of a new person and opens Role', async () => {
     mockIdentity.mockResolvedValue({ identityToken: 'apple-token', authorizationCode: 'code-1' });
     mockApi.api.auth.signInWithProvider.mutate.mockResolvedValue({
@@ -166,6 +221,45 @@ describe('Welcome', () => {
     );
     expect(mockNavigate).toHaveBeenCalledWith('/(auth)/email-sign-in');
     expect(getSession()).toEqual({ kind: 'signed-out' });
+  });
+
+  /** A Google sign-in whose address belongs to an Apple account. */
+  async function appleConflict() {
+    mockIdentity.mockResolvedValue({ identityToken: 'google-token', email: 'amal@example.com' });
+    mockApi.api.auth.signInWithProvider.mutate.mockRejectedValue(
+      apiError('EMAIL_IN_USE_BY_OTHER_METHOD', [{ path: 'email', code: 'apple' }]),
+    );
+    await renderIn('rtl', <Welcome />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
+    expect(await screen.findByText(ar('auth.signInConflict.title'))).toBeTruthy();
+  }
+
+  it('offers Apple in an Apple conflict on iOS (B50 T148)', async () => {
+    await appleConflict();
+    expect(
+      screen.getByText(ar('auth.signInConflict.bodyApple', { email: 'amal@example.com' })),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: ar('auth.signInConflict.signInApple') }),
+    ).toBeTruthy();
+  });
+
+  it('says to sign in on an iPhone in an Apple conflict on Android, with no Apple button (B50 T148)', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      await appleConflict();
+      expect(
+        screen.getByText(
+          ar('auth.signInConflict.bodyAppleOnIphone', { email: 'amal@example.com' }),
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole('button', { name: ar('auth.signInConflict.signInApple') }),
+      ).toBeNull();
+      expect(screen.getByRole('button', { name: ar('common.action.back') })).toBeTruthy();
+    } finally {
+      jest.restoreAllMocks();
+    }
   });
 
   it('does nothing when the person closes the provider, and says so when it fails', async () => {

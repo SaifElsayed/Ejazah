@@ -31,8 +31,10 @@ jest.mock('expo-router', () => ({
 }));
 
 const mockIdentity = jest.fn<(provider: string, nonce: string) => Promise<unknown>>();
+const mockSignOutProviders = jest.fn<() => Promise<void>>();
 jest.mock('../../shared/auth/providers', () => ({
   nativeIdentity: (provider: string, nonce: string) => mockIdentity(provider, nonce),
+  signOutProviders: () => mockSignOutProviders(),
 }));
 jest.mock('../../shared/auth/dev-sign-in', () => ({
   ...jest.requireActual<typeof import('../../shared/auth/dev-sign-in')>(
@@ -99,6 +101,7 @@ beforeEach(async () => {
   await mockApi.sessions.store.write(tokens);
   mockNavigate.mockReset();
   mockIdentity.mockReset();
+  mockSignOutProviders.mockReset().mockResolvedValue(undefined);
   mockOpen.mockReset();
   mockKey = 0;
   mockApi.api.auth.providerNonce.mutate.mockResolvedValue({
@@ -185,6 +188,13 @@ describe('DeleteAccountSheet', () => {
     expect(mockApi.sessions.current()).toBeNull();
     // The server has revoked every session: nothing is sent after the deletion.
     expect(mockApi.api.auth.signOut.mutate).not.toHaveBeenCalled();
+  });
+
+  it('signs the device out of the sign-in provider once deleted, as sign-out does (B50 T148)', async () => {
+    await renderIn('rtl', withAccount()());
+    await confirmWith('account.delete.sheet.confirmGoogle');
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
+    await waitFor(() => expect(mockSignOutProviders).toHaveBeenCalledTimes(1));
   });
 
   it('proves an Apple account through Apple, and sends the English word as the contract spells it', async () => {

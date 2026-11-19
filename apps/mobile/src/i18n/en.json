@@ -199,6 +199,7 @@
     },
     "signInConflict": {
       "bodyApple": "{email} is registered with an Apple account. Sign in with it.",
+      "bodyAppleOnIphone": "{email} is registered with an Apple account. Sign in with it on an iPhone.",
       "bodyEmailPassword": "{email} is registered with email and password. Sign in with them.",
       "bodyGoogle": "{email} is registered with a Google account. Sign in with it.",
       "signInApple": "Sign in with Apple",
