@@ -78,14 +78,33 @@ describe('genderFlags.list', () => {
   });
 });
 
+// 005:T023 (B49, Q-G1 (b); admin-surface.md:22 as amended): the preview is a count and one line per
+// enrollment a correction would end: the enrollment, its subject, its sessions and the other party
+// (an id, and a name null once that account is deleted). The ids travel on the lines only.
+const SUBJECT = {
+  id: '0199d0a0-0000-7000-8000-0000000000d1',
+  nameAr: 'التجويد',
+  nameEn: 'Tajweed',
+};
+const COUNTERPART = '0199d0a0-0000-7000-8000-0000000000a3';
+const LINE = {
+  enrollmentId: ENROLLMENT,
+  subject: SUBJECT,
+  sessions: 8,
+  counterpart: { userId: COUNTERPART, displayName: 'فاطمة' },
+};
+
+/** A flag's detail with `correctionWouldEnd` as given. */
+const detailWith = (correctionWouldEnd: unknown) => ({
+  ...ITEM,
+  reason: REASON,
+  resolution: null,
+  correctionWouldEnd,
+});
+
 describe('genderFlags.get', () => {
   it('adds the reason, the resolution and the preview of a correction, and no gender', () => {
-    const open = {
-      ...ITEM,
-      reason: REASON,
-      resolution: null,
-      correctionWouldEnd: { count: 1, enrollmentIds: [ENROLLMENT] },
-    };
+    const open = detailWith({ count: 1, lines: [LINE] });
     expect(adminGenderFlagsGetInput.parse({ flagId: FLAG })).toEqual({ flagId: FLAG });
     expect(adminGenderFlagsGetOutput.parse({ ...open, gender: 'female' })).toEqual(open);
     const dismissed = {
@@ -97,15 +116,53 @@ describe('genderFlags.get', () => {
         resolvedAt: '2026-11-18T10:00:00.000Z',
         resolvedByAdminId: ADMIN,
       },
-      correctionWouldEnd: { count: 0, enrollmentIds: [] },
+      correctionWouldEnd: { count: 0, lines: [] },
     };
     expect(adminGenderFlagsGetOutput.parse(dismissed)).toEqual(dismissed);
+    expect(adminGenderFlagsGetOutput.safeParse(detailWith({ count: -1, lines: [] })).success).toBe(
+      false,
+    );
+  });
+
+  it('draws each line: the enrollment, its subject, its sessions and the other party', () => {
+    const gone = { ...LINE, counterpart: { userId: COUNTERPART, displayName: null } };
+    const preview = { count: 2, lines: [LINE, gone] };
+    const parsed = adminGenderFlagsGetOutput.parse(
+      detailWith({ ...preview, enrollmentIds: [ENROLLMENT] }),
+    );
+    expect(parsed.correctionWouldEnd).toEqual(preview);
+    expect(parsed.correctionWouldEnd.lines[1]?.counterpart.displayName).toBeNull();
+  });
+
+  it('refuses a line without its enrollment, subject, sessions or other party', () => {
     expect(
-      adminGenderFlagsGetOutput.safeParse({
-        ...open,
-        correctionWouldEnd: { count: -1, enrollmentIds: [] },
-      }).success,
-    ).toBe(false);
+      adminGenderFlagsGetOutput.safeParse(detailWith({ count: 1, lines: [LINE] })).success,
+    ).toBe(true);
+    for (const line of [
+      { ...LINE, enrollmentId: 'enrollment' },
+      { ...LINE, subject: { id: SUBJECT.id, nameAr: 'التجويد' } },
+      { ...LINE, sessions: 0 },
+      { ...LINE, sessions: 1.5 },
+      { ...LINE, counterpart: { displayName: 'فاطمة' } },
+      { ...LINE, counterpart: { userId: COUNTERPART } },
+    ]) {
+      expect(
+        adminGenderFlagsGetOutput.safeParse(detailWith({ count: 1, lines: [line] })).success,
+      ).toBe(false);
+    }
+  });
+
+  it('refuses a count that is not the number of lines', () => {
+    expect(
+      adminGenderFlagsGetOutput.safeParse(detailWith({ count: 2, lines: [LINE, LINE] })).success,
+    ).toBe(true);
+    for (const preview of [
+      { count: 2, lines: [LINE] },
+      { count: 0, lines: [LINE] },
+      { count: 1, lines: [] },
+    ]) {
+      expect(adminGenderFlagsGetOutput.safeParse(detailWith(preview)).success).toBe(false);
+    }
   });
 });
 

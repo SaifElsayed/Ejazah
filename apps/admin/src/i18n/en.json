@@ -804,6 +804,14 @@
           },
           "title": "Accept {name}’s document"
         },
+        "actionReport": {
+          "confirm": "Mark action taken",
+          "effects": {
+            "closed": "The report is closed as “action taken”. The action itself is taken from the account’s own page."
+          },
+          "reasonLabel": "What was done (required)",
+          "title": "Mark the report as action taken"
+        },
         "approveApplication": {
           "confirm": "Approve",
           "effects": {
@@ -901,6 +909,7 @@
             "notified": "The reporter is notified that the report was dismissed.",
             "unchanged": "The declared gender stays as it is, and the report is closed."
           },
+          "heading": "Dismiss the gender flag",
           "reasonLabel": "Reason for dismissal (required)",
           "title": "Dismiss the gender report on {name}"
         },
@@ -910,6 +919,7 @@
             "chat": "The administration’s access to the enrollment’s chat ends when the report is closed.",
             "closed": "The report is closed as “dismissed” with no action on the account."
           },
+          "heading": "Dismiss the report",
           "reasonLabel": "Reason for dismissal (required)",
           "title": "Dismiss {reporter}’s report on {reported}"
         },
@@ -919,8 +929,10 @@
             "banned": "The account is banned. The ban can be lifted at any time and its enrollments come back once each pairing is checked: surely within {days, plural, one {# day} other {# days}}, and after that where their slot is still free.",
             "cases": "A compensation case opens for every counterparty in their enrollments.",
             "enrollments": "All their enrollments and upcoming sessions are cancelled as “cancelled by the administration”.",
+            "liftable": "The ban can be lifted at any time; each pairing is checked against the corrected genders before it returns.",
             "notified": "Every affected party is notified."
           },
+          "heading": "Ban for falsifying gender",
           "reasonLabel": "Reason for the ban (required)",
           "title": "Ban {name} for falsifying gender"
         },
@@ -932,6 +944,7 @@
             "notified": "Both parties of every affected enrollment are notified.",
             "record": "The declared gender is corrected from now on in search and sessions."
           },
+          "heading": "Correct the declared gender",
           "reasonLabel": "Reason for the correction (required)",
           "title": "Correct {name}’s gender to {gender}"
         },
@@ -980,6 +993,15 @@
           },
           "reasonLabel": "Reason for lifting the bar (required)",
           "title": "Lift the bar on {name}"
+        },
+        "raiseGenderFlag": {
+          "confirm": "Raise the flag",
+          "effects": {
+            "queued": "The flag joins the gender flags queue, open, to be decided with a reason.",
+            "unchanged": "The declared gender stays authoritative until a decision is issued."
+          },
+          "reasonLabel": "Why the flag is raised (required)",
+          "title": "Raise a gender flag"
         },
         "reactivateAccount": {
           "confirm": "Reactivate",
@@ -1599,6 +1621,8 @@
       "detail": {
         "a11y": "Dispute details",
         "affectedEnrollments": "Active enrollments affected by the correction · {count}",
+        "applicantNoteHint": "Used only when the person is an applicant not yet approved.",
+        "applicantNoteLabel": "Note the applicant sees (required for an applicant)",
         "ban": "Ban (falsification)",
         "banLabel": "Ban",
         "banText": "The account is banned, all its enrollments are cancelled, and a compensation case opens for each affected enrollment",
@@ -1606,20 +1630,30 @@
         "correct": "Correct (honest error)",
         "correctLabel": "Correct",
         "correctText": "The gender is corrected, the remaining sessions in non-compliant enrollments are cancelled, and a compensation case opens for each enrollment. No ban",
+        "decidedOn": "Decided on {date}",
+        "decision": "Decision",
         "declaredGender": "Declared gender",
         "declaredGenderValue": "{gender} · confirmed at sign-up",
         "dismiss": "Dismiss the dispute",
         "dismissLabel": "Dismiss the dispute",
         "dismissReasonLabel": "Reason for dismissing the dispute (required)",
         "dismissText": "Closes the dispute without any change",
-        "enrollmentLine": "{subject} · {sessions} · {teacher}",
+        "enrollmentLine": "{subject} · {sessions} · {counterpart}",
         "enrollmentMeta": "{status} · {done} of {total} · {day} {time}",
+        "flagged": "Flagged person",
         "footer": "No decision is issued without a reason. Correction cancels the non-compliant enrollments and opens compensation cases for them; a ban cancels all enrollments and opens compensation cases. The reason is recorded in the audit log.",
+        "fromReport": "From the report",
         "idDocument": "Identity document · view only",
         "idDocumentMeta": "Requested {requestedDate} · uploaded {uploadedDate} {uploadedTime}",
         "incompatible": "Non-compliant after correction",
+        "neverRestored": "These enrollments are ended and can never be restored.",
+        "noEnrollments": "A correction now ends no enrollment.",
+        "note": "Reason",
+        "openReport": "Open the report",
         "raisedBy": "Raised by",
+        "raisedByAdmin": "An administrator",
         "raisedByValue": "{name} · {role}",
+        "reason": "The raiser’s words",
         "reasonPlaceholder": "Recorded with the decision in the audit log",
         "reportTitle": "Dispute",
         "subtitle": "{role} · {status} · dispute from {date} · {time}"
@@ -1629,17 +1663,36 @@
         "text": "Every report has been decided. Each report on a declared gender appears here.",
         "title": "No open gender reports"
       },
+      "emptyTab": {
+        "text": "No flag has this status.",
+        "title": "No flags here"
+      },
+      "explain": "Every flag on a declared gender. The declared gender stays authoritative until a decision is issued with a reason: a dismissal, a correction or a ban for fraud.",
       "lede": "{count, plural, one {# open dispute} other {# open disputes}}. The declared gender stays authoritative in search and sessions until a decision is issued, and changes only from here.",
       "ledeEmpty": "No open reports now. The declared gender changes only from here.",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · open first",
+      "raise": "Raise a gender flag",
+      "raiseTargetHint": "From the user’s record on the users page.",
+      "raiseTargetLabel": "The person’s account id",
       "raisedByAdminFromChatReport": "{role} · from a chat report",
+      "refused": {
+        "alreadyResolved": "This flag was already decided, so nothing changed. Open it again to see its decision.",
+        "applicantNoteRequired": "This person is an applicant, so the ban needs the note they see. Write it, then try again. Nothing changed.",
+        "notFound": "This flag or this account was not found.",
+        "openExists": "This person already has an open gender flag, so no other was raised. Open the open flag.",
+        "reportTargetMismatch": "This report is about another person, so no gender flag was raised."
+      },
       "search": {
         "label": "Search",
         "placeholder": "Name or email"
       },
       "tabs": {
         "all": "All",
+        "corrected": "Corrected",
         "decided": "Decided",
+        "dismissed": "Dismissed",
+        "fraudBan": "Banned for fraud",
         "open": "Open"
       },
       "title": "Gender disputes",
@@ -2203,6 +2256,7 @@
     "reports": {
       "columns": {
         "context": "Context",
+        "date": "Date",
         "reason": "Reason",
         "reported": "Reported",
         "reporter": "Reporter",
@@ -2215,16 +2269,25 @@
       },
       "detail": {
         "a11y": "Report details",
+        "action": "Mark action taken",
         "chatHint": "Available to the admin while the report is open",
+        "context": "Context",
         "contextSession": "Context · session",
+        "decidedOn": "Settled on {date}",
+        "decision": "Decision",
         "dismiss": "Dismiss report",
         "enrollmentLine": "{subject} · {sessions} · {status}",
+        "evidence": "Evidence",
         "footer": "Dismissing sets the report to \"Dismissed\", and any other action sets it to \"Action taken\". The reason is required and recorded in the audit log, and the reported user is not told of a dismissal.",
+        "note": "Note",
         "openChat": "Open enrollment chat",
+        "openEnrollment": "Open the enrollment",
         "openGenderFlag": "Open a gender dispute",
+        "reason": "The reporter’s words",
         "reasonLabel": "Reason for the decision (required)",
         "reasonPlaceholder": "Recorded with the decision in the audit log",
         "reportTitle": "Report",
+        "reported": "Reported",
         "reporter": "Reporter",
         "reporterValue": "{name} · {role}",
         "requireId": "Require ID",
@@ -2238,15 +2301,25 @@
         "text": "All reports have been settled. Every new report a student or teacher raises from a session, a profile or a chat appears here.",
         "title": "No open reports"
       },
+      "emptyTab": {
+        "text": "No report has this status.",
+        "title": "No reports here"
+      },
+      "explain": "Every report a student or teacher raises from a session, a chat or a profile. A report is settled as action taken or dismissed, with a note recorded in the audit log.",
       "lede": "{count, plural, one {# open report} other {# open reports}} on sessions, profiles and chats. The decision needs a reason and is recorded in the audit log.",
       "ledeEmpty": "No open reports right now. The decision on any report needs a reason and is recorded in the audit log.",
       "openSince": "{days, plural, one {# day ago} other {# days ago}}",
+      "pagerPage": "Page {page}",
       "pagerSummary": "{shown} of {total} · newest first",
       "reasons": {
         "impersonation": "Account impersonation",
         "misleadingPhoto": "Misleading photo",
         "offPlatformContact": "Off-platform contact",
         "verbalAbuse": "Verbal abuse"
+      },
+      "refused": {
+        "alreadyResolved": "This report was already settled, so nothing changed. Open it again to see its decision.",
+        "notFound": "This report was not found."
       },
       "search": {
         "label": "Search",
@@ -2797,6 +2870,7 @@
       "genderFlag": {
         "corrected": "Corrected",
         "dismissed": "Dismissed",
+        "fraudBan": "Banned for fraud",
         "open": "Open"
       },
       "ijazah": {
@@ -3217,7 +3291,8 @@
           "timeTaken": "A session the restore would create overlaps a session, an open hold or a reserved make-up time of either party. Nothing changed.",
           "noFreeWeek": "No free week was found for a remedy the closing's case held, so the case stays open. Nothing changed.",
           "notFound": "This enrollment was not found. Nothing changed.",
-          "refunded": "This enrollment's payment was refunded through the payment gateway, so it is not restored; the student books anew. Nothing changed."
+          "refunded": "This enrollment's payment was refunded through the payment gateway, so it is not restored; the student books anew. Nothing changed.",
+          "genderMismatch": "Left ended: its student and teacher are not of the same gender. Nothing changed."
         },
         "released": "This enrollment's slot was released on {when}, so the restore succeeds while the slot is still free."
       },

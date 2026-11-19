@@ -93,6 +93,10 @@ beforeEach(() => {
 const reads: GenderDecisionReads = {
   confirmedEnrollmentsOf: async () => confirmed,
   gendersOf: async (_tx, userIds) => new Map([...genders].filter(([id]) => userIds.includes(id))),
+  // 005:T023 (rule d): the preview's lines are `get`'s only; the correction reads none.
+  previewOf: async () => {
+    throw new Error('the correction reads no preview line');
+  },
 };
 
 const steps: CorrectionSteps = {

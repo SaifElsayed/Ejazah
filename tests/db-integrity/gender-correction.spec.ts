@@ -13,7 +13,10 @@
 // - the restore (DEC-69), the adversarial case in both directions: the correction's own end
 //   `not_restorable`; an administrator's direct end of the same pairing `gender_mismatch` (step 3);
 // - the race probe against `sessions.restore` on one enrollment, both orders and at once: each
-//   outcome valid, no deadlock, never a mixed pairing restored.
+//   outcome valid, no deadlock, never a mixed pairing restored;
+// - 005:T023 (B49, Q-G1 (b)): `genderFlags.get`'s preview lines, a flagged student and a flagged
+//   teacher: the enrollment's subject, its sessions and the other party, nothing written
+//   (`previewAsComposed`, red first on its stub).
 //
 // THE CORRECTION HERE. R-API-3 and R-API-4 keep this file from importing the admin module (only the
 // composition roots may), so `correctAsComposed` below takes the admin composition's calls, in the
@@ -33,11 +36,12 @@ import {
   confirmationPartiesOf,
   confirmedEnrollmentsOf,
   createEnrollmentSide,
+  enrollmentsAmong,
   lockActiveHoldsOf,
   lockForConfirmation,
   releaseHolds,
 } from '../../apps/api/src/modules/booking/index.js';
-import { lockTeacherSlots } from '../../apps/api/src/modules/catalog/index.js';
+import { lockTeacherSlots, subjectSummariesOf } from '../../apps/api/src/modules/catalog/index.js';
 import { createPartyRerender } from '../../apps/api/src/modules/certification/index.js';
 import {
   declaredGenderOf,
@@ -214,6 +218,64 @@ async function correctAsComposed(tx: Transaction, flagId: string) {
   return { flaggedUserId: person, from, to, endedEnrollments: still.length };
 }
 
+/**
+ * 005:T023 (Q-G1 (b)): `genderFlags.get`'s preview as the admin composition draws it (this file's
+ * head), from the owners' entries its `previewOf` binds: booking's `enrollmentsAmong`, catalog's
+ * `subjectSummariesOf` and identity's `sessionPartiesOf`, the other party relative to the person.
+ */
+async function previewAsComposed(tx: Transaction, person: string) {
+  const confirmed = await confirmedEnrollmentsOf(tx, person);
+  const genders = await sessionPartiesOf(
+    tx,
+    sortedUnique([
+      person,
+      ...confirmed.flatMap(({ studentUserId, teacherUserId }) => [studentUserId, teacherUserId]),
+    ]),
+  );
+  const declared = genders.get(person)?.gender;
+  const ending =
+    declared === undefined
+      ? []
+      : confirmed
+          .filter(({ studentUserId, teacherUserId }) => {
+            const theirs = genders.get(
+              studentUserId === person ? teacherUserId : studentUserId,
+            )?.gender;
+            return theirs !== undefined && theirs !== other(declared);
+          })
+          .map(({ id }) => id)
+          .sort();
+  const rows = await enrollmentsAmong(tx, ending);
+  const subjects = await subjectSummariesOf(
+    tx,
+    sortedUnique(rows.map(({ snapshotSubjectId }) => snapshotSubjectId)),
+  );
+  const parties = await sessionPartiesOf(
+    tx,
+    sortedUnique(
+      rows.flatMap(({ studentUserId, teacherUserId }) => [studentUserId, teacherUserId]),
+    ),
+  );
+  const lines = ending.flatMap((enrollmentId) => {
+    const row = rows.find(({ id }) => id === enrollmentId);
+    const subject = row === undefined ? undefined : subjects.get(row.snapshotSubjectId);
+    if (row === undefined || subject === undefined) return [];
+    const counterpart = row.studentUserId === person ? row.teacherUserId : row.studentUserId;
+    return [
+      {
+        enrollmentId,
+        subject,
+        sessions: row.snapshotSessionCount,
+        counterpart: {
+          userId: counterpart,
+          displayName: parties.get(counterpart)?.displayName ?? null,
+        },
+      },
+    ];
+  });
+  return { count: lines.length, lines };
+}
+
 /** Runs an action on a committed transaction bound to its own after-commit list, as the kind does. */
 async function acted<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
   const list = new RequestLive({ publish: () => undefined }, SILENT);
@@ -374,6 +436,47 @@ describe('genderFlags.correct over the real tables (FR-616, FR-GENDER-7)', () =>
     expect(await causeOf(correct(flagId))).toBe('already_resolved');
     expect(await genderOf(made.studentId)).toBe('male');
   });
+});
+
+// 005:T023 (B49, Q-G1 (b)): the preview's lines on the real tables, read with no lock and writing
+// nothing, both sides of the enrollment flagged in turn.
+describe('genderFlags.get’s preview lines over the real tables (005:T023, Q-G1 (b))', () => {
+  it.each(['student', 'teacher'] as const)(
+    'a flagged %s’s line: the enrollment’s subject, its sessions and the other party',
+    async (side) => {
+      const made = await confirmedWorld('female');
+      await database.user.update({
+        where: { id: made.teacherId },
+        data: { displayName: 'المعلمة' },
+      });
+      await database.user.update({
+        where: { id: made.studentId },
+        data: { displayName: 'الطالبة' },
+      });
+      const person = side === 'student' ? made.studentId : made.teacherId;
+      const otherParty =
+        side === 'student'
+          ? { userId: made.teacherId, displayName: 'المعلمة' }
+          : { userId: made.studentId, displayName: 'الطالبة' };
+      const preview = await database.$transaction((tx) => previewAsComposed(tx, person), OPTIONS);
+      expect(preview).toEqual({
+        count: 1,
+        lines: [
+          {
+            enrollmentId: made.enrollmentId,
+            subject: { id: made.subjectId, nameAr: 'مادة', nameEn: 'Subject' },
+            sessions: 4,
+            counterpart: otherParty,
+          },
+        ],
+      });
+      expect(await genderOf(person)).toBe('female');
+      expect((await stateOf(made.enrollmentId)).enrollment).toEqual({
+        status: 'confirmed',
+        cancellationReason: null,
+      });
+    },
+  );
 });
 
 describe('a hold awaiting payment (Q-G2 (c))', () => {

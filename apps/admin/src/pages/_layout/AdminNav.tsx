@@ -50,6 +50,9 @@ export const NAV_GROUPS: readonly {
       { path: '/review', label: 'admin.nav.items.sessionReview', icon: 'activity' },
       { path: '/disputes', label: 'admin.nav.items.disputes', icon: 'flag' },
       { path: '/cases', label: 'admin.nav.items.cases', icon: 'scale' },
+      // 005:T023 (B49): the reports and the gender flags, two queues.
+      { path: '/reports', label: 'admin.nav.items.reports', icon: 'triangle-alert' },
+      { path: '/gender', label: 'admin.nav.items.gender', icon: 'user-x' },
     ],
   },
   {

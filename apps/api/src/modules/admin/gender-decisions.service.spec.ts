@@ -5,6 +5,10 @@
 // - `get` answers moderation's flag and the preview of what a correction would end now: the
 //   person's confirmed enrollments whose two declared genders would differ once the person's gender
 //   is the other one, read from booking's and identity's entries; nothing for a deleted person;
+//   005:T023 (B49, Q-G1 (b)): one line per such enrollment, in that order, with its own subject and
+//   sessions and its other party relative to the person (whichever side the person is on), the name
+//   null once that account is deleted; the count is the number of lines. Red first on the old
+//   composition, then under named mutants (lane C's runs, `mutants`).
 // - `list`, `raise` and `dismiss` are moderation's, on the call's transaction, with the log.
 // Both genders are proved: a man corrected to a woman and a woman to a man.
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -46,27 +50,95 @@ const DETAIL: GenderFlagDetail = {
 
 let calls: { name: string; args: unknown[] }[];
 let genders: Map<string, Gender>;
+/** 005:T023: the live accounts' names, as identity's `sessionPartiesOf` answers them. */
+let names: Map<string, string>;
+/** 005:T023: the enrollments booking's `enrollmentsAmong` still answers. */
+let present: Set<string>;
 
 beforeEach(() => {
   calls = [];
   genders = new Map();
+  names = new Map([
+    [PERSON, 'الشخص المبلغ عنه'],
+    [SAME, 'الطالب'],
+    [SAME_TOO, 'المعلم'],
+    [DIFFERENT, 'الآخر'],
+  ]);
+  present = new Set([E1, E2, E3, E4]);
 });
 
-/** The person teaches `SAME` (E2) and `SAME_TOO` (E1), `DIFFERENT` (E3) and a deleted one (E4). */
+/** 005:T023: two subjects, so a line drawn with another enrollment's subject shows. */
+const TAJWEED = {
+  id: '0199d0a0-0000-7000-8000-00000000c0d1',
+  nameAr: 'التجويد',
+  nameEn: 'Tajweed',
+};
+const HIFZ = {
+  id: '0199d0a0-0000-7000-8000-00000000c0d2',
+  nameAr: 'الحفظ',
+  nameEn: 'Memorisation',
+};
+
+/**
+ * The person learns from `SAME_TOO` (E1, the person the student) and teaches `SAME` (E2),
+ * `DIFFERENT` (E3) and a deleted one (E4). 005:T023: E1 is eight sessions of Tajweed, E2 four of
+ * Hifz.
+ */
+const ENROLLMENTS = [
+  { id: E1, studentUserId: PERSON, teacherUserId: SAME_TOO, subject: TAJWEED, sessions: 8 },
+  { id: E2, studentUserId: SAME, teacherUserId: PERSON, subject: HIFZ, sessions: 4 },
+  { id: E3, studentUserId: DIFFERENT, teacherUserId: PERSON, subject: HIFZ, sessions: 4 },
+  { id: E4, studentUserId: GONE, teacherUserId: PERSON, subject: HIFZ, sessions: 4 },
+];
+
 const reads: GenderDecisionReads = {
   confirmedEnrollmentsOf: async (_tx, userId) => {
     calls.push({ name: 'confirmedEnrollmentsOf', args: [userId] });
-    return [
-      { id: E1, studentUserId: SAME_TOO, teacherUserId: PERSON },
-      { id: E2, studentUserId: SAME, teacherUserId: PERSON },
-      { id: E3, studentUserId: DIFFERENT, teacherUserId: PERSON },
-      { id: E4, studentUserId: GONE, teacherUserId: PERSON },
-    ];
+    return ENROLLMENTS.map(({ id, studentUserId, teacherUserId }) => ({
+      id,
+      studentUserId,
+      teacherUserId,
+    }));
   },
   gendersOf: async (_tx, userIds) => {
     calls.push({ name: 'gendersOf', args: [userIds] });
     return new Map([...genders].filter(([id]) => userIds.includes(id)));
   },
+  previewOf: async (_tx, enrollmentIds) => {
+    calls.push({ name: 'previewOf', args: [enrollmentIds] });
+    const rows = ENROLLMENTS.filter(({ id }) => enrollmentIds.includes(id) && present.has(id));
+    return {
+      enrollments: rows.map(({ id, studentUserId, teacherUserId, subject, sessions }) => ({
+        id,
+        studentUserId,
+        teacherUserId,
+        snapshotSubjectId: subject.id,
+        snapshotSessionCount: sessions,
+      })),
+      subjects: new Map(rows.map(({ subject }) => [subject.id, subject])),
+      names: new Map(
+        [...names].filter(([id]) =>
+          rows.some(
+            ({ studentUserId, teacherUserId }) => id === studentUserId || id === teacherUserId,
+          ),
+        ),
+      ),
+    };
+  },
+};
+
+/** 005:T023: the line of E1 (the person the student: the teacher the other party) and of E2. */
+const LINE_E1 = {
+  enrollmentId: E1,
+  subject: TAJWEED,
+  sessions: 8,
+  counterpart: { userId: SAME_TOO, displayName: 'المعلم' },
+};
+const LINE_E2 = {
+  enrollmentId: E2,
+  subject: HIFZ,
+  sessions: 4,
+  counterpart: { userId: SAME, displayName: 'الطالب' },
 };
 
 const log = { info: () => undefined, warn: () => undefined };
@@ -138,23 +210,64 @@ describe('genderFlags.get', () => {
       worldOf(person);
       expect(await decisions.get(TX, ADMIN, { flagId: FLAG })).toEqual({
         ...DETAIL,
-        correctionWouldEnd: { count: 2, enrollmentIds: [E1, E2] },
+        correctionWouldEnd: { count: 2, lines: [LINE_E1, LINE_E2] },
       });
       expect(calls.map(({ name }) => name)).toEqual([
         'detail',
         'confirmedEnrollmentsOf',
         'gendersOf',
+        'previewOf',
       ]);
       expect(calls[1]?.args).toEqual([PERSON]);
+      // 005:T023: the lines read for the enrollments the preview ends, in its order.
+      expect(calls[3]?.args).toEqual([[E1, E2]]);
     });
   }
 
-  it('previews nothing for a person no longer there', async () => {
+  it('previews nothing for a person no longer there, reading no line', async () => {
     worldOf('male');
     genders.delete(PERSON);
     expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
       count: 0,
-      enrollmentIds: [],
+      lines: [],
+    });
+    expect(calls.map(({ name }) => name)).not.toContain('previewOf');
+  });
+
+  // 005:T023 (Q-G1 (b)): the lines.
+  it('names the other party of each line, whichever side the person is on, never the person', async () => {
+    worldOf('female');
+    const { lines } = (await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd;
+    expect(lines.map(({ counterpart }) => counterpart.userId)).toEqual([SAME_TOO, SAME]);
+    expect(lines.map(({ counterpart }) => counterpart.userId)).not.toContain(PERSON);
+  });
+
+  it('draws each line with its own enrollment’s subject and sessions', async () => {
+    worldOf('male');
+    const { lines } = (await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd;
+    expect(
+      lines.map(({ enrollmentId, subject, sessions }) => [enrollmentId, subject, sessions]),
+    ).toEqual([
+      [E1, TAJWEED, 8],
+      [E2, HIFZ, 4],
+    ]);
+  });
+
+  it('counts the lines it draws: an enrollment gone between the reads is neither drawn nor counted', async () => {
+    worldOf('male');
+    present.delete(E2);
+    expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
+      count: 1,
+      lines: [LINE_E1],
+    });
+  });
+
+  it('keeps the other party’s id with no name once that account is deleted', async () => {
+    worldOf('male');
+    names.delete(SAME);
+    expect((await decisions.get(TX, ADMIN, { flagId: FLAG })).correctionWouldEnd).toEqual({
+      count: 2,
+      lines: [LINE_E1, { ...LINE_E2, counterpart: { userId: SAME, displayName: null } }],
     });
   });
 });
