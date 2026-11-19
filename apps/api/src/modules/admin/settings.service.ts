@@ -9,10 +9,7 @@ import type { z } from 'zod';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
-import type {
-  IdempotencyService,
-  JsonValue,
-} from '../../platform/idempotency/idempotency.service.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import {
   SETTINGS_REGISTRY,
@@ -62,8 +59,15 @@ export class SettingsService implements SettingsReader {
 // change applies from the next read of the key (nothing is cached), except the signed-in default's
 // limit, which the limiter holds up to 60 s (`platform/guards/rate-limit.guard.ts`).
 
+/**
+ * A JSON value as the contract's `z.json()` reads it (its lists mutable), so what the service answers
+ * is what the procedures' schemas take, and the audit entry's snapshot too.
+ */
+export type SettingJson =
+  string | number | boolean | null | SettingJson[] | { [key: string]: SettingJson };
+
 /** A value a change stores: JSON, never null (every registry schema refuses it). */
-export type StoredValue = Exclude<JsonValue, null>;
+export type StoredValue = Exclude<SettingJson, null>;
 
 /** The settings table, as the panel's two procedures reach it: `settings.repository.ts`. */
 export interface SettingsWriter {
@@ -82,13 +86,13 @@ export interface SettingsAdministrationDependencies {
 /** One setting as `settings.list` answers it (contracts/admin/settings.ts, `adminSetting`). */
 export interface ListedSetting extends Omit<SettingEntry, 'schema'> {
   readonly key: string;
-  readonly value: JsonValue;
+  readonly value: SettingJson;
 }
 
 /** What a change asked: `settings.update`'s input, as its contract parsed it. */
 export interface SettingChangeAsked {
   readonly key: string;
-  readonly value: JsonValue;
+  readonly value: SettingJson;
   readonly reason: string;
   readonly idempotencyKey: string;
 }
@@ -96,12 +100,12 @@ export interface SettingChangeAsked {
 /** What a change did, for the router's audit entry and the answer; the key's stored outcome. */
 export type SettingChange = {
   readonly key: string;
-  readonly before: JsonValue;
-  readonly after: JsonValue;
+  readonly before: SettingJson;
+  readonly after: SettingJson;
 };
 
 export interface SettingsAdministration {
-  list(tx: Transaction, adminId: string): Promise<{ readonly items: readonly ListedSetting[] }>;
+  list(tx: Transaction, adminId: string): Promise<{ readonly items: ListedSetting[] }>;
   update(
     tx: Transaction,
     adminId: string,
@@ -129,7 +133,14 @@ export function createSettingsAdministration({
       const values = await writerOn(tx).valuesOf(keys);
       const items = keys.map((key): ListedSetting => {
         const { bounds, unit, group, srsRow } = SETTINGS_REGISTRY[key] as SettingEntry;
-        return { key, value: (values.get(key) ?? null) as JsonValue, bounds, unit, group, srsRow };
+        return {
+          key,
+          value: (values.get(key) ?? null) as SettingJson,
+          bounds,
+          unit,
+          group,
+          srsRow,
+        };
       });
       return { items };
     },
@@ -155,7 +166,7 @@ export function createSettingsAdministration({
         },
         async (keyed): Promise<SettingChange> => {
           const { before } = await writerOn(keyed).update(key, after, adminId);
-          return { key, before: before as JsonValue, after };
+          return { key, before: before as SettingJson, after };
         },
       );
       if (!replayed) log.info({ adminId, key }, 'A setting was changed');
