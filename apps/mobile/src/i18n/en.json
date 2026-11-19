@@ -468,7 +468,8 @@
         "adminOpenedForTeacher": "A case the administration opened for you",
         "teacherSuspended": "Your account was suspended",
         "adminEnded": "Ended by the administration",
-        "genderCorrection": "An account details correction"
+        "genderCorrection": "An account details correction",
+        "studentComplaintEnded": "Ended on a complaint against the student"
       },
       "empty": {
         "title": "No dues yet",

@@ -468,7 +468,8 @@
         "adminOpenedForTeacher": "حالة فتحتها الإدارة لك",
         "teacherSuspended": "إيقاف حسابك",
         "adminEnded": "إنهاء الباقة من الإدارة",
-        "genderCorrection": "تصحيح بيانات الحساب"
+        "genderCorrection": "تصحيح بيانات الحساب",
+        "studentComplaintEnded": "إنهاء الباقة بشكوى ضد الطالب"
       },
       "empty": {
         "title": "لا مستحقات بعد",

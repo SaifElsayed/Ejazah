@@ -43,6 +43,8 @@ const REASON: Readonly<Record<string, MessageKey>> = {
   teacher_suspended: 'money.dues.reason.teacherSuspended',
   admin_ended: 'money.dues.reason.adminEnded',
   gender_correction: 'money.dues.reason.genderCorrection',
+  // 003:T112 (Q-4 (a)): an administrator's end on a teacher's complaint against the student.
+  student_complaint_ended: 'money.dues.reason.studentComplaintEnded',
 };
 
 /** The reason's words, or undefined for none or one the phone does not know. */
