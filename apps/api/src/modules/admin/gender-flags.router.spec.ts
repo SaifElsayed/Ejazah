@@ -50,7 +50,18 @@ const ITEM = {
   createdAt: '2026-11-18T09:00:00.000Z',
 };
 
-const PREVIEW = { count: 1, enrollmentIds: [ENROLLMENT] };
+// 005:T023 (B49, Q-G1 (b)): the preview is a count and one line per enrollment.
+const PREVIEW = {
+  count: 1,
+  lines: [
+    {
+      enrollmentId: ENROLLMENT,
+      subject: { id: '0199d0a0-0000-7000-8000-00000000d1d1', nameAr: 'التجويد', nameEn: 'Tajweed' },
+      sessions: 8,
+      counterpart: { userId: RAISER, displayName: null },
+    },
+  ],
+};
 
 function surface({
   replayed = false,
