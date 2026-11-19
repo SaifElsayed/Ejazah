@@ -1,246 +1,297 @@
 # Research: The ijazah programme
 
 Decisions for `plan.md`, numbered from R-501 (Phase 4's run to R-414). Each gives the decision, why, the alternatives,
-and the code it stands on, read on `da98e600` (= `244096f1` + B-M4's documents).
+and the code it stands on, read on `da98e600` (= `244096f1` + B-M4's documents). Revised after the analysis of
+2026-11-19 (`ejazah-tools\track2\b-m4\analyze-triage.md`) and the owner's DEC-94.
 
-## R-501 — One enrollment per programme; the assessment is its session 0
+**Open with the owner (analyze, section C):**
+- I-2: no offer by the deadline;
+- G-4: a suspended teacher;
+- I-3: the switch;
+- U-1: the student's own weekly time.
+
+Each is written below with its recommended (a) and marked «pending».
+
+## R-501 — One enrollment per programme; the assessment is its session 1
 
 - **Decision.**
   - The programme is one `enrollments` row with `snapshot_track = ijazah_track`, created at the assessment's checkout
     as today (a hold, `pending_payment`, confirmed by the paid event).
-  - The assessment is the enrollment's session with `sequence_number = 0`.
-  - The offer's sessions are numbered 1..N.
-  - Every count that decides money or completion (the half, the end, `snapshot_session_count`) counts `>= 1` only.
+  - The assessment is the enrollment's **session 1**. The offer's sessions are 2..N+1.
+  - `snapshot_session_count` is 1 until the offer, then N+1.
+  - The half counts all N+1 sessions, the assessment included (DEC-94: 40 + 1 = 41, the half at 21). Completion counts
+    them too.
+  - A student who does not continue leaves a one-session enrollment.
 - **Why.**
-  - The money rules already work per enrollment. DEC-85's refund sums every order of one enrollment
-    (`case-amount.rules.ts:125-131`, `case-amount.repository.ts:17-39`), so the assessment fee is included with no new
-    link.
-  - Slot occupancy holds the weekly time while the enrollment is `confirmed` (`slot-occupancy.service.ts:4-6`), which
-    is FR-BOOK-15's reservation from the assessment to the payment.
+  - The database refuses a session 0 (`sessions_sequence_number_positive_check`, `≥ 1`,
+    `20261101083800_column_checks/migration.sql:36-37`), and the contracts parse `positive()`
+    (`packages/contracts/src/sessions.ts:85,87`). Session 1 needs neither changed.
+  - DEC-94 counts the assessment toward the half.
+  - DEC-85's refund already sums every order of the enrollment (`case-amount.rules.ts:125-131`).
+  - Slot occupancy holds the weekly time while the enrollment is `confirmed` (`slot-occupancy.service.ts:4-6`).
 - **Alternatives.**
-  - A separate assessment enrollment, then a programme enrollment: two occupancies of one weekly time, a cross-link for
-    the refund and for the rate fixed at the first order. Rejected.
-  - A `sessions.is_assessment` column: one more column for what sequence 0 already says.
-- **Code.**
-  - `generation.service.ts:83-86` already takes a `GenerationPlan {count, firstSequenceNumber}` (used by restore).
-  - `share-release.rules.ts:136-138` (`halfReached`) and `completion.service.ts` read the snapshot count; both
-    gain the `>= 1` filter (B-P2).
+  - Session 0, which needs rule 38 relaxed and the contracts widened (analyze V-2).
+  - A separate assessment enrollment, which means two occupancies and a cross-link for the refund.
+- **Completion gate (analyze V-1).** `completion.service.ts:172-186` completes a `confirmed` enrollment once the
+  rows that exist are settled and 72 h have passed, with no count check. Under month-by-month generation that would
+  complete a programme between months. A programme completes only when it is fully paid (`months_paid` = the month
+  count, or in full) and not `awaiting_offer`, `offered` or `paused`; the existing checks follow. Red first on «a paid
+  month settled, the next unpaid».
 
-## R-502 — Every order carries its kind
+## R-502 — Every order carries its kind; the confirm step knows each order
 
-- **Decision.** `payments.kind`, enum `order_kind`:
-  - `package` (today's one-order purchase, the default for every existing row);
-  - `assessment`;
-  - `rest_in_full`;
-  - `instalment`, with `payments.instalment_month` (smallint, set only for an instalment, a check).
-- **The confirm step** (`jobs/confirm-enrollment.ts:229-256`) treats a paid order whose kind the programme expects as
-  no second payment (FR-PAYG-19 as amended):
-  - an `assessment` on a `pending_payment` enrollment;
-  - a `rest_in_full` or the month's next `instalment` on an `offered` or `active` programme.
-- A second paid order for a month already paid takes today's `duplicate_payment` case branch (`:242-246`). No unique
-  index: the second paid event must still be recorded (FR-718).
-- **Why.** FR-PAYG-19 as amended and ADR 0024 D2 name the kind. The release rules and the monitor need it to tell the
-  assessment's share from the months'.
-- **Code.** `payments.prisma:12-64` has no kind (the explorer, item 1); `checkout.service.ts:488-558`
-  (`#createAndRecord`) writes the order.
+- **Decision.** `payments.kind`, enum `order_kind`: `package` (today's, the default for existing rows) · `assessment`
+  · `rest_in_full` · `instalment`, with `payments.instalment_month` (set only for an instalment, a check).
+- **The confirm step** (`jobs/confirm-enrollment.ts:229-256`; analyze V-3):
+  - A per-order marker `payments.confirmed_at`, set by the step for the order it processed; a replayed event finds it
+    and does nothing. Today's single `enrollments.confirming_payment_id` is not enough for several orders.
+  - An order of an expected kind skips today's cover and case gates (`cases !== null`, `covers()`,
+    `compensation-case.service.ts:99-103`), so month m+1 paid while month m's `duplicate_payment` case is open still
+    opens its month. Expected means:
+    - an `assessment` on `pending_payment`;
+    - a `rest_in_full`, or the next `instalment`, on `offered`, `active` or `paused`.
+  - `rest_in_full` and `instalment` take a confirm path with **no hold**: generation only, under the enrollment's
+    lock. The hold path (`:257-284`) stays for `package` and `assessment`.
+  - A second paid order for a month already paid takes the `duplicate_payment` case. There is no unique index, because
+    the second paid event must be recorded (FR-718).
+- **Specs:** a replay, «m+1 paid while m's case is open», and two paid events for one month (DB race).
 
 ## R-503 — An ijazah-track package sets three prices; its count, length and total come at the offer
 
 - **Decision.**
-  - `packages` gains `price_30_piasters`, `price_45_piasters` and `price_60_piasters`, all three set on an
-    `ijazah_track` package and none on a recitation one (a check).
-  - On an ijazah-track package, `session_count`, `session_duration_minutes` and `price_piasters` become NULL (made
-    nullable, with a check that a recitation package has them).
-  - Readers that assume them (discovery's lowest price, the average of DEC-88, checkout, the editor) branch on the
-    track.
-- **Existing ijazah-track packages** (closed-test data, DEC-87) are deactivated by the migration, their enrollments
-  untouched. → plan question **P2**.
-- **Why.** The owner's Q-C1 model. Three columns match the three fixed lengths (FR-PROFILE-4) better than a child
-  table, and a check holds the rule in the database.
-- **Alternatives.** A `package_length_prices` table: one more join on discovery for three fixed values. Keeping the old
-  columns filled on ijazah packages with placeholder values: a lie in the data.
-- **Code.** `catalog.prisma:43-71`; DEC-88's average is `catalog` T113's read by track and length.
+  - `packages` gains `price_30_piasters`, `price_45_piasters`, `price_60_piasters`: all three on an `ijazah_track`
+    package, none on a recitation one (a check).
+  - On an ijazah-track package, `session_count`, `session_duration_minutes` and `price_piasters` are NULL (made
+    nullable, with the track check).
+  - The package's contract output becomes a union by track; recitation's fields stay non-null (R-API-9; analyze K-3).
+- **Pending (I-3, recommended (a)): a setting `programme_enabled`, off by default.**
+  - While it is off, an ijazah-track package is created and sold as today (one order, B-M2's rule).
+  - Flipping it on (the owner, after B-P4 merges) makes new ijazah-track packages programme packages and deactivates
+    the old ones. Their enrollments are untouched (P2 (a)).
+  - So DEC-92's fallback «sold as today until it lands» holds, whatever date B-P4 merges.
+  - `packages.is_programme` tells a programme package from a pre-switch ijazah-track one; the check and every reader
+    branch on it, not on the track alone.
+- **Why.** The owner's Q-C1 model; three columns for three fixed lengths.
 
 ## R-504 — The assessment's booking reuses today's checkout
 
 - **Decision.**
-  - For an `ijazah_track` package, the booking sheet offers the teacher's active weekly times of any length `>=` the
-    assessment's length (§3.14, 30). Today it offers exactly the package's length
-    (`booking-slots.service.ts:198`).
-  - The hold, the checkout and the order are today's, with `kind = assessment` and the gross = the §3.14 fee.
-  - The paid event confirms the enrollment and generates session 0 only, at the first weekly occurrence, for the
+  - For a programme package, the booking sheet and the hold offer the teacher's active weekly times of length `>=` the
+    assessment's (§3.14, 30). Two places compare exactly today: `booking-slots.service.ts:198` and
+    `holds.service.ts:505` (analyze I-1).
+  - FR-PROFILE-8 («shall equal») is amended for the ijazah track as A-2 (a)'s consequence, recorded in DEC-94's
+    neighbour or by the review session (pending: whether the owner is asked).
+  - The hold, the checkout and the order are today's, with `kind = assessment` and the gross = the fee.
+  - The paid event confirms the enrollment and generates session 1 only, at the first weekly occurrence, for the
     assessment's length.
-  - A `programmes` row starts in `awaiting_offer`.
-  - The enrollment's snapshot holds, until the offer: count 0, the assessment's length, the fee.
-- **Publishing:** an ijazah-track package is refused (`assessment_fee_unset`) while the fee is 0 (R-515).
+  - A `programmes` row starts in `awaiting_offer`. The snapshot holds count 1, the assessment's length and the fee.
+- **Readers of the snapshot** (analyze U-8): every reader of `snapshot_session_count`, `snapshot_duration_minutes` and
+  `snapshot_price_piasters` is listed in T005 and checked for a one-session enrollment and for one whose snapshot
+  changes at the offer:
+  - the half and end rules;
+  - completion;
+  - restore;
+  - remaining-sessions;
+  - certification eligibility;
+  - the phone's «x of N».
+- Publishing is refused (`assessment_fee_unset`) while the fee is 0 (R-515).
 
-## R-505 — The 48 hours run from the assessment's end (FR-BOOK-15's own words)
+## R-505 — The 48 hours run from the delivered assessment's end
 
 - **Decision.**
-  - The deadline = the assessment session's scheduled end + 48 h (§3.14). The SRS words it as «after the assessment …
-    within 48 hours».
-  - The teacher's offer and the student's payment both fall inside it.
-  - The first regular session is the first weekly occurrence of the time after the deadline, even when the student
-    pays on the first day.
-  - No payment by the deadline (or no offer): the enrollment is cancelled `offer_lapsed`, its weekly time is free at
-    once, and the fee is kept.
-  - The student's reminder shows on the programme card from the offer onward (rule 17).
-- **Spec fix.** `spec.md` FR-706 said «48 hours after the offer», a drift from the SRS; it is corrected here.
-- **The rare case of no offer within 48 h** is an assumption, flagged for the review session: the teacher's offer
-  screen shows the deadline. It is not an owner question.
+  - `pay_by` = the end of the assessment session as delivered + 48 h (§3.14). That is FR-BOOK-15's «after the
+    assessment … within 48 hours».
+  - It is set when session 1 is settled `done`. A teacher's no-show, a postponement or a dispute moves the assessment
+    (DEC-84, DEC-86), and `pay_by` follows the make-up's delivery (analyze U-2).
+  - The offer is refused `assessment_not_delivered` before.
+  - The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze U-5;
+    FR-BOOK-15's «first weekly occurrence after»).
+  - The student's own cancellation records `offer_declined`; no payment by `pay_by` records `offer_lapsed`. Either
+    frees the weekly time at once and keeps the fee. The assessment's share falls due per DEC-94 (R-512).
+- **Pending (I-2, recommended (a)): no offer sent by `pay_by`.** Lapsing would be a refusal without an Administrator
+  (FR-BOOK-15). So a programme still `awaiting_offer` at `pay_by` opens an Administrator item instead. The
+  Administrator decides: a refusal (as R-513), or `pay_by` extended by 48 h.
 
 ## R-506 — The offer
 
-- **Decision.** `programme.offer` (the teacher):
-  - level, readiness, expected length (texts, bounded);
-  - the length, which must be `<=` the reserved weekly time's `duration_minutes`;
-  - the count (bounded);
-  - the total = count × the package's price for that length, read under the package's lock at the offer.
-- In one transaction it writes the offer on `programmes` and the enrollment's snapshot (count, length, total), then
-  moves the programme to `offered`. Count, length and total are frozen from then on.
-- A later change of the package's prices reaches later offers only.
+- **Decision.** `teacher.programme.offer`:
+  - level, readiness, expected length (texts, 1–500);
+  - the length, `<=` the reserved weekly time's;
+  - the count N, 1–200 (a contract constant, a definition; analyze U-6);
+  - the total = N × the package's price for that length, read under the package's lock.
+- Paying in full requires the total > the fee (U-6).
+- In one transaction it writes the offer and the enrollment's snapshot (count N+1, the length, the total), then moves
+  the programme to `offered`. All are frozen after.
+- The amounts come from `packages/money` through payments' entry (R-MONEY-6, the boundary lint; analyze K-5).
 
-## R-507 — Months are generated one at a time; an unpaid month simply has no sessions
+## R-507 — Months are generated one at a time; each session knows its month
 
 - **Decision.**
-  - Month m holds sessions `4(m−1)+1 .. min(4m, N)`. Its amount is 4 × the session price; the last month takes the
-    remainder (`packages/money`, the remainder rule of DEC-85).
-  - Paying in full generates 1..N.
-  - Paying a month generates that month's sessions through `GenerationPlan {count, firstSequenceNumber}`, from the
-    first weekly occurrence after both the previous month's last session and the payment (with the booking lead).
-- **The pause** (FR-721):
-  - Since an unpaid month has no sessions, nothing is held, opened or evaluated.
-  - The pause is the programme's state, set when the next weekly occurrence after the paid month's last session starts
-    with the month unpaid.
-  - A late payment generates the month from the next occurrence, so the sessions missed in the pause fall at the end
-    by construction (FR-722), and the slot's release moves with the final session.
-- **Why.** No session row to cancel or exclude from evaluation (`evaluation.repository.ts:19` reads `scheduled`,
-  `disputed` only), and no special release code.
+  - Month m holds 4 of the offer's sessions; the last month the remainder.
+  - A new column `sessions.programme_month` (smallint, NULL for the assessment and for non-programme enrollments)
+    records each session's month at generation. A make-up or a postponement takes its original's month (analyze V-4).
+  - Generation always starts from max(`sequence_number`) + 1, since a make-up takes max + 1 today
+    (`makeup-booking.service.ts:376`; `@@unique([enrollmentId, sequenceNumber])`, `sessions.prisma:85`). It writes
+    `programme_month`.
+  - Paying in full generates all N; a paid month generates its 4, from the first weekly occurrence after both the
+    paid month's last session and the payment.
+- **Month 1's amount:** 4 × the session price. The last month takes the remainder (`packages/money`).
+- **«4 sessions a month»** is a definition by DEC-93, not an operational number (R-MONEY-12; analyze K-2, the review
+  session confirms).
+- **The paid month's last session** (analyze I-4) is the latest end among the sessions of that `programme_month`,
+  make-ups included (`lastToEnd`, B-M2's precedent).
+- **The pause:** an unpaid month has no sessions, so nothing is held or evaluated. The pause is the programme's state,
+  set when the next weekly occurrence after the paid month's last session starts unpaid. A late payment generates the
+  month from the next occurrence, so the paused weeks fall at the end.
+- **Pending (U-1, recommended (a)): the student's own weekly time.** The student's booking of another teacher refuses
+  a weekly time overlapping their active programme's (discovery and holds, FR-BOOK-5's axis (b) on the reservation).
+  Without it, a month's generation could be refused and today's refusal branch would cancel the whole enrollment.
+  - Defence in depth either way: a refused month's generation never cancels a programme enrollment. It keeps the
+    order paid, opens a case and logs.
 
 ## R-508 — One sweep, `advance-programmes`, every minute
 
-- **Decision.** A scheduled job (`defineJob`, `jobs/job.ts:16-50`, registered in `worker.ts`'s `jobs` list) does
-  each step under the programme's row lock, in its own transaction, logging one line of ids and a reason per action:
-  1. **lapse:** cancel `offer_lapsed` programmes past their 48 h;
-  2. **due:** for each active programme whose paid month's last session has ended and whose next month is unpaid,
-     mark the month due and, with a saved card, start the automatic charge (R-509);
-  3. **retry:** for a soft-declined month, charge again at 1, 3, 5 and 7 days after the first failure (§3.14), at most
-     4 times;
-  4. **pause:** set `paused_at` when the next occurrence starts with the month unpaid.
-- **Double run:** each step reads its state and writes nothing when already done (R-API-14).
-- **Why.** The `advance-remedies` pattern (`jobs/advance-remedies.ts:35,100`): an every-minute sweep that catches up
-  after downtime.
+- **Decision.** A scheduled job (`jobs/job.ts:16-50`), registered by the integration's `006:` block in `worker.ts`.
+  - It acts only on a programme whose enrollment is `confirmed` (analyze G-5).
+  - Each step runs under the programme's row lock, in its own transaction, with one log line of ids and a reason:
+    1. **pay_by:** past `pay_by` with no payment: `offered` → cancel `offer_lapsed`; `awaiting_offer` → the
+       Administrator item (I-2 (a), pending).
+    2. **due:** mark the next month due at the paid month's last session's end; with a saved card, record the
+       automatic order (R-509).
+    3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
+       at most 4.
+    4. **pause:** set `paused_at` when the next occurrence starts with the month unpaid.
+  - **«Pending» (analyze A-1)** is an automatic order of the month in `created` and unexpired. Steps 2 and 3 skip while
+    a manual order of the month is `created` and unexpired. A manual payment is refused (`charge_pending`) while an
+    automatic one is.
+  - **Double run:** each step reads the state it moves from (R-API-14).
+- **Pending (G-4, recommended (a)): a suspended teacher.** The sweep does nothing while the teacher is suspended: no
+  due, no charge, no pause. A ban or a deletion ends the programme as a dropout (`teacher_ended`, DEC-85).
+  `teacher_suspended` joins the dropout set only when the suspension becomes a close (FR-504 pauses, it does not close;
+  `share-release.rules.ts:103-111`).
 
-## R-509 — The automatic charge: a merchant-initiated charge on the saved card
-
-- **Decision.**
-  - `PaymentPort` gains `chargeSavedCard(enrollmentId, gross, currency, cardToken, payee)`. It answers a `Checkout`
-    with no URL, the result arriving by the same signed webhook as every order.
-  - The Paymob adapter creates an intention on the saved-card (Moto) integration with the payee split and pays it with
-    the token. The fake adapter answers by its stand-in events, with a soft or hard decline on demand.
-  - The `failed` event carries `declineKind: 'soft' | 'hard'`, mapped from the gateway's response code by a table.
-    **An unknown code counts as hard (never retried).**
-  - The live adapter stays disabled until the gateway's written answers (OPEN-11; FR-720): with no Moto integration id
-    configured, no card is offered for saving and every month is manual.
-- **Why.** DEC-92 (no subscription service). The webhook, its HMAC (`paymob.adapter.ts:353-362`) and `order-events`
-  stay the single path.
-- **Code.** The port today: `createCheckout`, `cancelCheckout`, `verifyAndParseEvent` and two recipient calls
-  (`payment.port.ts:107-135`); no token support (the explorer, item 5).
-
-## R-510 — The saved card: captured from the first card payment, kept encrypted
+## R-509 — The automatic charge: recorded first, charged after commit
 
 - **Decision.**
-  - The first month's (or rest-in-full's) intention asks the gateway to save the card when the student ticked consent.
-  - The adapter maps the gateway's token callback to a new `GatewayEvent` `card_saved {gatewayOrderId, token, last4,
-    brand}`.
-  - Payments stores it in `programme_cards`: the token encrypted with `ColumnCipher`
-    (`platform/crypto/encryption.ts:167`), registered in payments' `createEncryptedColumns` so `reencrypt-columns`
-    rotates it.
-  - Only `last4` and the brand are shown. The token is never logged or returned.
-  - The row is deleted at a close, at the programme's end, and by the account's erasure.
-  - «Change card» = a manual payment of a due month with consent ticked; its `card_saved` replaces the row.
-- Whether the token callback is HMAC-signed is OPEN-11. Until written, the live adapter accepts no token.
+  - The sweep's transaction records an `instalment` order in `created`:
+    - its merchant reference deterministic from the enrollment, month and attempt;
+    - its `expires_at` = now + `checkout_ttl` (the existing setting).
+  - After commit it calls `PaymentPort.chargeSavedCard(paymentId, gross, currency, cardToken, payee)`, which answers
+    `{ gatewayOrderId }`; the result arrives by the same signed webhook as every order.
+  - A crash between commit and call leaves the order `created`; the next run finds it (A-1's pending) and calls again
+    with the same reference, which the gateway refuses as a duplicate where it can. An expired-then-paid order is
+    FR-PAYG-19's (analyze G-6).
+  - The Paymob adapter creates an intention on the saved-card (Moto) integration with the split and pays it with the
+    token. The fake answers paid, soft or hard on demand.
+  - The `failed` event carries `declineKind` from a code table; an unknown code counts as hard (never retried).
+  - **Off in live** until the gateway's written answers (OPEN-11; FR-720): with no Moto integration id configured, no
+    card is offered for saving and every month is manual.
+  - No gateway call while holding a database lock.
+- **R-514 corrected (analyze I-6).** `booking.recordOrderFailed` never cancels today. `holds.service.ts:330` only picks
+  the reason when a hold is released, so a failed instalment needs no change there. The failure's `payment_failed`
+  push is today's path (`order-failed.repository.ts:19-31` → `payment-outcome-notices.port.ts:47-48`).
+
+## R-510 — The saved card
+
+- **Decision.**
+  - The first payment's intention asks to save the card when the student ticked consent.
+  - The gateway's token callback becomes `GatewayEvent.card_saved {gatewayOrderId, token, last4, brand}`.
+  - It is recorded with a new `payment_event_type` member `card_saved` and the provider event id
+    `paymob:<txId>:token` (R-MONEY-8 replay; analyze G-9).
+  - `programme_cards` keeps the token encrypted by `ColumnCipher` (`platform/crypto/encryption.ts:167`). That is
+    R-DB-8, with the `payments.checkout_url_encrypted` precedent (`payments.prisma:50-53`); R-DB-7's hashing cannot
+    serve a token that must be used again (analyze K-4).
+  - It is registered in payments' `createEncryptedColumns` (`index.ts:113`) for `reencrypt-columns`.
+- **«Card detail»** (analyze I-5) = the token, the PAN, the expiry: never in a log, an audit entry or a response.
+  `last4` and the brand may be returned, to the student only.
+- **One close hook** (analyze G-5): booking's cancel path calls payments' `programmeClosed(enrollmentId)` for every
+  closing reason (today's and the programme's). It sets `programmes.state = closed` and deletes the card row.
+- **Erasure:** the card row is deleted by the account's erasure (`identity/deletion.service.ts`,
+  `identity/consequences.ts`, `jobs/erase-kept-data.ts`; `main.ts` wiring is the integration's; analyze G-10).
+- «Change card» = a manual payment of a due month with consent ticked; its `card_saved` replaces the row.
+- A token callback the live adapter cannot verify is refused.
 
 ## R-511 — The rates come from the assessment's order
 
-- **Decision.** `#createAndRecord` (`checkout.service.ts:488-558`) reads the share rate and the 25 % from settings for
-  a `package` or `assessment` order, as today (`:495-505`). For `rest_in_full` and `instalment` it copies them from the
-  programme's `assessment` order (ADR 0025 D6, FR-702).
+`#createAndRecord` (`checkout.service.ts:488-558`) reads the share rate and the 25 % from settings for a `package` or
+`assessment` order (`:495-505`). For `rest_in_full` and `instalment` it copies them from the programme's `assessment`
+order (ADR 0025 D6, FR-702).
 
-## R-512 — The programme's releases
+## R-512 — The programme's releases (DEC-94)
 
-- **Decision.** `share-release.rules.ts` gains, for a programme enrollment:
-  - **`assessment`** (a new milestone): the assessment order's share, due after session 0's dispute window (72 h) with
-    no case open, whatever happens after, the cancelled enrollment of a lapse or a refusal included.
+- **The student does not continue** (`offer_declined`, `offer_lapsed`, `assessment_refused`): a new milestone
+  `assessment`, the assessment order's share (350 of 500). It falls due once `pay_by` has passed and session 1's dispute
+  window has passed with no case open.
+- **The student continues:** no `assessment` milestone.
   - **`ijazah_half`:**
-    - **Base:** 25 % × `teacherShare(offer total, rate)`, the assessment excluded (DEC-93).
-    - **Cap:** the shares of the paid `rest_in_full`/`instalment` orders.
-    - **Trigger:** half of sessions 1..N delivered, as today.
-    - Today the base is the first paid order's share (`:246`, `shareOrdersOf`, repository `:129-156`), which for a
-      programme is the assessment. That is wrong, so the change is red first.
-  - **`ijazah_end`:** the shares of the paid non-assessment orders − releases − the refund share.
-  - **`programme_stopped`** (a new milestone): on a close by an approved stop request, the shares of the paid months −
-    releases, after the last delivered session's window, no case open (DEC-81).
-- One-order ijazah packages (`package` kind) keep today's rules unchanged.
+    - Base: 25 % × `teacherShare(the programme's price as paid, rate)`, where the price is the offer's total in full
+      (the fee inside it) or the total + the fee by months. That gives 1,750 / 1,837.50.
+    - Cap: the shares of the programme's paid orders, the assessment included, minus releases.
+    - Trigger: half of the N+1 sessions delivered, the assessment counted (41 → 21), as `halfReached` does today on the
+      snapshot count.
+    - Today the base is the first paid order's share (`share-release.rules.ts:246`; `shareOrdersOf`, repository
+      `:129-156`). For a programme that order is the assessment, so the change is red first.
+  - **`ijazah_end`:** the shares of all the programme's paid orders − the half released or owed − the refund share
+    (analyze U-4).
+  - **`programme_stopped`** (a new milestone, an approved stop): the shares of the paid orders − the half released or
+    owed − the refund share, after the last delivered session's window, no case open.
+- **The closes' amounts per session** (analyze G-3): DEC-86 and DEC-91's refunds and `student_complaint_close`'s
+  release value a session by **its own order**: the assessment = the fee; a month's session = the month's order ÷ its
+  sessions; in full = (total − fee) ÷ N. Today they take the first order ÷ the count (`case-amount.rules.ts:121,137-168`;
+  `share-release.rules.ts:277-291`), which on a programme would be fee ÷ N.
+- One-order packages (`package` kind) keep today's rules.
 
-## R-513 — Stop and refusal requests
+## R-513 — Stop and refusal requests; reopen
 
-- **Decision.** `programme_requests` (booking): enrollment, teacher, kind (`stop` | `refusal`), reason (1–500), status
-  (`open`, `approved`, `declined`, `withdrawn`), decided by and at.
+- **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a), pending), reason
+  (1–500), status `open`/`approved`/`declined`/`withdrawn`.
   - A partial unique index holds one open request per enrollment and kind.
-  - **`stop`:** refused before `paused_at` + 7 days (§3.14). A renewal withdraws an open one in the payment's
-    transaction, with one log line.
-  - **`refusal`:** allowed from the assessment's end until an offer is sent. Approval cancels the enrollment
-    `assessment_refused` (the fee kept, its weekly time free).
-  - The administrator's approve and decline are audited. Approving a stop closes:
-    - the enrollment `cancelled`, `programme_stopped`;
-    - the weekly time free at once;
-    - the card row deleted;
-    - R-512's release.
-  - **Reopen:** the administrator returns a closed programme to `paused` (the enrollment `confirmed` again), awaiting
-    a manual payment.
+  - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
+    one log line.
+  - **`refusal`:** from the assessment's delivery until an offer is sent. Approval cancels `assessment_refused`.
+  - The administrator's decisions are audited.
+  - **An approved stop:** the enrollment `cancelled` `programme_stopped`, the weekly time free at once, the close hook
+    (R-510), R-512's release.
+- **Reopen** (analyze G-2, U-3):
+  - Only a `programme_stopped` programme.
+  - Under the slot's lock, with restore's refusals: `slot_taken`, `party_restricted`, `gender_mismatch`.
+  - The enrollment `confirmed`, the programme `paused` with `paused_at` = the reopen time, so a new stop request waits
+    7 days.
+- **Restore** (ADR 0023, `restore.service.ts:559-564`) is refused on a programme enrollment
+  (`programme_enrollment`); reopen is its path (analyze G-1).
 
-## R-514 — The failure's notice is today's path, by kind
-
-- `order-events.service.ts:231-233` → `booking.recordOrderFailed` → `order_failed` → the `payment_failed` push
-  (`payment-outcome-notices.port.ts:47-48`).
-- For an `instalment` order the booking side **must not** cancel the enrollment. It records the event and leaves the
-  programme to the sweep. Today's checkout path (`holds.service.ts:330`) is unchanged for `package` and `assessment`.
+## R-514 — (merged into R-509)
 
 ## R-515 — Settings
 
-Six registry keys in track 2's block, seeded after `postponement_interval_weeks` (`prisma/seed.ts:185`); the count
-95 → 101 (`tests/seed/seed.spec.ts:375`):
+Seven registry keys in track 2's block, seeded after `postponement_interval_weeks` (`prisma/seed.ts:185`); the count
+95 → 102 (`tests/seed/seed.spec.ts:375`):
 
 | Key | Default | Bounds | Unit | Group |
 |---|---|---|---|---|
-| `assessment_fee_piasters` | 0 = unset | ≥ 0 | a new unit `piasters` | `booking` |
+| `programme_enabled` (I-3, pending) | false | boolean | — | `booking` |
+| `assessment_fee_piasters` | 0 = unset (P1, pending) | ≥ 0 | a new unit `piasters` | `booking` |
 | `assessment_duration_minutes` | 30 | list 30, 45, 60 | `minutes` | `booking` |
 | `programme_pay_rest_hours` | 48 | ≥ 1 | `hours` | `booking` |
 | `programme_stop_request_days` | 7 | ≥ 1 | `days` | `booking` |
 | `programme_renew_early_days` | 3 | ≥ 0 | `days` | `booking` |
 | `programme_charge_retry_days` | [1, 3, 5, 7] | a list of at most 4 increasing days | `days` | `booking` |
 
-- The registry requires a default (`registry.ts:84-97`), so «no default» is 0 meaning unset. → plan question **P1**
-  (the owner's figure).
-- The admin catalogues gain the labels (`tests/admin-i18n/settings-labels.spec.ts`).
+The admin catalogues gain their labels. A boolean setting is new to the registry: if the bounds shapes
+(`registry.ts:66-74`) refuse it, `programme_enabled` is a `count` 0/1 (decided in T002).
 
 ## R-516 — The catalogue and the editor
 
-- Discovery shows an ijazah-track package with the fee and «lowest – highest للحصة» from its three prices.
-- The editor takes three prices and shows DEC-88's average beside each, per length, over the other teachers'
-  ijazah-track prices for that length (FR-704a), with `price_average_min_teachers` as today.
+Discovery shows a programme package with the fee and «lowest – highest للحصة». The editor takes three prices and shows
+DEC-88's average beside each, per length (FR-704a).
 
 ## R-517 — Proofs
 
-- TDD in full (red first, named mutants) for money and time:
-  - the kinds;
-  - the months and their amounts;
-  - the rates copied;
-  - the releases;
-  - the sweep's steps;
-  - the retries;
-  - one paid order a month;
-  - the token's handling.
-- DB specs on `ijazah_integrity_b` (track 2). Double-run specs for `advance-programmes`. Every new user read and
-  mutation is registered in the adversarial harness, both gender directions.
+- TDD in full (red first, named mutants) for money and time.
+- DB specs on `ijazah_integrity_b`.
+- Double-run specs for `advance-programmes`.
+- **Adversarial (analyze K-1):** every new user procedure is registered in the harness, both gender directions, in the
+  batch that adds it (R-PROC-5; `tests/adversarial/procedure-harness.spec.ts:137-141` fails otherwise). T022 is only
+  the final reach check.
+- No card detail asserted in logs, audits and responses (SC-707).
+- A kernel.md row for the lock order programme → enrollment → payment (T006, T015, T016, T017; analyze U-7).

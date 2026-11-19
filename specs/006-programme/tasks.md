@@ -10,20 +10,29 @@ description: 'Task list for the ijazah programme — the assessment and prepaid 
 
 **Tests**: Included.
 - **Full TDD** (each spec red first on its own, negatives red under a named mutant, every mutant restored and
-  `cmp`-checked) for money and time: T001, T003, T005, T006, T007, T008, T009, T010, T011, T013, T014, T015, T016,
+  `cmp`-checked) for money and time: T001, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014, T015, T016,
   T017.
 - **Lighter specs** (a render or behaviour spec per screen, Arabic and English) for T019, T020, T021.
 - `advance-programmes` and the changed jobs have their double-run specs (R-API-14).
-- Every new user procedure is in the adversarial harness both ways (T022).
+- **Adversarial (R-PROC-5):** every task that adds a user procedure registers it in `tests/adversarial`, both gender
+  directions, in its own batch; T022 is only the final reach check.
 - DB specs run on `ijazah_integrity_b` only (track 2).
 
 **Organization**: the foundations, then the stories of spec.md in priority order, then the screens and the proofs,
-in the batches B-P1 to B-P4 (DEC-92: the server beside the design week, the screens after it; all merged by 12/4,
-else v1.1). At most six tasks a batch, a task in at most two lanes.
+in the batches B-P1 to B-P4. DEC-92: the server beside the design week, the screens after it; all merged by 12/4,
+else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after the analysis of 2026-11-19
+(`ejazah-tools\track2\b-m4\analyze-triage.md`) and DEC-94.
 
-**The owner's answers**: DEC-92 (Q-1 to Q-4 of B-M4's conflict check) and DEC-93 (the clarify answers). Plan
-questions P1 (the fee's amount) and P2 (existing ijazah packages) are pending: they change only T001's seed value and
-its migration step.
+**The owner's answers and what is pending.**
+- DEC-92 (Q-1 to Q-4), DEC-93 (clarify) and DEC-94 (the assessment's share) are answered.
+- Pending with the owner:
+  - P1, the fee's amount → T002's seed;
+  - P2, old ijazah packages → T002's switch;
+  - the analysis's I-2 (no offer) → T008;
+  - G-4 (a suspended teacher) → T012, T015;
+  - I-3 (the switch) → T002, T004;
+  - U-1 (the student's own weekly time) → T005.
+- Each task is written with the recommended (a) and is not built before its answer.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -35,186 +44,226 @@ its migration step.
 
 `apps/api/src/` (`modules/<module>/`, `platform/`, `surfaces/`, `jobs/`, `main.ts`, `worker.ts`), `apps/mobile/src/`,
 `apps/admin/src/`, `packages/contracts/src/`, `packages/money/src/`, `prisma/`, `tests/`.
-- Batches are cut from `develop` after T108's PR (`003:T108`) merges, as `Ejazah_app/006-programme/<ids>`.
-- The integration owns `main.ts`, `worker.ts`, `surfaces/context.ts`, `app.router.ts`, `admin.router.ts`,
-  `packages/contracts/src/index.ts` and the snapshot, each in a `006:` block.
+- Batches are cut from `develop` after `003:T108`'s PR merges, as `Ejazah_app/006-programme/<ids>`.
+- The integration owns, each in a `006:` block:
+  - `main.ts`, `worker.ts` (the new job's registration);
+  - `surfaces/context.ts`, `app.router.ts`, `admin.router.ts`;
+  - `packages/contracts/src/index.ts`;
+  - the snapshot.
 
 ## Phase 1: Foundations (B-P1)
 
-- [ ] T001 The migration, the schema and the ERD (data-model.md; R-501, R-502, R-503, R-510, R-513):
-  - a forward migration stamped after `20261119124112`, the enum values committed first:
+- [ ] T001 The migration, the schema and the ERD (data-model.md; R-501, R-502, R-503, R-507, R-510, R-513):
+  - A forward migration stamped after the latest merged one, the enum values committed first:
     - `order_kind`, `decline_kind`, `programme_state`, `programme_plan`, `programme_request_kind`,
       `programme_request_status`;
-    - `cancellation_reason` + `offer_lapsed`, `assessment_refused`, `programme_stopped`;
-    - `share_release_milestone` + `assessment`, `programme_stopped`;
-    - `enrollment_event_kind` + four members.
+    - `cancellation_reason` + 4, `share_release_milestone` + 2, `enrollment_event_kind` + 4,
+      `payment_event_type` + `card_saved`.
   - Then:
-    - `payments.kind`, `instalment_month`, `decline_kind`;
-    - `packages.price_30/45/60_piasters`, the three old columns made nullable, the track check;
+    - `payments.kind`, `instalment_month`, `attempt`, `automatic`, `decline_kind`, `confirmed_at`;
+    - `packages.is_programme` and the three prices, with the three old columns made nullable under the check;
+    - `sessions.programme_month`;
     - `programmes`, `programme_requests`, `programme_cards` with their checks and indexes.
-  - Existing `ijazah_track` packages deactivated first (P2 (a); a SELECT counts them before).
-  - `prisma/schema/{base,booking,catalog,payments}.prisma`; `packages/config/module-tables.json`.
+  - No existing row is changed.
+  - `prisma/schema/{base,booking,catalog,payments,sessions}.prisma`; `packages/config/module-tables.json`.
   - `docs/ERD.md`: a dated block at its end, rows from 65 and §15 rules from 70.
   - `tests/seed/seed.spec.ts` table count 45 + 3.
   - A migration spec red under a mutant migration.
-- [ ] T002 [P] The settings (R-515; FR-732):
+- [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3 (a), P1 (a), P2 (a) pending):
   - `apps/api/src/platform/settings/registry.ts`:
     - a new unit `piasters`;
-    - the six keys in track 2's block, with schema, bounds, group `booking` and their SRS rows (§3.14, DEC-92 and
-      DEC-93).
-  - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`), `assessment_fee_piasters` 0 (P1 (a)).
-  - `tests/seed/seed.spec.ts` 95 → 101.
+    - the seven keys in track 2's block, `programme_enabled` off;
+    - if the bounds shapes refuse a boolean, a `count` 0/1.
+  - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`); `tests/seed/seed.spec.ts` 95 → 102.
   - Both admin catalogues' labels (`tests/admin-i18n/settings-labels.spec.ts`).
-- [ ] T003 [P] The contracts (contracts/app-surface.md, admin-surface.md, gateway.md):
+  - Flipping the switch on deactivates the old ijazah-track packages (`modules/catalog/packages.service.ts`, an audited
+    effect of the setting's change, logged once).
+- [ ] T003 [P] The contracts (contracts/*):
   - `packages/contracts/src/programme.ts`, `packages/contracts/src/admin/programme.ts`;
-  - the changed package, discovery, slots and monitor schemas;
+  - the package output as a union by track (recitation and pre-switch ijazah unchanged, non-null; K-3);
+  - discovery, slots, monitor and restore changes;
   - `idempotent-procedures.ts`;
   - every refusal code named;
   - the snapshot regenerated.
-- [ ] T004 [US1] The three prices and the catalogue (FR-704, FR-704a; R-503, R-516):
-  - `modules/catalog/packages.service.ts`, `packages.repository.ts`, `packages.router.ts`:
-    - an ijazah-track package takes `prices {m30, m45, m60}` and no count, length or total;
-    - publishing is refused `assessment_fee_unset` while the fee is 0.
-  - Discovery adds `assessmentFee` and `priceRange`.
-  - DEC-88's average per length on the ijazah track (T113's read).
-  - Every reader of the three old columns branches on the track; the explorer's list (discovery's lowest price,
-    checkout, the editor) is re-read first.
-- [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702, FR-703; R-504, R-511):
-  - `modules/booking/booking-slots.service.ts:198`: an ijazah-track package offers active weekly times of length ≥
-    the assessment's.
-  - `modules/payments/checkout.service.ts` `#createAndRecord`:
-    - an `assessment` order, gross = the fee;
-    - the rate and 25 % read as today.
-  - `jobs/confirm-enrollment.ts`: an `assessment` paid event confirms the enrollment and generates session 0 only
-    (`sessions/generation.service.ts`, `GenerationPlan {count: 1, firstSequenceNumber: 0}`, the assessment's length).
-  - `modules/booking/` writes the `programmes` row `awaiting_offer` with `pay_by`.
-  - The enrollment's snapshot: count 0, the assessment's length, the fee.
-- [ ] T006 The confirm step by kind (FR-718; R-502): `jobs/confirm-enrollment.ts:229-256`:
-  - a paid order of an expected kind (`assessment` on `pending_payment`; `rest_in_full` or the next `instalment` on
-    `offered`/`active`/`paused`) is not a second payment;
-  - a second paid order for a month already paid takes the `duplicate_payment` case.
-  - `package` orders are unchanged.
-  - A DB race spec: two paid events for one month.
+- [ ] T004 [US1] The three prices and the catalogue (FR-704, FR-704a; R-503, R-516), behind `programme_enabled`:
+  - `modules/catalog/packages.service.ts`, `packages.repository.ts`, `packages.router.ts`: a programme package takes
+    `prices {m30, m45, m60}`; publishing is refused `assessment_fee_unset` while the fee is 0.
+  - Discovery: `assessmentFee`, `priceRange`.
+  - DEC-88's average per length (T113's read).
+  - Every reader of the three old columns branches on `is_programme`.
+  - Adversarial registrations of the changed reads.
+- [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1 (a) pending):
+  - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
+    the assessment's for a programme package. Under U-1 (a), they refuse one overlapping the student's own active
+    programme's weekly time.
+  - **The order:** `modules/payments/checkout.service.ts` `#createAndRecord` writes an `assessment` order, gross = the
+    fee, with the rate and 25 % read as today.
+  - **Confirmation:** `jobs/confirm-enrollment.ts` generates session 1 only, at the assessment's length
+    (`sessions/generation.service.ts`, `GenerationPlan {count: 1, firstSequenceNumber: 1}`).
+  - **The programme row:** `modules/booking/programmes.*` writes it `awaiting_offer`; the snapshot holds count 1, the
+    assessment's length and the fee.
+  - **Snapshot readers:** the inventory of `snapshot_session_count`/`duration`/`price` readers is written and each is
+    tested for a one-session enrollment (U-8).
+  - Adversarial registrations.
+- [ ] T006 The confirm step by kind (FR-718; R-502; V-3), `jobs/confirm-enrollment.ts:229-284`:
+  - the per-order marker `payments.confirmed_at`;
+  - expected kinds skip the cover and case gates;
+  - a no-hold path for `rest_in_full` and `instalment` (generation only, under the enrollment's lock, from max+1 with
+    `programme_month`);
+  - a second paid order for a paid month → `duplicate_payment`;
+  - a refused generation never cancels a programme (the order stays paid, a case, a log line);
+  - `package` orders unchanged.
+  - Specs: a replay; month m+1 paid while m's case is open; two paid events for one month (DB race).
+  - The kernel.md row for programme → enrollment → payment (`specs/004-sessions/contracts/kernel.md`, coordinated with
+    track 1).
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
-- [ ] T007 [US2] The offer (FR-705; R-506): `teacher.programme.offer`.
-  - The length must be ≤ the reserved weekly time's; the total = count × the package's price for that length, read
-    under the package's lock.
-  - The offer and the enrollment's snapshot are written in one transaction; frozen after.
-  - Refusals: `not_awaiting_offer`, `pay_by_passed`, `length_exceeds_slot`, `count_out_of_bounds`,
-    `teacher_not_active`, each red first.
-  - `modules/booking/programmes.*`; `packages/money` the session price and month amounts (the last the remainder).
-- [ ] T008 [US2] The 48 hours, the cancellation and the refusal request (FR-706, FR-707, FR-709; R-505, R-513):
-  - `programme.cancel`;
-  - `teacher.programme.request` kind `refusal`;
-  - `programmes.decide` approving it → `assessment_refused`;
-  - the lapse at `pay_by` (`offer_lapsed`) as a pure function used by T015's sweep;
-  - each close frees the weekly time at once; the fee is kept.
-  - `modules/booking/programme-requests.*`, `slot-occupancy.repository.ts` (the three new reasons free at once).
-- [ ] T009 [US2] Paying in full or a month (FR-710, FR-711, FR-712, FR-713; R-507, R-511): `programme.pay`.
-  - `checkout.service.ts`: `rest_in_full` = total − fee, or `instalment` month 1 = 4 × the session price; the rate and
-    25 % copied from the assessment order.
-  - The confirm step generates sessions 1..N, or month 1's 4, from the first weekly occurrence after `pay_by`.
-  - `saveCard` records the consent (the card itself is T013's).
-- [ ] T010 [US5] The counts from session 1 (R-501):
-  - `share-release.rules.ts:136-138` (`halfReached`), `completion.service.ts` and the delivered counts read
-    `sequence_number ≥ 1`;
-  - session 0 is never counted toward the half or the end;
-  - red first with a delivered assessment.
-- [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512), `share-release.rules.ts`,
+- [ ] T007 [US2] The offer (FR-705; R-506), `teacher.programme.offer`:
+  - the length ≤ the reserved time's;
+  - the count 1–200;
+  - the total = N × the price for that length, under the package's lock;
+  - the offer and the snapshot (N+1, length, total) in one transaction, frozen after.
+  - Refusals red first: `assessment_not_delivered`, `not_awaiting_offer`, `pay_by_passed`, `length_exceeds_slot`,
+    `count_out_of_bounds`, `teacher_not_active`.
+  - The amounts from `packages/money` through payments' entry (K-5).
+  - A live `enrollment` signal after commit; adversarial registration.
+- [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a) pending):
+  - `pay_by` from the delivered assessment's end (set when session 1 is `done`; a make-up moves it);
+  - `programme.cancel` (`offer_declined`);
+  - `teacher.programme.request` `refusal` and `programmes.decide` approving it (`assessment_refused`);
+  - the lapse (`offer_lapsed`) and the `no_offer` item as pure functions for T015;
+  - each close through the close hook (T013 provides it; a stub until then), freeing the weekly time at once
+    (`slot-occupancy.repository.ts`).
+  - Live signals; adversarial registrations.
+- [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`:
+  - no hold; expiry = min(the checkout setting, `pay_by`);
+  - `rest_in_full` = total − fee (refused `rest_not_positive` if ≤ 0), or `instalment` month 1 = 4 × the session price;
+  - the rate and 25 % copied from the assessment order;
+  - the confirm step (T006) generates sessions 2..N+1, or month 1's 4, from the first weekly occurrence after `pay_by`
+    (no lead), with `programme_month`;
+  - `saveCard` records the consent.
+  - Adversarial registration.
+- [ ] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
+  - `modules/sessions/completion.service.ts`: a programme completes only when fully paid and not `awaiting_offer`,
+    `offered` or `paused`. Red first on «a paid month settled, the next unpaid, 72 h passed».
+  - `share-release.rules.ts` `halfReached` over the N+1 snapshot count, the assessment counted (DEC-94: 41 → 21),
+    pinned.
+  - `sessions/restore.service.ts` refuses `programme_enrollment` (G-1).
+- [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
-  - `assessment` after session 0's 72 h, no case open, even when the enrollment was cancelled;
-  - `ijazah_half` = 25 % × `teacherShare(offer total, rate)` capped at the paid months' shares (red first: today's
-    base is the first order's share, `:246`);
-  - `ijazah_end` over the non-assessment orders;
-  - `programme_stopped`;
-  - the worked examples: 350, 1,750, the rest.
+  - `assessment` only when not continued (once `pay_by` has passed and session 1's 72 h, no case);
+  - `ijazah_half` = 25 % × the share of the programme's price as paid (1,750 in full; 1,837.50 by months, fee 500),
+    capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
+  - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
   - `package` orders keep today's rules.
-- [ ] T012 [P] [US5] The case amounts on a programme (FR-729, FR-730): `case-amount.rules.spec.ts`:
-  - a dropout refunds every order, the assessment included (already summed, `case-amount.rules.ts:125-131`), pinned;
-  - DEC-86/DEC-91 closes on a programme pinned;
-  - a teacher suspended, banned or gone opens the case (DEC-92).
+- [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4 (a) pending), `case-amount.rules.ts`
+  (+ spec), `share-release.rules.ts:277-291`:
+  - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
+    full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
+  - the dropout set for a programme: a ban or a deletion (`teacher_ended`) refunds everything (DEC-85);
+  - a suspension pauses the programme (T015), not a close.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
-- [ ] T013 [US3] Saved cards (FR-713, FR-719; R-510; contracts/gateway.md):
-  - `platform/ports/payment/payment.port.ts` `createCheckout`'s `saveCard` and the `card_saved` event;
-  - `paymob.adapter.ts`:
-    - the token callback, refused unless verified;
-    - off without the saved-card integration id;
-  - `fake.adapter.ts`;
-  - `modules/payments/programme-cards.*`:
-    - the token through `ColumnCipher`, registered in `createEncryptedColumns`;
-    - never logged (a log spec);
-    - deleted at a close, at the end and by the account's erasure.
-- [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509, R-514):
-  - `PaymentPort.chargeSavedCard`, with the Paymob intention on the Moto integration with the split, off until
-    configured;
-  - the fake's paid, soft and hard answers;
-  - `GatewayEvent.failed.declineKind` from a code table, unknown → hard;
-  - `booking.recordOrderFailed` for an `instalment` records without cancelling;
-  - the `payment_failed` push as today.
-- [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508; contracts/jobs.md): `jobs/advance-programmes.ts`, registered in `worker.ts`.
-  - The lapse, due, charge, retry (1, 3, 5, 7; at most 4; soft only) and pause steps.
-  - Under the programme's row lock, one transaction each, one log line each, no card detail.
-  - The double-run spec; DST at the boundary (`packages/time`).
-- [ ] T016 [US3] Manual renewal (FR-715, FR-716, FR-722, FR-724): `programme.renew`.
-  - Open from `programme_renew_early_days` before the month's end for a student without a card; never while a charge
-    is pending; «pay now» and «change card» after a failure.
-  - The paid month generates its sessions from the next occurrence, clears `paused_at` and withdraws an open stop
-    request with one log line.
+- [ ] T013 [US3] Saved cards and the close hook (FR-713, FR-719; R-510):
+  - **The port:** `platform/ports/payment/payment.port.ts` `createCheckout`'s `saveCard` and the `card_saved` event.
+  - **Paymob:** `paymob.adapter.ts` takes the token callback (`payment_event_type` `card_saved`, id
+    `paymob:<txId>:token`), refused unless verified; off without the saved-card integration id.
+  - **The fake:** `fake.adapter.ts`.
+  - **The card store:** `modules/payments/programme-cards.*`, the token through `ColumnCipher` in
+    `createEncryptedColumns`.
+  - **The close hook:** payments' `programmeClosed`, called from booking's cancel path for every reason; it sets
+    `closed`, sets `closed_at` and deletes the card.
+  - **Erasure:** the card deleted by `identity/deletion.service.ts`, `identity/consequences.ts`,
+    `jobs/erase-kept-data.ts`, with `main.ts`'s wiring by the integration.
+  - **Specs:** no card detail in any log, audit entry or response (SC-707).
+- [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
+  - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
+    configured; the fake's paid, soft and hard answers.
+  - **Declines:** `GatewayEvent.failed.declineKind` from a code table, unknown → hard; persisted in
+    `payments.decline_kind` (`order-events.service.ts`, `payments.repository.ts`).
+  - **Order before call:** recorded `created`, then called after commit; never under a lock.
+  - **The failure's push:** `payment_failed` through today's path, unchanged.
+- [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508; G-4 (a) pending), `jobs/advance-programmes.ts`:
+  - only `confirmed` enrollments whose teacher is not suspended;
+  - the `pay_by`, due, retry (1, 3, 5, 7; at most 4; soft only) and pause steps, each under the programme's lock in its
+    own transaction, with one log line each;
+  - «pending» per A-1;
+  - after commit, `chargeSavedCard` for each `created` automatic order;
+  - the due time by `lastToEnd` over the month's sessions;
+  - the double-run spec; DST at the boundary (`packages/time`);
+  - registered by the integration.
+- [ ] T016 [US3] Manual renewal (FR-715, FR-716, FR-722, FR-724), `programme.renew`:
+  - open from `programme_renew_early_days` for a student without a card; refused `charge_pending` while an automatic
+    order is `created`;
+  - «pay now» and «change card» after a failure;
+  - the paid month generates from max+1 and the next occurrence, clears `paused_at` and withdraws an open stop request
+    with one log line;
+  - live signals; adversarial registration.
 - [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513):
-  - `teacher.programme.request` kind `stop` (refused before 7 days);
-  - `programmes.decide` approving → the enrollment `cancelled` `programme_stopped`, the time free at once, the card
-    deleted, T011's release;
-  - `programmes.reopen` → `paused`;
-  - audited; the locks named in `specs/004-sessions/contracts/kernel.md` (a new row, coordinated).
-- [ ] T018 [US6] The administrators' queue and reads (FR-727): `programmes.queue` and `programmes.get`.
-  - Oldest first, how late, the reason.
-  - The monitor's `kind` and `instalmentMonth` (`payments-monitor.*`).
+  - `teacher.programme.request` `stop` (refused before 7 days);
+  - `programmes.decide` approving it → `programme_stopped` through the close hook, the time free at once, T011's
+    release;
+  - `programmes.reopen` under the slot's lock with `slot_taken`, `party_restricted`, `gender_mismatch`, `paused_at` =
+    the reopen time;
+  - audited; live signals; adversarial registration.
+- [ ] T018 [US2] [US6] The reads (FR-726, FR-727):
+  - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19), with its
+    adversarial registration;
+  - `programmes.queue` (paused, stop, refusal, no_offer; oldest first, how late, the reason) and `programmes.get`
+    (admin);
+  - the monitor's `kind`, `instalmentMonth`, `automatic`, `declineKind` (`payments-monitor.*`).
 
 ## Phase 4: Screens and proofs (B-P4, after the design week, on the new design)
 
 - [ ] T019 [US1] [US2] [US3] The student's phone, `apps/mobile/src/features/student/programme/`:
   - the range and the fee on the profile;
   - the assessment's booking (each time's length, «sessions up to this long»);
-  - the offer with its total and months;
+  - the offer with its total, its months and the 48 h deadline (a reminder before it, FR-708);
   - pay in full or monthly with the consent line;
   - months paid and next due;
   - «renew now», «pay now», «change card»;
-  - paused.
+  - paused;
+  - «the teacher is unavailable» (FR-BOOK-19).
   - i18n in a `programme` group.
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
-  - `teacher/programme/` (the offer, «late since», the stop and refusal requests).
+  - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests).
 - [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
-  - the queue (paused, stop, refusal) oldest first, decide, reopen;
+  - the queue (paused, stop, refusal, no_offer) oldest first, decide, extend, reopen;
   - each screen explains itself;
-  - the monitor's kind column;
+  - the monitor's columns;
+  - the `programme_enabled` setting's label explaining what flipping it does;
   - `admin.programme` i18n.
-- [ ] T022 The adversarial reach: every new user procedure in `tests/adversarial`, both gender directions;
-  `procedure-harness.ts`'s routers.
-- [ ] T023 The close: quickstart.md §1–§2 on the last batch's commit, each run's output in its own file;
-  `docs/ARCHITECTURE.md`'s module graph; the programme's close recorded in `PLAN.md`'s road (track 2's line).
+- [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`), and the
+  card-detail assertions across the suite.
+- [ ] T023 The close:
+  - quickstart.md §1–§3 on the last batch's commit, each run's output in its own file;
+  - SC-703 and SC-706 timed by hand;
+  - `docs/ARCHITECTURE.md`'s module graph;
+  - the switch left off for the owner to flip (I-3).
 
 ## Dependencies and Execution Order
 
-- **B-P1:** T001 first. Then T002 and T003 in parallel lanes, then T004 and T005 (both need T001 and T003), then T006
-  (after T005).
-- **B-P2:** T007, then T008 and T009; T010 before T011; T012 in parallel.
-- **B-P3:** T013, then T014; T015 after T014 and T008; T016 after T015; T017 after T015 and T011; T018 after T017.
+- **B-P1:** T001 first; T002 and T003 in parallel lanes; T004 and T005 after T001 and T003; T006 after T005.
+- **B-P2:** T007 after T006; T008 and T009 after T007 (T009 after T006's no-hold path); T010 and T011 after T009; T012
+  after T011.
+- **B-P3:** T013 first; T014 after T013; T015 after T014 and T008; T016 after T015; T017 after T015, T011 and T013;
+  T018 after T017.
 - **B-P4:** T019 to T021 after their procedures; T022 after every procedure; T023 last.
-- **Two tracks:** this file is track 2's (`tracks-coordination.md` §2). Shared with track 1: `kernel.md` (T017's row),
-  `jobs/confirm-enrollment.ts`, `sessions/generation.service.ts` and `completion.service.ts` (sessions' area,
-  coordinated as T112 was).
+- **Two tracks:** this file is track 2's (`tracks-coordination.md` §2). Shared with track 1 (sessions' area,
+  coordinated as T112 was):
+  - `kernel.md` (T006's row);
+  - `jobs/confirm-enrollment.ts`;
+  - `sessions/generation.service.ts`, `completion.service.ts`, `restore.service.ts`.
 
 ## Batches
 
 | When | Batch | Tasks | What |
 |---|---|---|---|
-| 11/20–11/22 | B-P1 | T001, T002, T003, T004, T005, T006 | Schema, settings, contracts, prices, the assessment, the confirm step by kind |
-| 11/22–11/24 | B-P2 | T007, T008, T009, T010, T011, T012 | The offer, the 48 hours and the refusal, the first payment, the counts, the releases, the case amounts |
-| 11/24–11/26 | B-P3 | T013, T014, T015, T016, T017, T018 | Saved cards, the automatic charge, the sweep, renewal, the stop and the reopen, the queue |
+| 11/20–11/22 | B-P1 | T001, T002, T003, T004, T005, T006 | Schema, settings and the switch, contracts, prices, the assessment, the confirm step by kind |
+| 11/22–11/24 | B-P2 | T007, T008, T009, T010, T011, T012 | The offer, the 48 hours and the refusal, the first payment, the completion gate, the releases, the case amounts |
+| 11/24–11/26 | B-P3 | T013, T014, T015, T016, T017, T018 | Saved cards and the close hook, the automatic charge, the sweep, renewal, the stop and the reopen, the reads |
 | 11/26–12/3 | B-P4 | T019, T020, T021, T022, T023 | The phone, the panel, the adversarial reach, the close |
-| 12/4 | — | — | Whatever is not merged and green moves to v1.1 (DEC-92) |
+| 12/4 | — | — | Whatever is not merged and green moves to v1.1; the switch stays off (DEC-92) |

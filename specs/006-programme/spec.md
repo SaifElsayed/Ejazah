@@ -197,7 +197,8 @@ paid on the first retry, one declined hard and paid by hand; each month has exac
 3. **Given** a hard decline (a stolen card, a closed account), **When** the charge fails, **Then** it is never retried;
    the student pays by hand or changes the card.
 4. **Given** a student without a saved card, **When** 3 days remain before the paid month's end, **Then** «renew now»
-   appears; a card holder never sees it while their automatic charge is pending.
+   appears; a card holder is charged automatically instead, and sees «pay now» only after a failed charge, never while
+   an automatic charge is pending.
 5. **Given** a manual payment and an automatic retry landing for the same month, **When** both are paid, **Then** the
    second opens a compensation case (FR-PAYG-19), and an administrator refunds it in the gateway's dashboard.
 
@@ -277,7 +278,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 - A session of a paid month postponed (DEC-86, DEC-90) or made up (DEC-84) belongs to its original month: it is paid,
   wherever it lands, and needs no new payment.
-- A month whose first session is postponed: the pause point is the first session that actually stands.
+- The paid month's last session, for the next month's due time, is the latest end among that month's sessions,
+  make-ups and postponed sessions placed later included (research R-507).
 - A teacher's no-show at the assessment: remedied by a make-up only (DEC-84); the fee is not refunded.
 - A teacher suspended, banned or gone during a pause: the compensation case of FR-DISPUTE-5 opens (DEC-92); no return.
 - A student who wants to continue after a close starts as a new student, with a new assessment (DEC-83).
@@ -319,7 +321,7 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   time's start. The count, the length and the total are frozen from then on; a later change of the teacher's prices
   reaches later offers only (FR-BOOK-14, `003` FR-312 as amended, DEC-93).
 - **FR-706**: The package's weekly time MUST stay reserved from the assessment until the student cancels, or until
-  48 hours (§3.14) after the assessment session ends pass with the rest unpaid (the offer and the payment both fall
+  48 hours (§3.14) after the assessment session ends as delivered (a make-up of it moves them) pass with the rest unpaid (the offer and the payment both fall
   inside them; FR-BOOK-15's «after the assessment … within 48 hours»); then it is offered to anyone again, and the fee
   is kept (FR-BOOK-15, research R-505).
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
@@ -381,7 +383,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 **The teacher's and the administrators' screens**
 
 - **FR-726**: The teacher MUST see, per programme, the months paid, the next month due, and when paused that the student
-  is late and since when (FR-BOOK-19). The student MUST see the same and the next due date.
+  is late and since when (FR-BOOK-19). The student MUST see the same and the next due date, and, where the teacher is
+  suspended, banned or gone, that the teacher is unavailable (FR-BOOK-19).
 - **FR-727**: Administrators MUST see paused packages, stop requests and refusal requests oldest first, with how late
   the student is and the teacher's reason, MUST decide each (audited), and MUST be able to reopen a closed package, which
   returns paused, awaiting a payment by hand (FR-BOOK-19).
@@ -397,7 +400,7 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   compensation case of FR-DISPUTE-5, showing every order's whole gross, the assessment included (DEC-85, DEC-92).
 - **FR-730**: A close on a complaint against the student, a ban or a confirmed fault MUST follow DEC-86 and DEC-91 as
   for any package.
-- **FR-731**: No code path MUST refund or release money; the automatic charge is the only payment the platform starts,
+- **FR-731**: Code MUST NOT refund or release money; the automatic charge is the only payment the platform starts,
   and it is the student's own consented monthly payment (FR-PAYG-10, R-MONEY-6).
 
 **Settings and proofs**
@@ -438,7 +441,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   example of 10,000 EGP at 250 a session (350 of a 500 fee only when the student does not continue; 1,750 in full or 1,837.50 by months at the 21st of 41
   sessions; the rest; the full refund on a dropout).
 - **SC-706**: Administrators find every paused package and stop request, oldest first, and decide one in under one minute.
-- **SC-707**: No card detail appears in any log, response or audit entry, in 100 % of the adversarial suite's attempts.
+- **SC-707**: No card detail (the token, the card number, the expiry) appears in any log, response or audit entry, in
+  100 % of the suite's attempts; a card's last four digits and brand are shown to its student only.
 
 ## Assumptions
 
