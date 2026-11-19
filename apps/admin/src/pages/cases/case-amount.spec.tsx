@@ -13,7 +13,7 @@ import { piasters } from '@ijazah/money';
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { setLocale } from '../../i18n';
+import { setLocale, translate } from '../../i18n';
 import { formatPounds } from '../../lib/format';
 import { inBothLocales, mutation, query, renderApp } from '../../test/app-harness';
 
@@ -232,5 +232,19 @@ describe('a close on the student’s ban or confirmed fault (003:T124, DEC-91)',
         expect(within(section).queryByText(t('admin.money.caseAmount.total'))).toBeNull();
       },
     );
+  });
+
+  // PR #151's review, round 1, nit 5: the Arabic cause line no longer says «nothing is refunded»
+  // and then names a refund; it says only what was owed before the close is refunded automatically.
+  it('says in Arabic that only what was owed to the student before the close is refunded automatically', async () => {
+    open(fakeApi({ amount: FAULT }, 'student_banned'));
+    const section = await screen.findByRole('region', {
+      name: translate('ar', 'admin.money.caseAmount.title'),
+    });
+    expect(
+      within(section).getByText(
+        /^إغلاق بحظر الطالب أو بثبوت خطئه: لا يُرد تلقائيًا إلا ما استُحق للطالب قبل الإغلاق؛ /u,
+      ),
+    ).toBeTruthy();
   });
 });
