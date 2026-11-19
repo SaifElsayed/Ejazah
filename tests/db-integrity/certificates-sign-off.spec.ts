@@ -124,7 +124,15 @@ beforeAll(async () => {
     renders: { enqueue: async () => undefined },
     log,
   });
-  ijazahs = createIjazahsService({ storage, settings, idempotency, log, renders });
+  ijazahs = createIjazahsService({
+    storage,
+    settings,
+    idempotency,
+    log,
+    renders,
+    // 005:T022 (B49): the barred list's names, unread here (outages.spec.ts's stand-in).
+    adminNames: async () => new Map(),
+  });
   certificates = createCertificatesService({ database, storage, settings, log });
 });
 

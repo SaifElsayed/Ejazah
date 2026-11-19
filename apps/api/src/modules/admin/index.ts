@@ -568,6 +568,11 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       log: dependencies.log,
       // 005:T032 of B46: a re-render's job, on the approval's queue (`main.ts`'s `ijazahRenders`).
       renders: dependencies.ijazahRenders,
+      // 005:T022 of B49 (Q-P2 (b)): the barred list's administrators' names, this module's
+      // `admin_users` (R-API-6), handed to certification's ijazahs service as sessions' outage list
+      // gets them: the sixteenth dependency handed in against the arrows (docs/ARCHITECTURE.md:197
+      // counts to the fifteenth; T026's §4 names it).
+      adminNames: readAdministratorNames,
     }),
     // 005:T013 of B47: the gender-flag queue; 005:T014: the correction over the bound enrollment
     // side, the kernel's idempotency, payments' order standing and certification's re-render.
