@@ -259,7 +259,7 @@ const RESTORE_CAUSES: Readonly<Record<string, MessageKey>> = {
   gender_mismatch: 'admin.sessions.restore.refused.genderMismatch',
 };
 
-/** The words of a refused restore (FR-454): its nine causes, `no_free_week`, the key reused. */
+/** The words of a refused restore (FR-454): its ten causes (005:T023 added `gender_mismatch`), `no_free_week`, the key reused. */
 export function restoreFailure(error: unknown): ErrorMessage {
   const cause = detailOf(error, 'cause');
   switch (errorCodeOf(error)) {
