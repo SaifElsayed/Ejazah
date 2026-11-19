@@ -94,6 +94,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'ijazah.revoked': 'admin.audit.actions.ijazahReview.ijazahRevoked',
   'ijazah_bar.set': 'admin.audit.actions.ijazahReview.barSet',
   'ijazah_bar.lifted': 'admin.audit.actions.ijazahReview.barLifted',
+  // 005:T022 of B49 (Q-P2 (b)): the barred list, in the ijazahs' own words.
+  'ijazah_bars.listed': 'admin.ijazahs.audit.barsListed',
   // 005:T032 of B46 (Q-E4 (a)): the sign-off and the re-render.
   'ijazah.signed_off': 'admin.audit.actions.ijazahReview.ijazahSignedOff',
   'ijazah.rerendered': 'admin.audit.actions.ijazahReview.ijazahRerendered',

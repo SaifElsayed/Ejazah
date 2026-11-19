@@ -127,6 +127,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.home'), '/'],
       [translate('ar', 'admin.nav.items.applications'), '/applications'],
       [translate('ar', 'admin.nav.items.credentials'), '/credentials'],
+      // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
+      [translate('ar', 'admin.nav.items.ijazahRequests'), '/ijazah-requests'],
       // B42 (the note under T048, T049 and T050, Q4): Phase 3's three queues.
       [translate('ar', 'admin.nav.items.sessionReview'), '/review'],
       [translate('ar', 'admin.nav.items.disputes'), '/disputes'],
@@ -135,6 +137,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.enrollments'), '/sessions'],
       // B42 (the note under T058, Q4): the user directory.
       [translate('ar', 'admin.nav.items.users'), '/users'],
+      // 005:T022 (B49, Q-X2 (a)): the ijazahs and the barred list.
+      [translate('ar', 'admin.nav.items.ijazahs'), '/ijazahs'],
       // T053: the payments monitor, before the settings as the board orders the group.
       [translate('ar', 'admin.nav.items.payments'), '/payments'],
       // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
