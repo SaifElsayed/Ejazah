@@ -732,11 +732,12 @@ describe('the gateway (T056)', () => {
   });
 
   // 003:T116 (PR #144's review, round 1, nit 4; the review session's (a)): T109's «A spec starts a
-  // hosted `live` configuration», every port's values given. The sign-in, email and SMS ports have
-  // no member but their stand-in yet (env.schema.ts), which production refuses, so those three are
-  // its only refusals until their adapters land; then this case reads «accepted». Every value is a
-  // placeholder of the shape the provider gives, never a real key (R-SEC-1).
-  it('a complete hosted live configuration is refused only for SMS_PROVIDER, SIGN_IN_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116)', () => {
+  // hosted `live` configuration», every port's values given. The email and SMS ports have no member
+  // but their stand-in yet (env.schema.ts), which production refuses, so those two are its only
+  // refusals until their adapters land; then this case reads «accepted». 002:T148 (B50) gives the
+  // sign-in port its `live` member, which production takes. Every value is a placeholder of the
+  // shape the provider gives, never a real key (R-SEC-1).
+  it('a complete hosted live configuration is refused only for SMS_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116, 002:T148)', () => {
     const hostedLive: Record<string, string> = {
       NODE_ENV: 'production',
       PORT: '3000',
@@ -770,7 +771,7 @@ describe('the gateway (T056)', () => {
       EXPO_ACCESS_TOKEN: 'expo-placeholder',
       SMS_PROVIDER: 'fake',
       SMS_PROVIDER_KEY: 'sms-placeholder',
-      SIGN_IN_PROVIDER: 'fake',
+      SIGN_IN_PROVIDER: 'live',
       GOOGLE_CLIENT_IDS: 'placeholder.apps.googleusercontent.com',
       APPLE_CLIENT_ID: 'app.ijazah.placeholder',
       APPLE_TEAM_ID: 'TEAMPLACEHOLDER',
@@ -785,7 +786,7 @@ describe('the gateway (T056)', () => {
 
     const failure = refusal(hostedLive);
 
-    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'SIGN_IN_PROVIDER', 'EMAIL_PROVIDER']);
+    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'EMAIL_PROVIDER']);
     expect(failure.message).not.toContain('placeholder');
   });
 
@@ -953,6 +954,61 @@ describe('the push provider (T005)', () => {
     const production = refusal({ ...validEnv, PUSH_PROVIDER: 'expo', NODE_ENV: 'production' });
     expect(production.offendingKeys).not.toContain('PUSH_PROVIDER');
     expect(production.offendingKeys).not.toContain('EXPO_ACCESS_TOKEN');
+  });
+});
+
+// 002:T148 (B50, the note under T148, (2) and (3); Q-T4 (a)): the live sign-in adapter verifies
+// Google's token against Google's published keys, and cannot start without the audiences it accepts.
+// Apple waits for iOS, so no Apple key is required. The stand-in stays refused outside development
+// and test (T168).
+describe('the sign-in provider (002:T148)', () => {
+  const live: Record<string, string> = {
+    ...validEnv,
+    SIGN_IN_PROVIDER: 'live',
+    GOOGLE_CLIENT_IDS: 'placeholder.apps.googleusercontent.com',
+  };
+
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('selects the live adapter with the audiences it accepts, and no Apple key', () => {
+    const config = loadConfig(live);
+
+    expect(config.SIGN_IN_PROVIDER).toBe('live');
+    expect(config.GOOGLE_CLIENT_IDS).toEqual(['placeholder.apps.googleusercontent.com']);
+    expect(config.APPLE_CLIENT_ID).toBeUndefined();
+  });
+
+  it('refuses the live adapter without GOOGLE_CLIENT_IDS, absent or empty, naming it and never a value', () => {
+    for (const env of [without(live, 'GOOGLE_CLIENT_IDS'), { ...live, GOOGLE_CLIENT_IDS: '' }]) {
+      const failure = refusal({ ...env, APPLE_CLIENT_ID: 'app.ijazah.placeholder' });
+
+      expect(failure.offendingKeys).toEqual(['GOOGLE_CLIENT_IDS']);
+      expect(failure.message).toContain(
+        'GOOGLE_CLIENT_IDS (required when SIGN_IN_PROVIDER=live',
+      );
+      expect(failure.message).not.toContain('placeholder');
+    }
+  });
+
+  it('refuses the stand-in outside development and test, and takes the live adapter there (FR-056, T168)', () => {
+    for (const env of [validEnv, { ...validEnv, SIGN_IN_PROVIDER: 'fake' }]) {
+      const failure = refusal({ ...env, NODE_ENV: 'production' });
+      expect(failure.offendingKeys).toContain('SIGN_IN_PROVIDER');
+      expect(failure.message).toMatch(/SIGN_IN_PROVIDER \(the stand-in is refused/);
+    }
+
+    // Still refused for the other ports' stand-ins (T153), never for sign-in.
+    const production = refusal({ ...live, NODE_ENV: 'production' });
+    expect(production.offendingKeys).not.toContain('SIGN_IN_PROVIDER');
+    expect(production.offendingKeys).not.toContain('GOOGLE_CLIENT_IDS');
   });
 });
 

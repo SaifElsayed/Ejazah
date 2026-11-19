@@ -214,7 +214,9 @@ const envObject = z.object({
   // T001 (Phase 1, contracts/ports.md): the sign-in port and the email port, `fake` the only member
   // of each until the live adapter's task adds it. `EMAIL_FROM` is the sender the stand-in records: a
   // reserved address by default (RFC 2606); the live sender arrives with the provider chosen at launch.
-  SIGN_IN_PROVIDER: z.enum(['fake']).default('fake'),
+  // 002:T148 (B50): `live` verifies Google's token against Google's published keys, and requires
+  // GOOGLE_CLIENT_IDS; Apple waits for iOS (Q-T4 (a)).
+  SIGN_IN_PROVIDER: z.enum(['fake', 'live']).default('fake'),
   EMAIL_PROVIDER: z.enum(['fake']).default('fake'),
   EMAIL_FROM: emailAddress.default('no-reply@ijazah.invalid'),
 
@@ -240,7 +242,8 @@ const envObject = z.object({
   TYPST_BIN: nonEmpty.optional(),
 
   // T001 (contracts/ports.md): the live sign-in adapter's credentials, each optional and stripped
-  // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`.
+  // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`. 002:T148: `live`
+  // requires GOOGLE_CLIENT_IDS (below); no code reads the Apple keys until iOS (Q-T4 (a)).
   GOOGLE_CLIENT_IDS: googleClientIds.optional(),
   APPLE_CLIENT_ID: nonEmpty.optional(),
   APPLE_TEAM_ID: nonEmpty.optional(),
@@ -452,6 +455,16 @@ export const envSchema = envObject.superRefine((env, ctx) => {
           "required in live mode: the split sends the teacher's share to the teacher (R-MONEY-6, T104, T109)",
       });
     }
+  }
+
+  // 002:T148 (B50): the live sign-in adapter accepts a Google token only for an audience it is
+  // given, so it cannot start without one. The key is named, never its value (R-SEC-2).
+  if (env.SIGN_IN_PROVIDER === 'live' && env.GOOGLE_CLIENT_IDS === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['GOOGLE_CLIENT_IDS'],
+      message: 'required when SIGN_IN_PROVIDER=live (002:T148)',
+    });
   }
 
   // T009: LiveKit cannot start without its address, its key and its secret. The key is named, never

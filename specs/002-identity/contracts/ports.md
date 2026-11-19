@@ -18,21 +18,44 @@ separate boolean, so a caller cannot read an unverified email as an address
 (FR-121); it returns no token, so nothing a provider issued is stored except
 the refresh token the revoke operation needs.
 
-**Selection**: `SIGN_IN_PROVIDER`, `fake` (the only member until the live
-adapter's task adds `live`); refused outside development and test like every
-stand-in (T168). Provider keys, all optional and stripped from every test run:
-`GOOGLE_CLIENT_IDS` (comma-separated audiences), `APPLE_CLIENT_ID`,
-`APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
+**Selection**: `SIGN_IN_PROVIDER`, `fake` or `live` (002:T148, B50); `fake` is
+refused outside development and test like every stand-in (T168), and `live`
+cannot start without `GOOGLE_CLIENT_IDS`. Provider keys, all optional and
+stripped from every test run: `GOOGLE_CLIENT_IDS` (comma-separated audiences),
+`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (read by
+no code until iOS, below).
 
 **Stand-in behaviour**: accepts an unsigned fake token of the shape `fake.<provider>.<subject>.<email or ->.<verified|unverified>.<nonce>` — no key, since the device must hold none; the stand-in is refused outside development and test (T168), so the unsigned shape reaches no deployment — still compares the nonce it is handed with the fake token's field (the service owns the single-use mark; an adapter holds no Redis state), records every call, can be told to fail, and answers `exchange` with a recorded fake refresh token and `revoke` with a recorded no-op. The phone app in development builds the fake token behind a development-only flag, so the owner can walk the flow on a device without a provider account.
 
-**Live adapter (later task)**: fetches Google's and Apple's JWK sets, caches
-them with their cache headers, verifies with `node:crypto` (RS256 for Google,
-ES256 for Apple), checks `iss`, `aud` against the configured client ids, `exp`
-and `nonce` (Apple: the SHA-256 of the raw nonce), reads `email_verified`
-(Google) and `email_verified` / `is_private_email` (Apple); exchanges and
-revokes against Apple's REST endpoints with a client secret signed by the
-configured key.
+**Live adapter (`live.adapter.ts`, 002:T148, B50; Google now, Apple with iOS,
+Q-T4 (a))**:
+
+- **Google, as built.** The ID token is a JWT, verified with `node:crypto` and
+  no JWT library: three base64url parts; a header of `alg: RS256` and a `kid`
+  the key set holds (otherwise `shape` or `signature`); the signature over the
+  first two parts with that key, imported from its JWK; then `iss` (one of
+  `accounts.google.com`, `https://accounts.google.com`), `aud` (one of
+  `GOOGLE_CLIENT_IDS`), `exp` and `iat` (each within a 60-second skew, read
+  from the clock the adapter is given) and `nonce` (equal to the server's,
+  compared in constant time). `email_verified` counts only when it is the
+  boolean `true`; `sub`, `email` and `name` are returned.
+- **The key set.** Google's published JWK set
+  (`https://www.googleapis.com/oauth2/v3/certs`), fetched through an injected
+  `fetch` with a 5-second timeout and cached until its `Cache-Control:
+  max-age`; concurrent tokens share one fetch. A `kid` the cached set lacks
+  triggers one refetch, at most once a minute. A fetch that fails, times out,
+  answers a status or an unreadable body refuses the token (fail closed).
+- **Refusals.** Every refusal is `IdentityTokenError` with its reason, which
+  the service answers as the one `UNAUTHENTICATED` (the note under T042), and
+  one warn line of the provider and a reason (and, for the key set, what
+  failed); never the token, the nonce, the email, the subject or a client id.
+- **Apple, until the first App Store submission.** Under `live`, an Apple
+  token, the Apple exchange and the Apple revocation are refused as the port's
+  error (`issuer`) with a log line of a reason, and reach no one, so no Apple
+  identity can exist under `live`. The Apple half (ES256 against Apple's JWK
+  set, the SHA-256 of the raw nonce, `email_verified` / `is_private_email`, the
+  exchange and the revocation against Apple's REST endpoints with a client
+  secret signed by the configured key) is the follow-up under T148.
 
 ## EmailPort — `platform/ports/email/`
 

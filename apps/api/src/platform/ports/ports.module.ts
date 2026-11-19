@@ -53,14 +53,17 @@ export interface Ports {
   readonly email: EmailPort;
 }
 
-/** 003:T101: `log` takes the payment gateway's one warn line of ids and a reason. */
+/**
+ * 003:T101: `log` takes the payment gateway's one warn line of ids and a reason. 002:T148: the live
+ * sign-in adapter writes its refusal lines (a provider and a reason) to the same logger.
+ */
 export function selectPorts(config: PortsConfig, log?: PaymentLog): Ports {
   return {
     storage: createStoragePort(config),
     payment: createPaymentPort(config, log),
     sms: createSmsPort(config),
     video: createVideoPort(config),
-    signIn: createSignInPort(config),
+    signIn: createSignInPort(config, log),
     email: createEmailPort(config),
   };
 }
