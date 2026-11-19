@@ -1,7 +1,8 @@
 // 005:T024 (B49; FR-624; R-410; the note under T024, Q-S1 (a)): the settings page through the router,
 // in both languages. Every key `settings.list` answers, under its group's heading, the groups in the
 // contract's order and the keys in the list's: each row its label, its value with its unit (a list
-// item by item, a rate limit as «N per S s», a key no row holds as not set), its bounds and its SRS
+// item by item, a rate limit as «N per S s», a key no row holds as not set), its default drawn as a
+// value is, between the value and the bounds (B49's Q-A1 (a)), its bounds and its SRS
 // row; `rate_limit_signed_in_default` marked as applying within 60 s, and no other row. The page
 // leads to `/settings/admins`. A change: the new value in the setting's shape, the mandatory reason,
 // trimmed, and a key, sent once; the dialog says the change applies to every later read at once (the
@@ -31,6 +32,7 @@ const from = (min: number, max: number | null = null) => ({ min, minExclusive: f
 const signedInDefault = {
   key: 'rate_limit_signed_in_default',
   value: { limit: 150, window_seconds: 60 },
+  default: { limit: 150, window_seconds: 60 },
   bounds: { shape: 'rate_limit', limit: from(1, 200), windowSeconds: from(1) },
   unit: 'rate_limit',
   group: 'rateLimits',
@@ -38,7 +40,8 @@ const signedInDefault = {
 } as const;
 const attendance = {
   key: 'attendance_threshold_pct',
-  value: 70,
+  value: 80,
+  default: 70,
   bounds: { shape: 'number', value: { min: 0, minExclusive: true, max: 100 } },
   unit: 'percent',
   group: 'sessions',
@@ -47,6 +50,7 @@ const attendance = {
 const reminders = {
   key: 'reminder_offsets_minutes',
   value: [1440, 15],
+  default: [1440, 15],
   bounds: { shape: 'list', each: from(1) },
   unit: 'minutes',
   group: 'notifications',
@@ -55,6 +59,7 @@ const reminders = {
 const holdTtl = {
   key: 'slot_hold_ttl_minutes',
   value: 10,
+  default: 10,
   bounds: { shape: 'number', value: from(1) },
   unit: 'minutes',
   group: 'booking',
@@ -63,6 +68,7 @@ const holdTtl = {
 const terms = {
   key: 'terms_version',
   value: '2026-10',
+  default: '2026-10',
   bounds: { shape: 'text' },
   unit: 'version',
   group: 'general',
@@ -71,6 +77,7 @@ const terms = {
 const otpAttempts = {
   key: 'otp_max_attempts',
   value: null,
+  default: 5,
   bounds: { shape: 'number', value: from(1) },
   unit: 'count',
   group: 'accounts',
@@ -79,6 +86,7 @@ const otpAttempts = {
 const lockout = {
   key: 'admin_lockout_minutes',
   value: 15,
+  default: 15,
   bounds: { shape: 'number', value: from(1) },
   unit: 'minutes',
   group: 'admin',
@@ -87,6 +95,7 @@ const lockout = {
 const settingsChange = {
   key: 'rate_limit_settings_update',
   value: { limit: 10, window_seconds: 60 },
+  default: { limit: 10, window_seconds: 60 },
   bounds: { shape: 'rate_limit', limit: from(1), windowSeconds: from(1) },
   unit: 'rate_limit',
   group: 'rateLimits',
@@ -145,6 +154,20 @@ function rowIn(container: Pick<typeof screen, 'getAllByRole'>, label: string) {
   return within(row);
 }
 
+/** The cell of the row labelled `label` under the column headed `header`. */
+function cellIn(container: Pick<typeof screen, 'getAllByRole'>, label: string, header: string) {
+  const column = container
+    .getAllByRole('columnheader')
+    .findIndex((each) => each.textContent === header);
+  if (column < 0) throw new Error(`no column headed ${header}`);
+  const row = container
+    .getAllByRole('row')
+    .find((each) => each.querySelector('td')?.textContent === label);
+  const cell = row?.querySelectorAll('td')[column];
+  if (cell === undefined) throw new Error(`no cell of ${label} under ${header}`);
+  return cell;
+}
+
 /** The row of `setting`, found by its label. */
 async function rowOf(setting: { readonly key: string }, t: Translate = ar) {
   await screen.findAllByText(t(labelOf(setting.key)));
@@ -169,7 +192,7 @@ const confirmOf = (dialog: ReturnType<typeof within>) =>
   dialog.getByRole('button', { name: ar('admin.dialogs.confirm.changeSetting.confirm') });
 
 describe('the settings page (FR-624)', () => {
-  it('lists every key under its group, the groups in order: its label, value with unit, bounds and SRS row, in both languages', async () => {
+  it('lists every key under its group, the groups in order: its label, value with unit, default, bounds and SRS row, in both languages', async () => {
     await inBothLocales(
       () => open(),
       async (t, locale) => {
@@ -194,51 +217,71 @@ describe('the settings page (FR-624)', () => {
           new Intl.ListFormat(formattingTag(locale), { type: 'unit', style: 'short' }).format(
             minutes.map((value) => t('admin.settings.units.minutes', { value })),
           );
+        const rateLimit = t('admin.settings.value.rateLimit', { limit: 150, window: 60 });
+        // [setting, value, default (B49's Q-A1 (a): drawn as a value is), bounds]
         const expected = [
           [
             holdTtl,
+            t('admin.settings.units.minutes', { value: 10 }),
             t('admin.settings.units.minutes', { value: 10 }),
             t('admin.settings.bounds.atLeast', { min: 1 }),
           ],
           [
             attendance,
+            t('admin.settings.units.percent', { value: 80 }),
             t('admin.settings.units.percent', { value: 70 }),
             t('admin.settings.bounds.aboveUpTo', { min: 0, max: 100 }),
           ],
           [
             reminders,
             listed([1440, 15]),
+            listed([1440, 15]),
             t('admin.settings.bounds.each', {
               bound: t('admin.settings.bounds.atLeast', { min: 1 }),
             }),
           ],
-          [terms, '2026-10', t('admin.settings.bounds.none')],
+          [terms, '2026-10', '2026-10', t('admin.settings.bounds.none')],
           [
             otpAttempts,
             t('admin.settings.value.missing'),
+            t('admin.settings.units.count', { value: 5 }),
             t('admin.settings.bounds.atLeast', { min: 1 }),
           ],
           [
             lockout,
             t('admin.settings.units.minutes', { value: 15 }),
+            t('admin.settings.units.minutes', { value: 15 }),
             t('admin.settings.bounds.atLeast', { min: 1 }),
           ],
           [
             signedInDefault,
-            t('admin.settings.value.rateLimit', { limit: 150, window: 60 }),
+            rateLimit,
+            rateLimit,
             t('admin.settings.bounds.rateLimit', {
               limit: t('admin.settings.bounds.between', { min: 1, max: 200 }),
               window: t('admin.settings.bounds.atLeast', { min: 1 }),
             }),
           ],
         ] as const;
-        for (const [setting, value, bounds] of expected) {
+        for (const [setting, value, fallback, bounds] of expected) {
           const region = within(screen.getByRole('region', { name: t(groupOf(setting.group)) }));
-          const row = rowIn(region, t(labelOf(setting.key)));
-          expect(row.getByText(value)).toBeTruthy();
-          expect(row.getByText(bounds)).toBeTruthy();
-          expect(row.getByText(setting.srsRow, { selector: 'span' })).toBeTruthy();
+          const label = t(labelOf(setting.key));
+          const cell = (header: MessageKey) => cellIn(region, label, t(header));
+          expect(within(cell('admin.settings.columns.value')).getByText(value)).toBeTruthy();
+          expect(cell('admin.settings.columns.default').textContent).toBe(fallback);
+          expect(cell('admin.settings.columns.bounds').textContent).toBe(bounds);
+          expect(cell('admin.settings.columns.srsRow').textContent).toBe(setting.srsRow);
         }
+        // The default stands between the value and the bounds.
+        expect(
+          within(screen.getByRole('region', { name: t(groupOf('sessions')) }))
+            .getAllByRole('columnheader')
+            .map((header) => header.textContent),
+        ).toEqual(
+          (['setting', 'value', 'default', 'bounds', 'srsRow', 'action'] as const).map((column) =>
+            t(`admin.settings.columns.${column}` as MessageKey),
+          ),
+        );
         const limits = within(screen.getByRole('region', { name: t(groupOf('rateLimits')) }));
         const order = limits
           .getAllByRole('row')

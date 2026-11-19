@@ -128,7 +128,7 @@ const itemOf = (items: readonly ListedSetting[], key: string) =>
   items.find((item) => item.key === key);
 
 describe('settings.list (T024)', () => {
-  it("answers every registry key, in its order, with the registry's bounds, unit, group and SRS row and the value stored", async () => {
+  it("answers every registry key, in its order, with the registry's default, bounds, unit, group and SRS row and the value stored", async () => {
     const { service, reached } = administration({
       stored: { chat_page_size: 50, attendance_threshold_pct: 80 },
     });
@@ -136,14 +136,36 @@ describe('settings.list (T024)', () => {
     const keys = Object.keys(SETTINGS_REGISTRY);
     expect(items.map((item) => item.key)).toEqual(keys);
     for (const item of items) {
-      const { bounds, unit, group, srsRow } = SETTINGS_REGISTRY[item.key]!;
-      expect(item).toEqual({ key: item.key, value: item.value, bounds, unit, group, srsRow });
+      const entry = SETTINGS_REGISTRY[item.key]!;
+      const { bounds, unit, group, srsRow } = entry;
+      expect(item).toEqual({
+        key: item.key,
+        value: item.value,
+        default: entry.default,
+        bounds,
+        unit,
+        group,
+        srsRow,
+      });
     }
     expect(itemOf(items, 'chat_page_size')?.value).toBe(50);
     expect(itemOf(items, 'attendance_threshold_pct')?.value).toBe(80);
     // A key no row holds is answered null, never a stand-in value.
     expect(itemOf(items, 'join_window_minutes')?.value).toBeNull();
     expect(reached).toEqual([['valuesOf', TX, keys]]);
+  });
+
+  // B49's Q-A1 (a) (FR-624: «value, default, unit»): the default is the registry's (the seed's
+  // value), never the value stored, and stands where no row holds the key.
+  it('answers the default from the registry, apart from the value stored', async () => {
+    const { service } = administration({ stored: { attendance_threshold_pct: 80 } });
+    const { items } = await service.list(TX, ADMIN);
+    expect(itemOf(items, 'attendance_threshold_pct')).toMatchObject({ value: 80, default: 70 });
+    expect(itemOf(items, 'join_window_minutes')).toMatchObject({ value: null, default: 10 });
+    expect(itemOf(items, 'rate_limit_settings_update')).toMatchObject({
+      value: null,
+      default: { limit: 10, window_seconds: 60 },
+    });
   });
 });
 

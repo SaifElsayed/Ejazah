@@ -95,6 +95,16 @@ describe('the settings registry (T002, R-410)', () => {
     expect(registryMismatch(rest)).toEqual({ notInRegistry: [], notSeeded: [dropped] });
   });
 
+  // 005:T024 (B49, Q-A1 (a); FR-624: «value, default, unit»): the registry carries each key's
+  // default, and it is the value the seed plants, so the panel's default is never a second copy that
+  // drifts from the seed. `SettingEntry.default` is required: an entry without one fails the type check.
+  it('carries every key’s default, equal to the value the seed plants', () => {
+    const defaults = Object.fromEntries(
+      Object.entries(SETTINGS_REGISTRY).map(([key, entry]) => [key, entry.default]),
+    );
+    expect(defaults).toStrictEqual(Object.fromEntries(seeded));
+  });
+
   it('parses every seed default under its schema, inside its bounds', () => {
     const refused = [...seeded].flatMap(([key, value]) => {
       const entry = SETTINGS_REGISTRY[key];

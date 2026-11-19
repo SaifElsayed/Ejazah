@@ -45,8 +45,9 @@ export class SettingsService implements SettingsReader {
 // T024, Q-X1 (a), Q-S1 (a)): the panel's `settings.list` and `settings.update`, on the
 // administrator kind's transaction (contracts/admin-surface.md, `settings.*`).
 //
-// `list` answers every key of the kernel's registry, in its order, with its bounds, unit, group and
-// SRS row and the value stored (null where no row holds it), read in one statement.
+// `list` answers every key of the kernel's registry, in its order, with its default (the registry's,
+// which is the seed's value; B49's Q-A1 (a)), bounds, unit, group and SRS row and the value stored
+// (null where no row holds it), read in one statement.
 //
 // `update` is refused VALIDATION_FAILED through the registry's `settingRefusal`, one code per
 // reason (`unknown` on the path `key`; `invalid` and `out_of_bounds` on `value`), logged with the
@@ -132,10 +133,17 @@ export function createSettingsAdministration({
       const keys = Object.keys(SETTINGS_REGISTRY);
       const values = await writerOn(tx).valuesOf(keys);
       const items = keys.map((key): ListedSetting => {
-        const { bounds, unit, group, srsRow } = SETTINGS_REGISTRY[key] as SettingEntry;
+        const {
+          bounds,
+          unit,
+          group,
+          srsRow,
+          default: fallback,
+        } = SETTINGS_REGISTRY[key] as SettingEntry;
         return {
           key,
           value: (values.get(key) ?? null) as SettingJson,
+          default: fallback,
           bounds,
           unit,
           group,
