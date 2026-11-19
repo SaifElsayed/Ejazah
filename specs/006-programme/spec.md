@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-19
 
-**Status**: Draft (specify; the owner's clarify answers pending)
+**Status**: Clarified (2026-11-19)
 
 **Input**: User description: "The programme of ADR 0024 as amended by DEC-83 and DEC-92: the assessment and the ijazah-track programme paid by prepaid monthly instalments (SRS §3.5.1 FR-BOOK-13..19, FR-PAYG-19 as amended, §3.14 programme rows, DEC-63, DEC-80, DEC-81, DEC-83, DEC-85, DEC-86, DEC-90, DEC-92; ADR 0024; ADR 0025 D2, D6). specs/003-booking/tasks.md T108."
 
@@ -77,6 +77,40 @@ from the SRS, never from the design boards.
 **Numbering.** Phase 4's requirements run to FR-631 and its criteria to SC-609. This specification numbers from FR-701
 and SC-701.
 
+## Clarifications
+
+### Session 2026-11-19
+
+The owner's answers, relayed by the review session and recorded as SRS DEC-93. The worked example throughout is
+40 sessions at 250 EGP = 10,000 EGP, with the assessment fee written F.
+
+- Q: What does an ijazah-track package publish before the offer, and who sets the assessment fee? → A: The owner's own
+  model: «سعر الاختبار ثابت ملهوش علاقة بالمعلم احنا اللي بنحدده وسعر ال 45 و ال 60 والنص ساعة هو اللي بيحدده … بتبقى في
+  الرينج ده».
+  - The assessment fee is one platform-wide amount, an Administrator's §3.14 setting; the teacher does not set it.
+  - The teacher's ijazah-track package sets a price per session for each of 30, 45 and 60 minutes.
+  - Before booking, the student sees the teacher's per-session range (e.g. «250 – 400 للحصة»).
+  - The offer picks the length and the count (FR-BOOK-14 as written; on who picks the length: «خليها زي ما هي»), and the
+    total is the count × that length's price, so it is always inside the range.
+  - DEC-88's average stays per length, beside each of the three prices (FR-701, FR-704, FR-705).
+- Q: Is the assessment fee deducted when paying in full or by months? → A: (a) Deducted when paying in full
+  (F + (10,000 − F) = 10,000), not when paying by months (F + 10 × 1,000 = 10,000 + F). «Costs a little more» is the
+  fee (FR-711).
+- Q: What is «a month»? → A: (a) 4 consecutive sessions of the weekly time, a fixed amount (4 × 250 = 1,000); the last
+  month takes the remainder (42 sessions = 10 × 1,000 + a last month of 2 sessions, 500) (FR-711).
+- Q: What is the base of the 25 % released at half? → A: (a) The offer's total, the assessment excluded:
+  25 % × 70 % × 10,000 = 1,750, the same in full or by months, capped at what is held. The assessment's share is
+  released on its own after its 72 hours (FR-728).
+- Q: An Administrator approves a teacher's refusal after the assessment: the fee? → A: (a) Kept: the assessment was
+  delivered (FR-BOOK-13), and its teacher share (70 % of F) is released after its 72 hours (FR-709).
+- Assumption approved (A-1): the assessment session's own length is an Administrator's §3.14 setting beside the fee,
+  default 30 minutes, the shortest weekly time a teacher can publish, so it fits any of them (FR-701).
+- Assumption approved (A-2 (a)): the offer may pick only a length that fits inside the reserved weekly time (60 → 30, 45
+  or 60; 45 → 30 or 45; 30 → 30), each session from the time's start; the reservation, the overlap refusals and the
+  release stay as built (FR-705).
+- Not given by the owner, written as an assumption: the assessment fee's amount. The §3.14 row has no default; an
+  ijazah-track package cannot be published until an Administrator sets it (FR-704).
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - A student books and pays an assessment (Priority: P1)
@@ -91,13 +125,15 @@ its fee through today's checkout. The weekly time is held, then reserved for the
 
 **Acceptance Scenarios**:
 
-1. **Given** an ijazah-track package with an assessment fee, **When** the student pays it, **Then** one order of kind
+1. **Given** an ijazah-track package and the assessment fee set by an Administrator, **When** the student pays it, **Then** one order of kind
    «assessment» is paid with its 70 % share kept, one assessment session exists at the chosen weekly time, and the
    time is reserved for this enrollment.
 2. **Given** a recitation package, **When** the student buys it, **Then** nothing changes from today: one order, every
    session generated, no assessment.
-3. **Given** a paid assessment whose session ends with no case open, **When** 72 hours pass, **Then** its share (350 of
-   a 500 fee) is listed as a release due.
+3. **Given** a paid assessment whose session ends with no case open, **When** 72 hours pass, **Then** its share (70 % of
+   the fee) is listed as a release due.
+4. **Given** a teacher's three prices (30: 250, 45: 320, 60: 400), **When** the student opens the profile, **Then** they
+   see the assessment's fee and «250 – 400 للحصة» before booking.
 
 ---
 
@@ -186,7 +222,7 @@ compensation amounts follow DEC-81 and DEC-85.
 
 **Why this priority**: Money rules are the owner's firmest (ADR 0025); a wrong release cannot be taken back in code.
 
-**Independent Test**: For a 10,000 EGP offer at 250 a session, paid monthly: the assessment's 350 is due after its window;
+**Independent Test**: For a 10,000 EGP offer at 250 a session, paid monthly: the assessment's 70 % share is due after its window;
 1,750 at the 20th session delivered, capped at what is held; the rest at the end; on a teacher's dropout the case shows
 every order's whole gross.
 
@@ -251,15 +287,22 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   later order (ADR 0025 D6, Q6).
 - **FR-703**: The assessment's teacher share MUST be listed as a release due once its session's dispute window (72 h)
   has passed with no case open (DEC-81, N3).
-- **FR-704**: The assessment's fee, its session length and how the catalogue shows an ijazah-track package
-  [NEEDS CLARIFICATION: who sets the assessment fee and the session length, and what the package publishes before the
-  offer — see Q-C1].
+- **FR-704**: The assessment's fee MUST be one platform-wide amount and its session length one length, both §3.14
+  settings an Administrator sets (the length 30 minutes by default; the fee with no default). An ijazah-track package
+  MUST NOT be published while the fee is unset. The teacher's ijazah-track package MUST set a price per session for
+  each of 30, 45 and 60 minutes; the catalogue MUST show the student the assessment's fee and the teacher's
+  per-session range (lowest to highest of the three) before booking (DEC-93).
+- **FR-704a**: The package editor's average price (DEC-88) MUST be shown per length on the ijazah track, beside each of
+  the three prices, over the other teachers' ijazah-track prices for that length.
 
 **The offer and the 48 hours**
 
 - **FR-705**: After the assessment session is delivered, the teacher MUST be able to send one offer recording the
-  student's level, readiness, the programme's expected length, the number of sessions and one total price; a session's
-  price is derived from it, and the count and the length are frozen from then on (FR-BOOK-14, `003` FR-312 as amended).
+  student's level, readiness, the programme's expected length, the session length and the number of sessions; the
+  total MUST be the count × the teacher's price for that length at the offer, so it lies inside the range. The length
+  MUST fit inside the reserved weekly time (60 → 30, 45 or 60; 45 → 30 or 45; 30 → 30), each session starting at the
+  time's start. The count, the length and the total are frozen from then on; a later change of the teacher's prices
+  reaches later offers only (FR-BOOK-14, `003` FR-312 as amended, DEC-93).
 - **FR-706**: The package's weekly time MUST stay reserved from the assessment until the student cancels, or until
   48 hours (§3.14) after the offer pass unpaid; then it is offered to anyone again
   (FR-BOOK-15).
@@ -268,15 +311,17 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
 - **FR-709**: A teacher MUST NOT refuse a student on their own after the assessment; they MAY send an administrator a
   refusal request with a mandatory reason, and the administrator decides; an approved refusal ends the programme before
-  any offer, freeing the time. The assessment fee follows FR-702.
+  any offer, freeing the time. The assessment fee is kept, and its teacher share is released after its 72 hours
+  (DEC-93).
 
 **Paying: in full or monthly, prepaid**
 
 - **FR-710**: The student MUST be able to pay the rest in full or by months, within the 48 hours (FR-BOOK-16,
   DEC-92). Each payment MUST be an ordinary gateway order carrying the payee split (T101) and the programme's rate
   (FR-702), of kind «rest in full» or «instalment» for a numbered month.
-- **FR-711**: A month's amount and sessions MUST follow [NEEDS CLARIFICATION: what a month is and how the assessment fee
-  enters the monthly total — see Q-C2 and Q-C3]; the last month takes the remainder.
+- **FR-711**: A month MUST be 4 consecutive sessions of the weekly time, its amount 4 × the offer's session price; the
+  last month takes the remainder (the sessions and the amount left). Paying in full MUST cost the offer's total less
+  the assessment fee; paying by months MUST cost the offer's total, the fee not deducted (DEC-93).
 - **FR-712**: A month's sessions MUST open only when its order is paid (FR-BOOK-4 as amended).
 - **FR-713**: Paying the first month by card MUST save the card for the automatic charge, with the student's explicit
   consent in words at that moment; a student MAY instead choose to renew by hand each month.
@@ -327,8 +372,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 **Money**
 
-- **FR-728**: The 25 % release MUST be computed on [NEEDS CLARIFICATION: the base of «the teacher's share of the
-  programme's whole price» — see Q-C4], capped at what the gateway holds of the orders paid by then, at half the
+- **FR-728**: The 25 % release MUST be 25 % of the teacher's share of the offer's total, the assessment excluded
+  (1,750 on a 10,000 offer at 70 %, in full or by months), capped at what the gateway holds of the orders paid by then, at half the
   sessions delivered with no case open, counted by sessions (a postponed or make-up session counted once delivered); the
   rest at the end (DEC-81, N2).
 - **FR-729**: A teacher's dropout on the programme, including a teacher suspended, banned or gone, MUST open the
@@ -340,8 +385,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 **Settings and proofs**
 
-- **FR-732**: Every number above MUST be a §3.14 setting read from `settings` (R-MONEY-12): 48 h, 7 days, 3 days, the
-  4 retries and their days.
+- **FR-732**: Every number above MUST be a §3.14 setting read from `settings` (R-MONEY-12): the assessment's fee and
+  length (30 min), 48 h, 7 days, 3 days, the 4 retries and their days.
 - **FR-733**: Every refusal MUST write nothing and log one line of ids and a reason; every automatic action (charge,
   retry, pause, withdrawal) MUST log one line of ids and a reason; no line carries a card detail.
 - **FR-734**: No user MUST be able to read or act on another's programme, offer, months or card, in both gender
@@ -349,6 +394,7 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 ### Key Entities _(include if feature involves data)_
 
+- **Ijazah-track prices**: a teacher's price per session for 30, 45 and 60 minutes on their ijazah-track package.
 - **Programme**: the ijazah enrollment with its offer (level, readiness, expected length, count, length, total price,
   sent and frozen times), its rate and 25 % fixed at the assessment, its state (awaiting offer, offered, active, paused,
   closed), and when paused, since when.
@@ -372,7 +418,7 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **SC-703**: A student renews a month by hand in under one minute from the notice.
 - **SC-704**: In 100 % of failed charges, the student is notified within two minutes, and a hard decline is never retried.
 - **SC-705**: Every release and every compensation amount of the programme equals DEC-81's and DEC-85's rule on a worked
-  example of 10,000 EGP at 250 a session (350, 1,750, the rest; the full refund on a dropout).
+  example of 10,000 EGP at 250 a session (70 % of the fee, 1,750, the rest; the full refund on a dropout).
 - **SC-706**: Administrators find every paused package and stop request, oldest first, and decide one in under one minute.
 - **SC-707**: No card detail appears in any log, response or audit entry, in 100 % of the adversarial suite's attempts.
 
@@ -386,8 +432,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   port, and the closed test renews by hand.
 - The teacher's share held and released later rests on the owner's assumption of 2026-11-15 (ADR 0025 D8).
 - A package has one weekly time (FR-BOOK-4), so one session a week.
-- A refusal request approved after the assessment keeps the fee (FR-BOOK-13's «never refunded»; to confirm in clarify,
-  Q-C5).
+- A refusal request approved after the assessment keeps the fee (the owner's answer, DEC-93).
+- The assessment fee has no default; an ijazah-track package cannot be published until an Administrator sets it
+  (the owner did not give the amount).
 - A postponed or made-up session belongs to the month of its original session and is paid (G-6).
 - A teacher's no-show at the assessment is made up (DEC-84), never refunded (G-7).
 - A reopened package returns paused, awaiting a payment by hand, since the card was deleted at the close (G-8).

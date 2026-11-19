@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — three remain (FR-704, FR-711, FR-728), carried to the owner as clarify questions Q-C1 to Q-C4, with Q-C5 confirming an assumption
+- [x] No [NEEDS CLARIFICATION] markers remain (closed by the owner's clarify answers, 2026-11-19, SRS DEC-93)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,4 +33,4 @@
 
 - The project's specifications name SRS ids, track 2's tasks and the existing rules by name (T057's precedent); that is provenance, not implementation.
 - «Gateway order», «saved card» and «payment stand-in» are the SRS's and ADR 0025's own terms.
-- The markers close with the owner's clarify answers, written into spec.md's «Clarifications» and SRS DEC-93 before `/speckit-plan`.
+- The three markers closed with the owner's clarify answers (2026-11-19), written into spec.md's «Clarifications» and SRS DEC-93.
