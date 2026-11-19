@@ -8,7 +8,7 @@ and the code it stands on, read on `da98e600` (= `244096f1` + B-M4's documents).
 - the analysis's I-2 (a): the offer within 24 h of the assessment, else an Administrator item;
 - the 48 hours run from the offer (R-505);
 - P1 (a): the fee is seeded 0 = unset;
-- P2 (a): the migration deactivates the old ijazah packages.
+- P2 (a): the old ijazah packages are deactivated when `programme_enabled` is turned on, not by the migration.
 
 Settled by the review session on recorded precedents:
 - G-4 (Q-3 (a), FR-SESS-16);
@@ -74,11 +74,11 @@ Settled by the review session on recorded precedents:
   - While it is off, an ijazah-track package is created and sold as today (one order, B-M2's rule).
   - Turning it on makes new ijazah-track packages programme packages, so DEC-92's fallback «sold as today until it
     lands» holds whatever date B-P4 merges.
+  - The switch gates only new programme packages and new assessments (analyze N-4). Turning it off again stops no
+    running programme (its offer, payments, renewals and requests go on) and reactivates no old package.
 - **The old ijazah packages (P2 (a)).**
-  - The migration deactivates the existing `ijazah_track` packages (closed-test data); their enrollments are untouched
-    and keep B-M2's one-order rule.
-  - Any ijazah-track package created the old way while the switch is off is deactivated when it is turned on, by the
-    same rule.
+  - Turning the switch on deactivates every old-style ijazah-track package (closed-test data); their enrollments are
+    untouched and keep B-M2's one-order rule. The migration changes no row, so they are sold as today until then.
   - `packages.is_programme` tells a programme package from a pre-switch ijazah-track one; the check and every reader
     branch on it, not on the track alone.
 - **Why.** The owner's Q-C1 model; three columns for three fixed lengths.
@@ -111,13 +111,18 @@ Settled by the review session on recorded precedents:
 - **Decision.**
   - **The offer's window (I-2 (a)):** `offer_due_at` = the end of the assessment session as delivered + 24 h
     (§3.14, `programme_offer_hours`).
-    - It is set when session 1 is settled `done`. A teacher's no-show, a postponement or a dispute moves the
-      assessment (DEC-84, DEC-86), and the window follows the make-up's delivery (analyze U-2).
+    - It is set when session 1 is settled `done` or `student_no_show` (consumed: the student missed it, the fee kept).
+      A teacher's no-show, a both-no-show, a cancellation by agreement or a postponement is made up (DEC-84, DEC-86),
+      and the window follows the make-up's delivery (analyze U-2).
+    - Any other end of session 1 with no make-up pending (a remedy that lapses, a dispute unresolved past 24 h after
+      its scheduled end) opens the `no_offer` Administrator item at its scheduled end + 24 h, so the weekly time is
+      never reserved for ever (analyze N-2).
     - The offer is refused `assessment_not_delivered` before.
   - **No offer by `offer_due_at`:** the sweep opens a `no_offer` Administrator item. It never lapses automatically,
     and the weekly time stays reserved. The Administrator decides:
     - a refusal (as R-513: the fee kept, the assessment's share released);
-    - or an extension, giving the teacher `programme_offer_hours` more.
+    - or an extension, giving the teacher `programme_offer_hours` more: the item is closed `extended`, and a new item may
+      open at the new deadline (analyze N-10). A `no_offer` item has no «decline».
   - **The 48 hours (the owner: «ال 48 ساعة دي بتبدأ من وقت عرض الباقة»):** `pay_by` = the offer's time + 48 h
     (§3.14). The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze
     U-5; FR-BOOK-15's «first weekly occurrence after»).
@@ -148,8 +153,7 @@ Settled by the review session on recorded precedents:
   - Paying in full generates all N; a paid month generates its 4, from the first weekly occurrence after both the
     paid month's last session and the payment.
 - **Month 1's amount:** 4 × the session price. The last month takes the remainder (`packages/money`).
-- **«4 sessions a month»** is a definition by DEC-93, not an operational number (R-MONEY-12; analyze K-2, the review
-  session confirms).
+- **«4 sessions a month»** is a definition by DEC-93, not an operational number (R-MONEY-12; analyze K-2, settled).
 - **The paid month's last session** (analyze I-4) is the latest end among the sessions of that `programme_month`,
   make-ups included (`lastToEnd`, B-M2's precedent).
 - **The pause:** an unpaid month has no sessions, so nothing is held or evaluated. The pause is the programme's state,
@@ -158,6 +162,9 @@ Settled by the review session on recorded precedents:
 - **The student's own weekly time (U-1, settled by the hidden-times rule).** The student's booking of another teacher refuses
   a weekly time overlapping their active programme's (discovery and holds, FR-BOOK-5's axis (b) on the reservation).
   Without it, a month's generation could be refused and today's refusal branch would cancel the whole enrollment.
+  - An active programme is one `awaiting_offer`, `offered`, `active` or `paused`.
+  - The same weekly time is excluded from the make-up times offered (FR-MAKEUP-3, `remedy-offer.service.ts` proposal and
+    counter options) and from the postponement's placement (DEC-86) of the student's other enrollments (analyze N-12).
   - Defence in depth either way: a refused month's generation never cancels a programme enrollment. It keeps the
     order paid, opens a case and logs.
 
@@ -172,17 +179,23 @@ Settled by the review session on recorded precedents:
        automatic order (R-509).
     3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
        at most 4.
-    4. **pause:** set `paused_at` when the next occurrence starts with the month unpaid.
+    4. **pause:** set `paused_at` when the next occurrence starts with the month unpaid; a live `enrollment` signal to
+       both parties after commit (analyze N-15).
   - **«Pending» (analyze A-1)** is an automatic order of the month in `created` and unexpired. Steps 2 and 3 skip while
     a manual order of the month is `created` and unexpired. A manual payment is refused (`charge_pending`) while an
     automatic one is.
   - **Double run:** each step reads the state it moves from (R-API-14).
-- **A teacher suspended, banned or gone (G-4, settled by Q-3 (a) and FR-SESS-16).**
-  - The programme ends as today: the remaining sessions are cancelled by the Administrator, and the compensation case
-    of FR-DISPUTE-5 opens with DEC-85's full refund.
-  - Through the close hook (R-510), the automatic charges stop at once and the token is deleted.
-  - On a programme, `teacher_suspended` joins the dropout set beside `teacher_ended` and `absence_termination`
-    (`share-release.rules.ts:103-111`; T012).
+- **A teacher suspended, banned or gone (G-4, settled by Q-3 (a) and FR-SESS-16; analyze N-1).**
+  - As for any enrollment today: a suspension **pauses** (the remaining sessions `cancelled_by_admin`, the enrollment
+    stays `confirmed`, a `teacher_suspended` case open; `termination.subscriber.ts:347-349`). A ban or a departure ends
+    it, and so does an Administrator ending a suspended enrollment.
+  - The sweep skips a programme with an open `teacher_suspended` or `student_suspended` case: no due, no charge, no
+    retry, no pause.
+  - At a teacher's suspension, ban or departure the saved card is deleted at once (DEC-94: «the automatic charges stop
+    at once and the token is deleted»), through payments' `deleteProgrammeCard` called from booking's termination
+    subscriber. After a reinstatement the student renews by hand.
+  - DEC-85's full refund is shown only once the enrollment is ended. On a programme, `teacher_suspended` joins the
+    dropout set as a closing reason (cancelled `teacher_suspended`), not while the case is a pause (T012).
   - A restore after a suspension on a programme is a rare edge, deferred; restore stays refused on a programme
     (R-513).
 
@@ -190,13 +203,19 @@ Settled by the review session on recorded precedents:
 
 - **Decision.**
   - The sweep's transaction records an `instalment` order in `created`:
-    - its merchant reference deterministic from the enrollment, month and attempt;
-    - its `expires_at` = now + `checkout_ttl` (the existing setting).
+    - its `gateway_order_id` NULL until the gateway answers (a check: NULL only on an `automatic` order in `created`;
+      analyze N-3); its merchant reference = the payment's id;
+    - its `expires_at` = now + `slot_hold_ttl_minutes` (FR-PAYG-6's checkout TTL, §3.14, 10 minutes).
   - After commit it calls `PaymentPort.chargeSavedCard(paymentId, gross, currency, cardToken, payee)`, which answers
     `{ gatewayOrderId }`; the result arrives by the same signed webhook as every order.
-  - A crash between commit and call leaves the order `created`; the next run finds it (A-1's pending) and calls again
-    with the same reference, which the gateway refuses as a duplicate where it can. An expired-then-paid order is
-    FR-PAYG-19's (analyze G-6).
+  - **Never called twice.** A crash between commit and call leaves the order `created` with no gateway id. It is never
+    called again: at its `expires_at` it is `expired`, and the next retry is a new order. If the call had reached the
+    gateway, its webhook is matched by the merchant reference (the payment's id) and an expired-then-paid order is
+    FR-PAYG-19's (analyze G-6, N-3). No double charge rests on the gateway refusing a duplicate.
+  - **Manual programme orders** (`programme.pay`, `programme.renew`; analyze G-7, N-11) have no hold. They expire at
+    min(`slot_hold_ttl_minutes`, `pay_by` for the first payment). FR-BOOK-12's one checkout per student applies: while
+    a programme order of the student is `created` and unexpired, no other checkout starts, and vice versa;
+    `checkout.current` and «continue» show it as today.
   - The Paymob adapter creates an intention on the saved-card (Moto) integration with the split and pays it with the
     token. The fake answers paid, soft or hard on demand.
   - The `failed` event carries `declineKind` from a code table; an unknown code counts as hard (never retried).
@@ -220,8 +239,9 @@ Settled by the review session on recorded precedents:
   - It is registered in payments' `createEncryptedColumns` (`index.ts:113`) for `reencrypt-columns`.
 - **«Card detail»** (analyze I-5) = the token, the PAN, the expiry: never in a log, an audit entry or a response.
   `last4` and the brand may be returned, to the student only.
-- **One close hook** (analyze G-5): booking's cancel path calls payments' `programmeClosed(enrollmentId)` for every
-  closing reason (today's and the programme's). It sets `programmes.state = closed` and deletes the card row.
+- **One close hook** (analyze G-5, N-6): booking's cancel path, for every closing reason (today's and the programme's),
+  sets `programmes.state = closed` and `closed_at` on its own table, then calls payments' entry `deleteProgrammeCard`
+  only to delete the card row (R-API-6: each module writes its own tables).
 - **Erasure:** the card row is deleted by the account's erasure (`identity/deletion.service.ts`,
   `identity/consequences.ts`, `jobs/erase-kept-data.ts`; `main.ts` wiring is the integration's; analyze G-10).
 - «Change card» = a manual payment of a due month with consent ticked; its `card_saved` replaces the row.
@@ -261,7 +281,7 @@ order (ADR 0025 D6, FR-702).
 ## R-513 — Stop and refusal requests; reopen
 
 - **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a), raised by the sweep), reason
-  (1–500), status `open`/`approved`/`declined`/`withdrawn`.
+  (1–500), status `open`/`approved`/`declined`/`withdrawn`/`extended` (`no_offer` only).
   - A partial unique index holds one open request per enrollment and kind.
   - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
     one log line.

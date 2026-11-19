@@ -62,11 +62,12 @@ No open question remains.
     - `cancellation_reason` + 4, `share_release_milestone` + 2, `enrollment_event_kind` + 4,
       `payment_event_type` + `card_saved`.
   - Then:
-    - `payments.kind`, `instalment_month`, `attempt`, `automatic`, `decline_kind`, `confirmed_at`;
+    - `payments.kind`, `instalment_month`, `attempt`, `automatic`, `decline_kind`, `confirmed_at`, and
+      `gateway_order_id` made NULL-able under its check (automatic `created`/`expired` only; N-3);
     - `packages.is_programme` and the three prices, with the three old columns made nullable under the check;
     - `sessions.programme_month`;
     - `programmes`, `programme_requests`, `programme_cards` with their checks and indexes.
-  - Existing `ijazah_track` packages deactivated (P2 (a); a SELECT counts them before); their enrollments untouched.
+  - No existing row is changed (P2 (a): the old ijazah packages are deactivated by turning the switch on, T002).
   - `prisma/schema/{base,booking,catalog,payments,sessions}.prisma`; `packages/config/module-tables.json`.
   - `docs/ERD.md`: a dated block at its end, rows from 65 and §15 rules from 70.
   - `tests/seed/seed.spec.ts` table count 45 + 3.
@@ -78,8 +79,9 @@ No open question remains.
     - if the bounds shapes refuse a boolean, a `count` 0/1.
   - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`); `tests/seed/seed.spec.ts` 95 → 103.
   - Both admin catalogues' labels (`tests/admin-i18n/settings-labels.spec.ts`).
-  - Flipping the switch on deactivates the old ijazah-track packages (`modules/catalog/packages.service.ts`, an audited
-    effect of the setting's change, logged once).
+  - Turning the switch on deactivates every old-style ijazah-track package (`modules/catalog/packages.service.ts`, an
+    audited effect of the setting's change, logged once). It gates only new programme packages and new assessments;
+    turning it off stops no running programme and reactivates nothing (N-4), red first.
 - [ ] T003 [P] The contracts (contracts/*):
   - `packages/contracts/src/programme.ts`, `packages/contracts/src/admin/programme.ts`;
   - the package output as a union by track (recitation and pre-switch ijazah unchanged, non-null; K-3);
@@ -97,7 +99,10 @@ No open question remains.
 - [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
   - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
     the assessment's for a programme package, and refuse one overlapping the student's own active
-    programme's weekly time.
+    programme's weekly time (active = `awaiting_offer`, `offered`, `active`, `paused`). The same time is excluded from
+    the make-up proposal and counter options and the postponement's placement of the student's other enrollments
+    (`modules/sessions/remedy-offer.service.ts`, `remedy.service.ts`, `postponement.service.ts`; sessions' area,
+    coordinated; N-12).
   - **The order:** `modules/payments/checkout.service.ts` `#createAndRecord` writes an `assessment` order, gross = the
     fee, with the rate and 25 % read as today.
   - **Confirmation:** `jobs/confirm-enrollment.ts` generates session 1 only, at the assessment's length
@@ -126,7 +131,7 @@ No open question remains.
   - the count 1–200;
   - the total = N × the price for that length, under the package's lock;
   - the offer and the snapshot (N+1, length, total) in one transaction, frozen after.
-  - Refusals red first: `assessment_not_delivered`, `not_awaiting_offer`, `pay_by_passed`, `length_exceeds_slot`,
+  - Refusals red first: `assessment_not_delivered`, `not_awaiting_offer`, `offer_due_passed`, `length_exceeds_slot`,
     `count_out_of_bounds`, `teacher_not_active`.
   - The amounts from `packages/money` through payments' entry (K-5).
   - A live `enrollment` signal after commit; adversarial registration.
@@ -135,8 +140,14 @@ No open question remains.
   - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (+24 h);
   - `programme.cancel` (`offer_declined`);
   - `teacher.programme.request` `refusal` and `programmes.decide` approving it (`assessment_refused`);
+  - session 1's outcomes: `done` or `student_no_show` start the offer window; a no-show of the teacher, a both-no-show,
+    a cancellation by agreement or a postponement wait for the make-up; any other end with no make-up pending opens
+    the `no_offer` item 24 h after its scheduled end (analyze N-2);
+  - the `no_offer` item's decisions: approve (a refusal) or extend (closed `extended`, a new item at the new
+    deadline); no decline (N-10);
   - the lapse (`offer_lapsed`) and the `no_offer` item as pure functions for T015;
-  - each close through the close hook (T013 provides it; a stub until then), freeing the weekly time at once
+  - each close through booking's close hook (programme state and `closed_at` set by booking; the card deleted by
+    T013's payments entry, a stub until then), freeing the weekly time at once
     (`slot-occupancy.repository.ts`).
   - Live signals; adversarial registrations.
 - [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`:
@@ -166,7 +177,10 @@ No open question remains.
     full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
   - the dropout set for a programme: `teacher_ended`, `absence_termination` and `teacher_suspended` (G-4: a suspension
     ends the programme as today, FR-SESS-16) refund everything (DEC-85), red first on `teacher_suspended`;
-  - the close hook stops the automatic charges and deletes the token on each of them (T013);
+  - the dropout amount shown only once the enrollment is ended (cancelled `teacher_suspended`, `teacher_ended`); an
+    open suspension case is a pause and shows none (analyze N-1);
+  - at a teacher's suspension, ban or departure, booking's `termination.subscriber.ts` calls payments'
+    `deleteProgrammeCard` at once (DEC-94); a spec red first;
   - a restore after a suspension on a programme is deferred (restore refused, T010).
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
@@ -178,8 +192,8 @@ No open question remains.
   - **The fake:** `fake.adapter.ts`.
   - **The card store:** `modules/payments/programme-cards.*`, the token through `ColumnCipher` in
     `createEncryptedColumns`.
-  - **The close hook:** payments' `programmeClosed`, called from booking's cancel path for every reason; it sets
-    `closed`, sets `closed_at` and deletes the card.
+  - **The close hook:** booking's cancel path, for every reason, sets the programme `closed` and `closed_at` on its own
+    table, then calls payments' entry `deleteProgrammeCard` (R-API-6; analyze N-6).
   - **Erasure:** the card deleted by `identity/deletion.service.ts`, `identity/consequences.ts`,
     `jobs/erase-kept-data.ts`, with `main.ts`'s wiring by the integration.
   - **Specs:** no card detail in any log, audit entry or response (SC-707).
@@ -188,15 +202,20 @@ No open question remains.
     configured; the fake's paid, soft and hard answers.
   - **Declines:** `GatewayEvent.failed.declineKind` from a code table, unknown → hard; persisted in
     `payments.decline_kind` (`order-events.service.ts`, `payments.repository.ts`).
-  - **Order before call:** recorded `created`, then called after commit; never under a lock.
+  - **Order before call:** recorded `created` with `gateway_order_id` NULL and `expires_at` = now +
+    `slot_hold_ttl_minutes`, then called once after commit, never under a lock and never again; an order left with no
+    gateway id expires, and a late webhook is matched by the merchant reference (the payment id) and handled as
+    FR-PAYG-19 (analyze N-3), red first on «crash between commit and call».
   - **The failure's push:** `payment_failed` through today's path, unchanged.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
-  - only `confirmed` enrollments (a teacher's suspension, ban or departure ends the programme through today's closings and the close hook, G-4);
+  - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
+    analyze N-1), red first;
   - the `pay_by`, due, retry (1, 3, 5, 7; at most 4; soft only) and pause steps, each under the programme's lock in its
     own transaction, with one log line each;
   - «pending» per A-1;
   - after commit, `chargeSavedCard` for each `created` automatic order;
   - the due time by `lastToEnd` over the month's sessions;
+  - a live `enrollment` signal after the pause's commit (N-15);
   - the double-run spec; DST at the boundary (`packages/time`);
   - registered by the integration.
 - [ ] T016 [US3] Manual renewal (FR-715, FR-716, FR-722, FR-724), `programme.renew`:

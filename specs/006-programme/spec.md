@@ -33,7 +33,7 @@ On the ijazah track that changes:
   split. The teacher's share is **70 %** of each order, held at the gateway. Releases:
   - the assessment's share on its own only when the student does not continue, after the 48 hours and its
     **72-hour** dispute window; when the student continues, the assessment is the package's first session;
-  - **25 %** of the teacher's share of everything paid, the assessment included, at half the sessions delivered (the
+  - **25 %** of the teacher's share of the programme's whole price (in full: the offer's total; by months: the total and the fee), the assessment included, at half the sessions delivered (the
     assessment counted);
   - the rest at the end, or at a close as DEC-81 lists.
 
@@ -72,7 +72,7 @@ as today (one order, 25 % at half; `003 tasks.md` T105's B-M2 note).
 - Phase 3: sessions, attendance, compensation cases, the live channel.
 - Phase 4: push for DEC-70's kinds, among them the payment's result.
 
-**Provenance.** Every requirement traces to SRS §3.5.1, FR-PAYG-19, §3.14, DEC-63, DEC-80 to DEC-92, ADR 0024 as
+**Provenance.** Every requirement traces to SRS §3.5.1, FR-PAYG-19, §3.14, DEC-63, DEC-80 to DEC-94, ADR 0024 as
 amended, ADR 0025, the owner's words (`ejazah-tools\track2\owner-words.md`), or B-M4's conflict check. Requirements come
 from the SRS, never from the design boards.
 
@@ -104,7 +104,8 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
   25 % × 70 % × 10,000 = 1,750, the same in full or by months, capped at what is held. The assessment's share is
   released on its own after its 72 hours (FR-728). *(Superseded by the owner's re-answer below, DEC-94.)*
 - Q: An Administrator approves a teacher's refusal after the assessment: the fee? → A: (a) Kept: the assessment was
-  delivered (FR-BOOK-13), and its teacher share (70 % of F) is released after its 72 hours (FR-709).
+  delivered (FR-BOOK-13), and its teacher share (70 % of F) is released after its 72 hours (FR-709). *(The timing restated by DEC-94: at the decision, once session 1's 72 hours
+  have passed.)*
 - Assumption approved (A-1): the assessment session's own length is an Administrator's §3.14 setting beside the fee,
   default 30 minutes, the shortest weekly time a teacher can publish, so it fits any of them (FR-701).
 - Assumption approved (A-2 (a)): the offer may pick only a length that fits inside the reserved weekly time (60 → 30, 45
@@ -118,7 +119,7 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
     teacher's refusal): the assessment's order is released as any order, 350 of a 500 fee, once the 48 hours have
     ended and its 72 hours have passed with no case open. The fee is never refunded.
   - **The student continues:** the assessment is the package's first session. Its share is held with the package,
-    the half counts it (40 + 1 = 41, so the half falls at 21), and the 25 % is taken on the share of everything paid
+    the half counts it (40 + 1 = 41, so the half falls at 21), and the 25 % is taken on the share of the programme's whole price (in full: the offer's total; by months: the total and the fee)
     (1,750 in full, 1,837.50 by months), capped at what is held (FR-703, FR-709, FR-728).
 - Q (2026-11-19, the owner's answers, «Approve all», DEC-94): when do the 48 hours start, and how long does the teacher
   have to send the offer? → A:
@@ -127,7 +128,8 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
   - The teacher sends the offer within 24 hours of the delivered assessment, an Administrator setting. With none by
     then, it becomes an Administrator item and never lapses on its own (FR-706a).
   - The fee is seeded 0 = unset; no programme package is published until an Administrator sets it (FR-704).
-  - The migration deactivates the existing ijazah-track packages (test data); their enrollments are untouched.
+  - The existing ijazah-track packages (test data) are deactivated when `programme_enabled` is turned on, not by the
+    migration; their enrollments are untouched.
 - Settled by the review session on recorded precedents (DEC-94):
   - A teacher's suspension, ban or departure ends the programme as today (FR-SESS-16): the remaining sessions are
     cancelled by an Administrator, the case of FR-DISPUTE-5 opens with DEC-85's full refund, the automatic charges
@@ -159,7 +161,7 @@ its fee through today's checkout. The weekly time is held, then reserved for the
    time is reserved for this enrollment.
 2. **Given** a recitation package, **When** the student buys it, **Then** nothing changes from today: one order, every
    session generated, no assessment.
-3. **Given** a paid assessment and a student who does not continue, **When** the 48 hours have ended and the session's
+3. **Given** a paid assessment and a student who does not continue, **When** it closes (or the 48 hours end, where an offer was sent, whichever is later) and the session's
    72 hours have passed with no case open, **Then** its share (70 % of the fee) is listed as a release due; **Given** a
    student who continues, **Then** no assessment release is listed: its share is held with the package (DEC-94).
 4. **Given** a teacher's three prices (30: 250, 45: 320, 60: 400), **When** the student opens the profile, **Then** they
@@ -262,7 +264,7 @@ every order's whole gross.
 1. **Given** a programme started at 70 % and 25 %, **When** an administrator later sets 65 % or 30 %, **Then** every later
    order of this programme still carries 70 % and 25 %.
 2. **Given** half the sessions delivered with no case open, **When** the 72 hours after the session that reached half have
-   passed, **Then** 25 % of the teacher's share of everything paid for the programme, the assessment included, is due,
+   passed, **Then** 25 % of the teacher's share of the programme's whole price (in full: the offer's total; by months: the total and the fee) is due,
    capped at what the gateway holds of the orders paid by then; the half counts the assessment (DEC-94).
 3. **Given** a teacher's dropout on the programme, **When** the case opens, **Then** it shows all the money paid back,
    the assessment fee included (DEC-85); a teacher suspended, banned or gone opens this case too (DEC-92).
@@ -316,13 +318,15 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   «assessment», through today's checkout and hold; a recitation package MUST be bought as today (DEC-92, FR-BOOK-13).
   The assessment MAY be booked on any of the teacher's weekly times at least as long as it (FR-PROFILE-8 as amended by
   DEC-94). A student's booking of another package MUST be refused on a weekly time overlapping their active
-  programme's (DEC-94). While the setting `programme_enabled` is off, an ijazah-track package is sold as today
-  (DEC-92's fallback).
+  programme's, an active programme being one `awaiting_offer`, `offered`, `active` or `paused` (DEC-94); a make-up or a
+  postponement of another enrollment is never placed on that time. The setting `programme_enabled` gates only new
+  programme packages and new assessments: while it is off, an ijazah-track package is sold as today (DEC-92's
+  fallback); turning it off again stops no running programme and reactivates no old package.
 - **FR-702**: The assessment's fee MUST NOT be refunded, except as part of an ijazah teacher's dropout (DEC-85); its
   order MUST carry the rate in force (70 % by default) and the 25 % in force, which become the programme's for every
   later order (ADR 0025 D6, Q6).
 - **FR-703**: The assessment's teacher share MUST be listed as a release due on its own only when the student does not
-  continue (the offer declined or unpaid within the 48 hours, or an approved refusal), once the 48 hours have ended and
+  continue (the offer declined or unpaid within the 48 hours, or an approved refusal), at the close, or at the end of the 48 hours where an offer was sent, whichever is later, once
   its session's dispute window (72 h) has passed with no case open. When the student continues, the assessment is the
   package's first session and its share is held with the package (DEC-94).
 - **FR-704**: The assessment's fee MUST be one platform-wide amount and its session length one length, both §3.14
@@ -353,8 +357,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
 - **FR-709**: A teacher MUST NOT refuse a student on their own after the assessment; they MAY send an administrator a
   refusal request with a mandatory reason, and the administrator decides; an approved refusal ends the programme before
-  any offer, freeing the time. The assessment fee is kept, and its teacher share is released once the 48 hours have
-  ended and its 72 hours have passed (DEC-93, DEC-94).
+  any offer, freeing the time. The assessment fee is kept, and its teacher share is released at the decision, once
+  session 1's 72 hours have passed with no case open (DEC-93, DEC-94).
 
 **Paying: in full or monthly, prepaid**
 
@@ -415,15 +419,17 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 
 **Money**
 
-- **FR-728**: The 25 % release MUST be 25 % of the teacher's share of everything paid for the programme, the
+- **FR-728**: The 25 % release MUST be 25 % of the teacher's share of the programme's whole price (in full: the offer's total; by months: the total and the fee), the
   assessment included (1,750 on a 10,000 offer paid in full; 1,837.50 by months with a 500 fee; at 70 %), capped at
   what the gateway holds of the orders paid by then, at half the programme's sessions delivered with no case open,
   the assessment counted as its first session (41 sessions: the half at 21), counted by sessions (a postponed or
   make-up session counted once delivered); the rest at the end (DEC-81, N2, DEC-94).
-- **FR-729**: A teacher's dropout on the programme, including a teacher suspended, banned or gone, MUST open the
-  compensation case of FR-DISPUTE-5, showing every order's whole gross, the assessment included (DEC-85, DEC-92). The
-  programme ends as any enrollment does today (FR-SESS-16); its automatic charges stop at once and its saved card is
-  deleted (DEC-94).
+- **FR-729**: A teacher suspended, banned or gone MUST be handled as for any enrollment today (FR-SESS-16): a
+  suspension pauses the programme, its case open; a ban, a departure, or an Administrator's end of a suspended
+  programme ends it, and the compensation case of FR-DISPUTE-5 then shows every order's whole gross, the assessment
+  included (DEC-85, DEC-92). In every case the programme's automatic charges stop at once and its saved card is deleted
+  (DEC-94); while a teacher's or a student's suspension is open, no month falls due, no charge or retry runs and no
+  pause is set.
 - **FR-730**: A close on a complaint against the student, a ban or a confirmed fault MUST follow DEC-86 and DEC-91 as
   for any package.
 - **FR-731**: Code MUST NOT refund or release money; the automatic charge is the only payment the platform starts,

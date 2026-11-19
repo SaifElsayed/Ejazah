@@ -20,7 +20,7 @@ The ijazah track's programme on top of what track 2 built:
 - **Requests:** the teacher's stop request after 7 days, and the refusal request after the assessment, both decided
   by an administrator.
 - **Releases (DEC-94):** the assessment's share on its own only when the student does not continue. Otherwise:
-  - 25 % of the share of everything paid at half the N+1 sessions;
+  - 25 % of the share of the programme's whole price (in full: the offer's total; by months: the total and the fee) at half the N+1 sessions;
   - the rest at the end;
   - the paid share at a stop.
 - **The closes' amounts:** each session valued by its own order.
@@ -34,7 +34,9 @@ decisions are in [research.md](research.md), R-501 to R-517.
   Expo phone app; React (Vite) admin panel; zod contracts; vitest and jest. No new dependency.
 - **Storage:** PostgreSQL only:
   - new: `programmes`, `programme_requests`, `programme_cards`;
-  - new columns: `payments.kind`, `payments.instalment_month`, `packages.price_30/45/60_piasters`;
+  - new columns: `payments.kind`, `instalment_month`, `attempt`, `automatic`, `decline_kind`, `confirmed_at`;
+    `packages.is_programme`, `price_30/45/60_piasters`; `sessions.programme_month`;
+  - `payments.gateway_order_id` NULL-able for an automatic order not yet answered;
   - three package columns made nullable;
   - new members: `order_kind`, `cancellation_reason`, `share_release_milestone`, the programme's enums.
 - **Gateway:** `PaymentPort.chargeSavedCard` and the `card_saved` event (R-509, R-510). The live adapter stays off
@@ -107,7 +109,7 @@ The integration wires `context.ts`, `app.router.ts`, `admin.router.ts`, `main.ts
 | Batch | When (DEC-92) | Tasks (summary) |
 |---|---|---|
 | B-P1 | 11/20–11/22, beside the design week | Migration, schema, ERD; settings; contracts; the three prices and the catalogue; the assessment's booking and confirmation; order kinds in the confirm step |
-| B-P2 | 11/22–11/24 | The offer; the 48 hours and the refusal request; paying in full or a month (rates copied, generation by month); counts from session 1; the releases (assessment, half on the offer's total, end) |
+| B-P2 | 11/22–11/24 | The offer; the 48 hours and the refusal request; paying in full or a month (rates copied, generation by month); the completion gate; the releases (the assessment when not continued, the half on the programme's whole price, the end); the case amounts per order |
 | B-P3 | 11/24–11/26 | Saved cards (port, adapters, encrypted rows, erasure); the automatic charge; `advance-programmes` (due, charge, retry, pause, lapse); manual renewal; the stop request, the close and its release; reopen |
 | B-P4 | 11/26–12/3, after the design week, on the new design | Phone (student, teacher), panel pages, adversarial registrations and i18n, the quickstart run and the documents |
 
@@ -117,8 +119,8 @@ Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is
 ## The owner's answers (2026-11-19, SRS DEC-94; no open question)
 
 - **P1 (a):** the assessment fee is seeded 0 = unset; no programme package is published until an administrator sets it.
-- **P2 (a):** the migration deactivates the existing ijazah-track packages (closed-test data); their enrollments are
-  untouched. An old-style ijazah package created while the switch is off is deactivated when it is turned on.
+- **P2 (a), with the switch:** turning `programme_enabled` on deactivates every old-style ijazah-track package
+  (closed-test data), their enrollments untouched; the migration changes no row, so «sold as today» holds until then.
 - **The analysis's I-2 (a):** the offer within 24 h of the delivered assessment (`programme_offer_hours`); with no offer by
   then, an Administrator item, never a lapse, the weekly time reserved meanwhile.
 - **R-505:** the 48 hours run from the offer («ال 48 ساعة دي بتبدأ من وقت عرض الباقة»); the first regular session is the

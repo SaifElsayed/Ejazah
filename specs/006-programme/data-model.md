@@ -23,6 +23,8 @@ changes.
 - New: `attempt` smallint NULL (an automatic charge's attempt, 0–4) and `automatic` boolean NOT NULL DEFAULT false.
 - New: `decline_kind` `decline_kind` NULL (`soft` · `hard`), set on a `failed` automatic order.
 - New: `confirmed_at` timestamptz NULL: the confirm step's per-order marker (V-3).
+- `gateway_order_id` becomes NULL-able, with a check: NULL only on an `automatic` order in `created` (until the
+  gateway answers) or `expired` (never answered). The unique index keeps non-NULL values unique (analyze N-3).
 - An index on (`enrollment_id`, `kind`, `instalment_month`). Not unique: a second paid order for a month is recorded
   and goes to the case (FR-718).
 
@@ -48,7 +50,7 @@ changes.
 |---|---|---|
 | `enrollment_id` | uuid PK, FK → `enrollments` | an `ijazah_track` enrollment created by an assessment |
 | `state` | enum `programme_state`: `awaiting_offer` · `offered` · `active` · `paused` · `closed` | |
-| `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); set when session 1 is settled `done` (R-505, I-2 (a)); an extension adds 24 h |
+| `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); set when session 1 is settled `done` or `student_no_show`, or by the make-up's delivery (R-505, I-2 (a)); an extension adds 24 h |
 | `pay_by` | timestamptz NULL | the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505) |
 | `level`, `readiness`, `expected_length` | text NULL (1–500) | set at the offer |
 | `offered_at` | timestamptz NULL | set once; the count (N+1), length and total frozen on the enrollment then |
@@ -77,7 +79,7 @@ An index on (`state`, `next_due_at`) for the sweep.
 | `enrollment_id`, `teacher_user_id` | uuid FKs | from the enrollment, never the input |
 | `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) | `no_offer` is raised by the sweep, not by the teacher |
 | `reason` | text (1–500) | mandatory for `stop` and `refusal` |
-| `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` | |
+| `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` · `extended` (a `no_offer` item only) | |
 | `decided_by_admin_id`, `decided_at` | | set together on approve or decline (a check) |
 | `created_at`, `updated_at` | | |
 
@@ -102,7 +104,8 @@ Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_enabled` (off);
 - `assessment_fee_piasters` (0);
 - `assessment_duration_minutes` (30);
-- `programme_pay_rest_hours` (48);
+- `programme_offer_hours` (24);
+- `programme_pay_rest_hours` (48, from the offer);
 - `programme_stop_request_days` (7);
 - `programme_renew_early_days` (3);
 - `programme_charge_retry_days` ([1,3,5,7]).

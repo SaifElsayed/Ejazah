@@ -7,7 +7,9 @@ Additive only (R-API-9).
 - Every refusal writes nothing and logs one line of ids and a reason.
 - Every procedure here is registered in the adversarial harness, both gender directions, in the batch that adds it
   (R-517).
-- While `programme_enabled` is off (R-503, I-3), the changed procedures behave as today and the new ones answer
+- The switch `programme_enabled` (R-503, I-3) gates only new programme packages and new assessments: while it is off,
+  ijazah-track packages are sold as today and no new programme starts; a running programme goes on whatever it says. The
+  procedures that start one answer
   `programme_disabled`.
 
 | Procedure | Kind | Input | Output | Notes |
@@ -19,7 +21,7 @@ Additive only (R-API-9).
 | `checkout.hold` / `pay` (changed) | student | as today | as today | a programme package → an `assessment` order, gross = the fee; the hold checks length ≥, not = (`holds.service.ts:505`) |
 | `programme.get` | participant | `{ enrollmentId }` | `{ state, offerDueAt, payBy, offer \| null, plan, monthsPaid, monthCount, nextDueAt, paused: { since } \| null, renewOpen, chargePending, teacherUnavailable, card: { last4, brand } \| null }` | the two parties only, else NOT_FOUND; `card` to the student only |
 | `teacher.programme.offer` | teacher | `{ enrollmentId, level, readiness, expectedLength, durationMinutes, sessionCount, idempotencyKey }` | `{ total, sessionPrice, monthCount }` | refusals: `assessment_not_delivered`, `not_awaiting_offer`, `offer_due_passed` (unless an administrator extended it), `length_exceeds_slot`, `count_out_of_bounds` (1–200), `teacher_not_active` |
-| `programme.pay` | student | `{ enrollmentId, plan: 'in_full' \| 'monthly', saveCard: boolean, idempotencyKey }` | `{ checkoutUrl }` | the first payment, within `payBy`; no hold; the order expires at min(the checkout setting, `payBy`); `saveCard` records consent; refusals: `not_offered`, `pay_by_passed`, `rest_not_positive` (in full with total ≤ fee) |
+| `programme.pay` | student | `{ enrollmentId, plan: 'in_full' \| 'monthly', saveCard: boolean, idempotencyKey }` | `{ checkoutUrl }` | the first payment, within `payBy`; no hold; the order expires at min(`slot_hold_ttl_minutes`, `payBy`); FR-BOOK-12's one checkout per student applies; `saveCard` records consent; refusals: `not_offered`, `pay_by_passed`, `rest_not_positive` (in full with total ≤ fee) |
 | `programme.renew` | student | `{ enrollmentId, saveCard: boolean, idempotencyKey }` | `{ checkoutUrl }` | the next month by hand: «renew now» (no saved card, from `programme_renew_early_days`), «pay now» and «change card» (after a failure); refusals: `not_due_yet`, `charge_pending` (an automatic order of the month `created` and unexpired), `nothing_due`, `closed` |
 | `teacher.programme.request` | teacher | `{ enrollmentId, kind: 'stop' \| 'refusal', reason, idempotencyKey }` | `{ requestId }` | stop: `not_paused`, `too_early` (before 7 days), `request_open`; refusal: `assessment_not_delivered`, `offer_sent`, `request_open` |
 | `programme.cancel` | student | `{ enrollmentId, idempotencyKey }` | `{ ok }` | before any payment of the rest: cancels `offer_declined`, the fee kept |
