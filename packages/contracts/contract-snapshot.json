@@ -64,11 +64,17 @@
         "cancelled_by_agreement",
         "disputed",
         "done",
+        "postponed",
         "provider_outage",
         "scheduled",
         "student_no_show",
         "teacher_no_show",
         "under_threshold"
+      ],
+      "sessionsPostponeRefusalCause": [
+        "enrollment_not_confirmed",
+        "interval_not_passed",
+        "no_session_in_week"
       ],
       "shareReleaseMilestone": [
         "ijazah_end",
@@ -222,6 +228,7 @@
         "makeup_booked",
         "outage_reclassified",
         "outcome_corrected",
+        "postponed",
         "remedy_frozen",
         "remedy_handed_to_case",
         "remedy_lapsed",
@@ -244,6 +251,7 @@
         "cancelled_by_agreement",
         "disputed",
         "done",
+        "postponed",
         "provider_outage",
         "scheduled",
         "student_no_show",
@@ -788,6 +796,7 @@
               "refund_choice",
               "slot_unavailable",
               "student_banned",
+              "student_complaint_ended",
               "student_fault_confirmed",
               "student_suspended",
               "teacher_ended",
@@ -843,6 +852,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -918,6 +928,7 @@
               "refund_choice",
               "slot_unavailable",
               "student_banned",
+              "student_complaint_ended",
               "student_fault_confirmed",
               "student_suspended",
               "teacher_ended",
@@ -1146,6 +1157,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -1255,6 +1267,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -1317,6 +1330,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -1370,6 +1384,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -1881,9 +1896,16 @@
           "$.amount.cause": {
             "required": true,
             "type": "string",
-            "values": ["ijazah_dropout", "recitation_dropout", "student_complaint_close"]
+            "values": [
+              "ijazah_dropout",
+              "recitation_dropout",
+              "student_complaint_close",
+              "student_fault_close"
+            ]
           },
+          "$.amount.decision_piasters": { "required": true, "type": "integer" },
           "$.amount.held_piasters": { "required": true, "type": "integer" },
+          "$.amount.owed_piasters": { "required": true, "type": "integer" },
           "$.amount.platformPart_piasters": { "required": true, "type": "integer" },
           "$.amount.refund_piasters": { "required": true, "type": "integer" },
           "$.amount.refunded_piasters": { "required": true, "type": "integer" },
@@ -2271,6 +2293,7 @@
       "sessions.endEnrollment": {
         "input": {
           "$": { "type": "object" },
+          "$.cause": { "type": "string", "values": ["admin_ended", "student_complaint_ended"] },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.internalNote": { "type": "string" },
@@ -2331,6 +2354,7 @@
               "refund_choice",
               "slot_unavailable",
               "student_banned",
+              "student_complaint_ended",
               "student_fault_confirmed",
               "student_suspended",
               "teacher_ended",
@@ -2420,6 +2444,7 @@
               "order_failed",
               "outage_reclassified",
               "outcome_corrected",
+              "postponed",
               "remedy_frozen",
               "remedy_handed_to_case",
               "remedy_lapsed",
@@ -2441,6 +2466,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -2456,6 +2482,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -2487,6 +2514,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -2544,6 +2572,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -2739,6 +2768,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -3934,6 +3964,14 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.last.postponement": { "type": "object" },
+          "$.last.postponement.at": { "required": true, "type": "string" },
+          "$.last.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.last.postponement.reason": { "required": true, "type": "string" },
           "$.last.remedyStatus": {
             "type": "string",
             "values": [
@@ -3958,6 +3996,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -3971,6 +4010,14 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.next.postponement": { "type": "object" },
+          "$.next.postponement.at": { "required": true, "type": "string" },
+          "$.next.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.next.postponement.reason": { "required": true, "type": "string" },
           "$.next.remedyStatus": {
             "type": "string",
             "values": [
@@ -3995,6 +4042,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4011,6 +4059,14 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].postponement": { "type": "object" },
+          "$.sessions[].postponement.at": { "required": true, "type": "string" },
+          "$.sessions[].postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.sessions[].postponement.reason": { "required": true, "type": "string" },
           "$.sessions[].remedyStatus": {
             "type": "string",
             "values": [
@@ -4035,6 +4091,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4099,6 +4156,14 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].last.postponement": { "type": "object" },
+          "$.items[].last.postponement.at": { "required": true, "type": "string" },
+          "$.items[].last.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].last.postponement.reason": { "required": true, "type": "string" },
           "$.items[].last.remedyStatus": {
             "type": "string",
             "values": [
@@ -4123,6 +4188,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4136,6 +4202,14 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].next.postponement": { "type": "object" },
+          "$.items[].next.postponement.at": { "required": true, "type": "string" },
+          "$.items[].next.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].next.postponement.reason": { "required": true, "type": "string" },
           "$.items[].next.remedyStatus": {
             "type": "string",
             "values": [
@@ -4160,6 +4234,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4343,6 +4418,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4441,6 +4517,14 @@
           "$.localDate": { "required": true, "type": "string" },
           "$.makeupFor": { "type": "object" },
           "$.makeupFor.sequenceNumber": { "required": true, "type": "integer" },
+          "$.postponement": { "type": "object" },
+          "$.postponement.at": { "required": true, "type": "string" },
+          "$.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.postponement.reason": { "required": true, "type": "string" },
           "$.remedy": { "type": "object" },
           "$.remedy.canChooseRefund": { "required": true, "type": "boolean" },
           "$.remedy.choiceClosesAt": { "required": true, "type": "string" },
@@ -4483,6 +4567,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -4506,6 +4591,22 @@
           "$.sessionId": { "required": true, "type": "string" },
           "$.token": { "required": true, "type": "string" },
           "$.validUntil": { "required": true, "type": "string" }
+        }
+      },
+      "sessions.postpone": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.postponementId": { "required": true, "type": "string" },
+          "$.sessionIds": { "required": true, "type": "array" },
+          "$.sessionIds[]": { "type": "string" }
         }
       },
       "sessions.remedy.accept": {
@@ -5251,6 +5352,14 @@
           "$.last.endsAt": { "required": true, "type": "string" },
           "$.last.localDate": { "required": true, "type": "string" },
           "$.last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.last.postponement": { "type": "object" },
+          "$.last.postponement.at": { "required": true, "type": "string" },
+          "$.last.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.last.postponement.reason": { "required": true, "type": "string" },
           "$.last.remedyStatus": {
             "type": "string",
             "values": [
@@ -5275,6 +5384,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -5288,6 +5398,14 @@
           "$.next.endsAt": { "required": true, "type": "string" },
           "$.next.localDate": { "required": true, "type": "string" },
           "$.next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.next.postponement": { "type": "object" },
+          "$.next.postponement.at": { "required": true, "type": "string" },
+          "$.next.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.next.postponement.reason": { "required": true, "type": "string" },
           "$.next.remedyStatus": {
             "type": "string",
             "values": [
@@ -5312,6 +5430,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -5328,6 +5447,14 @@
           "$.sessions[].endsAt": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].postponement": { "type": "object" },
+          "$.sessions[].postponement.at": { "required": true, "type": "string" },
+          "$.sessions[].postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.sessions[].postponement.reason": { "required": true, "type": "string" },
           "$.sessions[].remedyStatus": {
             "type": "string",
             "values": [
@@ -5352,6 +5479,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -5417,6 +5545,14 @@
           "$.items[].last.endsAt": { "required": true, "type": "string" },
           "$.items[].last.localDate": { "required": true, "type": "string" },
           "$.items[].last.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].last.postponement": { "type": "object" },
+          "$.items[].last.postponement.at": { "required": true, "type": "string" },
+          "$.items[].last.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].last.postponement.reason": { "required": true, "type": "string" },
           "$.items[].last.remedyStatus": {
             "type": "string",
             "values": [
@@ -5441,6 +5577,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -5454,6 +5591,14 @@
           "$.items[].next.endsAt": { "required": true, "type": "string" },
           "$.items[].next.localDate": { "required": true, "type": "string" },
           "$.items[].next.pendingCancellation": { "required": true, "type": "boolean" },
+          "$.items[].next.postponement": { "type": "object" },
+          "$.items[].next.postponement.at": { "required": true, "type": "string" },
+          "$.items[].next.postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.items[].next.postponement.reason": { "required": true, "type": "string" },
           "$.items[].next.remedyStatus": {
             "type": "string",
             "values": [
@@ -5478,6 +5623,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",
@@ -5538,6 +5684,14 @@
           "$.sessions[].enrollmentId": { "required": true, "type": "string" },
           "$.sessions[].localDate": { "required": true, "type": "string" },
           "$.sessions[].pendingCancellation": { "required": true, "type": "boolean" },
+          "$.sessions[].postponement": { "type": "object" },
+          "$.sessions[].postponement.at": { "required": true, "type": "string" },
+          "$.sessions[].postponement.by": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.sessions[].postponement.reason": { "required": true, "type": "string" },
           "$.sessions[].remedyStatus": {
             "type": "string",
             "values": [
@@ -5562,6 +5716,7 @@
               "cancelled_by_agreement",
               "disputed",
               "done",
+              "postponed",
               "provider_outage",
               "scheduled",
               "student_no_show",

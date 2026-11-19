@@ -532,6 +532,7 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
         latestCancellationOf: async () => null,
         remedyOf: async () => null,
         slotOf: async () => null,
+        postponementsOf: async () => new Map(),
       },
       idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
     });
