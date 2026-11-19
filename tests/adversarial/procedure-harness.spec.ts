@@ -13,6 +13,9 @@
 //
 // The registered attacks themselves run at the end, against the real router (`registered-attacks.ts`:
 // `discovery`'s three since T028), and each runs only on a database (T124).
+//
+// T025 of specs/005-certification: `certificates`, `reports` and `genderFlags` never exempt, each
+// for its own reason; T001's six keys declared at exactly the procedures whose meta stamps them.
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
@@ -68,6 +71,7 @@ import {
   expectAnswersAsNonexistent,
   notApplicable,
   type ProcedureAttacks,
+  type RouterLike,
   SESSION_ATTACK_KINDS,
   type SessionAttackKind,
   sessionKindFailures,
@@ -412,6 +416,48 @@ describe('a procedure of sessions, chat or live is registered and never exempt (
   );
 });
 
+/**
+ * T025 of specs/005-certification (FR-625; Q-X1 (a)): one procedure, `any`, under each router of
+ * Phase 4 that names a user, a certificate, a report or a flag, as the surface mounts it.
+ */
+const phaseFourNamespaces: Readonly<Record<string, ReturnType<typeof createAppRouter>>> = {
+  certificates: createAppRouter({ certificates: createAppRouter({ any: anyQuery() }) }),
+  reports: createAppRouter({ reports: createAppRouter({ any: anyQuery() }) }),
+  genderFlags: createAppRouter({ genderFlags: createAppRouter({ any: anyQuery() }) }),
+};
+
+describe('a procedure of certificates, reports or genderFlags is registered and never exempt (005:T025, FR-625)', () => {
+  it.each(Object.keys(phaseFourNamespaces))(
+    'fails a procedure under %s that is exempt with a reason',
+    (namespace) => {
+      const path = `${namespace}.any`;
+      const surface = phaseFourNamespaces[namespace];
+      expect(surface).toBeDefined();
+      expect(studentFacingProcedures(surface!)).toEqual([path]);
+      expect(coverageFailures([path], [], [{ path, reason: 'names no one' }])).toEqual([
+        expect.stringMatching(new RegExp(`^${namespace}\\.any: .*never exempt.*FR-625`)),
+      ]);
+    },
+  );
+
+  it.each(Object.keys(phaseFourNamespaces))(
+    'fails a procedure under %s that is not registered',
+    (namespace) => {
+      expect(coverageFailures([`${namespace}.any`], [], [])).toEqual([
+        expect.stringMatching(new RegExp(`^${namespace}\\.any: .*never exempt.*FR-625`)),
+      ]);
+    },
+  );
+
+  it('gives each of the three routers a reason of its own', () => {
+    const reasons = Object.keys(phaseFourNamespaces).map((namespace) => {
+      const [failure] = coverageFailures([`${namespace}.any`], [], []);
+      return failure?.slice(`${namespace}.any: `.length) ?? '';
+    });
+    expect(new Set(reasons).size).toBe(reasons.length);
+  });
+});
+
 /** The three kinds FR-496 names beyond FR-410's five, as T052's note writes them. */
 const FR_496_KINDS = ['otherSessionToken', 'replayedToken', 'afterGenderCorrection'] as const;
 
@@ -578,6 +624,50 @@ describe('every limit T052 names is stamped in the real routers’ meta (T052, G
   });
 });
 
+/** T001 of specs/005-certification's six keys (`prisma/seed.ts`, DEC-71, DEC-73). */
+const T001_KEYS = [
+  'rate_limit_user_report',
+  'rate_limit_gender_flag',
+  'rate_limit_ijazah_request',
+  'rate_limit_ijazah_decision',
+  'rate_limit_gender_decision',
+  'rate_limit_settings_update',
+] as const;
+
+/** Every procedure of `router` whose meta stamps `key` as its limit, sorted. */
+function stampedWith(router: RouterLike, key: string): string[] {
+  return Object.entries(router._def.procedures)
+    .filter(([, procedure]) => {
+      const definition: unknown = Reflect.get(procedure as object, '_def');
+      const meta: unknown =
+        typeof definition === 'object' && definition !== null
+          ? Reflect.get(definition, 'meta')
+          : undefined;
+      return typeof meta === 'object' && meta !== null && Reflect.get(meta, 'rateLimit') === key;
+    })
+    .map(([path]) => path)
+    .sort();
+}
+
+describe('T001’s six keys are declared at every procedure that stamps one (005:T025, Q-X1 (a))', () => {
+  it.each(T001_KEYS)('declares %s at exactly the procedures that stamp it', (key) => {
+    for (const [surface, router] of [
+      ['app', appRouter],
+      ['admin', adminRouter],
+    ] as const) {
+      const declared = DECLARED_LIMITS[surface].filter((limit) => limit.key === key);
+      expect(
+        declared.map((limit) => limit.path).sort(),
+        `${surface}: the procedures declared under ${key}`,
+      ).toEqual(stampedWith(router, key));
+      for (const limit of declared) expect(limit.source).toContain('T025');
+      expect(declaredLimitFailures(router, declared)).toEqual([]);
+    }
+    const stamped = [...stampedWith(appRouter, key), ...stampedWith(adminRouter, key)];
+    expect(stamped.length, `some procedure stamps ${key}`).toBeGreaterThan(0);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // An excluded teacher answers exactly as a nonexistent one
 // ---------------------------------------------------------------------------------------------
@@ -626,7 +716,9 @@ const caller = createAppCallerFactory(
     // Every signed-in call is counted by the signed-in default since T062 (FR-470), whose row this
     // limiter reads; nothing else here reads a setting.
     rateLimiter: new RateLimiter({
-      settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
+      settings: {
+        read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }),
+      },
       counter,
       subjectKey: Buffer.alloc(32, 1),
     }),
