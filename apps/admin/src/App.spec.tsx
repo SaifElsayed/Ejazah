@@ -133,6 +133,9 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.sessionReview'), '/review'],
       [translate('ar', 'admin.nav.items.disputes'), '/disputes'],
       [translate('ar', 'admin.nav.items.cases'), '/cases'],
+      // 005:T023 (B49): the reports and the gender flags, two queues.
+      [translate('ar', 'admin.nav.items.reports'), '/reports'],
+      [translate('ar', 'admin.nav.items.gender'), '/gender'],
       // B42 (the note under T047 and T048, Q4): the monitor and the outages, records.
       [translate('ar', 'admin.nav.items.enrollments'), '/sessions'],
       // B42 (the note under T058, Q4): the user directory.
