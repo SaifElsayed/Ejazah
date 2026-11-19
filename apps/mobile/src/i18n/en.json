@@ -468,7 +468,8 @@
         "adminOpenedForTeacher": "A case the administration opened for you",
         "teacherSuspended": "Your account was suspended",
         "adminEnded": "Ended by the administration",
-        "genderCorrection": "An account details correction"
+        "genderCorrection": "An account details correction",
+        "studentComplaintEnded": "Ended on a complaint against the student"
       },
       "empty": {
         "title": "No dues yet",
@@ -654,6 +655,33 @@
       "searchPlaceholder": "Search for a city",
       "title": "Time zone",
       "useDevice": "Use the device time zone ({city})"
+    }
+  },
+  "postponement": {
+    "action": "Postpone this week’s sessions",
+    "form": {
+      "back": "Not now",
+      "hint": "The reason reaches the other party with the postponement, on their screen.",
+      "reason": "Reason for postponing",
+      "send": "Postpone the sessions",
+      "tooLong": "The reason is longer than allowed."
+    },
+    "refused": {
+      "accountRestricted": "This enrollment’s sessions cannot be postponed now. Nothing changed.",
+      "enrollmentNotConfirmed": "This enrollment is no longer running, so its sessions are not postponed. Nothing changed.",
+      "intervalNotPassed": "You postponed this enrollment’s sessions recently; another postponement is not accepted before the set time between two has passed. Nothing changed.",
+      "noSessionInWeek": "You have no session of this enrollment to postpone in the next seven days; a session close to its start stands. Nothing changed."
+    },
+    "sheet": {
+      "makeup": "Each postponed session is made up as a missed one is: the student picks one of the teacher’s free times outside the postponed days, and with no fitting time or no choice in time it is added at the package’s end on the same weekly slot.",
+      "near": "A session very close to its start is not postponed and stands.",
+      "title": "Postpone the week’s sessions",
+      "week": "Your sessions of this enrollment in the next seven days are postponed, with no need for the other party’s consent."
+    },
+    "shown": {
+      "byMe": "Postponed at your request · Reason: {reason}",
+      "byStudent": "Postponed by the student · Reason: {reason}",
+      "byTeacher": "Postponed by the teacher · Reason: {reason}"
     }
   },
   "session": {
@@ -865,6 +893,7 @@
       "cancelledByAgreement": "Cancelled by agreement",
       "disputed": "Disputed",
       "done": "Done",
+      "postponed": "Postponed",
       "scheduled": "Upcoming",
       "studentNoShow": "Student absent",
       "teacherNoShow": "Teacher absent",

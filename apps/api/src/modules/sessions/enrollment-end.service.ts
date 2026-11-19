@@ -40,10 +40,21 @@
 // THE LOG (the owner's rule). One info line `{ adminId, enrollmentId, caseId, slot,
 // cancelledSessions, handedRemedies }` on the call's transaction; never either text.
 //
+// THE CAUSE (003:T112; SRS FR-POSTPONE-6, DEC-90; Q-4 (a)). `admin_ended`, the direct end above, by
+// default; `student_complaint_ended`, the close on a teacher's complaint against the student (made by a
+// report), opens its case under that reason instead, which T105's release and T110's amounts read as
+// a complaint close (`CLOSE_RELEASES`), and names it when it closes a paused enrollment's case. It
+// always releases the slot (the T112 note, «releasing the slot»; FR-POSTPONE-6, «its slots are
+// freed»; PR #151's review, round 1, Major 2 (a)): the input's `slot` is ignored, since the contract
+// defaults it to `hold` and an explicit hold cannot be told from the default once parsed. The release
+// is the one above, T070's locks in their order; the answer, the log line and the router's audit entry
+// carry `release`.
+//
 // THE LIVE EVENT (T066; FR-427). `enrollment` to both parties, read under the enrollment's lock, added
 // to the administrator kind's after-commit list bound to this transaction (`publisherOn`): sent once
 // it commits, nothing on a replay, a refusal or a rollback.
 import type {
+  EnrollmentEndCause,
   SessionsEndEnrollmentInput,
   SessionsEndEnrollmentOutput,
 } from '@ijazah/contracts/admin';
@@ -83,8 +94,15 @@ export interface EnrollmentEndStore extends PausedCaseStore {
   lockSlot(tx: Transaction, slotId: string): Promise<void>;
   /** Moderation's: the enrollment's open complaint of the teacher's absence, null for none. */
   openComplaintOf(tx: Transaction, enrollmentId: string): Promise<string | null>;
-  /** Moderation's: the enrollment's `admin_ended` case, opened (or joined). */
-  openEndCase(tx: Transaction, enrollmentId: string): Promise<CompensationCase>;
+  /**
+   * Moderation's: the enrollment's end case, opened (or joined), under the end's cause
+   * (`admin_ended`, or 003:T112's `student_complaint_ended`).
+   */
+  openEndCase(
+    tx: Transaction,
+    enrollmentId: string,
+    reason: EnrollmentEndCause,
+  ): Promise<CompensationCase>;
   /** T004's hand-off: the remaining sessions cancelled, the open remedies handed to `caseOf`. */
   cancelRemaining(
     tx: Transaction,
@@ -100,7 +118,7 @@ export const enrollmentEndStore: EnrollmentEndStore = {
   lockTeacherSlots,
   lockSlot: (tx, slotId) => lockSlots(tx, [slotId]),
   openComplaintOf,
-  openEndCase: (tx, enrollmentId) => openCompensationCase(tx, enrollmentId, 'admin_ended'),
+  openEndCase: (tx, enrollmentId, reason) => openCompensationCase(tx, enrollmentId, reason),
   cancelRemaining: (tx, enrollmentIds, now, caseOf) =>
     cancelRemainingSessions(tx, enrollmentIds, now, caseOf),
   ...pausedCaseStore,
@@ -174,9 +192,12 @@ export function createEnrollmentEnd({
   const endLocked = async (
     tx: Transaction,
     adminId: string,
-    { enrollmentId, partyReason, slot }: SessionsEndEnrollmentInput,
+    { enrollmentId, partyReason, slot: asked, cause }: SessionsEndEnrollmentInput,
   ): Promise<SessionsEndEnrollmentOutput> => {
     const ids = { adminId, enrollmentId };
+    // 003:T112 (Q-4 (a); PR #151's review, round 1, Major 2): a close on a complaint against the
+    // student frees the slot, the input's choice ignored (this file's head, THE CAUSE).
+    const slot = cause === 'student_complaint_ended' ? 'release' : asked;
     const seen = await enrollments.enrollmentFor(tx, enrollmentId);
     if (seen === null) throw notFound(log, ids);
     if (slot === 'release') {
@@ -202,10 +223,10 @@ export function createEnrollmentEnd({
       tx,
       [enrollmentId],
       now,
-      async () => (await store.openEndCase(tx, enrollmentId)).caseId,
+      async () => (await store.openEndCase(tx, enrollmentId, cause)).caseId,
     );
     const caseId = ended.caseOf.get(enrollmentId) ?? null;
-    if (caseId === null) throw new Error('enrollment end: the hand-off opened no admin_ended case');
+    if (caseId === null) throw new Error('enrollment end: the hand-off opened no end case');
     // With `release`: T070's release in the same transaction, its locks all held (Q-R15 (a)).
     if (slot === 'release' && (await enrollments.releaseHeldSlot(tx, enrollmentId)) === null) {
       throw new Error('enrollment end: the slot of the end just made was not released');
@@ -215,7 +236,7 @@ export function createEnrollmentEnd({
       adminId,
       enrollmentId,
       endCaseId: caseId,
-      end: 'admin_ended',
+      end: cause,
     });
     // T066: the enrollment closed, to both parties once this transaction commits.
     publisherOn(tx)?.afterCommit([terms.studentUserId, terms.teacherUserId], {

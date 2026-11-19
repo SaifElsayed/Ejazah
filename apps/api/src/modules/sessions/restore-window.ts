@@ -73,7 +73,9 @@ export type ClosingKind =
   | 'student_banned'
   | 'teacher_ended'
   // T082 (N8): an administrator's direct end.
-  | 'admin_ended';
+  | 'admin_ended'
+  // 003:T112 (the owner's Q-C (a); DEC-69): the direct end on a complaint against the student.
+  | 'student_complaint_ended';
 
 /** T070: what the rule reads of an enrollment's closing. */
 export interface ClosingFacts {
@@ -95,7 +97,9 @@ export interface Closing {
 function kindsOf(status: EnrollmentStatus, reason: string | null): readonly ClosingKind[] {
   if (status === 'terminated_no_show') return ['absence_termination'];
   if (status !== 'cancelled') return [];
-  if (reason === 'admin') return ['student_fault_confirmed', 'student_banned', 'admin_ended'];
+  if (reason === 'admin') {
+    return ['student_fault_confirmed', 'student_banned', 'admin_ended', 'student_complaint_ended'];
+  }
   if (reason === 'teacher_suspended') return ['teacher_ended'];
   return [];
 }

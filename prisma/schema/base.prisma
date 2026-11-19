@@ -320,6 +320,9 @@ enum SessionStatus {
   cancelled_by_agreement
   cancelled_by_admin
   disputed
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90; ERD changelog row 59): a session its party postponed,
+  // never evaluated, freeing both parties' time (ERD §15 rules 19 and 66). Members are permanent.
+  postponed
 
   @@map("session_status")
 }
@@ -373,6 +376,8 @@ enum SessionEventKind {
   outcome_corrected
   instants_reresolved
   counter_booking_refused
+  // 003:T112 (ERD changelog row 59): written for each session a postponement moves.
+  postponed
 
   @@map("session_event_kind")
 }

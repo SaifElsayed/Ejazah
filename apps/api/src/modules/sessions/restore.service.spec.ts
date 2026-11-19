@@ -438,6 +438,21 @@ describe('sessions.restore: the restore (FR-455)', () => {
     expect(calls.some(([name]) => name === 'offerLocked')).toBe(false);
   });
 
+  // 003:T112 (the owner's Q-B (a)): a postponed session owed never offered, as an agreed cancellation.
+  it('counts K with a postponed session owed never offered left out (003:T112)', async () => {
+    given.sessions = closedSessions().map((one) =>
+      one.sequenceNumber === 3 ? { ...one, status: 'postponed', remedy: null } : one,
+    );
+    given.terms = terms('cancelled');
+    given.events = [{ kind: 'cancelled', cancellationReason: 'admin', occurredAt: NOW }];
+    given.cases = [closingCase({ reason: 'student_fault_confirmed' })];
+    await restore();
+    expect(calls.find(([name]) => name === 'generate')?.[4]).toEqual({
+      count: 2,
+      firstSequenceNumber: 6,
+    });
+  });
+
   it('leaves out an unsettled session and a refund chosen, and counts a session cancelled by agreement with its remedy booked among the K', async () => {
     given.sessions = [
       session(1, 'disputed'),

@@ -11,6 +11,7 @@ import {
   addHours,
   addMinutes,
   addSeconds,
+  addWeeks,
   assertTimeZone,
   calendarDateOf,
   dateColumnOf,
@@ -379,6 +380,23 @@ describe('T044 addMinutes and addDays: a session’s lifetimes, counted from an 
     );
     expect(() => addDays(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
       expect.objectContaining({ name: 'TimeError', offendingField: 'days' }),
+    );
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-1, FR-POSTPONE-4, DEC-90): a postponement's week and its interval, whole
+// weeks of 7 × 24 hours from an instant. Written before the function, run red first.
+describe('003:T112 addWeeks: a postponement’s week and interval, counted from an instant', () => {
+  it('adds whole weeks of seven days of 24 hours, in canonical UTC', () => {
+    expect(addWeeks(new Date('2026-11-19T10:00:00Z'), 1)).toBe('2026-11-26T10:00:00Z');
+    expect(addWeeks(new Date('2026-11-19T10:00:00Z'), 4)).toBe('2026-12-17T10:00:00Z');
+    // A week of an instant, never a wall-clock week: Cairo's clock change in between does not move it.
+    expect(addWeeks(new Date('2026-10-26T21:30:00Z'), 1)).toBe('2026-11-02T21:30:00Z');
+  });
+
+  it.each([1.5, Number.NaN])('refuses %s, naming the field', (amount) => {
+    expect(() => addWeeks(new Date('2026-10-20T08:00:00Z'), amount)).toThrow(
+      expect.objectContaining({ name: 'TimeError', offendingField: 'weeks' }),
     );
   });
 });

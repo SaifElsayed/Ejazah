@@ -32,6 +32,9 @@ export const sessionStatus = z.enum([
   'cancelled_by_agreement',
   'cancelled_by_admin',
   'disputed',
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90; Q-2 (a)): a session its party postponed, never evaluated,
+  // freeing both parties' time and owed a make-up at once; added, additively (R-API-9).
+  'postponed',
 ]);
 
 /** A remedy's status as the lists show it: `RemedyView`'s, never `lapsed` (004:T028). */
@@ -43,6 +46,18 @@ export const listedRemedyStatus = z.enum([
   'booked',
   'refund_case',
 ]);
+
+/**
+ * 003:T112 (FR-POSTPONE-5, DEC-90): the postponement that moved a session, as `sessions.get` and the
+ * lists show it: which party postponed it, its reason (the party's own text, 1 to 500 characters,
+ * as a cancellation request's) and when. Both parties read it; the other party is shown it on
+ * screen through the live channel, with no push.
+ */
+export const sessionPostponement = z.object({
+  by: z.enum(['teacher', 'student']),
+  reason: z.string().min(1).max(500),
+  at: z.iso.datetime(),
+});
 
 /**
  * One session as a list shows it: `checkout.status`' session with its status (FR-393), and its id
@@ -62,6 +77,10 @@ export const listedSession = enrollmentSession.extend({
   // 004:T028 (FR-495): the session's remedy, by its status, absent while it has none; a `lapsed`
   // one is never shown (specs/004-sessions/contracts/app-surface.md, "Phase 2's lists", `remedyStatus?`).
   remedyStatus: listedRemedyStatus.optional(),
+  // 003:T112 (FR-POSTPONE-5; the coordinator's Q1 (a), 2026-11-19): the postponement that moved the
+  // session, absent while none did, so both enrollment screens show it from their own read.
+  // Additive (R-API-9).
+  postponement: sessionPostponement.optional(),
 });
 
 /** The package line an enrollment shows, from its snapshot: subject, track, sessions, minutes. */
@@ -164,6 +183,7 @@ export const enrollmentsGetOutput = studentEnrollmentItem.extend({
 
 export type EnrollmentListTab = z.infer<typeof enrollmentListTab>;
 export type SessionStatus = z.infer<typeof sessionStatus>;
+export type SessionPostponement = z.infer<typeof sessionPostponement>;
 export type ListedSession = z.infer<typeof listedSession>;
 export type EnrollmentTerms = z.infer<typeof enrollmentTerms>;
 export type ListedPartyName = z.infer<typeof listedPartyName>;

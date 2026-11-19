@@ -46,8 +46,15 @@ export interface SessionTime {
   readonly endsAt: Date;
 }
 
-/** The statuses that free a session's time, as the overlap constraints read them (ERD §15 rule 19). */
-export const TIME_FREEING_STATUSES = ['cancelled_by_agreement', 'cancelled_by_admin'] as const;
+/**
+ * The statuses that free a session's time, as the overlap constraints read them (ERD §15 rule 19);
+ * 003:T112 (DEC-90, Q-2 (a)): `postponed` among them, as `20261119095115_session_postponements` frees it.
+ */
+export const TIME_FREEING_STATUSES = [
+  'cancelled_by_agreement',
+  'cancelled_by_admin',
+  'postponed',
+] as const;
 
 /**
  * The times of the student's and the teacher's sessions that hold time in `[from, to)` (T032, T033,

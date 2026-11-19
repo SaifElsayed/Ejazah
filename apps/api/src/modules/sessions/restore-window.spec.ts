@@ -94,6 +94,8 @@ describe('windowSettingOf (FR-503; SRS FR-CANCEL-9)', () => {
     ['teacher_ended', BAN_RESTORE_WINDOW_SETTING],
     // T082: a direct end holds its slot through the enrollment window.
     ['admin_ended', ENROLLMENT_RESTORE_WINDOW_SETTING],
+    // 003:T112 (Q-C (a)): the end on a complaint against the student, as a direct end.
+    ['student_complaint_ended', ENROLLMENT_RESTORE_WINDOW_SETTING],
   ] as const)('a %s closing reads %s', (kind, setting) => {
     expect(windowSettingOf(kind)).toBe(setting);
   });
@@ -109,6 +111,12 @@ describe('latestEndCaseOf (R-322, step 1)', () => {
 
   it('counts a direct end’s `admin_ended` case as an end’s (T082)', () => {
     const end = endCase('admin_ended', 'open', 2);
+    expect(latestEndCaseOf([endCase('refund_choice', 'open', 3), end])).toEqual(end);
+  });
+
+  // 003:T112 (the owner's Q-C (a); DEC-69): the end on a complaint against the student is an end's.
+  it('counts the end on a complaint against the student as an end’s (003:T112)', () => {
+    const end = endCase('student_complaint_ended', 'open', 2);
     expect(latestEndCaseOf([endCase('refund_choice', 'open', 3), end])).toEqual(end);
   });
 
@@ -138,6 +146,12 @@ describe('closingOf, the one closing rule (Q4 (a), N4)', () => {
     ],
     // T082 (N8): an administrator's direct end.
     ['a direct end', facts('cancelled', 'admin', endCase('admin_ended')), 'admin_ended'],
+    // 003:T112 (Q-C (a); DEC-69): restorable as a direct end is.
+    [
+      'an end on a complaint against the student',
+      facts('cancelled', 'admin', endCase('student_complaint_ended')),
+      'student_complaint_ended',
+    ],
   ])('admits %s while its case is open', (_name, closing, kind) => {
     expect(closingOf(closing)).toEqual({ kind, closingCase: closing.endCase, restorable: true });
   });

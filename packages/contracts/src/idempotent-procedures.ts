@@ -22,6 +22,9 @@ export const idempotentProcedures = [
   'checkout.retry',
   // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.cancellation`"; T021).
   'sessions.cancellation.request',
+  // 003:T112 (SRS §3.8.6, FR-POSTPONE-1, DEC-90): `sessions.postpone`, keyed as
+  // `sessions.cancellation.request` is.
+  'sessions.postpone',
   // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.dispute`"; T026).
   'sessions.dispute.raise',
   // Phase 3 (specs/004-sessions/contracts/app-surface.md, "`sessions.remedy`"; T031, Q14 (a)).

@@ -8,8 +8,8 @@
 // (booking writes the status and its one `enrollment_events` row `completed`), when all of these
 // hold, read under the caller's locks:
 //   - every session of it, make-ups included, has a settled outcome that is not frozen: `done`,
-//     `student_no_show`, `teacher_no_show`, `both_no_show`, `cancelled_by_agreement` or
-//     `cancelled_by_admin`. Not `scheduled`; not `disputed` (the outcome frozen beside it, R-308);
+//     `student_no_show`, `teacher_no_show`, `both_no_show`, `cancelled_by_agreement`,
+//     `cancelled_by_admin` or (003:T112) `postponed`. Not `scheduled`; not `disputed` (the outcome frozen beside it, R-308);
 //     not `under_threshold` or `provider_outage`, which wait in the review queue for an
 //     administrator's outcome (R-SESS-6) and may still owe a remedy;
 //   - the last session's dispute window has closed: `dispute_window_hours` after the latest
@@ -82,12 +82,16 @@ const SETTLED: ReadonlySet<CompletionSession['status']> = new Set([
   'both_no_show',
   'cancelled_by_agreement',
   'cancelled_by_admin',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ]);
 
 /** The two cancellations, never disputed (FR-473), so without a dispute window. */
 export const UNDISPUTABLE: ReadonlySet<CompletionSession['status']> = new Set([
   'cancelled_by_agreement',
   'cancelled_by_admin',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ]);
 
 /** The outcomes that owe a remedy (FR-462). */
@@ -95,6 +99,8 @@ const OWES_REMEDY: ReadonlySet<CompletionSession['status']> = new Set([
   'teacher_no_show',
   'both_no_show',
   'cancelled_by_agreement',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ]);
 
 /** A remedy not yet final (data-model.md §3, "An open remedy"), `frozen` included. */

@@ -9,12 +9,15 @@ import { describe, expect, it } from 'vitest';
 import { isIdempotentProcedure } from '../idempotent-procedures.js';
 import {
   compensationCaseReason,
+  enrollmentEndCause,
   enrollmentEndRefusalCause,
   enrollmentEndSlot,
   monitorEnrollment,
   restoreRefusalCause,
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
+  timelineEvent,
+  timelineEventKind,
 } from './sessions.js';
 
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000000e1';
@@ -25,10 +28,15 @@ const asked = { enrollmentId: ENROLLMENT, partyReason: 'انتهى الاشتر�
 
 describe('sessions.endEnrollment input (FR-513)', () => {
   it('holds the slot by default, and keeps the internal note when given', () => {
-    expect(sessionsEndEnrollmentInput.parse(asked)).toEqual({ ...asked, slot: 'hold' });
+    // 003:T112 (Q-4 (a); rule d): the end's cause defaults to today's, `admin_ended`.
+    expect(sessionsEndEnrollmentInput.parse(asked)).toEqual({
+      ...asked,
+      slot: 'hold',
+      cause: 'admin_ended',
+    });
     expect(
       sessionsEndEnrollmentInput.parse({ ...asked, internalNote: 'ملاحظة', slot: 'release' }),
-    ).toEqual({ ...asked, internalNote: 'ملاحظة', slot: 'release' });
+    ).toEqual({ ...asked, internalNote: 'ملاحظة', slot: 'release', cause: 'admin_ended' });
   });
 
   it('takes a party reason of 1 to 500 characters, never a blank one', () => {
@@ -99,9 +107,10 @@ describe('sessions.endEnrollment output and refusals (FR-513, R-MONEY-6)', () =>
 
 describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
   it('adds admin_ended to the closed list of case reasons, at its end', () => {
-    // 005:T014 (rule d): `gender_correction` follows it, additively (R-API-9).
-    expect(compensationCaseReason.options.at(-2)).toBe('admin_ended');
-    expect(compensationCaseReason.options).toHaveLength(17);
+    // 005:T014 (rule d): `gender_correction` follows it, additively (R-API-9); 003:T112 (rule d):
+    // `student_complaint_ended` after that.
+    expect(compensationCaseReason.options.at(-3)).toBe('admin_ended');
+    expect(compensationCaseReason.options).toHaveLength(18);
   });
 
   it('answers enrollmentRestoreWindowDays on the monitor enrollment, a whole positive number', () => {
@@ -133,12 +142,53 @@ describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
 // step-3 cause, each added at its enum's end (R-API-9). Written before the enums, run red first.
 describe('005:T014: gender_correction and gender_mismatch', () => {
   it('adds gender_correction to the case reasons, at the end', () => {
-    expect(compensationCaseReason.options.at(-1)).toBe('gender_correction');
+    // 003:T112 (rule d): `student_complaint_ended` follows it, additively (R-API-9).
+    expect(compensationCaseReason.options.at(-2)).toBe('gender_correction');
     expect(compensationCaseReason.parse('gender_correction')).toBe('gender_correction');
   });
 
   it('adds gender_mismatch to the restore refusal causes, at the end, keeping refunded before it', () => {
     expect(restoreRefusalCause.options.slice(-2)).toEqual(['refunded', 'gender_mismatch']);
     expect(restoreRefusalCause.options).toHaveLength(10);
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the teacher complains by a report, and the
+// administrator's direct end on it is a close on a complaint against the student. The end takes
+// that cause, `admin_ended` by default (today's end), and opens its case as
+// `student_complaint_ended`, added at the reasons' end (R-API-9). Written before the schemas, run
+// red first.
+describe('003:T112: the end on a complaint against the student', () => {
+  it('adds student_complaint_ended to the case reasons, at the end', () => {
+    expect(compensationCaseReason.options.at(-1)).toBe('student_complaint_ended');
+  });
+
+  it('names the end’s two causes: today’s end and a complaint against the student', () => {
+    expect(enrollmentEndCause.options).toEqual(['admin_ended', 'student_complaint_ended']);
+  });
+
+  it('takes the complaint’s cause on the end', () => {
+    expect(
+      sessionsEndEnrollmentInput.parse({ ...asked, cause: 'student_complaint_ended' }),
+    ).toEqual({ ...asked, slot: 'hold', cause: 'student_complaint_ended' });
+  });
+
+  // The coordinator's Q2 (a), 2026-11-19: `session_event_kind` gains `postponed`, and the monitor's
+  // timeline parses it.
+  it('adds postponed to the timeline’s event kinds, at the end', () => {
+    const row = {
+      source: 'session',
+      kind: 'postponed',
+      sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
+      occurredAt: '2026-11-19T10:00:00.000Z',
+    };
+    expect(timelineEventKind.options.at(-1)).toBe('postponed');
+    expect(timelineEvent.safeParse(row).success).toBe(true);
+  });
+
+  it('refuses any other cause', () => {
+    for (const cause of ['student_banned', 'teacher_ended', '']) {
+      expect(sessionsEndEnrollmentInput.safeParse({ ...asked, cause }).success, cause).toBe(false);
+    }
   });
 });

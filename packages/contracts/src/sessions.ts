@@ -23,7 +23,7 @@ import { z } from 'zod';
 
 import { idempotencyKey } from './idempotency-key.js';
 import { calendarDate, timeZone } from './onboarding.js';
-import { sessionStatus } from './enrollments.js';
+import { sessionPostponement, sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
 import { slotStartTimeLocal } from './slots.js';
 
@@ -125,6 +125,11 @@ export const sessionsGetOutput = z.object({
    * per-connection rule; research R-324, item 6); a hint, never a decision, and no provider call.
    */
   counterpartyInRoom: z.boolean(),
+  /**
+   * 003:T112 (FR-POSTPONE-5, DEC-90): the postponement that moved this session, absent while none
+   * did (`sessionPostponement`, the lists' shape). Additive (R-API-9).
+   */
+  postponement: sessionPostponement.optional(),
 });
 
 /** What the phone connects with (FR-431): bound to this session and this caller (R-GENDER-7). */
@@ -300,3 +305,45 @@ export const sessionsComplaintRaiseOutput = z.object({
 
 export type SessionsComplaintRaiseInput = z.infer<typeof sessionsComplaintRaiseInput>;
 export type SessionsComplaintRaiseOutput = z.infer<typeof sessionsComplaintRaiseOutput>;
+
+// 003:T112 (SRS §3.8.6, FR-POSTPONE-1 to FR-POSTPONE-5, DEC-86, DEC-90; the owner's Q-1 (a), Q-2 (a)
+// and Q-3 (a) of 2026-11-19): `sessions.postpone`. Either party of a `confirmed` enrollment
+// postpones its sessions of that enrollment in the coming week, with a reason and without the other
+// party's consent, keyed by the kernel's idempotency (`idempotent-procedures.ts`), as a cancellation
+// request is. Q-1 (a): the week is the caller's `scheduled` sessions of the enrollment, make-ups
+// included, starting from now + the postponement notice to now + 7 days; one nearer than the notice
+// stands. Q-2 (a): each is moved to `postponed`, never evaluated, freeing both parties' time, and is
+// owed a make-up at once. Q-3 (a): once per postponement interval per party per enrollment, from that
+// party's last request on it. The caller names the enrollment and nothing of who asks (R-GENDER-4);
+// the reason is bounded and trimmed as a cancellation request's. Refused `CONFLICT` with
+// `details.cause` one of `sessionsPostponeRefusalCause`, and `ACCOUNT_RESTRICTED` while either
+// party's account is not active (as `sessions.join`), each writing nothing.
+
+/** The enrollment, the party's reason and the client's idempotency key. */
+export const sessionsPostponeInput = z.object({
+  enrollmentId: z.uuid(),
+  reason: z.string().trim().min(1).max(PARTICIPANT_REASON_MAX_LENGTH),
+  idempotencyKey,
+});
+
+/** The postponement written, and the sessions it moved to `postponed`: at least one. */
+export const sessionsPostponeOutput = z.object({
+  postponementId: z.uuid(),
+  sessionIds: z.array(z.uuid()).min(1),
+});
+
+/**
+ * Why a postponement was refused, as `CONFLICT`'s `details.cause`: the enrollment not `confirmed`
+ * (the cause `sessions.complaint.raise` and the administrator's end name), no session of the
+ * caller's left to postpone in the week (FR-POSTPONE-1, FR-POSTPONE-3), or the caller's last
+ * postponement on the enrollment inside the interval (FR-POSTPONE-4).
+ */
+export const sessionsPostponeRefusalCause = z.enum([
+  'enrollment_not_confirmed',
+  'no_session_in_week',
+  'interval_not_passed',
+]);
+
+export type SessionsPostponeInput = z.infer<typeof sessionsPostponeInput>;
+export type SessionsPostponeOutput = z.infer<typeof sessionsPostponeOutput>;
+export type SessionsPostponeRefusalCause = z.infer<typeof sessionsPostponeRefusalCause>;

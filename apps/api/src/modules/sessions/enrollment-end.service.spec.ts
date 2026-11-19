@@ -87,8 +87,9 @@ function world(given: Given = {}) {
       calls.push(['openComplaintOf', enrollmentId]);
       return given.complaint ?? null;
     },
-    openEndCase: async (_tx, enrollmentId) => {
-      calls.push(['openEndCase', enrollmentId]);
+    openEndCase: async (_tx, enrollmentId, reason) => {
+      // 003:T112 (rule d): the case's reason, the end's cause.
+      calls.push(['openEndCase', enrollmentId, reason]);
       return { caseId: NEW_CASE, opened: true };
     },
     cancelRemaining: async (_tx, enrollmentIds, now, caseOf) => {
@@ -162,6 +163,8 @@ function world(given: Given = {}) {
       partyReason: PARTY_REASON,
       internalNote: INTERNAL_NOTE,
       slot: 'hold',
+      // 003:T112 (rule d): the cause the router's schema defaults.
+      cause: 'admin_ended',
       idempotencyKey: KEY,
       ...input,
     });
@@ -188,6 +191,7 @@ const REQUEST = {
     partyReason: PARTY_REASON,
     internalNote: INTERNAL_NOTE,
     slot: 'hold',
+    cause: 'admin_ended',
   },
 };
 
@@ -213,7 +217,7 @@ describe('sessions.endEnrollment with slot hold (FR-513)', () => {
       ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
       ['clock'],
       ['cancelRemaining', [ENROLLMENT], AT],
-      ['openEndCase', ENROLLMENT],
+      ['openEndCase', ENROLLMENT, 'admin_ended'],
       ['pausedCaseOf', ENROLLMENT],
     ]);
     expect(one.lines).toEqual([
@@ -266,7 +270,7 @@ describe('sessions.endEnrollment with slot release (FR-513; T070’s release in 
       ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
       ['clock'],
       ['cancelRemaining', [ENROLLMENT], AT],
-      ['openEndCase', ENROLLMENT],
+      ['openEndCase', ENROLLMENT, 'admin_ended'],
       ['releaseHeldSlot', ENROLLMENT],
       ['pausedCaseOf', ENROLLMENT],
     ]);
@@ -442,5 +446,56 @@ describe('sessions.endEnrollment: the live event (T066)', () => {
     expect(added).toEqual([]);
     const rolledBack = world();
     expect(await asAdministratorKind((tx) => rolledBack.ask({}, tx), true)).toEqual([]);
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the end on a teacher's complaint against the student,
+// `cause: 'student_complaint_ended'`, opens its case under that reason, which T105's release and
+// T110's amounts read as a complaint close; a paused enrollment's case closed by it names it. Written
+// before the cause was read, run red first.
+describe('sessions.endEnrollment on a complaint against the student (003:T112)', () => {
+  // PR #151's review, round 1, Major 2 (a): the close frees the slot (the T112 note, «releasing the
+  // slot»; FR-POSTPONE-6, «its slots are freed»), whatever `slot` the input carries: the contract
+  // defaults it to `hold`, and an explicit hold cannot be told from the default once parsed, so it
+  // is ignored. The release is T070's, through the same locks in the same order as `slot: 'release'`.
+  it('opens the student_complaint_ended case, hands the sessions and remedies to it and releases the slot, the hold asked ignored', async () => {
+    const one = world();
+    expect(await one.ask({ cause: 'student_complaint_ended', slot: 'hold' })).toEqual({
+      answer: {
+        enrollmentId: ENROLLMENT,
+        caseId: NEW_CASE,
+        slot: 'release',
+        cancelledSessions: 1,
+      },
+      replayed: false,
+    });
+    expect(one.calls.slice(1)).toEqual([
+      ['enrollmentFor', ENROLLMENT],
+      ['keyShareAccounts', [STUDENT, TEACHER].sort()],
+      ['lockTeacherSlots', TEACHER],
+      ['lockSlot', SLOT],
+      ['lockEnrollments', [ENROLLMENT]],
+      ['enrollmentFor', ENROLLMENT],
+      ['openComplaintOf', ENROLLMENT],
+      ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
+      ['clock'],
+      ['cancelRemaining', [ENROLLMENT], AT],
+      ['openEndCase', ENROLLMENT, 'student_complaint_ended'],
+      ['releaseHeldSlot', ENROLLMENT],
+      ['pausedCaseOf', ENROLLMENT],
+    ]);
+    // The log records the release made.
+    expect(one.lines).toEqual([expect.objectContaining({ slot: 'release', caseId: NEW_CASE })]);
+    // What was asked stays the input as given, so a replay with the same input answers the first.
+    expect(one.calls[0]).toEqual([
+      'runOn',
+      { ...REQUEST, input: { ...REQUEST.input, cause: 'student_complaint_ended' } },
+    ]);
+  });
+
+  it('names the cause when it closes a paused enrollment’s case', async () => {
+    const one = world({ pausedCase: PAUSED_CASE });
+    await one.ask({ cause: 'student_complaint_ended' });
+    expect(one.lines[0]).toEqual(expect.objectContaining({ end: 'student_complaint_ended' }));
   });
 });

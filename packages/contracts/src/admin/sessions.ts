@@ -252,6 +252,10 @@ export const compensationCaseReason = z.enum([
   // 005:T014 (B47; FR-616, FR-GENDER-7): a gender correction's end, one case per enrollment it
   // ended; added, additively (R-API-9).
   'gender_correction',
+  // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): an administrator's direct end on a teacher's
+  // complaint against the student (`sessionsEndEnrollmentInput`'s `cause`); added, additively
+  // (R-API-9).
+  'student_complaint_ended',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
@@ -309,6 +313,9 @@ export const timelineEventKind = z.enum([
   // release (T070) and a hold's end (T074).
   'slot_released',
   'slot_hold_ended',
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90; Q-2 (a)): the `session_event_kind` value a postponement
+  // writes for each session it moves; added, additively (R-API-9).
+  'postponed',
 ]);
 
 /**
@@ -553,6 +560,15 @@ export type SessionsRestoreOutput = z.infer<typeof sessionsRestoreOutput>;
 export const enrollmentEndSlot = z.enum(['hold', 'release']);
 
 /**
+ * 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): why the administrator ends the enrollment, by the
+ * case reason the end opens: `admin_ended`, the direct end as T082 built it (the default), or
+ * `student_complaint_ended`, the close on a teacher's complaint against the student (made by a
+ * report, `reports.create`), whose case closes as a complaint close (T105's release, T110's
+ * amounts). Additive (R-API-9).
+ */
+export const enrollmentEndCause = z.enum(['admin_ended', 'student_complaint_ended']);
+
+/**
  * Why an end was refused, as `CONFLICT`'s `details.cause`: the enrollment not `confirmed`, or a
  * complaint of the teacher's absence open on it (decided through `cases.decideComplaint`, Q5 (a)),
  * which the refusal names beside its cause (`{ path: 'caseId', code: <the complaint's id> }`).
@@ -568,13 +584,23 @@ export const sessionsEndEnrollmentInput = z.object({
   partyReason: z.string().trim().min(1).max(ENROLLMENT_END_TEXT_MAX_LENGTH),
   /** Kept in the audit entry only, never shown to a party nor logged. */
   internalNote: z.string().trim().max(ENROLLMENT_END_TEXT_MAX_LENGTH).optional(),
+  /**
+   * Hold or release the weekly slot; ignored on the cause `student_complaint_ended`, which always
+   * releases it (003:T112, Q-4 (a); PR #151's review, round 1, Major 2 (a)). The answer's `slot`
+   * is the one the end made.
+   */
   slot: enrollmentEndSlot.default('hold'),
+  /** 003:T112 (Q-4 (a)): the end's cause; today's direct end by default. */
+  cause: enrollmentEndCause.default('admin_ended'),
   idempotencyKey,
 });
 
 export const sessionsEndEnrollmentOutput = z.object({
   enrollmentId: z.uuid(),
-  /** The `admin_ended` case opened (or joined), holding the sessions owed and every open remedy. */
+  /**
+   * The `admin_ended` case opened (or joined), holding the sessions owed and every open remedy; on
+   * the cause `student_complaint_ended` (003:T112), the case of that reason.
+   */
   caseId: z.uuid(),
   slot: enrollmentEndSlot,
   /** The remaining `scheduled` sessions the end cancelled (`cancelled_by_admin`). */
@@ -582,6 +608,7 @@ export const sessionsEndEnrollmentOutput = z.object({
 });
 
 export type EnrollmentEndSlot = z.infer<typeof enrollmentEndSlot>;
+export type EnrollmentEndCause = z.infer<typeof enrollmentEndCause>;
 export type EnrollmentEndRefusalCause = z.infer<typeof enrollmentEndRefusalCause>;
 export type SessionsEndEnrollmentInput = z.infer<typeof sessionsEndEnrollmentInput>;
 export type SessionsEndEnrollmentOutput = z.infer<typeof sessionsEndEnrollmentOutput>;

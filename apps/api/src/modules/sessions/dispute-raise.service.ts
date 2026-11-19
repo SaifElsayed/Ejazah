@@ -125,7 +125,12 @@ type RefusalReason =
   | 'before_end'
   | 'window_closed';
 
-const CANCELLED: ReadonlySet<string> = new Set(['cancelled_by_agreement', 'cancelled_by_admin']);
+// 003:T112 (the owner's Q-B (a)): a postponed session is never disputed, as a cancelled one.
+const CANCELLED: ReadonlySet<string> = new Set([
+  'cancelled_by_agreement',
+  'cancelled_by_admin',
+  'postponed',
+]);
 const UNDER_REVIEW: ReadonlySet<string> = new Set(['under_threshold', 'provider_outage']);
 const DISPUTABLE: ReadonlySet<string> = new Set(DISPUTABLE_STATUSES);
 

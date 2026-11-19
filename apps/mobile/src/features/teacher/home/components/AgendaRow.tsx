@@ -3,6 +3,8 @@
 // the session there too (ADR 0009 D5). A session with an outcome carries its badge; one to come, the
 // way forward. The row opens the enrollment. The current session's join and a student's cancel
 // request are Phase 3's.
+// 003:T112 (SRS FR-POSTPONE-5, DEC-90): a postponed session says which party postponed it and why
+// (`PostponementLine`).
 import type { TeacherTodaySession } from '@ijazah/contracts';
 import { View } from 'react-native';
 
@@ -12,6 +14,7 @@ import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
+import { PostponementLine } from '../../../shared/postponement';
 import { openEnrollment, SessionStatusBadge, useInViewerZone } from '../../students';
 
 export function AgendaRow({
@@ -51,6 +54,7 @@ export function AgendaRow({
               {elsewhere}
             </Text>
           )}
+          <PostponementLine postponement={session.postponement} viewer="teacher" />
         </View>
       }
       {...(session.status === 'scheduled'

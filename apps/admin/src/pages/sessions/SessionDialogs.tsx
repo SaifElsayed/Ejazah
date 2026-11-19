@@ -17,8 +17,14 @@
 //   the parties' reason (mandatory) and an internal note (optional), and offers the slot held for
 //   the monitor's `enrollmentRestoreWindowDays` (the default) or released now; its key minted when
 //   the dialog opens and reused on its retry; `complaint_open` links to the complaint.
+// - 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the end's cause, the direct end (the default,
+//   sent as before, with no `cause`) or a complaint against the student (a teacher's report),
+//   which says what that close does and is sent as `cause: 'student_complaint_ended'`. That close
+//   frees the slot (the T112 note, «releasing the slot»; FR-POSTPONE-6; PR #151's review, round 1,
+//   Major 2 (a)): with it the slot's choice shows «release now» alone, selected, with a line saying
+//   why, and sends `release`; the direct end gives the administrator's choice back.
 // Once the server answers, the monitor is read again and the dialog closes.
-import type { EnrollmentEndSlot } from '@ijazah/contracts/admin';
+import type { EnrollmentEndCause, EnrollmentEndSlot } from '@ijazah/contracts/admin';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -268,11 +274,12 @@ export function ReleaseSlotDialog({
   );
 }
 
-/** What the end sends: the parties' reason, the note when written, and the slot's choice. */
+/** What the end sends: the parties' reason, the note when written, the slot's choice and its cause. */
 interface EndInput {
   readonly partyReason: string;
   readonly internalNote: string;
   readonly slot: EnrollmentEndSlot;
+  readonly cause: EnrollmentEndCause;
 }
 
 /** T083 (FR-513): a confirmed enrollment's end, its key minted when the dialog opens. */
@@ -294,6 +301,7 @@ export function EndEnrollmentDialog({
   const [partyReason, setPartyReason] = useState('');
   const [internalNote, setInternalNote] = useState('');
   const [slot, setSlot] = useState<EnrollmentEndSlot>('hold');
+  const [cause, setCause] = useState<EnrollmentEndCause>('admin_ended');
   const [failure, setFailure] = useState<EndFailure | undefined>(undefined);
   const end = useMutation({
     mutationFn: (input: EndInput) =>
@@ -302,10 +310,15 @@ export function EndEnrollmentDialog({
         partyReason: input.partyReason,
         ...(input.internalNote === '' ? {} : { internalNote: input.internalNote }),
         slot: input.slot,
+        // 003:T112 (Q-4 (a)): the direct end is the server's default, sent as before.
+        ...(input.cause === 'admin_ended' ? {} : { cause: input.cause }),
         idempotencyKey,
       }),
   });
   const reason = partyReason.trim();
+  // 003:T112 (Major 2 (a)): a close on a complaint against the student always releases the slot.
+  const complaintClose = cause === 'student_complaint_ended';
+  const sentSlot: EnrollmentEndSlot = complaintClose ? 'release' : slot;
   const complaintHref =
     failure?.complaintId === undefined ? undefined : `/cases?case=${failure.complaintId}`;
 
@@ -313,7 +326,7 @@ export function EndEnrollmentDialog({
     if (reason === '') return;
     setFailure(undefined);
     end.mutate(
-      { partyReason: reason, internalNote: internalNote.trim(), slot },
+      { partyReason: reason, internalNote: internalNote.trim(), slot: sentSlot, cause },
       {
         onSuccess: () => {
           void reread();
@@ -355,6 +368,24 @@ export function EndEnrollmentDialog({
           </p>
         ))}
       </section>
+      <ChoiceGroup legend={t('admin.sessions.endCause.legend')}>
+        <Choice
+          label={t('admin.sessions.endCause.adminEnded')}
+          selected={cause === 'admin_ended'}
+          onPress={() => setCause('admin_ended')}
+        />
+        <Choice
+          label={t('admin.sessions.endCause.studentComplaintEnded')}
+          selected={cause === 'student_complaint_ended'}
+          onPress={() => setCause('student_complaint_ended')}
+        />
+      </ChoiceGroup>
+      {cause === 'student_complaint_ended' ? (
+        <p className="row row--top gap-2 text-callout">
+          <Icon name="info" size="sm" />
+          <span>{t('admin.sessions.endCause.studentComplaintEffect')}</span>
+        </p>
+      ) : null}
       <Field label={t('admin.sessions.end.reasonLabel')}>
         <Input
           value={partyReason}
@@ -367,18 +398,26 @@ export function EndEnrollmentDialog({
         <Input value={internalNote} onChangeText={setInternalNote} multiline />
       </Field>
       <ChoiceGroup legend={t('admin.sessions.end.slotLegend')}>
-        <Choice
-          label={t('admin.sessions.end.slot.hold', { days })}
-          selected={slot === 'hold'}
-          onPress={() => setSlot('hold')}
-        />
+        {complaintClose ? null : (
+          <Choice
+            label={t('admin.sessions.end.slot.hold', { days })}
+            selected={sentSlot === 'hold'}
+            onPress={() => setSlot('hold')}
+          />
+        )}
         <Choice
           label={t('admin.sessions.end.slot.release')}
-          selected={slot === 'release'}
+          selected={sentSlot === 'release'}
           danger
           onPress={() => setSlot('release')}
         />
       </ChoiceGroup>
+      {complaintClose ? (
+        <p className="row row--top gap-2 text-callout">
+          <Icon name="info" size="sm" />
+          <span>{t('admin.sessions.endCause.slotReleased')}</span>
+        </p>
+      ) : null}
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           <span className="stack gap-2">

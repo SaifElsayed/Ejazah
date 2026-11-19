@@ -74,6 +74,11 @@ describe('disputeFieldsOf (T026)', () => {
     }
   });
 
+  // 003:T112 (the owner's Q-B (a)): a postponed session as a cancelled one.
+  it('gives a postponed session neither the raise nor a window (003:T112)', () => {
+    expect(fieldsAt('postponed', INSIDE)).toEqual({ canRaiseDispute: false });
+  });
+
   it("names the latest dispute's state, whether the viewer raised it, and the window's close", () => {
     expect(
       fieldsAt('disputed', INSIDE, { disputeId: DISPUTE, status: 'open', raisedByUserId: VIEWER }),

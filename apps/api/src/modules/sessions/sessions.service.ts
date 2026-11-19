@@ -28,7 +28,9 @@
 // T021: `sessions.cancellation.request` and `.answer` are `cancellation.service.ts`', composed here
 // so the surface reaches them as `services.sessions.cancellation`. T031: `sessions.remedy.*` are
 // `remedy.service.ts`', composed here as `services.sessions.remedy`, over the same transactions,
-// idempotency, enrollment side and clock.
+// idempotency, enrollment side and clock. 003:T112: `sessions.postpone` is `postponement.service.ts`',
+// composed here as `services.sessions.postpone`, over the same idempotency, enrollment side, settings,
+// offer and clock.
 //
 // THE JOIN (FR-431, FR-432, FR-482, R-SESS-5; kernel.md, the `sessions.join` row: `users` (both, one
 // call) only, no `sessions` row locked and none written). The session is read once to learn its
@@ -90,6 +92,12 @@ import {
 import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { inRoomOf } from './participant-events.repository.js';
+import { postponementsAmong } from './postponement.repository.js';
+import {
+  createPostponement,
+  type Postponement,
+  type PostponementStore,
+} from './postponement.service.js';
 import { type RemedyViewRow, remedyViewRowOf } from './remedy-offer.repository.js';
 import { createRemedyOffer, type RemedyOffer } from './remedy-offer.service.js';
 import { remedyViewOf } from './remedy-offer.view.js';
@@ -139,6 +147,11 @@ export interface SessionsStore {
   remedyOf(tx: Transaction, sessionId: string): Promise<RemedyViewRow | null>;
   /** T028: the enrollment's slot's local start, `HH:MM:SS` (catalog's entry). */
   slotOf(tx: Transaction, slotId: string): Promise<{ readonly startTimeLocal: string } | null>;
+  /** 003:T112: of `sessionIds`, the postponement that moved each; no lock. */
+  postponementsOf(
+    tx: Transaction,
+    sessionIds: readonly string[],
+  ): Promise<ReadonlyMap<string, NonNullable<SessionsGetOutput['postponement']>>>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -149,6 +162,7 @@ export const sessionsStore: SessionsStore = {
   latestCancellationOf: latestRequestOf,
   remedyOf: remedyViewRowOf,
   slotOf: readSlot,
+  postponementsOf: postponementsAmong,
 };
 
 /** The person asking, from the server-held session. */
@@ -166,6 +180,8 @@ export interface SessionsServices extends DisputeRaise {
   readonly remedy: RemedyServices;
   /** T060: `sessions.complaint.raise`, the student's complaint of the teacher's absence. */
   readonly complaint: AbsenceComplaint;
+  /** 003:T112: `sessions.postpone`, a party's one-week postponement. */
+  readonly postpone: Postponement['postpone'];
 }
 
 export interface SessionsDependencies {
@@ -206,6 +222,8 @@ export interface SessionsDependencies {
    * fakes it.
    */
   readonly inRoom?: (tx: Transaction, sessionId: string, userId: string) => Promise<boolean>;
+  /** 003:T112: the postponement's store; `postponementStore` unless a spec fakes it. */
+  readonly postponementStore?: PostponementStore;
 }
 
 /** Why a read or a join was refused, as its one log line names it. */
@@ -282,6 +300,7 @@ export function createSessionsServices({
   remedyOffer = createRemedyOffer({ enrollments: enrollmentSide, settings }),
   remedyStore,
   inRoom = inRoomOf,
+  postponementStore,
 }: SessionsDependencies): SessionsServices {
   const leadMinutes = () => settings.read(EARLY_JOIN_LEAD_SETTING, wholeMinutes);
   const opensAtOf = (session: PartySessionRow, lead: number) =>
@@ -329,6 +348,8 @@ export function createSessionsServices({
         const remedy = await remedyOf(tx, session.id, terms);
         // T065: the counterparty's, never the caller's; a hint from the recorded events.
         const counterpartyInRoom = await inRoom(tx, session.id, counterpartyId);
+        // 003:T112 (FR-POSTPONE-5): the postponement that moved it, to both parties.
+        const postponement = (await store.postponementsOf(tx, [session.id])).get(session.id);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -358,6 +379,7 @@ export function createSessionsServices({
           ...disputes.get(session.id),
           ...(remedy === undefined ? {} : { remedy }),
           counterpartyInRoom,
+          ...(postponement === undefined ? {} : { postponement }),
         };
       });
     },
@@ -371,6 +393,17 @@ export function createSessionsServices({
       clock,
       ...(cancellationStore === undefined ? {} : { store: cancellationStore }),
     }),
+
+    // 003:T112: `sessions.postpone` (`postponement.service.ts`), each session's make-up offered on its
+    // transaction under its locks by the same offer an accepted cancellation makes.
+    postpone: createPostponement({
+      idempotency,
+      enrollments: enrollmentSide,
+      settings,
+      offer: remedyOffer,
+      clock,
+      ...(postponementStore === undefined ? {} : { store: postponementStore }),
+    }).postpone,
 
     remedy: createRemedyServices({
       transactions,

@@ -30,6 +30,8 @@ const SESSION: Readonly<Record<SessionStatus, { key: MessageKey; tone: StatusTon
   cancelled_by_agreement: { key: 'status.session.cancelledByAgreement', tone: 'neutral' },
   cancelled_by_admin: { key: 'status.session.cancelledByAdmin', tone: 'neutral' },
   disputed: { key: 'status.session.disputed', tone: 'warning' },
+  // 003:T112 (FR-POSTPONE-5): a session its party postponed, owed a make-up.
+  postponed: { key: 'status.session.postponed', tone: 'neutral' },
 };
 
 /**

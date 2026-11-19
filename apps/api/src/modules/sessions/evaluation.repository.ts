@@ -126,7 +126,8 @@ export async function settle(tx: Client, settlement: Settlement): Promise<boolea
 }
 
 /**
- * The cancelled sessions (`cancelled_by_agreement`, `cancelled_by_admin`) whose join period holds
+ * The sessions whose time is freed (`TIME_FREEING_STATUSES`: `cancelled_by_agreement`,
+ * `cancelled_by_admin` and, 003:T112, `postponed`) whose join period holds
  * `at`, a start at or before `joinOpensBy` (`at` plus the early-join lead) and an end after `at`,
  * with no `room_ended` row in `session_participant_events` (the note under T014, K6), in id order;
  * no lock. Bounded by the window, a session's length plus the lead wide; no index serves it

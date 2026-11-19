@@ -83,6 +83,10 @@ export const COMPENSATION_REASONS = [
   // integration's): a gender correction's end of a confirmed enrollment, one case each; never
   // restorable (DEC-69), so no closing kind reads it.
   'gender_correction',
+  // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a); ERD changelog row 60): an administrator's direct
+  // end on a teacher's complaint against the student (`sessions.endEnrollment`'s cause), a close on a
+  // complaint against the student: T105's release and T110's amounts follow (`CLOSE_RELEASES`).
+  'student_complaint_ended',
 ] as const;
 
 /**

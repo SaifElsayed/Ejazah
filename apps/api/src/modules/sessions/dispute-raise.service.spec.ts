@@ -272,6 +272,16 @@ describe('sessions.dispute.raise (T026, FR-473, FR-474)', () => {
     }
   });
 
+  // 003:T112 (the owner's Q-B (a)): a postponed session is never disputed, as a cancelled one.
+  it('refuses NOT_DISPUTABLE for a postponed session (003:T112)', async () => {
+    const world = harness({ status: 'postponed' });
+    expect(await refusalOf(world.raiseAs(STUDENT))).toEqual({ code: 'NOT_DISPUTABLE', logged: true });
+    expect(world.writes()).toEqual([]);
+    expect(world.lines.map(world.ownFields)).toEqual([
+      { sessionId: SESSION, userId: STUDENT, errorCode: 'NOT_DISPUTABLE', reason: 'cancelled' },
+    ]);
+  });
+
   it('refuses SESSION_UNDER_REVIEW for under_threshold and provider_outage', async () => {
     for (const status of ['under_threshold', 'provider_outage'] as const) {
       const world = harness({ status });

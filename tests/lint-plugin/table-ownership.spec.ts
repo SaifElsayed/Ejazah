@@ -125,20 +125,22 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   session_reminders: 'sessionReminder',
   // 003:T105 (ERD changelog row 57).
   teacher_share_releases: 'teacherShareRelease',
+  // 003:T112 (ERD changelog row 59).
+  session_postponements: 'sessionPostponement',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 47 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105)', () => {
+  it('holds the ERD’s 48 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105, the one of 003:T112)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(47);
-    expect(new Set(tables).size).toBe(47);
+    expect(tables).toHaveLength(48);
+    expect(new Set(tables).size).toBe(48);
   });
 
-  it('gives 47 distinct delegates, one per table', () => {
+  it('gives 48 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(47);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(48);
   });
 });
 

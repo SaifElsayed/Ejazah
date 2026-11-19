@@ -699,7 +699,8 @@ describe('sessions.endEnrollment’s internal note (T082, nit 3)', () => {
         targetType: 'enrollment',
         targetId: ENROLLMENT,
         reason: 'تعذر استمرار الاشتراك',
-        after: { status: 'cancelled', slot: 'hold', internalNote: null },
+        // 003:T112 (rule d): the end's cause, the schema's default.
+        after: { status: 'cancelled', slot: 'hold', internalNote: null, cause: 'admin_ended' },
       },
     ]);
   });

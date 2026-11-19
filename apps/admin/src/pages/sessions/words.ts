@@ -51,6 +51,7 @@ export const SESSION_STATUS: Readonly<Record<MonitoredSession['status'], Drawn>>
   cancelled_by_agreement: { label: 'admin.status.session.cancelledByAgreement', tone: 'neutral' },
   cancelled_by_admin: { label: 'admin.status.session.cancelledByAdmin', tone: 'neutral' },
   disputed: { label: 'admin.status.session.disputed', tone: 'warning' },
+  postponed: { label: 'admin.status.session.postponed', tone: 'neutral' },
 };
 
 export const TRACK: Readonly<Record<'recitation' | 'ijazah_track', MessageKey>> = {
@@ -104,6 +105,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   admin_ended: 'admin.sessions.caseReason.adminEnded',
   // 005:T014 of B47 (FR-616): a gender correction's case, one per enrollment it ended.
   gender_correction: 'admin.sessions.caseReason.genderCorrection',
+  // 003:T112 (Q-4 (a)): the case of the administrator's end on a complaint against the student.
+  student_complaint_ended: 'admin.sessions.endCause.caseReason',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {
@@ -147,6 +150,8 @@ const EVENT_KIND: Readonly<Record<MonitoredEvent['kind'], MessageKey>> = {
   // B42a, Q-B2 (a): T069's two kinds, a held slot's release and a hold's end.
   slot_released: 'admin.sessions.event.kind.slotReleased',
   slot_hold_ended: 'admin.sessions.event.kind.slotHoldEnded',
+  // 003:T112 (Q-2 (a)): a session its party postponed.
+  postponed: 'admin.sessions.postponement.event',
 };
 
 const CANCELLATION_REASON: Readonly<

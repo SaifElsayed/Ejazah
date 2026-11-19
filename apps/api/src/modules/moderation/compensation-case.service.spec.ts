@@ -151,8 +151,19 @@ describe('closeCase', () => {
 // three only). Written before the list changed, run red first.
 describe('COMPENSATION_REASONS: the gender correction (005:T014)', () => {
   it('ends with gender_correction, which covers no second paid order', () => {
-    expect(COMPENSATION_REASONS.at(-1)).toBe('gender_correction');
-    expect(COMPENSATION_REASONS.at(-2)).toBe('admin_ended');
+    // 003:T112 (rule d): `student_complaint_ended` follows it.
+    expect(COMPENSATION_REASONS.at(-2)).toBe('gender_correction');
+    expect(COMPENSATION_REASONS.at(-3)).toBe('admin_ended');
     expect(COVERING_REASONS).not.toContain('gender_correction');
+  });
+});
+
+// 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the administrator's end on a teacher's complaint
+// against the student opens its case as `student_complaint_ended`, at the list's end; never a
+// covering reason (Phase 2's three only). Written before the list changed, run red first.
+describe('COMPENSATION_REASONS: the end on a complaint against the student (003:T112)', () => {
+  it('ends with student_complaint_ended, which covers no second paid order', () => {
+    expect(COMPENSATION_REASONS.at(-1)).toBe('student_complaint_ended');
+    expect(COVERING_REASONS).not.toContain('student_complaint_ended');
   });
 });

@@ -219,6 +219,29 @@ describe('TeacherDues («مستحقاتي»)', () => {
     );
   });
 
+  // PR #151's review, round 1, Minor 2 (003:T112, Q-4 (a)): the refund an end on a complaint against
+  // the student makes names its reason. Q-4's example: 1,000 EGP for 8 sessions, 500 EGP refunded,
+  // the teacher's 70 % share 350 EGP.
+  it('names the reason of a refund on an end on a complaint against the student', async () => {
+    get.mockResolvedValue({
+      ...dues,
+      deductions: [{ share_piasters: 35_000, caseReason: 'student_complaint_ended' }],
+    });
+    await inBothDirections(
+      withQueries(() => <TeacherDues />),
+      async (_rendered, direction) => {
+        expect(await screen.findByText(pounds(direction, piasters(35_000)))).toBeTruthy();
+        expect(
+          screen.getByText(
+            said(direction, 'money.dues.reasonLine', {
+              reason: said(direction, 'money.dues.reason.studentComplaintEnded'),
+            }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
   it('draws no student’s name and no order, even one the server sent', async () => {
     get.mockResolvedValue({
       ...dues,

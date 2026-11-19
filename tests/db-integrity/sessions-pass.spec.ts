@@ -497,9 +497,11 @@ describe('ERD §15 rule 43: a session event says one thing per kind and is never
     'outcome_corrected',
     'instants_reresolved',
     'counter_booking_refused',
+    // 003:T112 (B-M3, SRS DEC-90): a party's postponement, appended by ADD VALUE.
+    'postponed',
   ] as const;
 
-  it('holds the twenty-five kinds, in data-model.md §2.4’s order', async () => {
+  it('holds the twenty-six kinds, in data-model.md §2.4’s order', async () => {
     const { rows } = await db.query<{ label: string }>(
       `SELECT unnest(enum_range(NULL::session_event_kind))::text AS label`,
     );

@@ -135,10 +135,12 @@ describe('a teacher’s dropout on recitation (DEC-85)', () => {
   });
 });
 
+// 003:T112 (Q-4 (a), rule d): the complaint close is the administrator's end on a teacher's complaint
+// against the student, `student_complaint_ended`; a ban's and a confirmed fault's close is T124's below.
 describe('a close on a complaint against the student (DEC-86)', () => {
   it('refunds the sessions after the close and releases the delivered and the missed ones’ share', () => {
     const sessions = tenWith('done', 'done', 'done', 'student_no_show', 'student_no_show');
-    expect(caseAmountOf(facts({ reason: 'student_fault_confirmed', sessions }))).toEqual({
+    expect(caseAmountOf(facts({ reason: 'student_complaint_ended', sessions }))).toEqual({
       cause: 'student_complaint_close',
       refund_piasters: EGP(5_000),
       release_piasters: EGP(3_500),
@@ -150,7 +152,7 @@ describe('a close on a complaint against the student (DEC-86)', () => {
     const sessions = tenWith('done', 'done', 'done', 'done', 'done', 'student_no_show');
     const amount = caseAmountOf(
       facts({
-        reason: 'student_banned',
+        reason: 'student_complaint_ended',
         track: 'ijazah_track',
         sessions,
         releases: [
@@ -164,6 +166,85 @@ describe('a close on a complaint against the student (DEC-86)', () => {
       refund_piasters: EGP(4_000),
       release_piasters: EGP(2_450),
     });
+  });
+});
+
+// 003:T124 (SRS DEC-91, FR-ADMIN-5, FR-AUTH-11; ADR 0018 D5; Q-7 (a), Q-7a (a), Q-7b (a)): a close on
+// the student's ban or confirmed fault shows no refund for the sessions the close took. The sessions
+// owed before it are a refund due; the rest not taken is the administrator's decision; the teacher's
+// release is the complaint close's, unchanged. Written before the rule, run red first.
+describe('a close on a student’s ban or confirmed fault (003:T124, DEC-91)', () => {
+  /** 8 sessions of a 1,000 EGP package (125 EGP each), the teacher's share 70 % (87.50 EGP each). */
+  const eight = (sessions: ReleaseSession[]): Partial<CaseAmountFacts> => ({
+    sessionCount: 8,
+    orders: [
+      {
+        paymentId: ORDER,
+        paid_piasters: EGP(1_000),
+        share_piasters: EGP(700),
+        refunded_piasters: EGP(0),
+      },
+    ],
+    sessions,
+  });
+
+  it.each(['student_banned', 'student_fault_confirmed'])(
+    'the task’s example on %s: 3 delivered, 1 missed by each party, 3 cancelled: owed 125, decision 375, release 350 EGP',
+    (reason) => {
+      const sessions = [
+        at(1, 'done'),
+        at(2, 'done'),
+        at(3, 'done'),
+        at(4, 'student_no_show'),
+        at(5, 'teacher_no_show'),
+        at(6, 'cancelled_by_admin'),
+        at(7, 'cancelled_by_admin'),
+        at(8, 'cancelled_by_admin'),
+      ];
+      expect(caseAmountOf(facts({ reason, ...eight(sessions) }))).toEqual({
+        cause: 'student_fault_close',
+        owed_piasters: EGP(125),
+        decision_piasters: EGP(375),
+        release_piasters: EGP(350),
+        refunded_piasters: EGP(0),
+      });
+    },
+  );
+
+  it('owes a both-parties absence, an agreed cancellation and a postponement not made up, never one taken through its make-up (Q-7b (a))', () => {
+    const sessions = [
+      at(1, 'done'),
+      at(2, 'teacher_no_show'),
+      at(3, 'both_no_show'),
+      at(4, 'cancelled_by_agreement'),
+      at(5, 'postponed'),
+      at(6, 'cancelled_by_admin'),
+      at(7, 'cancelled_by_admin'),
+      at(8, 'cancelled_by_admin'),
+      // Session 2's make-up, delivered: session 2 was taken.
+      at(9, 'done', 2),
+    ];
+    expect(caseAmountOf(facts({ reason: 'student_banned', ...eight(sessions) }))).toEqual({
+      cause: 'student_fault_close',
+      owed_piasters: EGP(375),
+      decision_piasters: EGP(375),
+      release_piasters: EGP(175),
+      refunded_piasters: EGP(0),
+    });
+  });
+
+  it('takes an earlier release off the teacher’s, as a complaint close does (Q-B1-5 (a))', () => {
+    const sessions = tenWith('done', 'done', 'done', 'done', 'done', 'student_no_show');
+    expect(
+      caseAmountOf(
+        facts({
+          reason: 'student_fault_confirmed',
+          track: 'ijazah_track',
+          sessions,
+          releases: [HALF_MARKED],
+        }),
+      ),
+    ).toMatchObject({ cause: 'student_fault_close', release_piasters: EGP(2_450) });
   });
 });
 

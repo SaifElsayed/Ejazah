@@ -356,6 +356,8 @@ const OWING: ReadonlySet<string> = new Set([
   'teacher_no_show',
   'both_no_show',
   'cancelled_by_agreement',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ]);
 
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();

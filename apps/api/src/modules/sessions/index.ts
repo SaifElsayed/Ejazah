@@ -437,6 +437,11 @@ export {
   remedyViewRowOf,
 } from './remedy-offer.repository.js';
 /**
+ * 003:T112 (FR-POSTPONE-5; the owner's Q-D (a)): the postponement that moved each session, which
+ * booking's lists answer on each session (`enrollments.get`, `teacher.students.get`, the day).
+ */
+export { postponementsAmong } from './postponement.repository.js';
+/**
  * T031 of specs/004-sessions (FR-463 to FR-466; research R-311, "The student"; Q5 (a), Q9 (a)): the
  * student's `sessions.remedy` procedures, composed into `SessionsServices.remedy`, and their store,
  * for a spec that narrows it.

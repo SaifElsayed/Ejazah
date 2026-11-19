@@ -179,6 +179,10 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 003:T105: the administrator's mark «تم الصرف», 10 per 60 s per administrator (the admin
   // actions' precedent, `rate_limit_slot_release`).
   ['rate_limit_payout_mark', { limit: 10, window_seconds: 60 }],
+  // 003:T112 (SRS §3.8.6, §3.14, DEC-86, DEC-90; ERD changelog row 61): a postponement's notice before
+  // each session it covers, and the interval per party per enrollment.
+  ['postponement_notice_hours', 12],
+  ['postponement_interval_weeks', 4],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],

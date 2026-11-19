@@ -56,6 +56,9 @@ model Session {
   adminSettledAt               DateTime?      @map("admin_settled_at") @db.Timestamptz(6)
   // The session this one makes up for (ADR 0018 D3; Phase 1, T012).
   makeupForSessionId           String?        @map("makeup_for_session_id") @db.Uuid
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90): the postponement that moved the session, set exactly
+  // when `status = 'postponed'` (ERD §15 rule 66, in the migration).
+  postponementId               String?        @map("postponement_id") @db.Uuid
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
   deletedAt                    DateTime?      @map("deleted_at") @db.Timestamptz(6)
   createdAt                    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -67,6 +70,7 @@ model Session {
   settledByAdmin   AdminUser? @relation(fields: [settledByAdminId], references: [id], onDelete: Restrict)
   makeupForSession Session?   @relation("SessionMakeup", fields: [makeupForSessionId], references: [id], onDelete: Restrict)
   makeupSessions   Session[]  @relation("SessionMakeup")
+  postponement     SessionPostponement? @relation(fields: [postponementId], references: [id], onDelete: Restrict)
 
   participantEvents    SessionParticipantEvent[]
   cancellationRequests CancellationRequest[]
@@ -83,7 +87,33 @@ model Session {
   @@index([studentUserId])
   @@index([settledByAdminId])
   @@index([makeupForSessionId])
+  @@index([postponementId])
   @@map("sessions")
+}
+
+// 003:T112 (SRS §3.8.6, FR-POSTPONE-1 to FR-POSTPONE-5, DEC-86, DEC-90; ERD changelog row 59): one
+// party's request to postpone its sessions of one enrollment in the coming week, with its reason;
+// each session it moved is `postponed` and names it (`sessions.postponement_id`). The interval
+// (FR-POSTPONE-4) is counted from the party's last row on the enrollment. The reason's bounds (ERD
+// §15 rule 65) live in the migration.
+model SessionPostponement {
+  id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId      String   @map("enrollment_id") @db.Uuid
+  // The student or the teacher.
+  requestedByUserId String   @map("requested_by_user_id") @db.Uuid
+  // 1 to 500 characters, not blank (rule 65).
+  reason            String
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Rule 65 is rule 43's pattern: a key update of the enrollment or the requester is refused, never
+  // cascaded into the row (002:T135; PR #151's review, round 1, Major 1).
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  requestedBy User       @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sessions    Session[]
+
+  @@index([enrollmentId])
+  @@index([requestedByUserId])
+  @@map("session_postponements")
 }
 
 // Phase 1 (T012, ADR 0018 D2 to D5, FR-MAKEUP-1..6): what a session not consumed is owed. One row

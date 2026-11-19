@@ -6,7 +6,8 @@
 // WHAT IS OWED (FR-462). A session `teacher_no_show` or `both_no_show` whose dispute window
 // (`scheduled_end_at` + `dispute_window_hours`) has closed by the database's clock and that is not
 // `disputed` (its status read under the locks), so no resolution or revision inside the window offers
-// anything (G1, A2); a `cancelled_by_agreement` session at once (decision 5); a `cancelled_by_admin`
+// anything (G1, A2); a `cancelled_by_agreement` session at once (decision 5), and a `postponed` one
+// (003:T112, FR-POSTPONE-2); a `cancelled_by_admin`
 // session only when T036 says a cleared suspension cancelled it. Only on a `confirmed` enrollment
 // (an ended one's sessions are covered by its case, C1), and never while the student's account is
 // suspended (C3), nor (T071, N2) while the teacher's is, the enrollment paused (FR-504): the sweep
@@ -235,6 +236,8 @@ export function createRemedyOffer({
     // T061: the remedy the closing's case held was owed when it was handed; the restore reopens it.
     if (options.restoredCase !== undefined) return true;
     if (session.status === 'cancelled_by_agreement') return true;
+    // 003:T112 (SRS FR-POSTPONE-2, DEC-90): a postponed session at once, as an agreed cancellation.
+    if (session.status === 'postponed') return true;
     if (session.status === 'cancelled_by_admin') return options.clearedSuspension === true;
     if (session.status !== 'teacher_no_show' && session.status !== 'both_no_show') return false;
     const hours = await settings.read(DISPUTE_WINDOW_SETTING, disputeWindowHours);

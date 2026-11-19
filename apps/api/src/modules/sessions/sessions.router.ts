@@ -11,6 +11,11 @@
 // "`sessions.cancellation`"); T066: each hands the service the request's after-commit list
 // (`ctx.live`), which the kind sends once the handler resolves and drops when it throws. T026:
 // `sessions.dispute.raise`, below. T031 and T032: `sessions.remedy`, below.
+//
+// 003:T112 (SRS §3.8.6, FR-POSTPONE-1 to FR-POSTPONE-5, DEC-90): `sessions.postpone`, a keyed mutation
+// of the same kind, keyed by the kernel's idempotency as `sessions.cancellation.request` is, with no
+// limit of its own (the signed-in default counts it); one service call with the caller's own account
+// and the request's after-commit list (`ctx.live`).
 import {
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
@@ -22,6 +27,8 @@ import {
   sessionsDisputeRaiseOutput,
   sessionsGetInput,
   sessionsGetOutput,
+  sessionsPostponeInput,
+  sessionsPostponeOutput,
   sessionsJoinInput,
   sessionsJoinOutput,
   sessionsRemedyAcceptInput,
@@ -139,6 +146,14 @@ export const sessionsRouter = createAppRouter({
       ),
     ),
   }),
+
+  // 003:T112.
+  postpone: participantProcedure({
+    input: sessionsPostponeInput,
+    output: sessionsPostponeOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.postpone({ userId: ctx.caller.userId }, input, ctx.log, ctx.live),
+  ),
 
   // T026.
   dispute: disputeRouter,

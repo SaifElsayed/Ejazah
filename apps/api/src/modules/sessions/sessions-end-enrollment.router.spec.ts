@@ -83,7 +83,8 @@ const ENTRY = {
   targetType: 'enrollment',
   targetId: ENROLLMENT,
   reason: PARTY_REASON,
-  after: { status: 'cancelled', slot: 'hold', internalNote: INTERNAL_NOTE },
+  // 003:T112 (the owner's Q-D (a)): the end's cause in its audit entry.
+  after: { status: 'cancelled', slot: 'hold', internalNote: INTERNAL_NOTE, cause: 'admin_ended' },
 };
 
 describe('the administrator kind', () => {
@@ -102,7 +103,8 @@ describe('sessions.endEnrollment (FR-513)', () => {
   it('ends with the actor, the slot held by default, and audits enrollment.ended_by_admin with both texts and the slot', async () => {
     const { as, written, reached } = surface(ENDED);
     expect(await as(VERIFIED).sessions.endEnrollment(ASKED)).toEqual(ENDED.answer);
-    expect(reached).toEqual([[SPEC_ADMIN, { ...ASKED, slot: 'hold' }]]);
+    // 003:T112 (rule d): the cause the schema defaults, today's end.
+    expect(reached).toEqual([[SPEC_ADMIN, { ...ASKED, slot: 'hold', cause: 'admin_ended' }]]);
     expect(written).toEqual([ENTRY]);
   });
 
@@ -112,7 +114,33 @@ describe('sessions.endEnrollment (FR-513)', () => {
     const { internalNote: _note, ...noNote } = ASKED;
     await as(VERIFIED).sessions.endEnrollment({ ...noNote, slot: 'release' });
     expect(written).toEqual([
-      { ...ENTRY, after: { status: 'cancelled', slot: 'release', internalNote: null } },
+      // 003:T112 (rule d): the cause the schema defaults.
+      {
+        ...ENTRY,
+        after: { status: 'cancelled', slot: 'release', internalNote: null, cause: 'admin_ended' },
+      },
+    ]);
+  });
+
+  // 003:T112, PR #151's review, round 1, Major 2 (a): an end on a complaint against the student always
+  // releases the slot; the entry records the release made, not the hold the schema defaults.
+  it('audits the release an end on a complaint against the student makes, the default hold not recorded', async () => {
+    const released: Answer = { ...ENDED, answer: { ...ENDED.answer, slot: 'release' } };
+    const { as, written, reached } = surface(released);
+    await as(VERIFIED).sessions.endEnrollment({ ...ASKED, cause: 'student_complaint_ended' });
+    expect(reached).toEqual([
+      [SPEC_ADMIN, { ...ASKED, slot: 'hold', cause: 'student_complaint_ended' }],
+    ]);
+    expect(written).toEqual([
+      {
+        ...ENTRY,
+        after: {
+          status: 'cancelled',
+          slot: 'release',
+          internalNote: INTERNAL_NOTE,
+          cause: 'student_complaint_ended',
+        },
+      },
     ]);
   });
 

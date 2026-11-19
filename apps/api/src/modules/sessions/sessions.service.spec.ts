@@ -150,6 +150,8 @@ let now: Date;
 /** The database's clock as `get` reads it on its transaction (`clockTimestamp` in production). */
 let databaseNow: Date;
 let remedies: Map<string, RemedyViewRow>;
+/** 003:T112: each session's postponement, as sessions' read answers it. */
+let postponed: Map<string, { by: 'teacher' | 'student'; reason: string; at: string }>;
 /** T065: `${sessionId} ${userId}` for each person the presence read says is in the session's room. */
 let inRoom: Set<string>;
 let services: SessionsServices;
@@ -204,6 +206,14 @@ const store: SessionsStore = {
     trace.push(`read slot ${slotId}`);
     return { startTimeLocal: '16:30:00' };
   },
+  // 003:T112.
+  postponementsOf: async (_tx, sessionIds) =>
+    new Map(
+      sessionIds.flatMap((id) => {
+        const found = postponed.get(id);
+        return found === undefined ? [] : [[id, found] as const];
+      }),
+    ),
 };
 
 const terms: EnrollmentTerms = {
@@ -244,6 +254,7 @@ beforeEach(() => {
   underLock = undefined;
   cancellations = new Map();
   remedies = new Map();
+  postponed = new Map();
   inRoom = new Set();
   disputeFields = new Map();
   disputeAsked = [];
@@ -414,6 +425,27 @@ describe('sessions.get: the counterparty’s presence (T065)', () => {
     parties.set(TEACHER, { ...active('male', 'المعلم'), teacherApproved: true });
     await refusalOf(services.get({ userId: STUDENT }, { sessionId: SESSION }, log));
     expect(trace.filter((step) => step.startsWith('read presence'))).toEqual([]);
+  });
+});
+
+// 003:T112 (FR-POSTPONE-5; the owner's Q-D (a)): the postponement that moved the session, who
+// postponed it, its reason and when, to both parties; none on a session no postponement moved.
+// Written before the read, run red first.
+describe('sessions.get: the postponement (003:T112)', () => {
+  it('answers both parties who postponed the session, its reason and when, and nothing when none did', async () => {
+    const postponement = {
+      by: 'teacher',
+      reason: 'سفر طارئ',
+      at: '2026-11-19T10:00:00.000Z',
+    } as const;
+    expect(
+      (await services.get({ userId: STUDENT }, { sessionId: SESSION }, log)).postponement,
+    ).toBeUndefined();
+    postponed.set(SESSION, postponement);
+    const byStudent = await services.get({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const byTeacher = await services.get({ userId: TEACHER }, { sessionId: SESSION }, log);
+    expect(byStudent).toEqual({ ...studentSees, postponement });
+    expect(byTeacher.postponement).toEqual(postponement);
   });
 });
 

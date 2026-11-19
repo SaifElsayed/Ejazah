@@ -90,7 +90,8 @@ export async function sessionsCancelledByCases(
 
 /**
  * The enrollment's sessions owed a remedy never offered (C1; the third analysis, I1):
- * `teacher_no_show`, `both_no_show` or `cancelled_by_agreement` with no `session_remedies` row.
+ * `teacher_no_show`, `both_no_show`, `cancelled_by_agreement` or (003:T112) `postponed` with no
+ * `session_remedies` row (`OWING_STATUSES`).
  */
 export async function owedNeverOfferedOf(
   tx: Client,

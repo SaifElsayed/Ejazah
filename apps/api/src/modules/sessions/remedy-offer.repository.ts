@@ -22,6 +22,8 @@ export const OWING_STATUSES = [
   'teacher_no_show',
   'both_no_show',
   'cancelled_by_agreement',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ] as const;
 
 /** The session an offer decides on. */
@@ -176,6 +178,8 @@ export async function dueForOffer(
       OR: [
         { status: { in: ['teacher_no_show', 'both_no_show'] }, scheduledEndAt: { lte: endedBy } },
         { status: 'cancelled_by_agreement' },
+        // 003:T112 (the owner's Q-B (a)): owed at once, as an agreed cancellation.
+        { status: 'postponed' },
       ],
       ...(after === undefined ? {} : { id: { gt: after } }),
     },

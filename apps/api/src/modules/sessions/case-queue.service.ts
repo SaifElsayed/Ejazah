@@ -80,7 +80,8 @@ const positiveWhole = z.int().positive();
 
 /**
  * The reasons of the case an enrollment's end opens (R-312, as T004 lists them); and (T082, Q2 (a))
- * `admin_ended`, an administrator's direct end.
+ * `admin_ended`, an administrator's direct end; and (003:T112, the owner's Q-C (a))
+ * `student_complaint_ended`, that end on a teacher's complaint against the student.
  */
 export const END_REASONS: ReadonlySet<string> = new Set([
   'absence_termination',
@@ -88,6 +89,7 @@ export const END_REASONS: ReadonlySet<string> = new Set([
   'student_banned',
   'student_fault_confirmed',
   'admin_ended',
+  'student_complaint_ended',
 ]);
 
 /** What the queue reads, each through its owner on the caller's transaction; faked in a spec. */

@@ -11,6 +11,7 @@
 //   `admin`, its reason written, one `cancelled` row;
 // - `hold` keeping the slot through the window and `release` freeing it at once (`booking.slots`,
 //   another enrollment's week), the release's `slot_released_at` and its one `slot_released` row;
+//   an end on a complaint against the student (003:T112) releasing it whatever was asked;
 // - both parties' reads answering the reason, never the note;
 // - a student's suspension case open meanwhile: its sessions join the new case when it is cleared
 //   (U2); a teacher's suspension (the pause): its case closed covered by the new case, its sessions in
@@ -171,6 +172,7 @@ interface EndAsked {
   readonly key?: string;
   readonly partyReason?: string;
   readonly internalNote?: string;
+  readonly cause?: 'admin_ended' | 'student_complaint_ended';
 }
 
 function end(enrollmentId: string, asked: EndAsked = {}) {
@@ -181,6 +183,8 @@ function end(enrollmentId: string, asked: EndAsked = {}) {
         partyReason: asked.partyReason ?? PARTY_REASON,
         internalNote: asked.internalNote ?? INTERNAL_NOTE,
         slot: asked.slot ?? 'hold',
+        // 003:T112 (rule d): the cause the router's schema defaults.
+        cause: asked.cause ?? 'admin_ended',
         idempotencyKey: asked.key ?? `end-${enrollmentId}`,
       }),
     { timeout: 30_000 },
@@ -473,6 +477,23 @@ describe('the slot: held through the window, or released at once (FR-503, FR-513
     expect(state.enrollment?.slotReleasedAt).not.toBeNull();
     expect(state.events.filter(({ kind }) => kind === 'slot_released')).toHaveLength(1);
     expect(state.events.map(({ kind }) => kind).slice(-2)).toEqual(['cancelled', 'slot_released']);
+    expect(await offered(made)).toEqual([made.slotId]);
+    expect(await weekTaken(made)).toBe(false);
+  });
+
+  // 003:T112 (Q-4 (a); FR-POSTPONE-6; PR #151's review, round 1, Major 2 (a)): a close on a complaint
+  // against the student frees the slot through the same release, whatever `slot` was asked.
+  it('an end on a complaint against the student, a hold asked: released at once, its case student_complaint_ended', async () => {
+    const made = await confirmedWorld();
+    const { answer } = await end(made.enrollmentId, {
+      slot: 'hold',
+      cause: 'student_complaint_ended',
+    });
+    expect(answer.slot).toBe('release');
+    const state = await stateOf(made.enrollmentId);
+    expect(state.enrollment?.slotReleasedAt).not.toBeNull();
+    expect(state.events.map(({ kind }) => kind).slice(-2)).toEqual(['cancelled', 'slot_released']);
+    expect(state.cases.map(({ reason }) => reason)).toEqual(['student_complaint_ended']);
     expect(await offered(made)).toEqual([made.slotId]);
     expect(await weekTaken(made)).toBe(false);
   });

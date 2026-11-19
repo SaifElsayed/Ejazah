@@ -220,6 +220,8 @@ import type {
   SessionsGetOutput,
   SessionsJoinInput,
   SessionsJoinOutput,
+  SessionsPostponeInput,
+  SessionsPostponeOutput,
   SessionsRemedyAcceptInput,
   SessionsRemedyAcceptOutput,
   SessionsRemedyAnswerCounterInput,
@@ -436,6 +438,12 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_user_report: { limit: 5, window_seconds: 86400 },
   // 005:T013: `genderFlags.raise`'s limit, as seeded (DEC-71).
   rate_limit_gender_flag: { limit: 3, window_seconds: 86400 },
+  // 003:T112: `sessions.postpone`'s notice and interval, and the make-up each postponed session is
+  // offered at once, as seeded.
+  postponement_notice_hours: 12,
+  postponement_interval_weeks: 4,
+  makeup_choice_window_days: 7,
+  makeup_counter_answer_hours: 72,
 };
 
 const settings: SettingsReader = {
@@ -529,6 +537,8 @@ export interface AppCaller {
     readonly complaint: {
       raise(input: SessionsComplaintRaiseInput): Promise<SessionsComplaintRaiseOutput>;
     };
+    /** 003:T112: a postponement, attacked in `sessions-postpone.attacks.ts`. */
+    postpone(input: SessionsPostponeInput): Promise<SessionsPostponeOutput>;
   };
   /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */
   readonly chat: {
@@ -632,6 +642,11 @@ export interface DiscoverySurface {
   suspend(teacherId: string): Promise<void>;
   /** T011 of specs/004-sessions: the pair of `gender`, made on first use (`SessionPair`). */
   sessionPair(gender: Gender): Promise<SessionPair>;
+  /**
+   * 003:T112: a pair of `gender` of its own, made on each call and never cached, for an attack that
+   * writes on it (a postponement moves its `later` session), so no other attack meets the change.
+   */
+  freshSessionPair(gender: Gender): Promise<SessionPair>;
   /**
    * T031 of specs/004-sessions: a new session of the pair of `gender`, a Teacher-No-Show over ten
    * days before, with its remedy `proposed`: offered an hour ago, its choice window open a week, its
@@ -1318,6 +1333,7 @@ async function build(): Promise<Built> {
     async suspend(teacherId) {
       await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));
     },
+    freshSessionPair: (gender) => makePair(gender),
     sessionPair(gender) {
       const made = pairs.get(gender);
       if (made !== undefined) return made;

@@ -90,6 +90,8 @@ model User {
   sessionReminders        SessionReminder[]
   // 003:T105: payments' releases of the teacher's share, a back-relation only.
   teacherShareReleases    TeacherShareRelease[]
+  // 003:T112: the postponements a party asked for, a back-relation only.
+  sessionPostponements    SessionPostponement[]
 
   @@map("users")
 }

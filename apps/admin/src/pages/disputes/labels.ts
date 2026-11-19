@@ -16,6 +16,7 @@ export const SESSION_STATUS: Readonly<Record<SessionStatus, MessageKey>> = {
   cancelled_by_agreement: 'admin.status.session.cancelledByAgreement',
   cancelled_by_admin: 'admin.status.session.cancelledByAdmin',
   disputed: 'admin.status.session.disputed',
+  postponed: 'admin.status.session.postponed',
 };
 
 export const DISPUTE_STATE: Readonly<
