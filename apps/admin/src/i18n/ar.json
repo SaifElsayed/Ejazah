@@ -853,6 +853,19 @@
           "subtitle": "{student} مع {teacher} · {package}",
           "title": "إلغاء الجلسة {number} · {date}"
         },
+        "changeSetting": {
+          "confirm": "حفظ التغيير",
+          "effects": {
+            "everyRead": "تسري القيمة الجديدة فورًا على كل قراءة لاحقة لهذا الإعداد، لكل مستخدم ولكل مهمة.",
+            "withinMinute": "يُحفظ هذا الحد حتى 60 ثانية بعد كل قراءة، فتسري القيمة الجديدة خلال 60 ثانية."
+          },
+          "limitLabel": "الطلبات في النافذة",
+          "listHint": "أرقام تفصل بينها فواصل",
+          "subtitle": "الآن: {value}",
+          "title": "تغيير {setting}",
+          "valueLabel": "القيمة الجديدة",
+          "windowLabel": "النافذة (بالثواني)"
+        },
         "common": {
           "cancel": "إلغاء",
           "effectsTitle": "ما يحدث فور التأكيد",
@@ -2418,11 +2431,22 @@
     "settings": {
       "adminsLink": "المشرفون · {count}",
       "attendanceThreshold": {
-        "error": "أدخل رقمًا من 1 إلى 100. القيمة الحالية {value}%.",
+        "error": "أدخل رقمًا أكبر من 0 وحتى 100. القيمة الحالية {value}%.",
         "label": "حد الحضور",
         "unit": "%"
       },
       "banner": "أي تغيير يسري على الجلسات والحجوزات القادمة فقط، ولا يُعاد به تقييم جلسة أو نزاع حُسم من قبل. يُسجَّل كل تغيير بقيمته قبل وبعد وسببه في سجل التدقيق.",
+      "bounds": {
+        "above": "أكبر من {min}",
+        "aboveUpTo": "أكبر من {min} وحتى {max}",
+        "atLeast": "{min} على الأقل",
+        "between": "من {min} إلى {max}",
+        "each": "كل قيمة: {bound}",
+        "none": "بلا حدود رقمية",
+        "rateLimit": "الطلبات: {limit} · النافذة بالثواني: {window}"
+      },
+      "change": "تغيير",
+      "changeA11y": "تغيير {setting}",
       "chatRetention": {
         "hint": "بعد انتهاء نافذة النزاع تُحذف المحادثة، إلا إن بقي نزاع أو بلاغ مفتوح.",
         "label": "الاحتفاظ بالمحادثة",
@@ -2432,6 +2456,13 @@
         "hint": "مدة صفحة الدفع، والموعد محجوز للطالب طوالها.",
         "label": "مهلة الدفع",
         "unit": "دقائق"
+      },
+      "columns": {
+        "action": "تغيير",
+        "bounds": "الحدود",
+        "setting": "الإعداد",
+        "srsRow": "بند المواصفات",
+        "value": "القيمة"
       },
       "confirmationTimeout": {
         "hint": "بعدها يُبلَّغ الطالب أن الدفع يستغرق وقتًا أطول، ويصله إشعار عند اكتماله.",
@@ -2455,9 +2486,12 @@
         "unit": "دقيقة"
       },
       "groups": {
+        "accounts": "الحسابات والدخول",
+        "admin": "حسابات المشرفين",
         "booking": "الحجز والدفع",
         "general": "عام",
         "notifications": "الإشعارات والمحادثة",
+        "rateLimits": "حدود الطلبات",
         "sessions": "الجلسات"
       },
       "holdGrace": {
@@ -2474,6 +2508,101 @@
         "hint": "من يدخل بعد بدء الجلسة بأكثر منها يُعدّ غائبًا.",
         "label": "مهلة الدخول",
         "unit": "دقائق"
+      },
+      "keys": {
+        "admin_home_latest_actions": "آخر الإجراءات في الصفحة الرئيسية",
+        "admin_invite_ttl_hours": "صلاحية رابط دعوة المشرف",
+        "admin_list_page_size": "عدد الصفوف في صفحة القائمة",
+        "admin_lockout_attempts": "محاولات دخول المشرف قبل القفل",
+        "admin_lockout_minutes": "مدة القفل",
+        "admin_recovery_code_count": "عدد رموز الاسترداد للمشرف",
+        "admin_session_idle_minutes": "مهلة خمول المشرف",
+        "admin_session_max_hours": "أقصى مدة لدخول المشرف",
+        "attendance_threshold_pct": "حد الحضور",
+        "ban_restore_window_days": "مهلة الاستعادة بعد الحظر",
+        "cancellation_requests_recent_days": "فترة طلبات الإلغاء الأخيرة",
+        "chat_page_size": "عدد الرسائل في صفحة المحادثة",
+        "chat_retention_days": "الاحتفاظ بالمحادثة",
+        "checkout_confirmation_timeout_seconds": "مهلة تأكيد الدفع",
+        "checkout_confirming_poll_seconds": "فحص حالة الدفع أثناء التأكيد",
+        "checkout_confirming_poll_window_minutes": "مدة فحص تأكيد الدفع",
+        "checkout_processing_poll_seconds": "فحص حالة الدفع أثناء المعالجة",
+        "discovery_page_size": "عدد المعلمين في صفحة الاستكشاف",
+        "dispute_window_hours": "نافذة النزاع",
+        "document_link_ttl_seconds": "صلاحية رابط المستند",
+        "document_unreferenced_max_per_user": "المستندات غير المستخدمة لكل شخص",
+        "document_unreferenced_purge_after_hours": "حذف المستندات المرفوعة غير المستخدمة بعد",
+        "early_join_lead_minutes": "الدخول المبكر",
+        "enrollment_restore_window_days": "مهلة استعادة الاشتراك",
+        "first_session_lead_hours": "مهلة أول جلسة بعد التأكيد",
+        "idempotency_key_ttl_hours": "مدة منع تكرار الدفع",
+        "ijazah_half_release_percent": "مسار الإجازة: النصيب المصروف عند منتصف الجلسات",
+        "join_window_minutes": "مهلة الدخول",
+        "live_channel_max_connections_per_user": "اتصالات القناة المباشرة لكل مستخدم",
+        "makeup_choice_window_days": "مهلة اختيار التعويض",
+        "makeup_counter_answer_hours": "مهلة الرد على اقتراح التعويض المقابل",
+        "minimum_connection_seconds": "أدنى مدة اتصال",
+        "notification_requeue_after_minutes": "الانتظار قبل إعادة جدولة إشعار ضائع",
+        "notification_requeue_max_age_minutes": "العمر الذي بعده لا يُرسل الإشعار الضائع",
+        "onboarding_token_ttl_minutes": "صلاحية رمز إكمال التسجيل",
+        "otp_code_ttl_minutes": "صلاحية رمز التحقق",
+        "otp_max_attempts": "محاولات رمز التحقق قبل إبطاله",
+        "otp_purge_after_hours": "حذف رموز التحقق بعد",
+        "price_average_min_teachers": "أقل عدد من المعلمين لمتوسط السعر",
+        "provider_nonce_ttl_minutes": "صلاحية رمز الدخول عبر مزوّد الهوية",
+        "push_token_stale_days": "حذف رموز الإشعارات غير المستخدمة بعد",
+        "rate_limit_absence_complaint": "شكاوى الغياب",
+        "rate_limit_admin_authentication": "طلبات دخول المشرف",
+        "rate_limit_admin_authentication_budget": "دخول المشرفين على مستوى المنصة",
+        "rate_limit_admin_user_delete": "حذف الحسابات بيد المشرف",
+        "rate_limit_authentication": "طلبات تسجيل الدخول",
+        "rate_limit_authentication_budget": "تسجيلات الدخول على مستوى المنصة",
+        "rate_limit_ban_lift": "رفع الحظر",
+        "rate_limit_chat_message": "رسائل المحادثة",
+        "rate_limit_dispute_revision": "مراجعات أحكام النزاعات",
+        "rate_limit_enrollment_end": "إنهاء الاشتراكات",
+        "rate_limit_enrollment_restore": "استعادات الاشتراك",
+        "rate_limit_gender_decision": "قرارات الجنس",
+        "rate_limit_gender_flag": "بلاغات الجنس",
+        "rate_limit_ijazah_decision": "قرارات الإجازة",
+        "rate_limit_ijazah_request": "طلبات الإجازة",
+        "rate_limit_kept_data_erase_date": "البيانات المحفوظة: موعد المحو",
+        "rate_limit_kept_data_erase_now": "البيانات المحفوظة: المحو الآن",
+        "rate_limit_kept_document_link": "البيانات المحفوظة: رابط المستند",
+        "rate_limit_live_channel": "فتح القناة المباشرة",
+        "rate_limit_manual_compensation_case": "قضايا التعويض اليدوية",
+        "rate_limit_one_time_code": "طلبات رمز التحقق",
+        "rate_limit_one_time_code_budget": "رموز التحقق على مستوى المنصة",
+        "rate_limit_outcome_correction": "تصحيحات نتائج الجلسات",
+        "rate_limit_payment_initiation": "بدء الدفع",
+        "rate_limit_payout_mark": "تسجيل صرف التحويلات وإلغاؤه",
+        "rate_limit_provider_nonce": "طلبات رمز مزوّد الهوية",
+        "rate_limit_provider_nonce_budget": "رموز مزوّد الهوية على مستوى المنصة",
+        "rate_limit_public_page": "طلبات الصفحات العامة",
+        "rate_limit_search": "عمليات البحث",
+        "rate_limit_settings_update": "تغييرات الإعدادات",
+        "rate_limit_signed_in_default": "الطلبات العامة للمستخدم المسجّل",
+        "rate_limit_slot_release": "إطلاق المواعيد المحجوزة",
+        "rate_limit_token_refresh": "تجديدات الرمز",
+        "rate_limit_upload": "عمليات الرفع",
+        "rate_limit_user_report": "بلاغات المستخدمين",
+        "reminder_offsets_minutes": "مواعيد التذكير",
+        "repeated_absence_flag_count": "غيابات المعلم قبل التنبيه",
+        "room_close_grace_minutes": "مهلة إغلاق الغرفة بعد النهاية",
+        "room_close_retry_minutes": "مدة إعادة محاولة إغلاق الغرفة",
+        "session_access_ttl_minutes": "صلاحية رمز الوصول",
+        "session_evaluation_delay_minutes": "تأخير تقييم الجلسة",
+        "session_purge_after_days": "حذف جلسات الدخول المنتهية بعد",
+        "session_refresh_grace_seconds": "مهلة إعادة استخدام رمز التجديد",
+        "session_refresh_ttl_days": "صلاحية رمز التجديد",
+        "slot_hold_grace_minutes": "مهلة إضافية للموعد",
+        "slot_hold_ttl_minutes": "مهلة الدفع",
+        "slot_release_buffer_weeks": "إعادة إتاحة الموعد",
+        "teacher_share_percent": "نصيب المعلم من كل دفعة",
+        "terms_version": "إصدار شروط الاستخدام المعمول به",
+        "upload_max_bytes": "أقصى حجم للرفع",
+        "video_departure_timeout_seconds": "مهلة مغادرة غرفة الفيديو",
+        "video_empty_timeout_seconds": "مهلة غرفة الفيديو الفارغة"
       },
       "lede": "القيم التي تعمل بها المنصة. لكل قيمة شرح لما تغيّره.",
       "lockoutAttempts": {
@@ -2497,13 +2626,13 @@
         "unit": "ثانية"
       },
       "modified": "مُعدَّل",
-      "noShowTermination": {
-        "hint": "عندها يُنهى الاشتراك وتُفتح قضية تعويض للطالب.",
-        "label": "إنهاء الاشتراك بغياب المعلم",
-        "unit": "مرات"
-      },
       "reasonLabel": "سبب التغيير (إلزامي)",
       "reasonPlaceholder": "يُسجَّل مع التغيير في سجل التدقيق",
+      "refused": {
+        "invalid": "القيمة ليست بصيغة هذا الإعداد: رقم، أو أرقام تفصل بينها فواصل، أو حد مع نافذة، أو نص. لم يتغيّر شيء.",
+        "outOfBounds": "القيمة خارج حدود هذا الإعداد: {bounds}. لم يتغيّر شيء.",
+        "unknown": "المنصة لا تعرف هذا الإعداد. لم يتغيّر شيء؛ أعد قراءة الصفحة."
+      },
       "reminderOffsets": {
         "hint": "قبل كل جلسة يصل تذكير للطرفين في هذه الأوقات.",
         "label": "مواعيد التذكير"
@@ -2514,7 +2643,22 @@
         "label": "إعادة إتاحة الموعد",
         "unit": "أسابيع"
       },
-      "title": "الإعدادات"
+      "title": "الإعدادات",
+      "units": {
+        "bytes": "{value} بايت",
+        "count": "{value}",
+        "days": "{value, plural, one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+        "hours": "{value, plural, one {ساعة واحدة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}",
+        "minutes": "{value, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
+        "percent": "{value}%",
+        "seconds": "{value, plural, one {ثانية واحدة} two {ثانيتان} few {# ثوانٍ} many {# ثانية} other {# ثانية}}",
+        "weeks": "{value, plural, one {أسبوع واحد} two {أسبوعان} few {# أسابيع} many {# أسبوعًا} other {# أسبوع}}"
+      },
+      "value": {
+        "missing": "غير مضبوط",
+        "rateLimit": "{limit} كل {window} ث"
+      },
+      "withinMinute": "يسري خلال 60 ثانية"
     },
     "shared": {
       "correction": {

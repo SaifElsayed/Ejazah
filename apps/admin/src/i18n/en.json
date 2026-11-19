@@ -853,6 +853,19 @@
           "subtitle": "{student} with {teacher} · {package}",
           "title": "Cancel session {number} · {date}"
         },
+        "changeSetting": {
+          "confirm": "Save the change",
+          "effects": {
+            "everyRead": "The new value applies at once to every later read of this setting, for every user and every job.",
+            "withinMinute": "This limit is held for up to 60 seconds after each read, so the new value applies within 60 seconds."
+          },
+          "limitLabel": "Requests per window",
+          "listHint": "Numbers separated by commas",
+          "subtitle": "Now: {value}",
+          "title": "Change {setting}",
+          "valueLabel": "New value",
+          "windowLabel": "Window (seconds)"
+        },
         "common": {
           "cancel": "Cancel",
           "effectsTitle": "What happens on confirmation",
@@ -2418,11 +2431,22 @@
     "settings": {
       "adminsLink": "Admins · {count}",
       "attendanceThreshold": {
-        "error": "Enter a number from 1 to 100. The current value is {value}%.",
+        "error": "Enter a number above 0, up to 100. The current value is {value}%.",
         "label": "Attendance threshold",
         "unit": "%"
       },
       "banner": "Any change applies to upcoming sessions and bookings only, and never re-evaluates a session or dispute already settled. Every change is recorded with its value before and after and its reason in the audit log.",
+      "bounds": {
+        "above": "Above {min}",
+        "aboveUpTo": "Above {min}, up to {max}",
+        "atLeast": "At least {min}",
+        "between": "From {min} to {max}",
+        "each": "Each: {bound}",
+        "none": "No numeric bounds",
+        "rateLimit": "Requests: {limit} · Window in seconds: {window}"
+      },
+      "change": "Change",
+      "changeA11y": "Change {setting}",
       "chatRetention": {
         "hint": "After the dispute window closes the chat is deleted, unless a dispute or report stays open.",
         "label": "Chat retention",
@@ -2432,6 +2456,13 @@
         "hint": "How long the payment page lasts, with the slot held for the student throughout.",
         "label": "Payment window",
         "unit": "minutes"
+      },
+      "columns": {
+        "action": "Change",
+        "bounds": "Bounds",
+        "setting": "Setting",
+        "srsRow": "SRS row",
+        "value": "Value"
       },
       "confirmationTimeout": {
         "hint": "After this the student is told the payment is taking longer, and gets a notification when it completes.",
@@ -2455,9 +2486,12 @@
         "unit": "minutes"
       },
       "groups": {
+        "accounts": "Accounts and sign-in",
+        "admin": "Administrator accounts",
         "booking": "Booking and payment",
         "general": "General",
         "notifications": "Notifications and chat",
+        "rateLimits": "Rate limits",
         "sessions": "Sessions"
       },
       "holdGrace": {
@@ -2474,6 +2508,101 @@
         "hint": "Whoever joins later than this after the session starts counts as absent.",
         "label": "Join window",
         "unit": "minutes"
+      },
+      "keys": {
+        "admin_home_latest_actions": "Latest actions on the home page",
+        "admin_invite_ttl_hours": "Admin invite link validity",
+        "admin_list_page_size": "Rows per list page",
+        "admin_lockout_attempts": "Admin sign-in attempts before lock",
+        "admin_lockout_minutes": "Lock duration",
+        "admin_recovery_code_count": "Admin recovery codes issued",
+        "admin_session_idle_minutes": "Admin idle timeout",
+        "admin_session_max_hours": "Admin sign-in maximum length",
+        "attendance_threshold_pct": "Attendance threshold",
+        "ban_restore_window_days": "Ban restore window",
+        "cancellation_requests_recent_days": "Recent cancellation requests period",
+        "chat_page_size": "Messages per chat page",
+        "chat_retention_days": "Chat retention",
+        "checkout_confirmation_timeout_seconds": "Payment confirmation timeout",
+        "checkout_confirming_poll_seconds": "Payment status check while confirming",
+        "checkout_confirming_poll_window_minutes": "Payment confirmation check window",
+        "checkout_processing_poll_seconds": "Payment status check while processing",
+        "discovery_page_size": "Teachers per discovery page",
+        "dispute_window_hours": "Dispute window",
+        "document_link_ttl_seconds": "Document link validity",
+        "document_unreferenced_max_per_user": "Unused documents per person",
+        "document_unreferenced_purge_after_hours": "Unused uploaded documents deleted after",
+        "early_join_lead_minutes": "Early join",
+        "enrollment_restore_window_days": "Enrollment restore window",
+        "first_session_lead_hours": "First session lead after confirmation",
+        "idempotency_key_ttl_hours": "Duplicate-payment guard",
+        "ijazah_half_release_percent": "Ijazah track: share released at half the sessions",
+        "join_window_minutes": "Join window",
+        "live_channel_max_connections_per_user": "Live channel connections per user",
+        "makeup_choice_window_days": "Make-up choice window",
+        "makeup_counter_answer_hours": "Make-up counter-proposal answer window",
+        "minimum_connection_seconds": "Minimum connection",
+        "notification_requeue_after_minutes": "Wait before a lost notification is queued again",
+        "notification_requeue_max_age_minutes": "Age after which a lost notification is no longer sent",
+        "onboarding_token_ttl_minutes": "Onboarding token validity",
+        "otp_code_ttl_minutes": "One-time code validity",
+        "otp_max_attempts": "One-time code attempts before it is void",
+        "otp_purge_after_hours": "One-time codes deleted after",
+        "price_average_min_teachers": "Fewest teachers for the average price",
+        "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
+        "push_token_stale_days": "Unused push tokens deleted after",
+        "rate_limit_absence_complaint": "Absence complaints",
+        "rate_limit_admin_authentication": "Admin sign-in requests",
+        "rate_limit_admin_authentication_budget": "Admin sign-ins, platform-wide",
+        "rate_limit_admin_user_delete": "An administrator's account deletions",
+        "rate_limit_authentication": "Sign-in requests",
+        "rate_limit_authentication_budget": "Sign-ins, platform-wide",
+        "rate_limit_ban_lift": "Ban lifts",
+        "rate_limit_chat_message": "Chat messages",
+        "rate_limit_dispute_revision": "Dispute ruling revisions",
+        "rate_limit_enrollment_end": "Enrollment ends",
+        "rate_limit_enrollment_restore": "Enrollment restores",
+        "rate_limit_gender_decision": "Gender decisions",
+        "rate_limit_gender_flag": "Gender flags",
+        "rate_limit_ijazah_decision": "Ijazah decisions",
+        "rate_limit_ijazah_request": "Ijazah requests",
+        "rate_limit_kept_data_erase_date": "Kept data: erasure date",
+        "rate_limit_kept_data_erase_now": "Kept data: erase now",
+        "rate_limit_kept_document_link": "Kept data: document link",
+        "rate_limit_live_channel": "Live channel openings",
+        "rate_limit_manual_compensation_case": "Manual compensation cases",
+        "rate_limit_one_time_code": "One-time code requests",
+        "rate_limit_one_time_code_budget": "One-time codes, platform-wide",
+        "rate_limit_outcome_correction": "Session outcome corrections",
+        "rate_limit_payment_initiation": "Payment starts",
+        "rate_limit_payout_mark": "Payout release marks and undos",
+        "rate_limit_provider_nonce": "Provider nonce requests",
+        "rate_limit_provider_nonce_budget": "Provider nonces, platform-wide",
+        "rate_limit_public_page": "Public page requests",
+        "rate_limit_search": "Searches",
+        "rate_limit_settings_update": "Settings changes",
+        "rate_limit_signed_in_default": "Signed-in default requests",
+        "rate_limit_slot_release": "Held slot releases",
+        "rate_limit_token_refresh": "Token refreshes",
+        "rate_limit_upload": "Uploads",
+        "rate_limit_user_report": "User reports",
+        "reminder_offsets_minutes": "Reminder times",
+        "repeated_absence_flag_count": "Teacher absences before a flag",
+        "room_close_grace_minutes": "Room close grace after the end",
+        "room_close_retry_minutes": "Room close retries",
+        "session_access_ttl_minutes": "Access token validity",
+        "session_evaluation_delay_minutes": "Session evaluation delay",
+        "session_purge_after_days": "Expired sign-ins deleted after",
+        "session_refresh_grace_seconds": "Refresh token reuse grace",
+        "session_refresh_ttl_days": "Refresh token validity",
+        "slot_hold_grace_minutes": "Extra time for the slot",
+        "slot_hold_ttl_minutes": "Payment window",
+        "slot_release_buffer_weeks": "Slot re-release",
+        "teacher_share_percent": "Teacher's share of each payment",
+        "terms_version": "Terms of service version in force",
+        "upload_max_bytes": "Upload size limit",
+        "video_departure_timeout_seconds": "Video room departure timeout",
+        "video_empty_timeout_seconds": "Empty video room timeout"
       },
       "lede": "The values the platform runs on. Each value explains what it changes.",
       "lockoutAttempts": {
@@ -2497,13 +2626,13 @@
         "unit": "seconds"
       },
       "modified": "Modified",
-      "noShowTermination": {
-        "hint": "At that point the enrollment ends and a compensation case opens for the student.",
-        "label": "Enrollment ends on teacher absence",
-        "unit": "times"
-      },
       "reasonLabel": "Reason for the change (required)",
       "reasonPlaceholder": "Recorded with the change in the audit log",
+      "refused": {
+        "invalid": "The value is not in this setting's form: a number, a list of numbers separated by commas, a limit with a window, or a text. Nothing changed.",
+        "outOfBounds": "The value is outside this setting's bounds: {bounds}. Nothing changed.",
+        "unknown": "The platform does not know this setting. Nothing changed; read the page again."
+      },
       "reminderOffsets": {
         "hint": "Before every session a reminder reaches both parties at these times.",
         "label": "Reminder times"
@@ -2514,7 +2643,22 @@
         "label": "Slot re-release",
         "unit": "weeks"
       },
-      "title": "Settings"
+      "title": "Settings",
+      "units": {
+        "bytes": "{value, plural, one {# byte} other {# bytes}}",
+        "count": "{value}",
+        "days": "{value, plural, one {# day} other {# days}}",
+        "hours": "{value, plural, one {# hour} other {# hours}}",
+        "minutes": "{value, plural, one {# minute} other {# minutes}}",
+        "percent": "{value}%",
+        "seconds": "{value, plural, one {# second} other {# seconds}}",
+        "weeks": "{value, plural, one {# week} other {# weeks}}"
+      },
+      "value": {
+        "missing": "Not set",
+        "rateLimit": "{limit} per {window} s"
+      },
+      "withinMinute": "Applies within 60 s"
     },
     "shared": {
       "correction": {

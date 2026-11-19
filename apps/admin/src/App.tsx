@@ -11,6 +11,7 @@
 // T053: `/payments`, the read-only payments monitor, behind the same guard as every console page.
 // 003:T105: `/payouts`, «تحويلات المعلمين», beside it; `?teacher=` opens one teacher's detail.
 // 005:T022 (B49, Q-X2 (a)): `/ijazah-requests` (`?request=` opens one) and `/ijazahs` (`?ijazah=`).
+// 005:T024 (B49, Q-X2 (a)): `/settings`, every setting by group, beside `/settings/admins`.
 //
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
@@ -47,6 +48,7 @@ import { AdminPayouts } from './pages/payouts/AdminPayouts';
 import { AdminReview } from './pages/review/AdminReview';
 import { AdminSessions } from './pages/sessions/AdminSessions';
 import { AdminSetPassword, SET_PASSWORD_PATH } from './pages/set-password/AdminSetPassword';
+import { AdminSettings } from './pages/settings/AdminSettings';
 import { AdminSignIn } from './pages/sign-in/AdminSignIn';
 import { AdminUsers } from './pages/users/AdminUsers';
 
@@ -114,6 +116,8 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/disputes" element={<AdminDisputes />} />
               <Route path="/cases" element={<AdminCases />} />
               <Route path="/users" element={<AdminUsers />} />
+              {/* 005:T024 (B49): the settings page, which leads to the administrators. */}
+              <Route path="/settings" element={<AdminSettings />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>
