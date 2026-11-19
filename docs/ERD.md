@@ -1093,7 +1093,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 64. `payments`: `half_release_rate_percent IS NULL OR half_release_rate_percent BETWEEN 0 AND 100` — check `payments_half_release_rate_check` (SRS DEC-81; T105; changelog row 57). That it is set only on an `ijazah_track` order spans `enrollments`, so no check can say it: the checkout holds it.
 
-65. `session_postponements`: `length(btrim(reason)) > 0 AND char_length(reason) <= 500` — check `session_postponements_reason_check`: the party's reason not blank and at most 500 characters, as a cancellation request's (rule 45) (SRS FR-POSTPONE-1, DEC-90; T112; changelog row 59).
+65. `session_postponements`: `length(btrim(reason)) > 0 AND char_length(reason) <= 500` — check `session_postponements_reason_check`: the party's reason not blank and at most 500 characters, as a cancellation request's (rule 45); and the table is append-only, UPDATE, DELETE and TRUNCATE revoked from the application role (rule 43's pattern), since the row records a request that happened and a party's interval is counted from it (SRS FR-POSTPONE-1, FR-POSTPONE-4, DEC-90; T112; changelog row 59).
 
 66. `sessions`: `(status = 'postponed') = (postponement_id IS NOT NULL)` — check `sessions_postponement_check`: a session is `postponed` exactly when a postponement moved it, so no postponed session lacks its request and no other status names one (SRS FR-POSTPONE-1, DEC-90; T112; changelog row 59).
 

@@ -68,6 +68,10 @@ ALTER TABLE "session_postponements" ADD CONSTRAINT "session_postponements_reques
 ALTER TABLE "session_postponements" ADD CONSTRAINT "session_postponements_reason_check"
     CHECK (length(btrim("reason")) > 0 AND char_length("reason") <= 500);
 
+-- Rule 65: the row records something that happened, and the interval (FR-POSTPONE-4) is counted from
+-- it, so the application role may not rewrite or remove it (`session_events`' pattern, rule 43).
+REVOKE UPDATE, DELETE, TRUNCATE ON "session_postponements" FROM ijazah_app;
+
 -- Hand-written: rule 66. A session is `postponed` exactly when a postponement moved it.
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_postponement_check"
     CHECK (("status" = 'postponed') = ("postponement_id" IS NOT NULL));
