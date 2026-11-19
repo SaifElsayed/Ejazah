@@ -3,7 +3,7 @@
 | Member | Shape | Notes |
 |---|---|---|
 | `createCheckout` (changed) | adds `options?: { saveCard: boolean }` | when true and the saved-card integration is configured, the intention asks the gateway to save the card |
-| `chargeSavedCard` (new) | `(paymentId, gross: Piasters, currency, cardToken, payee?) → Promise<{ gatewayOrderId }>` | a merchant-initiated charge on the saved-card (Moto) integration with the split. Called once, after the order is recorded `created`, never under a database lock and never again for the same order; the merchant reference is `paymentId`, and the webhook is matched by it when the order has no gateway id yet. The result arrives by the webhook |
+| `chargeSavedCard` (new) | `(paymentId, gross: Piasters, currency, cardToken, payee?) → Promise<{ gatewayOrderId }>` | a merchant-initiated charge on the saved-card (Moto) integration, carrying `split_amounts`. In live mode it refuses a charge that names no payee (`no_payee`), as `createCheckout` does (`paymob.adapter.ts:220-222`); the sweep records the refusal as a failure the student pays past by hand. Called once, after the order is recorded `created`, never under a database lock and never again for the same order; the merchant reference is `paymentId`, and the webhook is matched by it when the order has no gateway id yet. The result arrives by the webhook |
 | `GatewayEvent` `failed` (changed) | adds `declineKind: 'soft' \| 'hard'` | mapped from the response code by a table; unknown → `hard` |
 | `GatewayEvent` `card_saved` (new) | `{ gatewayOrderId, token, last4, brand }` | from the gateway's token callback; recorded as `payment_event_type` `card_saved`, provider event id `paymob:<txId>:token`; never logged |
 

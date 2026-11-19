@@ -131,7 +131,7 @@ Settled by the review session on recorded precedents:
 
 ## R-506 — The offer
 
-- **Decision.** `teacher.programme.offer`:
+- **Decision.** `programme.offer`:
   - level, readiness, expected length (texts, 1–500);
   - the length, `<=` the reserved weekly time's;
   - the count N, 1–200 (a contract constant, a definition; analyze U-6);
@@ -212,6 +212,9 @@ Settled by the review session on recorded precedents:
     called again: at its `expires_at` it is `expired`, and the next retry is a new order. If the call had reached the
     gateway, its webhook is matched by the merchant reference (the payment's id) and an expired-then-paid order is
     FR-PAYG-19's (analyze G-6, N-3). No double charge rests on the gateway refusing a duplicate.
+  - **An automatic order that expires with no answer** counts as a soft decline (PR #153 r1 Minor 1): `first_failure_at`
+    is set, the student is shown «pay now», and the retry schedule starts. Otherwise a card holder would have no button
+    and the programme would pause with no way to pay.
   - **Manual programme orders** (`programme.pay`, `programme.renew`; analyze G-7, N-11) have no hold. They expire at
     min(`slot_hold_ttl_minutes`, `pay_by` for the first payment). FR-BOOK-12's one checkout per student applies: while
     a programme order of the student is `created` and unexpired, no other checkout starts, and vice versa;
@@ -221,6 +224,10 @@ Settled by the review session on recorded precedents:
   - The `failed` event carries `declineKind` from a code table; an unknown code counts as hard (never retried).
   - **Off in live** until the gateway's written answers (OPEN-11; FR-720): with no Moto integration id configured, no
     card is offered for saving and every month is manual.
+  - **The payee guard (PR #153 r1 Major 3):** in live mode `chargeSavedCard` refuses a charge that names no payee, as
+    `createCheckout` does (`paymob.adapter.ts:220-222`), and the Moto intention carries `split_amounts`. The sweep
+    records the refusal as a failure the student pays past by hand. Without it, a live 1,000 EGP month with no split
+    would settle whole into the platform's account, the teacher's 700 with it (R-MONEY-6).
   - No gateway call while holding a database lock.
 - **R-514 corrected (analyze I-6).** `booking.recordOrderFailed` never cancels today. `holds.service.ts:330` only picks
   the reason when a hold is released, so a failed instalment needs no change there. The failure's `payment_failed`
@@ -237,6 +244,13 @@ Settled by the review session on recorded precedents:
     R-DB-8, with the `payments.checkout_url_encrypted` precedent (`payments.prisma:50-53`); R-DB-7's hashing cannot
     serve a token that must be used again (analyze K-4).
   - It is registered in payments' `createEncryptedColumns` (`index.ts:113`) for `reencrypt-columns`.
+  - **Where the token is written (PR #153 r1 Minor 3):** encrypted and written to `programme_cards` in the webhook's own
+    transaction, beside the `payment_events` row. It never travels in a job payload (the jobs README's identifiers-only
+    payloads), and a spec asserts the enqueued payload carries ids only.
+  - **Turning the automatic renewal off (PR #153 r1 Major 4 (a), DEC-95):** `programme.autoRenewOff`, the student only,
+    at any time, deletes the card row. Later months renew by hand under the same due point, early renewal and pause
+    rules. A charge already recorded `created` stays as it is. The consent words at the first payment say it can be
+    turned off.
 - **«Card detail»** (analyze I-5) = the token, the PAN, the expiry: never in a log, an audit entry or a response.
   `last4` and the brand may be returned, to the student only.
 - **One close hook** (analyze G-5, N-6): booking's cancel path, for every closing reason (today's and the programme's),
@@ -330,7 +344,11 @@ DEC-88's average beside each, per length (FR-704a).
 - DB specs on `ijazah_integrity_b`.
 - Double-run specs for `advance-programmes`.
 - **Adversarial (analyze K-1):** every new user procedure is registered in the harness, both gender directions, in the
-  batch that adds it (R-PROC-5; `tests/adversarial/procedure-harness.spec.ts:137-141` fails otherwise). T022 is only
-  the final reach check.
+  batch that adds it (R-PROC-5). The gate `procedure-harness.spec.ts:137-141` sees only what a student can reach: a
+  `teacher`-kind procedure is outside its reach unless its router is in `SESSION_ROUTERS` (`procedure-harness.ts:268`,
+  `:305`, `:333-342`). So every programme procedure, the teacher's offer and requests included, lives under one
+  `programme` router, and T007 adds `programme` to the routers reached whatever the caller kind and to the never-exempt
+  `ATTACKED_ROUTERS` (`:287-291`), red first with an unregistered fixture (#142 r1 Major 1's precedent; PR #153 r1
+  Major 2). T022 is only the final reach check.
 - No card detail asserted in logs, audits and responses (SC-707).
 - A kernel.md row for the lock order programme → enrollment → payment (T006, T015, T016, T017; analyze U-7).

@@ -10,7 +10,7 @@ description: 'Task list for the ijazah programme — the assessment and prepaid 
 
 **Tests**: Included.
 - **Full TDD** (each spec red first on its own, negatives red under a named mutant, every mutant restored and
-  `cmp`-checked) for money and time: T001, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014, T015, T016,
+  `cmp`-checked) for money and time: T001, T002, T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014, T015, T016,
   T017.
 - **Lighter specs** (a render or behaviour spec per screen, Arabic and English) for T019, T020, T021.
 - `advance-programmes` and the changed jobs have their double-run specs (R-API-14).
@@ -28,11 +28,13 @@ else v1.1. At most six tasks a batch, a task in at most two lanes. Revised after
 - the 48 hours from the offer;
 - the offer within 24 hours, else an Administrator item (I-2 (a));
 - the fee seeded 0 (P1 (a));
-- the migration deactivating the old ijazah packages (P2 (a));
+- the old ijazah packages deactivated when `programme_enabled` is turned on (P2 (a), T002);
 - the switch (I-3);
 - the student's own weekly time protected (U-1);
 - FR-PROFILE-8 for the programme (I-1);
-- a teacher's suspension, ban or departure ending the programme as today (G-4).
+- a teacher suspended, banned or gone handled as today (G-4): a suspension pauses (no due, no charge, no retry, no pause; the card deleted); a ban, a departure or an Administrator's end of a suspended programme ends it, with DEC-85's full refund;
+- PR #153's review, round 1 (the owner's «Approve all», 2026-11-20): every finding fixed, and the student can turn the
+  automatic renewal off (Major 4 (a), DEC-95).
 
 No open question remains.
 
@@ -114,7 +116,8 @@ No open question remains.
   - Adversarial registrations.
 - [ ] T006 The confirm step by kind (FR-718; R-502; V-3), `jobs/confirm-enrollment.ts:229-284`:
   - the per-order marker `payments.confirmed_at`;
-  - expected kinds skip the cover and case gates;
+  - expected kinds skip the cover and case gates; one paid during an open `teacher_suspended` or `student_suspended`
+    case opens a case instead of generating (PR #153 r1 Minor 2);
   - a no-hold path for `rest_in_full` and `instalment` (generation only, under the enrollment's lock, from max+1 with
     `programme_month`);
   - a second paid order for a paid month → `duplicate_payment`;
@@ -126,7 +129,11 @@ No open question remains.
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
-- [ ] T007 [US2] The offer (FR-705; R-506), `teacher.programme.offer`:
+- [ ] T007 [US2] The offer (FR-705; R-506), `programme.offer`, in `modules/booking/programmes.service.ts`,
+  `programmes.repository.ts`, `programmes.router.ts`:
+  - **The harness first (PR #153 r1 Major 2):** `tests/adversarial/procedure-harness.ts` adds `programme` to the routers
+    reached whatever the caller kind (beside `SESSION_ROUTERS`, `:268`) and to the never-exempt `ATTACKED_ROUTERS`
+    (`:287-291`), red first with an unregistered `programme.*` fixture of each caller kind (#142 r1 Major 1).
   - the length ≤ the reserved time's;
   - the count 1–200;
   - the total = N × the price for that length, under the package's lock;
@@ -137,9 +144,9 @@ No open question remains.
   - A live `enrollment` signal after commit; adversarial registration.
 - [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a)):
   - `offer_due_at` = the delivered assessment's end + 24 h (set when session 1 is `done`; a make-up moves it); `pay_by` = the offer + 48 h;
-  - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (+24 h);
+  - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (`programme_offer_hours` more, counted from the decision);
   - `programme.cancel` (`offer_declined`);
-  - `teacher.programme.request` `refusal` and `programmes.decide` approving it (`assessment_refused`);
+  - `programme.request` `refusal` and `programmes.decide` approving it (`assessment_refused`);
   - session 1's outcomes: `done` or `student_no_show` start the offer window; a no-show of the teacher, a both-no-show,
     a cancellation by agreement or a postponement wait for the make-up; any other end with no make-up pending opens
     the `no_offer` item 24 h after its scheduled end (analyze N-2);
@@ -147,12 +154,15 @@ No open question remains.
     deadline); no decline (N-10);
   - the lapse (`offer_lapsed`) and the `no_offer` item as pure functions for T015;
   - each close through booking's close hook (programme state and `closed_at` set by booking; the card deleted by
-    T013's payments entry, a stub until then), freeing the weekly time at once
+    T013's payments entry; until T013, a stub whose call the specs assert), freeing the weekly time at once
     (`slot-occupancy.repository.ts`).
   - Live signals; adversarial registrations.
-- [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`:
-  - no hold; expiry = min(the checkout setting, `pay_by`);
-  - `rest_in_full` = total − fee (refused `rest_not_positive` if ≤ 0), or `instalment` month 1 = 4 × the session price;
+- [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
+  `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
+  `checkout.repository.ts`:
+  - no hold; expiry = min(`slot_hold_ttl_minutes`, `pay_by`); FR-BOOK-12's one checkout per student;
+  - refused `party_suspended` while a `teacher_suspended` or `student_suspended` case is open (PR #153 r1 Minor 2);
+  - `rest_in_full` = total − fee (refused `rest_not_positive` if ≤ 0), or `instalment` month 1 = 4 × the session price (with N < 4, the whole N: the remainder rule of FR-711);
   - the rate and 25 % copied from the assessment order;
   - the confirm step (T006) generates sessions 2..N+1, or month 1's 4, from the first weekly occurrence after `pay_by`
     (no lead), with `programme_month`;
@@ -166,7 +176,8 @@ No open question remains.
   - `sessions/restore.service.ts` refuses `programme_enrollment` (G-1).
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
-  - `assessment` only when not continued (once the programme has closed, at `pay_by` for a lapse, and session 1's 72 h have passed, no case);
+  - `assessment` only when not continued (at the close, or at `pay_by` where an offer was sent, whichever is later, once session 1's 72 h have passed, no
+    case: DEC-94);
   - `ijazah_half` = 25 % × the share of the programme's price as paid (1,750 in full; 1,837.50 by months, fee 500),
     capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
   - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
@@ -175,12 +186,14 @@ No open question remains.
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
     full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
-  - the dropout set for a programme: `teacher_ended`, `absence_termination` and `teacher_suspended` (G-4: a suspension
-    ends the programme as today, FR-SESS-16) refund everything (DEC-85), red first on `teacher_suspended`;
+  - the dropout set for a programme names the closings, not the case reason: an enrollment ended by a teacher's ban,
+    revocation or departure (cancelled `teacher_suspended`, the case `teacher_ended`), an `absence_termination`, or an
+    Administrator's end of a suspended programme refunds everything (DEC-85). An open `teacher_suspended` case is a
+    pause and is never in the set (PR #153 r1 Major 1), red first on «a suspension shows no refund»;
   - the dropout amount shown only once the enrollment is ended (cancelled `teacher_suspended`, `teacher_ended`); an
     open suspension case is a pause and shows none (analyze N-1);
   - at a teacher's suspension, ban or departure, booking's `termination.subscriber.ts` calls payments'
-    `deleteProgrammeCard` at once (DEC-94); a spec red first;
+    `deleteProgrammeCard` at once (DEC-94); a spec red first that asserts the call (until T013, against T008's stub);
   - a restore after a suspension on a programme is deferred (restore refused, T010).
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
@@ -190,6 +203,9 @@ No open question remains.
   - **Paymob:** `paymob.adapter.ts` takes the token callback (`payment_event_type` `card_saved`, id
     `paymob:<txId>:token`), refused unless verified; off without the saved-card integration id.
   - **The fake:** `fake.adapter.ts`.
+  - **Where the token is written:** encrypted into `programme_cards` in the webhook's own transaction, beside the
+    `payment_events` row, never in a job payload; a spec asserts the enqueued payload carries ids only (PR #153 r1
+    Minor 3).
   - **The card store:** `modules/payments/programme-cards.*`, the token through `ColumnCipher` in
     `createEncryptedColumns`.
   - **The close hook:** booking's cancel path, for every reason, sets the programme `closed` and `closed_at` on its own
@@ -205,7 +221,12 @@ No open question remains.
   - **Order before call:** recorded `created` with `gateway_order_id` NULL and `expires_at` = now +
     `slot_hold_ttl_minutes`, then called once after commit, never under a lock and never again; an order left with no
     gateway id expires, and a late webhook is matched by the merchant reference (the payment id) and handled as
-    FR-PAYG-19 (analyze N-3), red first on «crash between commit and call».
+    FR-PAYG-19 (analyze N-3), red first on «crash between commit and call». An automatic order that expires with no
+    answer counts as a soft decline (`first_failure_at` set, «pay now» shown, the retries start; PR #153 r1 Minor 1),
+    red first.
+  - **The payee guard (PR #153 r1 Major 3):** in live mode `chargeSavedCard` refuses a charge naming no payee
+    (`paymob.adapter.ts`, as `createCheckout` does at `:220-222`), the Moto intention carries `split_amounts`, and the
+    sweep records the refusal as a failure the student pays past by hand; a spec red first for each.
   - **The failure's push:** `payment_failed` through today's path, unchanged.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
@@ -216,22 +237,37 @@ No open question remains.
   - after commit, `chargeSavedCard` for each `created` automatic order;
   - the due time by `lastToEnd` over the month's sessions;
   - a live `enrollment` signal after the pause's commit (N-15);
-  - the double-run spec; DST at the boundary (`packages/time`);
+  - the double-run spec; the retry and early-renewal days are whole 24-hour multiples on the instant, through
+    `packages/time`, and a DST spec names the day-7 retry against the next occurrence across a DST change (PR #153 r1
+    nit 5);
   - registered by the integration.
-- [ ] T016 [US3] Manual renewal (FR-715, FR-716, FR-722, FR-724), `programme.renew`:
+- [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
+  `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
+  `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
+  - `programme.autoRenewOff` (the student, at any time) deletes the card; later months by hand under the same rules; a
+    charge already `created` stays (DEC-95; PR #153 r1 Major 4 (a)), red first;
+  - refused `party_suspended` while a suspension case is open (PR #153 r1 Minor 2);
   - open from `programme_renew_early_days` for a student without a card; refused `charge_pending` while an automatic
     order is `created`;
   - «pay now» and «change card» after a failure;
   - the paid month generates from max+1 and the next occurrence, clears `paused_at` and withdraws an open stop request
     with one log line;
   - live signals; adversarial registration.
-- [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513):
-  - `teacher.programme.request` `stop` (refused before 7 days);
+- [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
+  `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
+  `modules/booking/enrollments-admin.router.ts` (the admin decisions):
+  - `programme.request` `stop` (refused before 7 days);
   - `programmes.decide` approving it → `programme_stopped` through the close hook, the time free at once, T011's
     release;
   - `programmes.reopen` under the slot's lock with `slot_taken`, `party_restricted`, `gender_mismatch`, `paused_at` =
     the reopen time;
   - audited; live signals; adversarial registration.
+  > **Follow-up (PR #153's review, round 1, follow-up 1; the owner's «Approve all», 2026-11-20).** A programme stopped,
+  > reopened and stopped again cannot write a second `programme_stopped` release (`@@unique([enrollmentId, milestone])`),
+  > and T011's «shares − the half released or owed − the refund share» subtracts only the half, while today's code
+  > subtracts every written release (`share-release.rules.ts:251-254`). With a first stop releasing 2,800, a reopen and
+  > 1,000 more paid, an end built to the letter would release the 2,800 again and a second stop nothing for the new
+  > month's 700. The fix: «− every release written», and a release per stop. Rare; not scheduled.
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727):
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19), with its
     adversarial registration;
@@ -260,7 +296,8 @@ No open question remains.
   - the monitor's columns;
   - the `programme_enabled` setting's label explaining what flipping it does;
   - `admin.programme` i18n.
-- [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`), and the
+- [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
+  in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
 - [ ] T023 The close:
   - quickstart.md §1–§3 on the last batch's commit, each run's output in its own file;
@@ -286,7 +323,7 @@ No open question remains.
 
 | When | Batch | Tasks | What |
 |---|---|---|---|
-| 11/20–11/22 | B-P1 | T001, T002, T003, T004, T005, T006 | Schema, settings and the switch, contracts, prices, the assessment, the confirm step by kind |
+| 11/21–11/22 | B-P1 | T001, T002, T003, T004, T005, T006 | Schema, settings and the switch, contracts, prices, the assessment, the confirm step by kind |
 | 11/22–11/24 | B-P2 | T007, T008, T009, T010, T011, T012 | The offer, the 48 hours and the refusal, the first payment, the completion gate, the releases, the case amounts |
 | 11/24–11/26 | B-P3 | T013, T014, T015, T016, T017, T018 | Saved cards and the close hook, the automatic charge, the sweep, renewal, the stop and the reopen, the reads |
 | 11/26–12/3 | B-P4 | T019, T020, T021, T022, T023 | The phone, the panel, the adversarial reach, the close |

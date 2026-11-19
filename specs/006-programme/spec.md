@@ -131,9 +131,8 @@ The owner's answers, relayed by the review session and recorded as SRS DEC-93. T
   - The existing ijazah-track packages (test data) are deactivated when `programme_enabled` is turned on, not by the
     migration; their enrollments are untouched.
 - Settled by the review session on recorded precedents (DEC-94):
-  - A teacher's suspension, ban or departure ends the programme as today (FR-SESS-16): the remaining sessions are
-    cancelled by an Administrator, the case of FR-DISPUTE-5 opens with DEC-85's full refund, the automatic charges
-    stop at once and the token is deleted; a restore after a suspension on a programme is deferred (FR-729).
+  - A teacher suspended, banned or gone is handled as today (FR-SESS-16): a suspension pauses (no due, no charge, no retry, no pause; the card deleted); a ban, a departure or an Administrator's end of a suspended programme ends it, with DEC-85's full refund; a restore after a
+    suspension on a programme is deferred (FR-729).
   - The switch `programme_enabled`, off by default, turned on when the programme's screens land, keeps ijazah packages
     sold as today until then (DEC-92's 12/4 fallback).
   - The student's own weekly time is protected: a booking overlapping it is refused (FR-701).
@@ -220,6 +219,8 @@ paid on the first retry, one declined hard and paid by hand; each month has exac
    an automatic charge is pending.
 5. **Given** a manual payment and an automatic retry landing for the same month, **When** both are paid, **Then** the
    second opens a compensation case (FR-PAYG-19), and an administrator refunds it in the gateway's dashboard.
+6. **Given** a saved card, **When** the student turns the automatic renewal off, **Then** the card is deleted, no later
+   month is charged automatically, and «renew now» appears from 3 days before each month's end (DEC-95).
 
 ---
 
@@ -267,7 +268,8 @@ every order's whole gross.
    passed, **Then** 25 % of the teacher's share of the programme's whole price (in full: the offer's total; by months: the total and the fee) is due,
    capped at what the gateway holds of the orders paid by then; the half counts the assessment (DEC-94).
 3. **Given** a teacher's dropout on the programme, **When** the case opens, **Then** it shows all the money paid back,
-   the assessment fee included (DEC-85); a teacher suspended, banned or gone opens this case too (DEC-92).
+   the assessment fee included (DEC-85); a teacher's ban or departure, or an Administrator's end of a suspended
+   programme, opens this case too, while a suspension only pauses (DEC-92, DEC-94).
 4. **Given** a close on a complaint against the student, or a ban, **When** the case opens, **Then** DEC-86's and
    DEC-91's amounts apply as for any package.
 
@@ -300,7 +302,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - The paid month's last session, for the next month's due time, is the latest end among that month's sessions,
   make-ups and postponed sessions placed later included (research R-507).
 - A teacher's no-show at the assessment: remedied by a make-up only (DEC-84); the fee is not refunded.
-- A teacher suspended, banned or gone during a pause: the compensation case of FR-DISPUTE-5 opens (DEC-92); no return.
+- A teacher suspended during a pause: the programme stays paused, the card deleted; banned or gone, the programme ends and
+  the compensation case of FR-DISPUTE-5 opens (DEC-92, DEC-94); no return.
 - A student who wants to continue after a close starts as a new student, with a new assessment (DEC-83).
 - A refund recorded for an instalment: the order's refunded total moves as T102 records it; the share released stays.
 - The card expires between months: the charge fails as a hard decline, and the student pays by hand or changes the card.
@@ -350,8 +353,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   then it is offered to anyone again, and the fee is kept (FR-BOOK-15, research R-505).
 - **FR-706a**: The teacher MUST send the offer within 24 hours (§3.14) of the assessment session's end as delivered (a
   make-up of it moves them). With no offer by then, the programme MUST become an Administrator item, never lapse on its
-  own, and the weekly time stays reserved; the Administrator decides a refusal (FR-709) or 24 more hours (DEC-94,
-  I-2 (a)).
+  own, and the weekly time stays reserved; the Administrator decides a refusal (FR-709) or §3.14's offer hours more,
+  counted from the decision (DEC-94, I-2 (a)). Until then a late offer is refused (`offer_due_passed`).
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
   even when the student pays on the first day (FR-BOOK-15).
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
@@ -370,7 +373,11 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   the assessment fee; paying by months MUST cost the offer's total, the fee not deducted (DEC-93).
 - **FR-712**: A month's sessions MUST open only when its order is paid (FR-BOOK-4 as amended).
 - **FR-713**: Paying the first month by card MUST save the card for the automatic charge, with the student's explicit
-  consent in words at that moment; a student MAY instead choose to renew by hand each month.
+  consent in words at that moment, the words saying that the automatic renewal can be turned off at any time; a
+  student MAY instead choose to renew by hand each month.
+- **FR-713a**: The student MUST be able to turn the automatic renewal off at any time. Turning it off deletes the
+  saved card; every later month is renewed by hand under the same due point, early renewal and pause rules (FR-714 to
+  FR-722). A charge already recorded for the month stays as it is (the owner's decision of 2026-11-20, DEC-95).
 
 **Renewal**
 
@@ -381,7 +388,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   pending (DEC-92).
 - **FR-716**: A failed automatic charge MUST be shown to the student with a push of DEC-70's payment result
   (`payment_failed`) and on screen, with «pay now» (any method today's checkout offers) and «change card» (paying by hand
-  with a new card, which then replaces the saved one).
+  with a new card, which then replaces the saved one). An automatic order that expires with no answer from the gateway
+  counts as a soft decline: the student is shown «pay now» and the retry schedule starts.
 - **FR-717**: A failed charge MUST be retried only on a soft decline, at most 4 times, 1, 3, 5 and 7 days after the
   failure (§3.14), then only by hand; a hard decline MUST never be retried (DEC-92).
 - **FR-718**: At most one paid order MUST cover a month. A second paid order for a month already paid MUST be treated as
@@ -428,8 +436,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   suspension pauses the programme, its case open; a ban, a departure, or an Administrator's end of a suspended
   programme ends it, and the compensation case of FR-DISPUTE-5 then shows every order's whole gross, the assessment
   included (DEC-85, DEC-92). In every case the programme's automatic charges stop at once and its saved card is deleted
-  (DEC-94); while a teacher's or a student's suspension is open, no month falls due, no charge or retry runs and no
-  pause is set.
+  (DEC-94); while a teacher's or a student's suspension is open, no month falls due, no charge or retry runs, no
+  pause is set, and no payment by hand is taken (refused `party_suspended`).
 - **FR-730**: A close on a complaint against the student, a ban or a confirmed fault MUST follow DEC-86 and DEC-91 as
   for any package.
 - **FR-731**: Code MUST NOT refund or release money; the automatic charge is the only payment the platform starts,
