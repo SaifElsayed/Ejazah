@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import type { EnrollmentIjazahRequest } from '@ijazah/contracts';
+import type { EnrollmentIjazahRequest, ListedSession } from '@ijazah/contracts';
 
 import type { EnrollmentCase } from '../moderation/index.js';
 import type { DaySession, EnrollmentSessionRow, WindowDays } from '../sessions/index.js';
@@ -156,6 +156,8 @@ function storeOf(
     pending?: readonly string[];
     /** 004:T028: each session's remedy status. */
     remedies?: Record<string, 'awaiting_choice' | 'proposed' | 'frozen' | 'booked'>;
+    /** 003:T112: each session's postponement, as sessions' entry answers it. */
+    postponements?: Record<string, NonNullable<ListedSession['postponement']>>;
     /** 004:T060: the enrollments whose complaint is open. */
     complaints?: readonly string[];
     /** 004:T074: each enrollment's compensation cases, newest first (moderation's). */
@@ -214,6 +216,14 @@ function storeOf(
         sessionIds.flatMap((id) => {
           const status = data.remedies?.[id];
           return status === undefined ? [] : [[id, status] as const];
+        }),
+      ),
+    // 003:T112.
+    postponementsOf: async (_tx, sessionIds) =>
+      new Map(
+        sessionIds.flatMap((id) => {
+          const postponement = data.postponements?.[id];
+          return postponement === undefined ? [] : [[id, postponement] as const];
         }),
       ),
     // 004:T060.
@@ -828,6 +838,47 @@ describe('remedyStatus (004:T028)', () => {
     expect(taught.sessions[0]?.remedyStatus).toBe('awaiting_choice');
     const today = await teacherTodayOf(tx, store, TEACHER, NOW, WINDOWS);
     expect(today.sessions[0]?.remedyStatus).toBe('awaiting_choice');
+  });
+});
+
+// 003:T112 (FR-POSTPONE-5; the coordinator's Q1 (a) and the owner's Q-D (a)): each session the lists
+// answer carries the postponement that moved it, read through sessions' entry. Written before the
+// read, run red first.
+describe('postponement (003:T112)', () => {
+  const MOVED = session(3, '2026-11-24T09:00:00Z', 'postponed');
+  const NEXT = session(2, '2026-11-17T12:00:00Z');
+  const BY_TEACHER = { by: 'teacher', reason: 'سفر طارئ', at: '2026-11-19T10:00:00.000Z' } as const;
+
+  it('answers a postponed session’s postponement on a list item, both details and the day, and none on the others', async () => {
+    const { store } = storeOf({
+      active: [row(E1)],
+      listed: row(E1),
+      sessions: { [E1]: [MOVED, NEXT] },
+      day: [{ enrollmentId: E1, ...MOVED }],
+      names: { [TEACHER]: 'أحمد سالم', [STUDENT]: 'يوسف علي' },
+      postponements: { [MOVED.id]: BY_TEACHER },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item?.last?.postponement).toEqual(BY_TEACHER);
+    expect(item?.next?.postponement).toBeUndefined();
+    const detail = await studentEnrollmentOf(
+      tx,
+      store,
+      STUDENT,
+      { enrollmentId: E1 },
+      NOW,
+      WINDOWS,
+    );
+    expect(detail.sessions.map(({ postponement }) => postponement)).toEqual([
+      BY_TEACHER,
+      undefined,
+    ]);
+    const taught = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
+    expect(taught.sessions[0]?.postponement).toEqual(BY_TEACHER);
+    const today = await teacherTodayOf(tx, store, TEACHER, NOW, WINDOWS);
+    expect(today.sessions[0]?.postponement).toEqual(BY_TEACHER);
   });
 });
 

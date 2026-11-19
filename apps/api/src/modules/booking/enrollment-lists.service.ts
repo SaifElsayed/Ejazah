@@ -112,6 +112,7 @@ import {
   isDisputed,
   latestEndCaseOf,
   pendingCancellationsAmong,
+  postponementsAmong,
   remedyStatusesAmong,
   restorableUntil,
   sessionProgress,
@@ -205,6 +206,11 @@ export interface EnrollmentListsStore {
     tx: Transaction,
     sessionIds: readonly string[],
   ): Promise<ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>>;
+  /** 003:T112: of `sessionIds`, the postponement that moved each (sessions' entry). */
+  postponementsOf(
+    tx: Transaction,
+    sessionIds: readonly string[],
+  ): Promise<ReadonlyMap<string, NonNullable<ListedSession['postponement']>>>;
   /** 004:T060: whether the enrollment's complaint of the teacher's absence is open (moderation's). */
   complaintOpenOf(tx: Transaction, enrollmentId: string): Promise<boolean>;
   /** 004:T074: of `enrollmentIds`, each one's compensation cases, newest first (moderation's). */
@@ -235,6 +241,7 @@ export const enrollmentListsStore: Omit<EnrollmentListsStore, 'ijazahRequestsOf'
   timezoneOf: accountTimezone,
   pendingCancellationsOf: pendingCancellationsAmong,
   remedyStatusesOf: remedyStatusesAmong,
+  postponementsOf: postponementsAmong,
   complaintOpenOf: async (tx, enrollmentId) => (await openComplaintOf(tx, enrollmentId)) !== null,
   casesAmong: compensationCasesAmong,
 };
@@ -309,8 +316,11 @@ function listedSessionOf(
   session: EnrollmentSessionRow,
   pending: ReadonlySet<string>,
   remedies: ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>,
+  // 003:T112 (FR-POSTPONE-5): the postponement that moved each session.
+  postponements: ReadonlyMap<string, NonNullable<ListedSession['postponement']>>,
 ): ListedSession {
   const remedyStatus = remedies.get(session.id);
+  const postponement = postponements.get(session.id);
   return {
     sessionId: session.id,
     sequenceNumber: session.sequenceNumber,
@@ -323,6 +333,7 @@ function listedSessionOf(
     pendingCancellation: pending.has(session.id),
     disputed: isDisputed(session.status),
     ...(remedyStatus === undefined ? {} : { remedyStatus }),
+    ...(postponement === undefined ? {} : { postponement }),
   };
 }
 
@@ -373,6 +384,8 @@ interface ItemContext {
   readonly pending: ReadonlySet<string>;
   /** 004:T028: the sessions' remedy statuses. */
   readonly remedies: ReadonlyMap<string, NonNullable<ListedSession['remedyStatus']>>;
+  /** 003:T112: the sessions' postponements. */
+  readonly postponements: ReadonlyMap<string, NonNullable<ListedSession['postponement']>>;
   readonly now: Date;
   /** 004:T074: the paused enrollments, answered with no session. */
   readonly paused: ReadonlySet<string>;
@@ -396,11 +409,12 @@ async function contextOf(
     pausedAmong(tx, store, rows, now, windowDays),
   ]);
   const sessionIds = [...sessions.values()].flatMap((rows) => rows.map(({ id }) => id));
-  const [pending, remedies] = await Promise.all([
+  const [pending, remedies, postponements] = await Promise.all([
     store.pendingCancellationsOf(tx, sessionIds, now),
     store.remedyStatusesOf(tx, sessionIds),
+    store.postponementsOf(tx, sessionIds),
   ]);
-  return { sessions, names, subjects, pending, remedies, now, paused };
+  return { sessions, names, subjects, pending, remedies, postponements, now, paused };
 }
 
 function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
@@ -416,10 +430,24 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     status: row.status,
     ...(paused || progress.next === undefined
       ? {}
-      : { next: listedSessionOf(progress.next, context.pending, context.remedies) }),
+      : {
+          next: listedSessionOf(
+            progress.next,
+            context.pending,
+            context.remedies,
+            context.postponements,
+          ),
+        }),
     ...(paused || progress.last === undefined
       ? {}
-      : { last: listedSessionOf(progress.last, context.pending, context.remedies) }),
+      : {
+          last: listedSessionOf(
+            progress.last,
+            context.pending,
+            context.remedies,
+            context.postponements,
+          ),
+        }),
     upcoming: progress.upcoming,
     completed: progress.completed,
     remaining: progress.remaining,
@@ -433,7 +461,7 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
 function detailSessionsOf(row: ListedEnrollmentRow, context: ItemContext): ListedSession[] {
   if (context.paused.has(row.id)) return [];
   return (context.sessions.get(row.id) ?? []).map((one) =>
-    listedSessionOf(one, context.pending, context.remedies),
+    listedSessionOf(one, context.pending, context.remedies, context.postponements),
   );
 }
 
@@ -684,6 +712,11 @@ export async function teacherTodayOf(
     ),
     pausedAmong(tx, store, rows, now, windowDays),
   ]);
+  // 003:T112: each day's session's postponement.
+  const postponements = await store.postponementsOf(
+    tx,
+    day.map(({ id }) => id),
+  );
   return {
     localDate,
     timezone,
@@ -693,7 +726,7 @@ export async function teacherTodayOf(
       if (row === undefined || paused.has(row.id)) return [];
       return [
         {
-          ...listedSessionOf(session, pending, remedies),
+          ...listedSessionOf(session, pending, remedies, postponements),
           enrollmentId: row.id,
           student: studentOf(names, row.studentUserId),
           summary: termsOf(row, subjects),

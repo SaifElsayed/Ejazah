@@ -266,7 +266,13 @@ export const sessionsAdminRouter = createAdminRouter({
       targetType: 'enrollment',
       targetId: input.enrollmentId,
       reason: input.partyReason,
-      after: { status: 'cancelled', slot: input.slot, internalNote: input.internalNote || null },
+      // 003:T112 (the owner's Q-D (a)): the end's cause beside the slot's choice.
+      after: {
+        status: 'cancelled',
+        slot: input.slot,
+        internalNote: input.internalNote || null,
+        cause: input.cause,
+      },
     });
     return answer;
   }),

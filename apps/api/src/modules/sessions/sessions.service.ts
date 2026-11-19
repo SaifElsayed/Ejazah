@@ -92,6 +92,7 @@ import {
 import { createDisputeView, type DisputeView } from './dispute-view.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { inRoomOf } from './participant-events.repository.js';
+import { postponementsAmong } from './postponement.repository.js';
 import {
   createPostponement,
   type Postponement,
@@ -146,6 +147,11 @@ export interface SessionsStore {
   remedyOf(tx: Transaction, sessionId: string): Promise<RemedyViewRow | null>;
   /** T028: the enrollment's slot's local start, `HH:MM:SS` (catalog's entry). */
   slotOf(tx: Transaction, slotId: string): Promise<{ readonly startTimeLocal: string } | null>;
+  /** 003:T112: of `sessionIds`, the postponement that moved each; no lock. */
+  postponementsOf(
+    tx: Transaction,
+    sessionIds: readonly string[],
+  ): Promise<ReadonlyMap<string, NonNullable<SessionsGetOutput['postponement']>>>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -156,6 +162,7 @@ export const sessionsStore: SessionsStore = {
   latestCancellationOf: latestRequestOf,
   remedyOf: remedyViewRowOf,
   slotOf: readSlot,
+  postponementsOf: postponementsAmong,
 };
 
 /** The person asking, from the server-held session. */
@@ -341,6 +348,8 @@ export function createSessionsServices({
         const remedy = await remedyOf(tx, session.id, terms);
         // T065: the counterparty's, never the caller's; a hint from the recorded events.
         const counterpartyInRoom = await inRoom(tx, session.id, counterpartyId);
+        // 003:T112 (FR-POSTPONE-5): the postponement that moved it, to both parties.
+        const postponement = (await store.postponementsOf(tx, [session.id])).get(session.id);
         return {
           sessionId: session.id,
           enrollmentId: session.enrollmentId,
@@ -370,6 +379,7 @@ export function createSessionsServices({
           ...disputes.get(session.id),
           ...(remedy === undefined ? {} : { remedy }),
           counterpartyInRoom,
+          ...(postponement === undefined ? {} : { postponement }),
         };
       });
     },

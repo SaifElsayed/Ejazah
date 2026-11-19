@@ -3,6 +3,8 @@
 // caller's transaction. The reads take no lock: the service locks the rows they name, in
 // kernel.md's «a postponement» row, and reads them again under the locks. `session_postponements` is
 // append-only (rule 65): a row is inserted and never updated or removed.
+import type { SessionPostponement } from '@ijazah/contracts';
+
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Transaction, 'session' | 'sessionPostponement'>;
@@ -88,4 +90,41 @@ export async function postponeSessions(
     data: { status: 'postponed', postponementId },
   });
   return count;
+}
+
+/**
+ * 003:T112 (FR-POSTPONE-5; the owner's Q-D (a)): the postponement that moved each of `sessionIds`, as
+ * both parties read it: which party asked (the requester against the session's teacher), its reason
+ * and when. A session no postponement moved is absent. One statement over the sessions' primary key
+ * and the postponement's; no lock. Bounded by the ids the caller holds.
+ */
+export async function postponementsAmong(
+  tx: Pick<Client, 'session'>,
+  sessionIds: readonly string[],
+): Promise<ReadonlyMap<string, SessionPostponement>> {
+  if (sessionIds.length === 0) return new Map();
+  const rows = await tx.session.findMany({
+    where: { id: { in: [...sessionIds] }, postponementId: { not: null } },
+    select: {
+      id: true,
+      teacherUserId: true,
+      postponement: { select: { requestedByUserId: true, reason: true, createdAt: true } },
+    },
+  });
+  return new Map(
+    rows.flatMap(({ id, teacherUserId, postponement }) =>
+      postponement === null
+        ? []
+        : [
+            [
+              id,
+              {
+                by: postponement.requestedByUserId === teacherUserId ? 'teacher' : 'student',
+                reason: postponement.reason,
+                at: postponement.createdAt.toISOString(),
+              },
+            ] as const,
+          ],
+    ),
+  );
 }

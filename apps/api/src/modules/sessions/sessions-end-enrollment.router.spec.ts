@@ -83,7 +83,8 @@ const ENTRY = {
   targetType: 'enrollment',
   targetId: ENROLLMENT,
   reason: PARTY_REASON,
-  after: { status: 'cancelled', slot: 'hold', internalNote: INTERNAL_NOTE },
+  // 003:T112 (the owner's Q-D (a)): the end's cause in its audit entry.
+  after: { status: 'cancelled', slot: 'hold', internalNote: INTERNAL_NOTE, cause: 'admin_ended' },
 };
 
 describe('the administrator kind', () => {
@@ -113,7 +114,11 @@ describe('sessions.endEnrollment (FR-513)', () => {
     const { internalNote: _note, ...noNote } = ASKED;
     await as(VERIFIED).sessions.endEnrollment({ ...noNote, slot: 'release' });
     expect(written).toEqual([
-      { ...ENTRY, after: { status: 'cancelled', slot: 'release', internalNote: null } },
+      // 003:T112 (rule d): the cause the schema defaults.
+      {
+        ...ENTRY,
+        after: { status: 'cancelled', slot: 'release', internalNote: null, cause: 'admin_ended' },
+      },
     ]);
   });
 

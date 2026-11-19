@@ -309,6 +309,19 @@ describe('sessions.postpone over the real tables (FR-POSTPONE-1, FR-POSTPONE-2)'
       [w.inWeek],
     );
     expect(remedies.rows).toEqual([{ status: 'proposed' }]);
+    // 003:T112 (Q-D (a)): both parties read who postponed it, its reason and when (sessions.get).
+    for (const userId of [w.studentId, w.teacherId]) {
+      const got = await services.get({ userId }, { sessionId: w.inWeek }, log);
+      expect(got.status).toBe('postponed');
+      expect(got.postponement).toEqual({
+        by: 'teacher',
+        reason: 'سفر طارئ',
+        at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      });
+    }
+    expect(
+      (await services.get({ userId: w.studentId }, { sessionId: w.afterWeek }, log)).postponement,
+    ).toBeUndefined();
   });
 
   it('two postponements by one party at once leave one; the second, waiting on the users lock, is refused interval_not_passed', async () => {
