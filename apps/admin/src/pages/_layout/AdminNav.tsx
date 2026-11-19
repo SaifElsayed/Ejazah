@@ -1,7 +1,8 @@
 // T037: AdminNav, the sidebar of every console page (screens.md, `AdminNav`), with the entries of
 // this phase only (FR-176): a navigation entry whose page lands in a later phase is not rendered
 // until that phase adds it here. The groups and the order are the board's; the settings entry leads
-// to `/settings/admins`, the one settings page this phase builds (FR-174).
+// to `/settings` (005:T024, FR-624), which leads to `/settings/admins` (FR-174); the entry is current
+// on both.
 //
 // The signed-in administrator's name (`auth.me`) and the two queues' open counts (`home.summary`,
 // the cache key the pages share) are read here (T073): the applications in review, the credentials
@@ -43,10 +44,15 @@ export const NAV_GROUPS: readonly {
         icon: 'file-text',
         queue: 'credentials',
       },
+      // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
+      { path: '/ijazah-requests', label: 'admin.nav.items.ijazahRequests', icon: 'book' },
       // B42 (the notes under T048, T049 and T050, Q4): Phase 3's three queues.
       { path: '/review', label: 'admin.nav.items.sessionReview', icon: 'activity' },
       { path: '/disputes', label: 'admin.nav.items.disputes', icon: 'flag' },
       { path: '/cases', label: 'admin.nav.items.cases', icon: 'scale' },
+      // 005:T023 (B49): the reports and the gender flags, two queues.
+      { path: '/reports', label: 'admin.nav.items.reports', icon: 'triangle-alert' },
+      { path: '/gender', label: 'admin.nav.items.gender', icon: 'user-x' },
     ],
   },
   {
@@ -56,13 +62,16 @@ export const NAV_GROUPS: readonly {
       { path: '/sessions', label: 'admin.nav.items.enrollments', icon: 'calendar' },
       // B42 (the note under T058, Q4): the user directory.
       { path: '/users', label: 'admin.nav.items.users', icon: 'users' },
+      // 005:T022 (B49, Q-X2 (a)): the ijazahs and the barred list.
+      { path: '/ijazahs', label: 'admin.nav.items.ijazahs', icon: 'award' },
       // T053: the payments monitor, before the settings as the board orders the group.
       { path: '/payments', label: 'admin.nav.items.payments', icon: 'credit-card' },
       // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
       { path: '/payouts', label: 'admin.money.payouts.nav', icon: 'landmark' },
       // B42 (the note under T048, Q4): the video outages.
       { path: '/outages', label: 'admin.nav.items.outages', icon: 'video-off' },
-      { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
+      // 005:T024 (B49, Q-X2 (a)): the settings page, which leads to the administrators.
+      { path: '/settings', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
       { path: '/audit', label: 'admin.nav.items.audit', icon: 'list' },
     ],
   },

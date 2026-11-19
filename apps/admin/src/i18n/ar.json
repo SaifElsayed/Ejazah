@@ -218,6 +218,10 @@
         "sessionsMonitorViewed": "عرض اشتراك",
         "sessionsReviewListed": "عرض قائمة المراجعة",
         "sessionsReviewViewed": "عرض بيانات اتصال جلسة",
+        "settings": {
+          "changed": "تعديل إعداد",
+          "listed": "عرض الإعدادات"
+        },
         "studentBan": "حظر طالب",
         "studentReinstate": "إعادة تفعيل طالب",
         "studentSuspend": "إيقاف طالب",
@@ -800,6 +804,14 @@
           },
           "title": "قبول وثيقة {name}"
         },
+        "actionReport": {
+          "confirm": "تسجيل الإجراء",
+          "effects": {
+            "closed": "يُغلق البلاغ بحالة «تم اتخاذ إجراء». يُتخذ الإجراء نفسه من صفحة الحساب."
+          },
+          "reasonLabel": "ما الذي اتُّخذ (إلزامي)",
+          "title": "تسجيل اتخاذ إجراء في البلاغ"
+        },
         "approveApplication": {
           "confirm": "اعتماد",
           "effects": {
@@ -832,7 +844,8 @@
           "effects": {
             "blocked": "لا يستطيع أي معلم طلب إجازة له، وتُرفض الطلبات المفتوحة.",
             "kept": "إجازاته الصادرة تبقى صالحة؛ لسحب إجازة إجراء مستقل.",
-            "listed": "يظهر في قائمة الممنوعين في صفحة الإجازات، ويُرفع المنع من هناك."
+            "listed": "يظهر في قائمة الممنوعين في صفحة الإجازات، ويُرفع المنع من هناك.",
+            "notApproved": "لا يرسل له معلم طلب إجازة، ولا يُعتمد له طلب مفتوح حتى يُرفع المنع."
           },
           "reasonLabel": "سبب المنع (إلزامي)",
           "title": "منع {name} من تلقي الإجازات"
@@ -847,6 +860,19 @@
           "reasonLabel": "سبب الإلغاء (إلزامي)",
           "subtitle": "{student} مع {teacher} · {package}",
           "title": "إلغاء الجلسة {number} · {date}"
+        },
+        "changeSetting": {
+          "confirm": "حفظ التغيير",
+          "effects": {
+            "everyRead": "تسري القيمة الجديدة فورًا على كل قراءة لاحقة لهذا الإعداد، لكل مستخدم ولكل مهمة.",
+            "withinMinute": "يُحفظ هذا الحد حتى 60 ثانية بعد كل قراءة، فتسري القيمة الجديدة خلال 60 ثانية."
+          },
+          "limitLabel": "الطلبات في النافذة",
+          "listHint": "أرقام تفصل بينها فواصل",
+          "subtitle": "الآن: {value}",
+          "title": "تغيير {setting}",
+          "valueLabel": "القيمة الجديدة",
+          "windowLabel": "النافذة (بالثواني)"
         },
         "common": {
           "cancel": "إلغاء",
@@ -883,6 +909,7 @@
             "notified": "يصل إشعار إلى المُبلِّغ بأن البلاغ رُفض.",
             "unchanged": "يبقى الجنس المصرَّح به كما هو، ويُغلق البلاغ."
           },
+          "heading": "رفض بلاغ الجنس",
           "reasonLabel": "سبب الرفض (إلزامي)",
           "title": "رفض بلاغ الجنس على {name}"
         },
@@ -892,6 +919,7 @@
             "chat": "ينتهي اطلاع الإدارة على محادثة الاشتراك بإغلاق البلاغ.",
             "closed": "يُغلق البلاغ بحالة «مرفوض» دون إجراء على الحساب."
           },
+          "heading": "رفض البلاغ",
           "reasonLabel": "سبب الرفض (إلزامي)",
           "title": "رفض بلاغ {reporter} على {reported}"
         },
@@ -901,8 +929,10 @@
             "banned": "يُحظر الحساب. يُرفع الحظر في أي وقت فتعود اشتراكاته بعد فحص كل اقتران: مضمونة خلال {days, plural, one {يومًا واحدًا} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}، وبعدها حيث بقي موعدها خاليًا.",
             "cases": "تُفتح قضية تعويض لكل طرف مقابل في اشتراكاته.",
             "enrollments": "تُلغى اشتراكاته كلها وجلساتها القادمة بحالة «ألغتها الإدارة».",
+            "liftable": "يُرفع الحظر في أي وقت، ويُفحص كل اقتران على الجنسين المصحَّحين قبل أن يعود.",
             "notified": "يصل إشعار إلى كل طرف متأثر."
           },
+          "heading": "حظر لتزوير الجنس",
           "reasonLabel": "سبب الحظر (إلزامي)",
           "title": "حظر {name} لتزوير الجنس"
         },
@@ -914,6 +944,7 @@
             "notified": "يصل إشعار إلى الطرفين في كل اشتراك متأثر.",
             "record": "يُصحَّح الجنس المصرَّح به من الآن في البحث والجلسات."
           },
+          "heading": "تصحيح الجنس المصرَّح به",
           "reasonLabel": "سبب التصحيح (إلزامي)",
           "title": "تصحيح جنس {name} إلى {gender}"
         },
@@ -947,7 +978,8 @@
             "immutable": "لا تُعدَّل بعد صدورها؛ لسحبها إجراء مستقل بسبب.",
             "issued": "تصدر الإجازة برقمها الآن، بالأسماء كما أُدخلت: المُجيز {grantor}، والمُجاز {grantee}.",
             "notified": "يصل إشعار إلى {teacher} وإلى {student}.",
-            "public": "تظهر في صفحة التحقق العامة بأنها صالحة، وفي إجازات الطالب."
+            "public": "تظهر في صفحة التحقق العامة بأنها صالحة، وفي إجازات الطالب.",
+            "signOff": "لا يراها الطرفان إلا بعد أن يفتح مسؤول ملفها المُخرج ويعتمده نهائيًا في صفحة الإجازات."
           },
           "notePlaceholder": "مثلًا: السند مطابق لإجازة المعلم الموثّقة، والأسماء مطابقة للوثائق",
           "subtitle": "{student} · {subject} · برواية {riwaya} · من {teacher}",
@@ -961,6 +993,15 @@
           },
           "reasonLabel": "سبب رفع المنع (إلزامي)",
           "title": "رفع المنع عن {name}"
+        },
+        "raiseGenderFlag": {
+          "confirm": "رفع البلاغ",
+          "effects": {
+            "queued": "ينضم البلاغ إلى قائمة بلاغات الجنس مفتوحًا، ويُبتّ فيه بسبب.",
+            "unchanged": "يبقى الجنس المصرَّح به معتمدًا حتى يصدر قرار."
+          },
+          "reasonLabel": "سبب رفع البلاغ (إلزامي)",
+          "title": "رفع بلاغ جنس"
         },
         "reactivateAccount": {
           "confirm": "إعادة تفعيل",
@@ -1032,6 +1073,15 @@
           "reasonLabel": "ما المطلوب من المعلم (إلزامي)",
           "title": "طلب وثيقة أخرى من {teacher}"
         },
+        "rerenderIjazah": {
+          "confirm": "إعادة الإخراج",
+          "effects": {
+            "notShown": "لا يراها الطرفان حتى تُعتمد نهائيًا.",
+            "rendered": "تُخرج الشهادة من سجلها المجمّد من جديد، وتظهر قيد الإعداد حتى ذلك."
+          },
+          "reasonLabel": "سبب إعادة الإخراج (إلزامي)",
+          "title": "إعادة إخراج الإجازة {code}"
+        },
         "saveCredentialCorrection": {
           "confirm": "حفظ التصحيح",
           "effects": {
@@ -1041,6 +1091,14 @@
           },
           "reasonLabel": "سبب التصحيح (إلزامي)",
           "title": "حفظ تصحيح سند {teacher}"
+        },
+        "signOffIjazah": {
+          "confirm": "اعتماد نهائي",
+          "effects": {
+            "final": "لا رجعة فيه: لا يتغير بعده شيء في الشهادة، ويبقى سحبها ممكنًا بسبب.",
+            "shown": "يرى الطرفان الشهادة، ويُتاح لهما ملفها."
+          },
+          "title": "اعتماد الإجازة {code} نهائيًا"
         },
         "suspendDisputeParty": {
           "confirm": "إيقاف الحساب",
@@ -1563,6 +1621,8 @@
       "detail": {
         "a11y": "تفاصيل البلاغ",
         "affectedEnrollments": "الاشتراكات الجارية التي يمسّها التصحيح · {count}",
+        "applicantNoteHint": "تُستعمل فقط إن كان الشخص متقدّمًا لم يُعتمد بعد.",
+        "applicantNoteLabel": "رسالة يراها المتقدّم (إلزامية للمتقدّم)",
         "ban": "حظر (تزوير)",
         "banLabel": "حظر",
         "banText": "يُحظر الحساب، وتُلغى كل اشتراكاته، وتُفتح قضية تعويض لكل اشتراك متأثر",
@@ -1570,20 +1630,30 @@
         "correct": "تصحيح (خطأ غير متعمد)",
         "correctLabel": "تصحيح",
         "correctText": "يُصحَّح الجنس، وتُلغى الجلسات المتبقية في الاشتراكات غير المتوافقة، وتُفتح قضية تعويض لكل اشتراك. لا حظر",
+        "decidedOn": "بُتّ فيه في {date}",
+        "decision": "القرار",
         "declaredGender": "الجنس المصرَّح به",
         "declaredGenderValue": "{gender} · أُكِّد عند التسجيل",
         "dismiss": "رفض البلاغ",
         "dismissLabel": "رفض البلاغ",
         "dismissReasonLabel": "سبب رفض البلاغ (إلزامي)",
         "dismissText": "يُغلق البلاغ دون أي تغيير",
-        "enrollmentLine": "{subject} · {sessions} · {teacher}",
+        "enrollmentLine": "{subject} · {sessions} · {counterpart}",
         "enrollmentMeta": "{status} · {done} من {total} · {day} {time}",
+        "flagged": "المُبلَّغ عنه",
         "footer": "لا يصدر قرار دون سبب. التصحيح يلغي الاشتراكات غير المتوافقة ويفتح لها قضايا تعويض؛ الحظر يلغي كل الاشتراكات ويفتح قضايا تعويض. يُسجَّل السبب في سجل التدقيق.",
+        "fromReport": "من البلاغ",
         "idDocument": "وثيقة الهوية · عرض فقط",
         "idDocumentMeta": "طُلبت {requestedDate} · رُفعت {uploadedDate} {uploadedTime}",
         "incompatible": "غير متوافق بعد التصحيح",
+        "neverRestored": "تنتهي هذه الاشتراكات ولا تُستعاد أبدًا.",
+        "noEnrollments": "لا ينهي التصحيح الآن أي اشتراك.",
+        "note": "السبب",
+        "openReport": "فتح البلاغ",
         "raisedBy": "رفعه",
+        "raisedByAdmin": "أحد المشرفين",
         "raisedByValue": "{name} · {role}",
+        "reason": "ما كتبه رافع البلاغ",
         "reasonPlaceholder": "يُسجَّل مع القرار في سجل التدقيق",
         "reportTitle": "البلاغ",
         "subtitle": "{role} · {status} · بلاغ من {date} · {time}"
@@ -1593,17 +1663,36 @@
         "text": "بُتّ في كل البلاغات. يظهر هنا كل بلاغ على الجنس المصرَّح به.",
         "title": "لا بلاغات جنس مفتوحة"
       },
+      "emptyTab": {
+        "text": "لا بلاغ بهذه الحالة.",
+        "title": "لا بلاغات هنا"
+      },
+      "explain": "كل بلاغ على الجنس المصرَّح به. يبقى الجنس المصرَّح به معتمدًا حتى يصدر قرار بسبب: رفض البلاغ، أو تصحيح، أو حظر للتزوير.",
       "lede": "{count, plural, one {بلاغ واحد مفتوح} two {بلاغان مفتوحان} few {# بلاغات مفتوحة} many {# بلاغًا مفتوحًا} other {# بلاغ مفتوح}}. يبقى الجنس المصرَّح به معتمدًا في البحث والجلسات حتى يصدر قرار، ولا يتغيّر إلا من هنا.",
       "ledeEmpty": "لا بلاغات مفتوحة الآن. لا يتغيّر الجنس المصرَّح به إلا من هنا.",
+      "pagerPage": "صفحة {page}",
       "pagerSummary": "{shown} من {total} · المفتوحة أولًا",
+      "raise": "رفع بلاغ جنس",
+      "raiseTargetHint": "من سجل المستخدم في صفحة المستخدمين.",
+      "raiseTargetLabel": "معرّف حساب الشخص",
       "raisedByAdminFromChatReport": "{role} · من بلاغ محادثة",
+      "refused": {
+        "alreadyResolved": "بُتّ في هذا البلاغ من قبل، فلم يتغيّر شيء. أعد فتحه لترى قراره.",
+        "applicantNoteRequired": "هذا الشخص متقدّم، فيحتاج حظره رسالة يراها. اكتبها ثم أعد المحاولة. لم يتغيّر شيء.",
+        "notFound": "لم يُعثر على هذا البلاغ أو هذا الحساب.",
+        "openExists": "لهذا الشخص بلاغ جنس مفتوح، فلم يُرفع آخر. افتح البلاغ المفتوح.",
+        "reportTargetMismatch": "هذا البلاغ عن شخص آخر، فلم يُرفع بلاغ الجنس."
+      },
       "search": {
         "label": "بحث",
         "placeholder": "الاسم أو البريد"
       },
       "tabs": {
         "all": "الكل",
+        "corrected": "صُحّحت",
         "decided": "تم البتّ",
+        "dismissed": "مرفوضة",
+        "fraudBan": "حظر للتزوير",
         "open": "مفتوحة"
       },
       "title": "بلاغات الجنس",
@@ -1637,6 +1726,7 @@
     "ijazahRequests": {
       "columns": {
         "completion": "الإكمال",
+        "standing": "حال المعلم",
         "status": "الحالة",
         "subjectRiwaya": "المادة والرواية",
         "submitted": "أُرسل",
@@ -1646,9 +1736,11 @@
         "a11y": "تفاصيل الطلب",
         "a11yCertificate": "الشهادة كما ستصدر",
         "approve": "اعتماد وإصدار",
+        "barTitle": "منع الطالب من تلقي الإجازات",
         "certificateName": "اسم الطالب على الإجازة",
         "certificateNameMeta": "أدخله الطالب {date}",
         "chainNote": "السند ({generations}) من إجازة المعلم الموثّقة، ولا يُعدَّل هنا.",
+        "chainTitle": "السند",
         "checks": {
           "credentialVerified": "إجازة المعلم في {subject} موثّقة",
           "notBarred": "الطالب غير ممنوع من تلقي الإجازات",
@@ -1660,10 +1752,18 @@
         "enrollmentValue": "{subject} · {sessions} · مكتمل {date}",
         "footer": "عند الاعتماد تصدر الإجازة برقمها، ويصل إشعار إلى المعلم والطالب. يُسجَّل قرارك باسمك في سجل التدقيق.",
         "language": "لغة الشهادة",
+        "noCertificateName": "لم يُدخل الطالب اسمه على الإجازة بعد.",
+        "openIjazah": "فتح الإجازة",
         "reject": "رفض",
+        "rejectionReason": "سبب الرفض: {reason}",
+        "signature": "توقيع المعلم",
+        "signatureErased": "نسخة التوقيع محذوفة: أُغلق الطلب.",
+        "standing": "حال المعلم الآن",
+        "standingReason": "السبب: {reason}",
         "student": "الطالب",
         "subject": "المادة",
         "subjectValue": "{subject} · {riwaya} · من طريق {tariq}",
+        "subjectValueNoTariq": "{subject} · {riwaya}",
         "subtitle": "من {teacher} · {date} · {time}",
         "teacher": "المعلم",
         "title": "طلب إجازة · {student}",
@@ -1674,15 +1774,34 @@
         "text": "بُتّ في كل الطلبات. يظهر هنا كل طلب يرسله معلم لطالبه.",
         "title": "لا طلبات إجازة مفتوحة"
       },
+      "explain": "يطلب المعلم الإجازة لطالبه، وتصدر عند اعتمادك.",
       "issuedOn": "صدرت · {date}",
       "lede": "{count, plural, one {طلب واحد ينتظر القرار} two {طلبان ينتظران القرار} few {# طلبات تنتظر القرار} many {# طلبًا ينتظر القرار} other {# طلب ينتظر القرار}}. يطلب المعلم الإجازة لطالبه، وتصدر عند اعتمادك.",
       "ledeEmpty": "لا طلبات تنتظر القرار الآن. يطلب المعلم الإجازة لطالبه، وتصدر عند اعتمادك.",
+      "pagerPage": "صفحة {page}",
       "pagerSummary": "{shown} من {total} · الأحدث أولًا",
       "pair": "{teacher} إلى {student}",
+      "refused": {
+        "notFound": "لم يُعثر على هذا الطلب.",
+        "notPending": "بُتّ في هذا الطلب من قبل، فلم يتغير شيء. أعد فتحه لترى قراره.",
+        "studentBarred": "الطالب ممنوع من تلقي الإجازات، فلم تصدر. ارفع المنع أولًا إن كان في غير محله."
+      },
       "rejectedOn": "مرفوض · {date}",
       "search": {
         "label": "بحث",
         "placeholder": "اسم المعلم أو الطالب"
+      },
+      "standing": {
+        "active": "نشط",
+        "banned": "محظور",
+        "deleted": "الحساب محذوف",
+        "revoked": "اعتماده مسحوب",
+        "suspended": "موقوف",
+        "verificationRequired": "بانتظار إثبات الهوية"
+      },
+      "status": {
+        "awaitingStudentName": "بانتظار اسم الطالب",
+        "closed": "مغلق"
       },
       "tabs": {
         "all": "الكل",
@@ -1692,8 +1811,12 @@
       "title": "طلبات الإجازة"
     },
     "ijazahs": {
+      "audit": {
+        "barsListed": "عرض الممنوعين من تلقي الإجازات"
+      },
       "barred": {
         "a11y": "الممنوعون من تلقي الإجازات",
+        "heading": "الممنوعون من تلقي الإجازات",
         "lift": "رفع المنع",
         "meta": "منذ {date} · {admin} · السبب: {reason}",
         "note": "لا يُرسَل طلب إجازة لطالب ممنوع. رفع المنع يطلب سببًا أيضًا، ويبقى المنع ورفعه في سجل التدقيق.",
@@ -1705,6 +1828,7 @@
       },
       "columns": {
         "certificateNo": "رقم الشهادة",
+        "issued": "الصدور",
         "parties": "الطالب والمعلم",
         "request": "الطلب",
         "status": "الحالة"
@@ -1714,12 +1838,19 @@
         "bar": "منع من تلقي الإجازات",
         "chainEllipsis": "… {generations}",
         "chainTitle": "السند · {generations} · من طريق {tariq}",
+        "chainTitleNoTariq": "السند · {generations}",
+        "completionDate": "تاريخ الإكمال",
         "footer": "السحب لا يمنع الطالب من إجازات لاحقة، والمنع إجراء مستقل. كل إجراء هنا يطلب سببًا ويُسجَّل في سجل التدقيق.",
         "grantor": "المُجيز",
         "issued": "صدرت {date} · اعتماد {admin}",
+        "language": "لغة الشهادة",
+        "openRequest": "فتح الطلب",
         "request": "الطلب",
         "requestValue": "أرسله المعلم {date}",
+        "rerender": "إعادة الإخراج",
         "revoke": "سحب الإجازة",
+        "revokedReason": "سبب السحب: {reason}",
+        "signOff": "اعتماد نهائي",
         "student": "الطالب",
         "subtitle": "{subject} · برواية {riwaya}",
         "verifyPage": "صفحة التحقق العامة",
@@ -1729,16 +1860,49 @@
         "text": "جرّب رقمًا أو اسمًا آخر، أو أزل فلترًا.",
         "title": "لا إجازات تطابق البحث"
       },
+      "emptyTab": {
+        "text": "يظهر هنا كل إجازة في هذه الحالة.",
+        "title": "لا إجازات هنا"
+      },
+      "explain": "كل إجازة صدرت بطلب من معلمها، وما ينتظر الاعتماد النهائي أولًا. تُسحب الإجازة ولا تُحذف.",
       "issuedCell": "{subject} · صدرت {date}",
       "lede": "كل إجازة صدرت بطلب من معلمها. تُسحب الإجازة ولا تُحذف، ويبقى رقمها يدلّ على حالتها في صفحة التحقق.",
+      "pagerPage": "صفحة {page}",
       "pagerSummary": "{shown} من {total} · الأحدث أولًا",
       "partiesCell": "{student} من {teacher}",
+      "pdf": {
+        "notRendered": "لم تُخرج الشهادة بعد: هي قيد الإعداد. تظهر هنا حين تُخرج، ولا يراها الطرفان قبل اعتمادك النهائي.",
+        "title": "الشهادة كما أُخرجت"
+      },
+      "refused": {
+        "alreadyBarred": "هذا الطالب ممنوع من تلقي الإجازات من قبل، فلم يتغير شيء.",
+        "alreadyRevoked": "هذه الإجازة مسحوبة من قبل، فلم يتغير شيء.",
+        "alreadySignedOff": "اعتُمدت هذه الإجازة من قبل، ولا يتغير بعد الاعتماد شيء.",
+        "notBarred": "هذا الطالب غير ممنوع من تلقي الإجازات، فلا منع يُرفع.",
+        "notFound": "لم يُعثر على هذه الإجازة أو هذا الحساب.",
+        "notRendered": "لم تُخرج الشهادة بعد، فلا يُعتمد ما لم يُفتح. انتظر إخراجها ثم افتحها واعتمدها.",
+        "revoked": "هذه الإجازة مسحوبة، فلا تُعتمد ولا تُخرج من جديد.",
+        "studentBarred": "الطالب ممنوع من تلقي الإجازات، فلم تُعتمد. ارفع المنع إن كان في غير محله، أو اسحب الإجازة."
+      },
       "requestCell": "طلب {date}",
       "requestsLink": "طلبات الإجازة · {count}",
       "revokedOn": "مسحوبة · {date}",
       "search": {
         "label": "بحث",
         "placeholder": "رقم الشهادة أو اسم الطالب"
+      },
+      "status": {
+        "preparing": "قيد الإعداد",
+        "rendered": "بانتظار الاعتماد النهائي",
+        "signedOff": "معتمدة"
+      },
+      "tabs": {
+        "all": "الكل",
+        "barred": "الممنوعون",
+        "preparing": "قيد الإعداد",
+        "revoked": "مسحوبة",
+        "signedOff": "معتمدة",
+        "waitingSignOff": "بانتظار الاعتماد النهائي"
       },
       "title": "الإجازات"
     },
@@ -2092,6 +2256,7 @@
     "reports": {
       "columns": {
         "context": "السياق",
+        "date": "التاريخ",
         "reason": "السبب",
         "reported": "المُبلَّغ عنه",
         "reporter": "المُبلِّغ",
@@ -2104,16 +2269,25 @@
       },
       "detail": {
         "a11y": "تفاصيل البلاغ",
+        "action": "تسجيل اتخاذ إجراء",
         "chatHint": "تُتاح للمشرف ما دام البلاغ مفتوحًا",
+        "context": "السياق",
         "contextSession": "السياق · جلسة",
+        "decidedOn": "حُسم في {date}",
+        "decision": "القرار",
         "dismiss": "رفض البلاغ",
         "enrollmentLine": "{subject} · {sessions} · {status}",
+        "evidence": "الدليل",
         "footer": "رفض البلاغ يجعل حالته «مرفوض»، وأي إجراء آخر يجعلها «تم اتخاذ إجراء». السبب إلزامي ويُسجَّل في سجل التدقيق، ولا يُبلَّغ المُبلَّغ عنه برفض البلاغ.",
+        "note": "الملاحظة",
         "openChat": "فتح محادثة الاشتراك",
+        "openEnrollment": "فتح الاشتراك",
         "openGenderFlag": "فتح بلاغ جنس",
+        "reason": "ما كتبه المُبلِّغ",
         "reasonLabel": "سبب القرار (إلزامي)",
         "reasonPlaceholder": "يُسجَّل مع القرار في سجل التدقيق",
         "reportTitle": "البلاغ",
+        "reported": "المُبلَّغ عنه",
         "reporter": "المُبلِّغ",
         "reporterValue": "{name} · {role}",
         "requireId": "طلب إثبات هوية",
@@ -2127,15 +2301,25 @@
         "text": "حُسمت كل البلاغات. يظهر هنا كل بلاغ جديد يرفعه طالب أو معلم من جلسة أو ملف شخصي أو محادثة.",
         "title": "لا بلاغات مفتوحة"
       },
+      "emptyTab": {
+        "text": "لا بلاغ بهذه الحالة.",
+        "title": "لا بلاغات هنا"
+      },
+      "explain": "كل بلاغ يرفعه طالب أو معلم من جلسة أو محادثة أو ملف شخصي. يُحسم البلاغ بإجراء أو برفض، مع ملاحظة تُسجَّل في سجل التدقيق.",
       "lede": "{count, plural, one {بلاغ واحد مفتوح} two {بلاغان مفتوحان} few {# بلاغات مفتوحة} many {# بلاغًا مفتوحًا} other {# بلاغ مفتوح}} على جلسات وملفات شخصية ومحادثات. القرار يحتاج سببًا ويُسجَّل في سجل التدقيق.",
       "ledeEmpty": "لا بلاغات مفتوحة الآن. القرار في أي بلاغ يحتاج سببًا ويُسجَّل في سجل التدقيق.",
       "openSince": "{days, plural, one {منذ يوم} two {منذ يومين} few {منذ # أيام} many {منذ # يومًا} other {منذ # يوم}}",
+      "pagerPage": "صفحة {page}",
       "pagerSummary": "{shown} من {total} · الأحدث أولًا",
       "reasons": {
         "impersonation": "انتحال الحساب",
         "misleadingPhoto": "صورة مضلِّلة",
         "offPlatformContact": "تواصل خارج المنصة",
         "verbalAbuse": "إساءة لفظية"
+      },
+      "refused": {
+        "alreadyResolved": "حُسم هذا البلاغ من قبل، فلم يتغيّر شيء. أعد فتحه لترى قراره.",
+        "notFound": "لم يُعثر على هذا البلاغ."
       },
       "search": {
         "label": "بحث",
@@ -2320,11 +2504,22 @@
     "settings": {
       "adminsLink": "المشرفون · {count}",
       "attendanceThreshold": {
-        "error": "أدخل رقمًا من 1 إلى 100. القيمة الحالية {value}%.",
+        "error": "أدخل رقمًا أكبر من 0 وحتى 100. القيمة الحالية {value}%.",
         "label": "حد الحضور",
         "unit": "%"
       },
       "banner": "أي تغيير يسري على الجلسات والحجوزات القادمة فقط، ولا يُعاد به تقييم جلسة أو نزاع حُسم من قبل. يُسجَّل كل تغيير بقيمته قبل وبعد وسببه في سجل التدقيق.",
+      "bounds": {
+        "above": "أكبر من {min}",
+        "aboveUpTo": "أكبر من {min} وحتى {max}",
+        "atLeast": "{min} على الأقل",
+        "between": "من {min} إلى {max}",
+        "each": "كل قيمة: {bound}",
+        "none": "بلا حدود رقمية",
+        "rateLimit": "الطلبات: {limit} · النافذة بالثواني: {window}"
+      },
+      "change": "تغيير",
+      "changeA11y": "تغيير {setting}",
       "chatRetention": {
         "hint": "بعد انتهاء نافذة النزاع تُحذف المحادثة، إلا إن بقي نزاع أو بلاغ مفتوح.",
         "label": "الاحتفاظ بالمحادثة",
@@ -2334,6 +2529,14 @@
         "hint": "مدة صفحة الدفع، والموعد محجوز للطالب طوالها.",
         "label": "مهلة الدفع",
         "unit": "دقائق"
+      },
+      "columns": {
+        "action": "تغيير",
+        "bounds": "الحدود",
+        "default": "القيمة الافتراضية",
+        "setting": "الإعداد",
+        "srsRow": "بند المواصفات",
+        "value": "القيمة"
       },
       "confirmationTimeout": {
         "hint": "بعدها يُبلَّغ الطالب أن الدفع يستغرق وقتًا أطول، ويصله إشعار عند اكتماله.",
@@ -2357,9 +2560,12 @@
         "unit": "دقيقة"
       },
       "groups": {
+        "accounts": "الحسابات والدخول",
+        "admin": "حسابات المشرفين",
         "booking": "الحجز والدفع",
         "general": "عام",
         "notifications": "الإشعارات والمحادثة",
+        "rateLimits": "حدود الطلبات",
         "sessions": "الجلسات"
       },
       "holdGrace": {
@@ -2376,6 +2582,101 @@
         "hint": "من يدخل بعد بدء الجلسة بأكثر منها يُعدّ غائبًا.",
         "label": "مهلة الدخول",
         "unit": "دقائق"
+      },
+      "keys": {
+        "admin_home_latest_actions": "آخر الإجراءات في الصفحة الرئيسية",
+        "admin_invite_ttl_hours": "صلاحية رابط دعوة المشرف",
+        "admin_list_page_size": "عدد الصفوف في صفحة القائمة",
+        "admin_lockout_attempts": "محاولات دخول المشرف قبل القفل",
+        "admin_lockout_minutes": "مدة القفل",
+        "admin_recovery_code_count": "عدد رموز الاسترداد للمشرف",
+        "admin_session_idle_minutes": "مهلة خمول المشرف",
+        "admin_session_max_hours": "أقصى مدة لدخول المشرف",
+        "attendance_threshold_pct": "حد الحضور",
+        "ban_restore_window_days": "مهلة الاستعادة بعد الحظر",
+        "cancellation_requests_recent_days": "فترة طلبات الإلغاء الأخيرة",
+        "chat_page_size": "عدد الرسائل في صفحة المحادثة",
+        "chat_retention_days": "الاحتفاظ بالمحادثة",
+        "checkout_confirmation_timeout_seconds": "مهلة تأكيد الدفع",
+        "checkout_confirming_poll_seconds": "فحص حالة الدفع أثناء التأكيد",
+        "checkout_confirming_poll_window_minutes": "مدة فحص تأكيد الدفع",
+        "checkout_processing_poll_seconds": "فحص حالة الدفع أثناء المعالجة",
+        "discovery_page_size": "عدد المعلمين في صفحة الاستكشاف",
+        "dispute_window_hours": "نافذة النزاع",
+        "document_link_ttl_seconds": "صلاحية رابط المستند",
+        "document_unreferenced_max_per_user": "المستندات غير المستخدمة لكل شخص",
+        "document_unreferenced_purge_after_hours": "حذف المستندات المرفوعة غير المستخدمة بعد",
+        "early_join_lead_minutes": "الدخول المبكر",
+        "enrollment_restore_window_days": "مهلة استعادة الاشتراك",
+        "first_session_lead_hours": "مهلة أول جلسة بعد التأكيد",
+        "idempotency_key_ttl_hours": "مدة منع تكرار الدفع",
+        "ijazah_half_release_percent": "مسار الإجازة: النصيب المصروف عند منتصف الجلسات",
+        "join_window_minutes": "مهلة الدخول",
+        "live_channel_max_connections_per_user": "اتصالات القناة المباشرة لكل مستخدم",
+        "makeup_choice_window_days": "مهلة اختيار التعويض",
+        "makeup_counter_answer_hours": "مهلة الرد على اقتراح التعويض المقابل",
+        "minimum_connection_seconds": "أدنى مدة اتصال",
+        "notification_requeue_after_minutes": "الانتظار قبل إعادة جدولة إشعار ضائع",
+        "notification_requeue_max_age_minutes": "العمر الذي بعده لا يُرسل الإشعار الضائع",
+        "onboarding_token_ttl_minutes": "صلاحية رمز إكمال التسجيل",
+        "otp_code_ttl_minutes": "صلاحية رمز التحقق",
+        "otp_max_attempts": "محاولات رمز التحقق قبل إبطاله",
+        "otp_purge_after_hours": "حذف رموز التحقق بعد",
+        "price_average_min_teachers": "أقل عدد من المعلمين لمتوسط السعر",
+        "provider_nonce_ttl_minutes": "صلاحية رمز الدخول عبر مزوّد الهوية",
+        "push_token_stale_days": "حذف رموز الإشعارات غير المستخدمة بعد",
+        "rate_limit_absence_complaint": "شكاوى الغياب",
+        "rate_limit_admin_authentication": "طلبات دخول المشرف",
+        "rate_limit_admin_authentication_budget": "دخول المشرفين على مستوى المنصة",
+        "rate_limit_admin_user_delete": "حذف الحسابات بيد المشرف",
+        "rate_limit_authentication": "طلبات تسجيل الدخول",
+        "rate_limit_authentication_budget": "تسجيلات الدخول على مستوى المنصة",
+        "rate_limit_ban_lift": "رفع الحظر",
+        "rate_limit_chat_message": "رسائل المحادثة",
+        "rate_limit_dispute_revision": "مراجعات أحكام النزاعات",
+        "rate_limit_enrollment_end": "إنهاء الاشتراكات",
+        "rate_limit_enrollment_restore": "استعادات الاشتراك",
+        "rate_limit_gender_decision": "قرارات الجنس",
+        "rate_limit_gender_flag": "بلاغات الجنس",
+        "rate_limit_ijazah_decision": "قرارات الإجازة",
+        "rate_limit_ijazah_request": "طلبات الإجازة",
+        "rate_limit_kept_data_erase_date": "البيانات المحفوظة: موعد المحو",
+        "rate_limit_kept_data_erase_now": "البيانات المحفوظة: المحو الآن",
+        "rate_limit_kept_document_link": "البيانات المحفوظة: رابط المستند",
+        "rate_limit_live_channel": "فتح القناة المباشرة",
+        "rate_limit_manual_compensation_case": "قضايا التعويض اليدوية",
+        "rate_limit_one_time_code": "طلبات رمز التحقق",
+        "rate_limit_one_time_code_budget": "رموز التحقق على مستوى المنصة",
+        "rate_limit_outcome_correction": "تصحيحات نتائج الجلسات",
+        "rate_limit_payment_initiation": "بدء الدفع",
+        "rate_limit_payout_mark": "تسجيل صرف التحويلات وإلغاؤه",
+        "rate_limit_provider_nonce": "طلبات رمز مزوّد الهوية",
+        "rate_limit_provider_nonce_budget": "رموز مزوّد الهوية على مستوى المنصة",
+        "rate_limit_public_page": "طلبات الصفحات العامة",
+        "rate_limit_search": "عمليات البحث",
+        "rate_limit_settings_update": "تغييرات الإعدادات",
+        "rate_limit_signed_in_default": "الطلبات العامة للمستخدم المسجّل",
+        "rate_limit_slot_release": "إطلاق المواعيد المحجوزة",
+        "rate_limit_token_refresh": "تجديدات الرمز",
+        "rate_limit_upload": "عمليات الرفع",
+        "rate_limit_user_report": "بلاغات المستخدمين",
+        "reminder_offsets_minutes": "مواعيد التذكير",
+        "repeated_absence_flag_count": "غيابات المعلم قبل التنبيه",
+        "room_close_grace_minutes": "مهلة إغلاق الغرفة بعد النهاية",
+        "room_close_retry_minutes": "مدة إعادة محاولة إغلاق الغرفة",
+        "session_access_ttl_minutes": "صلاحية رمز الوصول",
+        "session_evaluation_delay_minutes": "تأخير تقييم الجلسة",
+        "session_purge_after_days": "حذف جلسات الدخول المنتهية بعد",
+        "session_refresh_grace_seconds": "مهلة إعادة استخدام رمز التجديد",
+        "session_refresh_ttl_days": "صلاحية رمز التجديد",
+        "slot_hold_grace_minutes": "مهلة إضافية للموعد",
+        "slot_hold_ttl_minutes": "مهلة الدفع",
+        "slot_release_buffer_weeks": "إعادة إتاحة الموعد",
+        "teacher_share_percent": "نصيب المعلم من كل دفعة",
+        "terms_version": "إصدار شروط الاستخدام المعمول به",
+        "upload_max_bytes": "أقصى حجم للرفع",
+        "video_departure_timeout_seconds": "مهلة مغادرة غرفة الفيديو",
+        "video_empty_timeout_seconds": "مهلة غرفة الفيديو الفارغة"
       },
       "lede": "القيم التي تعمل بها المنصة. لكل قيمة شرح لما تغيّره.",
       "lockoutAttempts": {
@@ -2399,13 +2700,13 @@
         "unit": "ثانية"
       },
       "modified": "مُعدَّل",
-      "noShowTermination": {
-        "hint": "عندها يُنهى الاشتراك وتُفتح قضية تعويض للطالب.",
-        "label": "إنهاء الاشتراك بغياب المعلم",
-        "unit": "مرات"
-      },
       "reasonLabel": "سبب التغيير (إلزامي)",
       "reasonPlaceholder": "يُسجَّل مع التغيير في سجل التدقيق",
+      "refused": {
+        "invalid": "القيمة ليست بصيغة هذا الإعداد: رقم، أو أرقام تفصل بينها فواصل، أو حد مع نافذة، أو نص. لم يتغيّر شيء.",
+        "outOfBounds": "القيمة خارج حدود هذا الإعداد: {bounds}. لم يتغيّر شيء.",
+        "unknown": "المنصة لا تعرف هذا الإعداد. لم يتغيّر شيء؛ أعد قراءة الصفحة."
+      },
       "reminderOffsets": {
         "hint": "قبل كل جلسة يصل تذكير للطرفين في هذه الأوقات.",
         "label": "مواعيد التذكير"
@@ -2416,7 +2717,22 @@
         "label": "إعادة إتاحة الموعد",
         "unit": "أسابيع"
       },
-      "title": "الإعدادات"
+      "title": "الإعدادات",
+      "units": {
+        "bytes": "{value} بايت",
+        "count": "{value}",
+        "days": "{value, plural, one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+        "hours": "{value, plural, one {ساعة واحدة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}",
+        "minutes": "{value, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
+        "percent": "{value}%",
+        "seconds": "{value, plural, one {ثانية واحدة} two {ثانيتان} few {# ثوانٍ} many {# ثانية} other {# ثانية}}",
+        "weeks": "{value, plural, one {أسبوع واحد} two {أسبوعان} few {# أسابيع} many {# أسبوعًا} other {# أسبوع}}"
+      },
+      "value": {
+        "missing": "غير مضبوط",
+        "rateLimit": "{limit} كل {window} ث"
+      },
+      "withinMinute": "يسري خلال 60 ثانية"
     },
     "shared": {
       "correction": {
@@ -2555,6 +2871,7 @@
       "genderFlag": {
         "corrected": "صُحّح",
         "dismissed": "مرفوض",
+        "fraudBan": "حُظر للتزوير",
         "open": "مفتوح"
       },
       "ijazah": {
@@ -2975,7 +3292,8 @@
           "timeTaken": "جلسة ستُنشئها الاستعادة تتعارض مع جلسة، أو حجز مفتوح، أو موعد تعويض محجوز لأحد الطرفين. لم يتغيّر شيء.",
           "noFreeWeek": "لا أسبوع متاح لتعويض كانت قضية الإغلاق تحمله، فبقيت القضية مفتوحة. لم يتغيّر شيء.",
           "notFound": "لم يُعثر على هذا الاشتراك. لم يتغيّر شيء.",
-          "refunded": "استُرد ثمن هذا الاشتراك عبر بوابة الدفع، فلا يُستعاد؛ يحجز الطالب من جديد. لم يتغيّر شيء."
+          "refunded": "استُرد ثمن هذا الاشتراك عبر بوابة الدفع، فلا يُستعاد؛ يحجز الطالب من جديد. لم يتغيّر شيء.",
+          "genderMismatch": "بقي منتهيًا: الطالب والمعلم فيه ليسا من جنس واحد. لم يتغيّر شيء."
         },
         "released": "حُرّر موعد هذا الاشتراك في {when}، فتنجح الاستعادة ما دام الموعد خاليًا."
       },

@@ -94,6 +94,8 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'ijazah.revoked': 'admin.audit.actions.ijazahReview.ijazahRevoked',
   'ijazah_bar.set': 'admin.audit.actions.ijazahReview.barSet',
   'ijazah_bar.lifted': 'admin.audit.actions.ijazahReview.barLifted',
+  // 005:T022 of B49 (Q-P2 (b)): the barred list, in the ijazahs' own words.
+  'ijazah_bars.listed': 'admin.ijazahs.audit.barsListed',
   // 005:T032 of B46 (Q-E4 (a)): the sign-off and the re-render.
   'ijazah.signed_off': 'admin.audit.actions.ijazahReview.ijazahSignedOff',
   'ijazah.rerendered': 'admin.audit.actions.ijazahReview.ijazahRerendered',
@@ -110,6 +112,9 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'gender.corrected': 'admin.audit.actions.genderFlags.corrected',
   // 005:T015 (B47; FR-617): the fraud ban.
   'gender.fraud_banned': 'admin.audit.actions.genderFlags.fraudBanned',
+  // 005:T024 (B49; FR-624): the settings page's read, on the reader, and its change, on the key.
+  'settings.listed': 'admin.audit.actions.settings.listed',
+  'setting.changed': 'admin.audit.actions.settings.changed',
   // 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين», its two reads and the mark «تم الصرف»,
   // each on the reader or the teacher (`admin`, `user`), so no new target type.
   'payouts.listed': 'admin.money.audit.payoutsListed',

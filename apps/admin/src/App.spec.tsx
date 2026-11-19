@@ -85,6 +85,8 @@ describe('the pages of this phase', () => {
     ['/', 'admin.home.title'],
     ['/applications', 'admin.applications.title'],
     ['/credentials', 'admin.credentials.title'],
+    // 005:T024 (B49): the settings page beside the administrators'.
+    ['/settings', 'admin.settings.title'],
     ['/settings/admins', 'admin.admins.title'],
     ['/audit', 'admin.audit.title'],
   ] as const)('%s is in the console with its title', (path, title) => {
@@ -127,20 +129,28 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.home'), '/'],
       [translate('ar', 'admin.nav.items.applications'), '/applications'],
       [translate('ar', 'admin.nav.items.credentials'), '/credentials'],
+      // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
+      [translate('ar', 'admin.nav.items.ijazahRequests'), '/ijazah-requests'],
       // B42 (the note under T048, T049 and T050, Q4): Phase 3's three queues.
       [translate('ar', 'admin.nav.items.sessionReview'), '/review'],
       [translate('ar', 'admin.nav.items.disputes'), '/disputes'],
       [translate('ar', 'admin.nav.items.cases'), '/cases'],
+      // 005:T023 (B49): the reports and the gender flags, two queues.
+      [translate('ar', 'admin.nav.items.reports'), '/reports'],
+      [translate('ar', 'admin.nav.items.gender'), '/gender'],
       // B42 (the note under T047 and T048, Q4): the monitor and the outages, records.
       [translate('ar', 'admin.nav.items.enrollments'), '/sessions'],
       // B42 (the note under T058, Q4): the user directory.
       [translate('ar', 'admin.nav.items.users'), '/users'],
+      // 005:T022 (B49, Q-X2 (a)): the ijazahs and the barred list.
+      [translate('ar', 'admin.nav.items.ijazahs'), '/ijazahs'],
       // T053: the payments monitor, before the settings as the board orders the group.
       [translate('ar', 'admin.nav.items.payments'), '/payments'],
       // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
       [translate('ar', 'admin.money.payouts.nav'), '/payouts'],
       [translate('ar', 'admin.nav.items.outages'), '/outages'],
-      [translate('ar', 'admin.nav.items.settings'), '/settings/admins'],
+      // 005:T024 (B49): «Settings» opens the settings page, which leads to the administrators.
+      [translate('ar', 'admin.nav.items.settings'), '/settings'],
       [translate('ar', 'admin.nav.items.audit'), '/audit'],
     ]);
   });
@@ -148,7 +158,8 @@ describe('AdminNav', () => {
   it('marks the current page, home only on its own path', () => {
     renderAt('/settings/admins', verified);
     const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current'));
-    expect(current.map((link) => link.getAttribute('href'))).toEqual(['/settings/admins']);
+    // 005:T024 (B49): the administrators' page is below «Settings», so that entry is current.
+    expect(current.map((link) => link.getAttribute('href'))).toEqual(['/settings']);
   });
 
   it('navigates in place on a click', () => {

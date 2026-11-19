@@ -10,6 +10,9 @@
 //
 // T053: `/payments`, the read-only payments monitor, behind the same guard as every console page.
 // 003:T105: `/payouts`, «تحويلات المعلمين», beside it; `?teacher=` opens one teacher's detail.
+// 005:T022 (B49, Q-X2 (a)): `/ijazah-requests` (`?request=` opens one) and `/ijazahs` (`?ijazah=`).
+// 005:T023 (B49): `/reports` (`?report=` opens one) and `/gender` (`?flag=`).
+// 005:T024 (B49, Q-X2 (a)): `/settings`, every setting by group, beside `/settings/admins`.
 //
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
@@ -34,16 +37,21 @@ import { AdminAudit } from './pages/audit/AdminAudit';
 import { AdminCases } from './pages/cases/AdminCases';
 import { AdminCredentials } from './pages/credentials/AdminCredentials';
 import { AdminDisputes } from './pages/disputes/AdminDisputes';
+import { AdminGender } from './pages/gender/AdminGender';
 import { AdminHome } from './pages/home/AdminHome';
+import { AdminIjazahRequests } from './pages/ijazah-requests/AdminIjazahRequests';
+import { AdminIjazahs } from './pages/ijazahs/AdminIjazahs';
 import { AdminMfa } from './pages/mfa/AdminMfa';
 import { AdminMfaRecovery } from './pages/mfa/AdminMfaRecovery';
 import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
 import { AdminOutages } from './pages/outages/AdminOutages';
 import { AdminPayments } from './pages/payments/AdminPayments';
 import { AdminPayouts } from './pages/payouts/AdminPayouts';
+import { AdminReports } from './pages/reports/AdminReports';
 import { AdminReview } from './pages/review/AdminReview';
 import { AdminSessions } from './pages/sessions/AdminSessions';
 import { AdminSetPassword, SET_PASSWORD_PATH } from './pages/set-password/AdminSetPassword';
+import { AdminSettings } from './pages/settings/AdminSettings';
 import { AdminSignIn } from './pages/sign-in/AdminSignIn';
 import { AdminUsers } from './pages/users/AdminUsers';
 
@@ -100,6 +108,9 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path={HOME_PATH} element={<AdminHome />} />
               <Route path="/applications" element={<AdminApplications />} />
               <Route path="/credentials" element={<AdminCredentials />} />
+              {/* 005:T022 (B49): the ijazah requests and the ijazahs. */}
+              <Route path="/ijazah-requests" element={<AdminIjazahRequests />} />
+              <Route path="/ijazahs" element={<AdminIjazahs />} />
               <Route path="/payments" element={<AdminPayments />} />
               <Route path="/payouts" element={<AdminPayouts />} />
               <Route path="/sessions" element={<AdminSessions />} />
@@ -107,7 +118,12 @@ export function App({ client, sessions, queries: given }: AppProps) {
               <Route path="/outages" element={<AdminOutages />} />
               <Route path="/disputes" element={<AdminDisputes />} />
               <Route path="/cases" element={<AdminCases />} />
+              {/* 005:T023 (B49): the reports and the gender flags. */}
+              <Route path="/reports" element={<AdminReports />} />
+              <Route path="/gender" element={<AdminGender />} />
               <Route path="/users" element={<AdminUsers />} />
+              {/* 005:T024 (B49): the settings page, which leads to the administrators. */}
+              <Route path="/settings" element={<AdminSettings />} />
               <Route path="/settings/admins" element={<AdminAdmins />} />
               <Route path="/audit" element={<AdminAudit />} />
             </Route>

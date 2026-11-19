@@ -4,8 +4,9 @@
 //
 // The queue lists flags by status, the open ones unless said, a flag id as the cursor (a UUIDv7, so
 // the order is the order of raising). `get` adds the raiser's reason, the resolution once there is
-// one, and the enrollments a correction would end now (a preview: their count and ids, composed by
-// the admin module from booking's entry, R-409). `raise` flags a person from a report (its id stored)
+// one, and the enrollments a correction would end now (a preview: their count and one line each,
+// composed by the admin module from booking's, catalog's and identity's entries, R-409; 005:T023,
+// Q-G1 (b)). `raise` flags a person from a report (its id stored)
 // or on the administrator's own initiative; `dismiss` closes an open flag with a reason. Every
 // mutation is keyed (`idempotencyKey`) and refused `already_resolved` once the flag is not open, or
 // `open_exists` while the person has an open flag. The person is named `targetUserId`, never
@@ -13,6 +14,7 @@
 // only; no declared gender crosses. Additive only once merged (R-API-9).
 import { z } from 'zod';
 
+import { subjectSummary } from '../catalog.js';
 import { idempotencyKey } from '../idempotency-key.js';
 import { adminReason } from './admins.js';
 
@@ -68,11 +70,42 @@ export const genderFlagResolution = z.object({
   resolvedByAdminId: z.uuid(),
 });
 
-/** The confirmed enrollments a correction would end now (admin-surface.md: a preview count and ids). */
-export const genderCorrectionPreview = z.object({
-  count: z.int().nonnegative(),
-  enrollmentIds: z.array(z.uuid()),
+/** A party of an enrollment; the name is null once the account is deleted (`admin/ijazahs.ts`'s shape). */
+const party = z.object({ userId: z.uuid(), displayName: z.string().nullable() });
+
+/**
+ * 005:T023 (Q-G1 (b)): one enrollment a correction would end: its subject, its sessions (the
+ * package's count) and its other party, relative to the flagged person.
+ */
+export const genderCorrectionLine = z.object({
+  enrollmentId: z.uuid(),
+  subject: subjectSummary,
+  sessions: z.int().min(1),
+  counterpart: party,
 });
+
+/**
+ * The confirmed enrollments a correction would end now (admin-surface.md:22: a preview count and one
+ * line per enrollment, B49's Q-G1 (b)); the count is the number of lines. `enrollmentIds`, the
+ * field this preview had before the lines, stays: an output field is never removed (R-API-9); it
+ * is the lines' ids, in their order.
+ */
+export const genderCorrectionPreview = z
+  .object({
+    count: z.int().nonnegative(),
+    enrollmentIds: z.array(z.uuid()),
+    lines: z.array(genderCorrectionLine),
+  })
+  .refine(({ count, lines }) => count === lines.length, {
+    message: 'The count is the number of lines',
+    path: ['count'],
+  })
+  .refine(
+    ({ enrollmentIds, lines }) =>
+      enrollmentIds.length === lines.length &&
+      lines.every(({ enrollmentId }, index) => enrollmentIds[index] === enrollmentId),
+    { message: "enrollmentIds are the lines' ids, in their order", path: ['enrollmentIds'] },
+  );
 
 export const adminGenderFlagsGetOutput = adminGenderFlagsListItem.extend({
   /** The raiser's words, free text. */
@@ -105,6 +138,7 @@ export type AdminGenderFlagsListItem = z.infer<typeof adminGenderFlagsListItem>;
 export type AdminGenderFlagsListOutput = z.infer<typeof adminGenderFlagsListOutput>;
 export type AdminGenderFlagsGetInput = z.infer<typeof adminGenderFlagsGetInput>;
 export type AdminGenderFlagsGetOutput = z.infer<typeof adminGenderFlagsGetOutput>;
+export type GenderCorrectionLine = z.infer<typeof genderCorrectionLine>;
 export type AdminGenderFlagsRaiseInput = z.infer<typeof adminGenderFlagsRaiseInput>;
 export type AdminGenderFlagsRaiseOutput = z.infer<typeof adminGenderFlagsRaiseOutput>;
 export type AdminGenderFlagsDismissInput = z.infer<typeof adminGenderFlagsDismissInput>;

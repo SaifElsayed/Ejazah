@@ -12,6 +12,11 @@
 //
 // The preview counts the enrollments the correction ends (FR-616: `confirmed` ones only, the note
 // under T014, Q-G3 (a)); holds and closed enrollments are not in it. No line carries a gender.
+// 005:T023 (B49, Q-G1 (b); admin-surface.md:22): one line per such enrollment, in the preview's id
+// order: its subject (booking's `enrollmentsAmong`, the snapshot's subject and session count;
+// catalog's `subjectSummariesOf`) and its other party relative to the person, named through
+// identity's `sessionPartiesOf` (null once that account is deleted). The count is the number of
+// lines: an enrollment gone between the reads is neither drawn nor counted. No lock; no log line.
 //
 // GENDERFLAGS.CORRECT (T014; FR-616, FR-GENDER-7; research R-409; the note under T014: Q-G2 (c),
 // Q-G3 (a), Q-G4 (a), Q-G4b (a), Q-G6 (a), Q-G7 (a)). An honest error corrected, on the
@@ -57,6 +62,7 @@
 // and `KIND_OF` are unchanged. The ban's own live `account` event follows the commit.
 // ⚠️ Liftable: `students.liftBan` and `teachers.liftBan` restore only the pairings the corrected
 // genders allow. One info line of ids and the role; never a gender, the reason or the note.
+import type { SubjectSummary } from '@ijazah/contracts';
 import type {
   AdminGenderFlagsCorrectInput,
   AdminGenderFlagsDismissInput,
@@ -66,6 +72,7 @@ import type {
   AdminGenderFlagsListInput,
   AdminGenderFlagsListOutput,
   AdminGenderFlagsRaiseInput,
+  GenderCorrectionLine,
 } from '@ijazah/contracts/admin';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
@@ -83,12 +90,13 @@ import type { Logger } from '../../platform/logging/logger.js';
 import {
   type ConfirmedEnrollment,
   confirmedEnrollmentsOf,
+  enrollmentsAmong,
   type LockedHolds,
   lockActiveHoldsOf,
   type OrderStandings,
   releaseHolds,
 } from '../booking/index.js';
-import { lockTeacherSlots } from '../catalog/index.js';
+import { lockTeacherSlots, subjectSummariesOf } from '../catalog/index.js';
 import {
   declaredGenderOf,
   lockAccount,
@@ -118,9 +126,32 @@ export interface GenderDecisionReads {
   confirmedEnrollmentsOf(tx: Transaction, userId: string): Promise<readonly ConfirmedEnrollment[]>;
   /** The live accounts' declared genders (identity's); a deleted account is absent. */
   gendersOf(tx: Transaction, userIds: readonly string[]): Promise<ReadonlyMap<string, Gender>>;
+  /**
+   * 005:T023 (Q-G1 (b)): what the preview's lines are drawn from: the enrollments (booking's
+   * `enrollmentsAmong`; a soft-deleted one absent), their subjects (catalog's `subjectSummariesOf`)
+   * and their live parties' names (identity's `sessionPartiesOf`; a deleted account absent).
+   */
+  previewOf(tx: Transaction, enrollmentIds: readonly string[]): Promise<PreviewReads>;
 }
 
-/** The reads over booking's and identity's entries. */
+/** 005:T023: one enrollment as a preview line reads it. */
+export interface PreviewEnrollment {
+  readonly id: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly snapshotSubjectId: string;
+  readonly snapshotSessionCount: number;
+}
+
+/** 005:T023: `previewOf`'s answer. */
+export interface PreviewReads {
+  readonly enrollments: readonly PreviewEnrollment[];
+  readonly subjects: ReadonlyMap<string, SubjectSummary>;
+  /** The live parties' display names, by user id. */
+  readonly names: ReadonlyMap<string, string>;
+}
+
+/** The reads over booking's, catalog's and identity's entries. */
 export const genderDecisionReads: GenderDecisionReads = {
   confirmedEnrollmentsOf,
   gendersOf: async (tx, userIds) =>
@@ -130,7 +161,54 @@ export const genderDecisionReads: GenderDecisionReads = {
         gender,
       ]),
     ),
+  previewOf: async (tx, enrollmentIds) => {
+    const enrollments = await enrollmentsAmong(tx, enrollmentIds);
+    const subjects = await subjectSummariesOf(tx, [
+      ...new Set(enrollments.map(({ snapshotSubjectId }) => snapshotSubjectId)),
+    ]);
+    const parties = await sessionPartiesOf(tx, [
+      ...new Set(
+        enrollments.flatMap(({ studentUserId, teacherUserId }) => [studentUserId, teacherUserId]),
+      ),
+    ]);
+    return {
+      enrollments,
+      subjects,
+      names: new Map([...parties].map(([id, { displayName }]) => [id, displayName])),
+    };
+  },
 };
+
+/**
+ * 005:T023 (Q-G1 (b)): the preview's lines, one per enrollment of `enrollmentIds` (the preview's
+ * order) still read: its own subject and sessions, and its other party relative to `person`, the
+ * name null once that account is deleted.
+ */
+export function previewLines(
+  { enrollments, subjects, names }: PreviewReads,
+  person: string,
+  enrollmentIds: readonly string[],
+): GenderCorrectionLine[] {
+  const byId = new Map(enrollments.map((enrollment) => [enrollment.id, enrollment]));
+  return enrollmentIds.flatMap((enrollmentId) => {
+    const enrollment = byId.get(enrollmentId);
+    if (enrollment === undefined) return [];
+    const subject = subjects.get(enrollment.snapshotSubjectId);
+    if (subject === undefined) {
+      throw new Error('gender preview: an enrollment’s subject was not read');
+    }
+    const counterpart =
+      enrollment.studentUserId === person ? enrollment.teacherUserId : enrollment.studentUserId;
+    return [
+      {
+        enrollmentId,
+        subject: { id: subject.id, nameAr: subject.nameAr, nameEn: subject.nameEn },
+        sessions: enrollment.snapshotSessionCount,
+        counterpart: { userId: counterpart, displayName: names.get(counterpart) ?? null },
+      },
+    ];
+  });
+}
 
 /** The other declared gender: a correction's only outcome (FR-GENDER-4; the gender is binary). */
 export function otherGender(gender: Gender): Gender {
@@ -524,8 +602,21 @@ export function createGenderDecisions({
     },
     get: async (tx, adminId, input) => {
       const detail = await flags.detail(tx, adminId, input, log);
-      const enrollmentIds = [...(await wouldEnd(tx, detail.flaggedUserId))];
-      return { ...detail, correctionWouldEnd: { count: enrollmentIds.length, enrollmentIds } };
+      const person = detail.flaggedUserId;
+      const enrollmentIds = await wouldEnd(tx, person);
+      const lines =
+        enrollmentIds.length === 0
+          ? []
+          : previewLines(await reads.previewOf(tx, enrollmentIds), person, enrollmentIds);
+      // R-API-9: `enrollmentIds` stays beside the lines, their ids in their order.
+      return {
+        ...detail,
+        correctionWouldEnd: {
+          count: lines.length,
+          enrollmentIds: lines.map(({ enrollmentId }) => enrollmentId),
+          lines,
+        },
+      };
     },
     raise: (tx, adminId, input) => flags.raiseByAdministrator(tx, adminId, input, log),
     dismiss: (tx, adminId, input) => flags.dismiss(tx, adminId, input, log),

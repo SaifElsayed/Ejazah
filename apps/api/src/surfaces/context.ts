@@ -183,6 +183,9 @@ import type {
   // 005:T032 (B46): the sign-off and the re-render.
   adminIjazahsRerenderInput,
   adminIjazahsSignOffInput,
+  // 005:T022 (B49, Q-P2 (b)): the barred list.
+  adminIjazahsBarredInput,
+  adminIjazahsBarredOutput,
   // 005:T013 to T015 (B47): the administrators' gender flags, the correction and the fraud ban.
   adminGenderFlagsCorrectInput,
   adminGenderFlagsDismissInput,
@@ -192,6 +195,10 @@ import type {
   adminGenderFlagsListInput,
   adminGenderFlagsListOutput,
   adminGenderFlagsRaiseInput,
+  // 005:T024 (B49): the settings page's list and change.
+  adminSettingsListOutput,
+  adminSettingsUpdateInput,
+  adminSettingsUpdateOutput,
 } from '@ijazah/contracts/admin';
 import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
@@ -950,6 +957,12 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof adminIjazahsRerenderInput>,
     ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    // 005:T022 (B49, Q-P2 (b)): the open bars, newest first, on the call's transaction.
+    barred(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsBarredInput>,
+    ): Answer<typeof adminIjazahsBarredOutput>;
   };
   /**
    * 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the administrators' queue of
@@ -1006,6 +1019,20 @@ export interface AdminSurfaceServices {
       readonly from: Gender;
       readonly to: Gender;
       readonly accountStatus: string;
+      readonly replayed: boolean;
+    }>;
+  };
+  /** 005:T024 (B49; FR-624; R-410): the panel's settings, the admin module's, on the kind's transaction. */
+  readonly settings: {
+    list(tx: Transaction, adminId: string): Answer<typeof adminSettingsListOutput>;
+    update(
+      tx: Transaction,
+      adminId: string,
+      input: z.output<typeof adminSettingsUpdateInput>,
+    ): Promise<{
+      readonly key: string;
+      readonly before: z.input<typeof adminSettingsUpdateOutput>['value'];
+      readonly after: z.input<typeof adminSettingsUpdateOutput>['value'];
       readonly replayed: boolean;
     }>;
   };

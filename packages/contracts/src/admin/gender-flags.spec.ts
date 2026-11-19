@@ -78,14 +78,41 @@ describe('genderFlags.list', () => {
   });
 });
 
+// 005:T023 (B49, Q-G1 (b); admin-surface.md:22 as amended): the preview is a count and one line per
+// enrollment a correction would end: the enrollment, its subject, its sessions and the other party
+// (an id, and a name null once that account is deleted). `enrollmentIds` stays beside the lines,
+// one per line in the lines' order: an output field is never removed (R-API-9; B49's quickstart run).
+const SUBJECT = {
+  id: '0199d0a0-0000-7000-8000-0000000000d1',
+  nameAr: 'التجويد',
+  nameEn: 'Tajweed',
+};
+const COUNTERPART = '0199d0a0-0000-7000-8000-0000000000a3';
+const LINE = {
+  enrollmentId: ENROLLMENT,
+  subject: SUBJECT,
+  sessions: 8,
+  counterpart: { userId: COUNTERPART, displayName: 'فاطمة' },
+};
+
+/** A preview of `lines`: the count, the lines' ids in their order (R-API-9) and the lines. */
+const previewOf = <Line extends { readonly enrollmentId: string }>(lines: readonly Line[]) => ({
+  count: lines.length,
+  enrollmentIds: lines.map(({ enrollmentId }) => enrollmentId),
+  lines,
+});
+
+/** A flag's detail with `correctionWouldEnd` as given. */
+const detailWith = (correctionWouldEnd: unknown) => ({
+  ...ITEM,
+  reason: REASON,
+  resolution: null,
+  correctionWouldEnd,
+});
+
 describe('genderFlags.get', () => {
   it('adds the reason, the resolution and the preview of a correction, and no gender', () => {
-    const open = {
-      ...ITEM,
-      reason: REASON,
-      resolution: null,
-      correctionWouldEnd: { count: 1, enrollmentIds: [ENROLLMENT] },
-    };
+    const open = detailWith(previewOf([LINE]));
     expect(adminGenderFlagsGetInput.parse({ flagId: FLAG })).toEqual({ flagId: FLAG });
     expect(adminGenderFlagsGetOutput.parse({ ...open, gender: 'female' })).toEqual(open);
     const dismissed = {
@@ -97,15 +124,64 @@ describe('genderFlags.get', () => {
         resolvedAt: '2026-11-18T10:00:00.000Z',
         resolvedByAdminId: ADMIN,
       },
-      correctionWouldEnd: { count: 0, enrollmentIds: [] },
+      correctionWouldEnd: previewOf([]),
     };
     expect(adminGenderFlagsGetOutput.parse(dismissed)).toEqual(dismissed);
     expect(
-      adminGenderFlagsGetOutput.safeParse({
-        ...open,
-        correctionWouldEnd: { count: -1, enrollmentIds: [] },
-      }).success,
+      adminGenderFlagsGetOutput.safeParse(detailWith({ ...previewOf([]), count: -1 })).success,
     ).toBe(false);
+  });
+
+  it('draws each line: the enrollment, its subject, its sessions and the other party', () => {
+    const gone = { ...LINE, counterpart: { userId: COUNTERPART, displayName: null } };
+    const preview = previewOf([LINE, gone]);
+    const parsed = adminGenderFlagsGetOutput.parse(detailWith(preview));
+    expect(parsed.correctionWouldEnd).toEqual(preview);
+    expect(parsed.correctionWouldEnd.lines[1]?.counterpart.displayName).toBeNull();
+  });
+
+  it('keeps enrollmentIds beside the lines, one per line in their order (R-API-9)', () => {
+    const other = { ...LINE, enrollmentId: '0199d0a0-0000-7000-8000-0000000000e2' };
+    const parsed = adminGenderFlagsGetOutput.parse(detailWith(previewOf([LINE, other])));
+    expect(parsed.correctionWouldEnd.enrollmentIds).toEqual([ENROLLMENT, other.enrollmentId]);
+    const { enrollmentIds: _dropped, ...withoutIds } = previewOf([LINE]);
+    for (const preview of [
+      withoutIds,
+      { ...previewOf([LINE, other]), enrollmentIds: [other.enrollmentId, ENROLLMENT] },
+      { ...previewOf([LINE]), enrollmentIds: [] },
+    ]) {
+      expect(adminGenderFlagsGetOutput.safeParse(detailWith(preview)).success).toBe(false);
+    }
+  });
+
+  it('refuses a line without its enrollment, subject, sessions or other party', () => {
+    expect(adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE]))).success).toBe(true);
+    for (const line of [
+      { ...LINE, enrollmentId: 'enrollment' },
+      { ...LINE, subject: { id: SUBJECT.id, nameAr: 'التجويد' } },
+      { ...LINE, sessions: 0 },
+      { ...LINE, sessions: 1.5 },
+      { ...LINE, counterpart: { displayName: 'فاطمة' } },
+      { ...LINE, counterpart: { userId: COUNTERPART } },
+    ]) {
+      expect(
+        adminGenderFlagsGetOutput.safeParse(detailWith({ ...previewOf([LINE]), lines: [line] }))
+          .success,
+      ).toBe(false);
+    }
+  });
+
+  it('refuses a count that is not the number of lines', () => {
+    expect(adminGenderFlagsGetOutput.safeParse(detailWith(previewOf([LINE, LINE]))).success).toBe(
+      true,
+    );
+    for (const preview of [
+      { ...previewOf([LINE]), count: 2 },
+      { ...previewOf([LINE]), count: 0 },
+      { ...previewOf([]), count: 1 },
+    ]) {
+      expect(adminGenderFlagsGetOutput.safeParse(detailWith(preview)).success).toBe(false);
+    }
   });
 });
 

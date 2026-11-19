@@ -14,6 +14,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 // 002-identity T086: the identity, verification, catalog and admin modules join (FR-213).
 // 002-identity T141: the payments module joins, real code since B15 (Phase 2's B31).
 // 003-booking T054: booking, sessions and moderation join, Phase 2's modules (SC-308).
+// 005-certification T026 (B49, Q-C4 (a)): of Phase 4's four paths, only platform/typst holds every
+// measure at 80%; certification, notifications and jobs/ stay out until they do (T008's follow-up).
 const coveredPaths = [
   'packages/money/src/**',
   'packages/time/src/**',
@@ -27,6 +29,7 @@ const coveredPaths = [
   'apps/api/src/modules/booking/**',
   'apps/api/src/modules/sessions/**',
   'apps/api/src/modules/moderation/**',
+  'apps/api/src/platform/typst/**',
 ];
 
 // What the specs share is test code, not a module's rules: counted, a fixture the specs run end to
@@ -45,6 +48,10 @@ const notMeasured = ['**/__fixtures__/**', '**/*.fixtures.ts', '**/*.md'];
 // Measured before booking, sessions and moderation joined (003-booking T054; full suite on
 // `develop` at 6f39641, fixtures left out): booking 93.98/87.56/95.24/96.80, sessions
 // 98.25/89.74/100/100, moderation 96.55/92.59/100/100.
+// Measured for Phase 4 (005-certification T026, B49; the specs that load each path, by `vitest
+// related`, project `node`, IJAZAH_DB_SPECS=1 as CI runs it, fixtures left out; on `8f292b26`):
+// platform/typst 100/90.9/100/100 (joins); certification 79.6/73.4/68.4/81.4, notifications
+// 74.5/64.0/55.6/77.1, jobs 91.3/78.5/82.8/92.6 (not yet).
 const floor = { statements: 80, branches: 80, functions: 80, lines: 80 };
 
 export default defineConfig({

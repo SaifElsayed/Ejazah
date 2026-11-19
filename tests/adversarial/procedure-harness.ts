@@ -39,6 +39,11 @@
 // also give FR-496's three kinds (`SESSION_ATTACK_KINDS`); `sessionKindFailures` fails one written
 // without them. The declared limits T052 names are read from the real routers' meta
 // (`declaredLimitFailures` over `DECLARED_LIMITS`), so a stamp lost or changed fails the spec.
+//
+// T025 of specs/005-certification (FR-625; Q-X1 (a)): `certificates`, `reports` and `genderFlags`
+// join the routers that cannot be exempt, each with its own reason (`PHASE_FOUR_NEVER_EXEMPT`); their
+// four procedures are registered in `registered-attacks.ts`. `DECLARED_LIMITS` gains T001's six keys
+// at every procedure that stamps one (`PHASE_FOUR`).
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
@@ -262,8 +267,28 @@ const SLOT_ROUTERS = ['discovery', 'booking', 'checkout', 'enrollments'] as cons
  */
 const SESSION_ROUTERS = ['sessions', 'chat', 'live'] as const;
 
+/**
+ * T025 of specs/005-certification (FR-625; Q-X1 (a)): Phase 4's routers whose every procedure names
+ * a user, a certificate, a report or a flag, each never exempt for a reason of its own.
+ */
+const PHASE_FOUR_NEVER_EXEMPT = {
+  certificates: `answers a party’s certificates, each naming its teacher, and a certificate’s signed link by its id, so it registers its attacks and is never exempt (FR-625, FR-410, T025)`,
+  reports: `names another user, met in a session, a chat or a profile, as the one reported, so it registers its attacks and is never exempt (FR-625, FR-410, T025)`,
+  genderFlags: `names another user, paired with or shown to the caller, whose declared gender it flags, so it registers its attacks and is never exempt (FR-625, FR-410, T025)`,
+} as const;
+
+const PHASE_FOUR_ROUTERS = [
+  'certificates',
+  'reports',
+  'genderFlags',
+] as const satisfies readonly (keyof typeof PHASE_FOUR_NEVER_EXEMPT)[];
+
 /** The routers none of whose procedures can be exempt. */
-export const ATTACKED_ROUTERS = [...SLOT_ROUTERS, ...SESSION_ROUTERS] as const;
+export const ATTACKED_ROUTERS = [
+  ...SLOT_ROUTERS,
+  ...SESSION_ROUTERS,
+  ...PHASE_FOUR_ROUTERS,
+] as const;
 
 /** A student-facing procedure outside the attacked routers that names no teacher, and why. */
 export interface Exemption {
@@ -323,6 +348,9 @@ function attackedRouterOf(path: string): string | undefined {
 
 /** Why a procedure of `router` is never exempt. */
 function neverExemptBecause(router: string): string {
+  if (Object.hasOwn(PHASE_FOUR_NEVER_EXEMPT, router)) {
+    return PHASE_FOUR_NEVER_EXEMPT[router as keyof typeof PHASE_FOUR_NEVER_EXEMPT];
+  }
   return (SESSION_ROUTERS as readonly string[]).includes(router)
     ? `issues a token or reads a session, its chat or its counterparty, so it registers its attacks and is never exempt (FR-496, FR-410, T052)`
     : `returns teacher data or acts on a teacher's slot, so it registers its attacks and is never exempt (FR-410, analysis U1)`;
@@ -439,10 +467,11 @@ export function declaredLimitFailures(
 const LINE = 'T052’s line (the owner’s decision of 2026-11-06, G1)';
 const SEARCH = 'T052’s line, the three name searches (the owner’s decision of 2026-11-06, G4)';
 const FOLLOW_UP = 'T052’s follow-up (B42c’s conflict check, Q-R16 (a))';
+const PHASE_FOUR = '005:T025’s note (B49, Q-X1 (a)): T001’s six keys';
 
 /**
  * Every limit T052's line and its follow-up name, per surface: the user kinds' `rateLimit` and the
- * administrator kind's `AdminMeta.rateLimit`.
+ * administrator kind's `AdminMeta.rateLimit`; since 005:T025, T001's six keys (`PHASE_FOUR`).
  */
 export const DECLARED_LIMITS: {
   readonly app: readonly DeclaredLimit[];
@@ -452,6 +481,10 @@ export const DECLARED_LIMITS: {
     { path: 'sessions.complaint.raise', key: 'rate_limit_absence_complaint', source: LINE },
     { path: 'live.events', key: 'rate_limit_live_channel', source: LINE },
     { path: 'teacher.students.list', key: 'rate_limit_search', source: SEARCH },
+    // 005:T025 (B49).
+    { path: 'reports.create', key: 'rate_limit_user_report', source: PHASE_FOUR },
+    { path: 'genderFlags.raise', key: 'rate_limit_gender_flag', source: PHASE_FOUR },
+    { path: 'teacher.ijazahRequests.send', key: 'rate_limit_ijazah_request', source: PHASE_FOUR },
   ],
   admin: [
     { path: 'disputes.revise', key: 'rate_limit_dispute_revision', source: LINE },
@@ -481,6 +514,20 @@ export const DECLARED_LIMITS: {
     },
     { path: 'users.delete', key: 'rate_limit_admin_user_delete', source: FOLLOW_UP },
     { path: 'sessions.endEnrollment', key: 'rate_limit_enrollment_end', source: FOLLOW_UP },
+    // 005:T025 (B49).
+    { path: 'ijazahRequests.approve', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahRequests.reject', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahs.revoke', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahs.bar', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahs.liftBar', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahs.signOff', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'ijazahs.rerender', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'users.setCertificateName', key: 'rate_limit_ijazah_decision', source: PHASE_FOUR },
+    { path: 'genderFlags.raise', key: 'rate_limit_gender_decision', source: PHASE_FOUR },
+    { path: 'genderFlags.dismiss', key: 'rate_limit_gender_decision', source: PHASE_FOUR },
+    { path: 'genderFlags.correct', key: 'rate_limit_gender_decision', source: PHASE_FOUR },
+    { path: 'genderFlags.fraudBan', key: 'rate_limit_gender_decision', source: PHASE_FOUR },
+    { path: 'settings.update', key: 'rate_limit_settings_update', source: PHASE_FOUR },
   ],
 };
 
