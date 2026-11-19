@@ -230,7 +230,9 @@ Settled by the review session on recorded precedents:
     card is offered for saving and every month is manual.
   - **The payee guard (PR #153 r1 Major 3):** in live mode `chargeSavedCard` refuses a charge that names no payee, as
     `createCheckout` does (`paymob.adapter.ts:220-222`), and the Moto intention carries `split_amounts`. The sweep
-    records the refusal as a `failed` order with `declineKind` `hard`: no gateway call, no retry. The month pauses
+    records the refusal as a `failed` order with `declineKind` `hard` and `gateway_order_id` NULL (allowed by the
+    check, r3 Major 1): no gateway call, no expiry, no retry, no `payment_failed` push, and neither «pay now» nor
+    «change card»; `programme.get`'s `payeePending` tells the student why (r3 Minor 1). The month pauses
     until the teacher's payout account is verified, since a manual payment is refused the same way
     (`checkout.service.ts:507-508`; PR #153 r2 Minor 2). Without it, a live 1,000 EGP month with no split
     would settle whole into the platform's account, the teacher's 700 with it (R-MONEY-6).
@@ -255,7 +257,7 @@ Settled by the review session on recorded precedents:
     payloads), and a spec asserts the enqueued payload carries ids only.
   - **Turning the automatic renewal off (PR #153 r1 Major 4 (a), DEC-95):** `programme.autoRenewOff`, the student only,
     at any time, deletes the card row under the programme's row lock, the lock the sweep's due step reads the card
-    under, so an «off» that has answered is never followed by a charge (r2 Minor 1). Later months renew by hand under
+    under, so an «off» that has answered is never followed by a new automatic order (r2 Minor 1; r3 nit 1). Later months renew by hand under
     the same due point, early renewal and pause rules. A charge already recorded `created` stays as it is (settled by the review session as the reading of the owner's (a): a charge already sent cannot be recalled),
     and the screen says so while `chargePending` is true. The consent words at the first payment say it can be turned
     off.

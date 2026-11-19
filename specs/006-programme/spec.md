@@ -390,7 +390,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-716**: A failed automatic charge MUST be shown to the student with a push of DEC-70's payment result
   (`payment_failed`) and on screen, with «pay now» (any method today's checkout offers) and «change card» (paying by hand
   with a new card, which then replaces the saved one). An automatic order that expires with no answer from the gateway
-  counts as a soft decline: the student is shown «pay now» and the retry schedule starts.
+  counts as a soft decline: the student is shown «pay now» and the retry schedule starts. A charge refused before the
+  gateway because the teacher's payout account is not verified (`no_payee`) is not a card failure: no push, no «pay
+  now» or «change card»; the screen says payment opens once the teacher's payment details are verified (R-HONEST).
 - **FR-717**: A failed charge MUST be retried only on a soft decline, at most 4 times, 1, 3, 5 and 7 days after the
   failure (§3.14), then only by hand; a hard decline MUST never be retried (DEC-92).
 - **FR-718**: At most one paid order MUST cover a month. A second paid order for a month already paid MUST be treated as
@@ -403,7 +405,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   the saved-card integration, the split on such a charge, the token's issue and its signed callback, retry fees and
   decline codes); every month MUST be renewable by hand in any environment while the teacher's payout account is
   verified. In live mode, with none, both the automatic charge (a hard decline, no retry) and the manual payment are
-  refused and the month pauses (R-MONEY-6).
+  refused and the month pauses (R-MONEY-6); the manual refusal is a typed `payee_unverified`, and the student is told
+  why (FR-716).
 
 **The pause and the stop request**
 

@@ -24,7 +24,8 @@ changes.
 - New: `decline_kind` `decline_kind` NULL (`soft` · `hard`), set on a `failed` automatic order.
 - New: `confirmed_at` timestamptz NULL: the confirm step's per-order marker (V-3).
 - `gateway_order_id` becomes NULL-able, with a check: NULL only on an `automatic` order in `created` (until the
-  gateway answers) or `expired` (never answered). The unique index keeps non-NULL values unique (analyze N-3).
+  gateway answers), `expired` (never answered), or `failed` with `decline_kind = 'hard'` (refused before the gateway,
+  `no_payee`; PR #153 r3 Major 1). The unique index keeps non-NULL values unique (analyze N-3).
 - An index on (`enrollment_id`, `kind`, `instalment_month`). Not unique: a second paid order for a month is recorded
   and goes to the case (FR-718).
 

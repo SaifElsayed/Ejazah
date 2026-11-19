@@ -65,7 +65,8 @@ No open question remains.
       `payment_event_type` + `card_saved`.
   - Then:
     - `payments.kind`, `instalment_month`, `attempt`, `automatic`, `decline_kind`, `confirmed_at`, and
-      `gateway_order_id` made NULL-able under its check (automatic `created`/`expired` only; N-3);
+      `gateway_order_id` made NULL-able under its check (automatic `created`, `expired`, or `failed` with
+      `decline_kind = 'hard'` only; N-3, PR #153 r3 Major 1);
     - `packages.is_programme` and the three prices, with the three old columns made nullable under the check;
     - `sessions.programme_month`;
     - `programmes`, `programme_requests`, `programme_cards` with their checks and indexes.
@@ -126,6 +127,12 @@ No open question remains.
   - Specs: a replay; month m+1 paid while m's case is open; two paid events for one month (DB race).
   - The kernel.md row for programme → enrollment → payment (`specs/004-sessions/contracts/kernel.md`, coordinated with
     track 1).
+  > **Follow-up (PR #153's review, round 3, outside the round; the review session's word, 2026-11-20).** Unverified: the
+  > close hook (R-510) sets `programmes.state` from booking's cancel path, and the termination subscriber reaches that
+  > path holding the enrollment's lock, which would be enrollment → programme, the reverse of kernel.md's programme →
+  > enrollment. T006's kernel.md row states where the close hook takes the programme's lock (before the enrollment's,
+  > or a key-share that cannot deadlock), with a DB race spec of a termination against the sweep. Passed to the
+  > money-lane review. Not scheduled apart from T006.
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
@@ -231,8 +238,11 @@ No open question remains.
     (`paymob.adapter.ts`, as `createCheckout` does at `:220-222`) and the Moto intention carries `split_amounts`. The
     sweep records the refusal as a `failed` order with `declineKind` `hard`, with no gateway call and no retry; the
     month pauses until the teacher's payout account is verified, since a manual payment is refused the same way
-    (`checkout.service.ts:507-508`) (PR #153 r2 Minor 2). A spec red first for each.
-  - **The failure's push:** `payment_failed` through today's path, unchanged.
+    (`checkout.service.ts:507-508`) (PR #153 r2 Minor 2). A spec red first for each, and one (PR #153 r3 Major 1)
+    in which the `no_payee` refusal is recorded `failed`/`hard` with `gateway_order_id` NULL under T001's check, is
+    never expired, and is never retried.
+  - **The failure's push:** `payment_failed` through today's path, unchanged, except on a `no_payee` refusal: no push,
+    and neither «pay now» nor «change card» (PR #153 r3 Minor 1, R-HONEST), red first.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -258,6 +268,8 @@ No open question remains.
   - open from `programme_renew_early_days` for a student without a card; refused `charge_pending` while an automatic
     order is `created`;
   - «pay now» and «change card» after a failure;
+  - `programme.pay` and `programme.renew` refuse a typed `CONFLICT` `payee_unverified` before the gateway while the
+    teacher's payout account is not verified (PR #153 r3 Minor 1), red first;
   - the paid month generates from max+1 and the next occurrence, clears `paused_at` and withdraws an open stop request
     with one log line;
   - live signals; adversarial registration.
@@ -279,7 +291,8 @@ No open question remains.
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/enrollments-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
-  - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19), with its
+  - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19), `payeePending` (the teacher's payout account
+    not verified; PR #153 r3 Minor 1), with its
     adversarial registration;
   - `programmes.queue` (paused, stop, refusal, no_offer; oldest first, how late, the reason) and `programmes.get`
     (admin);
@@ -294,7 +307,9 @@ No open question remains.
   - pay in full or monthly with the consent line;
   - months paid and next due;
   - «renew now», «pay now», «change card»;
-  - the automatic renewal on/off while a card is saved (`programme.autoRenewOff`, FR-713a), and after turning it off,
+  - while `payeePending` is true, a line that payment opens once the teacher's payment details are verified, the month
+    resuming then, and no «pay now» or «change card» (PR #153 r3 Minor 1);
+  - turn the automatic renewal off (shown while a card is saved; `programme.autoRenewOff`, FR-713a), and after it,
     the month's renewal by hand; while `chargePending` is true, a line that this month's charge is already under way
     (PR #153 r2 Major 1, Minor 1);
   - paused;
