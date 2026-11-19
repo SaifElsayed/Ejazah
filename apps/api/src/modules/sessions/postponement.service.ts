@@ -129,6 +129,8 @@ export interface PostponementStore {
       readonly enrollmentId: string;
       readonly requestedByUserId: string;
       readonly reason: string;
+      /** The instant read under the locks (`at`), as the events' `occurred_at`. */
+      readonly createdAt: Date;
     },
   ): Promise<string>;
   postponeSessions(
@@ -286,6 +288,8 @@ export function createPostponement({
             enrollmentId: terms.id,
             requestedByUserId: userId,
             reason: asked.reason,
+            // PR #151's review, round 1, nit 1: the interval's «now», not the transaction's start.
+            createdAt: at,
           });
           await store.postponeSessions(tx, moved, postponementId);
           await store.recordEvents(

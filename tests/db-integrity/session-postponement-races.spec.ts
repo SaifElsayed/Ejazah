@@ -2,9 +2,13 @@
 // postponement raced against the paths that lock the same rows, over the real tables.
 //
 //   - AGAINST AN ACCEPTED CANCELLATION of the week's one session: both end with no deadlock, in
-//     either order, and agree. The answer first: the session `cancelled_by_agreement`, the
-//     postponement, reading the week again under its locks, refused `no_session_in_week`. The
-//     postponement first: the session `postponed`, the answer refused `SESSION_NOT_SCHEDULED`.
+//     either order, and agree. The answer first: the session `cancelled_by_agreement`; the
+//     postponement, waiting on the enrollment's row the answer holds, reads the week once granted
+//     (READ COMMITTED: its next statement sees the committed answer) and is refused
+//     `no_session_in_week`. The postponement first: the session `postponed`, the answer refused
+//     `SESSION_NOT_SCHEDULED`. The enrollment's row, locked by both before the week is read, decides
+//     the race; the week read again under the sessions' locks is a second guard that decides nothing
+//     here (PR #151's review, round 1, nit 2: its mutant M1-db, that re-read dropped, stayed green).
 //   - AGAINST THE EVALUATION SWEEP on the same enrollment: the sweep settles the ended session and
 //     the postponement moves the week's, both committed, in either order; the two share only the
 //     enrollment's row, taken by both in kernel.md's place.

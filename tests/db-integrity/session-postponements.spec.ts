@@ -378,6 +378,50 @@ describe('sessions.postpone over the real tables (FR-POSTPONE-1, FR-POSTPONE-2)'
       { path: 'cause', code: 'no_session_in_week' },
     ]);
   });
+
+  // PR #151's review, round 1, Minor 3: the kernel's idempotency keys the call, and the live events
+  // are added inside the keyed effect, so a replay writes and publishes nothing (FR-POSTPONE-5).
+  it('the same key twice: the same answer, one row, and the other party told once', async () => {
+    const w = await world();
+    const published: unknown[] = [];
+    const live: LivePublisher = {
+      afterCommit: (to, event) => void published.push([to, event]),
+    };
+    const idempotencyKey = `probe-${randomUUID()}`;
+    const call = () =>
+      services.postpone(
+        { userId: w.studentId },
+        { enrollmentId: w.enrollmentId, reason: 'سفر طارئ', idempotencyKey },
+        log,
+        live,
+      );
+    const first = await call();
+    expect(await call()).toEqual(first);
+    const rows = await db.query('SELECT 1 FROM session_postponements WHERE enrollment_id = $1', [
+      w.enrollmentId,
+    ]);
+    expect(rows.rowCount).toBe(1);
+    expect(published).toEqual([
+      [[w.teacherId], { type: 'session', sessionId: w.inWeek, enrollmentId: w.enrollmentId }],
+      [[w.teacherId], { type: 'enrollment', enrollmentId: w.enrollmentId }],
+    ]);
+  });
+
+  // PR #151's review, round 1, nit 1: the row's `created_at` is the instant read under the locks
+  // (`at`), as the interval's «now» and the `postponed` events' `occurred_at` are, not the
+  // transaction's start.
+  it('records the postponement at the instant its postponed event names', async () => {
+    const w = await world();
+    const answer = await postpone(w.enrollmentId, w.studentId);
+    const { rows } = await db.query<{ same: boolean }>(
+      `SELECT p.created_at = e.occurred_at AS same
+         FROM session_postponements p
+         JOIN session_events e ON e.session_id = $2 AND e.kind = 'postponed'
+        WHERE p.id = $1`,
+      [answer.postponementId, w.inWeek],
+    );
+    expect(rows).toEqual([{ same: true }]);
+  });
 });
 
 // 003:T112 (the owner's Q-B (a)): a postponed session whose make-up was never offered (its student

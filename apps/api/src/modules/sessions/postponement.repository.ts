@@ -70,6 +70,8 @@ export async function insertPostponement(
     readonly enrollmentId: string;
     readonly requestedByUserId: string;
     readonly reason: string;
+    /** The instant read under the locks; the interval (FR-POSTPONE-4) is counted from it. */
+    readonly createdAt: Date;
   },
 ): Promise<string> {
   const { id } = await tx.sessionPostponement.create({ data: row, select: { id: true } });
