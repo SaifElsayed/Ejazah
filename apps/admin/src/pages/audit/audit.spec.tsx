@@ -577,6 +577,24 @@ describe('005:T013: the gender-flag queue’s actions by name', () => {
   );
 });
 
+// 005:T024 (B49; FR-624; contracts/admin-surface.md, `settings.*`): the settings page's read, on
+// the reader (`admin`), and its change, on the key (`setting`), named by the catalogue's text in
+// Arabic and in English (T083's per-action pattern); both target types exist, so none is new.
+const B49_SETTINGS_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['settings.listed', 'عرض الإعدادات', 'View settings'],
+  ['setting.changed', 'تعديل إعداد', 'Change a setting'],
+];
+
+describe('005:T024: the settings page’s actions by name', () => {
+  it.each(B49_SETTINGS_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
+
 // 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين»'s two reads and the mark «تم الصرف», named by
 // the catalogue's text in Arabic and in English (T083's per-action pattern); each is audited on the
 // reader (`admin`) or the teacher (`user`), so no new target type.

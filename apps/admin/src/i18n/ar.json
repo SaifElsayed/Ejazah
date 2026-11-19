@@ -218,6 +218,10 @@
         "sessionsMonitorViewed": "عرض اشتراك",
         "sessionsReviewListed": "عرض قائمة المراجعة",
         "sessionsReviewViewed": "عرض بيانات اتصال جلسة",
+        "settings": {
+          "changed": "تعديل إعداد",
+          "listed": "عرض الإعدادات"
+        },
         "studentBan": "حظر طالب",
         "studentReinstate": "إعادة تفعيل طالب",
         "studentSuspend": "إيقاف طالب",
