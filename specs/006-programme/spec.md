@@ -304,8 +304,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   time's start. The count, the length and the total are frozen from then on; a later change of the teacher's prices
   reaches later offers only (FR-BOOK-14, `003` FR-312 as amended, DEC-93).
 - **FR-706**: The package's weekly time MUST stay reserved from the assessment until the student cancels, or until
-  48 hours (§3.14) after the offer pass unpaid; then it is offered to anyone again
-  (FR-BOOK-15).
+  48 hours (§3.14) after the assessment session ends pass with the rest unpaid (the offer and the payment both fall
+  inside them; FR-BOOK-15's «after the assessment … within 48 hours»); then it is offered to anyone again, and the fee
+  is kept (FR-BOOK-15, research R-505).
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
   even when the student pays on the first day (FR-BOOK-15).
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
