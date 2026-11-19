@@ -183,6 +183,9 @@ import type {
   // 005:T032 (B46): the sign-off and the re-render.
   adminIjazahsRerenderInput,
   adminIjazahsSignOffInput,
+  // 005:T022 (B49, Q-P2 (b)): the barred list.
+  adminIjazahsBarredInput,
+  adminIjazahsBarredOutput,
   // 005:T013 to T015 (B47): the administrators' gender flags, the correction and the fraud ban.
   adminGenderFlagsCorrectInput,
   adminGenderFlagsDismissInput,
@@ -950,6 +953,12 @@ export interface AdminSurfaceServices {
       actorId: string,
       input: z.output<typeof adminIjazahsRerenderInput>,
     ): Promise<{ readonly certificateNumber: string; readonly replayed: boolean }>;
+    // 005:T022 (B49, Q-P2 (b)): the open bars, newest first, on the call's transaction.
+    barred(
+      tx: Transaction,
+      actorId: string,
+      input: z.output<typeof adminIjazahsBarredInput>,
+    ): Answer<typeof adminIjazahsBarredOutput>;
   };
   /**
    * 005:T011 (B47; FR-612; contracts/admin-surface.md, `reports.*`): the administrators' queue of

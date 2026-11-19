@@ -280,6 +280,8 @@ export interface AdminServices {
     // 005:T032 of B46 (FR-629): the sign-off and the re-render.
     | 'signOff'
     | 'rerender'
+    // 005:T022 of B49 (Q-P2 (b)): the open bars, newest first.
+    | 'barred'
   >;
   /**
    * 005:T013 of B47 (FR-614, FR-615; R-409; Q-G1 (a)): the gender-flag queue, moderation's flags

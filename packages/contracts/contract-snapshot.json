@@ -1744,6 +1744,25 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "ijazahs.barred": {
+        "input": { "$": { "type": "object" }, "$.cursor": { "type": "string" } },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].barId": { "required": true, "type": "string" },
+          "$.items[].barredAt": { "required": true, "type": "string" },
+          "$.items[].barredBy": { "required": true, "type": "object" },
+          "$.items[].barredBy.adminId": { "required": true, "type": "string" },
+          "$.items[].barredBy.displayName": { "required": true, "type": "string" },
+          "$.items[].reason": { "required": true, "type": "string" },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "null|string" },
+          "$.items[].student.userId": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
       "ijazahs.get": {
         "input": {
           "$": { "type": "object" },
