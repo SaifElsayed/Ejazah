@@ -23,7 +23,7 @@ import { z } from 'zod';
 
 import { idempotencyKey } from './idempotency-key.js';
 import { calendarDate, timeZone } from './onboarding.js';
-import { sessionStatus } from './enrollments.js';
+import { sessionPostponement, sessionStatus } from './enrollments.js';
 import { sessionLengthMinutes } from './packages.js';
 import { slotStartTimeLocal } from './slots.js';
 
@@ -127,17 +127,9 @@ export const sessionsGetOutput = z.object({
   counterpartyInRoom: z.boolean(),
   /**
    * 003:T112 (FR-POSTPONE-5, DEC-90): the postponement that moved this session, absent while none
-   * did: which party postponed it, its reason (the party's own text, 1 to 500 characters, as a
-   * cancellation request's) and when. Both parties read it; the other party is shown it on screen
-   * through the live channel, with no push. Additive (R-API-9).
+   * did (`sessionPostponement`, the lists' shape). Additive (R-API-9).
    */
-  postponement: z
-    .object({
-      by: z.enum(['teacher', 'student']),
-      reason: z.string().min(1).max(500),
-      at: z.iso.datetime(),
-    })
-    .optional(),
+  postponement: sessionPostponement.optional(),
 });
 
 /** What the phone connects with (FR-431): bound to this session and this caller (R-GENDER-7). */

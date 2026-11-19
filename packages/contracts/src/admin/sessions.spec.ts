@@ -16,6 +16,8 @@ import {
   restoreRefusalCause,
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
+  timelineEvent,
+  timelineEventKind,
 } from './sessions.js';
 
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000000e1';
@@ -169,6 +171,19 @@ describe('003:T112: the end on a complaint against the student', () => {
     expect(
       sessionsEndEnrollmentInput.parse({ ...asked, cause: 'student_complaint_ended' }),
     ).toEqual({ ...asked, slot: 'hold', cause: 'student_complaint_ended' });
+  });
+
+  // The coordinator's Q2 (a), 2026-11-19: `session_event_kind` gains `postponed`, and the monitor's
+  // timeline parses it.
+  it('adds postponed to the timeline’s event kinds, at the end', () => {
+    const row = {
+      source: 'session',
+      kind: 'postponed',
+      sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
+      occurredAt: '2026-11-19T10:00:00.000Z',
+    };
+    expect(timelineEventKind.options.at(-1)).toBe('postponed');
+    expect(timelineEvent.safeParse(row).success).toBe(true);
   });
 
   it('refuses any other cause', () => {

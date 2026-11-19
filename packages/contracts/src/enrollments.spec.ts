@@ -135,6 +135,50 @@ describe('the tabs and the session statuses', () => {
   });
 });
 
+// 003:T112 (FR-POSTPONE-5, DEC-90; the coordinator's Q1 (a), 2026-11-19): a listed session carries the
+// postponement that moved it, the shape `sessions.get` answers, so both enrollment screens show who
+// postponed it and why from their own read. Optional, additive (R-API-9). Written before the
+// field, run red first.
+describe('003:T112: the postponement on a listed session', () => {
+  const postponed = { ...session, status: 'postponed' } as const;
+  const postponement = { by: 'student', reason: 'سفر طارئ', at: '2026-11-19T10:00:00.000Z' };
+
+  it('carries who postponed it, the reason and when, and parses without one', () => {
+    expect(listedSession.safeParse({ ...postponed, postponement }).data).toEqual({
+      ...postponed,
+      postponement,
+    });
+    const without = listedSession.safeParse(postponed);
+    expect(without.success).toBe(true);
+    expect(without.data?.postponement).toBeUndefined();
+  });
+
+  it('carries it on the enrollment read', () => {
+    expect(
+      enrollmentsGetOutput.safeParse({
+        ...item,
+        sessions: [{ ...postponed, postponement }],
+        complaintOpen: false,
+        ijazahRequest: null,
+      }).data?.sessions[0]?.postponement,
+    ).toEqual(postponement);
+  });
+
+  it('refuses a postponement by anyone else, a blank or over-long reason, or a time not an instant', () => {
+    for (const refused of [
+      { ...postponement, by: 'admin' },
+      { ...postponement, reason: '' },
+      { ...postponement, reason: 'ا'.repeat(501) },
+      { ...postponement, at: '2026-11-19' },
+    ]) {
+      expect(
+        listedSession.safeParse({ ...postponed, postponement: refused }).success,
+        JSON.stringify(refused).slice(0, 40),
+      ).toBe(false);
+    }
+  });
+});
+
 describe('every enrollments input names what is asked for, never who asks (R-GENDER-4)', () => {
   it('strips a gender, a user id or a role it was sent', () => {
     const sent = { gender: 'female', userId: ids.teacher, role: 'teacher' };

@@ -313,6 +313,9 @@ export const timelineEventKind = z.enum([
   // release (T070) and a hold's end (T074).
   'slot_released',
   'slot_hold_ended',
+  // 003:T112 (SRS FR-POSTPONE-1, DEC-90; Q-2 (a)): the `session_event_kind` value a postponement
+  // writes for each session it moves; added, additively (R-API-9).
+  'postponed',
 ]);
 
 /**
