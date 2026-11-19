@@ -1,7 +1,8 @@
 // T037: AdminNav, the sidebar of every console page (screens.md, `AdminNav`), with the entries of
 // this phase only (FR-176): a navigation entry whose page lands in a later phase is not rendered
 // until that phase adds it here. The groups and the order are the board's; the settings entry leads
-// to `/settings/admins`, the one settings page this phase builds (FR-174).
+// to `/settings` (005:T024, FR-624), which leads to `/settings/admins` (FR-174); the entry is current
+// on both.
 //
 // The signed-in administrator's name (`auth.me`) and the two queues' open counts (`home.summary`,
 // the cache key the pages share) are read here (T073): the applications in review, the credentials
@@ -66,7 +67,8 @@ export const NAV_GROUPS: readonly {
       { path: '/payouts', label: 'admin.money.payouts.nav', icon: 'landmark' },
       // B42 (the note under T048, Q4): the video outages.
       { path: '/outages', label: 'admin.nav.items.outages', icon: 'video-off' },
-      { path: '/settings/admins', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
+      // 005:T024 (B49, Q-X2 (a)): the settings page, which leads to the administrators.
+      { path: '/settings', label: 'admin.nav.items.settings', icon: 'sliders-horizontal' },
       { path: '/audit', label: 'admin.nav.items.audit', icon: 'list' },
     ],
   },

@@ -85,6 +85,8 @@ describe('the pages of this phase', () => {
     ['/', 'admin.home.title'],
     ['/applications', 'admin.applications.title'],
     ['/credentials', 'admin.credentials.title'],
+    // 005:T024 (B49): the settings page beside the administrators'.
+    ['/settings', 'admin.settings.title'],
     ['/settings/admins', 'admin.admins.title'],
     ['/audit', 'admin.audit.title'],
   ] as const)('%s is in the console with its title', (path, title) => {
@@ -144,7 +146,8 @@ describe('AdminNav', () => {
       // 003:T105 (DEC-89): «تحويلات المعلمين», beside the payments monitor.
       [translate('ar', 'admin.money.payouts.nav'), '/payouts'],
       [translate('ar', 'admin.nav.items.outages'), '/outages'],
-      [translate('ar', 'admin.nav.items.settings'), '/settings/admins'],
+      // 005:T024 (B49): «Settings» opens the settings page, which leads to the administrators.
+      [translate('ar', 'admin.nav.items.settings'), '/settings'],
       [translate('ar', 'admin.nav.items.audit'), '/audit'],
     ]);
   });
@@ -152,7 +155,8 @@ describe('AdminNav', () => {
   it('marks the current page, home only on its own path', () => {
     renderAt('/settings/admins', verified);
     const current = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current'));
-    expect(current.map((link) => link.getAttribute('href'))).toEqual(['/settings/admins']);
+    // 005:T024 (B49): the administrators' page is below «Settings», so that entry is current.
+    expect(current.map((link) => link.getAttribute('href'))).toEqual(['/settings']);
   });
 
   it('navigates in place on a click', () => {
