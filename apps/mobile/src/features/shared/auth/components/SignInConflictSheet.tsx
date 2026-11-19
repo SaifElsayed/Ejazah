@@ -2,9 +2,12 @@
 // used by another method. Its body names the address and that method, and its primary button is the
 // way in by that method; nothing links the two accounts. Drawn for email and password; the Google and
 // Apple bodies are the same sheet with their own body and button (screens.md, SignInConflict).
+//
+// B50 T148 (ADR 0012 D1): Apple is offered on iOS only, so on Android an Apple account's body says
+// to sign in with it on an iPhone, and the sheet has no Apple button.
 import type { SignInMethod } from '@ijazah/contracts';
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Button, IconTile, Sheet, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
@@ -40,6 +43,7 @@ export function SignInConflictSheet({
   const t = useT();
   if (conflict === null) return null;
   const { method, email } = conflict;
+  const elsewhere = method === 'apple' && Platform.OS !== 'ios';
   const primary = () => {
     onClose();
     if (method === 'email') router.push('/(auth)/email-sign-in');
@@ -53,18 +57,20 @@ export function SignInConflictSheet({
           {t('auth.signInConflict.title')}
         </Text>
         <Text tone="muted" align="center">
-          {t(BODY[method], { email })}
+          {t(elsewhere ? 'auth.signInConflict.bodyAppleOnIphone' : BODY[method], { email })}
         </Text>
       </View>
       <View style={{ gap: tokens.space['2'] }}>
-        <Button
-          label={t(PRIMARY[method])}
-          layout="block"
-          {...(method === 'email'
-            ? {}
-            : { variant: method, icon: { name: method, fill: 'solid' } })}
-          onPress={primary}
-        />
+        {elsewhere ? null : (
+          <Button
+            label={t(PRIMARY[method])}
+            layout="block"
+            {...(method === 'email'
+              ? {}
+              : { variant: method, icon: { name: method, fill: 'solid' } })}
+            onPress={primary}
+          />
+        )}
         <Button label={t('common.action.back')} variant="ghost" layout="block" onPress={onClose} />
       </View>
     </Sheet>

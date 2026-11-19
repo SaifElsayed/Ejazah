@@ -15,9 +15,11 @@
 // T066), `main.ts` passes stand-ins that answer null, so every request is anonymous in production
 // and `tests/pipeline/built-entrypoints.spec.ts` boots the built `main.js` as before.
 //
-// THE CLIENT'S ADDRESS (T017) is read once per request by `clientAddressOf`: the socket's peer,
+// THE CLIENT'S ADDRESS (T017) is read once per request by `readClientAddress`: the socket's peer,
 // or the last hop of the one proxy header `TRUSTED_PROXY` names, never the first hop the client
-// writes itself. Both contexts carry it, and the public-page helper (T019) counts its limit by it.
+// writes itself, and only from the proxy's own address, `TRUSTED_PROXY_ADDRESS`, when the hop is an
+// address (T147); a header set aside is logged once for the request, with its reason. Both
+// contexts carry it, and the public-page helper (T019) counts its limit by it.
 //
 // ONE ERROR SHAPE OUT. On a surface, tRPC sends T107's `toErrorShape`, and the HTTP status is set
 // from the same mapping (tRPC would otherwise answer 500 for every error thrown in a procedure).
@@ -100,6 +102,11 @@ import {
   READINESS,
   type Readiness,
 } from './platform/health/health.controller.js';
+import {
+  logProxyFallback,
+  readClientAddress,
+  type TrustedProxy,
+} from './platform/http/client-address.js';
 import { type Logger, requestLogger } from './platform/logging/logger.js';
 import {
   DESIGN_ASSETS_PATH,
@@ -117,7 +124,6 @@ import {
   type AppServices,
   type Administration,
   bearerOf,
-  clientAddressOf,
   createAdminContext,
   createAppContext,
   type LiveChannel,
@@ -174,8 +180,11 @@ export interface ApplicationOptions {
   readonly services: AppServices;
   /** The admin module's services the administrator surface's procedures read, bound by `main.ts` (T067). */
   readonly adminServices: AdminSurfaceServices;
-  /** `TRUSTED_PROXY`: the one proxy header whose last hop is the client's address, when set (T017). */
-  readonly trustedProxyHeader?: string;
+  /**
+   * `TRUSTED_PROXY` and `TRUSTED_PROXY_ADDRESS`: the one proxy header whose last hop is the
+   * client's address, read only from the proxy's own address, when set (T017, T147).
+   */
+  readonly trustedProxy?: TrustedProxy;
   /**
    * The process's live channel, its bus and its registry of open streams (T063), bound by `main.ts`:
    * every request's context carries a publisher over the bus, and the user surface's `live.events`
@@ -343,6 +352,7 @@ function surfaceHandler<TContext extends Correlated>(
   log: Logger,
   maxBodySize: number,
   actorOf: ActorOf<TContext>,
+  allowMethodOverride: boolean,
 ): (request: IncomingMessage, response: ServerResponse) => void {
   // tRPC tells a subscription's refused open twice, once by its call and once by its stream (its
   // `resolveResponse`), with the one error: each is written once.
@@ -352,6 +362,10 @@ function surfaceHandler<TContext extends Correlated>(
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
     // tRPC's PAYLOAD_TOO_LARGE, answered 413 in the one shape and not reported as unexpected.
     maxBodySize,
+    // 002:T147 (W1): the panel sends its queries by POST, their search text in the body rather
+    // than in a URL every log keeps; only the administrator surface takes a query so (tRPC allows
+    // the override for POST alone, so a mutation is never taken by GET).
+    allowMethodOverride,
     // Neither client batches (both use `httpLink`), so a batch is refused whole before any call's
     // input is read: tRPC's `BAD_REQUEST`, answered 400 `VALIDATION_FAILED` (T108).
     allowBatching: false,
@@ -435,17 +449,17 @@ export async function createApplication({
   sessions,
   services,
   adminServices,
-  trustedProxyHeader,
+  trustedProxy,
   live,
   surfaces = { app: appRouter, admin: adminRouter },
   webRoutes = {},
   routes = {},
 }: ApplicationOptions): Promise<INestApplication> {
   const channel = live === undefined ? {} : { live };
-  const clientAddress = (request: IncomingMessage): string =>
-    clientAddressOf(
+  const clientAddress = (request: IncomingMessage) =>
+    readClientAddress(
       { remoteAddress: request.socket.remoteAddress, headers: request.headers },
-      trustedProxyHeader,
+      trustedProxy,
     );
   // The surface's resolver, once per request, from the bearer token; no bearer, no call.
   const resolve = async <TSession>(
@@ -469,37 +483,47 @@ export async function createApplication({
     surfacePaths.app,
     surfaceHandler(
       surfaces.app,
-      async (request) =>
-        createAppContext({
+      async (request) => {
+        const { address, fallback } = clientAddress(request);
+        const context = createAppContext({
           session: await resolve(sessions.user, request),
           log,
           rateLimiter,
-          clientAddress: clientAddress(request),
+          clientAddress: address,
           services,
           ...channel,
-        }),
+        });
+        logProxyFallback(context.log, fallback);
+        return context;
+      },
       log,
       maxRequestBodyBytes,
       appActor,
+      false,
     ),
   );
   application.use(
     surfacePaths.admin,
     surfaceHandler(
       surfaces.admin,
-      async (request) =>
-        createAdminContext({
+      async (request) => {
+        const { address, fallback } = clientAddress(request);
+        const context = createAdminContext({
           session: await resolve(sessions.admin, request),
           log,
           administration,
           services: adminServices,
           rateLimiter,
-          clientAddress: clientAddress(request),
+          clientAddress: address,
           ...channel,
-        }),
+        });
+        logProxyFallback(context.log, fallback);
+        return context;
+      },
       log,
       maxRequestBodyBytes,
       adminActor,
+      true,
     ),
   );
   // The public pages and the design's stylesheets, beside the surfaces (T019, ADR 0021 D5).
@@ -507,7 +531,7 @@ export async function createApplication({
   const pages = {
     rateLimiter,
     log,
-    ...(trustedProxyHeader === undefined ? {} : { trustedProxyHeader }),
+    ...(trustedProxy === undefined ? {} : { trustedProxy }),
   };
   // Express matches a mount by prefix, so the longest path is mounted first: `/delete-account/
   // confirm` reaches its own handler ahead of `/delete-account`, whatever order the pages are

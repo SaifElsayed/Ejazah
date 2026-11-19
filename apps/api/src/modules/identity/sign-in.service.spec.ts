@@ -6,10 +6,15 @@
 // account is refused with that account's method, never signed in to or merged (FR-123). Over the
 // real database, the sign-in stand-in and in-memory marks.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
 import { hashPassword } from '../../platform/crypto/hashing.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import {
+  IdentityTokenError,
+  type IdentityTokenProblem,
+} from '../../platform/ports/sign-in/sign-in.port.js';
 import {
   buildIdentity,
   createAccount,
@@ -111,6 +116,41 @@ describe('the nonce', () => {
     });
     expect(identity.signInPort.calls).toHaveLength(1);
   });
+
+  // 002:T148 (B50, the note under T148 (2); the note under T042): the live adapter refuses a token
+  // for any of the port's six reasons. Each answers the one UNAUTHENTICATED, the same shape as an
+  // unknown nonce and naming no reason, and the nonce is spent all the same. The port's error is
+  // thrown here as the live adapter throws it: a module may name no adapter (R-API-4).
+  it.each<IdentityTokenProblem>(['shape', 'signature', 'issuer', 'audience', 'expiry', 'nonce'])(
+    'answers a port refusal for %s with the one UNAUTHENTICATED, and spends the nonce (002:T148)',
+    async (reason) => {
+      const unknown = await identity.signIn
+        .signInWithProvider({ provider: 'google', nonce: 'n'.repeat(43), identityToken: 'x' })
+        .catch((error: unknown) => error);
+      const { request } = await token('google');
+      const verify = vi
+        .spyOn(identity.signInPort, 'verifyIdentityToken')
+        .mockRejectedValueOnce(new IdentityTokenError(reason));
+
+      const refusal = await identity.signIn
+        .signInWithProvider(request)
+        .catch((error: unknown) => error);
+
+      expect(refusal).toBeInstanceOf(DomainError);
+      expect(unknown).toBeInstanceOf(DomainError);
+      const shape = (error: DomainError) => ({
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      });
+      expect(shape(refusal as DomainError)).toEqual(shape(unknown as DomainError));
+      expect((refusal as DomainError).message).not.toContain(reason);
+      await expect(identity.signIn.signInWithProvider(request)).rejects.toMatchObject({
+        code: 'UNAUTHENTICATED',
+      });
+      expect(verify).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe('a new identity', () => {

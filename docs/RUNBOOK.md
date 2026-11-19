@@ -51,6 +51,8 @@ bundles:
 ```bash
 EXPO_PUBLIC_API_URL=http://<this machine's LAN address>:3000   # the API's origin; without it the app stops at launch
 EXPO_PUBLIC_DEV_SIGN_IN=true                                   # the fake provider, below
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=                              # the Web OAuth client's ID: Google sign-in, below
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=                              # the iOS OAuth client's ID; unused until iOS ships
 ```
 
 With `pnpm dev` running and the device on the same network:
@@ -91,6 +93,30 @@ accepts an unsigned token (`platform/ports/sign-in/fake.adapter.ts`);
 `EXPO_PUBLIC_DEV_SIGN_IN=true` adds «دخول تجريبي للتطوير» to the welcome screen
 (`features/shared/auth/dev-sign-in.ts`), which signs in as one fixed person,
 `dev-phone@ijazah.test`; a release build never shows it (`__DEV__` is false).
+
+**Google sign-in for real (002:T148).** On Android the phone asks Credential
+Manager for Google's ID token through the local module `modules/google-id`,
+with the server's nonce in it, and the API's `SIGN_IN_PROVIDER=live` verifies
+the token against Google's published keys. Apple waits for iOS. The owner's
+steps, once:
+
+1. In Google Cloud, set up the project's OAuth consent screen.
+2. Create a **Web** OAuth client. Its ID is the API's `GOOGLE_CLIENT_IDS` (root
+   `.env`) and the phone's `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   (`apps/mobile/.env`).
+3. Create an **Android** OAuth client for `com.ijazah.app` with the SHA-1 of
+   every key that signs the app: the local debug keystore
+   (`keytool -list -v -keystore ~/.android/debug.keystore`) and the EAS key (`npx eas-cli credentials`, Android,
+   `development`). The phone sends this client's ID nowhere; Google matches it
+   by the package and the SHA-1.
+4. Put the values in the two `.env` files yourself; they are never printed or
+   committed.
+5. Make a new development build (the module is native; see «A new native
+   module means a new development build» above) and install it.
+6. Start the API with `SIGN_IN_PROVIDER=live` to try it.
+
+The store key's SHA-1 is added to the Android client later, with the
+production profile (`eas.json` has only `development` today).
 
 **Where the mails land.** With `NODE_ENV=development` and
 `EMAIL_PROVIDER=fake`, the email stand-in sends nothing and writes each mail,
@@ -280,7 +306,10 @@ membership in the owner role.
 `STORAGE_DRIVER=s3`) and restart. No code change; every adapter is chosen in
 `platform/ports/ports.module.ts`, including the payment gateway adapter
 (`PAYMENT_GATEWAY`). The platform never holds money; it creates gateway orders
-and confirms enrollments from signed webhooks (ADR 0007).
+and confirms enrollments from signed webhooks (ADR 0007). Storage is `local`
+by default, which writes the documents to disk as plaintext: outside
+development and test it is refused at startup, naming `STORAGE_DRIVER` (002:T147),
+so a hosted server sets `STORAGE_DRIVER=s3` with the five `S3_*` values.
 
 **Switch the payment mode to live** (003:T109; SRS DEC-87, ADR 0025 D7) —
 `PAYMENT_MODE` is required, `test` or `live`. In `test`, the closed test's
@@ -399,6 +428,72 @@ it, and not time it out between two reads in less than the ping.
   the process's working set, 500 streams of one account, no event sent): 200,528 KiB
   before, 273,252 KiB with the streams open, 214,904 KiB after they closed: about
   145 KiB per stream, above the 100 KB assumed until then.
+
+## Hosted deploy
+
+What 002:T147 asks of every hosted server (staging and production, from the
+deploy days of 12/1 to 12/5). The configuration refuses a server that misses
+the first two at startup, naming the key.
+
+**Storage** — `STORAGE_DRIVER=s3` with the five `S3_*` values. `local` writes
+the files to disk as plaintext and is refused outside development and test.
+A `Retry-After` from S3 can stretch the client's one retry past the hourly
+purge's 5 s transaction, which then rolls back (the owner's Q-A3 (a)): the
+next run deletes the row, and an S3 DELETE of an object already gone is
+harmless.
+
+**The proxy and the client's address** — one proxy (Caddy, below) stands in
+front of the API, and the API's port is reachable through the proxy only (the
+note under T018): bind the API to the private network or to `127.0.0.1`, and
+let no firewall rule open its port to the internet. Then set both keys:
+
+- `TRUSTED_PROXY=X-Forwarded-For`, the header Caddy's `reverse_proxy` sends
+  with the client's address as its last hop;
+- `TRUSTED_PROXY_ADDRESS`, the proxy's own IP address as the API's socket
+  sees it: `127.0.0.1` when Caddy runs on the same machine, the proxy
+  container's address on a Docker network (give it a fixed one in the compose
+  file). The API refuses `TRUSTED_PROXY` without it.
+
+The header is then read only from that address, and its last hop only when it
+is an IP address; any other peer, or a last hop that is not an address, counts
+as the socket's own address, and the request logs once at warn, «The trusted
+proxy's header was set aside for the socket's peer», with `reason`
+`peer_not_proxy` or `hop_not_an_address`. Many such lines after a deploy mean
+`TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
+the address the proxy connects from), or the port is open to others.
+
+**The panel's host** — `deploy/Caddyfile` is the panel's site block (research
+R-18): Caddy serves the panel's build as static files with the browser
+security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
+file names its four values as environment placeholders, so the final domain
+needs no change to it. The steps of 12/1, on the host:
+
+1. Build the panel with the API's origin: `VITE_API_URL=https://<api host>
+   pnpm --filter @ijazah/admin build` (the build lands in `apps/admin/build`;
+   without the value the panel refuses to start).
+2. Set the four values in the Caddy service's environment: `ADMIN_SITE` (the
+   panel's host, e.g. `admin.<domain>`), `ADMIN_BUILD_ROOT` (the build's path
+   on the host), `API_ORIGIN` and `STORAGE_ORIGIN` (each `https://` and a
+   host, no path).
+3. `caddy validate --config deploy/Caddyfile` with those values set: it must
+   answer «Valid configuration». Then reload Caddy.
+4. `curl -sI https://<admin host>/` and check each header the file sends:
+   `content-security-policy` exactly as in the file with the two origins
+   filled in, `x-content-type-options: nosniff`, `referrer-policy:
+   no-referrer`, `strict-transport-security: max-age=31536000`,
+   `x-frame-options: DENY`, and no `server` header. `curl -sI
+   https://<admin host>/applications` answers the same page (the router's
+   paths).
+5. Open the panel in a browser, sign in, open a document and a dialog, and
+   read the browser console for Content Security Policy violations: none may
+   appear except Radix's dialog scroll-lock style, which the policy refuses on
+   purpose (`style-src 'self'`, the owner's Q-A4 (a); the comment in
+   `deploy/Caddyfile`). Any other one names a source the file must allow or
+   code that must change.
+
+The API's own site block (its `reverse_proxy` and the live channel's notes
+under «Capacity») joins this file when the API's host is set up; it is not
+part of T147.
 
 ## Leaked credential
 

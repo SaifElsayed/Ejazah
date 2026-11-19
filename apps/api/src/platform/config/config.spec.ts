@@ -137,6 +137,58 @@ describe('env.schema (T015, FR-039)', () => {
     },
   );
 
+  // 002:T147 (M6): local storage writes the PDFs to disk as plaintext, so it is refused outside
+  // development and test as the stand-ins are, with its own message; the default stays `local`, so
+  // a configuration that names no driver is refused there too.
+  it('refuses STORAGE_DRIVER=local, named or by default, in every mode but development and test, with its own message (T147)', () => {
+    for (const nodeEnv of modesOutsideDevelopmentAndTest) {
+      for (const env of [
+        { ...validEnv, NODE_ENV: nodeEnv },
+        without({ ...validEnv, NODE_ENV: nodeEnv }, 'STORAGE_DRIVER'),
+      ]) {
+        let failure: unknown;
+        try {
+          loadConfig(env);
+        } catch (error: unknown) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(ConfigError);
+        expect((failure as ConfigError).offendingKeys).toContain('STORAGE_DRIVER');
+        expect((failure as ConfigError).message).toMatch(
+          /STORAGE_DRIVER \(local storage writes the files to disk as plaintext/,
+        );
+      }
+    }
+  });
+
+  it('takes STORAGE_DRIVER=local in development and test, and s3 with its keys in every mode (T147)', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).STORAGE_DRIVER).toBe('local');
+      expect(
+        loadConfig(without({ ...validEnv, NODE_ENV: nodeEnv }, 'STORAGE_DRIVER')).STORAGE_DRIVER,
+      ).toBe('local');
+    }
+    const s3 = {
+      STORAGE_DRIVER: 's3',
+      S3_ENDPOINT: 'https://s3.storage-placeholder.example.net',
+      S3_BUCKET: 'ijazah-placeholder',
+      S3_REGION: 'eu-west-3',
+      S3_ACCESS_KEY_ID: 'AKIAPLACEHOLDER',
+      S3_SECRET_ACCESS_KEY: 'secret-placeholder',
+    };
+    for (const nodeEnv of ['development', 'test', ...modesOutsideDevelopmentAndTest]) {
+      let offending: readonly string[] = [];
+      try {
+        expect(loadConfig({ ...validEnv, ...s3, NODE_ENV: nodeEnv }).STORAGE_DRIVER).toBe('s3');
+      } catch (error: unknown) {
+        if (!(error instanceof ConfigError)) throw error;
+        // Production also refuses the other ports' stand-ins (T153); none of them is storage's.
+        offending = error.offendingKeys;
+      }
+      for (const key of Object.keys(s3)) expect(offending, nodeEnv).not.toContain(key);
+    }
+  });
+
   // T168 (review finding SEC-1): a configuration copied onto a server without NODE_ENV used to
   // default to development, where every stand-in is accepted. There is no default now.
   it('refuses a configuration without NODE_ENV, naming it, and one naming a mode it does not know', () => {
@@ -564,16 +616,60 @@ describe('the Phase 1 keys (T001)', () => {
   });
 
   it('reads TRUSTED_PROXY as one header name, absent or empty as none (contracts/kernel.md)', () => {
+    // T147: the header comes with the proxy's address (the case below).
+    const proxied = { ...validEnv, TRUSTED_PROXY_ADDRESS: '10.0.0.2' };
     expect(loadConfig(validEnv).TRUSTED_PROXY).toBeUndefined();
     expect(loadConfig({ ...validEnv, TRUSTED_PROXY: '' }).TRUSTED_PROXY).toBeUndefined();
-    expect(loadConfig({ ...validEnv, TRUSTED_PROXY: 'X-Forwarded-For' }).TRUSTED_PROXY).toBe(
+    expect(loadConfig({ ...proxied, TRUSTED_PROXY: 'X-Forwarded-For' }).TRUSTED_PROXY).toBe(
       'X-Forwarded-For',
     );
     for (const value of ['X-Forwarded-For: 203.0.113.9', 'x forwarded for', '203.0.113.9']) {
-      const error = failure({ ...validEnv, TRUSTED_PROXY: value });
+      const error = failure({ ...proxied, TRUSTED_PROXY: value });
       expect(error.offendingKeys).toEqual(['TRUSTED_PROXY']);
       expect(error.message).not.toContain('203.0.113.9');
     }
+  });
+
+  // T147 (W8): the proxy's own address, the one peer whose header is read (contracts/kernel.md).
+  it('reads TRUSTED_PROXY_ADDRESS as one IP address, v4, v6 or IPv4-mapped, absent or empty as none (T147)', () => {
+    expect(loadConfig(validEnv).TRUSTED_PROXY_ADDRESS).toBeUndefined();
+    expect(loadConfig({ ...validEnv, TRUSTED_PROXY_ADDRESS: '' }).TRUSTED_PROXY_ADDRESS).toBe(
+      undefined,
+    );
+    for (const address of ['10.0.0.2', '2001:db8::5', '::ffff:10.0.0.2']) {
+      const config = loadConfig({
+        ...validEnv,
+        TRUSTED_PROXY: 'X-Forwarded-For',
+        TRUSTED_PROXY_ADDRESS: address,
+      });
+      expect(config.TRUSTED_PROXY_ADDRESS).toBe(address);
+    }
+  });
+
+  it('refuses a TRUSTED_PROXY_ADDRESS that is not one IP address, naming it and never the value (T147)', () => {
+    for (const value of ['proxy.internal', '10.0.0.2/32', '10.0.0.2:443', '10.0.0.2, 10.0.0.3']) {
+      const error = failure({
+        ...validEnv,
+        TRUSTED_PROXY: 'X-Forwarded-For',
+        TRUSTED_PROXY_ADDRESS: value,
+      });
+      expect(error.offendingKeys).toEqual(['TRUSTED_PROXY_ADDRESS']);
+      expect(error.message).not.toContain(value);
+    }
+  });
+
+  it('refuses TRUSTED_PROXY without TRUSTED_PROXY_ADDRESS, naming the address, in every mode (T147)', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      const error = failure({ ...validEnv, NODE_ENV: nodeEnv, TRUSTED_PROXY: 'X-Forwarded-For' });
+      expect(error.offendingKeys).toEqual(['TRUSTED_PROXY_ADDRESS']);
+      expect(error.message).toMatch(/TRUSTED_PROXY_ADDRESS \(required when TRUSTED_PROXY is set/);
+    }
+    const production = failure({
+      ...validEnv,
+      NODE_ENV: 'production',
+      TRUSTED_PROXY: 'X-Forwarded-For',
+    });
+    expect(production.offendingKeys).toContain('TRUSTED_PROXY_ADDRESS');
   });
 
   it('reads GOOGLE_CLIENT_IDS as a list of audiences and the Apple keys as they are', () => {
@@ -610,6 +706,8 @@ describe('the Phase 1 keys (T001)', () => {
       'EMAIL_PROVIDER',
       'EMAIL_FROM',
       'TRUSTED_PROXY',
+      // T147: the proxy's address is the platform's own, as its header is.
+      'TRUSTED_PROXY_ADDRESS',
     ]) {
       expect(platformKeys).toContain(key);
       expect(providerKeys).not.toContain(key);
@@ -732,11 +830,12 @@ describe('the gateway (T056)', () => {
   });
 
   // 003:T116 (PR #144's review, round 1, nit 4; the review session's (a)): T109's «A spec starts a
-  // hosted `live` configuration», every port's values given. The sign-in, email and SMS ports have
-  // no member but their stand-in yet (env.schema.ts), which production refuses, so those three are
-  // its only refusals until their adapters land; then this case reads «accepted». Every value is a
-  // placeholder of the shape the provider gives, never a real key (R-SEC-1).
-  it('a complete hosted live configuration is refused only for SMS_PROVIDER, SIGN_IN_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116)', () => {
+  // hosted `live` configuration», every port's values given. The email and SMS ports have no member
+  // but their stand-in yet (env.schema.ts), which production refuses, so those two are its only
+  // refusals until their adapters land; then this case reads «accepted». 002:T148 (B50) gives the
+  // sign-in port its `live` member, which production takes. Every value is a placeholder of the
+  // shape the provider gives, never a real key (R-SEC-1).
+  it('a complete hosted live configuration is refused only for SMS_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116, 002:T148)', () => {
     const hostedLive: Record<string, string> = {
       NODE_ENV: 'production',
       PORT: '3000',
@@ -770,7 +869,7 @@ describe('the gateway (T056)', () => {
       EXPO_ACCESS_TOKEN: 'expo-placeholder',
       SMS_PROVIDER: 'fake',
       SMS_PROVIDER_KEY: 'sms-placeholder',
-      SIGN_IN_PROVIDER: 'fake',
+      SIGN_IN_PROVIDER: 'live',
       GOOGLE_CLIENT_IDS: 'placeholder.apps.googleusercontent.com',
       APPLE_CLIENT_ID: 'app.ijazah.placeholder',
       APPLE_TEAM_ID: 'TEAMPLACEHOLDER',
@@ -780,12 +879,13 @@ describe('the gateway (T056)', () => {
       EMAIL_FROM: 'no-reply@ijazah.app',
       SUPPORT_EMAIL: 'help@ijazah.app',
       TRUSTED_PROXY: 'X-Forwarded-For',
+      TRUSTED_PROXY_ADDRESS: '10.0.0.2',
       SENTRY_DSN: 'https://placeholder@sentry.example.net/1',
     };
 
     const failure = refusal(hostedLive);
 
-    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'SIGN_IN_PROVIDER', 'EMAIL_PROVIDER']);
+    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'EMAIL_PROVIDER']);
     expect(failure.message).not.toContain('placeholder');
   });
 
@@ -953,6 +1053,61 @@ describe('the push provider (T005)', () => {
     const production = refusal({ ...validEnv, PUSH_PROVIDER: 'expo', NODE_ENV: 'production' });
     expect(production.offendingKeys).not.toContain('PUSH_PROVIDER');
     expect(production.offendingKeys).not.toContain('EXPO_ACCESS_TOKEN');
+  });
+});
+
+// 002:T148 (B50, the note under T148, (2) and (3); Q-T4 (a)): the live sign-in adapter verifies
+// Google's token against Google's published keys, and cannot start without the audiences it accepts.
+// Apple waits for iOS, so no Apple key is required. The stand-in stays refused outside development
+// and test (T168).
+describe('the sign-in provider (002:T148)', () => {
+  const live: Record<string, string> = {
+    ...validEnv,
+    SIGN_IN_PROVIDER: 'live',
+    GOOGLE_CLIENT_IDS: 'placeholder.apps.googleusercontent.com',
+  };
+
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('selects the live adapter with the audiences it accepts, and no Apple key', () => {
+    const config = loadConfig(live);
+
+    expect(config.SIGN_IN_PROVIDER).toBe('live');
+    expect(config.GOOGLE_CLIENT_IDS).toEqual(['placeholder.apps.googleusercontent.com']);
+    expect(config.APPLE_CLIENT_ID).toBeUndefined();
+  });
+
+  it('refuses the live adapter without GOOGLE_CLIENT_IDS, absent or empty, naming it and never a value', () => {
+    for (const env of [without(live, 'GOOGLE_CLIENT_IDS'), { ...live, GOOGLE_CLIENT_IDS: '' }]) {
+      const failure = refusal({ ...env, APPLE_CLIENT_ID: 'app.ijazah.placeholder' });
+
+      expect(failure.offendingKeys).toEqual(['GOOGLE_CLIENT_IDS']);
+      expect(failure.message).toContain(
+        'GOOGLE_CLIENT_IDS (required when SIGN_IN_PROVIDER=live',
+      );
+      expect(failure.message).not.toContain('placeholder');
+    }
+  });
+
+  it('refuses the stand-in outside development and test, and takes the live adapter there (FR-056, T168)', () => {
+    for (const env of [validEnv, { ...validEnv, SIGN_IN_PROVIDER: 'fake' }]) {
+      const failure = refusal({ ...env, NODE_ENV: 'production' });
+      expect(failure.offendingKeys).toContain('SIGN_IN_PROVIDER');
+      expect(failure.message).toMatch(/SIGN_IN_PROVIDER \(the stand-in is refused/);
+    }
+
+    // Still refused for the other ports' stand-ins (T153), never for sign-in.
+    const production = refusal({ ...live, NODE_ENV: 'production' });
+    expect(production.offendingKeys).not.toContain('SIGN_IN_PROVIDER');
+    expect(production.offendingKeys).not.toContain('GOOGLE_CLIENT_IDS');
   });
 });
 

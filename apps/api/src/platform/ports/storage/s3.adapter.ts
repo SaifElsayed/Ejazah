@@ -21,6 +21,29 @@ import {
   type StoredObject,
 } from './storage.port.js';
 
+// 002:T147 (M7): every call to the service ends in bounded time. The purge removes a document's
+// object inside the transaction that deletes its row (`verification/unreferenced-documents.ts`),
+// and Prisma ends that transaction after 5 s (its default; `db/transaction.repository.ts` sets
+// none), so every attempt, with the SDK's backoff between them, must end inside it. The SDK's
+// standard retry waits once, a random share of 100 ms, or of 500 ms after throttling (@smithy/core
+// 3.35.1, `DefaultRetryBackoffStrategy`): 2 × (800 + 1,200) + 500 = 4,500 ms, the row's delete
+// before it in the rest. Its request timer starts with the connection's, so an attempt in fact
+// ends by 1,200 ms. A request timeout alone only warns; `throwOnRequestTimeout` makes it fail.
+/** How long the connection to the service may take before the attempt is abandoned. */
+export const S3_CONNECTION_TIMEOUT_MS = 800;
+/** How long one attempt may take, from its start to the answer's headers. */
+export const S3_REQUEST_TIMEOUT_MS = 1_200;
+/** How many attempts one call makes at most: the first and one retry. */
+export const S3_MAX_ATTEMPTS = 2;
+// The owner's Q-A2 (a), 2026-11-19: a `put` passes its own request timeout with the call. The
+// request timer is total, not idle (@smithy/node-http-handler 4.12.1, `setRequestTimeout`: one
+// timer from the request's start to the answer's headers), so it must cover sending the whole
+// body. Uploads reach S3 from the API (multipart to the API, then `storage.put`), so the phone's
+// own link is not under this timeout, only the API's link to S3. The bound is a 10 MiB file
+// (`upload_max_bytes`, 10,485,760). `remove` and `exists`, the purge's calls, keep 1,200 ms.
+/** How long one `put` attempt may take, from its start to the answer's headers. */
+export const S3_PUT_REQUEST_TIMEOUT_MS = 30_000;
+
 export interface S3ClientOptions {
   readonly endpoint: string;
   readonly region: string;
@@ -37,6 +60,12 @@ export function createS3Client(options: S3ClientOptions): S3Client {
       accessKeyId: options.accessKeyId,
       secretAccessKey: options.secretAccessKey,
     },
+    requestHandler: {
+      connectionTimeout: S3_CONNECTION_TIMEOUT_MS,
+      requestTimeout: S3_REQUEST_TIMEOUT_MS,
+      throwOnRequestTimeout: true,
+    },
+    maxAttempts: S3_MAX_ATTEMPTS,
   });
 }
 
@@ -59,6 +88,7 @@ export class S3StorageAdapter implements StoragePort {
         ContentType: contentType,
         ServerSideEncryption: 'AES256',
       }),
+      { requestTimeout: S3_PUT_REQUEST_TIMEOUT_MS },
     );
   }
 

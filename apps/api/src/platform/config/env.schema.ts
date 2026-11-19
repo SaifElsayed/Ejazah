@@ -2,6 +2,7 @@
 // exits naming the value, before traffic (FR-039). Every key in .env.example is declared here and the
 // spec asserts the two sets are equal, so neither can drift from the other.
 import { Buffer } from 'node:buffer';
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { columnKeyId } from '../crypto/encryption.js';
 
@@ -21,6 +22,12 @@ const emailAddress = z.email({ error: 'must be one email address' });
 const headerName = z
   .string()
   .regex(/^[A-Za-z0-9-]+$/, { error: 'must be one HTTP header name, such as X-Forwarded-For' });
+
+// 002:T147 (W8; contracts/kernel.md): the proxy's own address as the API's socket sees it, the one
+// peer whose `TRUSTED_PROXY` header is read. One IP address, v4 or v6, and nothing else.
+const ipAddress = z.string().refine((value) => isIP(value) !== 0, {
+  error: "must be one IP address, the proxy's own, such as 10.0.0.2",
+});
 
 // T001 (contracts/ports.md): the audiences a Google identity token may name, comma-separated.
 const googleClientIds = z
@@ -93,9 +100,10 @@ const allowedOrigins = z
     ),
   );
 
-// T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each has only its
-// stand-in until the live adapter's task adds it, and each is refused outside development and test
-// as the three Phase 0 ones are. T009 adds LiveKit to `VIDEO_PROVIDER`; its stand-in stays refused.
+// T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each stand-in is
+// refused outside development and test as the three Phase 0 ones are, until its live adapter's task
+// adds one (T148 adds `live` to `SIGN_IN_PROVIDER`). T009 adds LiveKit to `VIDEO_PROVIDER`; its
+// stand-in stays refused.
 const standInProviderKeys = [
   'VIDEO_PROVIDER',
   'PUSH_PROVIDER',
@@ -214,7 +222,9 @@ const envObject = z.object({
   // T001 (Phase 1, contracts/ports.md): the sign-in port and the email port, `fake` the only member
   // of each until the live adapter's task adds it. `EMAIL_FROM` is the sender the stand-in records: a
   // reserved address by default (RFC 2606); the live sender arrives with the provider chosen at launch.
-  SIGN_IN_PROVIDER: z.enum(['fake']).default('fake'),
+  // 002:T148 (B50): `live` verifies Google's token against Google's published keys, and requires
+  // GOOGLE_CLIENT_IDS; Apple waits for iOS (Q-T4 (a)).
+  SIGN_IN_PROVIDER: z.enum(['fake', 'live']).default('fake'),
   EMAIL_PROVIDER: z.enum(['fake']).default('fake'),
   EMAIL_FROM: emailAddress.default('no-reply@ijazah.invalid'),
 
@@ -225,6 +235,8 @@ const envObject = z.object({
   // T001 (contracts/kernel.md): the one proxy header the contexts read the client address from, by
   // its last hop; optional, absent before launch.
   TRUSTED_PROXY: headerName.optional(),
+  // 002:T147: the proxy's own address; the header is read only from it. Required with TRUSTED_PROXY.
+  TRUSTED_PROXY_ADDRESS: ipAddress.optional(),
 
   // Provider credentials are optional: the suite passes with every one unset (FR-054).
   // T009: LiveKit's, read only while VIDEO_PROVIDER is `livekit` (ADR 0003, the Daily rename).
@@ -240,7 +252,8 @@ const envObject = z.object({
   TYPST_BIN: nonEmpty.optional(),
 
   // T001 (contracts/ports.md): the live sign-in adapter's credentials, each optional and stripped
-  // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`.
+  // from every test run; nothing reads them while SIGN_IN_PROVIDER is `fake`. 002:T148: `live`
+  // requires GOOGLE_CLIENT_IDS (below); no code reads the Apple keys until iOS (Q-T4 (a)).
   GOOGLE_CLIENT_IDS: googleClientIds.optional(),
   APPLE_CLIENT_ID: nonEmpty.optional(),
   APPLE_TEAM_ID: nonEmpty.optional(),
@@ -305,6 +318,7 @@ const envKeyKinds = {
   EMAIL_FROM: 'platform',
   SUPPORT_EMAIL: 'platform',
   TRUSTED_PROXY: 'platform',
+  TRUSTED_PROXY_ADDRESS: 'platform',
   LIVEKIT_URL: 'provider',
   LIVEKIT_API_KEY: 'provider',
   LIVEKIT_API_SECRET: 'provider',
@@ -454,6 +468,16 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     }
   }
 
+  // 002:T148 (B50): the live sign-in adapter accepts a Google token only for an audience it is
+  // given, so it cannot start without one. The key is named, never its value (R-SEC-2).
+  if (env.SIGN_IN_PROVIDER === 'live' && env.GOOGLE_CLIENT_IDS === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['GOOGLE_CLIENT_IDS'],
+      message: 'required when SIGN_IN_PROVIDER=live (002:T148)',
+    });
+  }
+
   // T009: LiveKit cannot start without its address, its key and its secret. The key is named, never
   // its value (R-SEC-2).
   if (env.VIDEO_PROVIDER === 'livekit') {
@@ -481,6 +505,27 @@ export const envSchema = envObject.superRefine((env, ctx) => {
         });
       }
     }
+  }
+
+  // 002:T147 (M6): local storage writes the documents and certificates to disk as plaintext, with
+  // no encryption at rest, so it is refused where the stand-ins are; the default stays `local`.
+  if (!standInsAllowed && env.STORAGE_DRIVER === 'local') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['STORAGE_DRIVER'],
+      message:
+        'local storage writes the files to disk as plaintext; refused outside development and test, set STORAGE_DRIVER=s3 (T147)',
+    });
+  }
+
+  // 002:T147 (W8): the header is trusted only from the proxy's own address, so the header without
+  // the address is refused rather than read from any peer. The key is named, never a value.
+  if (env.TRUSTED_PROXY !== undefined && env.TRUSTED_PROXY_ADDRESS === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['TRUSTED_PROXY_ADDRESS'],
+      message: "required when TRUSTED_PROXY is set: the proxy's own IP address (T147)",
+    });
   }
 
   // T023: a reserved address is for development and test only; the key is named, never the value.

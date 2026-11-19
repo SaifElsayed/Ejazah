@@ -102,6 +102,7 @@ On the phone, Google is `@react-native-google-signin/google-signin` (Expo's own
 recommendation for Google) with a nonce the server minted (`auth.providerNonce`, single-use in Redis for `provider_nonce_ttl_minutes`), and Apple is
 `expo-apple-authentication` with the SHA-256 of the raw nonce in the request, as
 Apple requires; the raw nonce goes to the server with the token.
+**Amended 2026-11-19 (B50, Q-T2 (a)):** on Android, Google's token comes through Credential Manager (`GetGoogleIdOption`, local module `apps/mobile/modules/google-id`) carrying the server's nonce as minted, unhashed; google-signin stays for iOS.
 
 **Rationale**: ARCHITECTURE §3.1 says a port exists only where a real second
 implementation exists; here it does from day one (the stand-in the suite needs,

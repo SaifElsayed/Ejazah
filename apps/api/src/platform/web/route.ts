@@ -39,7 +39,7 @@
 // its ETag, 304 when it matches). They are the only static files the API serves.
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { clientAddressOf } from '../http/client-address.js';
+import { logProxyFallback, readClientAddress, type TrustedProxy } from '../http/client-address.js';
 import type { Locale } from '../http/locale.js';
 import { DomainError } from '../errors/domain-error.js';
 import { mapError } from '../errors/error-filter.js';
@@ -99,8 +99,8 @@ export interface WebRoute {
 export interface WebRouteDependencies {
   readonly rateLimiter: RateLimiter;
   readonly log: Logger;
-  /** `TRUSTED_PROXY`, when set (T017). */
-  readonly trustedProxyHeader?: string;
+  /** `TRUSTED_PROXY` and `TRUSTED_PROXY_ADDRESS`, when set (T017, T147). */
+  readonly trustedProxy?: TrustedProxy;
 }
 
 /** A Node request handler, as the HTTP application mounts one. */
@@ -222,7 +222,7 @@ function pathOf(request: IncomingMessage): { path: string; query: URLSearchParam
  * remainder it sees is `/` for the page itself; anything deeper is not a page.
  */
 export function webRoute(
-  { rateLimiter, log, trustedProxyHeader }: WebRouteDependencies,
+  { rateLimiter, log, trustedProxy }: WebRouteDependencies,
   route: WebRoute,
 ): NodeHandler {
   const methods: readonly WebMethod[] = route.methods ?? ['GET'];
@@ -231,11 +231,12 @@ export function webRoute(
     const { path, query } = pathOf(incoming);
     const lang = languageOf(query);
     const correlationId = randomUUID();
-    const clientAddress = clientAddressOf(
+    const { address: clientAddress, fallback } = readClientAddress(
       { remoteAddress: incoming.socket.remoteAddress, headers: incoming.headers },
-      trustedProxyHeader,
+      trustedProxy,
     );
     const requestLog = requestLogger(log, correlationId).child({ clientAddress });
+    logProxyFallback(requestLog, fallback);
     void (async () => {
       try {
         if (path !== '/' && path !== '') {

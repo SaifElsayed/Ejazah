@@ -15,6 +15,8 @@
 //
 // 005:T031 of specs/005-certification (FR-630): a teacher's deletion refused for an undecided ijazah
 // request (`CONFLICT` `pending_ijazah_requests`) is told apart the same way, each cause its own text.
+//
+// B50 T148: once deleted, the device is signed out of the Google SDK too, as sign-out does.
 import type { DeleteAccountInput } from '@ijazah/contracts';
 import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
@@ -23,6 +25,7 @@ import { useMemo } from 'react';
 import { useApi } from '../../../lib/api';
 import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
 import { setSession } from '../../../lib/session';
+import { signOutOfProviders } from '../account/hooks';
 import { DEV_EMAIL, devIdentityToken, devSignInEnabled } from '../auth/dev-sign-in';
 import { nativeIdentity } from '../auth/providers';
 
@@ -94,6 +97,7 @@ export function useAccountDeletion() {
         });
         await sessions.clear();
         setSession({ kind: 'signed-out' });
+        signOutOfProviders();
         return 'deleted';
       },
 
