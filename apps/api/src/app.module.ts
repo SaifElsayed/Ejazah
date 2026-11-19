@@ -343,6 +343,7 @@ function surfaceHandler<TContext extends Correlated>(
   log: Logger,
   maxBodySize: number,
   actorOf: ActorOf<TContext>,
+  allowMethodOverride: boolean,
 ): (request: IncomingMessage, response: ServerResponse) => void {
   // tRPC tells a subscription's refused open twice, once by its call and once by its stream (its
   // `resolveResponse`), with the one error: each is written once.
@@ -352,6 +353,10 @@ function surfaceHandler<TContext extends Correlated>(
     // A body past the limit is refused as it streams in, never read whole (T150, FR-077):
     // tRPC's PAYLOAD_TOO_LARGE, answered 413 in the one shape and not reported as unexpected.
     maxBodySize,
+    // 002:T147 (W1): the panel sends its queries by POST, their search text in the body rather
+    // than in a URL every log keeps; only the administrator surface takes a query so (tRPC allows
+    // the override for POST alone, so a mutation is never taken by GET).
+    allowMethodOverride,
     // Neither client batches (both use `httpLink`), so a batch is refused whole before any call's
     // input is read: tRPC's `BAD_REQUEST`, answered 400 `VALIDATION_FAILED` (T108).
     allowBatching: false,
@@ -481,6 +486,7 @@ export async function createApplication({
       log,
       maxRequestBodyBytes,
       appActor,
+      false,
     ),
   );
   application.use(
@@ -500,6 +506,7 @@ export async function createApplication({
       log,
       maxRequestBodyBytes,
       adminActor,
+      true,
     ),
   );
   // The public pages and the design's stylesheets, beside the surfaces (T019, ADR 0021 D5).
