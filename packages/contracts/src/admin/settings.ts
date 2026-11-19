@@ -3,8 +3,9 @@
 // §3.14; research R-410; the note under T024, Q-X1 (a), Q-S1 (a)).
 //
 // `list` answers every key of the API's settings registry (`platform/settings/registry.ts`) with
-// the value stored, its bounds, its unit, its group on the panel's page and the SRS §3.14 row it
-// governs; the units, groups and bound shapes below are the registry's own words. `update` takes a
+// the value stored, its default (the registry's, which is the seed's value; B49's Q-A1 (a)), its
+// bounds, its unit, its group on the panel's page and the SRS §3.14 row it governs; the units,
+// groups and bound shapes below are the registry's own words. `update` takes a
 // key, a value in one of the registry's shapes, the administrator's reason and a key of
 // idempotency; it is refused VALIDATION_FAILED with one of the registry's three reasons
 // (`settingRefusal`) as the detail's code: `unknown` (path `key`), `invalid` or `out_of_bounds`
@@ -63,10 +64,21 @@ export const settingBounds = z.discriminatedUnion('shape', [
 /** A value in one of the registry's shapes: a number, a list, a rate limit or a text. */
 const settingValue = z.json();
 
+/** A default: one of the value's JSON shapes, never null (every registry key has one). */
+const settingDefault = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.json()),
+  z.record(z.string(), z.json()),
+]);
+
 export const adminSetting = z.object({
   key: settingKey,
   /** The stored JSON value; null when no row holds the key. */
   value: settingValue,
+  /** The registry's default, which is the value the seed plants (FR-624; B49's Q-A1 (a)). */
+  default: settingDefault,
   bounds: settingBounds,
   unit: settingUnit,
   group: settingGroup,

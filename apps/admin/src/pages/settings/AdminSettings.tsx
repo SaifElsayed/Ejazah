@@ -1,14 +1,13 @@
 // 005:T024 (B49; FR-624; R-410; the note under T024, Q-S1 (a), Q-X2 (a)): the settings page,
 // `/settings`. Every key `settings.list` answers, under its group's heading, the groups in the
 // contract's order (`GROUP_ORDER`) and the keys in the list's, which is the registry's. Each row: the
-// label, the value with its unit, the bounds, the SRS §3.14 row it governs, and the change
+// label, the value with its unit, the default (the registry's, which is the seed's value; B49's
+// Q-A1 (a)) drawn as a value is, the bounds, the SRS §3.14 row it governs, and the change
 // (`SettingDialog`). `rate_limit_signed_in_default` is marked as applying within 60 s. The page says
 // that a change applies prospectively and is audited, and leads to the administrators
 // (`/settings/admins`), the settings section's other page.
 //
-// The columns are one list (`COLUMNS`), so a further field of a row is one entry. A setting's default
-// is not drawn: `settings.list` answers none (the owner's Q-A1, open); it would be one column here,
-// between the value and the bounds, its words in `admin.settings.columns`.
+// The columns are one list (`COLUMNS`), so a further field of a row is one entry.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -66,6 +65,12 @@ const COLUMNS: readonly Column[] = [
         ) : null}
       </span>
     ),
+  },
+  {
+    table: { key: 'default' },
+    header: 'admin.settings.columns.default',
+    cell: (setting, { t, locale }) =>
+      valueText(t, locale, { value: setting.default, unit: setting.unit }),
   },
   {
     table: { key: 'bounds', wrap: true },

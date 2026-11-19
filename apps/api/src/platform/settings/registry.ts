@@ -2,6 +2,10 @@
 // plants, with its schema, its bounds, its unit, its group on the panel's settings page (T024) and the
 // SRS §3.14 row it governs.
 //
+// THE DEFAULT IS THE SEED'S (005:T024, B49's Q-A1 (a); FR-624). Each entry carries the value
+// `prisma/seed.ts` plants, which `settings.list` answers as the key's default; the spec asserts the
+// two are equal, key by key, so a change to one is a red until the other follows.
+//
 // EXACTLY THE SEED'S KEYS (Q2 (a), B45's conflict check). `tests/seed/settings-registry.spec.ts`
 // runs the real `prisma/seed.ts` and asserts the two lists are equal, both ways. A §3.14 row with no
 // seed key yet joins with its seed row, in the batch that seeds it.
@@ -69,6 +73,14 @@ export type SettingBounds =
     }
   | { readonly shape: 'text' };
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+/** A setting's value as the seed plants it and the contract's `z.json()` reads it: never null. */
+export type SettingValue = Exclude<Json, null>;
+
+/** A rate limit's value, as `rateLimitSetting` reads it. */
+type RateLimitValue = { readonly limit: number; readonly window_seconds: number };
+
 export interface SettingEntry {
   readonly schema: z.ZodType;
   readonly bounds: SettingBounds;
@@ -76,6 +88,12 @@ export interface SettingEntry {
   readonly group: SettingGroup;
   /** The §3.14 row's setting cell, without its italic notes, or `OPERATIONAL_SETTINGS_ROW`. */
   readonly srsRow: string;
+  /**
+   * The value `prisma/seed.ts` plants, which `settings.list` answers as the key's default (FR-624;
+   * B49's Q-A1 (a)). Required, so an entry without one fails the type check; the registry spec
+   * asserts each equals the seed's.
+   */
+  readonly default: SettingValue;
 }
 
 /** A key of the paragraph after §3.14's table, read by a sweep or a service, not a person's decision. */
@@ -122,6 +140,7 @@ function whole(
   unit: SettingUnit,
   group: SettingGroup,
   srsRow: string,
+  defaultValue: number,
   options: { readonly min?: number; readonly max?: number } = {},
 ): SettingEntry {
   return {
@@ -130,16 +149,22 @@ function whole(
     unit,
     group,
     srsRow,
+    default: defaultValue,
   };
 }
 
-function rateLimit(srsRow: string, limitMax: number | null = null): SettingEntry {
+function rateLimit(
+  srsRow: string,
+  defaultValue: RateLimitValue,
+  limitMax: number | null = null,
+): SettingEntry {
   return {
     schema: rateLimitSetting,
     bounds: { shape: 'rate_limit', limit: atLeast(1, limitMax), windowSeconds: atLeast(1) },
     unit: 'rate_limit',
     group: 'rateLimits',
     srsRow,
+    default: defaultValue,
   };
 }
 
@@ -153,12 +178,14 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     unit: 'percent',
     group: 'sessions',
     srsRow: 'Attendance threshold (%)',
+    default: 70,
   },
   join_window_minutes: whole(
     wholeNonNegative,
     'minutes',
     'sessions',
     'Join window (minutes after start)',
+    10,
     { min: 0 },
   ),
   minimum_connection_seconds: whole(
@@ -166,6 +193,7 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'seconds',
     'sessions',
     'Minimum connection duration (seconds)',
+    60,
     { min: 0 },
   ),
   early_join_lead_minutes: whole(
@@ -173,20 +201,23 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'minutes',
     'sessions',
     'Early-join lead time (minutes)',
+    15,
     { min: 0 },
   ),
-  dispute_window_hours: whole(positiveWhole, 'hours', 'sessions', 'Dispute window (hours)'),
+  dispute_window_hours: whole(positiveWhole, 'hours', 'sessions', 'Dispute window (hours)', 72),
   slot_hold_ttl_minutes: whole(
     positiveWhole,
     'minutes',
     'booking',
     'Slot-hold and gateway-order TTL at checkout (minutes); the hold adds the grace below',
+    10,
   ),
   slot_hold_grace_minutes: whole(
     wholeNonNegative,
     'minutes',
     'booking',
     'Slot-hold grace after the gateway order expires (minutes)',
+    5,
     { min: 0 },
   ),
   checkout_confirmation_timeout_seconds: whole(
@@ -194,18 +225,21 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'seconds',
     'booking',
     'Checkout confirmation timeout (seconds)',
+    15,
   ),
   idempotency_key_ttl_hours: whole(
     positiveWhole,
     'hours',
     'booking',
     'Idempotency key retention (hours)',
+    24,
   ),
   slot_release_buffer_weeks: whole(
     wholeNonNegative,
     'weeks',
     'booking',
     'Slot release buffer (weeks)',
+    0,
     { min: 0 },
   ),
   reminder_offsets_minutes: {
@@ -214,163 +248,228 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     unit: 'minutes',
     group: 'notifications',
     srsRow: 'Session reminder offsets',
+    default: [1440, 15],
   },
   chat_retention_days: whole(
     wholeNonNegative,
     'days',
     'notifications',
     'Chat retention beyond dispute window (days)',
+    30,
     { min: 0 },
   ),
-  rate_limit_authentication: rateLimit('Authentication rate limit (per subject, per window)'),
-  rate_limit_one_time_code: rateLimit('One-time code rate limit (per subject, per window)'),
-  rate_limit_search: rateLimit('Search rate limit (per subject, per window)'),
+  rate_limit_authentication: rateLimit('Authentication rate limit (per subject, per window)', {
+    limit: 10,
+    window_seconds: 900,
+  }),
+  rate_limit_one_time_code: rateLimit('One-time code rate limit (per subject, per window)', {
+    limit: 5,
+    window_seconds: 600,
+  }),
+  rate_limit_search: rateLimit('Search rate limit (per subject, per window)', {
+    limit: 60,
+    window_seconds: 60,
+  }),
   rate_limit_payment_initiation: rateLimit(
     'Payment initiation rate limit (per subject, per window)',
+    { limit: 10, window_seconds: 600 },
   ),
-  rate_limit_one_time_code_budget: rateLimit('One-time code budget (platform-wide, per window)'),
-  rate_limit_authentication_budget: rateLimit('Authentication budget (platform-wide, per window)'),
+  rate_limit_one_time_code_budget: rateLimit('One-time code budget (platform-wide, per window)', {
+    limit: 300,
+    window_seconds: 3600,
+  }),
+  rate_limit_authentication_budget: rateLimit('Authentication budget (platform-wide, per window)', {
+    limit: 1000,
+    window_seconds: 900,
+  }),
   admin_lockout_attempts: whole(
     positiveWhole,
     'count',
     'admin',
     'Admin failed sign-in attempts before lockout',
+    5,
   ),
   admin_lockout_minutes: whole(
     positiveWhole,
     'minutes',
     'admin',
     'Admin lockout duration (minutes)',
+    15,
   ),
   makeup_choice_window_days: whole(
     positiveWhole,
     'days',
     'sessions',
     'Make-up choice window (days)',
+    7,
   ),
   otp_code_ttl_minutes: whole(
     positiveWhole,
     'minutes',
     'accounts',
     'One-time code validity (minutes)',
+    10,
   ),
   otp_max_attempts: whole(
     positiveWhole,
     'count',
     'accounts',
     'One-time code attempts before it is void (count)',
+    5,
   ),
-  otp_purge_after_hours: whole(positiveWhole, 'hours', 'accounts', OPERATIONAL_SETTINGS_ROW),
+  otp_purge_after_hours: whole(positiveWhole, 'hours', 'accounts', OPERATIONAL_SETTINGS_ROW, 24),
   onboarding_token_ttl_minutes: whole(
     positiveWhole,
     'minutes',
     'accounts',
     'Onboarding token validity (minutes)',
+    15,
   ),
   session_access_ttl_minutes: whole(
     positiveWhole,
     'minutes',
     'accounts',
     'Access token validity (minutes)',
+    15,
   ),
   session_refresh_ttl_days: whole(
     positiveWhole,
     'days',
     'accounts',
     'Refresh token validity (days)',
+    30,
   ),
   session_refresh_grace_seconds: whole(
     positiveWhole,
     'seconds',
     'accounts',
     OPERATIONAL_SETTINGS_ROW,
+    30,
   ),
-  session_purge_after_days: whole(positiveWhole, 'days', 'accounts', OPERATIONAL_SETTINGS_ROW),
+  session_purge_after_days: whole(positiveWhole, 'days', 'accounts', OPERATIONAL_SETTINGS_ROW, 30),
   admin_session_idle_minutes: whole(
     positiveWhole,
     'minutes',
     'admin',
     'Admin session idle timeout (minutes)',
+    60,
   ),
   admin_session_max_hours: whole(
     positiveWhole,
     'hours',
     'admin',
     'Admin session maximum length (hours)',
+    12,
   ),
   admin_invite_ttl_hours: whole(
     positiveWhole,
     'hours',
     'admin',
     'Admin invite link validity (hours)',
+    48,
   ),
-  push_token_stale_days: whole(positiveWhole, 'days', 'notifications', OPERATIONAL_SETTINGS_ROW),
+  push_token_stale_days: whole(
+    positiveWhole,
+    'days',
+    'notifications',
+    OPERATIONAL_SETTINGS_ROW,
+    90,
+  ),
   terms_version: {
     schema: termsVersion,
     bounds: { shape: 'text' },
     unit: 'version',
     group: 'general',
     srsRow: 'Terms of service version in force',
+    default: '2026-10',
   },
-  upload_max_bytes: whole(uploadMaxBytes, 'bytes', 'general', 'Upload size limit (bytes)'),
-  rate_limit_public_page: rateLimit('Public page rate limit (requests per window)'),
-  rate_limit_upload: rateLimit('Upload rate limit (requests per window)'),
+  upload_max_bytes: whole(
+    uploadMaxBytes,
+    'bytes',
+    'general',
+    'Upload size limit (bytes)',
+    10_485_760,
+  ),
+  rate_limit_public_page: rateLimit('Public page rate limit (requests per window)', {
+    limit: 60,
+    window_seconds: 60,
+  }),
+  rate_limit_upload: rateLimit('Upload rate limit (requests per window)', {
+    limit: 20,
+    window_seconds: 600,
+  }),
   admin_recovery_code_count: whole(
     positiveWhole,
     'count',
     'admin',
     'Admin recovery codes issued (count)',
+    10,
   ),
   admin_home_latest_actions: whole(
     positiveWhole,
     'count',
     'admin',
     'Admin home: latest actions shown (count)',
+    7,
   ),
-  admin_list_page_size: whole(positiveWhole, 'count', 'admin', 'Admin list page size (rows)'),
+  admin_list_page_size: whole(positiveWhole, 'count', 'admin', 'Admin list page size (rows)', 25),
   provider_nonce_ttl_minutes: whole(
     positiveWhole,
     'minutes',
     'accounts',
     'Provider sign-in nonce validity (minutes)',
+    10,
   ),
   document_link_ttl_seconds: whole(
     documentLinkTtl,
     'seconds',
     'general',
     'Signed document link validity (seconds)',
+    300,
     {
       max: MAX_LINK_SECONDS,
     },
   ),
-  rate_limit_token_refresh: rateLimit('Token refresh rate limit (per token, per window)'),
+  rate_limit_token_refresh: rateLimit('Token refresh rate limit (per token, per window)', {
+    limit: 30,
+    window_seconds: 60,
+  }),
   rate_limit_provider_nonce: rateLimit(
     'Provider nonce rate limit (per client address, per window)',
+    { limit: 20, window_seconds: 60 },
   ),
   document_unreferenced_purge_after_hours: whole(
     positiveWhole,
     'hours',
     'general',
     OPERATIONAL_SETTINGS_ROW,
+    72,
   ),
   document_unreferenced_max_per_user: whole(
     positiveWhole,
     'count',
     'general',
     OPERATIONAL_SETTINGS_ROW,
+    30,
   ),
   rate_limit_admin_authentication: rateLimit(
     'Admin authentication rate limit (per subject, per window)',
+    { limit: 10, window_seconds: 900 },
   ),
   rate_limit_admin_authentication_budget: rateLimit(
     'Admin authentication budget (platform-wide, per window)',
+    { limit: 1000, window_seconds: 900 },
   ),
-  rate_limit_provider_nonce_budget: rateLimit('Provider nonce budget (platform-wide, per window)'),
+  rate_limit_provider_nonce_budget: rateLimit('Provider nonce budget (platform-wide, per window)', {
+    limit: 1000,
+    window_seconds: 900,
+  }),
   first_session_lead_hours: whole(
     wholeNonNegative,
     'hours',
     'booking',
     'First session lead after confirmation (hours)',
+    24,
     { min: 0 },
   ),
   checkout_processing_poll_seconds: whole(
@@ -378,20 +477,29 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'seconds',
     'booking',
     'Checkout Processing status read interval (seconds)',
+    2,
   ),
   checkout_confirming_poll_seconds: whole(
     checkoutPolling.shape.confirmingPollSeconds,
     'seconds',
     'booking',
     'Checkout Confirming status read interval (seconds)',
+    30,
   ),
   checkout_confirming_poll_window_minutes: whole(
     checkoutPolling.shape.confirmingPollWindowMinutes,
     'minutes',
     'booking',
     'Checkout Confirming read window from release (minutes)',
+    10,
   ),
-  discovery_page_size: whole(positiveWhole, 'count', 'booking', 'Discovery page size (teachers)'),
+  discovery_page_size: whole(
+    positiveWhole,
+    'count',
+    'booking',
+    'Discovery page size (teachers)',
+    20,
+  ),
   // 003:T104 (ADR 0025 D1, SRS DEC-80): the read site's own bounds, 0 to 100, a percent's; on the
   // panel's general settings page, as DEC-80 and ADR 0025 D1 place it (#145 r1 nit 2).
   teacher_share_percent: whole(
@@ -399,6 +507,7 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'percent',
     'general',
     "Teacher's share of each gateway order (whole percent, 0–100)",
+    70,
     { min: 0, max: PERCENT_MAX },
   ),
   // 003:T113 (SRS DEC-88): 2 to 100, the bounds §3.14's row names and the read site holds.
@@ -407,6 +516,7 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'count',
     'booking',
     "Fewest other Teachers for the average price (whole number, 2–100: at least 2, so no single Teacher's price is shown)",
+    3,
     { min: 2, max: PRICE_AVERAGE_MIN_TEACHERS_MAX },
   ),
   // 003:T105 (SRS DEC-81): 0 to 100, a percent's; on the general settings page with the teacher's
@@ -416,86 +526,111 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'percent',
     'general',
     "Ijazah track: share released at half the sessions (percent of the Teacher's share, 0–100)",
+    25,
     { min: 0, max: PERCENT_MAX },
   ),
   // 003:T105: the administrator's mark «تم الصرف» and its undo, §3.14's row of 2026-11-18 (Q-B1-12 (a)).
   rate_limit_payout_mark: rateLimit(
     'Payout release mark or unmark rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,
     'minutes',
     'sessions',
     'Session evaluation delay after scheduled end (minutes)',
+    2,
     { min: 0 },
   ),
-  rate_limit_chat_message: rateLimit('Chat message rate limit (per subject, per window)'),
+  rate_limit_chat_message: rateLimit('Chat message rate limit (per subject, per window)', {
+    limit: 30,
+    window_seconds: 60,
+  }),
   makeup_counter_answer_hours: whole(
     positiveWhole,
     'hours',
     'sessions',
     'Make-up counter-proposal answer window (hours)',
+    72,
   ),
-  chat_page_size: whole(positiveWhole, 'count', 'notifications', 'Chat page size (messages)'),
+  chat_page_size: whole(positiveWhole, 'count', 'notifications', 'Chat page size (messages)', 50),
   cancellation_requests_recent_days: whole(
     positiveWhole,
     'days',
     'sessions',
     'Cancellation requests recent period (days)',
+    30,
   ),
   video_empty_timeout_seconds: whole(
     positiveWhole,
     'seconds',
     'sessions',
     'Video room empty timeout (seconds)',
+    300,
   ),
   video_departure_timeout_seconds: whole(
     positiveWhole,
     'seconds',
     'sessions',
     'Video room departure timeout (seconds)',
+    20,
   ),
   repeated_absence_flag_count: whole(
     positiveWhole,
     'count',
     'sessions',
     'Repeated-absence flag count (Teacher-No-Shows per Enrollment)',
+    5,
   ),
   enrollment_restore_window_days: whole(
     positiveWhole,
     'days',
     'sessions',
     'Enrollment restore window (days)',
+    14,
   ),
-  rate_limit_absence_complaint: rateLimit('Absence complaint rate limit (per subject, per window)'),
+  rate_limit_absence_complaint: rateLimit(
+    'Absence complaint rate limit (per subject, per window)',
+    { limit: 5, window_seconds: 3600 },
+  ),
   rate_limit_signed_in_default: rateLimit(
     'Signed-in default rate limit (per signed-in User or Administrator, per window)',
+    { limit: 150, window_seconds: 60 },
     SIGNED_IN_DEFAULT_LIMIT_MAX,
   ),
   rate_limit_dispute_revision: rateLimit(
     'Dispute ruling revision rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   rate_limit_enrollment_restore: rateLimit(
     'Enrollment restore rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   rate_limit_manual_compensation_case: rateLimit(
     'Manual compensation case rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   rate_limit_outcome_correction: rateLimit(
     'Outcome correction rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
-  rate_limit_live_channel: rateLimit('Live channel open rate limit (per User, per window)'),
+  rate_limit_live_channel: rateLimit('Live channel open rate limit (per User, per window)', {
+    limit: 10,
+    window_seconds: 60,
+  }),
   live_channel_max_connections_per_user: whole(
     liveMaxConnections,
     'count',
     'general',
     'Live channel connections per User',
+    3,
   ),
   room_close_grace_minutes: whole(
     wholeNonNegative,
     'minutes',
     'sessions',
     'Session room close grace after the scheduled end (minutes)',
+    0,
     { min: 0 },
   ),
   room_close_retry_minutes: whole(
@@ -503,30 +638,57 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'minutes',
     'sessions',
     'Session room close retries after the scheduled end plus the grace (minutes)',
+    10,
   ),
-  ban_restore_window_days: whole(positiveWhole, 'days', 'sessions', 'Ban restore window (days)'),
-  rate_limit_ban_lift: rateLimit('Ban lift rate limit (per Administrator, per window)'),
+  ban_restore_window_days: whole(
+    positiveWhole,
+    'days',
+    'sessions',
+    'Ban restore window (days)',
+    14,
+  ),
+  rate_limit_ban_lift: rateLimit('Ban lift rate limit (per Administrator, per window)', {
+    limit: 10,
+    window_seconds: 60,
+  }),
   rate_limit_slot_release: rateLimit(
     'Held slot release rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
-  rate_limit_kept_data_erase_date: rateLimit(KEPT_DATA_LIMITS),
-  rate_limit_kept_data_erase_now: rateLimit(KEPT_DATA_LIMITS),
-  rate_limit_kept_document_link: rateLimit(KEPT_DATA_LIMITS),
+  rate_limit_kept_data_erase_date: rateLimit(KEPT_DATA_LIMITS, { limit: 10, window_seconds: 60 }),
+  rate_limit_kept_data_erase_now: rateLimit(KEPT_DATA_LIMITS, { limit: 10, window_seconds: 60 }),
+  rate_limit_kept_document_link: rateLimit(KEPT_DATA_LIMITS, { limit: 10, window_seconds: 60 }),
   rate_limit_admin_user_delete: rateLimit(
     "Administrator's deletion rate limit (per Administrator, per window)",
+    { limit: 10, window_seconds: 60 },
   ),
-  rate_limit_enrollment_end: rateLimit('Enrollment end rate limit (per Administrator, per window)'),
-  rate_limit_user_report: rateLimit('User report rate limit (per User, per window)'),
-  rate_limit_gender_flag: rateLimit('Gender flag rate limit (per User, per window)'),
-  rate_limit_ijazah_request: rateLimit('Ijazah request rate limit (per Teacher, per window)'),
+  rate_limit_enrollment_end: rateLimit(
+    'Enrollment end rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
+  ),
+  rate_limit_user_report: rateLimit('User report rate limit (per User, per window)', {
+    limit: 5,
+    window_seconds: 86400,
+  }),
+  rate_limit_gender_flag: rateLimit('Gender flag rate limit (per User, per window)', {
+    limit: 3,
+    window_seconds: 86400,
+  }),
+  rate_limit_ijazah_request: rateLimit('Ijazah request rate limit (per Teacher, per window)', {
+    limit: 10,
+    window_seconds: 3600,
+  }),
   rate_limit_ijazah_decision: rateLimit(
     "Ijazah decision rate limit: approve, reject, sign off, re-render, revoke, bar and the certificate name's change, each (per Administrator, per window)",
+    { limit: 10, window_seconds: 60 },
   ),
   rate_limit_gender_decision: rateLimit(
     'Gender decision rate limit: raise, dismiss, correct and fraud ban, each (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   rate_limit_settings_update: rateLimit(
     'Settings change rate limit (per Administrator, per window)',
+    { limit: 10, window_seconds: 60 },
   ),
   // T017 of specs/005-certification (SRS DEC-74; the follow-up under T005 and the note under T017,
   // Q-N4 (a)): `send-reminder` queues again a notification whose push was not queued after its
@@ -536,12 +698,14 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'minutes',
     'notifications',
     'Notification queued again after a lost enqueue: the wait before it is queued again (minutes)',
+    5,
   ),
   notification_requeue_max_age_minutes: whole(
     positiveWhole,
     'minutes',
     'notifications',
     'Notification queued again after a lost enqueue: the age after which it is no longer sent (minutes)',
+    30,
   ),
 };
 

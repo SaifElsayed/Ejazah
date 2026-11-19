@@ -2533,6 +2533,7 @@
       "columns": {
         "action": "Change",
         "bounds": "Bounds",
+        "default": "Default",
         "setting": "Setting",
         "srsRow": "SRS row",
         "value": "Value"

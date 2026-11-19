@@ -40,6 +40,7 @@ type Caller = ReturnType<typeof callerFor>;
 const ITEM = {
   key: 'chat_page_size',
   value: 50,
+  default: 50,
   bounds: { shape: 'number', value: { min: 1, minExclusive: false, max: null } },
   unit: 'count',
   group: 'notifications',

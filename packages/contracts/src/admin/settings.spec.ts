@@ -2,7 +2,8 @@
 // contracts/admin-surface.md (FR-624; SRS FR-ADMIN-9, §3.14; research R-410; the note under T024,
 // Q-S1 (a)). Written before the schemas, and run red first against a stub.
 //
-// `list` answers every registry key with its value, bounds, unit, group and SRS row; `update`
+// `list` answers every registry key with its value, default (B49's Q-A1 (a): the registry's, which is
+// the seed's), bounds, unit, group and SRS row; `update`
 // takes a key, a value, a reason and a key of idempotency, and answers the key and the value
 // stored. The units, groups and bounds are the registry's (`platform/settings/registry.ts`), and a
 // refusal names one of the registry's three reasons (`settingRefusal`).
@@ -26,6 +27,7 @@ const BOUND = { min: 1, minExclusive: false, max: null };
 const NUMBER_ITEM = {
   key: 'chat_page_size',
   value: 50,
+  default: 50,
   bounds: { shape: 'number', value: BOUND },
   unit: 'count',
   group: 'general',
@@ -62,12 +64,13 @@ describe('the registry’s words', () => {
 });
 
 describe('settings.list', () => {
-  it('answers each key with its value, bounds of each of the four shapes, unit, group and SRS row', () => {
+  it('answers each key with its value (null where no row holds it), its default, bounds of each of the four shapes, unit, group and SRS row', () => {
     const items = [
       NUMBER_ITEM,
       {
         key: 'attendance_threshold_pct',
         value: 80,
+        default: 70,
         bounds: { shape: 'number', value: { min: 0, minExclusive: true, max: 100 } },
         unit: 'percent',
         group: 'sessions',
@@ -76,6 +79,7 @@ describe('settings.list', () => {
       {
         key: 'reminder_offsets_minutes',
         value: [1440, 60],
+        default: [1440, 15],
         bounds: { shape: 'list', each: BOUND },
         unit: 'minutes',
         group: 'notifications',
@@ -84,6 +88,7 @@ describe('settings.list', () => {
       {
         key: 'rate_limit_settings_update',
         value: { limit: 10, window_seconds: 60 },
+        default: { limit: 10, window_seconds: 60 },
         bounds: { shape: 'rate_limit', limit: BOUND, windowSeconds: BOUND },
         unit: 'rate_limit',
         group: 'rateLimits',
@@ -91,7 +96,8 @@ describe('settings.list', () => {
       },
       {
         key: 'terms_version',
-        value: '2026-10-01',
+        value: null,
+        default: '2026-10',
         bounds: { shape: 'text' },
         unit: 'version',
         group: 'accounts',
@@ -99,6 +105,16 @@ describe('settings.list', () => {
       },
     ];
     expect(adminSettingsListOutput.parse({ items })).toEqual({ items });
+  });
+
+  // B49's Q-A1 (a) (FR-624: «value, default, unit»): the default is the registry's, the seed's value,
+  // in the value's JSON shapes, and never null: every key has one.
+  it('refuses an item without its default, or with a null default', () => {
+    const { default: _default, ...noDefault } = NUMBER_ITEM;
+    expect(adminSettingsListOutput.safeParse({ items: [noDefault] }).success).toBe(false);
+    expect(
+      adminSettingsListOutput.safeParse({ items: [{ ...NUMBER_ITEM, default: null }] }).success,
+    ).toBe(false);
   });
 
   it('refuses an item without its group, its SRS row or a known bounds shape', () => {

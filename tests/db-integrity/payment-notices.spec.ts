@@ -21,7 +21,9 @@
 // payment pushes nothing (its order's failure was pushed); a refused late payment records its
 // `cancelled` outcome with no push (Q-A1 (b)); the checkout's own gateway cancellation of an earlier
 // order records its `order_failed` outcome with no push (#148 Saif r1, Major 2: the platform
-// cancelled it, and nothing is left to Retry). Every queued id names a committed row.
+// cancelled it, and nothing is left to Retry), and the gateway's own later failed and expired events
+// for that order record nothing more (#148 Saif r2, Follow-up 1: red under R2M5, `MOVES_FROM.failed`
+// admitting `failed`). Every queued id names a committed row.
 // The rows are committed, each probe with a world of its own; every connection is the application
 // role.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
@@ -335,7 +337,8 @@ const checkoutSettings: SettingsReader = {
   read: async (key, schema) => schema.parse(CHECKOUT_SETTINGS[key]),
 };
 
-function checkoutServices() {
+/** The checkout; `payment` the webhook's stand-in when a case sends the gateway's events for its orders. */
+function checkoutServices(payment?: Webhook['payment']) {
   const config: PaymentConfig = {
     PAYMENT_GATEWAY: 'fake',
     PAYMENT_MODE: 'test',
@@ -348,7 +351,7 @@ function checkoutServices() {
       store: new IdempotencyRepository(database),
       settings: checkoutSettings,
     }),
-    payment: createPaymentPort(config),
+    payment: payment ?? createPaymentPort(config),
     cipher: new ColumnCipher(randomBytes(32).toString('base64')),
     gateway: 'fake',
     notices: writer,
@@ -433,6 +436,43 @@ describe('the checkout pushes (005:T016)', () => {
       cancellationReason: 'checkout_abandoned',
     });
     // The order's failure is recorded; the platform cancelled it, so nothing is pushed.
+    expect(
+      (await eventsOf(own.enrollmentId)).map(({ kind, cancellationReason }) => [
+        kind,
+        cancellationReason,
+      ]),
+    ).toEqual([
+      ['order_failed', null],
+      ['cancelled', 'checkout_abandoned'],
+    ]);
+    expect(await pushesOf(own.studentId)).toEqual([]);
+    await queuedAreCommitted();
+  });
+
+  // #148 Saif r2, Follow-up 1 (Q-C1 (a), B49): the checkout wrote the order `failed` first, so the
+  // gateway's own later events for it move nothing (`MOVES_FROM.failed` and `.expired`, `['created']`).
+  it('checkout.hold: the gateway’s later failed and expired events for the order it cancelled record no second order_failed row and no push', async () => {
+    const [first, second] = [
+      await world({ enrollment: ENDED }),
+      await world({ enrollment: ENDED }),
+    ];
+    const own = await checkoutOn(first, 15);
+    // The webhook's stand-in creates the order, so it can sign the gateway's events for it.
+    const services = checkoutServices(webhook.payment);
+    await services.retry(
+      { userId: own.studentId, gender: 'female' as RequesterGender },
+      { enrollmentId: own.enrollmentId, idempotencyKey: randomUUID() },
+    );
+    const { gatewayOrderId } = await database.payment.findFirstOrThrow({
+      where: { enrollmentId: own.enrollmentId },
+      select: { gatewayOrderId: true },
+    });
+    await services.hold(
+      { userId: own.studentId, gender: 'female' as RequesterGender },
+      { packageId: second.packageId, slotId: second.slotId, idempotencyKey: randomUUID() },
+    );
+    expect(await webhook.stand.deliver(webhook.stand.failed(gatewayOrderId))).toBe(200);
+    expect(await webhook.stand.deliver(webhook.stand.expired(gatewayOrderId))).toBe(200);
     expect(
       (await eventsOf(own.enrollmentId)).map(({ kind, cancellationReason }) => [
         kind,
