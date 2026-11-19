@@ -199,6 +199,7 @@
     },
     "signInConflict": {
       "bodyApple": "{email} مسجّل بحساب Apple. ادخل به.",
+      "bodyAppleOnIphone": "{email} مسجّل بحساب Apple. ادخل به من جهاز iPhone.",
       "bodyEmailPassword": "{email} مسجّل بالبريد وكلمة المرور. ادخل بهما.",
       "bodyGoogle": "{email} مسجّل بحساب Google. ادخل به.",
       "signInApple": "الدخول بحساب Apple",

@@ -223,6 +223,45 @@ describe('Welcome', () => {
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
 
+  /** A Google sign-in whose address belongs to an Apple account. */
+  async function appleConflict() {
+    mockIdentity.mockResolvedValue({ identityToken: 'google-token', email: 'amal@example.com' });
+    mockApi.api.auth.signInWithProvider.mutate.mockRejectedValue(
+      apiError('EMAIL_IN_USE_BY_OTHER_METHOD', [{ path: 'email', code: 'apple' }]),
+    );
+    await renderIn('rtl', <Welcome />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('auth.welcome.google') }));
+    expect(await screen.findByText(ar('auth.signInConflict.title'))).toBeTruthy();
+  }
+
+  it('offers Apple in an Apple conflict on iOS (B50 T148)', async () => {
+    await appleConflict();
+    expect(
+      screen.getByText(ar('auth.signInConflict.bodyApple', { email: 'amal@example.com' })),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: ar('auth.signInConflict.signInApple') }),
+    ).toBeTruthy();
+  });
+
+  it('says to sign in on an iPhone in an Apple conflict on Android, with no Apple button (B50 T148)', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      await appleConflict();
+      expect(
+        screen.getByText(
+          ar('auth.signInConflict.bodyAppleOnIphone', { email: 'amal@example.com' }),
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.queryByRole('button', { name: ar('auth.signInConflict.signInApple') }),
+      ).toBeNull();
+      expect(screen.getByRole('button', { name: ar('common.action.back') })).toBeTruthy();
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
   it('does nothing when the person closes the provider, and says so when it fails', async () => {
     mockIdentity.mockResolvedValueOnce(null);
     await renderIn('rtl', <Welcome />);
