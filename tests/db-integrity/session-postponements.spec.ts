@@ -24,7 +24,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addMinutes, addSeconds } from '../../packages/time/src/index.js';
 import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
 import {
+  createCaseQueue,
   createSessionsServices,
+  remedyAdvanceStore,
   type SessionsServices,
   sessionsStore,
 } from '../../apps/api/src/modules/sessions/index.js';
@@ -50,6 +52,7 @@ import {
   enrollmentValues,
   inRollback,
   insertRow,
+  makeAdmin,
   makeOffer,
   makeSession,
   makeUser,
@@ -75,6 +78,9 @@ const SEEDED: Record<string, unknown> = {
   // 003:T112.
   postponement_notice_hours: 12,
   postponement_interval_weeks: 4,
+  // The case queue's reads (Q-B's probe).
+  admin_list_page_size: 50,
+  repeated_absence_flag_count: 5,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
@@ -328,5 +334,42 @@ describe('sessions.postpone over the real tables (FR-POSTPONE-1, FR-POSTPONE-2)'
     expect((await refusalOf(postpone(w.enrollmentId, w.teacherId))).details).toEqual([
       { path: 'cause', code: 'no_session_in_week' },
     ]);
+  });
+});
+
+// 003:T112 (the owner's Q-B (a)): a postponed session whose make-up was never offered (its student
+// suspended at the postponement, say) is owed as an agreed cancellation is: the sweep offers it, and
+// an end hands it to its case. Written before `OWING_STATUSES` changed, run red first.
+describe('a postponed session never offered, as the sweep and an end read it (Q-B)', () => {
+  it('is due for the sweep’s offer and owed never offered on its enrollment', async () => {
+    const w = await world();
+    const postponementId = await insertRow(db, 'session_postponements', {
+      enrollment_id: w.enrollmentId,
+      requested_by_user_id: w.studentId,
+      reason: 'سفر طارئ',
+    });
+    await db.query(`UPDATE sessions SET status = 'postponed', postponement_id = $2 WHERE id = $1`, [
+      w.inWeek,
+      postponementId,
+    ]);
+    const due = await database.$transaction((tx) =>
+      remedyAdvanceStore.dueForOffer(tx, new Date(), undefined, 100_000),
+    );
+    expect(due.map(({ sessionId }) => sessionId)).toContain(w.inWeek);
+    // An end's case covers it as owed never offered (`case-covers.repository.ts`, through the queue).
+    const admin = await makeAdmin(db);
+    const caseId = await insertRow(db, 'disputes', {
+      enrollment_id: w.enrollmentId,
+      kind: 'compensation_case',
+      reason: 'teacher_ended',
+      status: 'open',
+    });
+    const queue = createCaseQueue({
+      enrollments: createEnrollmentSide({ settings }),
+      settings,
+      log: { info: () => undefined },
+    });
+    const answer = await database.$transaction((tx) => queue.get(tx, admin, { caseId }));
+    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([w.inWeek]);
   });
 });

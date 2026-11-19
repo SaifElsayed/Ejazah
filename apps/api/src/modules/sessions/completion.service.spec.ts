@@ -159,6 +159,34 @@ describe('completeIfDue (T015, FR-449)', () => {
     expect(completed).toEqual([]);
   });
 
+  // 003:T112 (SRS FR-POSTPONE-2, DEC-90; the owner's Q-B (a)): a postponed session is settled as an
+  // agreed cancellation is: owed its make-up, never disputed.
+  it('completes with a postponed session whose make-up is booked (003:T112)', async () => {
+    const { completion } = world({
+      sessions: [...DELIVERED, settled('postponed', { remedyStatus: 'booked' })],
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+  });
+
+  it('holds it while a postponed session has no remedy yet (003:T112)', async () => {
+    const { completion, completed } = world({ sessions: [...DELIVERED, settled('postponed')] });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  it('counts the window from the last session that can be disputed, not a later postponed one (003:T112)', async () => {
+    const { completion } = world({
+      sessions: [
+        ...DELIVERED,
+        settled('postponed', {
+          remedyStatus: 'booked',
+          scheduledEndAt: new Date('2026-11-08T08:00:00Z'),
+        }),
+      ],
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+  });
+
   it('completes with a refund handed to its case, or a remedy lapsed: no longer owed by the enrollment', async () => {
     const { completion } = world({
       sessions: [

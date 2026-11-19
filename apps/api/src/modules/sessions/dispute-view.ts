@@ -48,6 +48,8 @@ export interface DisputedSession {
 const CANCELLED: ReadonlySet<SessionStatus> = new Set([
   'cancelled_by_agreement',
   'cancelled_by_admin',
+  // 003:T112 (the owner's Q-B (a)): a postponed session, as an agreed cancellation.
+  'postponed',
 ]);
 const DISPUTABLE: ReadonlySet<SessionStatus> = new Set(DISPUTABLE_STATUSES);
 
