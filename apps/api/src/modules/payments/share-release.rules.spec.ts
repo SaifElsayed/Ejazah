@@ -220,6 +220,18 @@ describe('the ijazah track (ADR 0025 D2: 25% at half the sessions, the rest at t
     ]);
   });
 
+  // 003:T112 (SRS FR-POSTPONE-2, DEC-81; Q-6 (a)): a postponed session counts toward the half only once
+  // delivered, through its make-up; postponed itself it is nothing delivered. A pin of T105's rule.
+  it('never counts a postponed session toward the half: 4 done and 1 postponed hold it (003:T112)', () => {
+    const sessions = sessionsWith(4).map((one) =>
+      one.sequenceNumber === 5 ? { ...one, outcome: 'postponed' } : one,
+    );
+    expect(plan(facts({ track: 'ijazah_track', status: 'confirmed', sessions }))).toMatchObject([
+      { milestone: 'ijazah_half', due: false },
+      { milestone: 'ijazah_end', due: false },
+    ]);
+  });
+
   it('holds the half inside the 72-hour window of the session that reached it (Q-B1-3 (a))', () => {
     const inside = new Date(addHours(endOf(5), 71));
     expect(
@@ -415,6 +427,30 @@ describe('the closes that release (Q-5 (a))', () => {
         },
       ]);
     }
+  });
+
+  // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the administrator's end on a teacher's complaint
+  // against the student closes as a complaint close: the same release.
+  it('releases the delivered and missed sessions’ share on the end on a complaint against the student (003:T112)', () => {
+    const sessions = [
+      at(1, 'done'),
+      at(2, 'done'),
+      at(3, 'student_no_show'),
+      ...sessionsWith(10)
+        .slice(3)
+        .map((one) => ({ ...one, outcome: 'cancelled_by_admin' })),
+    ];
+    expect(
+      plan(facts({ status: 'cancelled', sessions, caseReasons: ['student_complaint_ended'] })),
+    ).toEqual([
+      {
+        milestone: 'student_complaint_close',
+        amount: 210_000,
+        dueAt: windowAfter(3),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
   });
 
   it('holds a close’s release while its case is open, and inside the last counted window', () => {

@@ -105,7 +105,7 @@ async function close(caseId: string, status: 'resolved' | 'dismissed'): Promise<
 }
 
 describe('openCompensationCase opens one system case per reason (T035, FR-DISPUTE-5)', () => {
-  it('has exactly the seventeen reasons of the closed list: Phase 2’s three, R-312’s nine, the manual case’s two, T071’s pause, T082’s direct end and 005:T014’s gender correction', () => {
+  it('has exactly the eighteen reasons of the closed list: Phase 2’s three, R-312’s nine, the manual case’s two, T071’s pause, T082’s direct end, 005:T014’s gender correction and 003:T112’s end on a complaint against the student', () => {
     expect([...COMPENSATION_REASONS]).toEqual([
       'slot_unavailable',
       'party_restricted',
@@ -124,6 +124,7 @@ describe('openCompensationCase opens one system case per reason (T035, FR-DISPUT
       'teacher_suspended',
       'admin_ended',
       'gender_correction',
+      'student_complaint_ended',
     ]);
     expect(COMPENSATION_REASONS).not.toContain('teacher_no_show_threshold');
   });
@@ -389,11 +390,11 @@ describe('the covering rule reads Phase 2’s three reasons only (T004 of specs/
     },
   );
 
-  it('every reason Phase 3 and 005:T014 add is left out, each one open on its own enrollment', async () => {
+  it('every reason Phase 3, 005:T014 and 003:T112 add is left out, each one open on its own enrollment', async () => {
     const added = COMPENSATION_REASONS.filter(
       (reason) => !(COVERING_REASONS as readonly string[]).includes(reason),
     );
-    expect(added).toHaveLength(14);
+    expect(added).toHaveLength(15);
     const enrollments: string[] = [];
     for (const reason of added) {
       const { enrollmentId } = await makeEnrollment(db);

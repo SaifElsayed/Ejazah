@@ -189,6 +189,15 @@ describe('remedy offer: what is owed and when (FR-462, G1, A2, C1, C3)', () => {
     expect(await offerOf().offerLocked(tx, SESSION)).toMatchObject({ status: 'proposed' });
   });
 
+  // 003:T112 (SRS FR-POSTPONE-2, DEC-90; the note under T112): a postponed session is owed its
+  // make-up at once, as a Cancelled-By-Agreement one, whoever postponed it.
+  it('offers a postponed session at once, with no window to wait (003:T112)', async () => {
+    session = { ...session, status: 'postponed' };
+    now = new Date('2026-11-26T08:00:00Z');
+    expect(await offerOf().offerLocked(tx, SESSION)).toMatchObject({ status: 'proposed' });
+    expect(inserted.map(({ row }) => row.status)).toEqual(['proposed']);
+  });
+
   // T111 of specs/003-booking (DEC-84, FR-ADMIN-5 as amended): a cleared suspension's session is
   // owed a make-up only, `proposed` on recitation too.
   it('offers a cancelled_by_admin session only for T036’s cleared suspension, proposed on recitation (T111)', async () => {

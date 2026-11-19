@@ -115,6 +115,9 @@ const SETTINGS: Record<string, unknown> = {
   ijazah_half_release_percent: 25,
   // 003:T105: the payout mark's limit, per administrator.
   rate_limit_payout_mark: { limit: 10, window_seconds: 60 },
+  // 003:T112 (SRS §3.14, DEC-86, DEC-90): the postponement's notice and interval.
+  postponement_notice_hours: 12,
+  postponement_interval_weeks: 4,
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -368,7 +371,7 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
-    // re-enqueue settings, merged from develop: 89 + 2 + 2.
-    expect(counts).toEqual([{ subjects: '5', settings: '93', admins: '1' }]);
+    // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two.
+    expect(counts).toEqual([{ subjects: '5', settings: '95', admins: '1' }]);
   });
 });

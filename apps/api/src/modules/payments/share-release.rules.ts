@@ -105,11 +105,14 @@ const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint
   ['absence_termination', 'teacher_dropout'],
   ['student_fault_confirmed', 'student_complaint_close'],
   ['student_banned', 'student_complaint_close'],
+  // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the administrator's end on a teacher's complaint
+  // against the student is a close on a complaint against the student.
+  ['student_complaint_ended', 'student_complaint_close'],
 ]);
 
 /**
  * 003:T110: the cause one case reason gives, or none, from the same closed set, so T110's case
- * amount and these releases never disagree (T112 adds DEC-86's complaints here, once).
+ * amount and these releases never disagree (T112 added DEC-86's complaint against the student here).
  */
 export function closingCauseOf(
   reason: string,

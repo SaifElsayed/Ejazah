@@ -422,6 +422,20 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
   rate_limit_payout_mark: rateLimit(
     'Payout release mark or unmark rate limit (per Administrator, per window)',
   ),
+  // 003:T112 (SRS §3.8.6, DEC-86, DEC-90): a postponement's notice before each session it covers
+  // (FR-POSTPONE-3) and its interval per party per enrollment (FR-POSTPONE-4), each at least 1.
+  postponement_notice_hours: whole(
+    positiveWhole,
+    'hours',
+    'sessions',
+    'Postponement notice before a session (hours, at least 1)',
+  ),
+  postponement_interval_weeks: whole(
+    positiveWhole,
+    'weeks',
+    'sessions',
+    'Postponement interval per party (weeks, at least 1)',
+  ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,
     'minutes',
