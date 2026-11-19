@@ -82,6 +82,42 @@ describe('the admin client', () => {
     }
   });
 
+  // 002:T147 (W1; the owner's Q-A1 (a), 2026-11-19): a query's input (a searched name, an email)
+  // never reaches a URL that access logs keep. A query with an input goes by POST, its input in
+  // the body; one with none goes by GET as before, since the API refuses a POST with no body (T108).
+  it('sends a query with an input by POST, its input in the body and none in the URL (T147)', async () => {
+    const { client, transport } = setUp(() => answer(200, { result: { data: [] } }));
+    const input = { name: 'a searched name', email: 'someone@example.test' };
+    await client.untyped.query('users.list', input);
+    const [url, init] = transport.mock.calls[0] ?? [];
+    expect(String(url)).toBe(`${URL}/users.list`);
+    expect(String(url)).not.toContain('input=');
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe(JSON.stringify(input));
+    expect(new Headers(init?.headers).get('content-type')).toBe('application/json');
+  });
+
+  it.each(['auth.me', 'home.summary', 'settings.list'])(
+    'sends %s, a query with no input, by GET as before, with no body (T147)',
+    async (path) => {
+      const { client, transport } = setUp(() => answer(200, { result: { data: {} } }));
+      await client.untyped.query(path);
+      const [url, init] = transport.mock.calls[0] ?? [];
+      expect(String(url)).toBe(`${URL}/${path}`);
+      expect(init?.method).toBe('GET');
+      expect(init?.body).toBeUndefined();
+    },
+  );
+
+  it('sends a mutation as before: POST, its input in the body, none in the URL (T147)', async () => {
+    const { client, transport } = setUp(() => answer(200, { result: { data: null } }));
+    await client.untyped.mutation('admins.disable', { adminId: 'a' });
+    const [url, init] = transport.mock.calls[0] ?? [];
+    expect(String(url)).toBe(`${URL}/admins.disable`);
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe('{"adminId":"a"}');
+  });
+
   it('signs out on the server with the bearer, and clears the tab even when the server fails', async () => {
     const { sessions, client, bearerOf, transport } = setUp(() => refusal('INTERNAL', 500));
     sessions.write({ token: 'token', step: 'verified' });
