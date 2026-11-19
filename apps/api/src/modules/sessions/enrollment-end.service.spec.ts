@@ -454,14 +454,43 @@ describe('sessions.endEnrollment: the live event (T066)', () => {
 // T110's amounts read as a complaint close; a paused enrollment's case closed by it names it. Written
 // before the cause was read, run red first.
 describe('sessions.endEnrollment on a complaint against the student (003:T112)', () => {
-  it('opens the student_complaint_ended case and hands the sessions and remedies to it', async () => {
+  // PR #151's review, round 1, Major 2 (a): the close frees the slot (the T112 note, «releasing the
+  // slot»; FR-POSTPONE-6, «its slots are freed»), whatever `slot` the input carries: the contract
+  // defaults it to `hold`, and an explicit hold cannot be told from the default once parsed, so it
+  // is ignored. The release is T070's, through the same locks in the same order as `slot: 'release'`.
+  it('opens the student_complaint_ended case, hands the sessions and remedies to it and releases the slot, the hold asked ignored', async () => {
     const one = world();
-    expect(await one.ask({ cause: 'student_complaint_ended' })).toEqual({
-      answer: { enrollmentId: ENROLLMENT, caseId: NEW_CASE, slot: 'hold', cancelledSessions: 1 },
+    expect(await one.ask({ cause: 'student_complaint_ended', slot: 'hold' })).toEqual({
+      answer: {
+        enrollmentId: ENROLLMENT,
+        caseId: NEW_CASE,
+        slot: 'release',
+        cancelledSessions: 1,
+      },
       replayed: false,
     });
-    expect(one.calls).toContainEqual(['openEndCase', ENROLLMENT, 'student_complaint_ended']);
-    expect(one.calls).not.toContainEqual(['openEndCase', ENROLLMENT, 'admin_ended']);
+    expect(one.calls.slice(1)).toEqual([
+      ['enrollmentFor', ENROLLMENT],
+      ['keyShareAccounts', [STUDENT, TEACHER].sort()],
+      ['lockTeacherSlots', TEACHER],
+      ['lockSlot', SLOT],
+      ['lockEnrollments', [ENROLLMENT]],
+      ['enrollmentFor', ENROLLMENT],
+      ['openComplaintOf', ENROLLMENT],
+      ['cancel', ENROLLMENT, 'admin', PARTY_REASON],
+      ['clock'],
+      ['cancelRemaining', [ENROLLMENT], AT],
+      ['openEndCase', ENROLLMENT, 'student_complaint_ended'],
+      ['releaseHeldSlot', ENROLLMENT],
+      ['pausedCaseOf', ENROLLMENT],
+    ]);
+    // The log records the release made.
+    expect(one.lines).toEqual([expect.objectContaining({ slot: 'release', caseId: NEW_CASE })]);
+    // What was asked stays the input as given, so a replay with the same input answers the first.
+    expect(one.calls[0]).toEqual([
+      'runOn',
+      { ...REQUEST, input: { ...REQUEST.input, cause: 'student_complaint_ended' } },
+    ]);
   });
 
   it('names the cause when it closes a paused enrollment’s case', async () => {

@@ -3321,7 +3321,8 @@
         "adminEnded": "A direct end",
         "studentComplaintEnded": "A complaint against the student",
         "studentComplaintEffect": "On the teacher’s report: the sessions the student missed up to the end stay the student’s absences, the teacher is released their share and that of the sessions attended, and the sessions after the end are refunded to the student.",
-        "caseReason": "The administration ended the enrollment on a complaint against the student"
+        "caseReason": "The administration ended the enrollment on a complaint against the student",
+        "slotReleased": "An end on a complaint against the student releases the weekly slot now, so it cannot be held."
       },
       "postponement": {
         "event": "The session was postponed"

@@ -19,7 +19,10 @@
 //   the dialog opens and reused on its retry; `complaint_open` links to the complaint.
 // - 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the end's cause, the direct end (the default,
 //   sent as before, with no `cause`) or a complaint against the student (a teacher's report),
-//   which says what that close does and is sent as `cause: 'student_complaint_ended'`.
+//   which says what that close does and is sent as `cause: 'student_complaint_ended'`. That close
+//   frees the slot (the T112 note, «releasing the slot»; FR-POSTPONE-6; PR #151's review, round 1,
+//   Major 2 (a)): with it the slot's choice shows «release now» alone, selected, with a line saying
+//   why, and sends `release`; the direct end gives the administrator's choice back.
 // Once the server answers, the monitor is read again and the dialog closes.
 import type { EnrollmentEndCause, EnrollmentEndSlot } from '@ijazah/contracts/admin';
 import { useMutation } from '@tanstack/react-query';
@@ -313,6 +316,9 @@ export function EndEnrollmentDialog({
       }),
   });
   const reason = partyReason.trim();
+  // 003:T112 (Major 2 (a)): a close on a complaint against the student always releases the slot.
+  const complaintClose = cause === 'student_complaint_ended';
+  const sentSlot: EnrollmentEndSlot = complaintClose ? 'release' : slot;
   const complaintHref =
     failure?.complaintId === undefined ? undefined : `/cases?case=${failure.complaintId}`;
 
@@ -320,7 +326,7 @@ export function EndEnrollmentDialog({
     if (reason === '') return;
     setFailure(undefined);
     end.mutate(
-      { partyReason: reason, internalNote: internalNote.trim(), slot, cause },
+      { partyReason: reason, internalNote: internalNote.trim(), slot: sentSlot, cause },
       {
         onSuccess: () => {
           void reread();
@@ -392,18 +398,26 @@ export function EndEnrollmentDialog({
         <Input value={internalNote} onChangeText={setInternalNote} multiline />
       </Field>
       <ChoiceGroup legend={t('admin.sessions.end.slotLegend')}>
-        <Choice
-          label={t('admin.sessions.end.slot.hold', { days })}
-          selected={slot === 'hold'}
-          onPress={() => setSlot('hold')}
-        />
+        {complaintClose ? null : (
+          <Choice
+            label={t('admin.sessions.end.slot.hold', { days })}
+            selected={sentSlot === 'hold'}
+            onPress={() => setSlot('hold')}
+          />
+        )}
         <Choice
           label={t('admin.sessions.end.slot.release')}
-          selected={slot === 'release'}
+          selected={sentSlot === 'release'}
           danger
           onPress={() => setSlot('release')}
         />
       </ChoiceGroup>
+      {complaintClose ? (
+        <p className="row row--top gap-2 text-callout">
+          <Icon name="info" size="sm" />
+          <span>{t('admin.sessions.endCause.slotReleased')}</span>
+        </p>
+      ) : null}
       {failure === undefined ? null : (
         <Banner icon={{ name: 'alert-circle' }} tone="danger">
           <span className="stack gap-2">

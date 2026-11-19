@@ -269,7 +269,9 @@ export const sessionsAdminRouter = createAdminRouter({
       // 003:T112 (the owner's Q-D (a)): the end's cause beside the slot's choice.
       after: {
         status: 'cancelled',
-        slot: input.slot,
+        // The slot the end released or held: a close on a complaint against the student releases
+        // whatever was asked (003:T112; PR #151's review, round 1, Major 2 (a)).
+        slot: answer.slot,
         internalNote: input.internalNote || null,
         cause: input.cause,
       },

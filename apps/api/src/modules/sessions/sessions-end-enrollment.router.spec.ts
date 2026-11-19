@@ -122,6 +122,28 @@ describe('sessions.endEnrollment (FR-513)', () => {
     ]);
   });
 
+  // 003:T112, PR #151's review, round 1, Major 2 (a): an end on a complaint against the student always
+  // releases the slot; the entry records the release made, not the hold the schema defaults.
+  it('audits the release an end on a complaint against the student makes, the default hold not recorded', async () => {
+    const released: Answer = { ...ENDED, answer: { ...ENDED.answer, slot: 'release' } };
+    const { as, written, reached } = surface(released);
+    await as(VERIFIED).sessions.endEnrollment({ ...ASKED, cause: 'student_complaint_ended' });
+    expect(reached).toEqual([
+      [SPEC_ADMIN, { ...ASKED, slot: 'hold', cause: 'student_complaint_ended' }],
+    ]);
+    expect(written).toEqual([
+      {
+        ...ENTRY,
+        after: {
+          status: 'cancelled',
+          slot: 'release',
+          internalNote: INTERNAL_NOTE,
+          cause: 'student_complaint_ended',
+        },
+      },
+    ]);
+  });
+
   it('answers a replay the first result and records no second entry', async () => {
     const { as, written } = surface({ ...ENDED, replayed: true });
     expect(await as(VERIFIED).sessions.endEnrollment(ASKED)).toEqual(ENDED.answer);

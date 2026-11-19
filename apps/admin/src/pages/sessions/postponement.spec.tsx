@@ -2,7 +2,8 @@
 // languages: a postponed session reads «مؤجلة» and its timeline event «أُجّلت الجلسة»; the case the
 // end on a complaint against the student opened is named by its reason. The end's dialog offers its
 // cause: the direct end (the default, sent as before, with no cause) or «a complaint against the
-// student», which says what that close does and is sent as `cause: 'student_complaint_ended'`.
+// student», which says what that close does and is sent as `cause: 'student_complaint_ended'`, its
+// slot released now, fixed, with the line saying why (PR #151's review, round 1, Major 2 (a)).
 // The panel's other session-status maps (disputes, telemetry) say «مؤجلة» too.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -194,9 +195,41 @@ describe('the end’s cause (003:T112, FR-POSTPONE-6, Q-4 (a))', () => {
     expect(api.sessions.endEnrollment.mutate).toHaveBeenCalledWith({
       enrollmentId: E1,
       partyReason: 'بلاغ المعلم عن الطالب',
-      slot: 'hold',
+      // PR #151's review, round 1, Major 2 (a): that close releases the slot.
+      slot: 'release',
       cause: 'student_complaint_ended',
       idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
     });
+  });
+
+  // PR #151's review, round 1, Major 2 (a): the close on a complaint against the student frees the
+  // slot (the T112 note, «releasing the slot»; FR-POSTPONE-6), so the dialog selects «release now»,
+  // offers no hold and says why; the direct end gives the choice back.
+  it('with the complaint against the student, shows the slot released now, fixed, and says why, in both languages', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.end') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.end.title') }),
+        );
+        const slotGroup = () =>
+          within(dialog.getByRole('group', { name: t('admin.sessions.end.slotLegend') }));
+        const hold = t('admin.sessions.end.slot.hold', { days: 14 });
+        expect(dialog.queryByText(t('admin.sessions.endCause.slotReleased'))).toBeNull();
+        fireEvent.click(
+          dialog.getByRole('radio', { name: t('admin.sessions.endCause.studentComplaintEnded') }),
+        );
+        expect(
+          slotGroup().getByRole('radio', { name: t('admin.sessions.end.slot.release') }),
+        ).toHaveProperty('checked', true);
+        expect(slotGroup().queryAllByRole('radio')).toHaveLength(1);
+        expect(dialog.getByText(t('admin.sessions.endCause.slotReleased'))).toBeTruthy();
+        fireEvent.click(dialog.getByRole('radio', { name: t('admin.sessions.endCause.adminEnded') }));
+        expect(slotGroup().getByRole('radio', { name: hold })).toHaveProperty('checked', true);
+        expect(dialog.queryByText(t('admin.sessions.endCause.slotReleased'))).toBeNull();
+      },
+    );
   });
 });

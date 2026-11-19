@@ -584,6 +584,11 @@ export const sessionsEndEnrollmentInput = z.object({
   partyReason: z.string().trim().min(1).max(ENROLLMENT_END_TEXT_MAX_LENGTH),
   /** Kept in the audit entry only, never shown to a party nor logged. */
   internalNote: z.string().trim().max(ENROLLMENT_END_TEXT_MAX_LENGTH).optional(),
+  /**
+   * Hold or release the weekly slot; ignored on the cause `student_complaint_ended`, which always
+   * releases it (003:T112, Q-4 (a); PR #151's review, round 1, Major 2 (a)). The answer's `slot`
+   * is the one the end made.
+   */
   slot: enrollmentEndSlot.default('hold'),
   /** 003:T112 (Q-4 (a)): the end's cause; today's direct end by default. */
   cause: enrollmentEndCause.default('admin_ended'),
