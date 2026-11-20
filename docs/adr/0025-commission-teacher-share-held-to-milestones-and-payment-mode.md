@@ -1,6 +1,6 @@
 # ADR 0025 — The platform's commission, the teacher's share held to milestones, and the payment mode
 
-**Status:** accepted · **Date:** 2026-11-17 · **Decided by:** the owner, 2026-11-05 (a commission, final), 2026-11-15 (the rate, who bears every cost, an administrator's setting, built on an assumption) and 2026-11-16/17 (the money rules, typed in track 2's review session, «موافق عالباقي»; the open points N1–N7, «التوصية بس تمام») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D1 (0% commission; no per-session deferred revenue share) and D5 (compensation executed outside the code path, as far as D3 and D4 below say); [ADR 0018](0018-package-tracks-make-up-sessions-and-student-suspension.md) (the recitation refund choice, D5 below); the SRS rows listed under «Documents amended» · **Replaces:** `specs/003-booking/tasks.md` T105 as first written (released session by session on the gateway's Sunday and Wednesday) and the monthly payout of 2026-11-15 · **Leaves:** ADR 0024's rules (its D4 is closed by SRS DEC-83); its instalments pay the commission of D1 (D6).
+**Status:** accepted · **Date:** 2026-11-17 · **Decided by:** the owner, 2026-11-05 (a commission, final), 2026-11-15 (the rate, who bears every cost, an administrator's setting, built on an assumption) and 2026-11-16/17 (the money rules, typed in track 2's review session, «موافق عالباقي»; the open points N1–N7, «التوصية بس تمام») · **Amends:** [ADR 0007](0007-direct-gateway-checkout.md) D1 (0% commission; no per-session deferred revenue share) and D5 (compensation executed outside the code path, as far as D3 and D4 below say); [ADR 0018](0018-package-tracks-make-up-sessions-and-student-suspension.md) (the recitation refund choice, D5 below); the SRS rows listed under «Documents amended» · **Replaces:** `specs/003-booking/tasks.md` T105 as first written (released session by session on the gateway's Sunday and Wednesday) and the monthly payout of 2026-11-15 · **Leaves:** ADR 0024's rules (its D4 is closed by SRS DEC-83); its instalments pay the commission of D1 (D6). · **Amended by:** SRS DEC-94 (2026-11-19: D2's assessment share, released on its own only when the student does not continue)
 
 ## Context
 
@@ -49,6 +49,10 @@ There is no monthly payout. The gateway holds each order's teacher share until a
   are delivered with no case open; sessions are counted, not calendar time, and a postponed or make-up session counts
   only once delivered. The rest is released at the programme's end, on the recitation condition.
 - **The assessment fee's share:** released when its session's dispute window has passed with no case open.
+  *(Amended 2026-11-19, the owner's decision, SRS DEC-94:)* only when the student does not continue (the offer declined
+  or unpaid within the 48 hours, or a refusal an administrator approves), once the 48 hours have ended and the
+  session's dispute window has passed with no case open. When the student continues, the assessment is the package's
+  first session: its share is held with the package, counted toward the half, and inside the 25 %.
 - **A programme closed for non-renewal** (SRS FR-BOOK-18): the held share of the instalments paid, after the last
   delivered session's dispute window, with no case open.
 - **A package closed on a complaint against the student** (SRS DEC-86): the share of the sessions delivered and of
