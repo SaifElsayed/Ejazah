@@ -13,6 +13,7 @@
 // its network (R-SEC-2).
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createLogger } from '../platform/logging/logger.js';
+import { logProxyFallback, readClientAddress } from '../platform/http/client-address.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
 import type { AuditWriter } from '../platform/audit/audit-writer.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
@@ -190,33 +191,101 @@ describe('the bearer token and the client address (T016, T017; contracts/kernel.
     ).toBe(socket);
   });
 
+  // T147: the proxy's own address (`TRUSTED_PROXY_ADDRESS`), the only peer whose header is read.
+  const proxyAddress = '10.0.0.2';
+  const forwardedFor = { header: 'X-Forwarded-For', address: proxyAddress };
+
   it('is the trusted header’s last hop, the one the proxy appended; a client-supplied first hop is never the subject', () => {
     const forged = '1.2.3.4';
     const address = clientAddressOf(
       {
-        remoteAddress: socket,
+        remoteAddress: proxyAddress,
         headers: { 'x-forwarded-for': `${forged}, 203.0.113.9, 203.0.113.10` },
       },
-      'X-Forwarded-For',
+      forwardedFor,
     );
     expect(address).toBe('203.0.113.10');
     expect(address).not.toBe(forged);
     expect(
       clientAddressOf(
-        { remoteAddress: socket, headers: { 'x-real-ip': ' 203.0.113.11 ' } },
-        'X-Real-IP',
+        { remoteAddress: proxyAddress, headers: { 'x-real-ip': ' 203.0.113.11 ' } },
+        { header: 'X-Real-IP', address: proxyAddress },
       ),
     ).toBe('203.0.113.11');
-  });
-
-  it('is the socket’s peer when the key is set but the header is absent or empty', () => {
-    expect(clientAddressOf({ remoteAddress: socket, headers: {} }, 'X-Forwarded-For')).toBe(socket);
     expect(
       clientAddressOf(
-        { remoteAddress: socket, headers: { 'x-forwarded-for': ' , ' } },
-        'X-Forwarded-For',
+        { remoteAddress: proxyAddress, headers: { 'x-forwarded-for': '2001:db8::1' } },
+        forwardedFor,
       ),
-    ).toBe(socket);
+    ).toBe('2001:db8::1');
+  });
+
+  it('is the socket’s peer when the key is set but the header is absent or empty, with nothing to report', () => {
+    for (const remoteAddress of [proxyAddress, socket]) {
+      expect(readClientAddress({ remoteAddress, headers: {} }, forwardedFor)).toEqual({
+        address: remoteAddress,
+      });
+      expect(
+        readClientAddress({ remoteAddress, headers: { 'x-forwarded-for': ' , ' } }, forwardedFor),
+      ).toEqual({ address: remoteAddress });
+    }
+  });
+
+  it('a peer that is not the proxy cannot choose the subject: its header is set aside for its own address (T147)', () => {
+    const chosen = '203.0.113.9';
+    const source = { remoteAddress: socket, headers: { 'x-forwarded-for': `10.9.9.9, ${chosen}` } };
+    expect(clientAddressOf(source, forwardedFor)).toBe(socket);
+    expect(readClientAddress(source, forwardedFor)).toEqual({
+      address: socket,
+      fallback: 'peer_not_proxy',
+    });
+  });
+
+  it('a last hop that is not an IP address falls back to the socket’s peer (T147)', () => {
+    for (const hop of ['not-an-address', 'unknown', '203.0.113.9:443', '[2001:db8::1]', '_hidden']) {
+      const source = {
+        remoteAddress: proxyAddress,
+        headers: { 'x-forwarded-for': `203.0.113.8, ${hop}` },
+      };
+      expect(clientAddressOf(source, forwardedFor), hop).toBe(proxyAddress);
+      expect(readClientAddress(source, forwardedFor), hop).toEqual({
+        address: proxyAddress,
+        fallback: 'hop_not_an_address',
+      });
+    }
+  });
+
+  it('matches the proxy’s address in its IPv4-mapped form, either way round, and no other address (T147)', () => {
+    const hop = '203.0.113.12';
+    const headers = { 'x-forwarded-for': hop };
+    expect(
+      clientAddressOf({ remoteAddress: `::ffff:${proxyAddress}`, headers }, forwardedFor),
+    ).toBe(hop);
+    expect(
+      clientAddressOf(
+        { remoteAddress: proxyAddress, headers },
+        { header: 'X-Forwarded-For', address: `::FFFF:${proxyAddress}` },
+      ),
+    ).toBe(hop);
+    expect(clientAddressOf({ remoteAddress: '::ffff:10.0.0.3', headers }, forwardedFor)).toBe(
+      '::ffff:10.0.0.3',
+    );
+  });
+
+  it('logs a header set aside once, at warn, with its reason and nothing of the header (T147)', () => {
+    const lines: string[] = [];
+    const sink = createLogger({ level: 'info', destination: { write: (line) => lines.push(line) } });
+    const { log } = createAppContext({ ...appSource, log: sink, clientAddress: socket });
+    logProxyFallback(log, undefined);
+    expect(lines).toEqual([]);
+    logProxyFallback(log, 'peer_not_proxy');
+    logProxyFallback(log, 'hop_not_an_address');
+    expect(lines).toHaveLength(2);
+    const [first, second] = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(first).toMatchObject({ level: 'warn', reason: 'peer_not_proxy' });
+    expect(second).toMatchObject({ level: 'warn', reason: 'hop_not_an_address' });
+    expect(first?.['correlationId']).toEqual(expect.any(String));
+    expect(first?.['clientAddress']).toBe('198.51.100.0/24');
   });
 
   it('names a socket without a peer address as unknown, so a limit still counts it under one subject', () => {

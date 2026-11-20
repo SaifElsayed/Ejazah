@@ -52,6 +52,7 @@ import { Banner, Button } from '../design/primitives';
 import { DirectionProvider, navigationTheme, ThemeProvider, useTheme } from '../design/theme';
 import { tokens } from '../design/tokens';
 import { clearPendingEmail } from '../features/shared/auth/pending';
+import { signOutOfProviders } from '../features/shared/account/hooks';
 import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
 import { TestModeStrip } from '../features/shared/test-mode';
 import { clearApplication } from '../features/teacher/application/draft';
@@ -87,7 +88,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <DirectionProvider>
         <QueryClientProvider client={queries}>
-          <ApiProvider>
+          <ApiProvider onSignedOut={signOutOfProviders}>
             <SessionGuard queries={queries} />
             <TestModeStrip />
           </ApiProvider>

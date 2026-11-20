@@ -1,0 +1,45 @@
+# The administrator panel's host (002:T147, W7; research R-18, «the admin surface as static
+# assets»; SRS NFR-SEC-11: the host that serves the panel's HTML sends the browser headers; the
+# owner's Q-T1 (a), 2026-11-19). Checked by tests/deploy/caddyfile.spec.ts; validated and its
+# served headers checked on the deploy days (docs/RUNBOOK.md, «Hosted deploy»).
+#
+# Four environment values, read when Caddy loads this file (the final domain is fixed before 12/6):
+#   ADMIN_SITE        the panel's own address, e.g. admin.<domain>
+#   ADMIN_BUILD_ROOT  the panel's build on the host, `apps/admin/build` (`vite build`, with
+#                     VITE_API_URL set to the API's origin)
+#   API_ORIGIN        the API's origin, which the panel calls
+#   STORAGE_ORIGIN    the object storage's origin, which its signed links name
+{$ADMIN_SITE} {
+	root * {$ADMIN_BUILD_ROOT}
+	# The panel routes in the browser (react-router): an unknown path is its page.
+	try_files {path} /index.html
+	file_server
+
+	# Each source the policy allows, and the code that needs it (paths under apps/admin/; read on
+	# the build of 2026-11-19):
+	# - script-src 'self': the one module script the build links, `/assets/index-*.js`
+	#   (apps/admin/index.html:10; vite.config.ts:14 emits no inline script).
+	# - style-src 'self': the one stylesheet the build links. Radix's dialog writes a scroll-lock
+	#   <style> at run time (react-remove-scroll-bar, under design/components/Dialog.tsx:9); it is
+	#   refused, so a dialog still opens and the page behind it may scroll.
+	# - img-src {$STORAGE_ORIGIN}: an avatar (design/components/Containers.tsx:140) and a
+	#   signature (pages/ijazah-requests/IjazahRequestPanel.tsx:190), both signed storage links.
+	#   No data: or blob: image is drawn: pdf.js draws pages on a canvas (lib/pdf.ts:35).
+	# - font-src 'self': the panel's own fonts under /fonts (design/fonts.css:4-9); pdf.js loads
+	#   a document's fonts from bytes (FontFace), not from a URL.
+	# - connect-src {$API_ORIGIN}: the client (main.tsx:17,27); {$STORAGE_ORIGIN}: pdf.js fetches
+	#   the document's signed link (lib/pdf.ts:26).
+	# - worker-src 'self': the pdf.js worker, a file of the build (lib/pdf.ts:9,25); being of the
+	#   same origin, pdf.js needs no blob: wrapper for it.
+	# - frame-ancestors, base-uri, form-action 'none': nothing frames the panel, it sets no base,
+	#   and its four forms submit through the client, never the browser (e.g.
+	#   pages/sign-in/AdminSignIn.tsx:42, `preventDefault`).
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' {$STORAGE_ORIGIN}; font-src 'self'; connect-src 'self' {$API_ORIGIN} {$STORAGE_ORIGIN}; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options DENY
+		-Server
+	}
+}

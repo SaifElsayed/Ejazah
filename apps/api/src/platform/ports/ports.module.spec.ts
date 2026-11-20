@@ -9,7 +9,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { piasters } from '@ijazah/money';
-import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { ConfigError, loadConfig, type Config } from '../config/config.module.js';
 import type { EmailPort } from './email/email.port.js';
 import type { PaymentPort } from './payment/payment.port.js';
@@ -125,6 +125,23 @@ describe('provider selection (T121, FR-056)', () => {
         { title: 'probe', body: 'probe' },
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('hands the process logger to the live sign-in adapter, which reaches no one for Apple (002:T148)', async () => {
+    const warn = vi.fn<(fields: object, message: string) => void>();
+    const live = loadConfig({
+      ...required,
+      STORAGE_LOCAL_ROOT: root,
+      SIGN_IN_PROVIDER: 'live',
+      GOOGLE_CLIENT_IDS: 'web-placeholder.apps.googleusercontent.com',
+    });
+
+    const { signIn } = selectPorts(live, { warn });
+
+    await expect(
+      signIn.revoke({ provider: 'apple', refreshToken: 'refresh-placeholder' }),
+    ).rejects.toThrow();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('selects anew on every call, holding nothing between processes or callers', () => {

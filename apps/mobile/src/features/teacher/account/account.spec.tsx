@@ -27,8 +27,13 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (route: unknown) => mockPush(route) } }));
 jest.mock('../../../lib/time-zone', () => ({ deviceTimeZone: () => 'Africa/Cairo' }));
-// The tab leads to the deletion, whose proof loads the providers' native modules (T084).
-jest.mock('../../shared/auth/providers', () => ({ nativeIdentity: jest.fn() }));
+// The tab leads to the deletion, whose proof loads the providers' native modules (T084); the
+// sign-out signs the provider out too (B50 T148).
+const mockSignOutProviders = jest.fn<() => Promise<void>>();
+jest.mock('../../shared/auth/providers', () => ({
+  nativeIdentity: jest.fn(),
+  signOutProviders: () => mockSignOutProviders(),
+}));
 
 const me = {
   userId: '0193a6f0-0000-7000-8000-000000000002',
@@ -69,6 +74,7 @@ beforeEach(async () => {
   mockApi = fakeApi();
   mockApi.api.account.me.query.mockResolvedValue(me);
   await mockApi.sessions.store.write(tokens);
+  mockSignOutProviders.mockReset().mockResolvedValue(undefined);
   setSession({ kind: 'signed-in', landing: 'teacher_home' });
 });
 
@@ -249,5 +255,34 @@ describe('TeacherAccount', () => {
         .at(-1)!,
     );
     await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
+  });
+
+  async function signOutThroughTheSheet() {
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(
+      screen.getByRole('button', { name: translate('ar', 'common.action.signOut') }),
+    );
+    await fireEvent.press(
+      (
+        await screen.findAllByRole('button', {
+          name: translate('ar', 'account.signOutSheet.confirm'),
+        })
+      ).at(-1)!,
+    );
+  }
+
+  it('signs the device out of the sign-in provider too (B50 T148)', async () => {
+    await signOutThroughTheSheet();
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
+    await waitFor(() => expect(mockSignOutProviders).toHaveBeenCalledTimes(1));
+  });
+
+  it('signs out even when the provider sign-out fails (B50 T148)', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockSignOutProviders.mockRejectedValue(new Error('the provider failed'));
+    await signOutThroughTheSheet();
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'signed-out' }));
+    expect(mockApi.sessions.current()).toBeNull();
+    jest.restoreAllMocks();
   });
 });

@@ -155,7 +155,8 @@ beforeAll(async () => {
     sessions,
     services,
     adminServices: unusedAdminServices,
-    trustedProxyHeader: 'X-Forwarded-For',
+    // The spec's own requests come from 127.0.0.1, the proxy here (T147).
+    trustedProxy: { header: 'X-Forwarded-For', address: '127.0.0.1' },
     // The shorter path is declared first on purpose: the application mounts the longer first.
     webRoutes: { '/terms': terms, '/broken': broken, '/a': terms, '/a/b': broken, '/form': form },
   });
@@ -413,5 +414,101 @@ describe('the form body of a page (T083, public-pages.md)', () => {
   it('refuses a body that is not UTF-8 with 400', async () => {
     const invalid = new Uint8Array([0x65, 0x6d, 0x61, 0x69, 0x6c, 0x3d, 0xff, 0xfe]);
     expect((await post(invalid, '203.0.113.69')).status).toBe(400);
+  });
+});
+
+// T147 (W8): the proxy's header is read only from the proxy's own address, and its last hop only
+// when it is an IP address; otherwise the socket's peer is the subject, and the request logs once
+// why, with no part of the header. Two applications of their own, each with its own limit counter:
+// one whose proxy is another machine, so the spec's requests (from 127.0.0.1) are not the proxy's,
+// and one whose proxy is 127.0.0.1. Each request names another last hop, so a hop taken as the
+// subject would never reach the limit.
+describe('the trusted proxy, by its address (T147)', () => {
+  interface Started {
+    readonly application: INestApplication;
+    readonly origin: string;
+    readonly lines: Record<string, unknown>[];
+  }
+
+  async function start(proxyAddress: string): Promise<Started> {
+    const lines: Record<string, unknown>[] = [];
+    const application = await createApplication({
+      log: createLogger({
+        level: 'info',
+        destination: { write: (line) => lines.push(JSON.parse(line) as Record<string, unknown>) },
+      }),
+      readiness: { databaseReachable: async () => {} },
+      securityHeaders: { allowedOrigins: [], mode: 'test' },
+      maxRequestBodyBytes: 1024,
+      administration,
+      rateLimiter: limiterOf(LIMIT).limiter,
+      sessions,
+      services,
+      adminServices: unusedAdminServices,
+      trustedProxy: { header: 'X-Forwarded-For', address: proxyAddress },
+      webRoutes: { '/terms': terms },
+    });
+    await application.listen(0, '127.0.0.1');
+    return {
+      application,
+      origin: (await application.getUrl()).replace('[::1]', '127.0.0.1'),
+      lines,
+    };
+  }
+
+  let notTheProxy: Started;
+  let theProxy: Started;
+
+  beforeAll(async () => {
+    [notTheProxy, theProxy] = await Promise.all([start('192.0.2.1'), start('127.0.0.1')]);
+  });
+
+  afterAll(async () => {
+    await Promise.all([notTheProxy?.application.close(), theProxy?.application.close()]);
+  });
+
+  const fallbacks = (lines: Record<string, unknown>[], reason: string) =>
+    lines.filter((line) => line['reason'] === reason);
+
+  it('a peer that is not the proxy cannot choose the subject: every hop it names counts as its own address', async () => {
+    const hops = Array.from({ length: LIMIT + 1 }, (_, index) => `198.51.100.${index + 90}`);
+    const statuses: number[] = [];
+    for (const hop of hops) {
+      const response = await fetch(`${notTheProxy.origin}/terms`, {
+        headers: { 'x-forwarded-for': `10.0.0.1, ${hop}` },
+      });
+      statuses.push(response.status);
+    }
+    expect(statuses).toEqual([...Array<number>(LIMIT).fill(200), 429]);
+    // Logged once a request, with the reason and nothing of the header.
+    expect(fallbacks(notTheProxy.lines, 'peer_not_proxy')).toHaveLength(LIMIT + 1);
+    const logged = JSON.stringify(notTheProxy.lines);
+    for (const hop of hops) expect(logged).not.toContain(hop);
+  });
+
+  it('both surfaces set aside the header of a peer that is not the proxy, and log it once a request', async () => {
+    const before = fallbacks(notTheProxy.lines, 'peer_not_proxy').length;
+    for (const surface of ['/trpc', '/admin/trpc']) {
+      const response = await fetch(`${notTheProxy.origin}${surface}/no.such.procedure`, {
+        headers: { 'x-forwarded-for': '198.51.100.120' },
+      });
+      expect(response.status).toBe(404);
+    }
+    expect(fallbacks(notTheProxy.lines, 'peer_not_proxy')).toHaveLength(before + 2);
+    expect(JSON.stringify(notTheProxy.lines)).not.toContain('198.51.100.120');
+  });
+
+  it('a last hop that is not an IP address falls back to the socket’s peer, logged once a request', async () => {
+    const hops = Array.from({ length: LIMIT + 1 }, (_, index) => `not-an-address-${index}`);
+    const statuses: number[] = [];
+    for (const hop of hops) {
+      const response = await fetch(`${theProxy.origin}/terms`, {
+        headers: { 'x-forwarded-for': `10.0.0.1, ${hop}` },
+      });
+      statuses.push(response.status);
+    }
+    expect(statuses).toEqual([...Array<number>(LIMIT).fill(200), 429]);
+    expect(fallbacks(theProxy.lines, 'hop_not_an_address')).toHaveLength(LIMIT + 1);
+    expect(JSON.stringify(theProxy.lines)).not.toContain('not-an-address');
   });
 });

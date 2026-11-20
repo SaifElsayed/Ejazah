@@ -24,6 +24,7 @@ import {
   createTRPCClient,
   createTRPCUntypedClient,
   httpLink,
+  splitLink,
   type TRPCClient,
   TRPCClientError,
   type TRPCUntypedClient,
@@ -81,7 +82,18 @@ export function createAdminClient(options: AdminClientOptions): AdminClient {
     if (step !== undefined) sessions.setStep(step);
   }
 
-  const links = () => [httpLink({ url, fetch: asLinkFetch(send) })];
+  // 002:T147 (W1; the owner's Q-A1 (a), 2026-11-19): a query that carries an input (seven lists
+  // carry a searched name or email) goes by POST with the input in its body, so no URL an access
+  // log keeps holds it; the API takes the override on `/admin/trpc` only. A query with no input
+  // (`auth.me`, `home.summary`, `settings.list`) stays a GET: by POST it would carry no body,
+  // which the API refuses (T108). A mutation is a POST with its body through either link.
+  const links = () => [
+    splitLink({
+      condition: (op) => op.type === 'query' && op.input !== undefined,
+      true: httpLink({ url, fetch: asLinkFetch(send), methodOverride: 'POST' }),
+      false: httpLink({ url, fetch: asLinkFetch(send) }),
+    }),
+  ];
   const api = createTRPCClient<AdminRouter>({ links: links() });
   const untyped = createTRPCUntypedClient<AdminRouter>({ links: links() });
 

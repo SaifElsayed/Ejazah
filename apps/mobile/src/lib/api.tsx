@@ -25,7 +25,17 @@ export function apiUrl(origin: string | undefined = process.env['EXPO_PUBLIC_API
   return `${apiOrigin(origin)}/trpc`;
 }
 
-export function ApiProvider({ children }: { readonly children: ReactNode }) {
+/**
+ * `onSignedOut` (002:T148, B50): what else ends with a refused refresh; the root passes the
+ * sign-in providers' sign-out, so the phone leaves Google as the app's own sign-out does.
+ */
+export function ApiProvider({
+  children,
+  onSignedOut,
+}: {
+  readonly children: ReactNode;
+  readonly onSignedOut?: () => void;
+}) {
   const [value] = useState(() => {
     const sessions = createSessionStore();
     const client = createApiClient({
@@ -37,7 +47,10 @@ export function ApiProvider({ children }: { readonly children: ReactNode }) {
       signatureUploadUrl: `${apiOrigin()}/uploads/signature`,
       sessions,
       // A refused refresh has already cleared the tokens; the guard lands the person on welcome.
-      onSignedOut: () => setSession({ kind: 'signed-out' }),
+      onSignedOut: () => {
+        onSignedOut?.();
+        setSession({ kind: 'signed-out' });
+      },
     });
     return { client, sessions };
   });

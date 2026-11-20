@@ -400,6 +400,8 @@ to one package rather than to every module.
 
 ## R-18: Staging environment — **decided: deferred to Phase 6 (2026-10-13)**
 
+**The panel's host, 2026-11-19 (B50, 002:T147; the owner's Q-T1 (a))**: the admin surface's static assets are served by the committed Caddy site block `deploy/Caddyfile`, which sends the browser security headers and the Content Security Policy (SRS NFR-SEC-11), checked by `tests/deploy/caddyfile.spec.ts` and on the host by `docs/RUNBOOK.md`'s «Hosted deploy».
+
 **Owner's decision, 2026-10-13**: no staging environment during development; it is provisioned in Phase 6 (T092's note). Staging holds synthetic data only (2026-10-12). The production host is planned on a Hostinger VPS.
 
 **Recommendation**: A single always-on staging environment: the backend as a
