@@ -63,7 +63,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 |---|---|---|---|
 | 11/21–11/22 | B-P1 | The tasks commit of PR #154's and #153's follow-ups; R1a starts | |
 | 11/23–11/24 | B-P2 | R1a ends 11/23; R1b starts 11/24, cut after B-P2 merges (both write `share-release.rules.ts`) | The owner: the gateway's contract request |
-| 11/25–11/26 | B-P3 | R1b ends 11/25; R2 starts | Counsel's answer, 11/26 |
+| 11/25–11/26 | B-P3 | R1b ends 11/25, with the room's end-to-end encryption (`specs/004-sessions/tasks.md` T084) and its run on both phones; R2 starts | Counsel's answer, 11/26 |
 | 11/27–11/29 | B-P4, on today's design: the programme is merged | R2 ends 11/27; R3, the code, 11/28–11/29 | |
 | 11/30–12/1 | The programme's own money review, and its fixes | The before-launch tasks, batch 1 | The design week, days 1 and 2; the owner: the logo, the testers |
 | 12/2–12/3 | `specs/003-booking/tasks.md` T128, once the contract is signed | The before-launch tasks, batch 2 | The design week, days 3 and 4; the store's listing and declarations, the privacy policy and the terms hosted, with the Terms' text (T151, T117) |
@@ -75,6 +75,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 - The before-launch tasks outside the review's batches, thirteen by their timing words, each confirmed in its batch's conflict check (PR #155's review, round 1, N5). Batch 1: `specs/002-identity/tasks.md` T148, T149, T150, T152, T153, T154. Batch 2: `specs/003-booking/tasks.md` T081, T083, T086, T092, T094. The Terms' text, `specs/002-identity/tasks.md` T151 with `specs/003-booking/tasks.md` T117 (the same files), with the store's preparation on 12/2–12/3. No batch passes six tasks.
 - B-P1 is cut after this calendar's pull request (#155) merges. R1a and B-P1 run on the same days and share the migration order, the ERD's numbering, the seed's counts and the settings registry: the two tracks' rule holds (`specs/006-programme/tasks.md`, «Batches»).
 - Not placed: the closes `specs/004-sessions/tasks.md` T054, T055, T056 and `specs/005-certification/tasks.md` T026, T033; `specs/001-foundations/tasks.md` T130; `specs/002-identity/tasks.md` T123; `specs/003-booking/tasks.md` T059, and T118 (Phase 6's load pass); `specs/004-sessions/tasks.md`, «Not scheduled», items (8), (12) and (13), which carry before-launch words and no task id.
+- Added 2026-11-22 (the owner, «تدخل»; SRS DEC-102): `specs/004-sessions/tasks.md` T084, a session's media encrypted end to end, in R1b (four tasks in its two days, and the owner's two phones on 11/25). No date moves; the design week's work on the room (11/30–12/4) builds on it.
 - What it rests on: the design week is five days, talk and code together, beside two batches; the gateway's contract is signed by 12/2, so T128 merges by 12/3; R2 has, before 11/25, the owner's domain, e-mail provider (`specs/002-identity/tasks.md` T177) and object-storage account (T179).
 
 **The owner's own steps.**
