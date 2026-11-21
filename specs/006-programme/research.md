@@ -175,7 +175,8 @@ Settled by the review session on recorded precedents:
   - Each step runs under the programme's row lock, in its own transaction, with one log line of ids and a reason:
     1. **windows:** `awaiting_offer` past `offer_due_at` → the `no_offer` Administrator item (once; R-505);
        `offered` past `pay_by` with no payment → cancel `offer_lapsed`; or, in live mode with the teacher's payout account
-       unverified at that instant, the `pay_blocked` Administrator item, once per deadline, never a lapse (FR-706b).
+       unverified at that instant, the `pay_blocked` Administrator item, once per deadline, never a lapse, also not once the account is verified
+       while the item is open (FR-706b).
     2. **due:** mark the next month due at the paid month's last session's end; with a saved card, record the
        automatic order (R-509).
     3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
@@ -307,8 +308,9 @@ order (ADR 0025 D6, FR-702).
 
 ## R-513 — Stop and refusal requests; reopen
 
-- **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a), raised by the sweep), reason
-  (1–500), status `open`/`approved`/`declined`/`withdrawn`/`extended` (`no_offer` only).
+- **Decision.** `programme_requests` (booking): kind `stop` | `refusal` | `no_offer` (I-2 (a)) | `pay_blocked`
+  (FR-706b), the last two raised by the sweep, reason (1–500), status
+  `open`/`approved`/`declined`/`withdrawn`/`extended` (`no_offer` and `pay_blocked` only).
   - A partial unique index holds one open request per enrollment and kind.
   - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
     one log line.

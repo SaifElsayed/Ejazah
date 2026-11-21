@@ -165,8 +165,16 @@ No open question remains.
   - **`pay_blocked` (FR-706b, SRS DEC-101; PR #153 r4 follow-up 2):** `offered` past `pay_by` unpaid while, in live
     mode, the teacher's payout account is not verified at that instant raises the item, once per deadline, in place of
     the lapse; the weekly time stays reserved. `programmes.decide` on it: approve (the lapse, `offer_lapsed`) or extend
-    (`pay_by` = the decision + `programme_pay_rest_hours`; closed `extended`); no decline. Red first on «unverified in
-    live mode: no lapse, one item» and on «the same in test mode lapses»;
+    (`pay_by` = the decision + `programme_pay_rest_hours`; closed `extended`); no decline.
+    - «Unverified in live mode» is one payments entry, built here and read by T016 and T018: the payment mode is live
+      and `payoutRecipient(teacherUserId)` answers none (`modules/payments/checkout.service.ts:508`) (PR #155's review, round 1, N4).
+    - While the item is open the lapse never runs, also not once the account is verified; `programme.pay` answers
+      `pay_by_passed`; only `programmes.decide` ends it, or a close (the student's `programme.cancel`, a ban, a
+      departure, a deletion), which sets the item `withdrawn` in the close hook (Major 1).
+    - `programmes.decide` takes the programme's row lock, the lock of the sweep's step.
+    - Red first: «unverified in live mode: no lapse, one item», «the same in test mode lapses», «verified while the
+      item is open: no lapse», «the student's cancellation withdraws the item», and a race spec of the decision
+      against the sweep;
   - each close through booking's close hook (programme state and `closed_at` set by booking; the card deleted by
     T013's payments entry; until T013, a stub whose call the specs assert), freeing the weekly time at once
     (`slot-occupancy.repository.ts`).
@@ -191,7 +199,8 @@ No open question remains.
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
   - `assessment` only when not continued (at the close, or at `pay_by` where an offer was sent, whichever is later, once session 1's 72 h have passed, no
-    case: DEC-94);
+    case: DEC-94); never while a `pay_blocked` item is open, the programme not being closed (FR-706b), red first on
+    «the item open past `pay_by`: no `assessment` release»;
   - `ijazah_half` = 25 % × the share of the programme's price as paid (1,750 in full; 1,837.50 by months, fee 500),
     capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
   - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
@@ -239,7 +248,8 @@ No open question remains.
     `payments.decline_kind` (`order-events.service.ts`, `payments.repository.ts`).
   - **Order before call:** recorded `created` with `gateway_order_id` NULL and `expires_at` = now +
     `slot_hold_ttl_minutes`, then called once after commit, never under a lock and never again; an order left with no
-    gateway id expires, and a late webhook is matched by the merchant reference (the payment id) and handled as
+    gateway id expires, and a late webhook is matched by the merchant reference (the payment id), the order's
+    `gatewayOrderId` written from the event then (PR #153 r4, the money-lane note), and handled as
     FR-PAYG-19 (analyze N-3), red first on «crash between commit and call». An automatic order that expires with no
     answer counts as a soft decline (`first_failure_at` set, «pay now» shown, the retries start; PR #153 r1 Minor 1),
     red first.
@@ -256,7 +266,7 @@ No open question remains.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
-  - the `pay_by` (the lapse, or FR-706b's `pay_blocked` item, once per deadline; T008's functions), due, retry (1, 3, 5, 7; at most 4; soft only; only while a saved card exists, otherwise the month is by hand) and
+  - the `pay_by` (the lapse, or FR-706b's `pay_blocked` item, once per deadline, and no lapse while one is open; T008's functions), due, retry (1, 3, 5, 7; at most 4; soft only; only while a saved card exists, otherwise the month is by hand) and
     pause steps, each under the programme's lock in its
     own transaction, with one log line each;
   - «pending» per A-1;
@@ -310,8 +320,10 @@ No open question remains.
   `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19),
     `payeePending` (in live mode, the teacher's payout account not verified; false in test mode, a spec for each mode;
-    PR #153 r3 Minor 1, r4 Minor 2), with its adversarial registration;
-  - `programmes.queue` (paused, stop, refusal, no_offer, pay_blocked; oldest first, how late, the reason) and `programmes.get`
+    PR #153 r3 Minor 1, r4 Minor 2; read through T008's payments entry) and `payBlocked` (a `pay_blocked` item is open),
+    with its adversarial registration;
+  - `programmes.queue` (paused, stop, refusal, no_offer, pay_blocked; oldest first, how late, the reason; a `pay_blocked` item with whether the payout account is
+    verified now) and `programmes.get`
     (admin);
   - the monitor's `kind`, `instalmentMonth`, `automatic`, `declineKind` (`payments-monitor.*`).
 
@@ -327,6 +339,9 @@ No open question remains.
   - while `payeePending` is true, a line that payment opens once the teacher's payment details are verified, and no
     «pay now» or «change card»; once it is false, both again, the student paying the month by hand (PR #153 r3 Minor 1,
     r4 Minor 1);
+  - on the offer: while `payeePending` is true, the same line and neither «pay in full» nor «pay monthly»; while
+    `payBlocked` is true, a line that payment is stopped until the administration decides, no pay button, the
+    cancellation still offered (FR-706b; PR #155's review, round 1, N3);
   - turn the automatic renewal off (shown while a card is saved; `programme.autoRenewOff`, FR-713a), and after it,
     the month's renewal by hand; while `chargePending` is true, a line that this month's charge is already under way
     (PR #153 r2 Major 1, Minor 1);
@@ -335,10 +350,12 @@ No open question remains.
   - i18n in a `programme` group.
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
-  - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests).
+  - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
+    is true, a line that the offer is with the administration because the payout account was not verified, FR-706b).
 - [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
-  - each screen explains itself;
+  - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
+    now, and what each decision does (approve: the offer lapses, the fee kept; extend: 48 hours more from now);
   - the monitor's columns;
   - the `programme_enabled` setting's label explaining what flipping it does;
   - `admin.programme` i18n.
@@ -373,4 +390,10 @@ No open question remains.
 | 11/23–11/24 | B-P2 | T007, T008, T009, T010, T011, T012 | The offer, the 48 hours and the refusal, the first payment, the completion gate, the releases, the case amounts |
 | 11/25–11/26 | B-P3 | T013, T014, T015, T016, T017, T018 | Saved cards and the close hook, the automatic charge, the sweep, renewal, the stop and the reopen, the reads |
 | 11/27–11/29 | B-P4 | T019, T020, T021, T022, T023 | The phone, the panel, the adversarial reach, the close |
-| 11/30–12/1 | — | — | The programme's own money review, at the full review's depth, and its fixes (`PLAN.md`, «The calendar to the closed test», 2026-11-21; the fallback to v1.1 is removed, DEC-92 as amended). It checks, among the rest (PR #153's review, round 4): the close hook's lock order (the follow-up under T006), and that some text says the webhook matched by merchant reference writes `gatewayOrderId` |
+| 11/30–12/1 | — | — | The programme's own money review, at the full review's depth, and its fixes (`PLAN.md`, «The calendar to the closed test», 2026-11-21; the fallback to v1.1 is removed, DEC-92 as amended). It checks, among the rest (PR #153's review, round 4): the close hook's lock order (the follow-up under T006), and that the webhook matched by merchant reference writes `gatewayOrderId` (T014) |
+
+- **B-P1 is cut from `develop` after PR #155 merges** (T001's `programme_request_kind` carries `pay_blocked`).
+- **Shared with R1a on the same days** (`specs/002-identity/tasks.md`, T174's two tables): the migration order, the
+  ERD's numbering, the seed's counts (T001: 95 → 103) and the settings registry. `tracks-coordination.md` §2 holds: the
+  numbers are agreed between the two review sessions before either merges, and both migrations are proven on one
+  database at integration (PR #155's review, round 1, N1).

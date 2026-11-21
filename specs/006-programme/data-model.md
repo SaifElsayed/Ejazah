@@ -123,7 +123,8 @@ A new registry unit `piasters`.
   - closed by any of today's closings.
 - `offered` →
   - `active` (the rest in full or month 1 paid by `pay_by`);
-  - closed by `offer_declined`, `offer_lapsed` (`pay_by` passed unpaid) or today's closings.
+  - closed by `offer_declined`, `offer_lapsed` (`pay_by` passed unpaid; with a `pay_blocked` item open, only by its
+    approval, FR-706b) or today's closings; a close withdraws an open item.
 - `active` →
   - `paused` (the next month unpaid at its first occurrence);
   - `closed` (fully paid and completed through the completion gate, or today's closings).
