@@ -182,7 +182,10 @@ No open question remains.
   > **Not scheduled, a rare case (PR #155's review, round 1, the reviewer's question; the owner, 2026-11-22, «موافق على التلاتة»).** FR-706b reads the
   > payout account when the 48 hours end. An account unverified for most of them and verified shortly before the end
   > leaves the student little time, and the offer lapses as FR-706 says (fee 200 EGP: the teacher's 140 released). Left
-  > as it is: the student reaches support and an Administrator can reopen. The wider rule (an item whenever payment was
+  > as it is (the owner again, 2026-11-22, on PR #155's review, round 2, Major 1: «حاول تقفلها بدون ضرر»). A lapsed offer has
+  > no reopen (`programmes.reopen` takes a `programme_stopped` programme only, R-513; T017 is not widened): the student
+  > reaches support and books a new assessment, and an Administrator may open a manual compensation case for the fee
+  > (SRS FR-ADMIN-20 (c)). The wider rule (an item whenever payment was
   > closed at any time inside the 48 hours) needs a recorded instant of the closing; recorded for later.
 - [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
   `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
@@ -294,7 +297,7 @@ No open question remains.
     order is `created`;
   - «pay now» and «change card» after a failure;
   - `programme.pay` and `programme.renew` refuse a typed `CONFLICT` `payee_unverified` before the gateway while, in live
-    mode, the teacher's payout account is not verified (`paymob.adapter.ts:220-222`, `checkout.service.ts:507-508`; PR
+    mode, the teacher's payout account is not verified (read through T008's payments entry; `paymob.adapter.ts:220-222`, `checkout.service.ts:507-508`; PR
     #153 r3 Minor 1, r4 Minor 2), red first, a spec for each mode: in test mode nothing is refused and the stand-in
     charges;
   - after a `no_payee` refusal, once the payout account is verified `programme.renew` takes the month by hand («pay

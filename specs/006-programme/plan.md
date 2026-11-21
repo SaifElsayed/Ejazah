@@ -115,7 +115,7 @@ The integration wires `context.ts`, `app.router.ts`, `admin.router.ts`, `main.ts
 | B-P3 | 11/25–11/26 | Saved cards (port, adapters, encrypted rows, erasure); the automatic charge; `advance-programmes` (due, charge, retry, pause, lapse); manual renewal; the stop request, the close and its release; reopen |
 | B-P4 | 11/27–11/29, on today's design (amended 2026-11-21, `PLAN.md`, «The calendar to the closed test») | Phone (student, teacher), panel pages, adversarial registrations and i18n, the quickstart run and the documents |
 
-Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is sold as today until it lands
+Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is sold as today until it lands *(Removed 2026-11-21, SRS DEC-92 as amended: the programme ships in the first release; the dates are the table's.)*
 (DEC-92). The programme's server code gets its own money review lane at the full review's depth once merged.
 
 ## The owner's answers (2026-11-19, SRS DEC-94; no open question)
