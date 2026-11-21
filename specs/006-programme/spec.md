@@ -1,5 +1,7 @@
 # Feature Specification: The ijazah programme — the assessment and prepaid monthly instalments
 
+> **Amended 2026-11-21 (the owner's decisions on the full-codebase review; SRS DEC-100 and DEC-92 as amended; PLAN.md).** The programme ships in the first release, built before the design week and the store's preparation, its screens on today's design. The lines below that say «beside the design week», «the screens after it, on the new design» or «merged by 12/4, else v1.1» are replaced by this; the fallback to v1.1 is removed.
+
 **Feature Branch**: `Ejazah_app/003-booking/T108` (the cycle, `specs/003-booking/tasks.md` T108); the programme's batches then run as `Ejazah_app/006-programme/<task ids>`
 
 **Created**: 2026-11-19

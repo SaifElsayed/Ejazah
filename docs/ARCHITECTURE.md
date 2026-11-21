@@ -413,7 +413,7 @@ You cannot force a mobile update. Three mitigations, all required:
 
 > **Amended 2026-11-21 (SRS DEC-99; `specs/002-identity/tasks.md` T184).** v1.0 ships mitigations 2 and 3. EAS Update (1) is deferred to v1.1 by the owner's decision.
 >
-> **Note 2026-11-21 (the full-codebase review, L5-1).** This document's money text (§1 principle 2, §3.5, §6.1, §8 and §17: «0%», «no refund path in code», «payout amount is the bug») and §4's graph row for `payments` predate ADR 0025, which governs: the platform takes a commission, the teacher's share is held to milestones, refunds are recorded, and `modules/payments` imports `moderation` and `sessions`. Rewritten at the programme's close.
+> **Note 2026-11-21 (the full-codebase review, L5-1).** This document's money text (§1 principle 2, §3.5, §6.1, §8 and §17: «0%», «no refund path in code», «payout amount is the bug») and §4's graph row for `payments` predate ADR 0025, which governs: the platform takes a commission, the teacher's share is held to milestones, refunds are recorded, and `modules/payments` imports `moderation` and `sessions`. To be rewritten; a task when the owner schedules it.
 
 1. **EAS Update** — OTA JS pushes, no store review.
 2. **Minimum-version gate** — server rejects clients below a floor.
