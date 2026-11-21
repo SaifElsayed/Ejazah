@@ -420,6 +420,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   2026-11-06, A2).
 - [ ] T033 [US3] An administrator's un-revoke (B46, the owner's decisions of 2026-11-17 on B46's conflict check («موافق على تعديلاتك، والباقي (أ)»; relayed by the review session), Q12 (a) with the review's addition; the check: `C:\Users\amrkn\Documents\ejazah-tools\b46\conflict-check.md`): `ijazahs.unrevoke` (a reason; audited, idempotent, `rate_limit_ijazah_decision`) within 14 days of the revocation, for a revocation made by mistake when the teacher can no longer send a new request (FR-IJAZAH-9's new request is the path otherwise); the revoked row's history kept.
 
+- [ ] T034 An administrator reads an enrollment's chat under an open report (the full-codebase review of 2026-11-20 on `5a9ba790`, lane 7's question; the owner's decision of 2026-11-21, «تمام دلوقتي»; SRS FR-SESS-13 as amended, DEC-100; the follow-up under T011): only a dispute opens a chat to the panel today. A session or chat report (T011; a profile report names no enrollment) open on an enrollment opens that enrollment's chat to an administrator, read-only, inside the report's screen and only while it is open, each opening audited as the dispute's read is; the purge already waits while the report is open, as T012 built. Red first: refused with no open report, refused for another enrollment's report. Batch R1a (`specs/002-identity/tasks.md`, «The full-codebase review's batches»)
+
 ---
 
 ## Dependencies and Execution Order
@@ -444,4 +446,5 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 | Wed 11/18 | B47 | T011, T012, T013, T014, T015, T031 | Reports, chat retention, gender flags, the correction, the fraud ban, a teacher's deletion refusals and the kept signature |
 | Wed–Thu 11/18–19 | B48 | T016, T017, T018, T019, T020, T021 | Push producers, reminders, their time spec, the phone screens |
 | Thu 11/19 | B49 | T022, T023, T024, T025, T026 | The panel's pages, the adversarial reach, the close |
+| see `specs/002-identity/tasks.md`, «The full-codebase review's batches» | R1a | T034 | The chat under an open report |
 | v1.1 | — | T027 to T030 | The first update (DEC-70) |

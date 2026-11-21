@@ -4,6 +4,8 @@ description: 'Task list for the ijazah programme — the assessment and prepaid 
 
 # Tasks: The ijazah programme — the assessment and prepaid monthly instalments
 
+> **Amended 2026-11-21 (the owner's decisions on the full-codebase review; SRS DEC-100 and DEC-92 as amended; PLAN.md).** The programme ships in the first release, built before the design week and the store's preparation, its screens on today's design. The lines below that say «beside the design week», «the screens after it, on the new design» or «merged by 12/4, else v1.1» are replaced by this; the fallback to v1.1 is removed.
+
 **Input**: Design documents from `/specs/006-programme/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
@@ -205,6 +207,8 @@ No open question remains.
   - at a teacher's suspension, ban or departure, booking's `termination.subscriber.ts` calls payments'
     `deleteProgrammeCard` at once (DEC-94); a spec red first that asserts the call (until T013, against T008's stub);
   - a restore after a suspension on a programme is deferred (restore refused, T010).
+
+  > **Amended 2026-11-21 (SRS DEC-96; `specs/003-booking/tasks.md` T125; the owner's decision on the full-codebase review, Q2).** A direct end of an unsuspended programme at the Student's choice is in the set: `admin_ended` releases the share of the sessions consumed, each valued by its own order, what was already released taken off, and the case shows the untaken value; nothing is executed until an Administrator resolves the case. Example: 10,000 EGP paid in full, 10 sessions, share 7,000, 6 delivered with the half (1,750) released → the teacher 4,200 in all (2,450 more), the student 4,000, the platform 1,800. T125 builds it with this task's set.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
