@@ -76,6 +76,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 
 - Play Console's app content asks, for each foreground service type, a declaration with its use, the user's impact and a video of the user starting it: `mediaProjection` and `microphone` (the follow-up under `specs/004-sessions/tasks.md` T019, 2026-11-09), prepared before the closed test.
 - The closed test needs a hosted API: the configuration refuses every stand-in outside development and test, and refuses the gateway outside them until T101 lands.
+- *(Amended 2026-11-21, the owner's decisions on the full-codebase review; SRS DEC-100.)* The closed test starts only after the gateway's contract, since the test account offers no payout onboarding and no teacher is bookable without it (`specs/003-booking/tasks.md` T128). The ijazah programme ships in the first release; the design week and the store's preparation come after it, not beside it («اسبوع التصميم وتجهيز المتجر بعد برنامج الاجازة»). The review's three batches (R1 the code, R2 the hosted server, R3 the store build: `specs/002-identity/tasks.md`, «The full-codebase review's batches») are placed with the programme's batches by the session that plans them, which tells the owner at once if the dates above no longer hold.
 - Testers pay with the gateway's test keys in a non-production mode; real money only after the contract and the lawyer's answer.
 - A new build during the test: the store's text counts testers, but sources disagree on whether a build restarts the 14 days, so the test starts on a stable build.
 

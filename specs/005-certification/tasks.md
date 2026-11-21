@@ -420,6 +420,8 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
   2026-11-06, A2).
 - [ ] T033 [US3] An administrator's un-revoke (B46, the owner's decisions of 2026-11-17 on B46's conflict check («موافق على تعديلاتك، والباقي (أ)»; relayed by the review session), Q12 (a) with the review's addition; the check: `C:\Users\amrkn\Documents\ejazah-tools\b46\conflict-check.md`): `ijazahs.unrevoke` (a reason; audited, idempotent, `rate_limit_ijazah_decision`) within 14 days of the revocation, for a revocation made by mistake when the teacher can no longer send a new request (FR-IJAZAH-9's new request is the path otherwise); the revoked row's history kept.
 
+- [ ] T034 An administrator reads an enrollment's chat under an open report (the full-codebase review of 2026-11-20 on `5a9ba790`, lane 7's question; the owner's decision of 2026-11-21, «تمام دلوقتي»; SRS FR-SESS-13 as amended, DEC-100; the follow-up under T011): only a dispute opens a chat to the panel today. A report (T011) open on an enrollment opens that enrollment's chat to an administrator, read-only, inside the report's screen and only while it is open, each opening audited as the dispute's read is; the purge waits while the report is open, as FR-SESS-13 says. Red first: refused with no open report, refused for another enrollment's report. Batch R1
+
 ---
 
 ## Dependencies and Execution Order
