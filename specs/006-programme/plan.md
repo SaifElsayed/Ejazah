@@ -110,12 +110,12 @@ The integration wires `context.ts`, `app.router.ts`, `admin.router.ts`, `main.ts
 
 | Batch | When (DEC-92) | Tasks (summary) |
 |---|---|---|
-| B-P1 | 11/21–11/22, beside the design week (Q-1) | Migration, schema, ERD; settings; contracts; the three prices and the catalogue; the assessment's booking and confirmation; order kinds in the confirm step |
-| B-P2 | 11/22–11/24 | The offer; the 48 hours and the refusal request; paying in full or a month (rates copied, generation by month); the completion gate; the releases (the assessment when not continued, the half on the programme's whole price, the end); the case amounts per order |
-| B-P3 | 11/24–11/26 | Saved cards (port, adapters, encrypted rows, erasure); the automatic charge; `advance-programmes` (due, charge, retry, pause, lapse); manual renewal; the stop request, the close and its release; reopen |
-| B-P4 | 11/26–12/3, after the design week, on the new design | Phone (student, teacher), panel pages, adversarial registrations and i18n, the quickstart run and the documents |
+| B-P1 | 11/21–11/22 | Migration, schema, ERD; settings; contracts; the three prices and the catalogue; the assessment's booking and confirmation; order kinds in the confirm step |
+| B-P2 | 11/23–11/24 | The offer; the 48 hours and the refusal request; paying in full or a month (rates copied, generation by month); the completion gate; the releases (the assessment when not continued, the half on the programme's whole price, the end); the case amounts per order |
+| B-P3 | 11/25–11/26 | Saved cards (port, adapters, encrypted rows, erasure); the automatic charge; `advance-programmes` (due, charge, retry, pause, lapse); manual renewal; the stop request, the close and its release; reopen |
+| B-P4 | 11/27–11/29, on today's design (amended 2026-11-21, `PLAN.md`, «The calendar to the closed test») | Phone (student, teacher), panel pages, adversarial registrations and i18n, the quickstart run and the documents |
 
-Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is sold as today until it lands
+Whatever is not merged and green by 12/4 moves to v1.1, and an ijazah package is sold as today until it lands *(Removed 2026-11-21, SRS DEC-92 as amended: the programme ships in the first release; the dates are the table's.)*
 (DEC-92). The programme's server code gets its own money review lane at the full review's depth once merged.
 
 ## The owner's answers (2026-11-19, SRS DEC-94; no open question)

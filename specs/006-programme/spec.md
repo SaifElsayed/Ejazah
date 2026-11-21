@@ -190,7 +190,8 @@ first weekly occurrence after the 48 hours; the month's 4 sessions exist; the ca
 3. **Given** an offer, **When** the student pays the first month by card within 48 hours, **Then** that month's sessions
    are generated, the card is saved with the student's consent to the automatic charge, and later months are not.
 4. **Given** an offer, **When** the student cancels or 48 hours pass unpaid, **Then** the reserved weekly time is offered
-   to anyone again, and the assessment fee is kept (FR-BOOK-13).
+   to anyone again, and the assessment fee is kept (FR-BOOK-13); in live mode with the teacher's payout account
+   unverified when the 48 hours end, an Administrator item instead (FR-706b).
 5. **Given** an assessment, **When** the teacher does not want to continue with the student, **Then** they cannot
    refuse alone: they send an administrator a reason, and the administrator decides.
 
@@ -357,6 +358,15 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   make-up of it moves them). With no offer by then, the programme MUST become an Administrator item, never lapse on its
   own, and the weekly time stays reserved; the Administrator decides a refusal (FR-709) or §3.14's offer hours more,
   counted from the decision (DEC-94, I-2 (a)). Until then a late offer is refused (`offer_due_passed`).
+- **FR-706b**: *(New 2026-11-21, SRS DEC-101; PR #153's review, round 4, follow-up 2.)* An offer past its 48 hours
+  unpaid while, in live mode, the teacher's payout account is not verified at that instant MUST NOT lapse on its own:
+  the programme becomes an Administrator item (`pay_blocked`, once per deadline) and the weekly time stays reserved.
+  The Administrator decides the lapse (FR-706: the time freed, the fee kept) or §3.14's 48 hours more, counted from
+  the decision. While the item is open nothing lapses on its own, also not once the account is verified: only the
+  Administrator's decision ends it, or a close (the student's cancellation, a ban, a departure, a deletion), which
+  withdraws the item. Meanwhile the student cannot pay, both parties' screens say the administration is deciding, and
+  the assessment's share is not released (PR #155's review, round 1, Major 1, N3). In test mode, and with the
+  account verified when the 48 hours end, FR-706 applies unchanged.
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
   even when the student pays on the first day (FR-BOOK-15).
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
@@ -393,8 +403,11 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   (`payment_failed`) and on screen, with «pay now» (any method today's checkout offers) and «change card» (paying by hand
   with a new card, which then replaces the saved one). An automatic order that expires with no answer from the gateway
   counts as a soft decline: the student is shown «pay now» and the retry schedule starts. A charge refused before the
-  gateway because the teacher's payout account is not verified (`no_payee`) is not a card failure: no push, no «pay
-  now» or «change card»; the screen says payment opens once the teacher's payment details are verified (R-HONEST).
+  gateway because the teacher's payout account is not verified (`no_payee`) is not a card failure: no push, and no «pay
+  now» or «change card» while the account stays unverified; the screen says payment opens once the teacher's payment
+  details are verified (R-HONEST). Once it is verified, «pay now» and «change card» are shown and the student pays the
+  month by hand: the refused charge is a hard decline and is never retried (PR #153's review, round 4, Minor 1). A push
+  at that moment is v1.1 (SRS DEC-101).
 - **FR-717**: A failed charge MUST be retried only on a soft decline, at most 4 times, 1, 3, 5 and 7 days after the
   failure (§3.14), then only by hand; a hard decline MUST never be retried (DEC-92).
 - **FR-718**: At most one paid order MUST cover a month. A second paid order for a month already paid MUST be treated as
@@ -408,7 +421,7 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   decline codes); every month MUST be renewable by hand in any environment while the teacher's payout account is
   verified. In live mode, with none, both the automatic charge (a hard decline, no retry) and the manual payment are
   refused and the month pauses (R-MONEY-6); the manual refusal is a typed `payee_unverified`, and the student is told
-  why (FR-716).
+  why (FR-716). In test mode neither is refused: the stand-in charges with no payee (PR #153's review, round 4, Minor 2).
 
 **The pause and the stop request**
 
@@ -430,7 +443,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-726**: The teacher MUST see, per programme, the months paid, the next month due, and when paused that the student
   is late and since when (FR-BOOK-19). The student MUST see the same and the next due date, and, where the teacher is
   suspended, banned or gone, that the teacher is unavailable (FR-BOOK-19).
-- **FR-727**: Administrators MUST see paused packages, stop requests and refusal requests oldest first, with how late
+- **FR-727**: Administrators MUST see paused packages, stop requests, refusal requests and the `no_offer` and `pay_blocked` items
+  (FR-706a, FR-706b) oldest first, with how late
   the student is and the teacher's reason, MUST decide each (audited), and MUST be able to reopen a closed package, which
   returns paused, awaiting a payment by hand (FR-BOOK-19).
 

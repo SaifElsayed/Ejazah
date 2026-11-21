@@ -27,6 +27,8 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
    - Before session 1 is `done`: refused `assessment_not_delivered`.
    - After it: offer 40 sessions of 45 min. Total 12,800 (40 × 320), 10 months, snapshot count 41, `payBy` = the offer + 48 h (the offer itself within
      24 h of session 1's delivered end; with no offer by then, a `no_offer` administrator item, never a lapse).
+   - FR-706b, by its specs where the payment mode cannot be set live: `payBy` passed unpaid with the teacher's payout
+     account unverified in live mode → a `pay_blocked` item, no lapse; extend, then pay.
    - An offer of 75 min is refused `length_exceeds_slot`.
 4. **Month 1, monthly with `saveCard`.** Expect:
    - one `instalment` order, month 1, 1,280;
@@ -87,7 +89,7 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
   - «late since»;
   - the stop and refusal requests.
 - **Panel:**
-  - the queue (paused, stop, refusal, no offer) oldest first;
+  - the queue (paused, stop, refusal, no offer, pay blocked) oldest first;
   - decide, extend, reopen;
   - the monitor's kinds;
   - the eight settings, the switch's label explaining it.

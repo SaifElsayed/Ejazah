@@ -78,9 +78,9 @@ An index on (`state`, `next_due_at`) for the sweep.
 |---|---|---|
 | `id` | uuid v7 | |
 | `enrollment_id`, `teacher_user_id` | uuid FKs | from the enrollment, never the input |
-| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) | `no_offer` is raised by the sweep, not by the teacher |
+| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) · `pay_blocked` (FR-706b) | `no_offer` and `pay_blocked` are raised by the sweep, not by the teacher |
 | `reason` | text (1–500) | mandatory for `stop` and `refusal` |
-| `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` · `extended` (a `no_offer` item only) | |
+| `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` · `extended` (a `no_offer` or `pay_blocked` item only) | |
 | `decided_by_admin_id`, `decided_at` | | set together on approve or decline (a check) |
 | `created_at`, `updated_at` | | |
 
@@ -123,7 +123,8 @@ A new registry unit `piasters`.
   - closed by any of today's closings.
 - `offered` →
   - `active` (the rest in full or month 1 paid by `pay_by`);
-  - closed by `offer_declined`, `offer_lapsed` (`pay_by` passed unpaid) or today's closings.
+  - closed by `offer_declined`, `offer_lapsed` (`pay_by` passed unpaid; with a `pay_blocked` item open, only by its
+    approval, FR-706b) or today's closings; a close withdraws an open item.
 - `active` →
   - `paused` (the next month unpaid at its first occurrence);
   - `closed` (fully paid and completed through the completion gate, or today's closings).
