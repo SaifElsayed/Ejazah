@@ -174,7 +174,8 @@ Settled by the review session on recorded precedents:
   - It acts only on a programme whose enrollment is `confirmed` (analyze G-5).
   - Each step runs under the programme's row lock, in its own transaction, with one log line of ids and a reason:
     1. **windows:** `awaiting_offer` past `offer_due_at` → the `no_offer` Administrator item (once; R-505);
-       `offered` past `pay_by` with no payment → cancel `offer_lapsed`.
+       `offered` past `pay_by` with no payment → cancel `offer_lapsed`; or, in live mode with the teacher's payout account
+       unverified at that instant, the `pay_blocked` Administrator item, once per deadline, never a lapse (FR-706b).
     2. **due:** mark the next month due at the paid month's last session's end; with a saved card, record the
        automatic order (R-509).
     3. **retry:** for a soft-declined month, record a new automatic order at 1, 3, 5 and 7 days after the first failure,
@@ -207,8 +208,8 @@ Settled by the review session on recorded precedents:
 
 - **Decision.**
   - The sweep's transaction records an `instalment` order in `created`:
-    - its `gateway_order_id` NULL until the gateway answers (a check: NULL only on an `automatic` order in `created`;
-      analyze N-3); its merchant reference = the payment's id;
+    - its `gateway_order_id` NULL until the gateway answers (a check: NULL only on an `automatic` order in `created`, `expired`,
+      or `failed` with a hard decline refused before the gateway, data-model.md; analyze N-3, PR #153 r3 Major 1); its merchant reference = the payment's id;
     - its `expires_at` = now + `slot_hold_ttl_minutes` (FR-PAYG-6's checkout TTL, §3.14, 10 minutes).
   - After commit it calls `PaymentPort.chargeSavedCard(paymentId, gross, currency, cardToken, payee)`, which answers
     `{ gatewayOrderId }`; the result arrives by the same signed webhook as every order.
@@ -232,7 +233,9 @@ Settled by the review session on recorded precedents:
     `createCheckout` does (`paymob.adapter.ts:220-222`), and the Moto intention carries `split_amounts`. The sweep
     records the refusal as a `failed` order with `declineKind` `hard` and `gateway_order_id` NULL (allowed by the
     check, r3 Major 1): no gateway call, no expiry, no retry, no `payment_failed` push, and neither «pay now» nor
-    «change card»; `programme.get`'s `payeePending` tells the student why (r3 Minor 1). The month pauses
+    «change card» while `payeePending` is true; `programme.get`'s `payeePending` (true in live mode only, r4 Minor 2)
+    tells the student why (r3 Minor 1), and once it is false both return and the student pays by hand (r4 Minor 1).
+    The month pauses
     until the teacher's payout account is verified, since a manual payment is refused the same way
     (`checkout.service.ts:507-508`; PR #153 r2 Minor 2). Without it, a live 1,000 EGP month with no split
     would settle whole into the platform's account, the teacher's 700 with it (R-MONEY-6).

@@ -47,7 +47,7 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 | 11/16–11/19 | Two tracks at once («How a phase is run», as amended on 2026-11-16). Track 1: Phase 4, lightened (below). Track 2: the assessment and the ijazah programme by instalments (ADR 0024), and `specs/003-booking/tasks.md` T104 (the commission: the teacher's 70% net), T101, T102 and T105 (a monthly payout with its deductions, on the owner's assumption of 2026-11-15, recorded under T105 by track 2's first tasks commit). The light items, all required, to whichever track frees first: the administrator's settings page (SRS §3.14), `specs/002-identity/tasks.md` T148 (the live sign-in) and T147 (nothing development-only on a hosted server) |
 | 11/20 | One phone run on both Android phones, the owner driving from a written checklist (`specs/004-sessions/tasks.md` T056's device run and the trials noted under it; system font and display size at default, large and largest); then T056's close |
 | 11/20–11/21 | The full-codebase review, in two waves (moved here from Phase 6) |
-| 11/21–11/25 | The design week: the screens, the room made like a call (the share for the teacher only), the certificate's look, large system fonts; the ADR that open point 6 below asks for first *(Amended 2026-11-21, the owner's decision, SRS DEC-100: the design week comes after the programme; its dates are set by the session that plans the batches.)* |
+| 11/21–11/25 | The design week: the screens, the room made like a call (the share for the teacher only), the certificate's look, large system fonts; the ADR that open point 6 below asks for first *(Amended 2026-11-21, the owner's decision, SRS DEC-100: the design week comes after the programme; its dates are set by the session that plans the batches: 11/30–12/4, «The calendar to the closed test» below.)* |
 | 11/26–12/5 | On the Pro plan: the server up, the email sender, the privacy policy and the terms hosted, the Play listing and its declarations, a new EAS build with the logo carrying `specs/004-sessions/tasks.md` T068, `expo doctor`, and T054 and T055 of that file |
 | **12/6 Sun** | **The closed test starts: the latest date** |
 | 12/6–12/20 | The 14 days, beside the rest of Phase 6: the fixes the closed test finds, the adversarial and performance passes, the restore drill, the week on the panel, the store screenshots |
@@ -56,6 +56,25 @@ Day numbers count working days after Phase 0 closes; the calendar is the owner's
 | **2027-01-01** | **On the store** |
 
 Nothing of the programme or of T104 may slide past 11/19 into the design week or Phase 6, which add no feature (R-PROC-6). *(Amended 2026-11-19, the owner's decision on B-M4's conflict check, Q-1, «تمام اقتراحك»: the programme's Spec Kit cycle runs on 11/19. Its server code, B-P batches by `specs/006-programme/tasks.md`, runs beside the design week (11/21–11/25), which does not touch it. Its screens are built after the design week, on the new design. Everything is merged by 12/4; what is not merged and green by then moves to v1.1, and the ijazah package is sold as today (one order, 25% at half) until it lands. The programme's server code gets its own money lane at the full review's depth once merged; it is not in the 11/20 full review.)* *(Amended 2026-11-21, the owner's decisions, SRS DEC-100 and DEC-92 as amended: the programme ships in the first release, built before the design week and the store's preparation, its screens on today's design; the fallback to v1.1 is removed; R-PROC-6's bar on the programme after 11/19 is lifted by the owner's decision, as it is for `specs/005-certification/tasks.md` T034.)*
+
+**The calendar to the closed test (the owner's decisions of 2026-11-21, in the session that plans the batches).** It replaces the rows from 11/21 to 12/5 above. Two tracks, as since 11/16. All of it is before 12/6: the proposal to move eleven before-launch tasks into the test's 14 days was refused («لا، كله قبل 12/6»). The Max plan runs to 12/25 («هتفضل لحد 25 شهر 12»), in place of the Pro plan from 11/26. There is no spare day: a batch that takes a day more moves 12/6, and the store's date, by a day, and is reported when it happens.
+
+| Days | Track 2 (the money, `ijazah_integrity_b`) | Track 1 (`ijazah_integrity`) | Beside them |
+|---|---|---|---|
+| 11/21–11/22 | B-P1 | The tasks commit of PR #154's and #153's follow-ups; R1a starts | |
+| 11/23–11/24 | B-P2 | R1a ends 11/23; R1b starts 11/24, cut after B-P2 merges (both write `share-release.rules.ts`) | The owner: the gateway's contract request |
+| 11/25–11/26 | B-P3 | R1b ends 11/25; R2 starts | Counsel's answer, 11/26 |
+| 11/27–11/29 | B-P4, on today's design: the programme is merged | R2 ends 11/27; R3, the code, 11/28–11/29 | |
+| 11/30–12/1 | The programme's own money review, and its fixes | The before-launch tasks, batch 1 | The design week, days 1 and 2; the owner: the logo, the testers |
+| 12/2–12/3 | `specs/003-booking/tasks.md` T128, once the contract is signed | The before-launch tasks, batch 2 | The design week, days 3 and 4; the store's listing and declarations, the privacy policy and the terms hosted |
+| 12/4 | free | free | The design week, day 5: its last code |
+| 12/5 | R3's build (`specs/002-identity/tasks.md` T182) with the logo and the design; the phone run; the upload | | |
+| **12/6 Sun** | **The closed test starts** | | |
+
+- The batches: `specs/006-programme/tasks.md`, «Batches»; `specs/002-identity/tasks.md`, «The full-codebase review's batches».
+- The before-launch tasks outside the review's batches, fourteen by their timing words, each confirmed in its batch's conflict check: `specs/002-identity/tasks.md` T148, T149, T150, T151, T152, T153, T154; `specs/003-booking/tasks.md` T081, T083, T086, T092, T094, T117, T118.
+- Not placed: the closes `specs/004-sessions/tasks.md` T054, T055, T056 and `specs/005-certification/tasks.md` T026, T033; `specs/001-foundations/tasks.md` T130; `specs/002-identity/tasks.md` T123; `specs/003-booking/tasks.md` T059.
+- What it rests on: the design week is five days, talk and code together, beside two batches; the gateway's contract is signed by 12/2, so T128 merges by 12/3; R2 has, before 11/25, the owner's domain, e-mail provider (`specs/002-identity/tasks.md` T177) and object-storage account (T179).
 
 **The owner's own steps.**
 
@@ -429,6 +448,7 @@ Decided before launch and built after it (SRS DEC-70; the owner's decisions of 2
 - Make-up-only times and a sooner Teacher-No-Show remedy (changes FR-MAKEUP-3 and ADR 0018) — `specs/004-sessions/tasks.md`, «Batches», v1.1
 - An on-device document scanner for a teacher's uploads — `specs/002-identity/tasks.md` T171
 - `specs/004-sessions/tasks.md` T054 and T055, on the Pro plan during the closed test (they add no feature)
+- A push telling the Student that payment has opened once the Teacher's payout account is verified (SRS DEC-101; PR #153's review, round 4, follow-up 1) — `specs/006-programme/tasks.md`, the note under T016
 
 ---
 
