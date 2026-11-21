@@ -169,7 +169,7 @@ Phase 4 prints, and the owner decided that the teacher never types it.
 panel, request another document, receive the re-upload, transcribe both chains,
 approve one credential and reject the other, attempt Approve before the call is
 recorded and be refused, record the call, approve. The device shows each state
-as it happens; the audit log holds every decision with its reason.
+as it happens; the audit log holds every decision with its reason. *(Amended 2026-11-21, SRS DEC-97, T174: the entry records that the note was given; its text is in the application's or the credential's history.)*
 
 **Acceptance Scenarios**:
 
@@ -180,7 +180,7 @@ as it happens; the audit log holds every decision with its reason.
 5. **Given** a credential, **When** the admin reviews it, **Then** the PDF sits beside the form for the holder's name, the riwaya, the tariq and the chain; approving writes the chain and makes the subject the teacher's; rejecting needs a reason; requesting another document sets the credential waiting until the teacher uploads one, then returns it to the queue (FR-ISNAD-1/2, FR-ADMIN-19, ADR 0017 D1).
 6. **Given** a transcribed chain, **When** the teacher views it, **Then** it is read-only; **When** an admin corrects it, **Then** the correction needs a reason and the audit entry holds the chain before and after (FR-ISNAD-4, `AdminCredentialCorrect`). *(Amended 2026-11-21, SRS DEC-97, T174: the correction's before and after are held in the credential's history; the audit entry names the correction without the name or the chain.)*
 7. **Given** an application whose verification call is not recorded, or one of whose credentials is still pending or waiting on a document, or none of whose credentials is approved, **When** Approve is attempted, **Then** the server refuses it; the control is disabled for the same reasons (FR-VERIFY-5, ADR 0017 D5).
-8. **Given** a decision, **When** it is made, **Then** rejection and ban carry a mandatory note the applicant sees, a request for information carries the choices and the mandatory text, approval's note is optional, and every one writes an audit entry with its reason (FR-VERIFY-4, FR-ADMIN-17, screens.md §24).
+8. **Given** a decision, **When** it is made, **Then** rejection and ban carry a mandatory note the applicant sees, a request for information carries the choices and the mandatory text, approval's note is optional, and every one writes an audit entry with its reason (FR-VERIFY-4, FR-ADMIN-17, screens.md §24). *(Amended 2026-11-21, SRS DEC-97, T174: the entry records that the note was given; its text is in the application's or the credential's history.)*
 9. **Given** a rejected applicant, **When** they reapply, **Then** a new application opens with new documents and the old stays in history; **Given** a banned applicant, **When** they sign in, **Then** they see the banned state and no path to apply (FR-VERIFY-9, `ApplicationRejected`).
 10. **Given** an approved teacher, **When** they add a subject with its PDF, **Then** a pending credential waits for review and the subject is theirs only once approved (FR-PROFILE-11, ADR 0017 D2).
 11. **Given** an admin, **When** they require an identity document from a user, **Then** the request carries a reason, the account enters the verification-required state, the user sees the upload screen, and the admin accepts the document or asks for another, each audited (FR-VERIFY-10, FR-ADMIN-16).
