@@ -446,4 +446,5 @@ merges, as `Ejazah_app/005-certification/<ids>` (`tracks-coordination.md` §1). 
 | Wed 11/18 | B47 | T011, T012, T013, T014, T015, T031 | Reports, chat retention, gender flags, the correction, the fraud ban, a teacher's deletion refusals and the kept signature |
 | Wed–Thu 11/18–19 | B48 | T016, T017, T018, T019, T020, T021 | Push producers, reminders, their time spec, the phone screens |
 | Thu 11/19 | B49 | T022, T023, T024, T025, T026 | The panel's pages, the adversarial reach, the close |
+| see `specs/002-identity/tasks.md`, «The full-codebase review's batches» | R1a | T034 | The chat under an open report |
 | v1.1 | — | T027 to T030 | The first update (DEC-70) |

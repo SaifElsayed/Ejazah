@@ -70,7 +70,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 | 11/29 | Buy the server, 4 GB (Phase 6's estimates below) |
 | 11/30 | The logo as a 1024×1024 PNG |
 | 12/1 | 15 to 20 testers with a Gmail account and an Android phone |
-| 12/25 | The gateway's contract done and its live keys ready *(Amended 2026-11-21, the owner, «التعاقد هيكون فاول شهر 12 تقريبا اللي هو قبل ميعاد الاختبار»: the contract is signed at the start of December, before the closed test, and `specs/003-booking/tasks.md` T128 is merged before the test starts. If the contract slips past 12/6 the closed test waits for it: each day of slip moves the store's date by a day.)* |
+| Start of December (before 12/6) | The gateway's contract signed; its live keys ready by 12/25 *(Amended 2026-11-21, the owner, «التعاقد هيكون فاول شهر 12 تقريبا اللي هو قبل ميعاد الاختبار»: the contract is signed at the start of December, before the closed test, and `specs/003-booking/tasks.md` T128 is merged before the test starts. If the contract slips past 12/6 the closed test waits for it: each day of slip moves the store's date by a day.)* |
 
 **What binds the order.**
 

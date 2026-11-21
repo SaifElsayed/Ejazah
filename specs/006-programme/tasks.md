@@ -208,7 +208,7 @@ No open question remains.
     `deleteProgrammeCard` at once (DEC-94); a spec red first that asserts the call (until T013, against T008's stub);
   - a restore after a suspension on a programme is deferred (restore refused, T010).
 
-  > **Amended 2026-11-21 (SRS DEC-96; `specs/003-booking/tasks.md` T125; the owner's decision on the full-codebase review, Q2).** A direct end of an unsuspended programme at the Student's choice is in the set: `admin_ended` releases the share of the sessions consumed, each valued by its own order, what was already released taken off, and the case shows the untaken value; nothing is executed until an Administrator resolves the case. Example: 10,000 EGP, 10 sessions, share 7,000, 6 delivered with the half (1,750) released → the teacher 4,200 in all (2,450 more), the student 4,000, the platform 1,800. T125 builds it with this task's set.
+  > **Amended 2026-11-21 (SRS DEC-96; `specs/003-booking/tasks.md` T125; the owner's decision on the full-codebase review, Q2).** A direct end of an unsuspended programme at the Student's choice is in the set: `admin_ended` releases the share of the sessions consumed, each valued by its own order, what was already released taken off, and the case shows the untaken value; nothing is executed until an Administrator resolves the case. Example: 10,000 EGP paid in full, 10 sessions, share 7,000, 6 delivered with the half (1,750) released → the teacher 4,200 in all (2,450 more), the student 4,000, the platform 1,800. T125 builds it with this task's set.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
