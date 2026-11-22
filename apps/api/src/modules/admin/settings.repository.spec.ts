@@ -362,6 +362,10 @@ describe(
         retirePreProgrammeIjazahPackages: async () => {
           throw new Error('the programme switch is not turned on in this spec');
         },
+        // 006:T004 (rule d): these cases never write the programme's switch.
+        lockProgrammeSwitch: async () => {
+          throw new Error('the programme switch is not written in this spec');
+        },
       });
       return callerFor(
         createAdminContext({

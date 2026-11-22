@@ -89,6 +89,12 @@ export interface SettingsAdministrationDependencies {
    * turns from off to on (bound in `index.ts`).
    */
   readonly retirePreProgrammeIjazahPackages: (tx: Transaction) => Promise<number>;
+  /**
+   * 006:T004 (SRS DEC-110; Q-D1 (a)): catalog's programme-switch advisory key, taken on the keyed
+   * transaction before `programme_enabled` is written, ahead of its row and the accounts the
+   * turn-on locks (kernel.md, the 006:T004 row; bound in `index.ts`).
+   */
+  readonly lockProgrammeSwitch: (tx: Transaction) => Promise<void>;
 }
 
 /** One setting as `settings.list` answers it (contracts/admin/settings.ts, `adminSetting`). */
@@ -148,6 +154,7 @@ export function createSettingsAdministration({
   log,
   writerOn,
   retirePreProgrammeIjazahPackages,
+  lockProgrammeSwitch,
 }: SettingsAdministrationDependencies): SettingsAdministration {
   return {
     list: async (tx) => {
@@ -194,6 +201,8 @@ export function createSettingsAdministration({
           input: { key, value, reason },
         },
         async (keyed): Promise<SettingChange> => {
+          // 006:T004 (Q-D1 (a)): the switch's key before its row, as a create takes it.
+          if (key === PROGRAMME_ENABLED_SETTING) await lockProgrammeSwitch(keyed);
           const { before } = await writerOn(keyed).update(key, after, adminId);
           if (!turnsProgrammeOn(key, before, after)) {
             return { key, before: before as SettingJson, after };

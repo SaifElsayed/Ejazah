@@ -290,6 +290,10 @@ describe('settings.update of the programme’s switch (006:T002, Q-3)', () => {
         reached.push(['retire', tx]);
         return count;
       },
+      // 006:T004 (Q-D1 (a)): the programme switch's advisory key, catalog's.
+      lockProgrammeSwitch: async (tx: unknown) => {
+        reached.push(['lockSwitch', tx]);
+      },
     } as never);
     return { service, reached, lines };
   }
@@ -308,6 +312,7 @@ describe('settings.update of the programme’s switch (006:T002, Q-3)', () => {
     });
     expect(reached).toEqual([
       ['runOn', TX],
+      ['lockSwitch', KEYED],
       ['update', KEYED, 'programme_enabled', 1],
       ['retire', KEYED],
     ]);
@@ -353,6 +358,27 @@ describe('settings.update of the programme’s switch (006:T002, Q-3)', () => {
     const { service, reached } = switchAdministration(0);
     await service.update(TX, ADMIN, { ...TURN_ON, key: 'slot_release_buffer_weeks' });
     expect(reached).not.toContainEqual(['retire', KEYED]);
+  });
+
+  // 006:T004 (Q-D1 (a), the owner's «موافق على الاتنين (أ)», 2026-11-22): every write of the switch
+  // takes its advisory key on the keyed transaction before the write, so a create of an old-style
+  // ijazah package, which takes it before reading the switch, never crosses the turn-on.
+  it('takes the switch’s key on the keyed transaction before writing it, turned off too', async () => {
+    for (const value of [0, 1]) {
+      const { service, reached } = switchAdministration(value === 1 ? 0 : 1);
+      await service.update(TX, ADMIN, { ...TURN_ON, value });
+      expect(reached.slice(0, 3)).toEqual([
+        ['runOn', TX],
+        ['lockSwitch', KEYED],
+        ['update', KEYED, 'programme_enabled', value],
+      ]);
+    }
+  });
+
+  it('takes no switch key for another key', async () => {
+    const { service, reached } = switchAdministration(0);
+    await service.update(TX, ADMIN, { ...TURN_ON, key: 'slot_release_buffer_weeks' });
+    expect(reached).not.toContainEqual(['lockSwitch', KEYED]);
   });
 
   it('a replay of the turn-on retires nothing again and answers the first count', async () => {

@@ -96,6 +96,11 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
     this.log.push(`lockApplication:${userId}`);
   }
 
+  /** 006:T004 (Q-D1 (a)): the programme switch's advisory key. */
+  async lockProgrammeSwitch(_tx: Transaction): Promise<void> {
+    this.log.push('lockProgrammeSwitch');
+  }
+
   async isPublished(
     _tx: Transaction,
     requester: RequesterGender,

@@ -255,6 +255,8 @@ describe('create', () => {
     memory.grant(TEACHER, SUBJECT);
     await serviceOver(memory).service.create(TEACHER, CREATE);
     expect(memory.log).toEqual([
+      // 006:T004 (Q-D1 (a)): an old-style ijazah-track package takes the switch's key first.
+      'lockProgrammeSwitch',
       `lockAccount:${TEACHER}`,
       `lockApplication:${TEACHER}`,
       'holdsSubject',
@@ -904,6 +906,35 @@ describe('create under the programme’s switch (006:T004)', () => {
       { ...CREATE, track: 'recitation' },
     );
     expect(log).toEqual([]);
+  });
+
+  // Q-D1 (a) (the owner, 2026-11-22): the switch's key before any row lock, so the turn-on, which
+  // takes it before the switch's row and then the old packages' accounts, never crosses it.
+  it('takes the switch’s key first, before the locks, for an old-style ijazah-track package', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const settings = programmeSettings({ enabled: 0, fee: 0 }, memory.log);
+    await serviceOver(memory, settings).service.create(TEACHER, CREATE);
+    expect(memory.log).toEqual([
+      'lockProgrammeSwitch',
+      `lockAccount:${TEACHER}`,
+      `lockApplication:${TEACHER}`,
+      'holdsSubject',
+      'read:programme_enabled',
+      'insert',
+    ]);
+  });
+
+  it('takes no switch key for a recitation package or a programme package', async () => {
+    for (const input of [{ ...CREATE, track: 'recitation' as const }, PROGRAMME_CREATE]) {
+      const memory = new MemoryPackages();
+      memory.grant(TEACHER, SUBJECT);
+      await serviceOver(memory, programmeSettings({ enabled: 1, fee: 50_000 })).service.create(
+        TEACHER,
+        input,
+      );
+      expect(memory.log).not.toContain('lockProgrammeSwitch');
+    }
   });
 });
 

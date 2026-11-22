@@ -35,7 +35,11 @@
 //   today. A programme package is created or made active only while the assessment's price is
 //   above 0 (`assessment_fee_unset`; a draft allowed). A recitation package reads no setting. On
 //   the ijazah track the average counts a programme package by its price of the asked length.
-//   These settings are read after the account's lock; no lock of their own is claimed.
+//   These settings are read after the account's lock. Q-D1 (a) (the owner, 2026-11-22): a new
+//   old-style ijazah-track package takes the switch's advisory key (`lockProgrammeSwitch`) before
+//   the account's lock, and `settings.update` of `programme_enabled` takes it before it writes, so a
+//   create and the turn-on never cross (kernel.md, the 006:T004 row; `tests/db-integrity/
+//   packages.spec.ts`, both orders).
 //
 // THE LOCKS (T005's rules, the owner's decisions of 2026-11-01). Lock, then read:
 // - `create` inserts a row referencing the teacher's `users` row, so it locks the account first
@@ -175,6 +179,8 @@ function reactivatesPreProgrammeIjazah(current: PackageRow, change: PackageChang
 
 /** What the packages read and write, each on the transaction it is handed. */
 export interface PackagesStore {
+  /** 006:T004 (Q-D1 (a)): the programme switch's advisory key until the transaction ends. */
+  lockProgrammeSwitch(tx: Transaction): Promise<void>;
   /** Locks the account's `users` row until the transaction ends, identity's (T126). */
   lockAccount(tx: Transaction, userId: string): Promise<void>;
   /** Locks the application's `teacher_profiles` row until the transaction ends, identity's (T126). */
@@ -403,12 +409,16 @@ export class PackagesService {
         input: terms,
       },
       async (tx) => {
+        const shaped = termsOfInput(terms);
+        // 006:T004 (Q-D1 (a)): the switch's key first, ahead of the rows the turn-on locks after it.
+        if (shaped.track === 'ijazah_track' && !shaped.isProgramme) {
+          await this.#store.lockProgrammeSwitch(tx);
+        }
         await this.#store.lockAccount(tx, teacherUserId);
         await this.#store.lockApplication(tx, teacherUserId);
         if (!(await this.#store.holdsSubject(tx, teacherUserId, terms.subjectId))) {
           throw new DomainError('SUBJECT_NOT_APPROVED');
         }
-        const shaped = termsOfInput(terms);
         await this.#refuseNewByProgramme(shaped, terms.isActive);
         const row = await this.#store.insert(tx, {
           teacherUserId,

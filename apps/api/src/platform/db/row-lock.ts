@@ -164,9 +164,11 @@ export async function keyShareRows(
 
 /**
  * What an advisory lock is taken over: `'teacher-slots'`, a teacher's slots by the teacher's user
- * id, taken in rule 2's place of the slot (R-206).
+ * id, taken in rule 2's place of the slot (R-206); 006:T004 (SRS DEC-110, Q-D1 (a)):
+ * `'programme-switch'`, the programme's switch, taken before it is read for a new old-style
+ * ijazah-track package and before it is written, ahead of every row lock of either path.
  */
-export type LockScope = 'teacher-slots';
+export type LockScope = 'teacher-slots' | 'programme-switch';
 
 /**
  * Takes the advisory lock of `scope` and `id` until the transaction ends, at commit or rollback; a

@@ -26,7 +26,7 @@ import {
 import { piasters, type Piasters, toPlainNumber } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { lockRows } from '../../platform/db/row-lock.js';
+import { lockKey, lockRows } from '../../platform/db/row-lock.js';
 
 type Client = Pick<Transaction, 'package'>;
 
@@ -470,4 +470,17 @@ export async function deactivatePreProgrammeIjazah(tx: Client): Promise<number> 
     data: { isActive: false },
   });
   return count;
+}
+
+/** 006:T004 (Q-D1 (a)): the one id the switch's advisory key is taken over, the setting's key. */
+const PROGRAMME_SWITCH_ID = 'programme_enabled';
+
+/**
+ * 006:T004 (SRS DEC-110; Q-D1 (a)): the programme switch's advisory key until the transaction
+ * ends. A new old-style ijazah-track package takes it before any row lock and before it reads the
+ * switch; `settings.update` of `programme_enabled` takes it before it writes the value. So a create
+ * either commits first and the turn-on then deactivates it, or waits and reads the switch on.
+ */
+export function lockProgrammeSwitch(tx: Transaction): Promise<void> {
+  return lockKey(tx, 'programme-switch', PROGRAMME_SWITCH_ID);
 }

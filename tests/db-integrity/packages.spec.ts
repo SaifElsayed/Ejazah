@@ -24,6 +24,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
 import {
+  lockProgrammeSwitch,
   PackagesService,
   packagesRouter,
   packagesStore,
@@ -655,8 +656,12 @@ describe('the programme’s switch (006:T002, DEC-110)', () => {
     });
   }
 
-  /** The turn-on on `tx`: the row set to 1, as the panel's writer sets it, then the catalog entry. */
+  /**
+   * The turn-on on `tx`: 006:T004 (Q-D1 (a)) the switch's key first, as `settings.update` takes it;
+   * the row set to 1, as the panel's writer sets it, then the catalog entry.
+   */
   async function turnOn(tx: Transaction): Promise<number> {
+    await lockProgrammeSwitch(tx);
     await tx.setting.updateMany({ where: { key: PROGRAMME_ENABLED_SETTING }, data: { value: 1 } });
     return retirePreProgrammeIjazahPackages(tx);
   }
@@ -792,5 +797,48 @@ describe('the programme’s switch (006:T002, DEC-110)', () => {
 
     expect('value' in outcome && outcome.value).toBeGreaterThanOrEqual(1);
     expect(await activeOf(packageId)).toBe(false);
+  });
+
+  // 006:T004 (SRS DEC-110; Q-D1 (a), the owner's «موافق على الاتنين (أ)», 2026-11-22): a new
+  // old-style ijazah-track package against the turn-on, by a teacher holding none, whose account
+  // the turn-on never locks. Both take the switch's advisory key before reading or writing it.
+  function oldStyleCreation(subjectId: string) {
+    return { ...creation(subjectId), track: 'ijazah_track' as const };
+  }
+
+  async function packagesOfTeacherRows(teacherId: string) {
+    const { rows } = await db.query<{ is_active: boolean }>(
+      'SELECT is_active FROM packages WHERE teacher_user_id = $1',
+      [teacherId],
+    );
+    return rows;
+  }
+
+  it('a create of an old-style ijazah package against the turn-on waits on the switch’s key, then answers programme_switch_on', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+
+    const outcome = await race(turnOn, (tx) =>
+      switchedServiceOn(tx).create(teacherId, oldStyleCreation(subjectId)),
+    );
+
+    expect('thrown' in outcome && outcome.thrown).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'track', code: 'programme_switch_on' }],
+    });
+    expect(await packagesOfTeacherRows(teacherId)).toEqual([]);
+  });
+
+  it('the turn-on against a create that read the switch off waits on the switch’s key, then deactivates it', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'male');
+
+    const outcome = await race(
+      (tx) => switchedServiceOn(tx).create(teacherId, oldStyleCreation(subjectId)),
+      turnOn,
+    );
+
+    expect('value' in outcome && outcome.value).toBeGreaterThanOrEqual(1);
+    expect(await packagesOfTeacherRows(teacherId)).toEqual([{ is_active: false }]);
   });
 });

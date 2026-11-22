@@ -60,6 +60,7 @@ import { SlotsService, type SlotsStore, type TeacherSlots } from './slots.servic
 import {
   changePackage,
   deactivatePreProgrammeIjazah,
+  lockProgrammeSwitch,
   holdsSubject,
   insertPackage,
   lockPackageOwners,
@@ -198,6 +199,8 @@ export function createCatalogServices({
  * queries and locks (`tests/db-integrity/packages.spec.ts`).
  */
 export const packagesStore: PackagesStore = {
+  // 006:T004 (Q-D1 (a)): the programme switch's advisory key.
+  lockProgrammeSwitch,
   lockAccount,
   lockApplication,
   isPublished: isPublishedTeacher,
@@ -229,6 +232,12 @@ export function retirePreProgrammeIjazahPackages(tx: Transaction): Promise<numbe
 }
 /** 006:T002: the switch's key, which `teacher.packages.update` and the admin module read. */
 export { PROGRAMME_ENABLED_SETTING } from './packages.service.js';
+/**
+ * 006:T004 (SRS DEC-110, Q-D1 (a)): the programme switch's advisory key, on the caller's
+ * transaction until it ends; `settings.update` of `programme_enabled` takes it before it writes the
+ * value, ahead of every row lock (kernel.md, the 006:T004 row).
+ */
+export { lockProgrammeSwitch } from './packages.repository.js';
 
 /** The `teacher.packages` router, mounted under `teacher.packages` by `app.router.ts` (T018). */
 export { packagesRouter } from './packages.router.js';
