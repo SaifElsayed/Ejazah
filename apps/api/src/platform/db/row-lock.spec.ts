@@ -93,6 +93,19 @@ describe('lockRows (T126, T005)', () => {
     },
   );
 
+  // 006:T006 of specs/006-programme (the owner's approval of 2026-11-22; kernel.md, the confirm
+  // step's row): a programme is keyed by its enrollment, after the holds and before the enrollments.
+  it('locks the rows of programmes by enrollment id, in that order, FOR UPDATE, the ids bound as one uuid array', async () => {
+    const { tx, sent } = recordingTransaction();
+    await lockRows(tx, 'programmes', IDS);
+    expect(sent).toEqual([
+      {
+        text: 'SELECT 1 FROM programmes WHERE enrollment_id = ANY($::uuid[]) ORDER BY enrollment_id FOR UPDATE',
+        values: [IDS],
+      },
+    ]);
+  });
+
   it('sends no statement for no ids', async () => {
     const { tx, sent } = recordingTransaction();
     await lockRows(tx, 'users', []);

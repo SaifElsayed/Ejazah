@@ -5,9 +5,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { orderTermsOf } from './payments.repository.js';
+import {
+  markOrderConfirmed,
+  orderTermsOf,
+  processedProgrammeOrdersOf,
+} from './payments.repository.js';
 
 const PAYMENT = '0199d0a0-0000-7000-8000-0000000007a1';
+const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000007e1';
 
 function clientOf(row: unknown) {
   const calls: unknown[] = [];
@@ -46,5 +51,54 @@ describe('the order’s terms (006:T005; R-502)', () => {
       instalmentMonth: null,
       confirmedAt: null,
     });
+  });
+});
+
+describe('the programme orders the confirm step processed, and its marker (006:T006; R-502, V-3)', () => {
+  it('reads the enrollment’s processed months and rest, by id', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      payment: {
+        findMany: async (query: unknown) => {
+          calls.push(query);
+          return [
+            { kind: 'instalment', instalmentMonth: 1 },
+            { kind: 'rest_in_full', instalmentMonth: null },
+          ];
+        },
+      },
+    } as unknown as Pick<Transaction, 'payment'>;
+    await expect(processedProgrammeOrdersOf(client, ENROLLMENT)).resolves.toStrictEqual([
+      { kind: 'instalment', instalmentMonth: 1 },
+      { kind: 'rest_in_full', instalmentMonth: null },
+    ]);
+    expect(calls).toEqual([
+      {
+        where: {
+          enrollmentId: ENROLLMENT,
+          kind: { in: ['rest_in_full', 'instalment'] },
+          confirmedAt: { not: null },
+        },
+        orderBy: { id: 'asc' },
+        select: { kind: true, instalmentMonth: true },
+      },
+    ]);
+  });
+
+  it('writes the marker once, only on an order that has none', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      payment: {
+        updateMany: async (query: unknown) => {
+          calls.push(query);
+          return { count: 1 };
+        },
+      },
+    } as unknown as Pick<Transaction, 'payment'>;
+    const at = new Date('2026-11-03T08:00:00Z');
+    await markOrderConfirmed(client, PAYMENT, at);
+    expect(calls).toEqual([
+      { where: { id: PAYMENT, confirmedAt: null }, data: { confirmedAt: at } },
+    ]);
   });
 });

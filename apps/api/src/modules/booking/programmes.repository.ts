@@ -62,3 +62,18 @@ export async function insertAwaitingOffer(tx: Client, enrollmentId: string): Pro
     skipDuplicates: true,
   });
 }
+
+/** `programme_state`, or null for an enrollment that is no programme. */
+export type ProgrammeState = 'awaiting_offer' | 'offered' | 'active' | 'paused' | 'closed';
+
+/**
+ * 006:T006 (R-502): the enrollment's programme's state, or null when it has none; the caller holds
+ * the programme's lock (`lockForConfirmation`).
+ */
+export async function programmeStateOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeState | null> {
+  const row = await tx.programme.findUnique({ where: { enrollmentId }, select: { state: true } });
+  return row?.state ?? null;
+}

@@ -63,7 +63,29 @@
 // offer), and writes its programme `awaiting_offer` through booking's entry, on the same transaction;
 // a second run meets the confirmed enrollment (2) and writes no second row. A refused assessment
 // writes no programme.
+//
+// BY KIND (006:T006 of specs/006-programme; FR-718, R-502, V-3; kernel.md, the confirm step's row).
+// Every order of a programme's kind (`assessment`, `rest_in_full`, `instalment`) carries its own marker,
+// `payments.confirmed_at`, written through payments' entry on the transaction that settles it, whatever
+// the outcome: a replay finds it and does nothing. A `package` order is unchanged and writes none (the
+// enrollment's `confirmed` event names it). An expected order skips 1 and 3's cover and case gates:
+// an `assessment` on an enrollment awaiting payment; a `rest_in_full`, or the next `instalment` (the
+// month after the highest processed one), on a confirmed programme `offered`, `active` or `paused`.
+// Those two take the path with NO HOLD, under the locks above (the programme's among them):
+//   - an order for a month already paid (or a month or the rest after the rest), or one on a
+//     programme not awaiting it, is FR-PAYG-19's unexpected payment: one `duplicate_payment` case
+//     (FR-718), the enrollment unchanged;
+//   - while a `teacher_suspended` or `student_suspended` case is open (a suspension pauses), one
+//     `party_restricted` case instead of the sessions, and one log line of ids and a reason;
+//   - otherwise generation only: the month's sessions (4, the last month the remainder; the rest in
+//     full all N), numbered from the highest + 1, each with its `programme_month`, from the first weekly
+//     occurrence at least the lead after the payment and after the last session (R-507);
+//   - a generation the database refuses never cancels the programme: the order stays paid, one
+//     `slot_unavailable` case, one log line `{ enrollmentId, paymentId, reason }`.
+// A month's case and its marker are written in the same transaction, so a replay opens no second.
 import { z } from 'zod';
+
+import { addHours } from '@ijazah/time';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';
 import type { Database, Transaction } from '../platform/db/prisma.repository.js';
@@ -85,17 +107,22 @@ import {
   type CaseInstants,
   caseInstantsOf,
   type CompensationReason,
+  openCaseOf,
   openCompensationCase,
 } from '../modules/moderation/index.js';
 import {
+  markOrderConfirmed,
   orderEnrollmentOf,
   orderStandingsOf,
   type OrderTerms,
   orderTermsOf,
   type PaidOrder,
   paidOrderOf,
+  type ProcessedProgrammeOrder,
+  processedProgrammeOrdersOf,
 } from '../modules/payments/index.js';
 import {
+  enrollmentSessionsOf,
   type EnrollmentToSchedule,
   generateForEnrollment,
   type ReservationReads,
@@ -125,6 +152,20 @@ export interface ConfirmationSteps {
   orderTermsOf(tx: Transaction, paymentId: string): Promise<OrderTerms>;
   /** 006:T005: the confirmed assessment's programme, `awaiting_offer` (booking's entry). */
   startProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  /** 006:T006: the per-order marker (payments' entry), under the order's lock. */
+  markConfirmed(tx: Transaction, paymentId: string, at: Date): Promise<void>;
+  /** 006:T006: the months and the rest already processed (payments' entry). */
+  programmeOrdersOf(
+    tx: Transaction,
+    enrollmentId: string,
+  ): Promise<readonly ProcessedProgrammeOrder[]>;
+  /** 006:T006: the enrollment's open case of a reason, or null (moderation's entry). */
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+  /** 006:T006: the enrollment's sessions' numbers and ends (sessions' entry). */
+  sessionsOf(
+    tx: Transaction,
+    enrollmentId: string,
+  ): Promise<readonly { readonly sequenceNumber: number; readonly endsAt: Date }[]>;
   casesOf(tx: Transaction, enrollmentId: string): Promise<CaseInstants | null>;
   openCase(tx: Transaction, enrollmentId: string, reason: CompensationReason): Promise<unknown>;
   confirm(tx: Transaction, confirmation: Confirmation): Promise<'confirmed' | 'no_active_hold'>;
@@ -160,6 +201,49 @@ type GenerationPlan = NonNullable<Parameters<typeof generateForEnrollment>[4]>;
 const ASSESSMENT_PLAN: GenerationPlan = { count: 1, firstSequenceNumber: 1 };
 
 /**
+ * 006:T006 (R-507; DEC-93): a month holds 4 of the offer's sessions, the last month the remainder.
+ * A definition of the programme, not an operational number (analyze K-2).
+ */
+const SESSIONS_PER_MONTH = 4;
+
+/** The programme states a month's or the rest's payment is awaited in (R-502). */
+const PAYABLE_STATES: ReadonlySet<LockedEnrollment['programmeState']> = new Set([
+  'offered',
+  'active',
+  'paused',
+]);
+
+/** The suspensions that pause a programme: a month paid during one opens a case (PR #153 r1 Minor 2). */
+const SUSPENSION_REASONS = ['teacher_suspended', 'student_suspended'] as const;
+
+/** Why a paid programme order generated nothing, as its one log line names it. */
+type UngeneratedReason = 'party_suspended' | 'generation_refused';
+
+/** Each offer session's month, the k-th (from 1) in month ⌈k ÷ 4⌉ (R-507). */
+function monthOfOfferSession(position: number): number {
+  return Math.ceil(position / SESSIONS_PER_MONTH);
+}
+
+/**
+ * The sessions an expected month or rest generates, by their months; null when the order is not
+ * the one awaited (a paid month, a month after the rest, the rest after any month, a month past the
+ * last): FR-718's duplicate.
+ */
+function monthsToGenerate(
+  terms: OrderTerms,
+  offerSessions: number,
+  processed: readonly ProcessedProgrammeOrder[],
+): readonly number[] | null {
+  if (processed.some(({ kind }) => kind === 'rest_in_full')) return null;
+  const all = Array.from({ length: offerSessions }, (_, index) => monthOfOfferSession(index + 1));
+  if (terms.kind === 'rest_in_full') return processed.length === 0 ? all : null;
+  const month = terms.instalmentMonth;
+  if (month === null || month !== processed.length + 1) return null;
+  const sessions = all.filter((one) => one === month);
+  return sessions.length === 0 ? null : sessions;
+}
+
+/**
  * The steps over the modules' entries, the orders' locks and standing being payments'; 005:T016:
  * booking's writes hand their pushes to `notices`.
  */
@@ -171,6 +255,10 @@ export function confirmationStepsOf(notices: PaymentOutcomeNotices): Confirmatio
     paidOrderOf,
     orderTermsOf,
     startProgramme: booking.startProgramme,
+    markConfirmed: markOrderConfirmed,
+    programmeOrdersOf: processedProgrammeOrdersOf,
+    openCaseOf,
+    sessionsOf: enrollmentSessionsOf,
     casesOf: caseInstantsOf,
     openCase: openCompensationCase,
     confirm: (tx, confirmation) => booking.confirmEnrollment(tx, confirmation, notices),
@@ -261,10 +349,34 @@ class Confirmer {
       steps.casesOf(tx, enrollmentId),
       steps.orderTermsOf(tx, paymentId),
     ]);
-    if (order.status !== 'paid' || covers(cases, order.paidRecordedAt)) return;
+    if (order.status !== 'paid') return;
+    // 006:T006: an order of a programme's kind carries its own marker (this file's head).
+    if (terms.kind !== 'package' && terms.confirmedAt !== null) return;
+    if (terms.kind === 'rest_in_full' || terms.kind === 'instalment') {
+      await this.#month(tx, enrollment, paymentId, terms, attempt);
+      return;
+    }
+    await this.#hold(tx, enrollment, paymentId, terms, attempt, { cases, order });
+    if (terms.kind === 'assessment') await steps.markConfirmed(tx, paymentId, this.#terms.now);
+  }
+
+  /** The hold path (R-215's decision): a `package` order as before, an `assessment` alike. */
+  async #hold(
+    tx: Transaction,
+    enrollment: LockedEnrollment,
+    paymentId: string,
+    terms: OrderTerms,
+    attempt: Attempt,
+    { cases, order }: { readonly cases: CaseInstants | null; readonly order: PaidOrder },
+  ): Promise<void> {
+    const steps = this.#steps;
+    const enrollmentId = enrollment.id;
+    // 006:T006: an assessment awaited on its enrollment skips the cover and case gates (R-502).
+    const expected = terms.kind === 'assessment' && enrollment.status === 'pending_payment';
+    if (!expected && covers(cases, order.paidRecordedAt)) return;
     if (enrollment.confirmingPaymentId === paymentId) return;
     const duplicate = enrollment.confirmed || enrollment.confirmingPaymentId !== null;
-    if (duplicate || cases !== null) {
+    if (duplicate || (!expected && cases !== null)) {
       await steps.openCase(tx, enrollmentId, 'duplicate_payment');
       return;
     }
@@ -277,6 +389,80 @@ class Confirmer {
       return;
     }
     await this.#confirm(tx, enrollment, paymentId, terms);
+  }
+
+  /**
+   * 006:T006: a month's or the rest's order, the path with no hold (this file's head); the marker
+   * written with whatever it settles.
+   */
+  async #month(
+    tx: Transaction,
+    enrollment: LockedEnrollment,
+    paymentId: string,
+    terms: OrderTerms,
+    attempt: Attempt,
+  ): Promise<void> {
+    const steps = this.#steps;
+    const at = this.#terms.now;
+    const done = () => steps.markConfirmed(tx, paymentId, at);
+    const processed = await steps.programmeOrdersOf(tx, enrollment.id);
+    const months = monthsToGenerate(terms, enrollment.snapshotSessionCount - 1, processed);
+    const awaited =
+      enrollment.status === 'confirmed' && PAYABLE_STATES.has(enrollment.programmeState);
+    if (!awaited || months === null) {
+      await steps.openCase(tx, enrollment.id, 'duplicate_payment');
+      await done();
+      return;
+    }
+    const suspended = await Promise.all(
+      SUSPENSION_REASONS.map((reason) => steps.openCaseOf(tx, enrollment.id, reason)),
+    );
+    if (suspended.some((caseId) => caseId !== null)) {
+      await this.#ungenerated(tx, enrollment.id, paymentId, 'party_restricted', 'party_suspended');
+      await done();
+      return;
+    }
+    if (attempt === 'refuse') {
+      await this.#ungenerated(
+        tx,
+        enrollment.id,
+        paymentId,
+        'slot_unavailable',
+        'generation_refused',
+      );
+      await done();
+      return;
+    }
+    const slot = await steps.slotOf(tx, enrollment.slotId);
+    if (slot === null) throw new Error(`No slot has the id ${enrollment.slotId}`);
+    const sessions = await steps.sessionsOf(tx, enrollment.id);
+    const highest = Math.max(0, ...sessions.map(({ sequenceNumber }) => sequenceNumber));
+    const lastEnd = Math.max(0, ...sessions.map(({ endsAt }) => endsAt.getTime()));
+    // The first weekly occurrence at least the lead after the payment and after the last session.
+    const leadEnd = new Date(addHours(at, this.#terms.leadHours)).getTime();
+    const [from, leadHours] =
+      lastEnd > leadEnd ? [new Date(lastEnd), 0] : [at, this.#terms.leadHours];
+    await steps.generate(tx, scheduleOf(enrollment, slot), from, leadHours, {
+      count: months.length,
+      firstSequenceNumber: highest + 1,
+      months,
+    });
+    await done();
+  }
+
+  /** A paid programme order that generated nothing: its case and one log line (ids and a reason). */
+  async #ungenerated(
+    tx: Transaction,
+    enrollmentId: string,
+    paymentId: string,
+    caseReason: CompensationReason,
+    reason: UngeneratedReason,
+  ): Promise<void> {
+    await this.#steps.openCase(tx, enrollmentId, caseReason);
+    this.#log?.info(
+      { enrollmentId, paymentId, reason },
+      'A paid programme order was not generated',
+    );
   }
 
   /** FR-361 with the hold active, else FR-PAYG-19's late branch after the parties' check. */

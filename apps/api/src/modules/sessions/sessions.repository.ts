@@ -97,6 +97,8 @@ export interface NewSessionRow {
   readonly scheduledStartAt: Date;
   readonly scheduledEndAt: Date;
   readonly status: 'scheduled';
+  /** 006:T006 (R-507): the programme's month of an offer session; absent on every other. */
+  readonly programmeMonth?: number;
 }
 
 /**

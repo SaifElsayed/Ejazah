@@ -133,6 +133,15 @@ export { orderEnrollmentOf, type PaidOrder, paidOrderOf } from './confirmation-o
  * by the confirm job under the same locks as the order's status.
  */
 export { type OrderTerms, orderTermsOf } from './payments.repository.js';
+/**
+ * 006:T006 (R-502, FR-718; V-3): the months and the rest the confirm job already processed, and its
+ * per-order marker `payments.confirmed_at`, written once, under the orders' locks.
+ */
+export {
+  markOrderConfirmed,
+  type ProcessedProgrammeOrder,
+  processedProgrammeOrdersOf,
+} from './payments.repository.js';
 
 /**
  * What `expire-pending-payments` reads and writes of the orders (T040, FR-364; PR #109's review, M2

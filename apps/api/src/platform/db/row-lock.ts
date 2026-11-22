@@ -73,6 +73,9 @@ export type LockedTable =
   | 'verification_documents'
   | 'availability_slots'
   | 'slot_holds'
+  // 006:T006 of specs/006-programme (the owner's approval of 2026-11-22; kernel.md, the confirm
+  // step's row): a programme, keyed by its enrollment, after the holds and before the enrollments.
+  | 'programmes'
   | 'enrollments'
   | 'sessions'
   | 'session_remedies'
@@ -108,6 +111,9 @@ export async function lockRows(
       return;
     case 'slot_holds':
       await tx.$queryRaw`SELECT 1 FROM slot_holds WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'programmes':
+      await tx.$queryRaw`SELECT 1 FROM programmes WHERE enrollment_id = ANY(${ids}::uuid[]) ORDER BY enrollment_id FOR UPDATE`;
       return;
     case 'enrollments':
       await tx.$queryRaw`SELECT 1 FROM enrollments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;

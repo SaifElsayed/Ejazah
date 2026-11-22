@@ -1,11 +1,16 @@
 // 006:T005 (R-504; U-1, N-12) — booking's queries on `programmes`: a student's active programmes'
 // weekly times (the four active states, a soft-deleted enrollment left out, one enrollment left out
 // when asked) and the confirmed assessment's row written once. Over a recording stand-in of the
-// client; the rows against Postgres are `tests/db-integrity/programme-confirmation.spec.ts`'s.
+// client; the rows against Postgres are `tests/db-integrity/programme-confirmation.spec.ts`' and
+// `tests/adversarial/programme-assessment.spec.ts`'.
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { activeProgrammeSlotsOf, insertAwaitingOffer } from './programmes.repository.js';
+import {
+  activeProgrammeSlotsOf,
+  insertAwaitingOffer,
+  programmeStateOf,
+} from './programmes.repository.js';
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000006d2';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000006e1';
@@ -82,5 +87,23 @@ describe('the confirmed assessment’s programme (R-504)', () => {
         { data: [{ enrollmentId: ENROLLMENT, state: 'awaiting_offer' }], skipDuplicates: true },
       ],
     ]);
+  });
+});
+
+describe('the programme’s state under its lock (006:T006; R-502)', () => {
+  it('reads the enrollment’s programme’s state, and none for an enrollment that is no programme', async () => {
+    const calls: unknown[] = [];
+    const answers = [{ state: 'active' }, null];
+    const client = {
+      programme: {
+        findUnique: async (query: unknown) => {
+          calls.push(query);
+          return answers.shift() ?? null;
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await expect(programmeStateOf(client, ENROLLMENT)).resolves.toBe('active');
+    await expect(programmeStateOf(client, ENROLLMENT)).resolves.toBeNull();
+    expect(calls[0]).toEqual({ where: { enrollmentId: ENROLLMENT }, select: { state: true } });
   });
 });
