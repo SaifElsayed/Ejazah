@@ -145,6 +145,9 @@ No open question remains.
   > allowed); discovery's `prices`, `priceRange`, `assessmentPrice_piasters`, none shown while closed; DEC-88's programme
   > pool (kept counting while the switch is off, the owner's (a)); the nearest slot at the assessment's length. Q-D1 (a):
   > one advisory key `programme-switch` taken by an old-style create or edit and by the turn-on (kernel.md `006:T004`).
+  > **Follow-up (PR #156 r1 nit, 2026-11-22).** `catalog/discovery.service.ts` `highestOf` compares piasters beside
+  > `packages/money`'s `lowest`; a `highest` in `packages/money` keeps the pair together. A file outside B-P1's list,
+  > so it waits for the batch that next touches discovery's price range, red first on its own spec.
 - [x] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
   - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
     the assessment's for a programme package, and refuse one overlapping the student's own active
@@ -265,6 +268,12 @@ No open question remains.
   - `share-release.rules.ts` `halfReached` over the N+1 snapshot count, the assessment counted (DEC-94: 41 → 21),
     pinned.
   - `sessions/restore.service.ts` refuses `programme_enrollment` (G-1).
+  > **Follow-up (PR #156 r1 Follow-up 1, 2026-11-22).** Three make-up writers read no programme time:
+  > `remedy.service.ts:1152-1157` (the choice-end sweep books the proposal after `heldTimesOf` only),
+  > `makeup-booking.service.ts:358-366` and `restore.service.ts:472-474`. A make-up placed before the programme existed
+  > is then booked onto its weekly time, and a later month's generation meets the session exclusion: the whole month is
+  > refused (`slot_unavailable` case, the order paid). Each reads `EnrollmentSide.programmeTimesOf` as T005's searches
+  > do, red first on «a make-up booked onto the student's programme time», with T010's restore refusal.
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
   > **Follow-up (B-P1's lane e, 2026-11-22).** Today `share-release.rules.ts` would list `ijazah_half` at session 1 for
