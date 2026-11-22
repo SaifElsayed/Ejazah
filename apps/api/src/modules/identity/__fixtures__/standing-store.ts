@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Transaction } from '../../../platform/db/prisma.repository.js';
+import type { ApplicationHistoryEntry } from '../application-history.repository.js';
 import type { StandingStore } from '../standing.service.js';
 import type {
   AccountStatus,
@@ -48,6 +49,8 @@ export class MemoryStandingStore implements StandingStore {
    * (T164), `read:<id>`, and a student's read, `read-student:<id>` (T005 of specs/004-sessions).
    */
   readonly journal: string[] = [];
+  /** R1a (002:T174): each row the standing wrote to the application's history, in order. */
+  readonly history: ApplicationHistoryEntry[] = [];
 
   /**
    * A person with one live session; a teacher when `teacher` is given or `role` says so (a teacher
@@ -220,6 +223,10 @@ export class MemoryStandingStore implements StandingStore {
     if (teacher?.verificationStatus !== 'revoked') return false;
     Object.assign(teacher, { verificationStatus: 'approved', applicationStatus: 'approved' });
     return true;
+  }
+
+  async recordHistory(_tx: Transaction, entry: ApplicationHistoryEntry): Promise<void> {
+    this.history.push(entry);
   }
 
   async revokeSessions(

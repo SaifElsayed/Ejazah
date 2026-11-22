@@ -62,6 +62,8 @@ function detailOf(more: Record<string, unknown> = {}) {
       },
     ],
     call: {},
+    // R1a (002:T174, rule d): `applications.get`'s history.
+    history: [],
     ...more,
   };
 }
@@ -510,7 +512,10 @@ describe('require-ID (FR-166)', () => {
 
 describe('T058: RATE_LIMITED on the documents', () => {
   const limited = (seconds?: string) =>
-    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+    refusal(
+      'RATE_LIMITED',
+      seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+    );
 
   it('the viewer’s link says when to try again, and still offers a retry', async () => {
     const api = fakeApi();

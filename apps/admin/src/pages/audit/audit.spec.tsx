@@ -629,3 +629,57 @@ describe('003:T110: the case amount’s read by name', () => {
     );
   });
 });
+
+// R1a (002:T174; SRS DEC-97, FR-ADMIN-17 as amended; the owner's Q-1 (a)): an entry whose note is in
+// a history carries the marker `note_given` as its reason; both pages say it in words, linked to the
+// entry's target, and never show the marker itself.
+describe('a reason kept in the history (R1a, T174)', () => {
+  const APPLICANT = '0193a6f0-0000-7000-8000-0000000000b7';
+  const REJECTED = '0193a6f0-0000-7000-8000-0000000000e7';
+  const rejected = {
+    entryId: REJECTED,
+    occurredAt: '2026-10-16T09:00:00.000Z',
+    adminName: 'سارة عادل',
+    action: 'application.reject',
+    targetLabel: `طلب · ${APPLICANT}`,
+    targetName: 'منى عبد الرحمن',
+    targetType: 'teacher_application',
+    targetId: APPLICANT,
+    reason: 'note_given',
+  } as const;
+
+  function withRejection() {
+    const api = fakeApi();
+    api.audit.list.query.mockResolvedValue({ rows: [rejected], total: 1, pageSize: 25 });
+    api.audit.get.query.mockResolvedValue({
+      ...rejected,
+      before: { status: 'in_review' },
+      after: { status: 'rejected', reasonChoice: 'other' },
+    });
+    return api;
+  }
+
+  it('the list says it in words, linked to the application, in both languages', async () => {
+    await inBothLocales(
+      () => open(withRejection()),
+      async (t) => {
+        const words = await screen.findByRole('link', { name: t('admin.audit.values.noteGiven') });
+        expect(words.getAttribute('href')).toBe(`/applications?teacher=${APPLICANT}`);
+        expect(screen.queryByText('note_given')).toBeNull();
+      },
+    );
+  });
+
+  it('the detail says it in words, linked to the application, and opens it', async () => {
+    open(withRejection());
+    const cells = await screen.findAllByText(ar('admin.audit.actions.rejectApplication'));
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    const detail = within(
+      await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }),
+    );
+    const words = await detail.findByRole('link', { name: ar('admin.audit.values.noteGiven') });
+    expect(detail.queryByText('note_given')).toBeNull();
+    fireEvent.click(words);
+    await waitFor(() => expect(currentPath()).toBe(`/applications?teacher=${APPLICANT}`));
+  });
+});

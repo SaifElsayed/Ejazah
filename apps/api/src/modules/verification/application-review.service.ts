@@ -38,6 +38,8 @@ export type {
   ApplicantRow,
   ApplicantsFilter,
   ApplicantStatus,
+  ApplicationHistoryEntry,
+  ApplicationHistoryRow,
   CallRecord,
 } from '../identity/index.js';
 import type {
@@ -45,6 +47,8 @@ import type {
   ApplicantRow,
   ApplicantsFilter,
   ApplicantStatus,
+  ApplicationHistoryEntry,
+  ApplicationHistoryRow,
   CallRecord,
 } from '../identity/index.js';
 
@@ -102,6 +106,13 @@ export interface ApplicationReviewStore {
   grantSubjects(tx: Transaction, userId: string, subjectIds: readonly string[]): Promise<void>;
   /** Rejects those still `pending` or `needs_document` (catalog's entry, T122); how many it moved. */
   closeCredentials(tx: Transaction, closure: CredentialClosure): Promise<number>;
+  /**
+   * R1a (002:T174): one row of the application's history, identity's entry, on the profile the
+   * decision holds locked.
+   */
+  recordHistory(tx: Transaction, entry: ApplicationHistoryEntry): Promise<void>;
+  /** R1a (002:T174): the application's history, oldest first, identity's entry. */
+  historyOf(tx: Transaction, userId: string): Promise<ApplicationHistoryRow[]>;
 }
 
 /** The standing's ban, identity's (`standing.service.ts`): the application status it moved from. */
@@ -173,9 +184,10 @@ export class ApplicationReviewService {
   }
 
   /**
-   * `applications.get`: the detail; the decision history is `audit.list` on the target. B42b, T075
-   * (Q-O2 (a)): also `banRestoreWindowDays`, the `ban_restore_window_days` setting (R-MONEY-12), the
-   * panel's `{days}` in an approved teacher's ban.
+   * `applications.get`: the detail. B42b, T075 (Q-O2 (a)): also `banRestoreWindowDays`, the
+   * `ban_restore_window_days` setting (R-MONEY-12), the panel's `{days}` in an approved teacher's
+   * ban. R1a (002:T174, DEC-97): the decision history is `history`, read from the application's
+   * history, oldest first; the audit log keeps the entries without the text.
    */
   async get(tx: Transaction, userId: string): Promise<z.input<typeof applicationsGetOutput>> {
     const applicant = await this.#readOrRefuse(tx, userId);
@@ -185,6 +197,7 @@ export class ApplicationReviewService {
       documentId === null ? null : await this.#store.documentUploadedAt(tx, documentId);
     const request = await this.#store.openRequestOf(tx, userId);
     const banRestoreWindowDays = await windowDaysOf(this.#settings)(BAN_RESTORE_WINDOW_SETTING);
+    const history = await this.#store.historyOf(tx, userId);
     return {
       ...this.#rowOf(applicant, credentials),
       qualificationSummary: applicant.qualificationSummary,
@@ -212,6 +225,12 @@ export class ApplicationReviewService {
       ...(applicant.note === null ? {} : { note: applicant.note }),
       ...(request === null ? {} : { identityRequest: request }),
       banRestoreWindowDays,
+      history: history.map(({ action, note, adminName, at }) => ({
+        action,
+        ...(note === null ? {} : { note }),
+        adminName,
+        at: at.toISOString(),
+      })),
     };
   }
 
@@ -289,6 +308,13 @@ export class ApplicationReviewService {
     if (!(await this.#store.decide(tx, applicant.userId, decision))) {
       await this.#refuseMoved(tx, applicant.userId);
     }
+    await this.#store.recordHistory(tx, {
+      teacherUserId: applicant.userId,
+      action: 'approve',
+      note: decision.note,
+      adminId,
+      at: decision.at,
+    });
     const subjectIds = approved.map((credential) => credential.subject.id);
     await this.#store.grantSubjects(tx, applicant.userId, subjectIds);
     return { before: { status: 'in_review' }, after: { status: 'approved' }, subjectIds };
@@ -359,6 +385,10 @@ export class ApplicationReviewService {
     return { before: { status: applicationStatus }, after: { status: 'banned' } };
   }
 
+  /**
+   * A rejection or a request for information, then its one row of the application's history
+   * (R1a, 002:T174), once the decision has landed; a rejection's closed credentials write none.
+   */
   async #decide(
     tx: Transaction,
     adminId: string,
@@ -369,6 +399,7 @@ export class ApplicationReviewService {
   ): Promise<void> {
     const written = await this.#store.decide(tx, userId, { kind, adminId, at, note });
     if (!written) await this.#refuseMoved(tx, userId);
+    await this.#store.recordHistory(tx, { teacherUserId: userId, action: kind, note, adminId, at });
   }
 
   #rowOf(row: ApplicantRow, credentials: readonly CredentialOfApplicant[]): ListRow {

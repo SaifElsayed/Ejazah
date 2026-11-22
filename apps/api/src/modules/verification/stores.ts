@@ -20,6 +20,7 @@ import {
   applicantsCount,
   applicantsPage,
   type ApplicationChange,
+  applicationHistoryOf,
   type ApplicationRecord,
   decideApplication,
   lockAccount,
@@ -28,6 +29,7 @@ import {
   readApplication,
   readStanding,
   recordApplicationCall,
+  recordApplicationHistory,
   setApplication,
 } from '../identity/index.js';
 import type { ApplicationReviewStore } from './application-review.service.js';
@@ -145,6 +147,9 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
     decide: decideApplication,
     grantSubjects,
     closeCredentials: closeUndecidedCredentials,
+    // R1a (002:T174): the application's history, through identity's one entry.
+    recordHistory: recordApplicationHistory,
+    historyOf: applicationHistoryOf,
   };
 }
 

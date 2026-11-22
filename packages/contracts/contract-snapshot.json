@@ -415,6 +415,16 @@
           "$.displayName": { "required": true, "type": "string" },
           "$.email": { "required": true, "type": "string" },
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.history": { "required": true, "type": "array" },
+          "$.history[]": { "type": "object" },
+          "$.history[].action": {
+            "required": true,
+            "type": "string",
+            "values": ["approve", "ban", "reject", "request_info", "revoke"]
+          },
+          "$.history[].adminName": { "required": true, "type": "string" },
+          "$.history[].at": { "required": true, "type": "string" },
+          "$.history[].note": { "type": "string" },
           "$.identityDocument": { "required": true, "type": "object" },
           "$.identityDocument.documentId": { "required": true, "type": "string" },
           "$.identityDocument.type": {

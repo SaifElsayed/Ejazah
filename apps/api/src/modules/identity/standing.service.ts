@@ -73,6 +73,10 @@ import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import { publisherOn } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
+import {
+  type ApplicationHistoryEntry,
+  record as recordApplicationHistory,
+} from './application-history.repository.js';
 import { lockApplication } from './application.repository.js';
 import type { AccountConsequences } from './consequences.js';
 import { AccountsRepository } from './identity.repository.js';
@@ -119,6 +123,11 @@ export interface StandingStore {
     to: AccountStatus,
   ): Promise<boolean>;
   revokeApproval(tx: Transaction, userId: string, decision: ProfileDecision): Promise<boolean>;
+  /**
+   * R1a (002:T174): one row of the application's history, on the profile the action holds locked
+   * (`application-history.repository.ts`).
+   */
+  recordHistory(tx: Transaction, entry: ApplicationHistoryEntry): Promise<void>;
   banProfile(tx: Transaction, userId: string, ban: ProfileBan): Promise<boolean>;
   /**
    * T072: bans the live account from one of `from`, `banned_at` the database's instant, in one
@@ -165,6 +174,7 @@ export function standingStoreOver(database: Database): StandingStore {
     },
     moveAccount: moveAccountStatus,
     revokeApproval: revokeTeacherApproval,
+    recordHistory: recordApplicationHistory,
     banProfile: banTeacherProfile,
     // T072: `banned_at` the database's clock on the call's transaction.
     banAccount: async (tx, userId, from) =>
@@ -351,6 +361,8 @@ export class StandingService {
     if (!(await this.#store.revokeApproval(tx, teacherUserId, decision))) {
       throw conflict(await this.#teacher(tx, teacherUserId));
     }
+    // R1a (002:T174, DEC-97 as amended): the history shows why `application_note` changed.
+    await this.#store.recordHistory(tx, { teacherUserId, action: 'revoke', ...decision });
     await this.#revokeSubjects(tx, teacherUserId);
     await this.#end(tx, adminId, teacherUserId, 'approval_revoked');
     return {
@@ -387,17 +399,29 @@ export class StandingService {
     if (!allowed) throw conflict(standing);
     // T072: the statuses read under the application's lock, kept for the lift.
     const before = { verificationStatus, applicationStatus };
+    const at = this.#now();
     const written = await this.#store.banProfile(
       tx,
       userId,
       applicant === undefined
         ? { kind: 'teacher', before }
-        : { kind: 'applicant', before, adminId, at: this.#now(), note: applicant.applicantNote },
+        : { kind: 'applicant', before, adminId, at, note: applicant.applicantNote },
     );
     const banned =
       written &&
       (await this.#store.banAccount(tx, userId, ['active', 'suspended', 'verification_required']));
     if (!banned) throw conflict(await this.#teacher(tx, userId));
+    // R1a (002:T174): an applicant's ban is a decision on the application, one row with its note; a
+    // teacher's ban decides the standing, not the application, and writes none.
+    if (applicant !== undefined) {
+      await this.#store.recordHistory(tx, {
+        teacherUserId: userId,
+        action: 'ban',
+        note: applicant.applicantNote,
+        adminId,
+        at,
+      });
+    }
     await this.#end(tx, adminId, userId, 'banned');
     return {
       ...accountMove(standing.accountStatus, 'banned'),
@@ -419,7 +443,9 @@ export class StandingService {
     const locked =
       reinstatement === undefined
         ? [teacherUserId]
-        : [...new Set([teacherUserId, ...(await reinstatement.studentsOf(tx, teacherUserId))])].sort();
+        : [
+            ...new Set([teacherUserId, ...(await reinstatement.studentsOf(tx, teacherUserId))]),
+          ].sort();
     if (reinstatement === undefined) await this.#store.lockAccount(tx, teacherUserId);
     else await this.#store.lockAccounts(tx, locked);
     const standing = await this.#teacher(tx, teacherUserId);

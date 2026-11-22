@@ -564,7 +564,10 @@ describe('the `account` event after a standing change (T063)', () => {
 
   it.each([
     ['suspend', (tx: typeof TX, userId: string) => standing.suspend(tx, ADMIN, userId)],
-    ['revokeApproval', (tx: typeof TX, userId: string) => standing.revokeApproval(tx, ADMIN, userId, 'a reason')],
+    [
+      'revokeApproval',
+      (tx: typeof TX, userId: string) => standing.revokeApproval(tx, ADMIN, userId, 'a reason'),
+    ],
     ['ban', (tx: typeof TX, userId: string) => standing.ban(tx, ADMIN, userId)],
   ] as const)('%s adds one `account` to the person’s streams', async (_, act) => {
     const { tx, added, unbind } = bound();
@@ -575,7 +578,10 @@ describe('the `account` event after a standing change (T063)', () => {
   });
 
   it.each([
-    ['suspendStudent', (tx: typeof TX, userId: string) => standing.suspendStudent(tx, ADMIN, userId)],
+    [
+      'suspendStudent',
+      (tx: typeof TX, userId: string) => standing.suspendStudent(tx, ADMIN, userId),
+    ],
     ['banStudent', (tx: typeof TX, userId: string) => standing.banStudent(tx, ADMIN, userId)],
   ] as const)('%s adds one `account` to the student’s streams', async (_, act) => {
     const { tx, added, unbind } = bound();
@@ -1166,5 +1172,86 @@ describe('T072: keyedLift', () => {
       }),
     ).toEqual({ move: first, replayed: true });
     expect(store.person(userId).accountStatus).toBe('banned');
+  });
+});
+
+// R1a (002:T174; SRS DEC-97 as amended by DEC-101's paragraph; the note under T174, (4) and (7)): a
+// revocation writes the application's history one row of action `revoke` with its reason, and an
+// applicant's ban one row of action `ban` with its note, in the action's transaction; a teacher's
+// ban, a refused action and a lift write none.
+describe("R1a: the application's history (T174)", () => {
+  /** A lift with no closed enrollment to restore. */
+  const lift = {
+    counterpartiesOf: async () => [],
+    restoreClosed: async () => [],
+    grantApprovedSubjects: async () => undefined,
+  };
+
+  it('revokeApproval writes one row: revoke, its reason, the administrator, its instant', async () => {
+    const userId = approvedTeacher();
+    await standing.revokeApproval(TX, ADMIN, userId, 'شكوى موثّقة من طالب');
+    expect(store.history).toEqual([
+      {
+        teacherUserId: userId,
+        action: 'revoke',
+        note: 'شكوى موثّقة من طالب',
+        adminId: ADMIN,
+        at: NOW,
+      },
+    ]);
+  });
+
+  it("an applicant's ban writes one row: ban, the note the applicant sees", async () => {
+    const userId = applicant('needs_document');
+    await standing.ban(TX, ADMIN, userId, { applicantNote: 'وثيقة الهوية معدَّلة' });
+    expect(store.history).toEqual([
+      {
+        teacherUserId: userId,
+        action: 'ban',
+        note: 'وثيقة الهوية معدَّلة',
+        adminId: ADMIN,
+        at: NOW,
+      },
+    ]);
+  });
+
+  it("a teacher's ban writes none", async () => {
+    await standing.ban(TX, ADMIN, approvedTeacher());
+    expect(store.history).toEqual([]);
+  });
+
+  it('a refused revocation or ban writes none, a lost conditional write included', async () => {
+    const pending = applicant('in_review');
+    await refusal(standing.revokeApproval(TX, ADMIN, pending, 'سبب'));
+    await refusal(standing.ban(TX, ADMIN, approvedTeacher(), { applicantNote: 'سبب' }));
+    // The read admitted it and the write found the row moved: refused before any row is written.
+    store.revokeApproval = async () => false;
+    store.banProfile = async () => false;
+    await refusal(standing.revokeApproval(TX, ADMIN, approvedTeacher(), 'سبب'));
+    await refusal(standing.ban(TX, ADMIN, applicant('rejected'), { applicantNote: 'سبب' }));
+    expect(store.history).toEqual([]);
+  });
+
+  it("a lift writes none: a teacher's ban, an applicant's ban and a revocation lifted", async () => {
+    const lifting = new StandingService({
+      store,
+      consequences: new AccountConsequences(),
+      revokeSubjects: async () => undefined,
+      hasOpenIdentityRequest: async () => false,
+      now: () => NOW,
+      lift,
+    });
+    const teacher = approvedTeacher();
+    const banned = applicant('rejected');
+    const revoked = approvedTeacher();
+    await lifting.ban(TX, ADMIN, teacher);
+    await lifting.ban(TX, ADMIN, banned, { applicantNote: 'وثائق مزوّرة' });
+    await lifting.revokeApproval(TX, ADMIN, revoked, 'شكوى');
+    const written = store.history.length;
+    await lifting.liftTeacherBan(TX, ADMIN, teacher);
+    await lifting.liftTeacherBan(TX, ADMIN, banned);
+    await lifting.liftRevocation(TX, ADMIN, revoked);
+    expect(written).toBe(2);
+    expect(store.history).toHaveLength(written);
   });
 });

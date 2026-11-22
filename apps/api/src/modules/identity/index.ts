@@ -296,6 +296,18 @@ export {
   lockApplication,
   recordApplicationCall,
 } from './application.repository.js';
+/**
+ * R1a (002:T174; SRS DEC-97): the application's history, the one entry verification's approve,
+ * reject and requestInfo write through, as standing's ban and revocation do; read by
+ * `applications.get`. Its erasure is the deletion's alone (`eraseAccount`), so it is not exported.
+ */
+export {
+  type ApplicationHistoryAction,
+  type ApplicationHistoryEntry,
+  type ApplicationHistoryRow,
+  listOf as applicationHistoryOf,
+  record as recordApplicationHistory,
+} from './application-history.repository.js';
 
 /**
  * A person's standing as the administrator changes it (T068, FR-165, FR-166): the service, its store
