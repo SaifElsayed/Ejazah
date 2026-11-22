@@ -43,7 +43,8 @@
 // once it is completed, and decision (a) on the follow-up under T031 and T029): a slot taken on every
 // date is no option, one a completed package holds is searched from its release. Each resolved on
 // its own date in the slot's own zone by `packages/time` (R-TIME-2, `003:T077`). The search ends:
-// what can make a week busy is finite.
+// what can make a week busy is finite, and a slot over the programme's weekly time, which recurs on
+// every week, is no option at all (PR #156 r1 Major 2).
 //
 // WHAT A COUNTER WRITES. The five `counter_*` columns (the slot, its local date and start, the slot's
 // zone, `counter_proposed_at` the database's clock), `counter_proposed`, and one `counter_proposed`
@@ -686,9 +687,12 @@ export function createRemedyServices({
         // 006:T005 (N-12): the student's other active programmes' weekly times.
         enrollments.programmeTimesOf(tx, [session.studentUserId], window, session.enrollmentId),
       ]);
-      const busy = [...own, ...held, ...reserved, ...programme];
+      const busy = [...own, ...held, ...reserved];
       const next: Candidate[] = [];
       for (const candidate of pending) {
+        // A programme's weekly time recurs on every week: the slot under it is no option, never
+        // stepped over (PR #156 r1 Major 2; sessions, holds and reservations are finite).
+        if (overlapsAny(timeOf(candidate.occurrence), programme)) continue;
         if (!overlapsAny(timeOf(candidate.occurrence), busy)) {
           found.push(candidate);
           continue;

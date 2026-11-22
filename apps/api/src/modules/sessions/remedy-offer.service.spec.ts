@@ -404,12 +404,32 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
 });
 
 describe('remedy offer: the student’s own programme’s weekly time (006:T005; N-12, U-1)', () => {
-  it('skips a week over the weekly time of another active programme of the student, uncounted', async () => {
+  it('skips a week over the weekly time of another active programme of the student', async () => {
     // C + A + L lands on 12-17 (the first test above); the programme's Thursday 09:00 there.
     programmeTimes = [
       { startsAt: new Date('2026-12-17T07:30:00Z'), endsAt: new Date('2026-12-17T08:30:00Z') },
     ];
     expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2026-12-24');
+  });
+
+  // PR #156 r1 Major 2: a programme's weekly time recurs on every week, as a taken slot does, so
+  // its weeks count toward the bound (PROBE-P3).
+  it('counts a week over a programme time toward the bound: over every week, it ends with none', async () => {
+    programmeTimes = Array.from({ length: 600 }, (_, week) => ({
+      startsAt: new Date(Date.parse('2026-12-17T07:30:00Z') + week * 7 * 86_400_000),
+      endsAt: new Date(Date.parse('2026-12-17T08:30:00Z') + week * 7 * 86_400_000),
+    }));
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    expect(programmeAsked.length).toBeLessThanOrEqual(4);
+  }, 3_000);
+
+  it('counts programme weeks and taken weeks together: two of each reach the bound of four', async () => {
+    programmeTimes = [
+      { startsAt: new Date('2026-12-17T07:30:00Z'), endsAt: new Date('2026-12-17T08:30:00Z') },
+      { startsAt: new Date('2026-12-31T07:30:00Z'), endsAt: new Date('2026-12-31T08:30:00Z') },
+    ];
+    takenDates = new Set(['2026-12-24', '2027-01-07']);
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
   });
 
   it('asks for the student’s programmes alone, this enrollment’s own left out', async () => {

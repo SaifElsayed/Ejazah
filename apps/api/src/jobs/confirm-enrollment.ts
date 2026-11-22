@@ -225,6 +225,26 @@ function monthOfOfferSession(position: number): number {
 }
 
 /**
+ * Where the processed orders leave the programme, walked in the order they were processed: the
+ * next month awaited and whether the rest was paid in full. Only the awaited order moves it (the
+ * rest before any month, or the next month); a duplicate already processed never does (PR #156 r1
+ * Major 1: month 1 twice, then month 2, generates month 2).
+ */
+function awaitedAfter(processed: readonly ProcessedProgrammeOrder[]): {
+  readonly next: number;
+  readonly inFull: boolean;
+} {
+  let next = 1;
+  let inFull = false;
+  for (const { kind, instalmentMonth } of processed) {
+    if (inFull) break;
+    if (kind === 'rest_in_full') inFull = next === 1;
+    else if (instalmentMonth === next) next += 1;
+  }
+  return { next, inFull };
+}
+
+/**
  * The sessions an expected month or rest generates, by their months; null when the order is not
  * the one awaited (a paid month, a month after the rest, the rest after any month, a month past the
  * last): FR-718's duplicate.
@@ -234,11 +254,12 @@ function monthsToGenerate(
   offerSessions: number,
   processed: readonly ProcessedProgrammeOrder[],
 ): readonly number[] | null {
-  if (processed.some(({ kind }) => kind === 'rest_in_full')) return null;
+  const { next, inFull } = awaitedAfter(processed);
+  if (inFull) return null;
   const all = Array.from({ length: offerSessions }, (_, index) => monthOfOfferSession(index + 1));
-  if (terms.kind === 'rest_in_full') return processed.length === 0 ? all : null;
+  if (terms.kind === 'rest_in_full') return next === 1 ? all : null;
   const month = terms.instalmentMonth;
-  if (month === null || month !== processed.length + 1) return null;
+  if (month === null || month !== next) return null;
   const sessions = all.filter((one) => one === month);
   return sessions.length === 0 ? null : sessions;
 }

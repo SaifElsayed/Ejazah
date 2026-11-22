@@ -133,7 +133,8 @@ export interface ProcessedProgrammeOrder {
 
 /**
  * The enrollment's `rest_in_full` and `instalment` orders the confirm step processed
- * (`confirmed_at` set), by id; the caller holds the orders' locks. Bounded by the programme's months.
+ * (`confirmed_at` set), in the order it processed them (`confirmed_at`, then id: the awaited month is
+ * walked from them, PR #156 r1 Major 1); the caller holds the orders' locks.
  */
 export async function processedProgrammeOrdersOf(
   tx: Pick<Transaction, 'payment'>,
@@ -145,7 +146,7 @@ export async function processedProgrammeOrdersOf(
       kind: { in: ['rest_in_full', 'instalment'] },
       confirmedAt: { not: null },
     },
-    orderBy: { id: 'asc' },
+    orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
     select: { kind: true, instalmentMonth: true },
   });
   return rows.flatMap(({ kind, instalmentMonth }) =>

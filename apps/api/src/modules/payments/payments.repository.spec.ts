@@ -55,7 +55,7 @@ describe('the order’s terms (006:T005; R-502)', () => {
 });
 
 describe('the programme orders the confirm step processed, and its marker (006:T006; R-502, V-3)', () => {
-  it('reads the enrollment’s processed months and rest, by id', async () => {
+  it('reads the enrollment’s processed months and rest, in the order they were processed', async () => {
     const calls: unknown[] = [];
     const client = {
       payment: {
@@ -79,7 +79,7 @@ describe('the programme orders the confirm step processed, and its marker (006:T
           kind: { in: ['rest_in_full', 'instalment'] },
           confirmedAt: { not: null },
         },
-        orderBy: { id: 'asc' },
+        orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
         select: { kind: true, instalmentMonth: true },
       },
     ]);

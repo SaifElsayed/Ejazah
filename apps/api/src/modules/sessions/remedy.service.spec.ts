@@ -800,7 +800,9 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
     ]);
   });
 
-  it('006:T005 (N-12): steps over a week over the student’s other active programme’s weekly time, asking for the student alone, this enrollment’s own left out', async () => {
+  // PR #156 r1 Major 2: a programme's weekly time recurs on every week, so a slot under it is no
+  // option (the owner's choice: dropped, not stepped over).
+  it('006:T005 (N-12): drops a slot over the student’s other active programme’s weekly time, asking for the student alone, this enrollment’s own left out', async () => {
     programmeAsked = [];
     busy.programme = [
       {
@@ -813,15 +815,28 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
       { sessionId: SESSION },
       log,
     );
-    expect(options).toContainEqual({
-      ...RIYADH_FREE,
-      localDate: '2026-11-26',
-      startsAt: '2026-11-26T17:00:00Z',
-    });
+    expect(options.map(({ slotId }) => slotId)).not.toContain(RIYADH_SLOT);
+    expect(options).toContainEqual(OWN_FREE);
     expect(programmeAsked.length).toBeGreaterThan(0);
     expect(new Set(programmeAsked.map((asked) => JSON.stringify(asked)))).toEqual(
       new Set([JSON.stringify([[STUDENT], ENROLLMENT])]),
     );
+  });
+
+  it('006:T005 (N-12): ends over a programme time on every week, the slot under it dropped (PROBE-P2)', async () => {
+    programmeAsked = [];
+    // The programme's Thursday 17:30Z on 600 consecutive weeks from 2026-11-19.
+    busy.programme = Array.from({ length: 600 }, (_, week) => ({
+      startsAt: new Date(Date.parse('2026-11-19T17:30:00.000Z') + week * 7 * 86_400_000),
+      endsAt: new Date(Date.parse('2026-11-19T18:30:00.000Z') + week * 7 * 86_400_000),
+    }));
+    const { options } = await services().counterOptions(
+      { userId: STUDENT },
+      { sessionId: SESSION },
+      log,
+    );
+    expect(options.map(({ slotId }) => slotId)).not.toContain(RIYADH_SLOT);
+    expect(programmeAsked.length).toBeLessThan(10);
   });
 
   it('per active slot of the session’s length, its first free occurrence at or after max(now + A + L, C), by start, in each slot’s zone', async () => {

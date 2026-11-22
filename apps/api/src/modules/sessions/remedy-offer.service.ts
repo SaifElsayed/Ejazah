@@ -251,7 +251,9 @@ export function createRemedyOffer({
    * The first free week of the enrollment's slot from the latest of its time, at or after `bound`;
    * null once the snapshot's count of weeks the slot is taken has been passed (the decision under
    * T028, amended 2026-11-11: a guard against bugs only, the slot being kept until the package is
-   * completed; weeks other sessions, reservations or holds block are stepped over, uncounted).
+   * completed; weeks other sessions, reservations or holds block are stepped over, uncounted). A
+   * week over the student's other programme's weekly time counts as a taken one: it recurs on every
+   * date too (006:T005, N-12; PR #156 r1 Major 2).
    */
   async function proposalOf(
     tx: Transaction,
@@ -296,18 +298,14 @@ export function createRemedyOffer({
         // 006:T005 (N-12): the student's other active programmes' weekly times.
         enrollments.programmeTimesOf(tx, [session.studentUserId], window, session.enrollmentId),
       ]);
-      // Only a week the slot is taken counts toward the bound: sessions, reservations and holds are
-      // finite, a slot taken on every date is not (the owner's amendment of 2026-11-11 under T028).
-      if (taken) {
+      // Only a week the slot is taken, or a programme's weekly time covers, counts toward the bound:
+      // sessions, reservations and holds are finite, a slot taken on every date and a programme's
+      // weekly time are not (the owner's amendment of 2026-11-11 under T028; PR #156 r1 Major 2).
+      if (taken || overlapsAny(time, programme)) {
         weeks += 1;
         continue;
       }
-      if (
-        overlapsAny(time, own) ||
-        overlapsAny(time, reserved) ||
-        overlapsAny(time, held) ||
-        overlapsAny(time, programme)
-      ) {
+      if (overlapsAny(time, own) || overlapsAny(time, reserved) || overlapsAny(time, held)) {
         continue;
       }
       return date;

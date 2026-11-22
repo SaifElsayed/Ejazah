@@ -836,6 +836,78 @@ describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-
     }
   });
 
+  // PR #156 r1 Major 1: the awaited month comes from the months processed, not their count, so a
+  // duplicate already processed never moves the next month (PROBE-P1).
+  it('generates month 2 after month 1 was processed twice (the second a duplicate)', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 2,
+        enrollment: offered(),
+        processed: [
+          { kind: 'instalment', instalmentMonth: 1 },
+          { kind: 'instalment', instalmentMonth: 1 },
+        ],
+        sessions: monthOne,
+      }),
+    );
+    expect(recorded.calls).toEqual([
+      ...PREAMBLE,
+      'generate 4 from 6 months 2,2,2,2 after 2026-12-03T08:00:00.000Z lead 0',
+      'mark confirmed',
+    ]);
+  });
+
+  it('generates month 3 after month 1 twice, then month 2 twice; a third month 2 is a duplicate', async () => {
+    const processed = [
+      { kind: 'instalment', instalmentMonth: 1 },
+      { kind: 'instalment', instalmentMonth: 1 },
+      { kind: 'instalment', instalmentMonth: 2 },
+      { kind: 'instalment', instalmentMonth: 2 },
+    ] as const;
+    const sessions = [{ sequenceNumber: 9, endsAt: new Date('2026-10-01T08:00:00Z') }];
+    const third = await run(
+      paid({ kind: 'instalment', instalmentMonth: 3, enrollment: offered(), processed, sessions }),
+    );
+    expect(third.calls).toContain(
+      'generate 2 from 10 months 3,3 after 2026-11-03T08:00:00.000Z lead 24',
+    );
+    const again = await run(
+      paid({ kind: 'instalment', instalmentMonth: 2, enrollment: offered(), processed, sessions }),
+    );
+    expect(again.calls).toEqual([...PREAMBLE, 'case duplicate_payment', 'mark confirmed']);
+  });
+
+  it('generates month 2 after month 1 and a rest_in_full that was itself a duplicate', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 2,
+        enrollment: offered(),
+        processed: [
+          { kind: 'instalment', instalmentMonth: 1 },
+          { kind: 'rest_in_full', instalmentMonth: null },
+        ],
+        sessions: monthOne,
+      }),
+    );
+    expect(recorded.calls).toContain(
+      'generate 4 from 6 months 2,2,2,2 after 2026-12-03T08:00:00.000Z lead 0',
+    );
+  });
+
+  it('treats a rest_in_full after month 1 as duplicate_payment', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'rest_in_full',
+        enrollment: offered(),
+        processed: [{ kind: 'instalment', instalmentMonth: 1 }],
+        sessions: monthOne,
+      }),
+    );
+    expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment', 'mark confirmed']);
+  });
+
   it('treats a month order on a programme not awaiting a payment as duplicate_payment', async () => {
     for (const programmeState of ['awaiting_offer', 'closed', null] as const) {
       const recorded = await run(

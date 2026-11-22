@@ -292,6 +292,32 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     expect(enrollment.status).toBe('confirmed');
   });
 
+  // PR #156 r1 Major 1 (PROBE-P4): a duplicate the step processed never moves the awaited month.
+  it('generates month 2 after month 1 was paid again and processed as a duplicate', async () => {
+    const { enrollmentId } = await activeProgramme();
+    await confirm(await order(enrollmentId, 'instalment', 1, false));
+    await confirm(await order(enrollmentId, 'instalment', 2, false));
+    expect((await sessionsOf(enrollmentId)).slice(5)).toEqual(MONTH_TWO);
+    expect((await casesOf(enrollmentId)).map(({ reason }) => reason)).toEqual([
+      'duplicate_payment',
+    ]);
+  });
+
+  it('walks the processed months in the order they were processed, not by their ids', async () => {
+    const { enrollmentId } = await activeProgramme();
+    // Month 2, processed after month 1 (10-20) but with an id below month 1's.
+    const lowId = `00000000-${randomUUID().slice(9)}`;
+    await database.$executeRaw`
+      INSERT INTO payments (id, enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at, kind, instalment_month, confirmed_at)
+      VALUES (${lowId}::uuid, ${enrollmentId}::uuid, 'fake',
+              ${`probe-order-${randomUUID()}`}, 140000, 'EGP', 'paid'::payment_status, ${LATER},
+              now(), 'instalment'::order_kind, 2, ${new Date('2026-10-27T07:00:00Z')}::timestamptz)`;
+    await confirm(await order(enrollmentId, 'instalment', 3, false));
+    expect((await sessionsOf(enrollmentId)).slice(5).map(([, , month]) => month)).toEqual([3, 3]);
+    expect(await casesOf(enrollmentId)).toEqual([]);
+  });
+
   it('waits on the programme’s row, locked after the holds and before the enrollment', async () => {
     const { enrollmentId } = await activeProgramme();
     const paymentId = await order(enrollmentId, 'instalment', 2, false);
