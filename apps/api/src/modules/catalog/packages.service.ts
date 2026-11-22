@@ -26,6 +26,16 @@
 //   such teachers than the setting `price_average_min_teachers` (seed 3, read at each request;
 //   Q-T113-k) answer nothing, so no single teacher's price is exposed; a setting outside 2 to 100
 //   refuses the read. It decides nothing and takes no lock.
+// - 006:T004 (FR-704, FR-704a; R-503; Q-B2 settled, DEC-110; Q-5 (a)): a programme package takes
+//   its three prices and no count, length or total (the shape check, `VALIDATION_FAILED` on a
+//   field of the other shape). While `programme_enabled` is on, a new ijazah-track package, or a
+//   track turned to `ijazah_track` (with its prices, the package then a programme one), is a
+//   programme package only: today's shape answers CONFLICT `programme_switch_on`; while it is off,
+//   no programme package is made (`programme_disabled`) and ijazah-track packages are made as
+//   today. A programme package is created or made active only while the assessment's price is
+//   above 0 (`assessment_fee_unset`; a draft allowed). A recitation package reads no setting. On
+//   the ijazah track the average counts a programme package by its price of the asked length.
+//   These settings are read after the account's lock; no lock of their own is claimed.
 //
 // THE LOCKS (T005's rules, the owner's decisions of 2026-11-01). Lock, then read:
 // - `create` inserts a row referencing the teacher's `users` row, so it locks the account first
@@ -208,7 +218,7 @@ export interface PackagesServiceDependencies {
 const NONE: PackageEnrollmentCounts = { total: 0, active: 0 };
 
 /** 006:T004: a programme package's three prices as the contract carries them, plain piasters. */
-function plainPrices(prices: ProgrammePriceRow): ProgrammePrices {
+export function plainPrices(prices: ProgrammePriceRow): ProgrammePrices {
   return {
     m30_piasters: toPlainNumber(prices.m30_piasters),
     m45_piasters: toPlainNumber(prices.m45_piasters),
@@ -304,6 +314,40 @@ function changeOf(input: PackagesUpdateInput): PackageChange {
   };
 }
 
+/** The fields of today's shape a change may name (006:T004). */
+const FIXED_FIELDS = ['sessionCount', 'sessionDurationMinutes', 'price_piasters'] as const;
+
+/**
+ * 006:T004 (R-503; data-model.md «packages», ERD section 15 rule 73): the input's change checked
+ * against the package's shape. A programme package takes its prices and its state, never a count, a
+ * length, a total or another track. A package with a count takes three prices only with its track
+ * turned to `ijazah_track` in the same edit, and none of today's three beside them: it then becomes a
+ * programme package (`isProgramme`), today's three NULL.
+ */
+function shapedChangeOf(current: PackageRow, input: PackagesUpdateInput): PackageChange {
+  const change = changeOf(input);
+  const fixedField = FIXED_FIELDS.find((field) => input[field] !== undefined);
+  if (current.isProgramme) {
+    if (fixedField !== undefined) return shapeRefused(fixedField);
+    if (input.track !== undefined && input.track !== 'ijazah_track') return shapeRefused('track');
+    return change;
+  }
+  if (input.prices === undefined) return change;
+  if (input.track !== 'ijazah_track' || current.track === 'ijazah_track') {
+    return shapeRefused('prices');
+  }
+  if (fixedField !== undefined) return shapeRefused(fixedField);
+  return { ...change, isProgramme: true };
+}
+
+/** 006:T004: a refusal by the programme's switch or the assessment's price, a 409 with its code. */
+function programmeRefused(
+  path: string,
+  code: ProgrammeStartRefusal | 'programme_switch_on',
+): never {
+  throw new DomainError('CONFLICT', undefined, { details: [{ path, code }] });
+}
+
 /**
  * 003:T113 (DEC-88): a pool package's price per session; 006:T004 (DEC-88 as amended, FR-704a): a
  * programme package's price for the length, already per session.
@@ -364,11 +408,13 @@ export class PackagesService {
         if (!(await this.#store.holdsSubject(tx, teacherUserId, terms.subjectId))) {
           throw new DomainError('SUBJECT_NOT_APPROVED');
         }
+        const shaped = termsOfInput(terms);
+        await this.#refuseNewByProgramme(shaped, terms.isActive);
         const row = await this.#store.insert(tx, {
           teacherUserId,
           subjectId: terms.subjectId,
           isActive: terms.isActive,
-          ...termsOfInput(terms),
+          ...shaped,
         });
         return answerOf(row, NONE);
       },
@@ -381,16 +427,15 @@ export class PackagesService {
       await this.#store.lockAccount(tx, teacherUserId);
       const current = await this.#store.packageOf(tx, teacherUserId, input.packageId);
       if (current === null) throw new DomainError('NOT_FOUND');
-      const change = changeOf(input);
-      // 006:T002 (DEC-110): read after the account's lock, which the switch's turn-on takes too.
-      if (
-        reactivatesPreProgrammeIjazah(current, change) &&
-        (await this.#settings.read(PROGRAMME_ENABLED_SETTING, programmeEnabled)) === PROGRAMME_ON
-      ) {
-        throw new DomainError('CONFLICT', undefined, {
-          details: [{ path: 'isActive', code: 'programme_switch_on' }],
-        });
+      const change = shapedChangeOf(current, input);
+      // 006:T002 (DEC-110): read after the account's lock, which the switch's turn-on takes too;
+      // 006:T004 reads it once for its own rules beside.
+      let switchRead: Promise<boolean> | undefined;
+      const switchOn = (): Promise<boolean> => (switchRead ??= this.#switchOn());
+      if (reactivatesPreProgrammeIjazah(current, change) && (await switchOn())) {
+        programmeRefused('isActive', 'programme_switch_on');
       }
+      await this.#refuseChangeByProgramme(current, change, switchOn);
       const newTerms =
         (change.track !== undefined && change.track !== current.track) ||
         (change.sessionDurationMinutes !== undefined &&
@@ -409,6 +454,65 @@ export class PackagesService {
       const counts = await this.#use.packageEnrollmentCounts(tx, [current.id]);
       return answerOf(changed, counts.get(current.id) ?? NONE);
     });
+  }
+
+  /** 006:T004: whether `programme_enabled` is on, read at the request. */
+  async #switchOn(): Promise<boolean> {
+    return (
+      (await this.#settings.read(PROGRAMME_ENABLED_SETTING, programmeEnabled)) === PROGRAMME_ON
+    );
+  }
+
+  /** 006:T004 (Q-5 (a)): whether the assessment's price is set, above 0. */
+  async #feeSet(): Promise<boolean> {
+    return (await this.#settings.read(ASSESSMENT_PRICE_SETTING, assessmentPricePiasters)) > 0;
+  }
+
+  /**
+   * 006:T004 (Q-B2 settled, DEC-110; Q-5 (a)): a new ijazah-track package under the switch. On, it is
+   * a programme package only (`programme_switch_on` for today's shape); off, a programme package is
+   * refused (`programme_disabled`). An active programme package needs the assessment's price set
+   * (`assessment_fee_unset`); a draft does not. A recitation package reads nothing.
+   */
+  async #refuseNewByProgramme(
+    terms: FixedTerms | ProgrammeTerms,
+    isActive: boolean,
+  ): Promise<void> {
+    if (terms.track !== 'ijazah_track') return;
+    const on = await this.#switchOn();
+    if (!terms.isProgramme) {
+      if (on) programmeRefused('track', 'programme_switch_on');
+      return;
+    }
+    if (!on) programmeRefused('prices', 'programme_disabled');
+    if (isActive && !(await this.#feeSet())) programmeRefused('isActive', 'assessment_fee_unset');
+  }
+
+  /**
+   * 006:T004 (Q-B2 settled, DEC-110; Q-5 (a)): an edit under the switch. A track turned to
+   * `ijazah_track` gives a programme package only while the switch is on (`programme_switch_on`
+   * without prices) and none while it is off (`programme_disabled` with them). A programme package
+   * that becomes active, by its state or by the turn, needs the assessment's price set
+   * (`assessment_fee_unset`); one already active, or kept a draft, does not.
+   */
+  async #refuseChangeByProgramme(
+    current: PackageRow,
+    change: PackageChange,
+    switchOn: () => Promise<boolean>,
+  ): Promise<void> {
+    const turned = change.track === 'ijazah_track' && current.track !== 'ijazah_track';
+    if (turned && change.isProgramme === undefined && (await switchOn())) {
+      programmeRefused('track', 'programme_switch_on');
+    }
+    if (change.isProgramme === true && !(await switchOn())) {
+      programmeRefused('prices', 'programme_disabled');
+    }
+    const programme = current.isProgramme || change.isProgramme === true;
+    const activated =
+      (change.isActive ?? current.isActive) && !(current.isProgramme && current.isActive);
+    if (programme && activated && !(await this.#feeSet())) {
+      programmeRefused('isActive', 'assessment_fee_unset');
+    }
   }
 
   /**

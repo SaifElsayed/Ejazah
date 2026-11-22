@@ -36,12 +36,20 @@ const KEY = 'spec-packages-key-0001';
 // The session's gender, the teacher's own.
 const REQUESTER = 'female' as RequesterGender;
 
-/** 003:T113: the settings the average reads, `price_average_min_teachers` at the seed's 3 unless told. */
+/**
+ * 003:T113: the settings the average reads, `price_average_min_teachers` at the seed's 3 unless
+ * told; 006:T004: the programme's switch off and the assessment's price unset, as seeded.
+ */
 function settingsWith(minTeachers: unknown = 3): SettingsReader {
+  const seeded: Record<string, unknown> = {
+    price_average_min_teachers: minTeachers,
+    programme_enabled: 0,
+    assessment_price_piasters: 0,
+  };
   return {
     read: async (key, schema) => {
-      if (key !== 'price_average_min_teachers') throw new Error(`no setting ${key} in this spec`);
-      return schema.parse(minTeachers);
+      if (!(key in seeded)) throw new Error(`no setting ${key} in this spec`);
+      return schema.parse(seeded[key]);
     },
   };
 }
@@ -606,8 +614,9 @@ describe('update while the programme’s switch is on (006:T002, DEC-110)', () =
   it('reactivates a programme package while the switch is on', async () => {
     const memory = new MemoryPackages();
     const id = memory.plant(TEACHER, { ...PROGRAMME, isActive: false });
+    // 006:T004 (Q-5 (a)): its activation reads the assessment's price too, set here.
     await expect(
-      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+      serviceOver(memory, programmeSettings({ enabled: 1, fee: 50_000 })).service.update(TEACHER, {
         packageId: id,
         isActive: true,
       }),
@@ -792,5 +801,279 @@ describe('programmeAvailabilityOf (006:T004, Q-5 (a)): whether a programme packa
     await expect(
       programmeAvailabilityOf(programmeSettings({ enabled: 1, fee: 0 })),
     ).resolves.toStrictEqual({ open: false, refusal: 'assessment_fee_unset' });
+  });
+});
+
+/** The refusal's code and details, or what else the call ended with. */
+async function refusedWith(call: Promise<unknown>): Promise<unknown> {
+  const thrown: unknown = await call.then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  return thrown instanceof DomainError ? { code: thrown.code, details: thrown.details } : thrown;
+}
+
+const conflict = (path: string, code: string) => ({ code: 'CONFLICT', details: [{ path, code }] });
+const shape = (path: string) => ({
+  code: 'VALIDATION_FAILED',
+  details: [{ path, code: 'custom' }],
+});
+
+const PROGRAMME_CREATE = {
+  subjectId: SUBJECT.id,
+  track: 'ijazah_track',
+  prices: PLAIN_PRICES,
+  isActive: true,
+  idempotencyKey: KEY,
+} as const;
+
+// 006:T004 (Q-B2 settled, SRS DEC-110; Q-5 (a)): while the switch is on, a new ijazah-track package
+// is a programme package only; while it is off, none is made and ijazah-track packages are made as
+// today. A programme package is created or activated only while the assessment's price is above 0;
+// a draft is allowed.
+describe('create under the programme’s switch (006:T004)', () => {
+  it('refuses an active programme package while the assessment’s price is 0, assessment_fee_unset, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 0 }));
+    expect(await refusedWith(service.create(TEACHER, PROGRAMME_CREATE))).toEqual(
+      conflict('isActive', 'assessment_fee_unset'),
+    );
+    expect(memory.all()).toEqual([]);
+  });
+
+  it('drafts a programme package while the assessment’s price is 0', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 0 }));
+    await expect(
+      service.create(TEACHER, { ...PROGRAMME_CREATE, isActive: false }),
+    ).resolves.toMatchObject({ isProgramme: true, isActive: false });
+  });
+
+  it('refuses a programme package while the switch is off, programme_disabled, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 0, fee: 50_000 }));
+    for (const isActive of [true, false]) {
+      expect(await refusedWith(service.create(TEACHER, { ...PROGRAMME_CREATE, isActive }))).toEqual(
+        conflict('prices', 'programme_disabled'),
+      );
+    }
+    expect(memory.all()).toEqual([]);
+  });
+
+  it('refuses an old-style ijazah-track package while the switch is on, programme_switch_on, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 50_000 }));
+    expect(await refusedWith(service.create(TEACHER, CREATE))).toEqual(
+      conflict('track', 'programme_switch_on'),
+    );
+    expect(memory.all()).toEqual([]);
+  });
+
+  it('makes an old-style ijazah-track package while the switch is off, as today', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 0, fee: 0 }));
+    await expect(service.create(TEACHER, CREATE)).resolves.toMatchObject({
+      track: 'ijazah_track',
+      sessionCount: 4,
+    });
+  });
+
+  it('reads the switch after the locks and the subject, and nothing for a recitation package', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const settings = programmeSettings({ enabled: 1, fee: 50_000 }, memory.log);
+    await serviceOver(memory, settings).service.create(TEACHER, PROGRAMME_CREATE);
+    expect(memory.log).toEqual([
+      `lockAccount:${TEACHER}`,
+      `lockApplication:${TEACHER}`,
+      'holdsSubject',
+      'read:programme_enabled',
+      'read:assessment_price_piasters',
+      'insert',
+    ]);
+    const log: string[] = [];
+    const recitation = new MemoryPackages();
+    recitation.grant(TEACHER, SUBJECT);
+    await serviceOver(recitation, programmeSettings({ enabled: 1, fee: 0 }, log)).service.create(
+      TEACHER,
+      { ...CREATE, track: 'recitation' },
+    );
+    expect(log).toEqual([]);
+  });
+});
+
+describe('update of a programme package and to one (006:T004)', () => {
+  const OPEN = { enabled: 1, fee: 50_000 } as const;
+  const NEW_PRICES = { m30_piasters: 21_000, m45_piasters: 29_000, m60_piasters: 36_000 };
+
+  it('changes a programme package’s three prices', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, PROGRAMME);
+    await expect(
+      serviceOver(memory, programmeSettings(OPEN)).service.update(TEACHER, {
+        packageId: id,
+        prices: NEW_PRICES,
+      }),
+    ).resolves.toMatchObject({ isProgramme: true, prices: NEW_PRICES });
+  });
+
+  it('refuses activating a programme package while the assessment’s price is 0, assessment_fee_unset, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, { ...PROGRAMME, isActive: false });
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 0 }));
+    expect(await refusedWith(service.update(TEACHER, { packageId: id, isActive: true }))).toEqual(
+      conflict('isActive', 'assessment_fee_unset'),
+    );
+    expect(memory.held(id).isActive).toBe(false);
+    expect(memory.log).not.toContain('change');
+  });
+
+  it('re-prices or deactivates an active programme package while the price is 0: no activation', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, PROGRAMME);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 0 }));
+    await expect(
+      service.update(TEACHER, { packageId: id, prices: NEW_PRICES, isActive: true }),
+    ).resolves.toMatchObject({ isActive: true, prices: NEW_PRICES });
+    await expect(
+      service.update(TEACHER, { packageId: id, isActive: false }),
+    ).resolves.toMatchObject({ isActive: false });
+  });
+
+  it('refuses a count, a length, a total or another track on a programme package, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, PROGRAMME);
+    const { service } = serviceOver(memory, programmeSettings(OPEN));
+    expect(await refusedWith(service.update(TEACHER, { packageId: id, sessionCount: 4 }))).toEqual(
+      shape('sessionCount'),
+    );
+    expect(
+      await refusedWith(service.update(TEACHER, { packageId: id, sessionDurationMinutes: 45 })),
+    ).toEqual(shape('sessionDurationMinutes'));
+    expect(
+      await refusedWith(service.update(TEACHER, { packageId: id, price_piasters: 90_000 })),
+    ).toEqual(shape('price_piasters'));
+    expect(
+      await refusedWith(service.update(TEACHER, { packageId: id, track: 'recitation' })),
+    ).toEqual(shape('track'));
+    expect(memory.log).not.toContain('change');
+  });
+
+  it('refuses three prices on a package with a count, its track unchanged, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track' });
+    const { service } = serviceOver(memory, programmeSettings(OPEN));
+    expect(
+      await refusedWith(service.update(TEACHER, { packageId: id, prices: NEW_PRICES })),
+    ).toEqual(shape('prices'));
+    expect(memory.log).not.toContain('change');
+  });
+
+  it('refuses turning a recitation package to ijazah-track without prices while the switch is on, programme_switch_on', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    const { service } = serviceOver(memory, programmeSettings(OPEN));
+    expect(
+      await refusedWith(service.update(TEACHER, { packageId: id, track: 'ijazah_track' })),
+    ).toEqual(conflict('track', 'programme_switch_on'));
+    expect(memory.held(id).track).toBe('recitation');
+  });
+
+  it('turns a recitation package to a programme package with its prices while the switch is on', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    const { service } = serviceOver(memory, programmeSettings(OPEN));
+    await expect(
+      service.update(TEACHER, { packageId: id, track: 'ijazah_track', prices: NEW_PRICES }),
+    ).resolves.toEqual({
+      id,
+      subject: SUBJECT,
+      track: 'ijazah_track',
+      isProgramme: true,
+      prices: NEW_PRICES,
+      isActive: true,
+      activeEnrollmentCount: 0,
+      frozen: false,
+    });
+    expect(memory.held(id)).not.toHaveProperty('sessionCount');
+  });
+
+  it('refuses that turn while the switch is off, programme_disabled, writing nothing', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 0, fee: 50_000 }));
+    expect(
+      await refusedWith(
+        service.update(TEACHER, { packageId: id, track: 'ijazah_track', prices: NEW_PRICES }),
+      ),
+    ).toEqual(conflict('prices', 'programme_disabled'));
+    expect(memory.held(id).isProgramme).toBe(false);
+  });
+
+  it('refuses that turn to an active programme package while the price is 0; a draft turns', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 0 }));
+    const turn = { packageId: id, track: 'ijazah_track', prices: NEW_PRICES } as const;
+    expect(await refusedWith(service.update(TEACHER, turn))).toEqual(
+      conflict('isActive', 'assessment_fee_unset'),
+    );
+    expect(memory.held(id).isProgramme).toBe(false);
+    await expect(service.update(TEACHER, { ...turn, isActive: false })).resolves.toMatchObject({
+      isProgramme: true,
+      isActive: false,
+    });
+  });
+
+  it('refuses that turn once the package has an enrollment, PACKAGE_FROZEN', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    memory.enrol(id, { total: 1, active: 1 });
+    const { service } = serviceOver(memory, programmeSettings(OPEN));
+    expect(
+      await codeOf(
+        service.update(TEACHER, { packageId: id, track: 'ijazah_track', prices: NEW_PRICES }),
+      ),
+    ).toBe('PACKAGE_FROZEN');
+    expect(memory.held(id).isProgramme).toBe(false);
+  });
+});
+
+// 006:T004 (SRS DEC-88 as amended, FR-704a): on the ijazah track the average is taken per length,
+// a programme package counted by its price of that length, beside the other packages of that length.
+describe('averagePrice over programme packages (006:T004)', () => {
+  it('counts each programme package by its price of the asked length, beside the packages of that length', async () => {
+    const memory = new MemoryPackages();
+    const peers = [
+      OTHER_TEACHER,
+      '0199d0a0-0000-7000-8000-0000000000d3',
+      '0199d0a0-0000-7000-8000-0000000000d4',
+    ];
+    for (const peer of peers) memory.publish(peer, REQUESTER);
+    memory.plant(peers[0] ?? '', PROGRAMME);
+    memory.plant(peers[1] ?? '', {
+      ...PROGRAMME,
+      prices: { ...PRICES, m45_piasters: piasters(30_001) },
+    });
+    // 90 000 over 3 at 45 minutes: 30 000 a session.
+    memory.plant(peers[2] ?? '', {
+      ...RECITATION,
+      track: 'ijazah_track',
+      sessionCount: 3,
+      price_piasters: piasters(90_000),
+    });
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 50_000 }));
+    // 28 000, 30 001 and 30 000: 88 001 over 3 is 29 333.67.
+    await expect(
+      service.averagePrice(TEACHER, REQUESTER, {
+        track: 'ijazah_track',
+        sessionDurationMinutes: 45,
+      }),
+    ).resolves.toEqual({ averagePerSession_piasters: 29_334 });
   });
 });

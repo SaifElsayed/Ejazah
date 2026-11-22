@@ -101,7 +101,7 @@ interface PriceColumns {
   readonly price60Piasters: bigint | null;
 }
 
-interface TermsColumns extends PriceColumns {
+export interface TermsColumns extends PriceColumns {
   readonly track: PackageTrack;
   readonly isProgramme: boolean;
   readonly sessionCount: number | null;
@@ -127,8 +127,11 @@ function pricesOf(columns: PriceColumns): ProgrammePriceRow {
   };
 }
 
-/** The package's terms by shape; a row of neither shape is refused, never answered (006:T004). */
-function termsOf(columns: TermsColumns): FixedTerms | ProgrammeTerms {
+/**
+ * The package's terms by shape; a row of neither shape is refused, never answered (006:T004).
+ * Discovery's reads of the same columns map them here too.
+ */
+export function packageTermsOf(columns: TermsColumns): FixedTerms | ProgrammeTerms {
   if (columns.isProgramme) {
     if (columns.track !== 'ijazah_track') return shapeBroken();
     return { track: columns.track, isProgramme: true, prices: pricesOf(columns) };
@@ -169,7 +172,7 @@ function rowOf({
   readonly subject: SubjectSummary;
   readonly isActive: boolean;
 }): PackageRow {
-  return { id, subject, isActive, ...termsOf(columns) };
+  return { id, subject, isActive, ...packageTermsOf(columns) };
 }
 
 /** Whether the subject is one of the teacher's `teacher_subjects` (FR-311, FR-PROFILE-11). */

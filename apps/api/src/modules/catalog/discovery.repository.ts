@@ -9,21 +9,24 @@
 // nothing here returns a teacher's data, and every id is filtered by identity's predicate before
 // anything of it is answered (R-GENDER-5). The profile's packages (T027) are read only for a teacher
 // the predicate has already answered.
-import {
-  type PackageTrack,
-  type SessionLengthMinutes,
-  sessionLengthMinutes,
-  type SubjectSummary,
-} from '@ijazah/contracts';
-import { piasters, type Piasters } from '@ijazah/money';
+//
+// 006:T004 (R-503, R-516; Q-5 (a)): every package read here says whether it is a programme package
+// and reads its terms by shape (`packageTermsOf`); whether a programme package is shown is the
+// service's to decide (the switch and the assessment's price), so nothing here reads a setting.
+import type { PackageTrack, SubjectSummary } from '@ijazah/contracts';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { type FixedTerms, packageTermsOf, type ProgrammeTerms } from './packages.repository.js';
 
-/** One teacher's active packages on one subject and track, once however many there are. */
+/**
+ * One teacher's active packages on one subject and track, once however many there are; 006:T004:
+ * apart by whether they are programme packages.
+ */
 export interface Offering {
   readonly teacherUserId: string;
   readonly subjectId: string;
   readonly track: PackageTrack;
+  readonly isProgramme: boolean;
 }
 
 /** An approved credential's riwaya, as transcribed (ADR 0021 D1). */
@@ -39,13 +42,11 @@ export interface CardSubject {
   readonly subject: SubjectSummary;
 }
 
-/** One of a card's active packages, what its track badge and its price per session need. */
-export interface CardPackage {
-  readonly teacherUserId: string;
-  readonly track: PackageTrack;
-  readonly sessionCount: number;
-  readonly price_piasters: Piasters;
-}
+/**
+ * One of a card's active packages, what its track badge and its price per session need; 006:T004:
+ * by shape, a programme package's three prices.
+ */
+export type CardPackage = { readonly teacherUserId: string } & (FixedTerms | ProgrammeTerms);
 
 /** Each teacher, subject and track of an active package, of `subjectId` only when named. */
 export async function activeOfferings(
@@ -53,13 +54,14 @@ export async function activeOfferings(
   subjectId?: string,
 ): Promise<Offering[]> {
   const groups = await tx.package.groupBy({
-    by: ['teacherUserId', 'subjectId', 'track'],
+    by: ['teacherUserId', 'subjectId', 'track', 'isProgramme'],
     where: { isActive: true, ...(subjectId === undefined ? {} : { subjectId }) },
   });
-  return groups.map(({ teacherUserId, subjectId: subject, track }) => ({
+  return groups.map(({ teacherUserId, subjectId: subject, track, isProgramme }) => ({
     teacherUserId,
     subjectId: subject,
     track,
+    isProgramme,
   }));
 }
 
@@ -98,7 +100,7 @@ export async function cardSubjects(
   return rows.map(({ teacherUserId, subject }) => ({ teacherUserId, subject }));
 }
 
-/** The active packages of each of `teacherIds`: track, length and price. */
+/** The active packages of each of `teacherIds`: track and terms, by shape (006:T004). */
 export async function cardPackages(
   tx: Pick<Transaction, 'package'>,
   teacherIds: readonly string[],
@@ -106,25 +108,31 @@ export async function cardPackages(
   if (teacherIds.length === 0) return [];
   const rows = await tx.package.findMany({
     where: { teacherUserId: { in: [...teacherIds] }, isActive: true },
-    select: { teacherUserId: true, track: true, sessionCount: true, pricePiasters: true },
+    select: {
+      teacherUserId: true,
+      track: true,
+      isProgramme: true,
+      sessionCount: true,
+      sessionDurationMinutes: true,
+      pricePiasters: true,
+      price30Piasters: true,
+      price45Piasters: true,
+      price60Piasters: true,
+    },
   });
-  return rows.map(({ teacherUserId, track, sessionCount, pricePiasters }) => ({
+  return rows.map(({ teacherUserId, ...columns }) => ({
     teacherUserId,
-    track,
-    sessionCount,
-    price_piasters: piasters(Number(pricePiasters)),
+    ...packageTermsOf(columns),
   }));
 }
 
-/** One of a profile's active packages (T027, FR-336): what the profile shows of it. */
-export interface ProfilePackage {
-  readonly id: string;
-  readonly subject: SubjectSummary;
-  readonly track: PackageTrack;
-  readonly sessionCount: number;
-  readonly sessionDurationMinutes: SessionLengthMinutes;
-  readonly price_piasters: Piasters;
-}
+/**
+ * One of a profile's active packages (T027, FR-336): what the profile shows of it; 006:T004: by
+ * shape, a programme package's three prices.
+ */
+export type ProfilePackage = { readonly id: string; readonly subject: SubjectSummary } & (
+  FixedTerms | ProgrammeTerms
+);
 
 /** The teacher's active packages, oldest first (the id is a UUID v7), as the teacher's own list. */
 export async function profilePackages(
@@ -139,17 +147,14 @@ export async function profilePackages(
       // Subjects are never deleted: the table has no `deleted_at`.
       subject: { select: { id: true, nameAr: true, nameEn: true } },
       track: true,
+      isProgramme: true,
       sessionCount: true,
       sessionDurationMinutes: true,
       pricePiasters: true,
+      price30Piasters: true,
+      price45Piasters: true,
+      price60Piasters: true,
     },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    subject: row.subject,
-    track: row.track,
-    sessionCount: row.sessionCount,
-    sessionDurationMinutes: sessionLengthMinutes.parse(row.sessionDurationMinutes),
-    price_piasters: piasters(Number(row.pricePiasters)),
-  }));
+  return rows.map(({ id, subject, ...columns }) => ({ id, subject, ...packageTermsOf(columns) }));
 }

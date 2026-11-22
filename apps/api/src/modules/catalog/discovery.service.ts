@@ -38,6 +38,13 @@
 // `teacher_subjects` (an approved credential's), and its active packages, each with the price per
 // session `packages/money` computes (FR-337). No riwaya, tariq or chain is read (Phase 4,
 // FR-ISNAD-5); the remedy line is the phone's fixed copy per track (ADR 0018 D2, T024).
+//
+// THE PROGRAMME PACKAGE (006:T004; FR-704, R-516; Q-5 (a)). A programme package is shown only while
+// the programme is open (`programmeAvailabilityOf`: the switch on and the assessment's price above
+// 0, read at each request): on the profile with its three session prices, their lowest and highest
+// and the assessment's price; on a card through its lowest price; and as an offering, so a teacher
+// whose only active package is a programme one is no candidate, no tab counts it and the riwaya
+// filter takes none of its values while the programme is closed.
 import {
   type DiscoveryBrowseInput,
   type DiscoveryBrowseOutput,
@@ -47,6 +54,7 @@ import {
   type DiscoveryTab,
   type DiscoveryTeacherInput,
   type DiscoveryTeacherOutput,
+  type DiscoveryTeacherPackage,
   type PackageTrack,
   packageTrack,
   type SubjectSummary,
@@ -69,6 +77,12 @@ import type {
   ProfilePackage,
   RiwayaRow,
 } from './discovery.repository.js';
+import type { FixedTerms, ProgrammeTerms } from './packages.repository.js';
+import {
+  plainPrices,
+  type ProgrammeAvailability,
+  programmeAvailabilityOf,
+} from './packages.service.js';
 import type { SubjectRow } from './subjects.repository.js';
 
 export const DISCOVERY_PAGE_SIZE_SETTING = 'discovery_page_size';
@@ -158,6 +172,65 @@ function groupBy<T>(items: readonly T[], key: (item: T) => string): Map<string, 
   return groups;
 }
 
+/** 006:T004 (Q-5 (a)): whether the package is shown: a programme package only while it is open. */
+function isShown(
+  pkg: { readonly isProgramme: boolean },
+  availability: ProgrammeAvailability,
+): boolean {
+  return !pkg.isProgramme || availability.open;
+}
+
+/**
+ * A package's prices per session (FR-337): today's price over its count; 006:T004, a programme
+ * package's three session prices.
+ */
+function sessionPricesOf(pkg: FixedTerms | ProgrammeTerms): [Piasters, ...Piasters[]] {
+  if (!pkg.isProgramme) return [perSession(pkg.price_piasters, pkg.sessionCount)];
+  return [pkg.prices.m30_piasters, pkg.prices.m45_piasters, pkg.prices.m60_piasters];
+}
+
+/** The highest of the amounts: compared, never computed (006:T004, `priceRange`). */
+function highestOf(amounts_piasters: readonly [Piasters, ...Piasters[]]): Piasters {
+  const [first_piasters, ...rest_piasters] = amounts_piasters;
+  return rest_piasters.reduce((high, next) => (next > high ? next : high), first_piasters);
+}
+
+/** One profile package as the contract answers it; a programme package only while open (006:T004). */
+function profileAnswerOf(
+  pkg: ProfilePackage,
+  availability: ProgrammeAvailability,
+): DiscoveryTeacherPackage[] {
+  if (!pkg.isProgramme) {
+    return [
+      {
+        packageId: pkg.id,
+        subject: pkg.subject,
+        track: pkg.track,
+        sessionCount: pkg.sessionCount,
+        sessionDurationMinutes: pkg.sessionDurationMinutes,
+        price_piasters: toPlainNumber(pkg.price_piasters),
+        perSession_piasters: toPlainNumber(perSession(pkg.price_piasters, pkg.sessionCount)),
+      },
+    ];
+  }
+  if (!availability.open) return [];
+  const prices = sessionPricesOf(pkg);
+  return [
+    {
+      packageId: pkg.id,
+      subject: pkg.subject,
+      track: pkg.track,
+      isProgramme: true,
+      prices: plainPrices(pkg.prices),
+      priceRange: {
+        lowest_piasters: toPlainNumber(lowest(prices)),
+        highest_piasters: toPlainNumber(highestOf(prices)),
+      },
+      assessmentPrice_piasters: toPlainNumber(availability.assessmentPrice_piasters),
+    },
+  ];
+}
+
 /** The teachers with an active package of the tab's subject and the track, both in one package. */
 function candidatesOf(
   offerings: readonly Offering[],
@@ -192,7 +265,10 @@ export class DiscoveryService implements DiscoveryCatalog {
   ): Promise<DiscoveryBrowseOutput> {
     const after = input.cursor === undefined ? undefined : readCursor(input.cursor);
     const size = await this.#settings.read(DISCOVERY_PAGE_SIZE_SETTING, positiveWhole);
-    const offerings = await this.#store.offerings(tx);
+    const availability = await programmeAvailabilityOf(this.#settings);
+    const offerings = (await this.#store.offerings(tx)).filter((offering) =>
+      isShown(offering, availability),
+    );
     let candidates = candidatesOf(offerings, input);
     if (input.riwaya !== undefined) {
       candidates = await this.#withRiwaya(tx, candidates, input.subjectId, input.riwaya);
@@ -213,7 +289,7 @@ export class DiscoveryService implements DiscoveryCatalog {
     });
     const page = rows.slice(0, size);
     const [cards, tabs] = await Promise.all([
-      this.#cards(tx, page, input.query),
+      this.#cards(tx, page, input.query, availability),
       after === undefined ? this.#tabs(tx, requester, offerings) : undefined,
     ]);
     const last = page.at(-1);
@@ -229,7 +305,11 @@ export class DiscoveryService implements DiscoveryCatalog {
     requester: RequesterGender,
     { subjectId }: DiscoveryFiltersInput,
   ): Promise<DiscoveryFiltersOutput> {
-    const offered = candidatesOf(await this.#store.offerings(tx, subjectId), { subjectId });
+    const availability = await programmeAvailabilityOf(this.#settings);
+    const offerings = (await this.#store.offerings(tx, subjectId)).filter((offering) =>
+      isShown(offering, availability),
+    );
+    const offered = candidatesOf(offerings, { subjectId });
     const rows = (await this.#store.riwayas(tx, subjectId)).filter(({ teacherUserId }) =>
       offered.has(teacherUserId),
     );
@@ -264,10 +344,11 @@ export class DiscoveryService implements DiscoveryCatalog {
       teacherIds: [teacherId],
     });
     if (profile === undefined) throw new DomainError('NOT_FOUND');
-    const [subjects, packages, photoUrl] = await Promise.all([
+    const [subjects, packages, photoUrl, availability] = await Promise.all([
       this.#store.subjectsOf(tx, [teacherId]),
       this.#store.profilePackagesOf(tx, teacherId),
       this.#photoUrl(profile.photoKey),
+      programmeAvailabilityOf(this.#settings),
     ]);
     return {
       teacherId: profile.id,
@@ -279,15 +360,7 @@ export class DiscoveryService implements DiscoveryCatalog {
       subjects: subjects.map(({ subject }) => subject),
       ...(profile.averageRating === null ? {} : { rating: Number(profile.averageRating) }),
       reviewCount: profile.reviewCount,
-      packages: packages.map(({ id, price_piasters, ...offered }) => ({
-        packageId: id,
-        subject: offered.subject,
-        track: offered.track,
-        sessionCount: offered.sessionCount,
-        sessionDurationMinutes: offered.sessionDurationMinutes,
-        price_piasters: toPlainNumber(price_piasters),
-        perSession_piasters: toPlainNumber(perSession(price_piasters, offered.sessionCount)),
-      })),
+      packages: packages.flatMap((pkg) => profileAnswerOf(pkg, availability)),
     };
   }
 
@@ -390,6 +463,7 @@ export class DiscoveryService implements DiscoveryCatalog {
     tx: Transaction,
     page: readonly VisibleTeacher[],
     query: string | undefined,
+    availability: ProgrammeAvailability,
   ): Promise<DiscoveryCard[]> {
     if (page.length === 0) return [];
     const ids = page.map(({ id }) => id);
@@ -405,12 +479,13 @@ export class DiscoveryService implements DiscoveryCatalog {
           ),
     ]);
     const subjectsBy = groupBy(subjects, ({ teacherUserId }) => teacherUserId);
-    const packagesBy = groupBy(packages, ({ teacherUserId }) => teacherUserId);
+    const packagesBy = groupBy(
+      packages.filter((pkg) => isShown(pkg, availability)),
+      ({ teacherUserId }) => teacherUserId,
+    );
     return page.flatMap((teacher, index): DiscoveryCard[] => {
       const offered = packagesBy.get(teacher.id) ?? [];
-      const [first_piasters, ...rest_piasters] = offered.map(({ price_piasters, sessionCount }) =>
-        perSession(price_piasters, sessionCount),
-      );
+      const [first_piasters, ...rest_piasters] = offered.flatMap(sessionPricesOf);
       // Deactivated since the candidates were read: no longer a candidate, so no card.
       if (first_piasters === undefined) return [];
       const lowest_piasters: Piasters = lowest([first_piasters, ...rest_piasters]);

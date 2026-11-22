@@ -28,10 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
-import {
-  createCatalogServices,
-  packagesRouter,
-} from '../../apps/api/src/modules/catalog/index.js';
+import { createCatalogServices, packagesRouter } from '../../apps/api/src/modules/catalog/index.js';
 import {
   closeDatabase,
   type Database,
@@ -305,7 +302,7 @@ describe.each(DIRECTIONS)(
       });
     });
 
-    it("leaves out a teacher published to the other gender only (Q-T113 (a))", async () => {
+    it('leaves out a teacher published to the other gender only (Q-T113 (a))', async () => {
       await inRollback(async (tx) => {
         const viewer = await twoCounted(tx, gender);
         await packageOf(tx, await teacher(tx, otherGender(gender)), THIRD);
@@ -329,7 +326,8 @@ describe.each(DIRECTIONS)(
         await inRollback(async (tx) => {
           const viewer = await twoCounted(tx, gender);
           await packageOf(tx, await teacher(tx, gender), THIRD);
-          const extra = named === 'gender' ? { gender: otherGender(gender) } : { teacherId: viewer };
+          const extra =
+            named === 'gender' ? { gender: otherGender(gender) } : { teacherId: viewer };
 
           const thrown: unknown = await callerAs(tx, viewer, gender)
             .teacher.packages.averagePrice({ ...ASKED, ...extra } as typeof ASKED)
@@ -353,6 +351,93 @@ describe.each(DIRECTIONS)(
         await expect(
           callerAs(tx, viewer, gender, standing).teacher.packages.averagePrice(ASKED),
         ).rejects.toEqual(refused(code));
+      });
+    });
+  },
+);
+
+// 006:T004 (SRS DEC-88 as amended, FR-704a): on the ijazah track the average is taken per length,
+// a programme package counted by its price of the asked length, under the same predicate in both
+// directions. Two counted programme teachers at 30 000 and 20 000 for 45 minutes; a third counted
+// at 10 001 makes the average 20 000; each exclusion of the third answers nothing.
+const ASKED_IJAZAH = { track: 'ijazah_track', sessionDurationMinutes: 45 } as const;
+
+/** A programme package of the teacher's: its price for 45 minutes, the other two around it. */
+async function programmeOf(
+  tx: Transaction,
+  teacherUserId: string,
+  price45: number,
+  isActive = true,
+): Promise<void> {
+  const { id: subjectId } = await tx.subject.create({
+    data: { nameAr: 'القرآن الكريم', nameEn: "Qur'an", isActive: true },
+    select: { id: true },
+  });
+  await tx.package.create({
+    data: {
+      teacherUserId,
+      subjectId,
+      track: 'ijazah_track',
+      isProgramme: true,
+      price30Piasters: BigInt(price45 + 1),
+      price45Piasters: BigInt(price45),
+      price60Piasters: BigInt(price45 + 2),
+      isActive,
+    },
+  });
+}
+
+async function twoCountedProgrammes(tx: Transaction, gender: Gender): Promise<string> {
+  const viewer = await teacher(tx, gender);
+  await programmeOf(tx, await teacher(tx, gender), 30_000);
+  await programmeOf(tx, await teacher(tx, gender), 20_000);
+  return viewer;
+}
+
+describe.each(DIRECTIONS)(
+  '006:T004, $name: the average per length over the other published teachers’ programme packages',
+  ({ gender }) => {
+    it('answers the average of their prices for the length with a third counted teacher', async () => {
+      await inRollback(async (tx) => {
+        const viewer = await twoCountedProgrammes(tx, gender);
+        await programmeOf(tx, await teacher(tx, gender), 10_001);
+
+        expect(
+          await callerAs(tx, viewer, gender).teacher.packages.averagePrice(ASKED_IJAZAH),
+        ).toEqual({ averagePerSession_piasters: 20_000 });
+      });
+    });
+
+    it('leaves out a programme package of a teacher published to the other gender only', async () => {
+      await inRollback(async (tx) => {
+        const viewer = await twoCountedProgrammes(tx, gender);
+        await programmeOf(tx, await teacher(tx, otherGender(gender)), 10_001);
+
+        expect(
+          await callerAs(tx, viewer, gender).teacher.packages.averagePrice(ASKED_IJAZAH),
+        ).toEqual({});
+      });
+    });
+
+    it('leaves out an unpublished teacher’s programme package, a paused one and the viewer’s own', async () => {
+      await inRollback(async (tx) => {
+        const viewer = await twoCountedProgrammes(tx, gender);
+        await programmeOf(tx, await teacher(tx, gender, { payoutVerified: false }), 10_001);
+        await programmeOf(tx, await teacher(tx, gender), 10_001, false);
+        await programmeOf(tx, viewer, 10_001);
+
+        expect(
+          await callerAs(tx, viewer, gender).teacher.packages.averagePrice(ASKED_IJAZAH),
+        ).toEqual({});
+      });
+    });
+
+    it('leaves the programme packages out of the recitation track’s average', async () => {
+      await inRollback(async (tx) => {
+        const viewer = await twoCounted(tx, gender);
+        await programmeOf(tx, await teacher(tx, gender), 10_001);
+
+        expect(await callerAs(tx, viewer, gender).teacher.packages.averagePrice(ASKED)).toEqual({});
       });
     });
   },

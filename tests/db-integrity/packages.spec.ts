@@ -86,6 +86,17 @@ let idempotency: IdempotencyService<Transaction>;
 /** Booking's port as `main.ts` binds it (T026), the release buffer at its default of 0 weeks. */
 const use = createCatalogUse({ settings: { read: async (_key, schema) => schema.parse(0) } });
 
+/**
+ * 006:T004 (rule d): the programme's switch off, as seeded, which an edit to the ijazah track reads;
+ * any other setting is refused, as before.
+ */
+const switchOffAsSeeded: SettingsReader = {
+  read: async (key, schema) =>
+    key === 'programme_enabled'
+      ? schema.parse(0)
+      : Promise.reject(new Error('no setting in this probe')),
+};
+
 beforeAll(async () => {
   [db, watcher] = await Promise.all([connectAsApplication(), connectAsApplication()]);
   database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
@@ -111,8 +122,8 @@ function service(): PackagesService {
     store: packagesStore,
     use,
     idempotency,
-    // 003:T113 (rule d): the probes never ask the average.
-    settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
+    // 003:T113 (rule d): the probes never ask the average; 006:T004 (rule d): the switch off.
+    settings: switchOffAsSeeded,
   });
 }
 
@@ -123,7 +134,7 @@ function serviceOn(tx: Transaction): PackagesService {
     store: packagesStore,
     use,
     idempotency: { run: (_request, effect) => effect(tx) },
-    settings: { read: async () => Promise.reject(new Error('no setting in this probe')) },
+    settings: switchOffAsSeeded,
   });
 }
 
