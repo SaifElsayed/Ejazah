@@ -683,3 +683,108 @@ describe('a reason kept in the history (R1a, T174)', () => {
     await waitFor(() => expect(currentPath()).toBe(`/applications?teacher=${APPLICANT}`));
   });
 });
+
+// R1a (002:T174; the owner's answer to Q-A1-3, 2026-11-22): a credential's entry says the reason is
+// in the credential's history, linked to the credential; an application's keeps the application's
+// words. Each of the four credential actions, on the list and on the detail.
+describe("a reason kept in the credential's history (R1a, T174, Q-A1-3)", () => {
+  const APPLICANT = '0193a6f0-0000-7000-8000-0000000000b8';
+  const ENTRY = '0193a6f0-0000-7000-8000-0000000000e8';
+  const APPLICATION_ENTRY = '0193a6f0-0000-7000-8000-0000000000e9';
+  const credentialEntry = (action: string) =>
+    ({
+      entryId: ENTRY,
+      occurredAt: '2026-10-16T10:00:00.000Z',
+      adminName: 'سارة عادل',
+      action,
+      targetLabel: `إجازة · ${CREDENTIAL}`,
+      targetType: 'credential',
+      targetId: CREDENTIAL,
+      reason: 'note_given',
+    }) as const;
+  const applicationEntry = {
+    entryId: APPLICATION_ENTRY,
+    occurredAt: '2026-10-16T09:00:00.000Z',
+    adminName: 'سارة عادل',
+    action: 'application.request_info',
+    targetLabel: `طلب · ${APPLICANT}`,
+    targetName: 'منى عبد الرحمن',
+    targetType: 'teacher_application',
+    targetId: APPLICANT,
+    reason: 'note_given',
+  } as const;
+
+  function withEntries(action: string, opened: 'credential' | 'application') {
+    const api = fakeApi();
+    api.audit.list.query.mockResolvedValue({
+      rows: [credentialEntry(action), applicationEntry],
+      total: 2,
+      pageSize: 25,
+    });
+    api.audit.get.query.mockResolvedValue(
+      opened === 'credential' ? credentialEntry(action) : applicationEntry,
+    );
+    return api;
+  }
+
+  const ACTIONS = [
+    'credential.approve',
+    'credential.reject',
+    'credential.request_document',
+    'credential.correct',
+  ] as const;
+
+  it.each(ACTIONS)(
+    'the list: %s says the credential’s history, linked to the credential; the application’s entry keeps its words',
+    async (action) => {
+      await inBothLocales(
+        () => open(withEntries(action, 'credential')),
+        async (t) => {
+          const credential = await screen.findByRole('link', {
+            name: t('admin.audit.values.noteGivenCredential'),
+          });
+          expect(credential.getAttribute('href')).toBe(`/credentials?credential=${CREDENTIAL}`);
+          const application = screen.getByRole('link', { name: t('admin.audit.values.noteGiven') });
+          expect(application.getAttribute('href')).toBe(`/applications?teacher=${APPLICANT}`);
+          expect(
+            screen.getAllByRole('link', { name: t('admin.audit.values.noteGiven') }),
+          ).toHaveLength(1);
+          expect(screen.queryByText('note_given')).toBeNull();
+        },
+      );
+    },
+  );
+
+  async function openDetail(name: string) {
+    const cells = await screen.findAllByText(name);
+    fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+    return within(
+      await screen.findByRole('complementary', { name: ar('admin.audit.a11y.detail') }),
+    );
+  }
+
+  it.each(ACTIONS)(
+    'the detail: %s says the credential’s history, linked to the credential, and opens it',
+    async (action) => {
+      open(withEntries(action, 'credential'));
+      const detail = await openDetail(actionText(action, (key) => ar(key)));
+      const words = await detail.findByRole('link', {
+        name: ar('admin.audit.values.noteGivenCredential'),
+      });
+      expect(detail.queryByRole('link', { name: ar('admin.audit.values.noteGiven') })).toBeNull();
+      fireEvent.click(words);
+      await waitFor(() => expect(currentPath()).toBe(`/credentials?credential=${CREDENTIAL}`));
+    },
+  );
+
+  it('the detail: an application’s entry keeps the application’s words', async () => {
+    open(withEntries('credential.reject', 'application'));
+    const detail = await openDetail(ar('admin.audit.actions.requestMoreInfo'));
+    expect(
+      await detail.findByRole('link', { name: ar('admin.audit.values.noteGiven') }),
+    ).toBeTruthy();
+    expect(
+      detail.queryByRole('link', { name: ar('admin.audit.values.noteGivenCredential') }),
+    ).toBeNull();
+  });
+});
