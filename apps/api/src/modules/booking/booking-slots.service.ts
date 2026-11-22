@@ -29,6 +29,13 @@
 // Read-only: no lock, nothing written (T005's rule 1). The answer is a preview; the hold (T033)
 // decides under its locks.
 //
+// 006:T005 (FR-701, R-504; U-1; Q-5 (a)). A programme package is offered as its assessment
+// (`programmes.service.ts`): every active weekly time of the teacher at least the assessment's length
+// (`assessment_duration_minutes`, 30 by default), each answered with its own length and its one
+// session as both previews, the session checked at the assessment's length; none while the switch
+// is off or the fee is unset, with no slot read. Every slot's sessions are also checked against the
+// student's own active programmes' weekly times (`withProgrammeTimes`, the owner's hidden-times rule).
+//
 // THE CHECKOUT'S PREVIEWS (T085, FR-386). `checkout.current` previews the held slot through
 // `sessionPreviewsOn`: the same first session, run and mapping as each slot of the sheet, from the
 // read's instant, so the checkout shows the dates the sheet would show at that moment.
@@ -50,6 +57,7 @@ import {
   bookablePackageOf,
   type OfferedSlot,
   offeredSlotsOf,
+  programmeAvailabilityOf,
 } from '../catalog/index.js';
 import { accountTimezone, visibleTeachers } from '../identity/index.js';
 import { windowDaysOf } from '../sessions/index.js';
@@ -66,6 +74,13 @@ import {
   firstSessionOf,
   offerableOccurrences,
 } from './nearest-slot.service.js';
+import {
+  bookingTermsOf,
+  closedProgramme,
+  fitsSlot,
+  type ProgrammeReader,
+  withProgrammeTimes,
+} from './programmes.service.js';
 import {
   freeOfPartiesSessions,
   type PackageSlot,
@@ -92,7 +107,12 @@ export interface BookingSlotsStore {
   packageOf(tx: Transaction, packageId: string): Promise<BookablePackage | null>;
   /** Whether the predicate admits the teacher for booking to a requester of this gender. */
   bookable(tx: Transaction, requester: RequesterGender, teacherUserId: string): Promise<boolean>;
-  offeredSlotsOf(tx: Transaction, teacherIds: readonly string[]): Promise<OfferedSlot[]>;
+  /** 006:T004: `programmeMinMinutes`, the assessment's length, offers a programme package's slots. */
+  offeredSlotsOf(
+    tx: Transaction,
+    teacherIds: readonly string[],
+    programmeMinMinutes?: number,
+  ): Promise<OfferedSlot[]>;
   occupancyOf(
     tx: Transaction,
     slotIds: readonly string[],
@@ -110,8 +130,9 @@ export const bookingSlotsStore: BookingSlotsStore = {
       .length === 1,
   offeredSlotsOf,
   occupancyOf,
-  // T027: the parties' sessions and the times their open remedies reserve (H3).
-  sessionsBetween: partiesBusyBetween,
+  // T027: the parties' sessions and the times their open remedies reserve (H3); 006:T005 (U-1):
+  // and the student's own active programmes' weekly times.
+  sessionsBetween: withProgrammeTimes(partiesBusyBetween),
   teacherTimezone: accountTimezone,
 };
 
@@ -139,16 +160,13 @@ function previewsOf(first: Occurrence, sessions: readonly Occurrence[]): Session
   };
 }
 
-/** One slot of the answer, with its previews. */
-export function bookingSlotOf(
-  { slot, first, sessions }: Offerable,
-  pkg: Pick<BookablePackage, 'sessionCount' | 'sessionDurationMinutes'>,
-): BookingSlot {
+/** One slot of the answer, with its previews; `durationMinutes` the slot's length (006:T005). */
+export function bookingSlotOf({ slot, first, sessions }: Offerable): BookingSlot {
   return {
     slotId: slot.id,
     dayOfWeek: slot.dayOfWeek,
     startTimeLocal: slot.startTimeLocal.slice(0, -SECONDS.length),
-    durationMinutes: pkg.sessionDurationMinutes,
+    durationMinutes: slot.durationMinutes,
     ...previewsOf(first, sessions),
   };
 }
@@ -181,7 +199,8 @@ function bySoonest(a: Offerable, b: Offerable): number {
 /**
  * `booking.slots` on the caller's transaction: `NOT_FOUND` for an unknown or inactive package or a
  * teacher the student may not book, asked before anything else is read; otherwise the offerable
- * slots of the package's length with their previews from `clock.now`.
+ * slots of the package's length with their previews from `clock.now`. 006:T005: `programme`, the
+ * programme's availability, read for a programme package only (this file's head).
  */
 export async function bookingSlotsOf(
   tx: Transaction,
@@ -189,13 +208,21 @@ export async function bookingSlotsOf(
   student: BookingStudent,
   input: BookingSlotsInput,
   clock: DiscoveryClock,
+  programme: ProgrammeReader = closedProgramme,
 ): Promise<BookingSlotsOutput> {
   const pkg = await store.packageOf(tx, input.packageId);
   if (pkg === null || !(await store.bookable(tx, student.gender, pkg.teacherUserId))) {
     throw new DomainError('NOT_FOUND');
   }
-  const slots = (await store.offeredSlotsOf(tx, [pkg.teacherUserId])).filter(
-    ({ durationMinutes }) => durationMinutes === pkg.sessionDurationMinutes,
+  const terms = await bookingTermsOf(pkg, programme);
+  if ('refusal' in terms) {
+    const zone = await store.teacherTimezone(tx, pkg.teacherUserId);
+    if (zone === null) throw new Error('booking.slots: the bookable teacher has no zone');
+    return { teacherTimezone: zone, slots: [] };
+  }
+  const assessmentMinutes = terms.kind === 'assessment' ? terms.sessionDurationMinutes : undefined;
+  const slots = (await store.offeredSlotsOf(tx, [pkg.teacherUserId], assessmentMinutes)).filter(
+    ({ durationMinutes }) => fitsSlot(terms, durationMinutes),
   );
   const occupancy = await store.occupancyOf(
     tx,
@@ -205,7 +232,11 @@ export async function bookingSlotsOf(
   const free = offerableOccurrences(slots, occupancy, clock);
   const runs = free.map((one) => ({
     ...one,
-    sessions: packageSessionsOn(one.slot, one.first, pkg.sessionCount),
+    sessions: packageSessionsOn(
+      { ...one.slot, durationMinutes: terms.sessionDurationMinutes },
+      one.first,
+      terms.sessionCount,
+    ),
   }));
   const parties = { studentUserId: student.userId, teacherUserId: pkg.teacherUserId };
   const offered = (await freeOfPartiesSessions(tx, store.sessionsBetween, parties, runs)).toSorted(
@@ -214,7 +245,7 @@ export async function bookingSlotsOf(
   const teacherTimezone =
     sharedZoneOf(offered) ?? (await store.teacherTimezone(tx, pkg.teacherUserId));
   if (teacherTimezone === null) throw new Error('booking.slots: the bookable teacher has no zone');
-  return { teacherTimezone, slots: offered.map((one) => bookingSlotOf(one, pkg)) };
+  return { teacherTimezone, slots: offered.map((one) => bookingSlotOf(one)) };
 }
 
 /**
@@ -259,7 +290,9 @@ export function createBookingServices({
         // T070 of specs/004-sessions: a closing's hold reads its window.
         windowDays: windowDaysOf(settings),
       };
-      return transactions.run((tx) => bookingSlotsOf(tx, store, student, input, clock));
+      return transactions.run((tx) =>
+        bookingSlotsOf(tx, store, student, input, clock, () => programmeAvailabilityOf(settings)),
+      );
     },
   };
 }
