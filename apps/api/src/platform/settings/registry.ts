@@ -733,6 +733,16 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Anonymous one-time-code request rate limit (per client address, per window)',
     { limit: 30, window_seconds: 3600 },
   ),
+  // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account is
+  // erased this many days after its decision by the daily `erase-identity-documents`, a teacher once
+  // approved excepted (DEC-67); a ban's never before its restore window ends (Q-3 (a)).
+  identity_document_retention_days: whole(
+    positiveWhole,
+    'days',
+    'accounts',
+    'Identity document retention on a live account after its decision, a Teacher once approved excepted (days)',
+    90,
+  ),
 };
 
 /** Whether `key` is a setting the registry names (and so one the panel may change). */

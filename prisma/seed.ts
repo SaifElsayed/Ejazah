@@ -241,6 +241,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // address, counted before the platform-wide budgets they guard, each a tenth of its budget.
   ['rate_limit_address_authentication', { limit: 100, window_seconds: 900 }],
   ['rate_limit_address_one_time_code', { limit: 30, window_seconds: 3600 }],
+  // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account
+  // erased 90 days after its decision, a teacher once approved excepted (DEC-67).
+  ['identity_document_retention_days', 90],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

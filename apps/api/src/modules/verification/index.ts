@@ -300,6 +300,21 @@ export {
   type KeptDataErasureSweep,
 } from './kept-data.sweep.js';
 
+/**
+ * R1a (002:T176; SRS §3.14, DEC-100, DEC-67; the note under T176, Q-3 (a)): the daily sweep ⚠️ that
+ * marks an identity document on a live account erased once its retention has passed since its
+ * decision, a teacher once approved excepted; `worker.ts` builds it through the job
+ * (`jobs/erase-identity-documents.ts`), and `erase-deleted-files` then removes the file.
+ */
+export {
+  createIdentityRetentionSweep,
+  type IdentityRetentionDependencies,
+  type IdentityRetentionRun,
+  type IdentityRetentionStore,
+  type IdentityRetentionSweep,
+  identityRetentionStore,
+} from './identity-retention.sweep.js';
+
 // ---------------------------------------------------------------------------------------------
 // 005:T031 of specs/005-certification (FR-631; R-411; the note under T031, Q-D2 (a) to Q-D4 (a)): a
 // deleted teacher's kept signature, listed by `users.get` and opened by

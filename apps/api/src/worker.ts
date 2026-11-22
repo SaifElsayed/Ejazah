@@ -71,6 +71,8 @@ const [
   { releaseTeacherShares },
   // 005:T017 (B48): the reminder sweep and the re-send of a lost enqueue.
   { sendReminder },
+  // R1a (002:T176): the identity documents' retention sweep.
+  { eraseIdentityDocuments },
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -116,6 +118,8 @@ const [
   // 003:T105 (track 2, B-M2).
   import('./jobs/release-teacher-shares.js'),
   import('./jobs/send-reminder.js'),
+  // R1a (002:T176).
+  import('./jobs/erase-identity-documents.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -320,6 +324,17 @@ const jobs: readonly Job[] = [
     settings,
     writer: notificationWriter,
     queue: notificationQueue,
+    log,
+  }),
+  // R1a (002:T176; SRS §3.14, DEC-100, DEC-67; Q-3 (a)), daily at 04:40 ⚠️ automatic: each identity
+  // document on a live account marked erased once `identity_document_retention_days` have passed
+  // since its decision (a rejected or banned application's, a ban never before its restore window;
+  // a satisfied or replaced request's), a teacher once approved excepted, one held by an open matter
+  // left; the file then removed by `erase-deleted-files`, the same `held` as its own.
+  eraseIdentityDocuments({
+    database,
+    settings,
+    held: (userIds) => booking.heldFileOwnersAmong(database, userIds),
     log,
   }),
 ];

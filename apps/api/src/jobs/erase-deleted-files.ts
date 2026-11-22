@@ -25,6 +25,12 @@
 // teacher's signature once it is no longer kept (the kept data erased at its date or «now», or a
 // teacher never approved); its `clearKey` deletes the row where it still holds the key, so the file
 // goes first and the row after it, and a file that could not be removed keeps its row.
+//
+// R1a (002:T176; SRS §3.14, DEC-100; the note under T176, (2)) ⚠️ final: an erased document is no
+// longer only a deleted person's. `erase-identity-documents` marks an identity document on a live
+// account erased once its retention has passed (the key kept), and verification's store lists it
+// with the others (`erasedWithKeyPage` reads `erased_at`, never the owner's deletion), so this sweep
+// removes its file and clears its key, a live owner's held files waiting as a deleted owner's do.
 import { z } from 'zod';
 
 import { reportError } from '../platform/errors/reporting.js';

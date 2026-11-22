@@ -2647,6 +2647,7 @@
         "enrollment_restore_window_days": "Enrollment restore window",
         "first_session_lead_hours": "First session lead after confirmation",
         "idempotency_key_ttl_hours": "Duplicate-payment guard",
+        "identity_document_retention_days": "Identity document kept after its decision",
         "ijazah_half_release_percent": "Ijazah track: share released at half the sessions",
         "join_window_minutes": "Join window",
         "live_channel_max_connections_per_user": "Live channel connections per user",
