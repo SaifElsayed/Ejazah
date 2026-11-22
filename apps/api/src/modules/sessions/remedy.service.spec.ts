@@ -16,7 +16,7 @@
 // now + A + L = 2026-11-07T08:00Z falls before C and the counter options' bound is C (H2).
 import { Writable } from 'node:stream';
 
-import { addMinutes } from '@ijazah/time';
+import { addMinutes, addWeeks } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -827,8 +827,8 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
     programmeAsked = [];
     // The programme's Thursday 17:30Z on 600 consecutive weeks from 2026-11-19.
     busy.programme = Array.from({ length: 600 }, (_, week) => ({
-      startsAt: new Date(Date.parse('2026-11-19T17:30:00.000Z') + week * 7 * 86_400_000),
-      endsAt: new Date(Date.parse('2026-11-19T18:30:00.000Z') + week * 7 * 86_400_000),
+      startsAt: new Date(addWeeks(new Date('2026-11-19T17:30:00.000Z'), week)),
+      endsAt: new Date(addWeeks(new Date('2026-11-19T18:30:00.000Z'), week)),
     }));
     const { options } = await services().counterOptions(
       { userId: STUDENT },

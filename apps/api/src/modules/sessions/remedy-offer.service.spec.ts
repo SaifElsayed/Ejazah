@@ -9,6 +9,7 @@
 // a week over a session, a reservation or an open hold of either party, resolved per date across a
 // DST change; a frozen remedy offered again as a new offer; one `remedy_offered` row; and the offer
 // row's locks. Over the real tables: `tests/db-integrity/remedy-offer.spec.ts`.
+import { addWeeks } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -416,8 +417,8 @@ describe('remedy offer: the student’s own programme’s weekly time (006:T005;
   // its weeks count toward the bound (PROBE-P3).
   it('counts a week over a programme time toward the bound: over every week, it ends with none', async () => {
     programmeTimes = Array.from({ length: 600 }, (_, week) => ({
-      startsAt: new Date(Date.parse('2026-12-17T07:30:00Z') + week * 7 * 86_400_000),
-      endsAt: new Date(Date.parse('2026-12-17T08:30:00Z') + week * 7 * 86_400_000),
+      startsAt: new Date(addWeeks(new Date('2026-12-17T07:30:00Z'), week)),
+      endsAt: new Date(addWeeks(new Date('2026-12-17T08:30:00Z'), week)),
     }));
     expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
     expect(programmeAsked.length).toBeLessThanOrEqual(4);
