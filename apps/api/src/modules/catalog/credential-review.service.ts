@@ -23,6 +23,12 @@
 // text (`auditTranscriptionsOf`). A correction locks the credential before it reads what it
 // replaces, so two corrections at once chain their history.
 //
+// Q-A2-1 (the owner's approval of 2026-11-22): every decision locks the teacher's account first and
+// then reads the credential again (rule 1), so a never-approved teacher's deletion, which holds the
+// account while catalog's consequence blanks the credentials, commits first and the decision then
+// answers NOT_FOUND (a soft-deleted teacher's credential, R-DB-3) and writes nothing onto the blanked
+// row. A credential's teacher never changes, so the read before the lock reads only whose it is.
+//
 // Every write is conditional on the state it moves from, decided by the database (the store), so two
 // reviewers racing on one credential cannot both move it; the one that lost reads the state again to
 // answer NOT_FOUND or CONFLICT. Each method runs on the administrator kind's transaction (`tx`), so
@@ -341,7 +347,7 @@ export class CredentialReviewService {
 
   /** `credentials.approve`: the transcription written; what was written, for the audit entry. */
   async approve(tx: Transaction, adminId: string, input: ApproveInput): Promise<ApprovalMove> {
-    const record = await this.#readOrRefuse(tx, input.credentialId);
+    const { teacher } = await this.#readOrRefuse(tx, input.credentialId);
     // The teacher's application row locked before the credential moves (T142): a revocation, which
     // writes that row, commits first or waits, so whether the teacher is approved is read as it is
     // when the subject is granted. Taken before the credential's own write, as a rejection of the
@@ -349,7 +355,9 @@ export class CredentialReviewService {
     // The account's lock comes first, the order a ban takes them (the owner's decision of
     // 2026-11-01): the grant's `teacher_subjects` row references the teacher's `users` row, so
     // holding only the application, the grant would wait on a ban that waits on the application.
-    await this.#store.lockAccount(tx, record.teacher.userId);
+    await this.#store.lockAccount(tx, teacher.userId);
+    // Q-A2-1: read again under the account's lock; a teacher deleted meanwhile is NOT_FOUND.
+    const record = await this.#readOrRefuse(tx, input.credentialId);
     await this.#store.lockApplication(tx, record.teacher.userId);
     if (record.status !== 'pending') throw conflict(record.status);
     if (await this.#store.hasApproved(tx, record.teacher.userId, record.subject.id)) {
@@ -401,8 +409,12 @@ export class CredentialReviewService {
   }
 
   /** `credentials.reject`: from review, or from waiting on a document that never came. */
-  reject(tx: Transaction, adminId: string, input: DecisionInput): Promise<void> {
-    return this.#decide(tx, adminId, input, ['pending', 'needs_document'], 'rejected');
+  async reject(tx: Transaction, adminId: string, input: DecisionInput): Promise<void> {
+    const { teacher } = await this.#readOrRefuse(tx, input.credentialId);
+    // Q-A2-1: the account's lock, then the credential read again (NOT_FOUND once deleted).
+    await this.#store.lockAccount(tx, teacher.userId);
+    await this.#readOrRefuse(tx, input.credentialId);
+    await this.#decide(tx, adminId, input, ['pending', 'needs_document'], 'rejected');
   }
 
   /**
@@ -414,6 +426,9 @@ export class CredentialReviewService {
     adminId: string,
     input: DecisionInput,
   ): Promise<DocumentRequestMove> {
+    const { teacher } = await this.#readOrRefuse(tx, input.credentialId);
+    // Q-A2-1: the account's lock first, then the credential read again (NOT_FOUND once deleted).
+    await this.#store.lockAccount(tx, teacher.userId);
     const record = await this.#readOrRefuse(tx, input.credentialId);
     // The application's lock before the credential moves (T161), so a resubmission meanwhile
     // commits first, or waits and then reads the credential waiting. A credential's teacher never
@@ -442,7 +457,10 @@ export class CredentialReviewService {
   ): Promise<z.input<typeof adminCredentialCorrection>> {
     // T174: the credential's row locked, then read (rule 1), so the transcription before is the one
     // the correction replaces: a second correction meanwhile waits, then reads this one's after.
-    // The kernel's order: the credential, then its open ijazah requests (the re-freeze below).
+    // The kernel's order: the account (Q-A2-1), the credential, then its open ijazah requests (the
+    // re-freeze below).
+    const { teacher } = await this.#readOrRefuse(tx, input.credentialId);
+    await this.#store.lockAccount(tx, teacher.userId);
     await this.#store.lockCredential(tx, input.credentialId);
     const record = await this.#readOrRefuse(tx, input.credentialId);
     if (record.status !== 'approved') throw conflict(record.status);

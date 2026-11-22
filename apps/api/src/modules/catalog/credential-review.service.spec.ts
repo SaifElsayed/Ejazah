@@ -424,8 +424,9 @@ describe("requestDocument and the teacher's application (T155)", () => {
     const credentialId = store.plant();
     store.applyingAs(TEACHER, 'in_review');
     await serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' });
-    // T174: the credential's history row once the credential moved.
+    // T174: the credential's history row once the credential moved; Q-A2-1: the account first.
     expect(store.journal).toEqual([
+      `lock-account:${TEACHER}`,
       `lock:${TEACHER}`,
       `decide:${credentialId}`,
       `history:${credentialId}`,
@@ -505,7 +506,9 @@ describe('correct', () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant({ status: 'approved' });
     await serviceOver(store).correct(TX, ADMIN, { credentialId, riwaya: 'ورش', reason: 'سبب' });
+    // Q-A2-1: the account first, then the credential (`row-lock.ts`'s order).
     expect(store.journal).toEqual([
+      `lock-account:${TEACHER}`,
       `lock-credential:${credentialId}`,
       `correct:${credentialId}`,
       `history:${credentialId}`,
@@ -724,4 +727,41 @@ describe('list and get', () => {
       'NOT_FOUND',
     );
   });
+});
+
+// Q-A2-1 (the owner's approval of 2026-11-22, «موافق على التلاتة»): every decision locks the teacher's
+// account first, then reads the credential again (rule 1), so a never-approved teacher's deletion
+// that committed while it waited leaves it NOT_FOUND (admin-surface.md: a soft-deleted teacher's
+// credential), writing nothing.
+describe("a decision and its teacher's deletion (Q-A2-1)", () => {
+  const decisions = {
+    approve: (service: CredentialReviewService, credentialId: string) =>
+      service.approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION, note: 'ملاحظة' }),
+    reject: (service: CredentialReviewService, credentialId: string) =>
+      service.reject(TX, ADMIN, { credentialId, reason: 'الختم غير واضح' }),
+    requestDocument: (service: CredentialReviewService, credentialId: string) =>
+      service.requestDocument(TX, ADMIN, { credentialId, reason: 'الختم غير واضح' }),
+    correct: (service: CredentialReviewService, credentialId: string) =>
+      service.correct(TX, ADMIN, { credentialId, holderName: 'اسم آخر', reason: 'الاسم' }),
+  } as const;
+
+  it.each(Object.keys(decisions) as (keyof typeof decisions)[])(
+    '%s locks the account first and answers NOT_FOUND once the teacher was deleted meanwhile, writing nothing',
+    async (decision) => {
+      const store = new MemoryReviewStore();
+      store.applyingAs(TEACHER, 'in_review');
+      const credentialId = store.plant(decision === 'correct' ? { status: 'approved' } : {});
+      const held = structuredClone(store.held(credentialId));
+      store.deletedWhileWaiting(TEACHER);
+      expect(await codeOf(decisions[decision](serviceOver(store), credentialId))).toBe('NOT_FOUND');
+      // A correction takes the credential's lock after the account's, before it reads (row-lock.ts).
+      expect(store.journal).toEqual([
+        `lock-account:${TEACHER}`,
+        ...(decision === 'correct' ? [`lock-credential:${credentialId}`] : []),
+      ]);
+      expect(store.held(credentialId)).toEqual(held);
+      expect(store.history).toEqual([]);
+      expect(store.applications.get(TEACHER)?.status).toBe('in_review');
+    },
+  );
 });

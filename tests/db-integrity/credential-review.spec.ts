@@ -345,7 +345,6 @@ describe('the history: one row per decision, raced (T174)', () => {
   it.each([
     ['two rejections', 'reject', 'reject'],
     ['two requests for a document', 'requestDocument', 'requestDocument'],
-    ['a rejection and a request for a document', 'reject', 'requestDocument'],
   ] as const)('%s at once: one wins, one CONFLICT, one row', async (_case, first, second) => {
     const adminId = await makeAdmin(db);
     const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
@@ -355,6 +354,25 @@ describe('the history: one row per decision, raced (T174)', () => {
     ]);
     expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
     expect(await historyOf(credentialId)).toHaveLength(1);
+  });
+
+  // Both orders are decisions in sequence once each waits on the account (Q-A2-1): a rejection first
+  // leaves the request CONFLICT; a request first leaves the credential waiting, which a rejection
+  // may still end, so both land, in that order. One row per decision that landed, either way.
+  it('a rejection and a request for a document at once: one row per decision that landed, in its order', async () => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    const outcomes = await raced([
+      (tx) => review.reject(tx, adminId, { credentialId, reason: 'السبب الأول' }),
+      (tx) => review.requestDocument(tx, adminId, { credentialId, reason: 'السبب الثاني' }),
+    ]);
+    const actions = (await historyOf(credentialId)).map(({ action }) => action);
+    if (codesOf(outcomes).includes('CONFLICT')) {
+      expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
+      expect(actions).toEqual(['reject']);
+    } else {
+      expect(actions).toEqual(['request_document', 'reject']);
+    }
   });
 
   it('an approval and a rejection at once: one wins, one CONFLICT, one row', async () => {
