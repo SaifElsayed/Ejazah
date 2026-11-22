@@ -18,6 +18,7 @@ import {
 import { piasters, type Piasters, toPlainNumber } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 type Client = Pick<Transaction, 'package'>;
 
@@ -30,6 +31,11 @@ export interface PackageRow {
   readonly sessionDurationMinutes: SessionLengthMinutes;
   readonly price_piasters: Piasters;
   readonly isActive: boolean;
+  /**
+   * 006:T002 (R-503, DEC-110): a programme package; false on every other one, an ijazah-track
+   * package made before the programme included, which the switch keeps from being reactivated.
+   */
+  readonly isProgramme: boolean;
 }
 
 /** A package to write: the teacher's, on a subject the service checked is theirs. */
@@ -60,6 +66,7 @@ function rowOf(row: {
   readonly sessionDurationMinutes: number;
   readonly pricePiasters: bigint;
   readonly isActive: boolean;
+  readonly isProgramme: boolean;
 }): PackageRow {
   return {
     id: row.id,
@@ -69,6 +76,7 @@ function rowOf(row: {
     sessionDurationMinutes: sessionLengthMinutes.parse(row.sessionDurationMinutes),
     price_piasters: piasters(Number(row.pricePiasters)),
     isActive: row.isActive,
+    isProgramme: row.isProgramme,
   };
 }
 
@@ -103,6 +111,7 @@ async function readPackages(
       sessionDurationMinutes: true,
       pricePiasters: true,
       isActive: true,
+      isProgramme: true,
     },
   });
   return rows.map(rowOf);
@@ -231,4 +240,37 @@ export async function changePackage(
     },
   });
   return count === 1;
+}
+
+// 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): the programme's switch turned on, on the
+// setting change's transaction. An old-style ijazah-track package is one made before the programme,
+// `is_programme = false` (ERD section 15 rule 73).
+const PRE_PROGRAMME_IJAZAH = { track: 'ijazah_track', isProgramme: false } as const;
+
+/**
+ * The teachers of every old-style ijazah-track package, active or not, ascending: the accounts the
+ * turn-on locks. Bounded by the teachers who hold one when the switch is turned on, once.
+ */
+export async function preProgrammeIjazahOwners(tx: Client): Promise<string[]> {
+  const rows = await tx.package.findMany({
+    where: PRE_PROGRAMME_IJAZAH,
+    distinct: ['teacherUserId'],
+    orderBy: { teacherUserId: 'asc' },
+    select: { teacherUserId: true },
+  });
+  return rows.map(({ teacherUserId }) => teacherUserId);
+}
+
+/** Locks the accounts' `users` rows FOR UPDATE, in id order, in one statement (T005's rule 2). */
+export function lockPackageOwners(tx: Transaction, userIds: readonly string[]): Promise<void> {
+  return lockRows(tx, 'users', userIds);
+}
+
+/** Deactivates every active old-style ijazah-track package in one update; how many it did. */
+export async function deactivatePreProgrammeIjazah(tx: Client): Promise<number> {
+  const { count } = await tx.package.updateMany({
+    where: { ...PRE_PROGRAMME_IJAZAH, isActive: true },
+    data: { isActive: false },
+  });
+  return count;
 }

@@ -358,6 +358,10 @@ describe(
             },
           };
         },
+        // 006:T002 (rule d): these cases never turn the programme's switch on.
+        retirePreProgrammeIjazahPackages: async () => {
+          throw new Error('the programme switch is not turned on in this spec');
+        },
       });
       return callerFor(
         createAdminContext({

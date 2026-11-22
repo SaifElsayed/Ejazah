@@ -11,6 +11,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { formattingTag, type MessageKey, setLocale, translate } from '../../i18n';
+import { actionText } from '../audit/actions';
 import {
   currentPath,
   inBothLocales,
@@ -419,5 +420,20 @@ describe('a change (FR-624: a reason, audited before and after)', () => {
     write(dialog, 'admin.settings.reasonLabel', 'تعديل');
     fireEvent.click(confirmOf(dialog));
     expect(await dialog.findByText(words)).toBeTruthy();
+  });
+});
+
+// 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): the switch's turn-on writes its own
+// audit entry, `packages.retired_by_switch`, on the switch's key; the audit list names it by the
+// catalogue's sentence in both languages, never by the stored code.
+describe('the switch’s audit entry by name (006:T002, Q-3)', () => {
+  it('packages.retired_by_switch reads its sentence in Arabic and in English', () => {
+    const action = 'packages.retired_by_switch';
+    expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(
+      'إيقاف باقات الإجازة القديمة عند تشغيل البرنامج',
+    );
+    expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(
+      'Deactivate the old ijazah packages when the programme is turned on',
+    );
   });
 });

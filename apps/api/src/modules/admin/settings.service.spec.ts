@@ -253,3 +253,113 @@ describe('settings.update (T024)', () => {
     expect(lines).toEqual([]);
   });
 });
+
+// 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): turning `programme_enabled` from 0 to 1
+// deactivates every old-style ijazah package through catalog's entry, on the change's own keyed
+// transaction, after the value is written; the change answers the count for the router's second
+// audit entry (`packages.retired_by_switch`) and logs one line `{ adminId, count }`. Turning it off,
+// writing 1 over 1, changing another key or replaying the change retires nothing.
+describe('settings.update of the programme’s switch (006:T002, Q-3)', () => {
+  function switchAdministration(
+    before: unknown,
+    { replay, count = 3 }: { readonly replay?: unknown; readonly count?: number } = {},
+  ) {
+    const reached: unknown[][] = [];
+    const lines: unknown[][] = [];
+    const service = createSettingsAdministration({
+      log: { info: (fields: unknown, message?: string) => void lines.push([fields, message]) },
+      idempotency: {
+        runOn: async <T>(
+          tx: never,
+          _request: IdempotentRequest,
+          effect: (tx: never) => Promise<T>,
+        ) => {
+          reached.push(['runOn', tx]);
+          if (replay !== undefined) return { outcome: replay as T, replayed: true };
+          return { outcome: await effect(KEYED as never), replayed: false };
+        },
+      },
+      writerOn: (tx: unknown) => ({
+        valuesOf: async () => new Map(),
+        update: async (key: string, value: unknown) => {
+          reached.push(['update', tx, key, value]);
+          return { before };
+        },
+      }),
+      retirePreProgrammeIjazahPackages: async (tx: unknown) => {
+        reached.push(['retire', tx]);
+        return count;
+      },
+    } as never);
+    return { service, reached, lines };
+  }
+
+  const KEYED = { tx: 'keyed' };
+  const TURN_ON = { key: 'programme_enabled', value: 1, reason: REASON, idempotencyKey: KEY };
+
+  it('turned on from 0, retires the old ijazah packages on the keyed transaction, after the write, and answers the count', async () => {
+    const { service, reached } = switchAdministration(0);
+    expect(await service.update(TX, ADMIN, TURN_ON)).toEqual({
+      key: 'programme_enabled',
+      before: 0,
+      after: 1,
+      retiredPackages: 3,
+      replayed: false,
+    });
+    expect(reached).toEqual([
+      ['runOn', TX],
+      ['update', KEYED, 'programme_enabled', 1],
+      ['retire', KEYED],
+    ]);
+  });
+
+  it('logs the turn-on’s one line, the administrator and the count, after the change’s', async () => {
+    const { service, lines } = switchAdministration(0, { count: 12 });
+    await service.update(TX, ADMIN, TURN_ON);
+    expect(lines).toEqual([
+      [{ adminId: ADMIN, key: 'programme_enabled' }, 'A setting was changed'],
+      [{ adminId: ADMIN, count: 12 }, 'The programme switch deactivated the old ijazah packages'],
+    ]);
+  });
+
+  it('turned on where no row held a value before, retires them too', async () => {
+    const { service, reached } = switchAdministration(undefined);
+    await service.update(TX, ADMIN, TURN_ON);
+    expect(reached).toContainEqual(['retire', KEYED]);
+  });
+
+  it('turned off, retires nothing and answers no count', async () => {
+    const { service, reached } = switchAdministration(1);
+    const answer = await service.update(TX, ADMIN, { ...TURN_ON, value: 0 });
+    expect(answer).toEqual({ key: 'programme_enabled', before: 1, after: 0, replayed: false });
+    expect(reached).not.toContainEqual(['retire', KEYED]);
+  });
+
+  it('0 written where it was off or unset retires nothing', async () => {
+    for (const before of [0, undefined]) {
+      const { service, reached } = switchAdministration(before);
+      await service.update(TX, ADMIN, { ...TURN_ON, value: 0 });
+      expect(reached).not.toContainEqual(['retire', KEYED]);
+    }
+  });
+
+  it('1 written over 1 retires nothing', async () => {
+    const { service, reached } = switchAdministration(1);
+    await service.update(TX, ADMIN, TURN_ON);
+    expect(reached).not.toContainEqual(['retire', KEYED]);
+  });
+
+  it('another key set to 1 retires nothing', async () => {
+    const { service, reached } = switchAdministration(0);
+    await service.update(TX, ADMIN, { ...TURN_ON, key: 'slot_release_buffer_weeks' });
+    expect(reached).not.toContainEqual(['retire', KEYED]);
+  });
+
+  it('a replay of the turn-on retires nothing again and answers the first count', async () => {
+    const first = { key: 'programme_enabled', before: 0, after: 1, retiredPackages: 3 };
+    const { service, reached, lines } = switchAdministration(0, { replay: first });
+    expect(await service.update(TX, ADMIN, TURN_ON)).toEqual({ ...first, replayed: true });
+    expect(reached).toEqual([['runOn', TX]]);
+    expect(lines).toEqual([]);
+  });
+});

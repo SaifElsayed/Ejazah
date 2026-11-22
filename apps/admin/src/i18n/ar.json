@@ -220,7 +220,8 @@
         "sessionsReviewViewed": "عرض بيانات اتصال جلسة",
         "settings": {
           "changed": "تعديل إعداد",
-          "listed": "عرض الإعدادات"
+          "listed": "عرض الإعدادات",
+          "retiredBySwitch": "إيقاف باقات الإجازة القديمة عند تشغيل البرنامج"
         },
         "studentBan": "حظر طالب",
         "studentReinstate": "إعادة تفعيل طالب",
@@ -2597,6 +2598,7 @@
         "admin_recovery_code_count": "عدد رموز الاسترداد للمشرف",
         "admin_session_idle_minutes": "مهلة خمول المشرف",
         "admin_session_max_hours": "أقصى مدة لدخول المشرف",
+        "assessment_duration_minutes": "برنامج الإجازة: مدة جلسة الاختبار",
         "attendance_threshold_pct": "حد الحضور",
         "ban_restore_window_days": "مهلة الاستعادة بعد الحظر",
         "cancellation_requests_recent_days": "فترة طلبات الإلغاء الأخيرة",
@@ -2630,6 +2632,12 @@
         "postponement_interval_weeks": "المدة بين تأجيلين لكل طرف",
         "postponement_notice_hours": "مهلة التأجيل قبل الجلسة",
         "price_average_min_teachers": "أقل عدد من المعلمين لمتوسط السعر",
+        "programme_charge_retry_days": "برنامج الإجازة: أيام إعادة محاولة الخصم التلقائي",
+        "programme_enabled": "برنامج الإجازة: التشغيل",
+        "programme_offer_hours": "برنامج الإجازة: مهلة إرسال العرض بعد الاختبار",
+        "programme_pay_rest_hours": "برنامج الإجازة: مهلة دفع الباقي من العرض",
+        "programme_renew_early_days": "برنامج الإجازة: التجديد اليدوي قبل نهاية الشهر المدفوع",
+        "programme_stop_request_days": "برنامج الإجازة: مدة الإيقاف قبل طلب الإنهاء",
         "provider_nonce_ttl_minutes": "صلاحية رمز الدخول عبر مزوّد الهوية",
         "push_token_stale_days": "حذف رموز الإشعارات غير المستخدمة بعد",
         "rate_limit_absence_complaint": "شكاوى الغياب",

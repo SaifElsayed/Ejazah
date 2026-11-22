@@ -66,6 +66,8 @@ const row: PackageRow = {
   sessionDurationMinutes: 60,
   price_piasters: piasters(100_000),
   isActive: true,
+  // 006:T002 (rule d): `PackageRow` names whether it is a programme package.
+  isProgramme: false,
 };
 const occurrence = (date: string): Occurrence =>
   ({

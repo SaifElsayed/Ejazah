@@ -23,6 +23,8 @@ import {
 } from '../catalog/index.js';
 // T072 of specs/004-sessions: a revocation's lift grants the approved credentials' subjects again.
 import { credentialsOfTeachers, grantSubjects } from '../catalog/index.js';
+// 006:T002 (SRS DEC-110; Q-3 (a)(a)): the programme's switch turned on retires the old ijazah packages.
+import { retirePreProgrammeIjazahPackages } from '../catalog/index.js';
 import {
   AccountConsequences,
   // T081 of specs/004-sessions: the administrator's deletion, identity's, handed in by `main.ts`.
@@ -608,6 +610,8 @@ export function createAdminServices(dependencies: AdminServiceDependencies): Adm
       idempotency: dependencies.idempotency,
       log: dependencies.log,
       writerOn: (tx) => new SettingsRepository(tx),
+      // 006:T002: catalog's entry, on the change's own transaction.
+      retirePreProgrammeIjazahPackages,
     }),
   };
 }

@@ -59,13 +59,21 @@ import {
 import { SlotsService, type SlotsStore, type TeacherSlots } from './slots.service.js';
 import {
   changePackage,
+  deactivatePreProgrammeIjazah,
   holdsSubject,
   insertPackage,
+  lockPackageOwners,
   packageOf,
   packagesOf,
   peerPackagesOf,
+  preProgrammeIjazahOwners,
 } from './packages.repository.js';
-import { PackagesService, type PackagesStore } from './packages.service.js';
+import {
+  PackagesService,
+  type PackagesStore,
+  type PreProgrammeRetirementStore,
+  retirePreProgrammeIjazahPackages as retireOver,
+} from './packages.service.js';
 import { SubjectsRepository } from './subjects.repository.js';
 import { type SubjectsReader, SubjectsService } from './subjects.service.js';
 import { signatureOf, writeSignature } from './teacher-signature.repository.js';
@@ -204,6 +212,23 @@ export const packagesStore: PackagesStore = {
     (await visibleTeachers(tx, requester, { purpose: 'discover', teacherIds })).map(({ id }) => id),
 };
 export { PackagesService };
+
+/**
+ * 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): the programme's switch turned on
+ * deactivates every old-style ijazah-track package (`is_programme = false`), on the setting
+ * change's transaction `tx`, the owners' accounts locked first; answers how many. The admin
+ * module's `settings.update` calls it on the turn from 0 to 1 and records the count.
+ */
+export const preProgrammeRetirementStore: PreProgrammeRetirementStore = {
+  preProgrammeIjazahOwners,
+  lockAccounts: lockPackageOwners,
+  deactivatePreProgrammeIjazah,
+};
+export function retirePreProgrammeIjazahPackages(tx: Transaction): Promise<number> {
+  return retireOver(preProgrammeRetirementStore, tx);
+}
+/** 006:T002: the switch's key, which `teacher.packages.update` and the admin module read. */
+export { PROGRAMME_ENABLED_SETTING } from './packages.service.js';
 
 /** The `teacher.packages` router, mounted under `teacher.packages` by `app.router.ts` (T018). */
 export { packagesRouter } from './packages.router.js';

@@ -11,6 +11,7 @@
 // slot's release, the kept data and an administrator's deletion (T069, with the restore window's
 // default 14, SRS DEC-66), the one of an administrator's direct end (T082), Phase 4's six rate limits
 // (005:T001, data-model.md «Settings»), the two of a notification queued again (005:T017, SRS DEC-74),
+// the programme's (006:T002, research R-515)
 // and one administrator, each with a fixed identifier and a fixed instant;
 // every other table stays empty.
 //
@@ -118,6 +119,15 @@ const SETTINGS: Record<string, unknown> = {
   // 003:T112 (SRS §3.14, DEC-86, DEC-90): the postponement's notice and interval.
   postponement_notice_hours: 12,
   postponement_interval_weeks: 4,
+  // 006:T002 (research R-515; SRS §3.14, DEC-92, DEC-93, DEC-94): the programme's seven so far, the
+  // switch off (the assessment's fee waits for lane b's question Q-B4).
+  programme_enabled: 0,
+  assessment_duration_minutes: 30,
+  programme_offer_hours: 24,
+  programme_pay_rest_hours: 48,
+  programme_stop_request_days: 7,
+  programme_renew_early_days: 3,
+  programme_charge_retry_days: [1, 3, 5, 7],
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -371,7 +381,8 @@ describe('the seed (T074)', () => {
               (SELECT count(*) FROM admin_users)::text AS admins`,
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
-    // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two.
-    expect(counts).toEqual([{ subjects: '5', settings: '95', admins: '1' }]);
+    // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two;
+    // 006:T002: + the programme's seven so far (95 + 7; the eighth, the assessment's fee, waits).
+    expect(counts).toEqual([{ subjects: '5', settings: '102', admins: '1' }]);
   });
 });

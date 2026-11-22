@@ -18,6 +18,7 @@ import {
   settingRefusal,
 } from '../../platform/settings/registry.js';
 import { SettingError, type SettingsReader } from '../../platform/settings/settings-reader.js';
+import { PROGRAMME_ENABLED_SETTING } from '../catalog/index.js';
 
 /** Where stored values come from: `settings.repository.ts`, or a fake in a spec. */
 export interface StoredSettings {
@@ -82,6 +83,12 @@ export interface SettingsAdministrationDependencies {
   readonly log: Pick<Logger, 'info'>;
   /** The writer on the call's transaction (`new SettingsRepository(tx)`, bound in `index.ts`). */
   readonly writerOn: (tx: Transaction) => SettingsWriter;
+  /**
+   * 006:T002 (SRS DEC-110; Q-3 (a)(a)): catalog's entry, which deactivates every old-style ijazah
+   * package on the change's transaction and answers how many, called when `programme_enabled`
+   * turns from off to on (bound in `index.ts`).
+   */
+  readonly retirePreProgrammeIjazahPackages: (tx: Transaction) => Promise<number>;
 }
 
 /** One setting as `settings.list` answers it (contracts/admin/settings.ts, `adminSetting`). */
@@ -103,6 +110,11 @@ export type SettingChange = {
   readonly key: string;
   readonly before: SettingJson;
   readonly after: SettingJson;
+  /**
+   * 006:T002 (Q-3 (a)(a)): set only when the change turned the programme's switch on, the old-style
+   * ijazah packages it deactivated, for the router's `packages.retired_by_switch` entry.
+   */
+  readonly retiredPackages?: number;
 };
 
 export interface SettingsAdministration {
@@ -116,6 +128,14 @@ export interface SettingsAdministration {
 
 const UPDATE_SCOPE = 'settings.update';
 
+/** 006:T002 (SRS §3.14, DEC-94; I-3): the programme's switch's «on». */
+const PROGRAMME_ON = 1;
+
+/** Whether the change turns the programme's switch from off (or no value) to on (DEC-110). */
+function turnsProgrammeOn(key: string, before: unknown, after: StoredValue): boolean {
+  return key === PROGRAMME_ENABLED_SETTING && after === PROGRAMME_ON && before !== PROGRAMME_ON;
+}
+
 /** Where a refusal points: the key the registry does not name, or the value. */
 const REFUSAL_PATH: Readonly<Record<SettingRefusal, 'key' | 'value'>> = {
   unknown: 'key',
@@ -127,6 +147,7 @@ export function createSettingsAdministration({
   idempotency,
   log,
   writerOn,
+  retirePreProgrammeIjazahPackages,
 }: SettingsAdministrationDependencies): SettingsAdministration {
   return {
     list: async (tx) => {
@@ -174,10 +195,23 @@ export function createSettingsAdministration({
         },
         async (keyed): Promise<SettingChange> => {
           const { before } = await writerOn(keyed).update(key, after, adminId);
-          return { key, before: before as SettingJson, after };
+          if (!turnsProgrammeOn(key, before, after)) {
+            return { key, before: before as SettingJson, after };
+          }
+          // 006:T002 (DEC-110): on the change's own transaction, after the value is written.
+          const retiredPackages = await retirePreProgrammeIjazahPackages(keyed);
+          return { key, before: before as SettingJson, after, retiredPackages };
         },
       );
-      if (!replayed) log.info({ adminId, key }, 'A setting was changed');
+      if (!replayed) {
+        log.info({ adminId, key }, 'A setting was changed');
+        if (outcome.retiredPackages !== undefined) {
+          log.info(
+            { adminId, count: outcome.retiredPackages },
+            'The programme switch deactivated the old ijazah packages',
+          );
+        }
+      }
       return { ...outcome, replayed };
     },
   };
