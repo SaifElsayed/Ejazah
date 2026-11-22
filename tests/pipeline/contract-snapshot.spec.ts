@@ -706,8 +706,9 @@ describe('the real contract (T084)', () => {
     // the kind of an enrollment's event (Phase 2's T004), and Phase 3's two (specs/004-sessions T001):
     // the kind of a session's event and the reason a hold was released, and Phase 4's one
     // (specs/005-certification T001): an ijazah request's status, and track 2's one
-    // (specs/003-booking T105, B-M2): the milestone a teacher's share is released at.
-    expect(Object.keys(declared)).toHaveLength(43);
+    // (specs/003-booking T105, B-M2): the milestone a teacher's share is released at, and R1a's two
+    // (002:T174): the actions of the application's and of the credential's decision history.
+    expect(Object.keys(declared)).toHaveLength(45);
     expect(snapshot.enums.prisma).toEqual(declared);
     expect(Object.keys(snapshot.procedures)).toEqual(['admin', 'app']);
   });
