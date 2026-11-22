@@ -211,6 +211,25 @@ export async function markDocumentsErased(
 export const KEPT_DOCUMENT_TYPES = ['national_id', 'passport', 'credential'] as const;
 
 /**
+ * R1a (002:T176's owner-approved addition, Q-C1-2 (a); SRS DEC-67): an identity document uploaded as
+ * `other` (the route's kind `identity`) typed with the kind its submission names, on the
+ * submission's transaction, so the deletion keeps it by kind for a teacher once approved
+ * (`KEPT_DOCUMENT_TYPES`). Only an upload still `other` and neither erased nor kept is typed, once;
+ * a credential's PDF named as an identity document keeps its own kind. Whether it typed.
+ */
+export async function typeIdentityDocument(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+  kind: 'national_id' | 'passport',
+): Promise<boolean> {
+  const { count } = await tx.verificationDocument.updateMany({
+    where: { id, documentType: 'other', erasedAt: null, keptAt: null },
+    data: { documentType: kind },
+  });
+  return count === 1;
+}
+
+/**
  * Marks every document of `userId` of a kept kind, neither erased nor kept, as kept at `at`, on the
  * deletion's transaction; the keys stay (rule 34's first check), so no file erasure touches them.
  */
