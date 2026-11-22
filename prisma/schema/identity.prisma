@@ -274,11 +274,34 @@ model TeacherProfile {
   approvedByAdmin           AdminUser?            @relation(fields: [approvedByAdminId], references: [id], onDelete: Restrict)
   applicationDecidedByAdmin AdminUser?            @relation("TeacherApplicationDecidedBy", fields: [applicationDecidedByAdminId], references: [id], onDelete: Restrict)
   identityDocument          VerificationDocument? @relation(fields: [identityDocumentId], references: [id], onDelete: Restrict)
+  // R1a (002:T174): the application's history, a back-relation only.
+  applicationHistory        TeacherApplicationHistory[]
 
   @@index([approvedByAdminId])
   @@index([applicationDecidedByAdminId])
   @@index([identityDocumentId])
   @@map("teacher_profiles")
+}
+
+// R1a (002:T174, SRS DEC-97, FR-AUTH-14; ERD §2, changelog row 62): one row per decision on the
+// application and per revocation of approval, with its note; written once, never edited (rule 69:
+// UPDATE and TRUNCATE revoked; DELETE only by the deletion of a teacher never approved). The audit
+// entry records that a note was given; the text is here.
+model TeacherApplicationHistory {
+  id               String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  teacherProfileId String                          @map("teacher_profile_id") @db.Uuid
+  action           TeacherApplicationHistoryAction
+  // Required except on approve; not blank, at most 1,000 characters (rule 67).
+  note             String?
+  adminId          String                          @map("admin_id") @db.Uuid
+  createdAt        DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  teacherProfile TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  admin          AdminUser      @relation("TeacherApplicationHistoryAdmin", fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([teacherProfileId, createdAt])
+  @@index([adminId])
+  @@map("teacher_application_history")
 }
 
 // Signup verification, sign-in and password reset (FR-AUTH-1/6).

@@ -10,8 +10,9 @@
 // THE EMAIL STEP answers one page for every well-formed address: the deletion's `requestWebCode`
 // does the same work for an unknown address as for an account (the decoy hash) and writes an
 // `account_deletion` code only for an account, its mail dispatched after the commit (T082). The
-// page counts the platform's one-time-code budget and then the address, in lower case as it is
-// stored, before asking anything, as every code-issuing path does (auth.router.ts). A malformed
+// page counts the client's address (T172, DEC-103), the platform's one-time-code budget and then
+// the e-mail address, in lower case as it is stored, before asking anything, as every
+// code-issuing path does (auth.router.ts), so one client cannot spend the budget. A malformed
 // address is told so on the email step and asks nothing; that says nothing of any account.
 //
 // THE CONFIRM STEP runs the same deletion as `account.delete` (FR-141) when the code is right and
@@ -59,8 +60,11 @@ export interface DeleteAccountRouteDependencies {
   readonly rateLimiter: Pick<RateLimiter, 'check'>;
 }
 
-const { oneTimeCode: ONE_TIME_CODE_LIMIT, oneTimeCodeBudget: ONE_TIME_CODE_BUDGET } =
-  defaultRateLimits;
+const {
+  oneTimeCode: ONE_TIME_CODE_LIMIT,
+  oneTimeCodeBudget: ONE_TIME_CODE_BUDGET,
+  addressOneTimeCode: ADDRESS_ONE_TIME_CODE_LIMIT,
+} = defaultRateLimits;
 
 /** The status of a step rendered again because what was sent cannot be used. */
 const UNUSABLE_FORM = errorCodes.VALIDATION_FAILED.status;
@@ -413,10 +417,16 @@ export function deleteAccountRoutes({
   supportEmail,
   rateLimiter,
 }: DeleteAccountRouteDependencies): Readonly<Record<string, WebRoute>> {
-  const requestCode = async ({ lang, form }: WebRequest): Promise<WebResponse> => {
+  const requestCode = async ({ lang, form, clientAddress }: WebRequest): Promise<WebResponse> => {
     const email = emailOf(form);
     if (!emailAddress.safeParse(email).success) return emailStep(lang, { email });
-    // Each step's path is its fixed name in a refusal's record (T062); the address is an identifier.
+    // Each step's path is its fixed name in a refusal's record (T062); each address is an
+    // identifier. The client's address first (T172), so a refused call spends none of the budget.
+    await rateLimiter.check(
+      ADDRESS_ONE_TIME_CODE_LIMIT,
+      { kind: 'identifier', value: clientAddress },
+      DELETE_ACCOUNT_PATH,
+    );
     await rateLimiter.check(ONE_TIME_CODE_BUDGET, { kind: 'budget' }, DELETE_ACCOUNT_PATH);
     await rateLimiter.check(
       ONE_TIME_CODE_LIMIT,

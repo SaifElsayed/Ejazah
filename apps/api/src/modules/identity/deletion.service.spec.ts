@@ -1230,3 +1230,20 @@ describe('the deletion’s after-commit list (T066)', () => {
     expect(publisherOn(held)).toBeUndefined();
   });
 });
+
+// R1a (002:T173; SRS §3.14, DEC-100; research R-104): failed deletion codes capped per address.
+describe('the web: requestWebCode once the address’s deletion codes are capped (T173)', () => {
+  it('answers the same, with the decoy’s work, and writes and mails nothing', async () => {
+    spec = buildDeletion(database, {
+      settings: { rate_limit_failed_one_time_code: { limit: 2, window_seconds: 86_400 } },
+    });
+    const caller = await emailAccount();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(spec.deletion.confirmWebDeletion(caller.email, '000000')).resolves.toBe(false);
+    }
+    await expect(spec.deletion.requestWebCode(caller.email)).resolves.toBeUndefined();
+    expect(await rows().codes(caller.email)).toEqual([]);
+    expect(spec.identity.mails().filter(({ to }) => to === caller.email)).toEqual([]);
+    await expectUntouched(caller.userId, caller.email);
+  });
+});

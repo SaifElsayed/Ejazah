@@ -131,6 +131,24 @@ export async function closeUndecidedCredentials(
 }
 
 /**
+ * T174 (SRS DEC-97, FR-AUTH-14): blanks every credential of the teacher, the holder's name, the
+ * riwaya, the tariq and the review reason, then deletes their chains, on the deletion's transaction.
+ * The rows stay (their documents and reviewers point at them); no CHECK binds the four columns (the
+ * note under T174, (1)). Only the deletion of a teacher never approved calls it
+ * (`credentials-erasure.ts`).
+ */
+export async function blankTranscriptionsOfTeacher(
+  tx: Pick<Transaction, 'teacherCredential' | 'isnadEntry'>,
+  teacherUserId: string,
+): Promise<void> {
+  await tx.teacherCredential.updateMany({
+    where: { teacherUserId },
+    data: { holderName: null, riwaya: null, tariq: null, reviewReason: null },
+  });
+  await tx.isnadEntry.deleteMany({ where: { credential: { teacherUserId } } });
+}
+
+/**
  * The teacher whose credentials the documents queue holds, beside `deletedAt: null` (T121): not a
  * banned account (T122). One condition for the queue's list (`credential-review.repository.ts`) and
  * the admin home's count (`readCredentialQueue`); nothing is written on the credentials.

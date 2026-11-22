@@ -21,6 +21,7 @@ import {
   IDEMPOTENCY_RETENTION_SETTING,
   type IdempotencyStore,
   IdempotencyService,
+  type JsonValue,
   KeyTakenError,
   type NewKey,
   type StoredKey,
@@ -383,6 +384,59 @@ describe('one transaction covers the key and the effect (T096, research R-14)', 
     expect(answer).toEqual({ checkoutId: 'competitor' });
     expect(runs()).toBe(0);
     expect(store.committed.effects).toEqual(['checkout by the competitor']);
+  });
+});
+
+// T175 (R1a): a key whose stored outcome holds no personal data, answered on a replay from the rows.
+// `run`'s third argument reads the answer again from what the key stored, on the replay's own
+// transaction; the first call answers the effect's outcome and never calls it.
+describe('a replay answered from the rows (T175)', () => {
+  const reader = (reads: unknown[]) => async (tx: FakeTransaction, stored: JsonValue) => {
+    reads.push(stored);
+    tx.effects.push('read again');
+    return { checkoutId: 'read from the rows' };
+  };
+
+  it('answers a repeat with what the reader reads from the stored outcome, running no effect', async () => {
+    const { service, effect, runs } = setUp();
+    const reads: unknown[] = [];
+    const first = await service.run(request(), effect, reader(reads));
+    expect(first).toEqual({ checkoutId: 'checkout-1' });
+    expect(reads).toEqual([]);
+
+    await expect(service.run(request(), effect, reader(reads))).resolves.toEqual({
+      checkoutId: 'read from the rows',
+    });
+    expect(reads).toEqual([{ checkoutId: 'checkout-1' }]);
+    expect(runs()).toBe(1);
+  });
+
+  it('answers a concurrent duplicate that committed first through the reader too', async () => {
+    const { store, service, effect, runs } = setUp();
+    const reads: unknown[] = [];
+    store.beforeClaim = async () => {
+      await service.run(request(), async () => ({ checkoutId: 'competitor' }));
+    };
+    await expect(service.run(request(), effect, reader(reads))).resolves.toEqual({
+      checkoutId: 'read from the rows',
+    });
+    expect(reads).toEqual([{ checkoutId: 'competitor' }]);
+    expect(runs()).toBe(0);
+  });
+
+  it('never calls the reader for the same key with another input: CONFLICT', async () => {
+    const { service, effect } = setUp();
+    const reads: unknown[] = [];
+    await service.run(request(), effect);
+    const failure = await refusal(
+      service.run(
+        request({ input: { packageId: 'pkg-2', slotId: 'slot-9' } }),
+        effect,
+        reader(reads),
+      ),
+    );
+    expect(failure).toMatchObject({ code: 'CONFLICT' });
+    expect(reads).toEqual([]);
   });
 });
 

@@ -7,6 +7,9 @@
 // One waiting on a file, or rejected, shows what the teacher was told. Every decision is confirmed
 // (`CredentialConfirm`). A long chain shows its ends and folds its middle until it is opened.
 // «اعتماد» waits until the credential's file has loaded beside the panel (T116).
+// T174 (SRS DEC-97): under the panel, the credential's decision history, oldest first: each decision
+// and correction in words, its note or reason, the name and the chain before and after a correction,
+// who and when. The audit log holds none of that text; this is where it is read.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -24,7 +27,7 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorMessageKey } from '../../lib/error-message';
-import { dayMonthYear } from '../../lib/format';
+import { dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { CredentialConfirm, type CredentialDecision } from './CredentialConfirm';
 import { type CredentialDetail, useCredential } from './queries';
@@ -88,7 +91,88 @@ export function CredentialPanel({
         onMoved={() => setMoved(true)}
         onDeciding={() => setMoved(false)}
       />
+      <CredentialHistory history={detail.history} />
     </div>
+  );
+}
+
+type HistoryRow = CredentialDetail['history'][number];
+
+const HISTORY_ACTION_TEXT: Readonly<Record<HistoryRow['action'], MessageKey>> = {
+  approve: 'admin.credentials.history.action.approve',
+  reject: 'admin.credentials.history.action.reject',
+  request_document: 'admin.credentials.history.action.requestDocument',
+  correct: 'admin.credentials.history.action.correct',
+};
+
+/** T174: the credential's decisions and corrections, oldest first, as `credentials.get` reads them. */
+function CredentialHistory({ history }: { readonly history: readonly HistoryRow[] }) {
+  const t = useT();
+  const locale = useLocale();
+  const zone = panelTimeZone();
+  const separator = locale === 'ar' ? '، ' : ', ';
+  const chainText = (chain: NonNullable<HistoryRow['before']>['chain']) =>
+    chain.map(({ names }) => names.join(separator)).join(' · ');
+  return (
+    <section className="section">
+      <h2 className="group-label">{t('admin.credentials.history.title')}</h2>
+      <p className="text-caption tone-muted">{t('admin.credentials.history.lede')}</p>
+      {history.length === 0 ? (
+        <p className="text-callout tone-muted">{t('admin.credentials.history.empty')}</p>
+      ) : (
+        <ol className="stack gap-3">
+          {history.map((row, index) => {
+            const text = row.reason ?? row.note;
+            return (
+              <li key={`${row.at}-${String(index)}`} className="stack gap-1">
+                <strong className="text-callout text-medium">
+                  {t(HISTORY_ACTION_TEXT[row.action])}
+                </strong>
+                <span className="text-caption tone-muted">
+                  {t('admin.credentials.history.meta', {
+                    admin: row.adminName,
+                    date: dayMonthYear(row.at, locale, zone),
+                    time: timeOfDay(row.at, locale, zone),
+                  })}
+                </span>
+                {text === undefined ? null : (
+                  <p className="text-callout">
+                    <span className="tone-muted">
+                      {t(
+                        row.reason === undefined
+                          ? 'admin.credentials.history.noteLabel'
+                          : 'admin.credentials.history.reasonLabel',
+                      )}
+                    </span>{' '}
+                    <bdi>{text}</bdi>
+                  </p>
+                )}
+                {row.action === 'correct' && row.before !== undefined && row.after !== undefined ? (
+                  <>
+                    <span className="text-caption">
+                      {t('admin.credentials.history.nameBefore', { name: row.before.holderName })}
+                    </span>
+                    <span className="text-caption">
+                      {t('admin.credentials.history.nameAfter', { name: row.after.holderName })}
+                    </span>
+                    <span className="text-caption">
+                      {t('admin.credentials.history.chainBefore', {
+                        chain: chainText(row.before.chain),
+                      })}
+                    </span>
+                    <span className="text-caption">
+                      {t('admin.credentials.history.chainAfter', {
+                        chain: chainText(row.after.chain),
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 }
 

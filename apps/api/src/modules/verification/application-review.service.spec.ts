@@ -14,6 +14,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   ADMIN,
+  ADMIN_NAME,
   HAFS,
   MemoryReviewStore,
   SUBMITTED,
@@ -505,4 +506,120 @@ describe('reject, requestInfo and ban', () => {
       expect((await refusal(service[action](TX, ADMIN, input))).code).toBe('NOT_FOUND');
     },
   );
+});
+
+// R1a (002:T174; SRS DEC-97 as amended by DEC-101's paragraph; the note under T174, (4)): each of
+// approve, reject and requestInfo writes the application's history one row, in its transaction,
+// once the decision has landed: the action, its note (an approval's optional), the administrator
+// and the decision's instant. A rejection writes one row, not one per credential it closes; the ban's
+// row is the standing's (`standing.service.spec.ts`); a refused decision writes none.
+describe("R1a: the application's history (T174)", () => {
+  const ready = () =>
+    store.plant({
+      callRecorded: true,
+      credentials: [{ subject: HAFS, status: 'approved' }],
+    });
+
+  it("a request for information followed by an approval keeps the request's text in the approved teacher's history", async () => {
+    const userId = ready();
+    await service.requestInfo(TX, ADMIN, {
+      teacherUserId: userId,
+      needed: ['id_unclear'],
+      note: 'صورة الهوية غير واضحة، أرسل صورة أوضح',
+    });
+    // The applicant's resubmission returns the application to review (identity's `resubmit`).
+    Object.assign(store.held(userId), { status: 'in_review' });
+    await service.approve(TX, ADMIN, { teacherUserId: userId });
+    expect(store.held(userId).note).toBeNull();
+    expect(store.history).toEqual([
+      {
+        teacherUserId: userId,
+        action: 'request_info',
+        note: 'صورة الهوية غير واضحة، أرسل صورة أوضح',
+        adminId: ADMIN,
+        at: NOW,
+      },
+      { teacherUserId: userId, action: 'approve', note: null, adminId: ADMIN, at: NOW },
+    ]);
+  });
+
+  it("an approval with a note writes it as the row's note", async () => {
+    const userId = ready();
+    await service.approve(TX, ADMIN, { teacherUserId: userId, note: 'مرحبًا بك' });
+    expect(store.history).toEqual([
+      { teacherUserId: userId, action: 'approve', note: 'مرحبًا بك', adminId: ADMIN, at: NOW },
+    ]);
+  });
+
+  it('a rejection writes one row, not one per credential it closes', async () => {
+    const userId = store.plant({
+      credentials: [
+        { subject: HAFS, status: 'pending' },
+        { subject: WARSH, status: 'needs_document' },
+      ],
+    });
+    await service.reject(TX, ADMIN, {
+      teacherUserId: userId,
+      reasonChoice: 'other',
+      note: 'المؤهل لا يكفي',
+    });
+    expect(store.reviews.size).toBe(2);
+    expect(store.history).toEqual([
+      { teacherUserId: userId, action: 'reject', note: 'المؤهل لا يكفي', adminId: ADMIN, at: NOW },
+    ]);
+  });
+
+  it('the ban writes no row here: the standing writes it', async () => {
+    await service.ban(TX, ADMIN, {
+      teacherUserId: store.plant(),
+      reasonChoice: 'forged_documents',
+      note: 'وثيقة معدَّلة',
+    });
+    expect(store.history).toEqual([]);
+  });
+
+  it('a refused decision writes none', async () => {
+    const decided = store.plant({ status: 'rejected' });
+    const blocked = store.plant({ credentials: [{ subject: HAFS, status: 'pending' }] });
+    await refusal(
+      service.reject(TX, ADMIN, { teacherUserId: decided, reasonChoice: 'other', note: 'x' }),
+    );
+    await refusal(
+      service.requestInfo(TX, ADMIN, { teacherUserId: decided, needed: ['other'], note: 'x' }),
+    );
+    await refusal(service.approve(TX, ADMIN, { teacherUserId: blocked }));
+    expect(store.history).toEqual([]);
+  });
+});
+
+describe('R1a: applications.get reads the history (T174)', () => {
+  it('answers each decision oldest first: the action, its note (none on an approval without one), who and when', async () => {
+    const userId = store.plant({
+      callRecorded: true,
+      credentials: [{ subject: HAFS, status: 'approved' }],
+    });
+    const earlier = new Date('2026-10-21T08:00:00Z');
+    store.history.push({
+      teacherUserId: userId,
+      action: 'request_info',
+      note: 'أرسل صورة أوضح',
+      adminId: '0199d0a0-0000-7000-8000-0000000000a2',
+      at: earlier,
+    });
+    await service.approve(TX, ADMIN, { teacherUserId: userId });
+    const { history } = await service.get(TX, userId);
+    expect(history).toEqual([
+      {
+        action: 'request_info',
+        note: 'أرسل صورة أوضح',
+        adminName: 'مشرف آخر',
+        at: earlier.toISOString(),
+      },
+      { action: 'approve', adminName: ADMIN_NAME, at: NOW.toISOString() },
+    ]);
+  });
+
+  it('answers an empty history for an application not yet decided', async () => {
+    expect((await service.get(TX, store.plant())).history).toEqual([]);
+  });
 });

@@ -36,7 +36,12 @@ import {
   type OpenCases,
   type OpenIjazahRequests,
 } from './deletion.service.js';
-import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
+import {
+  type FailedCodeCap,
+  OneTimeCodes,
+  UNBOUND_FAILED_CODE_CAP,
+  type WarningLog,
+} from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {
@@ -194,6 +199,12 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
    * deletion's commit, ends their live streams. Bound by `main.ts`.
    */
   readonly live?: Pick<LiveBus, 'publish'>;
+  /**
+   * R1a (002:T173; SRS §3.14, DEC-100): the process's rate limiter, which counts the failed
+   * one-time codes per e-mail address and purpose and is read before a code is issued. Bound by
+   * `main.ts`; unbound, every code request and every failed code fails closed.
+   */
+  readonly failedCodes?: FailedCodeCap;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -214,10 +225,16 @@ export function createIdentityServices({
   openCases,
   report,
   live,
+  failedCodes,
   ...base
 }: IdentityServiceDependencies): Omit<IdentityServices, 'certificateName'> {
   const sessions = new SessionService(base);
-  const codes = new OneTimeCodes({ ...base, email, log });
+  const codes = new OneTimeCodes({
+    ...base,
+    email,
+    log,
+    failedCodes: failedCodes ?? UNBOUND_FAILED_CODE_CAP,
+  });
   const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
   return {
     sessions,
@@ -296,6 +313,23 @@ export {
   lockApplication,
   recordApplicationCall,
 } from './application.repository.js';
+/**
+ * R1a (002:T176; Q-C1-1 (a), the owner's «موافق على الاتنين» of 2026-11-22): the live applicants
+ * never approved whose identity document is due, paged for verification's `erase-identity-documents`.
+ */
+export { identityDocumentsDecidedBefore } from './application.repository.js';
+/**
+ * R1a (002:T174; SRS DEC-97): the application's history, the one entry verification's approve,
+ * reject and requestInfo write through, as standing's ban and revocation do; read by
+ * `applications.get`. Its erasure is the deletion's alone (`eraseAccount`), so it is not exported.
+ */
+export {
+  type ApplicationHistoryAction,
+  type ApplicationHistoryEntry,
+  type ApplicationHistoryRow,
+  listOf as applicationHistoryOf,
+  record as recordApplicationHistory,
+} from './application-history.repository.js';
 
 /**
  * A person's standing as the administrator changes it (T068, FR-165, FR-166): the service, its store

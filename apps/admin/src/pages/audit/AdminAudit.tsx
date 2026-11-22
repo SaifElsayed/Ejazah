@@ -6,7 +6,8 @@
 // page), the reason; the pager the page size answers. A row opens its entry beside the table. The
 // board's filter panel (the range, the administrator, the action) is not drawn and is not built.
 // T111: the target wraps, as drawn, and the reason ends in an ellipsis after two lines, in full on
-// hover.
+// hover. R1a (002:T174, Q-1 (a)): a reason kept in a history (`note_given`) is said in words, linked
+// to the entry's target (`AuditReason`).
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -28,7 +29,7 @@ import { cityName, dayMonth, timeOfDay } from '../../lib/format';
 import { daysBefore, panelTimeZone, todayIn } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
 import { actionText, targetHref, targetText } from './actions';
-import { AuditEntry } from './AuditEntry';
+import { AuditEntry, AuditReason, reasonTitle } from './AuditEntry';
 import { type AuditFilter, useAuditPage } from './queries';
 
 /** The chip's period: the board's «آخر … يومًا», today included. */
@@ -129,9 +130,18 @@ export function AdminAudit() {
                   <TextLink label={target} href={href} onPress={() => void navigate(href)} />
                 ),
               reason:
-                row.reason === undefined ? null : <bdi className="tone-muted">{row.reason}</bdi>,
+                row.reason === undefined ? null : (
+                  <AuditReason
+                    reason={row.reason}
+                    action={row.action}
+                    href={href}
+                    className="tone-muted"
+                  />
+                ),
             },
-            ...(row.reason === undefined ? {} : { titles: { reason: row.reason } }),
+            ...(row.reason === undefined
+              ? {}
+              : { titles: { reason: reasonTitle(row.reason, row.action, t) } }),
           };
         })}
         {...(selected === null ? {} : { selectedKey: selected })}

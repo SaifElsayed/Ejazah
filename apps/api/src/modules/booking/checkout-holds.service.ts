@@ -149,6 +149,23 @@ export interface CheckoutHoldStore {
   ): Promise<string | null>;
 }
 
+/**
+ * The teacher's display name when the requester may see the teacher, else null: identity's one
+ * visibility predicate (SRS §3.7.1, R-GENDER-5). T175: also `checkout.hold`'s replay, whose key
+ * stores no name.
+ */
+export async function checkoutTeacherName(
+  tx: Transaction,
+  requester: RequesterGender,
+  teacherUserId: string,
+): Promise<string | null> {
+  const [teacher] = await visibleTeachers(tx, requester, {
+    purpose: 'discover',
+    teacherIds: [teacherUserId],
+  });
+  return teacher?.displayName ?? null;
+}
+
 export const checkoutHoldStore: CheckoutHoldStore = {
   lockRows,
   packageOf: bookablePackageOf,
@@ -156,13 +173,7 @@ export const checkoutHoldStore: CheckoutHoldStore = {
   activeHoldsByIds,
   activeHoldsOf,
   teacherPackageOf,
-  teacherName: async (tx, requester, teacherUserId) => {
-    const [teacher] = await visibleTeachers(tx, requester, {
-      purpose: 'discover',
-      teacherIds: [teacherUserId],
-    });
-    return teacher?.displayName ?? null;
-  },
+  teacherName: checkoutTeacherName,
 };
 
 /** The hold and what the checkout screen shows (FR-358, FR-386). */

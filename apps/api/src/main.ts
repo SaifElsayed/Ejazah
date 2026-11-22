@@ -185,6 +185,11 @@ const cipher = createColumnCipher(config);
 const consequences = new identity.AccountConsequences();
 consequences.subscribe(verification.documentErasureConsequence());
 consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf, log }));
+// T174 of specs/002-identity (R1a; SRS DEC-97, FR-AUTH-14; the note under T174, (5)): catalog's
+// consequence, so no module reaches another's tables. The deletion of a teacher never approved blanks
+// their credentials' holder name, riwaya, tariq and review reason, deletes their chains and erases
+// the credentials' history; a teacher once approved keeps all of it.
+consequences.subscribe(catalog.catalogDeletionConsequence());
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,
@@ -294,6 +299,8 @@ const services = {
       cipher,
       // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
       live: liveBus,
+      // 002:T173 (SRS §3.14, DEC-100): the failed one-time codes' cap, on the process's limiter.
+      failedCodes: rateLimiter,
       marks: createRedisSingleUseMarks({
         redisUrl: config.REDIS_URL,
         onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),
@@ -600,10 +607,17 @@ const adminModuleServices = createAdminServices({
   genderFlags,
   orders: payments.orderStandingsOf,
 });
-// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): `reports.chat`, an open
+// report's enrollment chat, over moderation's `ReportChat` port bound here to chat's
+// `createDisputeChat()`, as sessions' `disputeChat` is above, so moderation imports no chat.
+const reportChat = moderation.createReportChat({
+  chat: chat.createDisputeChat({ enrollments: enrollmentSide, settings }),
+});
+// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's;
+// 005:T034: and `reports.chat`, the read above.
 const adminServices = {
   ...adminModuleServices,
-  reports: userReports,
+  reports: { ...userReports, ...reportChat },
   // 003:T105: `payouts.*`, the service above.
   payouts: payouts.admin,
 };

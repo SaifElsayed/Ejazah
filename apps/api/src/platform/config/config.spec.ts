@@ -672,6 +672,38 @@ describe('the Phase 1 keys (T001)', () => {
     expect(production.offendingKeys).toContain('TRUSTED_PROXY_ADDRESS');
   });
 
+  // 002:T172 (SRS DEC-103): the anonymous paths count the client's address before the platform's
+  // budgets, so a hosted server without the proxy would count every person as the proxy's one
+  // address. Outside development and test both keys are required; T147's rule stays beside it.
+  it('refuses a hosted server without both proxy keys, naming each missing one; development and test need neither (T172)', () => {
+    const proxyKeysIn = (env: Record<string, string>): readonly string[] => {
+      try {
+        loadConfig(env);
+        return [];
+      } catch (error: unknown) {
+        if (!(error instanceof ConfigError)) throw error;
+        return error.offendingKeys.filter((key) => key.startsWith('TRUSTED_PROXY'));
+      }
+    };
+    const production = { ...validEnv, NODE_ENV: 'production' };
+    const proxied = { TRUSTED_PROXY: 'X-Forwarded-For', TRUSTED_PROXY_ADDRESS: '10.0.0.2' };
+
+    expect(proxyKeysIn(production)).toEqual(['TRUSTED_PROXY', 'TRUSTED_PROXY_ADDRESS']);
+    expect(
+      proxyKeysIn({ ...production, TRUSTED_PROXY_ADDRESS: proxied.TRUSTED_PROXY_ADDRESS }),
+    ).toEqual(['TRUSTED_PROXY']);
+    expect(proxyKeysIn({ ...production, TRUSTED_PROXY: proxied.TRUSTED_PROXY })).toEqual([
+      'TRUSTED_PROXY_ADDRESS',
+    ]);
+    expect(proxyKeysIn({ ...production, ...proxied })).toEqual([]);
+    expect(failure(production).message).toMatch(
+      /TRUSTED_PROXY \(required outside development and test/,
+    );
+    for (const nodeEnv of ['development', 'test']) {
+      expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).TRUSTED_PROXY).toBeUndefined();
+    }
+  });
+
   it('reads GOOGLE_CLIENT_IDS as a list of audiences and the Apple keys as they are', () => {
     const config = loadConfig({
       ...validEnv,

@@ -19,15 +19,17 @@ import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
 import { createAppRouter, publicProcedure } from '../../surfaces/procedures.js';
 import { normalizeEmail } from './one-time-codes.js';
 
-const { authentication, oneTimeCode, oneTimeCodeBudget } = defaultRateLimits;
+const { authentication, oneTimeCode, oneTimeCodeBudget, addressOneTimeCode } = defaultRateLimits;
 
 export const onboardingRouter = createAppRouter({
+  // T172 (DEC-103): the client address first, so one address cannot spend the code budget.
   requestEmailCode: publicProcedure({
     input: requestEmailCodeInput,
     output: z.void(),
     rateLimit: {
       key: oneTimeCode,
       budget: oneTimeCodeBudget,
+      addressKey: addressOneTimeCode,
       subjectOf: ({ input }) => normalizeEmail(input.email),
     },
   }).mutation(async ({ ctx, input }) => {

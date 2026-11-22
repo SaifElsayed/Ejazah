@@ -1,11 +1,13 @@
 // T069 — the administrator surface's `credentials` namespace as it is served (admin-surface.md
 // "`credentials`"; FR-163, FR-164). Every procedure is the administrator kind: it refuses an
 // anonymous caller and one whose second factor is not verified, runs in one transaction, and writes
-// the action's audit entry with the actor from the session, nothing of a refused call. A rejection,
-// a request for another document and a correction carry their mandatory reason into the entry; an
-// approval's entry holds the transcription it wrote, and a correction's the transcription before and
-// after (FR-164). The list and the panel are reads naming the reader. What the review does is
+// the action's audit entry with the actor from the session, nothing of a refused call. T174 (SRS
+// DEC-97): a rejection's, a request for another document's and a correction's entry, and an
+// approval's with a note, record that a reason was given (`note_given`), never its text; an approval's
+// and a correction's before and after hold no name and no chain. The list and the panel are reads
+// naming the reader; the panel answers the credential's history. What the review does is
 // `credential-review.service.spec.ts`'s.
+import { AUDIT_REASON_NOTE_GIVEN } from '@ijazah/contracts/admin';
 import { describe, expect, it } from 'vitest';
 
 import { toErrorShape } from '../../surfaces/procedures.js';
@@ -61,7 +63,7 @@ describe('the administrator kind', () => {
 });
 
 describe('credentials.approve', () => {
-  it('audits credential.approve with the transcription before (T116) and after, and the note', async () => {
+  it('audits credential.approve with no name, no chain and no note: the note is said given (T174)', async () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant();
     const surface = surfaceOver(store);
@@ -74,19 +76,15 @@ describe('credentials.approve', () => {
         action: 'credential.approve',
         targetType: 'credential',
         targetId: credentialId,
-        reason: 'السند مقروء كاملًا',
-        before: { holderName: null, riwaya: null, tariq: null, chain: [] },
-        after: {
-          holderName: 'عمر بن فاروق',
-          riwaya: 'حفص عن عاصم',
-          tariq: null,
-          chain: [
-            { position: 1, names: ['رسول الله ﷺ'] },
-            { position: 2, names: ['جبريل'] },
-          ],
-        },
+        reason: AUDIT_REASON_NOTE_GIVEN,
+        before: { riwaya: null, tariq: null, chainLength: 0, holderNameChanged: false },
+        after: { riwaya: 'حفص عن عاصم', tariq: null, chainLength: 2, holderNameChanged: true },
       },
     ]);
+    const entry = JSON.stringify(surface.written);
+    for (const text of ['عمر بن فاروق', 'جبريل', 'السند مقروء كاملًا']) {
+      expect(entry).not.toContain(text);
+    }
   });
 
   it('writes no reason without a note', async () => {
@@ -130,22 +128,26 @@ describe('credentials.reject and credentials.requestDocument', () => {
   it.each([
     ['reject', 'credential.reject', 'rejected'],
     ['requestDocument', 'credential.request_document', 'needs_document'],
-  ] as const)('%s audits %s with the reason as typed', async (procedure, action, status) => {
-    const store = new MemoryReviewStore();
-    const credentialId = store.plant();
-    const surface = surfaceOver(store);
-    await surface.verified().credentials[procedure]({ credentialId, reason: 'الختم غير واضح' });
-    expect(store.held(credentialId)).toMatchObject({ status, reviewedAt: NOW });
-    expect(surface.written).toEqual([
-      {
-        adminId: ADMIN,
-        action,
-        targetType: 'credential',
-        targetId: credentialId,
-        reason: 'الختم غير واضح',
-      },
-    ]);
-  });
+  ] as const)(
+    '%s audits %s with the reason said given, not its text (T174)',
+    async (procedure, action, status) => {
+      const store = new MemoryReviewStore();
+      const credentialId = store.plant();
+      const surface = surfaceOver(store);
+      await surface.verified().credentials[procedure]({ credentialId, reason: 'الختم غير واضح' });
+      expect(store.held(credentialId)).toMatchObject({ status, reviewedAt: NOW });
+      expect(surface.written).toEqual([
+        {
+          adminId: ADMIN,
+          action,
+          targetType: 'credential',
+          targetId: credentialId,
+          reason: AUDIT_REASON_NOTE_GIVEN,
+        },
+      ]);
+      expect(JSON.stringify(surface.written)).not.toContain('الختم غير واضح');
+    },
+  );
 
   it("requestDocument's entry holds the application it set waiting on the applicant (T155)", async () => {
     const store = new MemoryReviewStore();
@@ -165,7 +167,7 @@ describe('credentials.reject and credentials.requestDocument', () => {
         action: 'credential.request_document',
         targetType: 'credential',
         targetId: credentialId,
-        reason: 'الختم غير واضح',
+        reason: AUDIT_REASON_NOTE_GIVEN,
         before: { applicationStatus: 'in_review' },
         after: { applicationStatus: 'needs_document' },
       },
@@ -188,7 +190,7 @@ describe('credentials.reject and credentials.requestDocument', () => {
 });
 
 describe('credentials.correct', () => {
-  it('audits credential.correct with the reason and the transcription before and after', async () => {
+  it('audits credential.correct with the reason said given, and no name or chain before and after (T174)', async () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant({ status: 'approved' });
     const surface = surfaceOver(store);
@@ -203,11 +205,24 @@ describe('credentials.correct', () => {
       action: 'credential.correct',
       targetType: 'credential',
       targetId: credentialId,
-      reason: 'الرواية كما في الملف',
-      before: { riwaya: 'حفص عن عاصم' },
-      after: { riwaya: 'حفص عن عاصم من طريق الشاطبية' },
+      reason: AUDIT_REASON_NOTE_GIVEN,
+      before: {
+        riwaya: 'حفص عن عاصم',
+        tariq: 'الشاطبية',
+        chainLength: 2,
+        holderNameChanged: false,
+      },
+      after: {
+        riwaya: 'حفص عن عاصم من طريق الشاطبية',
+        tariq: 'الشاطبية',
+        chainLength: 2,
+        holderNameChanged: false,
+      },
     });
-    expect(entry?.before?.['chain']).toEqual(entry?.after?.['chain']);
+    const written = JSON.stringify(surface.written);
+    for (const text of ['عمر بن فاروق', 'جبريل', 'الرواية كما في الملف']) {
+      expect(written).not.toContain(text);
+    }
   });
 
   it.each([
@@ -243,6 +258,22 @@ describe('credentials.list and credentials.get', () => {
     await call(surface, credentialId);
     expect(surface.written).toEqual([
       { adminId: ADMIN, action: 'credentials.read', targetType: 'admin', targetId: ADMIN },
+    ]);
+  });
+
+  it("get answers the credential's history through its output schema (T174)", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    const surface = surfaceOver(store);
+    await surface.verified().credentials.reject({ credentialId, reason: 'الختم غير واضح' });
+    const { history } = await surface.verified().credentials.get({ credentialId });
+    expect(history).toEqual([
+      {
+        action: 'reject',
+        note: 'الختم غير واضح',
+        adminName: 'هالة سعيد',
+        at: NOW.toISOString(),
+      },
     ]);
   });
 });

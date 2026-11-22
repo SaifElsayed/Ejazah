@@ -324,7 +324,9 @@
         "student_complaint_close",
         "teacher_dropout"
       ],
+      "TeacherApplicationHistoryAction": ["approve", "ban", "reject", "request_info", "revoke"],
       "TeacherApplicationStatus": ["approved", "banned", "in_review", "needs_document", "rejected"],
+      "TeacherCredentialHistoryAction": ["approve", "correct", "reject", "request_document"],
       "TeacherCredentialStatus": ["approved", "needs_document", "pending", "rejected"],
       "TeacherVerificationStatus": [
         "approved",
@@ -472,6 +474,16 @@
           "$.displayName": { "required": true, "type": "string" },
           "$.email": { "required": true, "type": "string" },
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.history": { "required": true, "type": "array" },
+          "$.history[]": { "type": "object" },
+          "$.history[].action": {
+            "required": true,
+            "type": "string",
+            "values": ["approve", "ban", "reject", "request_info", "revoke"]
+          },
+          "$.history[].adminName": { "required": true, "type": "string" },
+          "$.history[].at": { "required": true, "type": "string" },
+          "$.history[].note": { "type": "string" },
           "$.identityDocument": { "required": true, "type": "object" },
           "$.identityDocument.documentId": { "required": true, "type": "string" },
           "$.identityDocument.type": {
@@ -1086,6 +1098,35 @@
           "$.chain[].position": { "required": true, "type": "integer" },
           "$.credentialId": { "required": true, "type": "string" },
           "$.documentId": { "required": true, "type": "string" },
+          "$.history": { "required": true, "type": "array" },
+          "$.history[]": { "type": "object" },
+          "$.history[].action": {
+            "required": true,
+            "type": "string",
+            "values": ["approve", "correct", "reject", "request_document"]
+          },
+          "$.history[].adminName": { "required": true, "type": "string" },
+          "$.history[].after": { "type": "object" },
+          "$.history[].after.chain": { "required": true, "type": "array" },
+          "$.history[].after.chain[]": { "type": "object" },
+          "$.history[].after.chain[].names": { "required": true, "type": "array" },
+          "$.history[].after.chain[].names[]": { "type": "string" },
+          "$.history[].after.chain[].position": { "required": true, "type": "integer" },
+          "$.history[].after.holderName": { "required": true, "type": "string" },
+          "$.history[].after.riwaya": { "required": true, "type": "string" },
+          "$.history[].after.tariq": { "required": true, "type": "null|string" },
+          "$.history[].at": { "required": true, "type": "string" },
+          "$.history[].before": { "type": "object" },
+          "$.history[].before.chain": { "required": true, "type": "array" },
+          "$.history[].before.chain[]": { "type": "object" },
+          "$.history[].before.chain[].names": { "required": true, "type": "array" },
+          "$.history[].before.chain[].names[]": { "type": "string" },
+          "$.history[].before.chain[].position": { "required": true, "type": "integer" },
+          "$.history[].before.holderName": { "required": true, "type": "string" },
+          "$.history[].before.riwaya": { "required": true, "type": "string" },
+          "$.history[].before.tariq": { "required": true, "type": "null|string" },
+          "$.history[].note": { "type": "string" },
+          "$.history[].reason": { "type": "string" },
           "$.holderName": { "type": "string" },
           "$.origin": { "required": true, "type": "string", "values": ["added", "application"] },
           "$.reviewReason": { "type": "string" },
@@ -2326,6 +2367,37 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "reports.chat": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.messages": { "required": true, "type": "array" },
+          "$.messages[]": { "type": "object" },
+          "$.messages[].attachment": { "type": "object" },
+          "$.messages[].attachment.filename": { "required": true, "type": "string" },
+          "$.messages[].attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.messages[].body": { "type": "string" },
+          "$.messages[].messageId": { "required": true, "type": "string" },
+          "$.messages[].purged": { "required": true, "type": "boolean" },
+          "$.messages[].senderRole": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.messages[].sentAt": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
       "reports.get": {
         "input": {
           "$": { "type": "object" },
@@ -2334,6 +2406,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.chatAvailable": { "required": true, "type": "boolean" },
           "$.context": {
             "required": true,
             "type": "string",

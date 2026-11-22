@@ -6,10 +6,18 @@
 // «dismissed», each with its note and a key, or a gender flag is raised from it (`genderFlags.raise`
 // with the report's id and its reported person). A resolved one shows its decision and offers none.
 // Each refusal of the two contracts in its own words.
+//
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): while `reports.get`
+// answers `chatAvailable`, the report's panel reads the enrollment's chat read-only
+// (`reports.chat` with the report and its enrollment, each page's cursor), with the report's banner;
+// a session or chat report no longer open says the chat is shown only while it is open and reads
+// nothing; a profile report has no chat. The chat read's refusals in the report's words.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { type MessageKey, setLocale, translate } from '../../i18n';
+import { dayMonth, timeOfDay } from '../../lib/format';
+import { panelTimeZone } from '../../lib/zone';
 import {
   inBothLocales,
   mutation,
@@ -54,28 +62,63 @@ const actioned = {
   sessionId: null,
   enrollmentId: null,
 } as const;
+const R3 = '0193a6f0-0000-7000-8000-0000000003a3';
+const M1 = '0193a6f0-0000-7000-8000-0000000003d1';
+const M2 = '0193a6f0-0000-7000-8000-0000000003d2';
+const dismissedSession = { ...open1, reportId: R3, status: 'dismissed' } as const;
+const CHAT_PAGE = {
+  messages: [
+    {
+      messageId: M1,
+      body: 'لا تتأخر مرة أخرى',
+      sentAt: '2026-11-17T06:02:00.000Z',
+      purged: false,
+      senderRole: 'teacher',
+    },
+  ],
+  nextCursor: M1,
+} as const;
+const OLDER_PAGE = {
+  messages: [
+    {
+      messageId: M2,
+      body: 'موعدنا غدًا',
+      sentAt: '2026-11-16T05:00:00.000Z',
+      purged: false,
+      senderRole: 'student',
+    },
+  ],
+} as const;
 
 function fakeApi() {
   const api = {
-    reports: { list: query(), get: query(), resolve: mutation() },
+    reports: { list: query(), get: query(), resolve: mutation(), chat: query() },
     genderFlags: { raise: mutation() },
     home: { summary: query() },
     auth: { me: query() },
   };
   api.reports.list.query.mockResolvedValue({ items: [open1, actioned] });
-  api.reports.get.query.mockImplementation(async (input) =>
-    (input as { reportId: string }).reportId === R1
-      ? { ...open1, reason: REASON, resolution: null }
-      : {
-          ...actioned,
-          reason: REASON,
-          resolution: {
-            outcome: 'actioned',
-            note: 'أُوقف الحساب أسبوعًا',
-            resolvedAt: '2026-11-18T12:00:00.000Z',
-            resolvedByAdminId: ADMIN,
-          },
-        },
+  const decided = (outcome: 'actioned' | 'dismissed') => ({
+    outcome,
+    note: 'أُوقف الحساب أسبوعًا',
+    resolvedAt: '2026-11-18T12:00:00.000Z',
+    resolvedByAdminId: ADMIN,
+  });
+  api.reports.get.query.mockImplementation(async (input) => {
+    const { reportId } = input as { reportId: string };
+    if (reportId === R1) return { ...open1, reason: REASON, resolution: null, chatAvailable: true };
+    if (reportId === R3) {
+      return {
+        ...dismissedSession,
+        reason: REASON,
+        resolution: decided('dismissed'),
+        chatAvailable: false,
+      };
+    }
+    return { ...actioned, reason: REASON, resolution: decided('actioned'), chatAvailable: false };
+  });
+  api.reports.chat.query.mockImplementation(async (input) =>
+    (input as { cursor?: string }).cursor === M1 ? OLDER_PAGE : CHAT_PAGE,
   );
   api.reports.resolve.mutate.mockResolvedValue(undefined);
   api.genderFlags.raise.mutate.mockResolvedValue({ flagId: FLAG });
@@ -273,5 +316,76 @@ describe('a report’s detail and its decision (FR-612, FR-614)', () => {
             'admin.dialogs.confirm.raiseGenderFlag.confirm',
           );
     expect(await opened.findByText(ar(words))).toBeTruthy();
+  });
+});
+
+describe('the enrollment’s chat under an open report (005:T034; SRS FR-SESS-13 as amended)', () => {
+  it('reads the chat inside the open report’s panel, with the report’s banner, each sender by role, and its older pages, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/reports?report=${R1}`),
+      async (t, locale) => {
+        const panel = await detailPanel(t);
+        expect(await panel.findByText(CHAT_PAGE.messages[0].body)).toBeTruthy();
+        expect(panel.getByText(t('admin.disputes.detail.chatTitle'))).toBeTruthy();
+        expect(panel.getByText(t('admin.reports.chat.banner'))).toBeTruthy();
+        expect(panel.queryByText(t('admin.chatLog.banner'))).toBeNull();
+        const { sentAt } = CHAT_PAGE.messages[0];
+        const zone = panelTimeZone();
+        expect(
+          panel.getByText(
+            t('admin.disputes.chat.meta', {
+              sender: t('admin.disputes.columns.teacher'),
+              date: dayMonth(sentAt, locale, zone),
+              time: timeOfDay(sentAt, locale, zone),
+            }),
+          ),
+        ).toBeTruthy();
+        fireEvent.click(panel.getByRole('button', { name: t('admin.disputes.chat.more') }));
+        expect(await panel.findByText(OLDER_PAGE.messages[0].body)).toBeTruthy();
+        expect(panel.queryByRole('button', { name: t('admin.disputes.chat.more') })).toBeNull();
+      },
+    );
+  });
+
+  it('asks the chat with the report, its enrollment and each page’s cursor', async () => {
+    const { api } = open(fakeApi(), `/reports?report=${R1}`);
+    const panel = await detailPanel();
+    await panel.findByText(CHAT_PAGE.messages[0].body);
+    expect(api.reports.chat.query).toHaveBeenCalledWith({ reportId: R1, enrollmentId: ENROLLMENT });
+    fireEvent.click(panel.getByRole('button', { name: ar('admin.disputes.chat.more') }));
+    await panel.findByText(OLDER_PAGE.messages[0].body);
+    expect(api.reports.chat.query).toHaveBeenLastCalledWith({
+      reportId: R1,
+      enrollmentId: ENROLLMENT,
+      cursor: M1,
+    });
+  });
+
+  it('neither reads nor draws the chat of a session report no longer open, and says when it is shown', async () => {
+    const { api } = open(fakeApi(), `/reports?report=${R3}`);
+    const panel = await detailPanel();
+    expect(panel.getByText(ar('admin.reports.detail.chatHint'))).toBeTruthy();
+    expect(api.reports.chat.query).not.toHaveBeenCalled();
+    expect(panel.queryByText(ar('admin.reports.chat.banner'))).toBeNull();
+  });
+
+  it('draws no chat for a profile report, which names no enrollment', async () => {
+    const { api } = open(fakeApi(), `/reports?report=${R2}`);
+    const panel = await detailPanel();
+    expect(api.reports.chat.query).not.toHaveBeenCalled();
+    expect(panel.queryByText(ar('admin.disputes.detail.chatTitle'))).toBeNull();
+    expect(panel.queryByText(ar('admin.reports.detail.chatHint'))).toBeNull();
+  });
+
+  it.each([
+    ['CONFLICT', [{ path: 'cause', code: 'not_open' }], 'admin.reports.chat.notOpen'],
+    ['NOT_FOUND', [], 'admin.reports.chat.notFound'],
+    ['INTERNAL', [], 'admin.common.loadError.text'],
+  ] as const)('says a chat read refused %s in the report’s words', async (code, details, words) => {
+    const api = fakeApi();
+    api.reports.chat.query.mockRejectedValue(refusal(code, details));
+    open(api, `/reports?report=${R1}`);
+    const panel = await detailPanel();
+    expect(await panel.findByText(ar(words))).toBeTruthy();
   });
 });

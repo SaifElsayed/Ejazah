@@ -178,6 +178,8 @@ interface World {
   readonly halfPercent?: number;
   /** T101: the teacher's verified payout recipient; none by default. */
   readonly recipient?: string | null;
+  /** T175: the teacher's name a replay reads through visibility; null once not visible. */
+  readonly visibleName?: string | null;
   /** 006:T005: the order's kind the retry's target and Pay's target answer; `package` by default. */
   readonly kind?: 'package' | 'assessment';
   /** 006:T005: the switch, when not on. */
@@ -197,6 +199,11 @@ function setUp(world: World = {}) {
   let orders = 0;
   const steps: CheckoutSteps = {
     transaction: async (work) => work({} as Transaction),
+    // T175: booking's read through the visibility predicate, as `checkoutHoldStore` reads it.
+    teacherName: async (_tx, requester, teacherUserId) => {
+      log.push(['teacher name', requester, teacherUserId]);
+      return world.visibleName === undefined ? 'الشيخ' : world.visibleName;
+    },
     placeHold: async (_tx, who, request, dependencies) => {
       log.push(['place', who.userId, request.slotId, dependencies.terms.now.toISOString()]);
       const outcomes = world.placements ?? [heldAnswer];
@@ -519,12 +526,51 @@ describe('checkout.hold (FR-BOOK-12, FR-357)', () => {
     });
   });
 
-  it('answers a completed key’s outcome without placing anything again', async () => {
+  it('answers a completed key’s outcome without placing anything again, the teacher’s name read again through visibility (T175)', async () => {
     const { service, log } = setUp();
     const first = await service.hold(student, holdInput);
     log.length = 0;
     await expect(service.hold(student, holdInput)).resolves.toEqual(first);
-    expect(log).toEqual([['key read', 'checkout.hold']]);
+    expect(log).toEqual([
+      ['key read', 'checkout.hold'],
+      ['teacher name', 'female', TEACHER],
+    ]);
+  });
+
+  // T175 (R1a; the note under T175, (1)): the key stores everything but the teacher's name.
+  it('stores the hold without the teacher’s name (T175)', async () => {
+    const { service, idempotency } = setUp();
+    await service.hold(student, holdInput);
+    const stored = idempotency.stored.get(`checkout.hold:${KEY}`);
+    expect(stored).toEqual({
+      holdId: HOLD,
+      expiresAt: HOLD_EXPIRES.toISOString(),
+      payBy: ORDER_EXPIRES.toISOString(),
+      summary: { ...heldAnswer.summary, teacher: { teacherId: TEACHER } },
+      firstSession: { localDate: '2026-11-05', startsAt: '2026-11-05T07:00:00.000Z' },
+      lastSession: { localDate: '2026-11-26', startsAt: '2026-11-26T07:00:00.000Z' },
+    });
+    expect(JSON.stringify(stored)).not.toContain('الشيخ');
+  });
+
+  it('answers a replay NOT_FOUND once the teacher is no longer visible to the student (T175)', async () => {
+    // The first call answers the name the placement read; the replay reads it again, and none is.
+    const { service } = setUp({ visibleName: null });
+    await service.hold(student, holdInput);
+    const error = await refusal(service.hold(student, holdInput));
+    expect(error.code).toBe('NOT_FOUND');
+  });
+
+  it('answers a duplicate that committed first with the name read again through visibility (T175)', async () => {
+    const { service, idempotency, log } = setUp({ visibleName: 'الشيخ الآن' });
+    const { idempotency: firstKeys, service: first } = setUp();
+    await first.hold(student, holdInput);
+    const competitor = firstKeys.stored.get(`checkout.hold:${KEY}`);
+    if (competitor === undefined) throw new Error('no stored outcome');
+    idempotency.duplicateFirst(competitor);
+    const answer = await service.hold(student, holdInput);
+    expect(answer.summary.teacher).toEqual({ teacherId: TEACHER, displayName: 'الشيخ الآن' });
+    expect(log).toContainEqual(['teacher name', 'female', TEACHER]);
   });
 
   it('(b) cancels the previous payable order outside any transaction, records it failed, then holds again', async () => {

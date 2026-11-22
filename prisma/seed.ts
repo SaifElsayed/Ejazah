@@ -250,6 +250,16 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 5 minutes old, and no longer sent once it is 30 minutes old.
   ['notification_requeue_after_minutes', 5],
   ['notification_requeue_max_age_minutes', 30],
+  // T172 of specs/002-identity (SRS DEC-103, §3.14; the note under T172): the two limits per client
+  // address, counted before the platform-wide budgets they guard, each a tenth of its budget.
+  ['rate_limit_address_authentication', { limit: 100, window_seconds: 900 }],
+  ['rate_limit_address_one_time_code', { limit: 30, window_seconds: 3600 }],
+  // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account
+  // erased 90 days after its decision, a teacher once approved excepted (DEC-67).
+  ['identity_document_retention_days', 90],
+  // T173 of specs/002-identity (SRS DEC-100, §3.14; the note under T173): after 10 failed codes for
+  // one e-mail address and purpose, no code is issued for them until the 24-hour window ends.
+  ['rate_limit_failed_one_time_code', { limit: 10, window_seconds: 86400 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

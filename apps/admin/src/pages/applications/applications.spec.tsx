@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { Icon } from '../../design/components';
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
-import { dayMonth, dayMonthYear } from '../../lib/format';
+import { dayMonth, dayMonthYear, timeOfDay } from '../../lib/format';
 import { daysBefore, panelTimeZone, todayIn } from '../../lib/zone';
 import {
   currentPath,
@@ -74,6 +74,8 @@ function detailOf(row: typeof rowA | typeof rowB, more: Record<string, unknown> 
       documentId: `0193a6f0-0000-7000-8000-0000000000e${index}`,
     })),
     call: {},
+    // R1a (002:T174): `applications.get`'s history, none unless a case gives one.
+    history: [],
     ...more,
   };
 }
@@ -635,7 +637,10 @@ describe('the actions each state allows (FR-162)', () => {
 
 describe('T058: RATE_LIMITED on the applications', () => {
   const limited = (seconds?: string) =>
-    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+    refusal(
+      'RATE_LIMITED',
+      seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+    );
 
   it('the queue says when to try again', async () => {
     const api = fakeApi();
@@ -696,5 +701,58 @@ describe('T058: RATE_LIMITED on the applications', () => {
     fireEvent.click(dialog.getByRole('button', { name: ar('admin.dialogs.decision.ban.confirm') }));
     expect(await dialog.findByText(ar('admin.common.rateLimitedIn', { count: 1 }))).toBeTruthy();
     expect(dialog.queryByText(ar('admin.dialogs.submitError'))).toBeNull();
+  });
+});
+
+// R1a (002:T174; SRS DEC-97; contracts/admin-surface.md, the decision history): the panel's history
+// section, read from `applications.get`'s `history`, oldest first as the server answers it: each
+// decision's action in words, its note when there is one, who made it and when, in both languages.
+describe('the decision history (R1a, T174)', () => {
+  const ASKED = '2026-10-15T08:30:00.000Z';
+  const APPROVED = '2026-10-16T11:05:00.000Z';
+  const history = [
+    { action: 'request_info', note: 'صورة الهوية غير واضحة', adminName: 'أ. سعاد', at: ASKED },
+    { action: 'approve', adminName: 'أ. خالد', at: APPROVED },
+  ];
+
+  it('draws each decision oldest first: the action in words, the note, who and when', async () => {
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        api.applications.get.query.mockResolvedValue(
+          detailOf(rowA, { status: 'approved', history }),
+        );
+        return open(api);
+      },
+      async (t, locale) => {
+        const detail = within(await select(rowA.displayName));
+        const section = (
+          await detail.findByRole('heading', { name: t('admin.applications.detail.history.title') })
+        ).closest('section') as HTMLElement;
+        const items = within(section).getAllByRole('listitem');
+        expect(items.map((item) => within(item).getByRole('term').textContent)).toEqual([
+          t('admin.applications.detail.history.actions.requestInfo'),
+          t('admin.applications.detail.history.actions.approve'),
+        ]);
+        const zone = panelTimeZone();
+        const metaOf = (adminName: string, at: string) =>
+          t('admin.applications.detail.history.meta', {
+            date: dayMonthYear(at, locale, zone),
+            time: timeOfDay(at, locale, zone),
+            admin: adminName,
+          });
+        expect(within(items[0] as HTMLElement).getByText('صورة الهوية غير واضحة')).toBeTruthy();
+        expect(within(items[0] as HTMLElement).getByText(metaOf('أ. سعاد', ASKED))).toBeTruthy();
+        expect(within(items[1] as HTMLElement).getByText(metaOf('أ. خالد', APPROVED))).toBeTruthy();
+        // An approval with no note shows none.
+        expect(within(items[1] as HTMLElement).queryByText('صورة الهوية غير واضحة')).toBeNull();
+      },
+    );
+  });
+
+  it('says there is no decision yet', async () => {
+    open();
+    const detail = within(await select(rowA.displayName));
+    expect(await detail.findByText(ar('admin.applications.detail.history.empty'))).toBeTruthy();
   });
 });

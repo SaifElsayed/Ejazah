@@ -80,6 +80,28 @@ export const openIdentityRequest = z.object({
     .optional(),
 });
 
+/**
+ * R1a (002:T174; SRS DEC-97; `contracts/admin-surface.md`, the decision history): what one row of the
+ * application's history records (`teacher_application_history_action`).
+ */
+export const applicationHistoryAction = z.enum([
+  'approve',
+  'reject',
+  'request_info',
+  'ban',
+  'revoke',
+]);
+
+/** One decision on the application or one revocation of approval, its note, who and when. */
+export const applicationHistoryEntry = z.object({
+  action: applicationHistoryAction,
+  /** The decision's note; absent on an approval with none. */
+  note: z.string().optional(),
+  /** The administrator's display name. */
+  adminName: z.string(),
+  at: z.iso.datetime(),
+});
+
 export const applicationsGetOutput = applicationsListRow.extend({
   qualificationSummary: z.string(),
   /** The applicant's IANA zone, which the panel shows as its city. */
@@ -112,6 +134,12 @@ export const applicationsGetOutput = applicationsListRow.extend({
    * teacher's ban. Additive (R-API-9).
    */
   banRestoreWindowDays: z.int().positive(),
+  /**
+   * R1a (002:T174; SRS DEC-97): the application's history, oldest first: each decision's note, kept
+   * after a later decision overwrites `note`; the audit log keeps the entries without the text.
+   * Additive (R-API-9).
+   */
+  history: z.array(applicationHistoryEntry),
 });
 
 export const applicationsRecordCallInput = z.object({

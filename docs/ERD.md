@@ -30,9 +30,9 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 
 | Domain | Module | Tables |
 |---|---|---|
-| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` · `banned_identifiers` |
+| IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` · `banned_identifiers` · `teacher_application_history` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
-| CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` |
+| CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` · `teacher_credential_history` |
 | BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` · `programmes` · `programme_requests` |
 | PAYMENTS | `payments` | `payments` · `payment_events` · `teacher_share_releases` · `programme_cards` |
 | SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` · `session_events` · `provider_outages` · `session_postponements` |
@@ -185,6 +185,19 @@ Exists only for users holding the teacher role. 1:1 with the role.
 | kept_at / kept_erase_at / kept_erased_at | timestamptz, nullable | A teacher ever approved keeps, after the deletion, the identity and credential documents and the payout recipient reference, for fraud prevention, with no end date (SRS FR-AUTH-14 as amended on 2026-11-12, DEC-67): `kept_at` the deletion that kept them, `kept_erase_at` the erasure date an administrator set, `kept_erased_at` their erasure, final (SRS FR-ADMIN-21; T069, T076, T077; changelog row 38) *(2026-11-21, SRS DEC-97: a teacher ever approved also keeps the credentials' holder name and transcription, the verification notes and the history of the application's and the credential's decisions and corrections, after `kept_erased_at` too; `specs/002-identity/tasks.md` T174 adds the history's tables.)* |
 | verification_status_before_ban / application_status_before_ban | enum `teacher_verification_status`, nullable; enum `teacher_application_status`, nullable | The two statuses the profile had before a ban, written by every ban and cleared by its lift, which returns the profile to them (SRS FR-ADMIN-5 as amended on 2026-11-12, DEC-66; T069, T072; changelog row 38) |
 
+### `teacher_application_history`
+
+One row per decision on a teacher's application (approve, reject, a request for information, a ban) and per revocation of approval, with its note (SRS DEC-97, FR-AUTH-14; T174; changelog row 62). Inserted in the decision's transaction, never edited (§15 rule 69); the audit entry records that a note was given, the text is here. An application's rejection writes one row, not one per credential it closes; a lift writes none. Deleted with the account of a teacher never approved; a teacher once approved keeps it with no end date.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| teacher_profile_id | FK → teacher_profiles | Indexed with `created_at`. The profile, not the user: every writer already holds the profile FOR UPDATE |
+| action | enum approve · reject · request_info · ban · revoke | `teacher_application_history_action` |
+| note | text, nullable | The reviewer's note; required except on `approve`, not blank, at most 1,000 characters (§15 rule 67) |
+| admin_id | FK → admin_users | Indexed |
+| created_at | timestamptz | When it was decided |
+
 ### `otp_codes`
 
 Signup verification and password reset (FR-AUTH-1/6).
@@ -315,7 +328,7 @@ One ijazah PDF per subject with its transcription; the chain hangs under it (ADR
 | teacher_user_id | FK → users | |
 | subject_id | FK → subjects | |
 | document_id | FK → verification_documents | The ijazah PDF |
-| holder_name | text, nullable | The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1) |
+| holder_name | text, nullable | The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1), blanked with the riwaya, the tariq and the review reason by the deletion of a teacher never approved (SRS DEC-97, T174) |
 | riwaya / tariq | text, nullable | Transcribed at approval, Arabic as typed (ADR 0021 D1) |
 | status | enum pending · needs_document · approved · rejected | |
 | review_reason | text, nullable | Mandatory on reject and needs_document; the teacher sees it |
@@ -324,6 +337,20 @@ One ijazah PDF per subject with its transcription; the chain hangs under it (ADR
 | created_at / updated_at | timestamptz | |
 
 One approved credential per teacher and subject: partial unique `(teacher_user_id, subject_id) WHERE status = 'approved'` (§15 rule 23). A rejected credential stays as history; a new upload for the same subject is a new row. Rejecting an application closes its undecided credentials: each still `pending` or `needs_document` becomes `rejected` with the rejection's note as `review_reason`, its administrator and its moment (T122).
+
+### `teacher_credential_history`
+
+One row per decision on a credential (approve, reject, a request for a document) and per correction, with its note or reason and, for an approval and a correction, the name and the chain before and after (SRS DEC-97, FR-AUTH-14; T174; changelog row 63). Inserted in the decision's transaction, never edited (§15 rule 69). A credential's `requestDocument` that moves the application writes this row only. Deleted, with the credential's transcription blanked, for a teacher never approved; a teacher once approved keeps it with no end date.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| credential_id | FK → teacher_credentials | Indexed with `created_at` |
+| action | enum approve · reject · request_document · correct | `teacher_credential_history_action` |
+| note | text, nullable | The note or the correction's reason; required except on `approve`, not blank, at most 1,000 characters (§15 rule 68) |
+| before / after | jsonb, nullable | `{ holderName, riwaya, tariq, chain }`: `before` exactly on `correct`, `after` exactly on `approve` and `correct` (§15 rule 68) |
+| admin_id | FK → admin_users | Indexed |
+| created_at | timestamptz | When it was decided |
 
 ### `isnad_entries`
 
@@ -920,7 +947,7 @@ Backs SRS §3.14. Changes are prospective-only and audit-logged.
 
 | Column | Type | Notes |
 |---|---|---|
-| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets_minutes`, `chat_retention_days` (default 30 days since 2026-11-05, the owner's decision: was 0; SRS §3.14, FR-SESS-13; changelog row 24); Phase 3 adds, among its rows, `video_empty_timeout_seconds` (300) and `video_departure_timeout_seconds` (20), the video room's two timeouts (SRS §3.14; v1.15, the owner's decision of 2026-11-05 on Phase 3's analysis), and `repeated_absence_flag_count` (5), `enrollment_restore_window_days` (7) and `rate_limit_absence_complaint` (5 per 3600 s), while `teacher_no_show_threshold` is removed (SRS §3.14; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)); and four rate limits, each `{ limit, window_seconds }`: `rate_limit_signed_in_default` (seeded 150 per 60 s per research R-325 of `specs/004-sessions/research.md`, the owner's decision of 2026-11-06, changelog row 32, by SRS NFR-SEC-12's rule, its reason: the larger of 120 per 60 s and the heaviest normal minute times 2 to 3, never a number above 200; every signed-in call that declares no limit of its own; changelog row 23), `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and `rate_limit_manual_compensation_case` (10 per 60 s each, per administrator) (SRS NFR-SEC-12, FR-ADMIN-20, §3.14; v1.15, the owner's decision of 2026-11-05); and `rate_limit_outcome_correction` (10 per 60 s, per administrator: an administrator's correction of an outcome nobody disputed; SRS §3.14, the owner's decision of 2026-11-05, changelog row 26); and the live channel's two, `rate_limit_live_channel` (10 per 60 s, per user, the channel's opening) and `live_channel_max_connections_per_user` (3) (SRS §3.14, NFR-SEC-12; amended 2026-11-05, the owner's decision; changelog row 28); and, since the owner's decisions of 2026-11-12 (SRS DEC-66, DEC-67; T069; changelog row 44), `enrollment_restore_window_days` at 14 (was 7; an existing row moved by the migration only while it held 7), `ban_restore_window_days` (14), and six limits of 10 per 60 s each, per administrator: `rate_limit_ban_lift`, `rate_limit_slot_release`, `rate_limit_kept_data_erase_date`, `rate_limit_kept_data_erase_now`, `rate_limit_kept_document_link` and `rate_limit_admin_user_delete` |
+| key | text | PK — e.g. `attendance_threshold_pct`, `join_window_minutes`, `dispute_window_hours`, `slot_hold_ttl_minutes`, `reminder_offsets_minutes`, `chat_retention_days` (default 30 days since 2026-11-05, the owner's decision: was 0; SRS §3.14, FR-SESS-13; changelog row 24); Phase 3 adds, among its rows, `video_empty_timeout_seconds` (300) and `video_departure_timeout_seconds` (20), the video room's two timeouts (SRS §3.14; v1.15, the owner's decision of 2026-11-05 on Phase 3's analysis), and `repeated_absence_flag_count` (5), `enrollment_restore_window_days` (7) and `rate_limit_absence_complaint` (5 per 3600 s), while `teacher_no_show_threshold` is removed (SRS §3.14; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)); and four rate limits, each `{ limit, window_seconds }`: `rate_limit_signed_in_default` (seeded 150 per 60 s per research R-325 of `specs/004-sessions/research.md`, the owner's decision of 2026-11-06, changelog row 32, by SRS NFR-SEC-12's rule, its reason: the larger of 120 per 60 s and the heaviest normal minute times 2 to 3, never a number above 200; every signed-in call that declares no limit of its own; changelog row 23), `rate_limit_dispute_revision`, `rate_limit_enrollment_restore` and `rate_limit_manual_compensation_case` (10 per 60 s each, per administrator) (SRS NFR-SEC-12, FR-ADMIN-20, §3.14; v1.15, the owner's decision of 2026-11-05); and `rate_limit_outcome_correction` (10 per 60 s, per administrator: an administrator's correction of an outcome nobody disputed; SRS §3.14, the owner's decision of 2026-11-05, changelog row 26); and the live channel's two, `rate_limit_live_channel` (10 per 60 s, per user, the channel's opening) and `live_channel_max_connections_per_user` (3) (SRS §3.14, NFR-SEC-12; amended 2026-11-05, the owner's decision; changelog row 28); and, since the owner's decisions of 2026-11-12 (SRS DEC-66, DEC-67; T069; changelog row 44), `enrollment_restore_window_days` at 14 (was 7; an existing row moved by the migration only while it held 7), `ban_restore_window_days` (14), and six limits of 10 per 60 s each, per administrator: `rate_limit_ban_lift`, `rate_limit_slot_release`, `rate_limit_kept_data_erase_date`, `rate_limit_kept_data_erase_now`, `rate_limit_kept_document_link` and `rate_limit_admin_user_delete`; and, since the owner's decisions of 2026-11-21 and 2026-11-22 (SRS DEC-100; R1a, `specs/002-identity/tasks.md` T176, Q-3 (a)), `identity_document_retention_days` (90; counsel, OPEN-05): the days after its decision after which the daily `erase-identity-documents` erases an identity document on a live account (`verification_documents.erased_at`, the file then removed by `erase-deleted-files`), a teacher once approved excepted (DEC-67), a ban's never before `ban_restore_window_days` has passed |
 | value | jsonb | |
 | updated_by_admin_id | FK → admin_users | |
 | updated_at | timestamptz | |
@@ -964,6 +991,10 @@ erDiagram
     users ||--o{ isnad_entries : "records chain"
     subjects ||--o{ isnad_entries : "per subject"
     users ||--o| teacher_signatures : "stores"
+    teacher_profiles ||--o{ teacher_application_history : "decided in"
+    teacher_credentials ||--o{ teacher_credential_history : "decided in"
+    admin_users ||--o{ teacher_application_history : "writes"
+    admin_users ||--o{ teacher_credential_history : "writes"
 ```
 
 ### 13.2 Booking and sessions
@@ -1162,6 +1193,12 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 66. `sessions`: `(status = 'postponed') = (postponement_id IS NOT NULL)` — check `sessions_postponement_check`: a session is `postponed` exactly when a postponement moved it, so no postponed session lacks its request and no other status names one (SRS FR-POSTPONE-1, DEC-90; T112; changelog row 59).
 
+67. `teacher_application_history`: `(action = 'approve' OR note IS NOT NULL) AND (note IS NULL OR (length(btrim(note)) > 0 AND char_length(note) <= 1000))` — check `teacher_application_history_note_check`: a note on every decision but an approval, never blank and at most 1,000 characters, as `adminReason` (SRS DEC-97; T174; changelog row 62).
+
+68. `teacher_credential_history`: the same note rule — check `teacher_credential_history_note_check`; and `(before IS NOT NULL) = (action = 'correct') AND (after IS NOT NULL) = (action IN ('approve', 'correct'))` — check `teacher_credential_history_transcription_check`: the transcription before only on a correction, after on an approval and a correction (SRS DEC-97; T174; changelog row 63).
+
+69. `teacher_application_history`, `teacher_credential_history`: no UPDATE and no TRUNCATE, revoked at the Postgres role level; each row records a decision and is written once (rule 21's pattern). DELETE stays granted, used only by the deletion of a teacher never approved (FR-AUTH-14, DEC-97): a spec finds no other code path deleting from them, and each erasure function refuses the history of a teacher once approved (`approved_at` set). A legal redaction of a note, if ever needed, is a documented migration, never application code (the owner's decision of 2026-11-22 on R1a's conflict check, Q-2 (a); T174).
+
 70. `payments`: `(kind = 'instalment') = (instalment_month IS NOT NULL) AND (instalment_month IS NULL OR instalment_month >= 1)` — check `payments_instalment_month_check`: an instalment names its month, from 1, and no other order names one (ADR 0024, R-502; 006:T001; changelog row 66).
 
 71. `payments`: `attempt IS NULL OR attempt BETWEEN 0 AND 4` — check `payments_attempt_check`: an automatic charge's attempt, at most four retries after the first (R-508; 006:T001; changelog row 67).
@@ -1190,7 +1227,7 @@ Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purch
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 51 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 53 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -1558,6 +1595,14 @@ Amended on 2026-11-19 by T112 of `specs/003-booking/tasks.md` (B-M3), on the own
 | 59 | §5 `session_status` gains `postponed` and `session_event_kind` gains `postponed`, each at its end, committed before use (`20261108120000_sessions_pass`'s precedent); §5 new table `session_postponements` (`enrollment_id`, `requested_by_user_id`, `reason`, `created_at`) and its foreign keys' plain indexes, both keys `ON DELETE RESTRICT ON UPDATE RESTRICT` (rule 43's pattern, 002:T135's precedent; PR #151's review, round 1, Major 1, `20261119124112_session_postponements_foreign_keys_restrict`), and §15 rule 65; §5 `sessions.postponement_id` (FK → session_postponements, nullable; NULL on every existing row) and its plain index, and §15 rule 66; §15 rule 19 amended, both overlap exclusions re-created under their names with `postponed` freed; §1 names the table under `sessions` (SRS FR-POSTPONE-1, FR-POSTPONE-2, DEC-90) | `20261119095115_session_postponements`, `20261119124112_session_postponements_foreign_keys_restrict` (B-M3) |
 | 60 | `compensation_cases.reason` gains `student_complaint_ended` (003:T112, Q-4 (a): the administrator's direct end on a teacher's complaint against the student, `sessions.endEnrollment` with that cause, a close on a complaint against the student, SRS FR-POSTPONE-6 as amended, DEC-90; `reason` is text, the closed list is `COMPENSATION_REASONS` in code) | none |
 | 61 | §12 `settings`: `postponement_notice_hours` (12, at least 1), the notice before each session a postponement covers, a nearer session standing (SRS §3.14, FR-POSTPONE-3), and `postponement_interval_weeks` (4, at least 1), once per interval per party per enrollment, from that party's last request on it (SRS §3.14, FR-POSTPONE-4, DEC-90); group `sessions` | none (the seed) |
+
+Amended on 2026-11-22 by T174 of `specs/002-identity/tasks.md` (R1a), on the owner's decisions of 2026-11-21 (SRS DEC-97: an applicant never approved keeps nothing; the text of a decision's note in a history, not in the audit log) and of 2026-11-22 on R1a's conflict check (Q-2 (a): UPDATE and TRUNCATE revoked, DELETE for the erasure alone); the numbers agreed with B-P1's review session (rows 62 to 64, rules 67 to 69); `C:\Users\amrkn\Documents\ejazah-tools\r1a\conflict-check.md`. Two tables are added (with B-P1's three, merged from develop: 53 tables).
+
+| # | Change | Migration |
+|---|---|---|
+| 62 | §2 new table `teacher_application_history` (`teacher_profile_id`, `action`, `note`, `admin_id`, `created_at`) and enum `teacher_application_history_action` (approve · reject · request_info · ban · revoke), its indexes `(teacher_profile_id, created_at)` and `(admin_id)`, its foreign keys `RESTRICT` on delete and update, and §15 rules 67 and 69 | `20261122111346_teacher_decision_histories` |
+| 63 | §4 new table `teacher_credential_history` (`credential_id`, `action`, `note`, `before`, `after`, `admin_id`, `created_at`) and enum `teacher_credential_history_action` (approve · reject · request_document · correct), its indexes `(credential_id, created_at)` and `(admin_id)`, its foreign keys `RESTRICT` on delete and update, and §15 rules 68 and 69 | `20261122111346_teacher_decision_histories` |
+| 64 | §12 `settings`: `rate_limit_address_authentication` (100 per 900 s) and `rate_limit_address_one_time_code` (30 per 3,600 s), the two limits per client address counted before the platform-wide budgets they guard (SRS §3.14, NFR-SEC-10, DEC-103; T172); `rate_limit_failed_one_time_code` (10 per 86,400 s), failed one-time codes per e-mail address and purpose before issuing stops (SRS §3.14, DEC-100; T173); group `rateLimits`; and `identity_document_retention_days` (90, at least 1), the days after its decision an identity document on a live account is erased, a teacher once approved excepted (SRS §3.14, DEC-100, DEC-67; counsel, OPEN-05; T176); group `accounts` | none (the seed) |
 
 Amended on 2026-11-22 by T001 of `specs/006-programme/tasks.md` (B-P1), on the owner's decisions of 2026-11-19 (SRS DEC-94: the assessment, the offer within 24 hours, the 48 hours from the offer, the old ijazah packages deactivated by the switch, not by the migration) and of 2026-11-22 on B-P1's conflict check (Q-2 (a): `gateway_order_id` NULL-able as written, the reads that need a string refusing a NULL; SRS DEC-110); [ADR 0024](adr/0024-assessment-and-ijazah-programme-by-instalments.md), `specs/006-programme/data-model.md`; the numbers agreed with R1a's review session (rows 65 to 73 and rules 70 to 81; rows 62 to 64 and rules 67 to 69 are R1a's). No existing row is changed. Three tables are added: 51 tables.
 

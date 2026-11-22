@@ -6,6 +6,8 @@
 // - `setOwn` is `account.certificateName.set`: the student, once. Keyed in its own transaction
 //   (`run`, scope `account.certificateName.set`, the student the actor); a name already held is
 //   refused `CONFLICT` `already_set` (FR-602: «entered once; afterwards only an administrator»).
+//   T175 (R1a): its key's stored outcome is null too; a replay reads the name from the account's
+//   row (`store.read`), `NOT_FOUND` once the account is no live student's.
 // - `setByAdministrator` is `users.setCertificateName`: an administrator sets or changes it at the
 //   student's request, keyed on the administrator kind's transaction (`runOn`, scope
 //   `users.setCertificateName`); the router audits it with the reason and no name. The key's stored
@@ -74,14 +76,16 @@ export class CertificateNameService {
    * list `live` is bound to the keyed transaction while its work runs, so the port publishes the
    * released requests' events on it (sent once the procedure resolves, after the commit), and is
    * unbound when the work ends, refused or not (sessions/cancellation.service.ts' `bound`). A
-   * replay runs no work, so it publishes nothing.
+   * replay runs no work, so it publishes nothing. T175 (R1a; the note under T175, (1)): the key
+   * stores null, so the name lives in no other table; a replay answers the name the account's row
+   * holds, read on the replay's transaction (an administrator may have changed it since).
    */
   async setOwn(
     studentUserId: string,
     { name, idempotencyKey }: CertificateNameSetInput,
     live: LivePublisher,
   ): Promise<CertificateNameSetOutput> {
-    return this.#dependencies.idempotency.run(
+    const again = await this.#dependencies.idempotency.run<CertificateNameSetOutput | null>(
       {
         scope: 'account.certificateName.set',
         key: idempotencyKey,
@@ -101,12 +105,24 @@ export class CertificateNameService {
             );
           }
           await this.#setLocked(tx, studentUserId, name);
-          return { name };
+          return null;
         } finally {
           unbind();
         }
       },
+      async (tx) => ({ name: await this.#heldName(tx, studentUserId) }),
     );
+    return again ?? { name };
+  }
+
+  /** T175: a replay's answer, the live student's name as its row holds it; else `NOT_FOUND`. */
+  async #heldName(tx: Transaction, studentUserId: string): Promise<string> {
+    const holder = await this.#dependencies.store.read(tx, studentUserId);
+    if (holder === null || !holder.student || holder.certificateName === null) {
+      this.#refusal({ userId: studentUserId }, 'not_student');
+      throw markRefusalLogged(new DomainError('NOT_FOUND'));
+    }
+    return holder.certificateName;
   }
 
   /** `users.setCertificateName`: an administrator sets or changes it, on the kind's transaction. */

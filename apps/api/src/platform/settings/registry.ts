@@ -827,6 +827,32 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Notification queued again after a lost enqueue: the age after which it is no longer sent (minutes)',
     30,
   ),
+  // T172 of specs/002-identity (SRS DEC-103, §3.14): the two limits per client address, counted
+  // before the platform-wide budgets they guard.
+  rate_limit_address_authentication: rateLimit(
+    'Anonymous sign-in rate limit (per client address, per window)',
+    { limit: 100, window_seconds: 900 },
+  ),
+  rate_limit_address_one_time_code: rateLimit(
+    'Anonymous one-time-code request rate limit (per client address, per window)',
+    { limit: 30, window_seconds: 3600 },
+  ),
+  // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account is
+  // erased this many days after its decision by the daily `erase-identity-documents`, a teacher once
+  // approved excepted (DEC-67); a ban's never before its restore window ends (Q-3 (a)).
+  identity_document_retention_days: whole(
+    positiveWhole,
+    'days',
+    'accounts',
+    'Identity document retention on a live account after its decision, a Teacher once approved excepted (days)',
+    90,
+  ),
+  // T173 of specs/002-identity (SRS DEC-100, §3.14): failed one-time codes counted per e-mail
+  // address and purpose; at the limit no code is issued for them until the window ends.
+  rate_limit_failed_one_time_code: rateLimit(
+    'Failed one-time codes before issuing stops (per e-mail address and purpose, per window)',
+    { limit: 10, window_seconds: 86400 },
+  ),
 };
 
 /** Whether `key` is a setting the registry names (and so one the panel may change). */

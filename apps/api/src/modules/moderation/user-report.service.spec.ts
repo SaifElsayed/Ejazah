@@ -477,7 +477,36 @@ describe('reports.get', () => {
       ...ITEM,
       reason: REASON,
       resolution: null,
+      chatAvailable: true,
     });
+  });
+
+  // 005:T034: an open report that names an enrollment opens its chat; nothing else does.
+  it.each([
+    ['an open session report', {}, true],
+    ['an open chat report', { context: 'chat', sessionId: null }, true],
+    ['an open profile report', { context: 'profile', sessionId: null, enrollmentId: null }, false],
+    [
+      'an actioned session report',
+      { status: 'actioned', resolutionNotes: 'تم', resolvedAt: AT, resolvedByAdminId: ADMIN },
+      false,
+    ],
+    [
+      'a dismissed chat report',
+      {
+        context: 'chat',
+        sessionId: null,
+        status: 'dismissed',
+        resolutionNotes: 'تم',
+        resolvedAt: AT,
+        resolvedByAdminId: ADMIN,
+      },
+      false,
+    ],
+  ] as const)('answers chatAvailable for %s', async (_name, change, available) => {
+    rows.set(REPORT, reportRow(change as Partial<UserReportRow>));
+    const detail = await service.get(TX, ADMIN, { reportId: REPORT }, log);
+    expect(detail.chatAvailable).toBe(available);
   });
 
   it('answers a resolved report with its outcome, note, instant and administrator', async () => {
@@ -494,6 +523,7 @@ describe('reports.get', () => {
       ...ITEM,
       status: 'dismissed',
       reason: REASON,
+      chatAvailable: false,
       resolution: {
         outcome: 'dismissed',
         note: 'لا مخالفة',

@@ -207,7 +207,8 @@ export {
  * What `payments`' checkout asks of booking (T036, FR-BOOK-12, FR-356, R-208), each on the caller's
  * transaction: a new checkout's hold with FR-BOOK-12's release of the student's own (its payable
  * order thrown as `PayableCheckout` for the caller to cancel outside any transaction), and a Retry's
- * enrollment and hold, read first and then locked in T005's order.
+ * enrollment and hold, read first and then locked in T005's order. T175: `checkoutTeacherName`, the
+ * teacher's name through the visibility predicate, read again by `checkout.hold`'s replay.
  */
 export {
   type CheckoutEnrollmentRow,
@@ -215,6 +216,7 @@ export {
   type CheckoutHoldDependencies,
   type CheckoutHoldStore,
   checkoutHoldStore,
+  checkoutTeacherName,
   type HeldOrders,
   type HeldOrdersOf,
   lockOrderTarget,

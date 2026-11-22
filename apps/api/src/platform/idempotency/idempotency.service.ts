@@ -49,6 +49,12 @@
 // (`AuditTrail.replayed()`): a replay records no second entry, the first call's being the record.
 // The retention is read inside the caller's transaction, since it is already open. A caller that
 // keys before it locks any row waits on a duplicate's claim holding no lock of the one order.
+//
+// A REPLAY FROM THE ROWS (T175, R1a; contracts/kernel.md «Idempotency»). A keyed call whose answer
+// holds personal data stores less than it answers: ids, or null. `run`'s `replay` reads the answer
+// again from what the key stored, on the replay's own transaction, after the request's hash is
+// checked; the first call answers the effect's outcome and never calls it. Without `replay`, the
+// stored outcome is the answer.
 import { createHash } from 'node:crypto';
 import { type IdempotentProcedure, isIdempotentProcedure } from '@ijazah/contracts';
 import { addSeconds } from '@ijazah/time';
@@ -119,6 +125,12 @@ export interface IdempotencyStore<TTransaction> {
   /** Deletes every key whose `expires_at` is not after `now`; answers how many. */
   removeExpired(now: Date): Promise<number>;
 }
+
+/**
+ * T175: how a replay is answered from the rows: handed the replay's transaction and the stored
+ * outcome, it answers what the first call answered, read again.
+ */
+export type Replay<TTransaction, TResult> = (tx: TTransaction, stored: TResult) => Promise<TResult>;
 
 export interface IdempotentRequest {
   /** The keyed procedure the key applies to: one of `packages/contracts`' list. */
@@ -209,6 +221,7 @@ export class IdempotencyService<TTransaction> {
   async run<TResult extends JsonValue>(
     request: IdempotentRequest,
     effect: (tx: TTransaction) => Promise<TResult>,
+    replay?: Replay<TTransaction, TResult>,
   ): Promise<TResult> {
     const { scope, actorId } = parsePrincipal(request);
     const key = parseKey(request.key);
@@ -223,14 +236,16 @@ export class IdempotencyService<TTransaction> {
     };
 
     try {
-      return await this.#store.transaction((tx) => this.#runOnce(tx, claim, now, effect));
+      return await this.#store.transaction((tx) =>
+        this.#runOnce(tx, claim, now, effect, replay),
+      );
     } catch (error: unknown) {
       if (!(error instanceof KeyTakenError)) throw error;
       // A duplicate committed first; its row is the answer.
       return this.#store.transaction(async (tx) => {
         const row = await this.#store.find(tx, claim.scope, claim.actorId, claim.key);
         if (row === null) throw error;
-        return this.#replay<TResult>(row, claim.requestHash);
+        return this.#answerOn(tx, this.#replay<TResult>(row, claim.requestHash), replay);
       });
     }
   }
@@ -309,16 +324,28 @@ export class IdempotencyService<TTransaction> {
     claim: NewKey,
     now: Date,
     effect: (tx: TTransaction) => Promise<TResult>,
+    replay: Replay<TTransaction, TResult> | undefined,
   ): Promise<TResult> {
     const existing = await this.#store.find(tx, claim.scope, claim.actorId, claim.key);
     if (existing !== null) {
-      if (existing.expiresAt > now) return this.#replay<TResult>(existing, claim.requestHash);
+      if (existing.expiresAt > now) {
+        return this.#answerOn(tx, this.#replay<TResult>(existing, claim.requestHash), replay);
+      }
       await this.#store.remove(tx, existing.id);
     }
     const id = await this.#store.claim(tx, claim);
     const outcome = await effect(tx);
     await this.#store.complete(tx, id, { outcome });
     return outcome;
+  }
+
+  /** A replay's answer: the stored outcome, or what `replay` reads again from it on `tx` (T175). */
+  async #answerOn<TResult extends JsonValue>(
+    tx: TTransaction,
+    stored: TResult,
+    replay: Replay<TTransaction, TResult> | undefined,
+  ): Promise<TResult> {
+    return replay === undefined ? stored : replay(tx, stored);
   }
 
   #replay<TResult extends JsonValue>(row: StoredKey, hash: string): TResult {

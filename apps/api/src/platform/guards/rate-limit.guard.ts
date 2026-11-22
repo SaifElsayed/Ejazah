@@ -34,8 +34,15 @@
 //
 // A BUDGET is a second key the declaration may name, counted under the one constant subject `*`
 // with its own settings row, so a path has a platform-wide cap beside the per-subject one: a
-// one-time-code flood spread over many numbers still stops. It is checked first, so a refused
-// budget counts nothing against the caller's own subject.
+// one-time-code flood spread over many numbers still stops. It is checked before the subject, so a
+// refused budget counts nothing against the caller's own subject.
+//
+// A LIMIT PER CLIENT ADDRESS (T172, SRS NFR-SEC-10, DEC-103) is a third key an anonymous
+// declaration may name, `addressKey`, counted under the request context's `clientAddress` before
+// the budget, so one address sending made-up subjects is refused before it spends the budget, and
+// a call refused there spends none. The key is the counter: every path declaring the same key
+// shares one count per address. Its first refusal is logged by the address's digest, as any
+// identifier's.
 //
 // WHO IS COUNTED is a `RateLimitSubject` (T062): a user or an administrator, filled only by the
 // signed-in kinds from the context they authenticated; an identifier, any value an endpoint names
@@ -80,7 +87,10 @@ import type { SettingsReader } from '../settings/settings-reader.js';
 /** The settings key of one limit. */
 export type RateLimitKey = `rate_limit_${string}`;
 
-/** The four paths limited by default (NFR-SEC-10) and the two budgets (T170), each by its settings key. */
+/**
+ * The four paths limited by default (NFR-SEC-10), the two budgets (T170) and the two limits per
+ * client address counted before them (T172, DEC-103), each by its settings key.
+ */
 export const defaultRateLimits = {
   authentication: 'rate_limit_authentication',
   oneTimeCode: 'rate_limit_one_time_code',
@@ -88,6 +98,8 @@ export const defaultRateLimits = {
   paymentInitiation: 'rate_limit_payment_initiation',
   oneTimeCodeBudget: 'rate_limit_one_time_code_budget',
   authenticationBudget: 'rate_limit_authentication_budget',
+  addressAuthentication: 'rate_limit_address_authentication',
+  addressOneTimeCode: 'rate_limit_address_one_time_code',
 } as const satisfies Record<string, RateLimitKey>;
 
 /** Every signed-in call that declares no limit (T062, FR-470; seeded by T001 at 150 per 60 s). */
@@ -164,6 +176,11 @@ export interface RateLimitCounter {
    * expiry or no key; T062). Read on a refusal only. A counter without it gives a refusal no time.
    */
   remainingMilliseconds?(key: string): Promise<number>;
+  /**
+   * How many the key's current window holds, read without counting (T173): 0 before a window opens
+   * and once it has ended. A counter without it backs no cap: `isCapped` then fails closed.
+   */
+  count?(key: string): Promise<number>;
 }
 
 /** What the limiter writes: the first refusal's record and the default breaker's warning (T062). */
@@ -267,6 +284,44 @@ export class RateLimiter {
     if (count <= limit) return;
     if (count === limit + 1) this.#logRefusal(key, subject, digest, procedure);
     throw await this.#refusal(this.#counter, counterKey);
+  }
+
+  /**
+   * A CAP ON EVENTS (T173 of specs/002-identity; SRS §3.14 «Failed one-time codes before issuing
+   * stops»): one event by `subject` counted under `key`'s fixed window, which the window's first
+   * event opens, and never refused, since the call it follows has its own answer. Answers the
+   * subject's digest when this event is the one that fills the limit (the count exactly the limit),
+   * so the caller writes the window's one record by the digest, never the subject; otherwise
+   * nothing.
+   */
+  async countEvent(key: RateLimitKey, subject: RateLimitSubject): Promise<string | undefined> {
+    const digest = this.#subjectDigest(key, subject);
+    const { limit, window_seconds } = await this.#settings.read(key, rateLimitSetting);
+    const count = await this.#counter.hit(`rate-limit:${key}:${digest}`, window_seconds);
+    return count === limit ? digest : undefined;
+  }
+
+  /**
+   * Whether `subject`'s window under `key` holds the limit or more (T173): read on the counter
+   * without counting, so asking never fills the cap. The limit is read on every call; a counter
+   * that cannot read a count fails closed, as every declared limit does.
+   */
+  async isCapped(key: RateLimitKey, subject: RateLimitSubject): Promise<boolean> {
+    const digest = this.#subjectDigest(key, subject);
+    const { limit } = await this.#settings.read(key, rateLimitSetting);
+    if (this.#counter.count === undefined) {
+      throw new Error(`Rate limit ${key}: the counter cannot read a count; nothing was answered.`);
+    }
+    return (await this.#counter.count(`rate-limit:${key}:${digest}`)) >= limit;
+  }
+
+  /** The digest `subject` is counted under; a subject that names nothing is refused. */
+  #subjectDigest(key: RateLimitKey, subject: RateLimitSubject): string {
+    const counted = countedAs(subject);
+    if (counted === '') {
+      throw new Error(`Rate limit ${key}: the caller named no subject; nothing was counted.`);
+    }
+    return this.#digest(counted);
   }
 
   /** The default: its held setting, its own counter under the timer, and the breaker. */
@@ -374,29 +429,39 @@ export interface IdentifierRateLimit<TContext, TInput> {
   /** The subject counted: an account identifier, a destination, a client address. */
   readonly subjectOf: (call: { readonly ctx: TContext; readonly input: TInput }) => string;
   readonly budget?: RateLimitKey;
+  /**
+   * The limit per client address counted before the budget (T172, DEC-103), its subject the
+   * context's `clientAddress`; one counter per address across every path naming the key.
+   */
+  readonly addressKey?: RateLimitKey;
 }
 
 /**
- * What a procedure declares to be limited (T170, T062): the settings key, who is counted, and the
- * platform-wide budget key when the path has one. `subject: 'caller'` is accepted by the signed-in
- * kinds only; the anonymous kinds take an `IdentifierRateLimit`.
+ * What a procedure declares to be limited (T170, T062, T172): the settings key, who is counted, the
+ * platform-wide budget key when the path has one and, on an anonymous path, the key per client
+ * address. `subject: 'caller'` is accepted by the signed-in kinds only; the anonymous kinds take an
+ * `IdentifierRateLimit`.
  */
 export type RateLimitDeclaration<TContext, TInput> =
   CallerRateLimit | IdentifierRateLimit<TContext, TInput>;
 
-/** What the middleware reads of a call: the context's limiter, the validated input, tRPC's path. */
+/**
+ * What the middleware reads of a call: the context's limiter and client address, the validated
+ * input, tRPC's path.
+ */
 interface ThrottledCall {
-  readonly ctx: { readonly rateLimiter: RateLimiter };
+  readonly ctx: { readonly rateLimiter: RateLimiter; readonly clientAddress: string };
   readonly input: unknown;
   readonly path: string;
   readonly next: () => Promise<unknown>;
 }
 
 /**
- * The procedure middleware a caller kind applies for a declaration: the budget first, when one is
- * named, then the subject, each refused past its limit before the handler runs. `callerOf` is the
- * signed-in kind's own reading of the caller it authenticated; a `'caller'` declaration without one
- * does not build.
+ * The procedure middleware a caller kind applies for a declaration: the client address first, when
+ * a key per address is named (T172), then the budget, when one is named, then the subject, each
+ * refused past its limit before the handler runs, so a refused call counts nothing after it.
+ * `callerOf` is the signed-in kind's own reading of the caller it authenticated; a `'caller'`
+ * declaration without one does not build.
  */
 export function throttle<TOptions extends ThrottledCall>(
   declaration: RateLimitDeclaration<TOptions['ctx'], TOptions['input']>,
@@ -407,6 +472,13 @@ export function throttle<TOptions extends ThrottledCall>(
   }
   const middleware = async (options: TOptions) => {
     const { rateLimiter } = options.ctx;
+    if ('addressKey' in declaration && declaration.addressKey !== undefined) {
+      await rateLimiter.check(
+        declaration.addressKey,
+        { kind: 'identifier', value: options.ctx.clientAddress },
+        options.path,
+      );
+    }
     if (declaration.budget !== undefined) {
       await rateLimiter.check(declaration.budget, { kind: 'budget' }, options.path);
     }
@@ -453,6 +525,16 @@ end
 return count
 `;
 
+// GET only (T173): a read that never increments and never opens or stretches a window; a key no
+// window holds reads 0.
+const COUNT_SCRIPT = `
+local count = redis.call('GET', KEYS[1])
+if count then
+  return tonumber(count)
+end
+return 0
+`;
+
 /** The two commands of a Redis client the counter needs. */
 export interface ScriptRunner {
   eval(script: string, keyCount: number, ...keysAndArgs: Array<string | number>): Promise<unknown>;
@@ -481,6 +563,14 @@ export class RedisRateLimitCounter implements RateLimitCounter {
       throw new TypeError('The rate-limit counter answered something other than a time to live.');
     }
     return remaining;
+  }
+
+  async count(key: string): Promise<number> {
+    const count = await this.#redis.eval(COUNT_SCRIPT, 1, key);
+    if (typeof count !== 'number' || !Number.isInteger(count)) {
+      throw new TypeError('The rate-limit counter answered something other than a count.');
+    }
+    return count;
   }
 }
 

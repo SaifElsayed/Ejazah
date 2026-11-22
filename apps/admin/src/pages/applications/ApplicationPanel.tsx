@@ -10,6 +10,8 @@
 // «اعتماد» waits for the three conditions, each one said.
 // B42b, T075 of specs/004-sessions (FR-502; the note under T075, Q-R6 (a)): «رفع الحظر» on a banned
 // account, an applicant's or an approved teacher's, at any time (`StandingDialogs.tsx`).
+// R1a (002:T174, DEC-97): the decision history, each decision's note kept after a later one
+// overwrites the application's note (`DecisionHistory`).
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -31,7 +33,7 @@ import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
 import { calendarDateOfDayField, dayFieldOf, dayFieldText } from '../../lib/day-field';
 import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
-import { cityName, dayMonthYear } from '../../lib/format';
+import { cityName, dayMonthYear, timeOfDay } from '../../lib/format';
 import { panelTimeZone, todayIn } from '../../lib/zone';
 import { AdminDocumentViewer, type DocumentViewerProps } from '../documents/AdminDocumentViewer';
 import { AdminRequireIdDialog } from '../documents/AdminRequireIdDialog';
@@ -383,6 +385,8 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
           <p className="text-callout">{detail.qualificationSummary}</p>
         </section>
 
+        <DecisionHistory history={detail.history} />
+
         {allowed.approve && blocked.length > 0 ? (
           <Banner icon={{ name: 'info' }} tone="info">
             <span className="stack gap-1">
@@ -424,6 +428,58 @@ function Detail({ detail }: { readonly detail: ApplicationDetail }) {
         />
       ) : null}
     </>
+  );
+}
+
+const HISTORY_ACTION_TEXT: Readonly<
+  Record<ApplicationDetail['history'][number]['action'], MessageKey>
+> = {
+  approve: 'admin.applications.detail.history.actions.approve',
+  reject: 'admin.applications.detail.history.actions.reject',
+  request_info: 'admin.applications.detail.history.actions.requestInfo',
+  ban: 'admin.applications.detail.history.actions.ban',
+  revoke: 'admin.applications.detail.history.actions.revoke',
+};
+
+/**
+ * R1a (002:T174; SRS DEC-97; contracts/admin-surface.md, the decision history): the application's
+ * history, oldest first as the server answers it: each decision's action in words, its note when
+ * there is one, who made it and when. The audit log keeps the entries without the text.
+ */
+function DecisionHistory({ history }: { readonly history: ApplicationDetail['history'] }) {
+  const t = useT();
+  const locale = useLocale();
+  const zone = panelTimeZone();
+  return (
+    <section className="section">
+      <h2 className="group-label">{t('admin.applications.detail.history.title')}</h2>
+      {history.length === 0 ? (
+        <p className="text-callout tone-muted">{t('admin.applications.detail.history.empty')}</p>
+      ) : (
+        <ol className="stack gap-4">
+          {history.map((entry, index) => (
+            // The rows carry no id; the server's order is the history's, and it is never edited.
+            <li key={`${entry.at}-${String(index)}`}>
+              <dl className="stack gap-half">
+                <dt className="text-medium">{t(HISTORY_ACTION_TEXT[entry.action])}</dt>
+                {entry.note === undefined ? null : (
+                  <dd className="text-callout">
+                    <bdi>{entry.note}</bdi>
+                  </dd>
+                )}
+                <dd className="text-caption tone-muted">
+                  {t('admin.applications.detail.history.meta', {
+                    date: dayMonthYear(entry.at, locale, zone),
+                    time: timeOfDay(entry.at, locale, zone),
+                    admin: entry.adminName,
+                  })}
+                </dd>
+              </dl>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 

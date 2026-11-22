@@ -207,13 +207,15 @@ function chatOver() {
     },
     lockEnrollments: async () => undefined,
   };
+  // T175 (rule d): the messages written, read again by id as `chat.send`'s replay reads them.
+  const written = new Map<string, Awaited<ReturnType<ChatStore['insertMessage']>>>();
   const store: ChatStore = {
     partiesOf,
     lockSender: async () => undefined,
     messagePage: async () => [],
     insertMessage: async (_tx, row) => {
       sent += 1;
-      return {
+      const message = {
         id: `0199d0a0-0000-7000-8000-0000000ef${String(sent).padStart(3, '0')}`,
         senderUserId: row.senderUserId,
         body: row.body,
@@ -222,7 +224,10 @@ function chatOver() {
         sentAt: row.sentAt,
         purgedAt: null,
       };
+      written.set(message.id, message);
+      return message;
     },
+    messageById: async (_tx, messageId) => written.get(messageId) ?? null,
     attachmentOf: async () => null,
     insertAttachment: async () => {
       throw new Error('no document in this attack');

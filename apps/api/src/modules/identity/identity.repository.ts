@@ -7,6 +7,7 @@
 // replaced only where the row still holds the one read, so a value written meanwhile is kept.
 import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
+import { eraseOf as eraseApplicationHistory } from './application-history.repository.js';
 
 type Client = Pick<Database, 'teacherProfile' | 'devicePushToken' | 'authIdentity'>;
 
@@ -308,7 +309,7 @@ export class AccountsRepository {
 
 type ErasureWriter = Pick<
   Transaction,
-  'user' | 'authIdentity' | 'devicePushToken' | 'teacherProfile'
+  'user' | 'authIdentity' | 'devicePushToken' | 'teacherProfile' | 'teacherApplicationHistory'
 >;
 
 /** What re-authentication reads of the live caller: the password hash and the provider identities. */
@@ -442,6 +443,11 @@ export async function readBannedSignIn(
  * columns; a teacher ever approved keeps them, the profile marked `kept_at`. `approved_at` is never
  * cleared (its one write, `application.repository.ts`), so «ever approved» is `approved_at IS NOT
  * NULL`, whatever the standing since.
+ *
+ * R1a (002:T174; SRS DEC-97, FR-AUTH-14 as amended): a teacher never approved also loses the
+ * verification call's notes, the application's note and the application's history (`eraseOf`, the
+ * history's one delete path); a teacher ever approved keeps all three, after `eraseKeptProfile` too.
+ * ⚠️ Irreversible: the notes and the history cannot be restored.
  */
 export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date): Promise<boolean> {
   const { count } = await tx.user.updateMany({
@@ -460,7 +466,7 @@ export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date):
   await tx.authIdentity.deleteMany({ where: { userId } });
   await tx.devicePushToken.deleteMany({ where: { userId } });
   const erased = { bio: '', qualificationSummary: '', photoKey: null };
-  await tx.teacherProfile.updateMany({
+  const { count: neverApproved } = await tx.teacherProfile.updateMany({
     where: { userId, approvedAt: null },
     data: {
       ...erased,
@@ -469,8 +475,13 @@ export async function eraseAccount(tx: ErasureWriter, userId: string, at: Date):
       payoutConfiguredAt: null,
       payoutVerifiedAt: null,
       payoutRejectedReason: null,
+      verificationCallNotes: null,
+      applicationNote: null,
     },
   });
+  // R1a (002:T174): a teacher never approved keeps nothing, the application's history included;
+  // `eraseOf` reads `approved_at` again under the account's lock the deletion holds.
+  if (neverApproved === 1) await eraseApplicationHistory(tx, userId);
   await tx.teacherProfile.updateMany({
     where: { userId, approvedAt: { not: null } },
     data: { ...erased, keptAt: at },

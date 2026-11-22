@@ -20,6 +20,7 @@ import {
   applicantsCount,
   applicantsPage,
   type ApplicationChange,
+  applicationHistoryOf,
   type ApplicationRecord,
   decideApplication,
   lockAccount,
@@ -28,11 +29,16 @@ import {
   readApplication,
   readStanding,
   recordApplicationCall,
+  recordApplicationHistory,
   setApplication,
 } from '../identity/index.js';
 import type { ApplicationReviewStore } from './application-review.service.js';
 import type { IdentityRequestStore } from './verification-request.service.js';
-import { documentSizes, documentsOwnedAmong } from './verification.repository.js';
+import {
+  documentSizes,
+  documentsOwnedAmong,
+  typeIdentityDocument,
+} from './verification.repository.js';
 import {
   attachDocument,
   documentUploadedAt,
@@ -83,6 +89,31 @@ export interface VerificationStores {
   documentSizes(tx: Transaction, ids: readonly string[]): Promise<ReadonlyMap<string, number>>;
 }
 
+/**
+ * R1a (002:T176's owner-approved addition, Q-C1-2 (a), the owner's «موافق على الاتنين» of 2026-11-22;
+ * SRS DEC-67, FR-AUTH-14; spec FR-508 of specs/004-sessions): the application's change, and once it
+ * lands, the identity document it names typed with the kind the application holds. The upload stores
+ * an identity document as `other` (`uploads.controller.ts`, kind `identity`), and the deletion keeps
+ * an approved teacher's documents by kind (`KEPT_DOCUMENT_TYPES`), so without this an identity
+ * document was erased at an approved teacher's deletion. Each submission types its own document, so
+ * one a later submission replaced keeps its kind and is kept too. Same transaction, so a refused
+ * change types nothing.
+ */
+async function setApplicationTypingItsDocument(
+  tx: Transaction,
+  userId: string,
+  change: ApplicationChange,
+): Promise<boolean> {
+  if (!(await setApplication(tx, userId, change))) return false;
+  if (change.kind === 'open') {
+    await typeIdentityDocument(tx, change.identityDocumentId, change.identityDocumentType);
+  } else if (change.kind === 'resubmit' && change.identityDocumentId !== undefined) {
+    const kind = (await readApplicant(tx, userId))?.identityDocumentType ?? null;
+    if (kind !== null) await typeIdentityDocument(tx, change.identityDocumentId, kind);
+  }
+  return true;
+}
+
 /** The stores over the process's database. */
 export function createVerificationStores(database: Database): VerificationStores {
   const { run } = transactionsOver(database);
@@ -91,7 +122,7 @@ export function createVerificationStores(database: Database): VerificationStores
     lockAccount,
     lockApplication,
     readApplication,
-    setApplication,
+    setApplication: setApplicationTypingItsDocument,
     activeSubjectsAmong,
     credentialsOf: listCredentials,
     addCredential,
@@ -145,6 +176,9 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
     decide: decideApplication,
     grantSubjects,
     closeCredentials: closeUndecidedCredentials,
+    // R1a (002:T174): the application's history, through identity's one entry.
+    recordHistory: recordApplicationHistory,
+    historyOf: applicationHistoryOf,
   };
 }
 
@@ -159,7 +193,13 @@ export function createIdentityRequestStore(database: Database): IdentityRequestS
     lastClosedRequestOf,
     readRequest,
     openRequest,
-    attachDocument,
+    // R1a (Q-C1-2 (a)): the identity document attached typed with the kind the person named, as an
+    // application's is (`setApplicationTypingItsDocument`), so a teacher once approved keeps it.
+    attachDocument: async (tx, attachment) => {
+      if (!(await attachDocument(tx, attachment))) return false;
+      await typeIdentityDocument(tx, attachment.documentId, attachment.documentType);
+      return true;
+    },
     resolve: resolveRequest,
     replace: replaceRequest,
     documentsOwnedAmong,

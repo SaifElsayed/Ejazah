@@ -1003,24 +1003,30 @@ export interface AdminSurfaceServices {
       tx: Transaction,
       adminId: string,
       input: z.output<typeof adminGenderFlagsCorrectInput>,
-    ): Promise<{
-      readonly flaggedUserId: string;
-      readonly from: Gender;
-      readonly to: Gender;
-      readonly endedEnrollments: number;
-      readonly replayed: boolean;
-    }>;
+    ): Promise<
+      | { readonly replayed: true; readonly endedEnrollments: number }
+      | {
+          readonly replayed: false;
+          readonly flaggedUserId: string;
+          readonly from: Gender;
+          readonly to: Gender;
+          readonly endedEnrollments: number;
+        }
+    >;
     fraudBan(
       tx: Transaction,
       adminId: string,
       input: z.output<typeof adminGenderFlagsFraudBanInput>,
-    ): Promise<{
-      readonly flaggedUserId: string;
-      readonly from: Gender;
-      readonly to: Gender;
-      readonly accountStatus: string;
-      readonly replayed: boolean;
-    }>;
+    ): Promise<
+      | { readonly replayed: true }
+      | {
+          readonly replayed: false;
+          readonly flaggedUserId: string;
+          readonly from: Gender;
+          readonly to: Gender;
+          readonly accountStatus: string;
+        }
+    >;
   };
   /** 005:T024 (B49; FR-624; R-410): the panel's settings, the admin module's, on the kind's transaction. */
   readonly settings: {

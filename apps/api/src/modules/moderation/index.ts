@@ -3,6 +3,8 @@
 import type { UserReports } from './user-report.service.js';
 // 005:T013: the gender flags' services' type, for `ModerationServices.genderFlags` (at the end).
 import type { GenderFlags } from './gender-flag.service.js';
+// 005:T034: the report chat's read, for `AdminReports` (at the end).
+import type { ReportChatReads } from './report-chat.service.js';
 
 /**
  * The system's compensation case on an enrollment (T035, FR-362, FR-375, FR-DISPUTE-5): opened, or
@@ -148,7 +150,8 @@ export interface ModerationServices {
   // 005:T013: the user's `genderFlags.raise`, one `createGenderFlags` built by `main.ts` (below).
   readonly genderFlags: Pick<GenderFlags, 'raise'>;
 }
-export type AdminReports = Pick<UserReports, 'list' | 'get' | 'resolve'>;
+/** 005:T034: and `reports.chat`, `createReportChat` built by `main.ts` over the `ReportChat` it binds. */
+export type AdminReports = Pick<UserReports, 'list' | 'get' | 'resolve'> & ReportChatReads;
 export { reportsRouter, USER_REPORT_RATE_LIMIT } from './reports.router.js';
 export { reportsAdminRouter } from './reports-admin.router.js';
 
@@ -197,3 +200,17 @@ export type AdminGenderFlags = Pick<
   'raiseByAdministrator' | 'list' | 'detail' | 'dismiss'
 >;
 export { GENDER_FLAG_RATE_LIMIT, genderFlagsRouter } from './gender-flags.router.js';
+
+// ---------------------------------------------------------------------------------------------
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): an administrator reads an
+// enrollment's chat under an open session or chat report (`reports.chat`), through the `ReportChat`
+// port `main.ts` binds to chat's `createDisputeChat()`, so moderation imports no chat.
+export type { ReportChat, ReportChatMessage, ReportChatPage } from './report-chat.port.js';
+export {
+  type ReportChatAsked,
+  type ReportChatDependencies,
+  type ReportChatReads,
+  type ReportChatStore,
+  createReportChat,
+  reportChatStore,
+} from './report-chat.service.js';

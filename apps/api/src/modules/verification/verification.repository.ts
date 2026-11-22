@@ -211,6 +211,25 @@ export async function markDocumentsErased(
 export const KEPT_DOCUMENT_TYPES = ['national_id', 'passport', 'credential'] as const;
 
 /**
+ * R1a (002:T176's owner-approved addition, Q-C1-2 (a); SRS DEC-67): an identity document uploaded as
+ * `other` (the route's kind `identity`) typed with the kind its submission names, on the
+ * submission's transaction, so the deletion keeps it by kind for a teacher once approved
+ * (`KEPT_DOCUMENT_TYPES`). Only an upload still `other` and neither erased nor kept is typed, once;
+ * a credential's PDF named as an identity document keeps its own kind. Whether it typed.
+ */
+export async function typeIdentityDocument(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+  kind: 'national_id' | 'passport',
+): Promise<boolean> {
+  const { count } = await tx.verificationDocument.updateMany({
+    where: { id, documentType: 'other', erasedAt: null, keptAt: null },
+    data: { documentType: kind },
+  });
+  return count === 1;
+}
+
+/**
  * Marks every document of `userId` of a kept kind, neither erased nor kept, as kept at `at`, on the
  * deletion's transaction; the keys stay (rule 34's first check), so no file erasure touches them.
  */
@@ -284,6 +303,113 @@ export async function eraseKeptDocuments(
     data: { keptAt: null, erasedAt: at },
   });
   return count;
+}
+
+/**
+ * R1a T176 (SRS §3.14, DEC-100; the note under T176): a document a decided identity request holds,
+ * as `erase-identity-documents` pages them: its owner, the document, and the request's id it is
+ * paged by.
+ */
+export interface DueRequestDocument {
+  readonly cursor: string;
+  readonly userId: string;
+  readonly documentId: string;
+}
+
+/**
+ * R1a T176: a page of the identity requests `satisfied` or `replaced` at or before `resolvedBefore`
+ * whose document is neither erased nor kept, in request id order after `after`; no lock (the sweep
+ * reads each again under its locks). Bounded by `limit`; the table is the rare FR-VERIFY-10 demands.
+ */
+export async function requestDocumentsDue(
+  tx: Pick<Transaction, 'verificationRequest'>,
+  resolvedBefore: Date,
+  after: string | undefined,
+  limit: number,
+): Promise<DueRequestDocument[]> {
+  const rows = await tx.verificationRequest.findMany({
+    where: {
+      status: { in: ['satisfied', 'replaced'] },
+      resolvedAt: { lte: resolvedBefore },
+      document: { erasedAt: null, keptAt: null },
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true, userId: true, documentId: true },
+  });
+  return rows.flatMap(({ id, userId, documentId }) =>
+    documentId === null ? [] : [{ cursor: id, userId, documentId }],
+  );
+}
+
+/** R1a T176: the identity request holding `documentId`, read under the sweep's locks; null for none. */
+export async function requestHoldingDocument(
+  tx: Pick<Transaction, 'verificationRequest'>,
+  documentId: string,
+): Promise<{
+  readonly userId: string;
+  readonly status: 'open' | 'satisfied' | 'expired' | 'replaced';
+  readonly resolvedAt: Date | null;
+} | null> {
+  return tx.verificationRequest.findFirst({
+    where: { documentId },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: { userId: true, status: true, resolvedAt: true },
+  });
+}
+
+/** R1a T176: a document's owner and its two marks, read under its lock; null for none. */
+export async function documentMarksOf(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+): Promise<{
+  readonly userId: string;
+  readonly erasedAt: Date | null;
+  readonly keptAt: Date | null;
+} | null> {
+  return tx.verificationDocument.findUnique({
+    where: { id },
+    select: { userId: true, erasedAt: true, keptAt: true },
+  });
+}
+
+/** R1a T176: of `ids`, the documents neither erased nor kept, by primary key, with no lock. */
+export async function unmarkedDocumentsAmong(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  const rows = await tx.verificationDocument.findMany({
+    where: { id: { in: [...ids] }, erasedAt: null, keptAt: null },
+    select: { id: true },
+  });
+  return new Set(rows.map(({ id }) => id));
+}
+
+/**
+ * R1a T176 (kernel.md of specs/004-sessions, the document sweep's row): locks the document `id` FOR
+ * UPDATE, after its owner's account and application (the one order of `platform/db/row-lock.ts`).
+ */
+export async function lockDocument(tx: Transaction, id: string): Promise<void> {
+  await lockRows(tx, 'verification_documents', [id]);
+}
+
+/**
+ * R1a T176 (the note under T176, (2); T077's precedent above): marks the identity document `id`
+ * erased at `at` where it is neither erased nor kept (rule 34: never both), its key left, so
+ * `erase-deleted-files` removes the file and then clears the key, waiting on an open matter. Whether
+ * it did.
+ */
+export async function markIdentityDocumentErased(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  id: string,
+  at: Date,
+): Promise<boolean> {
+  const { count } = await tx.verificationDocument.updateMany({
+    where: { id, erasedAt: null, keptAt: null },
+    data: { erasedAt: at },
+  });
+  return count === 1;
 }
 
 export class VerificationRepository {

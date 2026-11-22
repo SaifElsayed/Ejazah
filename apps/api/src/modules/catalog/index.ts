@@ -14,6 +14,7 @@ import {
   correctCredential,
   decideCredential,
   hasApprovedCredential,
+  lockCredential,
   readForReview,
   reviewCount,
   reviewPage,
@@ -23,6 +24,7 @@ import {
   type CredentialReviewStore,
   type OpenRequestsRefreeze,
 } from './credential-review.service.js';
+import { credentialHistory } from './credentials-history.repository.js';
 import { foldedTexts } from '../../platform/db/folded-name.js';
 import {
   accountTimezone,
@@ -88,9 +90,22 @@ export { credentialsAdminRouter } from './credentials-admin.router.js';
 export type { CredentialReviewService };
 
 /**
+ * T174 (SRS DEC-97, FR-AUTH-14): the credential's history of decisions and corrections, written in
+ * each decision's transaction and erased only with a teacher never approved; exported for its
+ * probes (`tests/db-integrity/teacher-credential-history.spec.ts`).
+ */
+export { credentialHistory };
+/**
+ * T174: catalog's subscriber to identity's consequences registry, subscribed by `main.ts`: the
+ * deletion of a teacher never approved blanks their credentials' transcription and erases the
+ * credentials' history; a teacher once approved keeps all of it.
+ */
+export { catalogDeletionConsequence } from './credentials-erasure.js';
+
+/**
  * The credential review's store: this module's rows, the teacher's standing read, the application
  * set waiting on the applicant (T155), its row's lock (T161) and the account's (T142) through
- * identity's entry (R-121).
+ * identity's entry (R-121); T174 adds the credential's lock and its history.
  * Exported for the probe of its queries (`tests/db-integrity/credential-review.spec.ts`).
  */
 export const credentialReviewStore: CredentialReviewStore = {
@@ -107,6 +122,10 @@ export const credentialReviewStore: CredentialReviewStore = {
   requestApplicationDocument: (tx, userId, request) =>
     decideApplication(tx, userId, { kind: 'request_info', ...request }),
   grantSubjects,
+  // T174: the credential's own lock, and its history's writer and reader.
+  lockCredential,
+  recordHistory: credentialHistory.record,
+  historyOf: credentialHistory.listOf,
 };
 
 /** The credential review (T069, FR-163, FR-164); the admin module composes it into the surface's services. */

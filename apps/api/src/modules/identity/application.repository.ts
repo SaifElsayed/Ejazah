@@ -72,8 +72,9 @@ export class ApplicationRepository {
 
   /**
    * Opens the application `in_review` from the state it names; the earlier decision, note, call
-   * record and approved screen belong to the earlier application and are cleared (the audit log
-   * keeps them), so a reapproval shows `ApplicationApproved` again. Whether it wrote.
+   * record and approved screen belong to the earlier application and are cleared (each decision's
+   * note stays in the application's history, R1a 002:T174; the call's day and outcome in its audit
+   * entry), so a reapproval shows `ApplicationApproved` again. Whether it wrote.
    */
   async open(userId: string, application: OpenedApplication): Promise<boolean> {
     const data = {
@@ -177,6 +178,40 @@ export async function isApprovedTeacher(tx: Client, userId: string): Promise<boo
     select: { verificationStatus: true },
   });
   return profile?.verificationStatus === 'approved';
+}
+
+/**
+ * R1a, 002:T176 (SRS §3.14, DEC-100, DEC-67; Q-3 (a); the owner's «موافق على الاتنين» of 2026-11-22,
+ * Q-C1-1 (a)): a page of the live applicants never approved whose identity document is due, in
+ * profile id order after `after`, read with no lock for verification's `erase-identity-documents`,
+ * which reads each again under its locks (T077's `keptProfilesDue` is the precedent). `rejected`
+ * decided at or before `rejectedBefore`; `banned` at or before `bannedBefore`, which the caller sets
+ * from the later of the retention and `ban_restore_window_days`.
+ */
+export async function identityDocumentsDecidedBefore(
+  tx: Client,
+  cutoffs: { readonly rejectedBefore: Date; readonly bannedBefore: Date },
+  after: string | undefined,
+  limit: number,
+): Promise<{ readonly profileId: string; readonly userId: string; readonly documentId: string }[]> {
+  const rows = await tx.teacherProfile.findMany({
+    where: {
+      approvedAt: null,
+      identityDocumentId: { not: null },
+      user: { deletedAt: null },
+      OR: [
+        { applicationStatus: 'rejected', applicationDecidedAt: { lte: cutoffs.rejectedBefore } },
+        { applicationStatus: 'banned', applicationDecidedAt: { lte: cutoffs.bannedBefore } },
+      ],
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
+    orderBy: { id: 'asc' },
+    take: limit,
+    select: { id: true, userId: true, identityDocumentId: true },
+  });
+  return rows.flatMap(({ id, userId, identityDocumentId }) =>
+    identityDocumentId === null ? [] : [{ profileId: id, userId, documentId: identityDocumentId }],
+  );
 }
 
 /**

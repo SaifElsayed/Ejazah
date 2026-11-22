@@ -2,7 +2,7 @@
 
 ## Owns
 
-`subjects, teacher_subjects, packages, availability_slots, isnad_entries, teacher_signatures, teacher_credentials`
+`subjects, teacher_subjects, packages, availability_slots, isnad_entries, teacher_signatures, teacher_credentials, teacher_credential_history`
 
 Listed in `packages/config/module-tables.json`. Reaching a table outside this list fails the build citing R-API-6.
 
@@ -12,16 +12,19 @@ Store an availability slot as an absolute instant; it is wall-clock plus IANA zo
 
 ## Locks
 
-The credential review locks the teacher's rows before the credential moves, through identity's entry: `lockAccount` locks the `users` row, `lockApplication` the `teacher_profiles` row. Where one transaction takes both, the account's comes first, the order the standing's ban takes them (T164, the owner's decision of 2026-11-01).
+The credential review locks the teacher's rows before the credential moves, through identity's entry: `lockAccount` locks the `users` row, `lockApplication` the `teacher_profiles` row; `lockCredential` locks the credential's own `teacher_credentials` row. The order is `row-lock.ts`'s: the account, the application, then the credential (T164, the owner's decision of 2026-11-01). Every decision locks the account first and then reads the credential again (rule 1; Q-A2-1, the owner's approval of 2026-11-22), so a never-approved teacher's deletion, which holds the account while it blanks the credentials, commits first and the decision answers NOT_FOUND, writing nothing. Each decision writes its `teacher_credential_history` row after its conditional write, which holds the credential's row (T174).
 
-- `credentials.approve` locks the account, then the application, before the credential moves and the subject is granted (T142, T164): a revocation meanwhile commits first or waits, and the grant's `teacher_subjects` row references the teacher's `users` row.
-- `credentials.requestDocument` locks the application before the credential moves (T161), so the applicant's resubmission meanwhile commits first or waits and then reads the credential waiting.
+- `credentials.approve` locks the account, reads the credential again, then locks the application, before the credential moves and the subject is granted (T142, T164): a revocation meanwhile commits first or waits, and the grant's `teacher_subjects` row references the teacher's `users` row.
+- `credentials.reject` locks the account and reads the credential again; its write is conditional on the state it moves from.
+- `credentials.requestDocument` locks the account, reads the credential again, then locks the application before the credential moves (T161), so the applicant's resubmission meanwhile commits first or waits and then reads the credential waiting.
+- `credentials.correct` locks the account, then the credential, then reads the transcription it replaces (T174), so two corrections at once chain their history, and then re-freezes the credential's open ijazah requests (005:T006).
 - `teacher.packages.create` locks the account, then the application, before it reads the teacher's subjects (T018): its row references the teacher's `users` row, and a revocation meanwhile, which moves the application's row before it removes the subjects, commits first or waits.
 - `teacher.packages.update` locks the account before it reads the package and asks booking whether it has an enrollment (T018): `checkout.pay` locks the same account before it reads the package and inserts its first enrollment (T036; the hold, T033, inserts none), so an edit of the track or the length and a first enrollment never cross.
 - `teacher.slots.create` locks the account, then `lockKey('teacher-slots', teacherId)`, before it reads the zone and the active slots (T019): its row references the teacher's `users` row, and two saves of one teacher meet on the key.
 - `teacher.slots.update` locks the account, then the key, then the slot's row, before it asks booking whether the slot is in use and reads the others (T019). The key is never taken after a slot's row, and `checkout.hold` takes the same key before it inserts a hold (R-207), so a save and a hold never cross.
 - `POST /uploads/signature` locks the account before it reads and writes the teacher's signature row (T003 of specs/005-certification): the row references the teacher's `users` row, two uploads of one teacher meet on that lock, and the old file is erased only after the commit.
-- `credentials.reject` and `credentials.correct` take no lock: every write is conditional on the state it moves from, and §15 rule 23's partial unique refuses a second approved credential for a teacher's subject.
+- Beside the locks, every credential write is conditional on the state it moves from, and §15 rule 23's partial unique refuses a second approved credential for a teacher's subject.
+- The deletion of a teacher never approved (`catalogDeletionConsequence`, on the deletion's transaction, under its account lock) blanks the teacher's credentials, deletes their chains and erases their history; `eraseOfTeacher` is the only DELETE on `teacher_credential_history` (rule 69) and refuses a teacher once approved.
 
 ## Discovery (Phase 2)
 

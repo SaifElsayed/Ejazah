@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { idempotencyKey } from '../idempotency-key.js';
 import { reportContext } from '../reports.js';
 import { adminReason } from './admins.js';
+import { disputesChatOutput } from './disputes.js';
 
 /** A report's state (`user_report_status`, ERD §10). */
 export const reportStatus = z.enum(['open', 'actioned', 'dismissed']);
@@ -62,6 +63,8 @@ export const adminReportsGetOutput = adminReportsListItem.extend({
   /** The reporter's words, free text (Q-R8 (a)). */
   reason: z.string(),
   resolution: reportResolution.nullable(),
+  /** 005:T034: an open report that names an enrollment opens its chat (`reports.chat`). */
+  chatAvailable: z.boolean(),
 });
 
 export const adminReportsResolveInput = z.object({
@@ -70,6 +73,18 @@ export const adminReportsResolveInput = z.object({
   note: adminReason,
   idempotencyKey,
 });
+
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): an open session or chat
+// report's enrollment chat, read-only. The input names the enrollment the panel was shown, so a
+// report and an enrollment that do not belong together are refused; the page is `disputes.chat`'s.
+export const adminReportsChatInput = z.object({
+  reportId: z.uuid(),
+  enrollmentId: z.uuid(),
+  /** The last message id of the previous page. */
+  cursor: z.uuid().optional(),
+});
+
+export const adminReportsChatOutput = disputesChatOutput;
 
 export type ReportStatus = z.infer<typeof reportStatus>;
 export type ReportOutcome = z.infer<typeof reportOutcome>;
@@ -80,3 +95,5 @@ export type AdminReportsListOutput = z.infer<typeof adminReportsListOutput>;
 export type AdminReportsGetInput = z.infer<typeof adminReportsGetInput>;
 export type AdminReportsGetOutput = z.infer<typeof adminReportsGetOutput>;
 export type AdminReportsResolveInput = z.infer<typeof adminReportsResolveInput>;
+export type AdminReportsChatInput = z.infer<typeof adminReportsChatInput>;
+export type AdminReportsChatOutput = z.infer<typeof adminReportsChatOutput>;

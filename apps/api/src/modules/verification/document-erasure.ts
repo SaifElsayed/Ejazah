@@ -19,6 +19,12 @@
 // - THE JOB. `pendingPage` and `clearKey` are the `erase-deleted-files` sweep's store: every erased
 //   document still holding a key, in id order, and the conditional clear. So no identity document
 //   outlives its key unseen (rule 34 holds that a key never goes without `erased_at`).
+// - A LIVE ACCOUNT'S (R1a, 002:T176; SRS §3.14, DEC-100): an erased document is not only a deleted
+//   person's. The daily `erase-identity-documents` (`identity-retention.sweep.ts`) marks an identity
+//   document on a live account erased once its retention has passed since its decision, its key
+//   kept; `pendingPage` lists it like any other (it reads `erased_at`, never the owner's deletion), so
+//   the job removes its file. One marked and then held by a matter opened before the file goes is
+//   listed by a dispute's held files (`heldErasedDocumentsOf`) as evidence, as a deleted person's is.
 //
 // The key is decrypted for the one removal and goes nowhere else (R-DB-8, R-SEC-2).
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';

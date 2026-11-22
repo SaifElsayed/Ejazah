@@ -105,3 +105,31 @@ export class IdempotencyRepository implements IdempotencyStore<Transaction> {
     return count;
   }
 }
+
+/** The running call's own key, which a removal of its actor's keys keeps (T175). */
+export interface KeptKey {
+  readonly scope: string;
+  readonly key: string;
+}
+
+/**
+ * T175 (R1a; the note under T175, (3); `specs/002-identity/contracts/kernel.md`, «Idempotency»): a
+ * deleted person's keys removed on the deletion's transaction, every one whose actor is `actorId`
+ * except `keep`. The person's own `account.delete` runs inside its key's `run`, whose `complete`
+ * updates that row after the effect: deleting it there would fail the update and roll the deletion
+ * back, so it is kept (its outcome null) until `expire-idempotency-keys`. No other actor's key is
+ * touched. A rare call (a deletion), so no index of `actor_id` alone (R-DB-9). Answers how many.
+ */
+export async function removeOfActor(
+  tx: Pick<Transaction, 'idempotencyKey'>,
+  actorId: string,
+  keep?: KeptKey,
+): Promise<number> {
+  const { count } = await tx.idempotencyKey.deleteMany({
+    where: {
+      actorId,
+      ...(keep === undefined ? {} : { NOT: { scope: keep.scope, key: keep.key } }),
+    },
+  });
+  return count;
+}

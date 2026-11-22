@@ -106,7 +106,19 @@
         "subjects": "Subjects and qualification",
         "suitable": "Suitable",
         "unsuitable": "Unsuitable",
-        "liftBan": "Lift the ban"
+        "liftBan": "Lift the ban",
+        "history": {
+          "title": "Decision history",
+          "empty": "No decision on the application yet.",
+          "meta": "{date} · {time} · {admin}",
+          "actions": {
+            "approve": "Approved",
+            "reject": "Rejected",
+            "requestInfo": "Information requested",
+            "ban": "Banned",
+            "revoke": "Approval revoked"
+          }
+        }
       },
       "empty": {
         "decided": {
@@ -329,6 +341,8 @@
       "values": {
         "no": "No",
         "none": "—",
+        "noteGiven": "The reason is in the application's history",
+        "noteGivenCredential": "The reason is in the credential's history",
         "retiredReasons": {
           "ijazahUnreadable": "Ijazah file unreadable or incomplete"
         },
@@ -729,6 +743,24 @@
           "title": "No ijazah awaits another file"
         }
       },
+      "history": {
+        "action": {
+          "approve": "Approved",
+          "correct": "Corrected",
+          "reject": "Rejected",
+          "requestDocument": "Another document requested"
+        },
+        "chainAfter": "Chain after: {chain}",
+        "chainBefore": "Chain before: {chain}",
+        "empty": "No decision is recorded on this ijazah yet.",
+        "lede": "Every decision on this ijazah and every correction, with its text, who wrote it and when. It is never edited.",
+        "meta": "{admin} · {date} {time}",
+        "nameAfter": "Name after: {name}",
+        "nameBefore": "Name before: {name}",
+        "noteLabel": "Note",
+        "reasonLabel": "Reason for the correction",
+        "title": "Decision history"
+      },
       "lede": "{count, plural, one {# ijazah awaits review} other {# ijazahs await review}}: one PDF per subject, from applications or from subjects teachers add.",
       "ledeEmpty": "No credentials awaiting review now.",
       "pagerSummary": "{shown} of {total}",
@@ -743,7 +775,7 @@
         "conflict": "This ijazah changed meanwhile, so it is shown as it is now.",
         "correctEffect1": "The corrected chain appears on the teacher's page, and on every ijazah issued after saving.",
         "correctEffect2": "Ijazahs issued before the correction stay as issued.",
-        "correctFooter": "Saving unlocks once the reason is written. The correction, its reason and the chain before and after are recorded under your name in the audit log.",
+        "correctFooter": "Saving unlocks once the reason is written. The correction, its reason, and the name and chain before and after are recorded under your name in the decision history below, not in the audit log.",
         "correctReason": "Reason for the correction (required)",
         "footer": "Approving makes the ijazah \"Verified\" with the riwaya, tariq and chain as you transcribed them. \"Request another document\" sets it to \"Another file needed\" until the teacher uploads a new file. Your decision is recorded under your name in the audit log.",
         "generation": "{n}",
@@ -2271,6 +2303,11 @@
       "teacherShare": "{amount} at {percent}%"
     },
     "reports": {
+      "chat": {
+        "banner": "This chat is shown because the report is open, and is not shown otherwise. Your opening it is recorded in the audit log with your name and the time. Nothing can be written in it or deleted from it.",
+        "notFound": "This report's chat was not found.",
+        "notOpen": "This report is no longer open, so the enrollment's chat is not shown here."
+      },
       "columns": {
         "context": "Context",
         "date": "Date",
@@ -2629,6 +2666,7 @@
         "enrollment_restore_window_days": "Enrollment restore window",
         "first_session_lead_hours": "First session lead after confirmation",
         "idempotency_key_ttl_hours": "Duplicate-payment guard",
+        "identity_document_retention_days": "Identity document kept after its decision",
         "ijazah_half_release_percent": "Ijazah track: share released at half the sessions",
         "join_window_minutes": "Join window",
         "live_channel_max_connections_per_user": "Live channel connections per user",
@@ -2653,6 +2691,8 @@
         "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
         "push_token_stale_days": "Unused push tokens deleted after",
         "rate_limit_absence_complaint": "Absence complaints",
+        "rate_limit_address_authentication": "Sign-in requests from one address",
+        "rate_limit_address_one_time_code": "One-time code requests from one address",
         "rate_limit_admin_authentication": "Admin sign-in requests",
         "rate_limit_admin_authentication_budget": "Admin sign-ins, platform-wide",
         "rate_limit_admin_user_delete": "An administrator's account deletions",
@@ -2663,6 +2703,7 @@
         "rate_limit_dispute_revision": "Dispute ruling revisions",
         "rate_limit_enrollment_end": "Enrollment ends",
         "rate_limit_enrollment_restore": "Enrollment restores",
+        "rate_limit_failed_one_time_code": "Wrong one-time codes before no more codes are sent",
         "rate_limit_gender_decision": "Gender decisions",
         "rate_limit_gender_flag": "Gender flags",
         "rate_limit_ijazah_decision": "Ijazah decisions",

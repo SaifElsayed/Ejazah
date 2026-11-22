@@ -10,7 +10,10 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { credentialReviewStore } from '../../apps/api/src/modules/catalog/index.js';
+import {
+  createCredentialReviewService,
+  credentialReviewStore,
+} from '../../apps/api/src/modules/catalog/index.js';
 import {
   closeDatabase,
   type Database,
@@ -20,6 +23,7 @@ import {
 import {
   connectAsApplication,
   type Db,
+  insertRow,
   makeAdmin,
   makeCredential,
   makeSubject,
@@ -34,7 +38,8 @@ let database: Database;
 beforeAll(async () => {
   db = await connectAsApplication();
   database = openDatabase(process.env['DATABASE_URL'] ?? '', {
-    poolMax: 2,
+    // T174: two raced transactions, and a third connection for the reads between them.
+    poolMax: 3,
     statementTimeoutMs: 30_000,
     idleInTransactionTimeoutMs: 60_000,
   });
@@ -251,5 +256,185 @@ describe('decisions and corrections', () => {
         { position: 2, names: ['جبريل'] },
       ],
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T174 (R1a; SRS DEC-97; ERD `teacher_credential_history`; the note under T174, (4)): each decision
+// on a credential writes one history row in its transaction, through the service as the admin
+// module composes it. A race spec per insert path: two decisions on one credential at once, each in
+// its own committed transaction, both begun before either writes; one wins and one row is written.
+// Two corrections at once both land, the second reading, under the credential's lock, the
+// transcription the first left: its `before` is the first one's `after`. A request for another
+// document that moves the application writes the credential's row only, none in the application's.
+describe('the history: one row per decision, raced (T174)', () => {
+  const review = createCredentialReviewService({
+    settings: { read: async (_key, schema) => schema.parse(50) },
+    // 005:T006: the correction's re-freeze, which this probe does not assert.
+    openRequestsRefreeze: { refreeze: async () => undefined },
+  });
+
+  function barrier(parties: number): () => Promise<void> {
+    let waiting = 0;
+    let release: () => void = () => undefined;
+    const all = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () => {
+      waiting += 1;
+      if (waiting === parties) release();
+      return all;
+    };
+  }
+
+  /** Each call on its own committed transaction, all begun before any of them runs. */
+  async function raced(calls: readonly ((tx: Transaction) => Promise<unknown>)[]) {
+    const meet = barrier(calls.length);
+    return Promise.allSettled(
+      calls.map((call) =>
+        database.$transaction(
+          async (tx) => {
+            await tx.$queryRaw`SELECT 1`;
+            await meet();
+            return call(tx);
+          },
+          { timeout: 30_000 },
+        ),
+      ),
+    );
+  }
+
+  const codesOf = (outcomes: readonly PromiseSettledResult<unknown>[]) =>
+    outcomes
+      .map((outcome) =>
+        outcome.status === 'fulfilled' ? 'ok' : String((outcome.reason as { code?: unknown }).code),
+      )
+      .sort();
+
+  async function historyOf(credentialId: string) {
+    const { rows } = await db.query<{
+      action: string;
+      note: string | null;
+      before: unknown;
+      after: unknown;
+    }>(
+      `SELECT action, note, before, after FROM teacher_credential_history
+        WHERE credential_id = $1 ORDER BY created_at, id`,
+      [credentialId],
+    );
+    return rows;
+  }
+
+  const TRANSCRIPTION = {
+    holderName: 'عمر بن فاروق',
+    riwaya: 'حفص عن عاصم',
+    chain: [{ names: ['رسول الله ﷺ'] }, { names: ['جبريل'] }],
+  };
+
+  it('two approvals at once: one wins, one CONFLICT, one row', async () => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    const outcomes = await raced([
+      (tx) => review.approve(tx, adminId, { credentialId, ...TRANSCRIPTION }),
+      (tx) => review.approve(tx, adminId, { credentialId, ...TRANSCRIPTION, note: 'ثانٍ' }),
+    ]);
+    expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
+    expect((await historyOf(credentialId)).map(({ action }) => action)).toEqual(['approve']);
+  });
+
+  it.each([
+    ['two rejections', 'reject', 'reject'],
+    ['two requests for a document', 'requestDocument', 'requestDocument'],
+  ] as const)('%s at once: one wins, one CONFLICT, one row', async (_case, first, second) => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    const outcomes = await raced([
+      (tx) => review[first](tx, adminId, { credentialId, reason: 'السبب الأول' }),
+      (tx) => review[second](tx, adminId, { credentialId, reason: 'السبب الثاني' }),
+    ]);
+    expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
+    expect(await historyOf(credentialId)).toHaveLength(1);
+  });
+
+  // Both orders are decisions in sequence once each waits on the account (Q-A2-1): a rejection first
+  // leaves the request CONFLICT; a request first leaves the credential waiting, which a rejection
+  // may still end, so both land, in that order. One row per decision that landed, either way.
+  it('a rejection and a request for a document at once: one row per decision that landed, in its order', async () => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    const outcomes = await raced([
+      (tx) => review.reject(tx, adminId, { credentialId, reason: 'السبب الأول' }),
+      (tx) => review.requestDocument(tx, adminId, { credentialId, reason: 'السبب الثاني' }),
+    ]);
+    const actions = (await historyOf(credentialId)).map(({ action }) => action);
+    if (codesOf(outcomes).includes('CONFLICT')) {
+      expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
+      expect(actions).toEqual(['reject']);
+    } else {
+      expect(actions).toEqual(['request_document', 'reject']);
+    }
+  });
+
+  it('an approval and a rejection at once: one wins, one CONFLICT, one row', async () => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    const outcomes = await raced([
+      (tx) => review.approve(tx, adminId, { credentialId, ...TRANSCRIPTION }),
+      (tx) => review.reject(tx, adminId, { credentialId, reason: 'الختم غير واضح' }),
+    ]);
+    expect(codesOf(outcomes)).toEqual(['CONFLICT', 'ok']);
+    expect(await historyOf(credentialId)).toHaveLength(1);
+  });
+
+  it('two corrections at once: both land, and the second’s before is the first’s after', async () => {
+    const adminId = await makeAdmin(db);
+    const credentialId = await makeCredential(db, { ...(await teacherAndSubject('race')) });
+    await database.$transaction((tx) =>
+      review.approve(tx, adminId, { credentialId, ...TRANSCRIPTION, tariq: 'الشاطبية' }),
+    );
+    const outcomes = await raced([
+      (tx) =>
+        review.correct(tx, adminId, { credentialId, holderName: 'عمر الأنصاري', reason: 'الاسم' }),
+      (tx) =>
+        review.correct(tx, adminId, { credentialId, riwaya: 'ورش عن نافع', reason: 'الرواية' }),
+    ]);
+    expect(codesOf(outcomes)).toEqual(['ok', 'ok']);
+    const corrections = (await historyOf(credentialId)).filter(
+      ({ action }) => action === 'correct',
+    );
+    expect(corrections).toHaveLength(2);
+    expect(corrections[1]?.before).toEqual(corrections[0]?.after);
+    expect(corrections[1]?.after).toMatchObject({
+      holderName: 'عمر الأنصاري',
+      riwaya: 'ورش عن نافع',
+    });
+  });
+
+  it("a request for a document that moves the application writes the credential's row only", async () => {
+    const adminId = await makeAdmin(db);
+    const parents = await teacherAndSubject('moves');
+    const profileId = await insertRow(db, 'teacher_profiles', {
+      user_id: parents.teacherId,
+      bio: '',
+      qualification_summary: 'Probe',
+      verification_status: 'pending',
+      application_status: 'in_review',
+      application_submitted_at: '2026-10-20T09:00:00Z',
+    });
+    const credentialId = await makeCredential(db, { ...parents });
+    await database.$transaction((tx) =>
+      review.requestDocument(tx, adminId, { credentialId, reason: 'الصفحة الأخيرة ناقصة' }),
+    );
+    const { rows } = await db.query<{ status: string; count: string }>(
+      `SELECT p.application_status AS status,
+              (SELECT count(*) FROM teacher_application_history h
+                WHERE h.teacher_profile_id = p.id)::text AS count
+         FROM teacher_profiles p WHERE p.id = $1`,
+      [profileId],
+    );
+    expect(rows).toEqual([{ status: 'needs_document', count: '0' }]);
+    expect(await historyOf(credentialId)).toEqual([
+      { action: 'request_document', note: 'الصفحة الأخيرة ناقصة', before: null, after: null },
+    ]);
   });
 });

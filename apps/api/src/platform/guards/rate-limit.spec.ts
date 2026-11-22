@@ -41,6 +41,7 @@ import {
   type RateLimitCounter,
   type RateLimitLog,
   RateLimiter,
+  type RateLimitKey,
   RedisRateLimitCounter,
   SIGNED_IN_DEFAULT_RATE_LIMIT,
 } from './rate-limit.guard.js';
@@ -93,6 +94,14 @@ class FakeCounter implements RateLimitCounter {
     this.remainingReads += 1;
     return this.remaining();
   }
+
+  /** T173: the window's count, read without counting; each such read is counted. */
+  countReads = 0;
+
+  async count(key: string): Promise<number> {
+    this.countReads += 1;
+    return this.counts.get(key) ?? 0;
+  }
 }
 
 type LogLine = readonly [Readonly<Record<string, unknown>>, string];
@@ -128,6 +137,8 @@ function fixture(
     readonly windowSeconds?: number;
     readonly budgetLimit?: number;
     readonly defaultLimit?: number;
+    /** T172: both per-address keys at this limit, declared on the anonymous paths. */
+    readonly addressLimit?: number;
   } = {},
 ) {
   const settings = new FakeSettings();
@@ -152,6 +163,13 @@ function fixture(
     settings.values.set(defaultRateLimits.authenticationBudget, budget);
     settings.values.set(defaultRateLimits.oneTimeCodeBudget, budget);
   }
+  if (options.addressLimit !== undefined) {
+    const perAddress = { limit: options.addressLimit, window_seconds: 900 };
+    settings.values.set(defaultRateLimits.addressAuthentication, perAddress);
+    settings.values.set(defaultRateLimits.addressOneTimeCode, perAddress);
+  }
+  const addressKey = (key: RateLimitKey) =>
+    options.addressLimit === undefined ? {} : { addressKey: key };
 
   const phoneInput = z.object({ phone: z.string() });
   const text = z.string();
@@ -165,8 +183,22 @@ function fixture(
         ...(options.budgetLimit === undefined
           ? {}
           : { budget: defaultRateLimits.authenticationBudget }),
+        ...addressKey(defaultRateLimits.addressAuthentication),
       },
     }).mutation(() => 'signed-in'),
+    // T172: a second path on the same per-address key, as `auth.email.resetPassword` beside `signIn`.
+    resetPassword: publicProcedure({
+      input: phoneInput,
+      output: text,
+      rateLimit: {
+        key: defaultRateLimits.authentication,
+        subjectOf: ({ input }) => input.phone,
+        ...(options.budgetLimit === undefined
+          ? {}
+          : { budget: defaultRateLimits.authenticationBudget }),
+        ...addressKey(defaultRateLimits.addressAuthentication),
+      },
+    }).mutation(() => 'reset'),
     requestCode: publicProcedure({
       input: phoneInput,
       output: text,
@@ -176,6 +208,7 @@ function fixture(
         ...(options.budgetLimit === undefined
           ? {}
           : { budget: defaultRateLimits.oneTimeCodeBudget }),
+        ...addressKey(defaultRateLimits.addressOneTimeCode),
       },
     }).mutation(() => 'sent'),
     search: studentProcedure({
@@ -225,9 +258,15 @@ function fixture(
     moderation: unusedModerationServices,
   };
   const callerFor = createAppCallerFactory(router);
-  const anonymous = () =>
+  const anonymous = (address = clientAddress) =>
     callerFor(
-      createAppContext({ session: null, log, rateLimiter: limiter, clientAddress, services }),
+      createAppContext({
+        session: null,
+        log,
+        rateLimiter: limiter,
+        clientAddress: address,
+        services,
+      }),
     );
   const signedIn = () =>
     callerFor(
@@ -283,7 +322,7 @@ const defaultPaths: ReadonlyArray<{
 ];
 
 describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
-  it('names the four default paths and the two budgets by the settings keys the seed plants (T074, T170)', () => {
+  it('names the four default paths, the two budgets and the two per-address limits by the settings keys the seed plants (T074, T170, T172)', () => {
     expect(defaultRateLimits).toEqual({
       authentication: 'rate_limit_authentication',
       oneTimeCode: 'rate_limit_one_time_code',
@@ -291,6 +330,8 @@ describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
       paymentInitiation: 'rate_limit_payment_initiation',
       oneTimeCodeBudget: 'rate_limit_one_time_code_budget',
       authenticationBudget: 'rate_limit_authentication_budget',
+      addressAuthentication: 'rate_limit_address_authentication',
+      addressOneTimeCode: 'rate_limit_address_one_time_code',
     });
   });
 
@@ -509,6 +550,88 @@ describe('a platform-wide budget beside the per-subject limit (T170, review find
   });
 });
 
+// T172 (SRS NFR-SEC-10, DEC-103): an anonymous path that counts a budget also counts the client's
+// address under a key of its own, before the budget, so one address cannot spend it.
+describe('a per-address limit before the budget (T172, DEC-103)', () => {
+  const OTHER_ADDRESS = '198.51.100.4';
+  const countsUnder = (f: Fixture, key: string) =>
+    [...f.counter.counts.entries()].filter(([counted]) => counted.startsWith(`rate-limit:${key}:`));
+
+  it('counts the address first, then the budget, then the declared subject', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 10 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect(f.settings.reads).toEqual([
+      defaultRateLimits.addressAuthentication,
+      defaultRateLimits.authenticationBudget,
+      defaultRateLimits.authentication,
+    ]);
+  });
+
+  it('refuses a call past the address’s limit before it spends any of the budget or its subject’s count', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 2 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect((await outcome(() => f.anonymous().signIn({ phone: OTHER_PHONE }))).status).toBe(200);
+    expect(await outcome(() => f.anonymous().signIn({ phone: THIRD_PHONE }))).toEqual(throttled);
+
+    const [budget] = countsUnder(f, defaultRateLimits.authenticationBudget);
+    expect(budget?.[1]).toBe(2);
+    expect(countsUnder(f, defaultRateLimits.authentication)).toHaveLength(2);
+    expect(f.settings.reads.at(-1)).toBe(defaultRateLimits.addressAuthentication);
+  });
+
+  it('is one counter per address across the paths of its key, apart from the other key and from every other address', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 2 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect((await outcome(() => f.anonymous().resetPassword({ phone: OTHER_PHONE }))).status).toBe(
+      200,
+    );
+    expect(await outcome(() => f.anonymous().resetPassword({ phone: THIRD_PHONE }))).toEqual(
+      throttled,
+    );
+    expect(await outcome(() => f.anonymous().signIn({ phone: THIRD_PHONE }))).toEqual(throttled);
+    // The one-time-code key counts the same address apart; another address is untouched.
+    expect((await outcome(() => f.anonymous().requestCode({ phone: PHONE }))).status).toBe(200);
+    expect(
+      (await outcome(() => f.anonymous(OTHER_ADDRESS).signIn({ phone: THIRD_PHONE }))).status,
+    ).toBe(200);
+
+    expect(countsUnder(f, defaultRateLimits.addressAuthentication)).toHaveLength(2);
+    expect(countsUnder(f, defaultRateLimits.addressOneTimeCode)).toHaveLength(1);
+  });
+
+  it('refuses in the one shape and logs the first refusal by the address’s digest only', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 1 });
+
+    expect((await outcome(() => f.anonymous().requestCode({ phone: PHONE }))).status).toBe(200);
+    expect(await outcome(() => f.anonymous().requestCode({ phone: OTHER_PHONE }))).toEqual(
+      throttled,
+    );
+    expect(await outcome(() => f.anonymous().requestCode({ phone: THIRD_PHONE }))).toEqual(
+      throttled,
+    );
+
+    expect(f.log.lines).toEqual([
+      [
+        { procedure: 'requestCode', subjectDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        'rate limit refused',
+      ],
+    ]);
+    expect(JSON.stringify(f.log.lines)).not.toContain(clientAddress);
+  });
+
+  it('fails closed when the address’s row is missing, before the budget is read', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 10 });
+    f.settings.values.delete(defaultRateLimits.addressAuthentication);
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(500);
+    expect(f.counter.counts.size).toBe(0);
+    expect(f.settings.reads).toEqual([defaultRateLimits.addressAuthentication]);
+  });
+});
+
 describe('the counter key is an HMAC of the subject (T170, review finding SEC-2)', () => {
   it('derives the subject key from ENCRYPTION_KEY under its own label, 32 bytes unlike the key itself', () => {
     expect(RATE_LIMIT_SUBJECT_LABEL).toBe('ijazah:rate-limit-subject:v1');
@@ -542,6 +665,104 @@ describe('the counter key is an HMAC of the subject (T170, review finding SEC-2)
       expect(key).not.toContain(PHONE);
       expect(key).not.toContain('1001234567');
     }
+  });
+});
+
+// T173 of specs/002-identity (SRS §3.14 «Failed one-time codes before issuing stops», DEC-100): a
+// cap on events counted apart from any call. `countEvent` counts and never refuses; `isCapped`
+// reads the count without adding to it.
+describe('a cap on events counted apart from the calls (T173)', () => {
+  const CAP = 'rate_limit_failed_one_time_code';
+  const subject = { kind: 'identifier', value: 'password_reset:someone@example.com' } as const;
+  const other = { kind: 'identifier', value: 'signup:someone@example.com' } as const;
+
+  function capFixture(limit = 3, windowSeconds = 86_400) {
+    const settings = new FakeSettings();
+    settings.values.set(CAP, { limit, window_seconds: windowSeconds });
+    const counter = new FakeCounter();
+    const log = recordingLog();
+    const limiter = new RateLimiter({
+      settings,
+      counter,
+      subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
+      log,
+    });
+    return { settings, counter, log, limiter };
+  }
+
+  it('counts each event under the window the setting names, and never refuses past the limit', async () => {
+    const { counter, limiter } = capFixture(2, 86_400);
+    // Past the limit too: an event is counted, never refused.
+    for (let event = 0; event < 5; event += 1) await limiter.countEvent(CAP, subject);
+    expect([...counter.counts.values()]).toEqual([5]);
+    expect(counter.windows).toEqual([86_400, 86_400, 86_400, 86_400, 86_400]);
+  });
+
+  it('answers the digest for the event that fills the limit only, and logs nothing itself', async () => {
+    const { counter, log, limiter } = capFixture(3);
+    const answers = [];
+    for (let event = 0; event < 5; event += 1) answers.push(await limiter.countEvent(CAP, subject));
+    const [counterKey] = [...counter.counts.keys()];
+    const digest = counterKey?.split(':').at(-1);
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(answers).toEqual([undefined, undefined, digest, undefined, undefined]);
+    expect(counterKey).toBe(`rate-limit:${CAP}:${String(digest)}`);
+    expect(counterKey).not.toContain('someone');
+    expect(log.lines).toEqual([]);
+  });
+
+  it('reads the cap without counting: open below the limit, capped at it and past it', async () => {
+    const { counter, limiter } = capFixture(3);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    for (let event = 0; event < 2; event += 1) await limiter.countEvent(CAP, subject);
+    for (let read = 0; read < 4; read += 1) {
+      await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    }
+    expect([...counter.counts.values()]).toEqual([2]);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    expect([...counter.counts.values()]).toEqual([4]);
+    expect(counter.countReads).toBe(7);
+  });
+
+  it('counts each subject apart', async () => {
+    const { limiter } = capFixture(1);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    await expect(limiter.isCapped(CAP, other)).resolves.toBe(false);
+  });
+
+  it('reads the limit from the setting on every read, never from a constant', async () => {
+    const { settings, limiter } = capFixture(5);
+    for (let event = 0; event < 2; event += 1) await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    settings.values.set(CAP, { limit: 2, window_seconds: 86_400 });
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    expect(settings.reads.filter((key) => key === CAP)).toHaveLength(4);
+  });
+
+  it('fails closed: a missing row, and a counter that cannot read a count, refuse to answer', async () => {
+    const { settings, limiter } = capFixture();
+    settings.values.delete(CAP);
+    await expect(limiter.isCapped(CAP, subject)).rejects.toBeInstanceOf(SettingError);
+    await expect(limiter.countEvent(CAP, subject)).rejects.toBeInstanceOf(SettingError);
+
+    const blind = new RateLimiter({
+      settings: capFixture().settings,
+      counter: { hit: async () => 1 },
+      subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
+    });
+    await expect(blind.isCapped(CAP, subject)).rejects.toThrow(/cannot read a count/);
+  });
+
+  it('refuses a subject that names nothing, counting nothing', async () => {
+    const { counter, limiter } = capFixture();
+    const empty = { kind: 'identifier', value: '' } as const;
+    await expect(limiter.countEvent(CAP, empty)).rejects.toThrow(/named no subject/);
+    await expect(limiter.isCapped(CAP, empty)).rejects.toThrow(/named no subject/);
+    expect(counter.counts.size).toBe(0);
   });
 });
 
@@ -590,6 +811,25 @@ describe('the Redis counter (T103)', () => {
     await expect(
       new RedisRateLimitCounter(client(4, 'OK')).remainingMilliseconds('rate-limit:k:abc'),
     ).rejects.toThrow(TypeError);
+  });
+
+  it('reads a count with one script that GETs the key and neither increments nor opens a window (T173)', async () => {
+    const redis = client(7);
+    expect(await new RedisRateLimitCounter(redis).count('rate-limit:k:abc')).toBe(7);
+
+    expect(redis.calls).toHaveLength(1);
+    const [script, keyCount, key, ...rest] = redis.calls[0] ?? [];
+    expect(script).toEqual(expect.stringContaining("redis.call('GET', KEYS[1])"));
+    expect(script).not.toEqual(expect.stringContaining('INCR'));
+    expect(script).not.toEqual(expect.stringContaining('EXPIRE'));
+    expect([keyCount, key, rest]).toEqual([1, 'rate-limit:k:abc', []]);
+  });
+
+  it('reads 0 for a key no window holds, and refuses a reply that is not a count (T173)', async () => {
+    expect(await new RedisRateLimitCounter(client(0)).count('rate-limit:k:none')).toBe(0);
+    await expect(new RedisRateLimitCounter(client('OK')).count('rate-limit:k:abc')).rejects.toThrow(
+      TypeError,
+    );
   });
 });
 
