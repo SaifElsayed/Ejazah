@@ -594,6 +594,34 @@ describe('R1a: an applicant never approved keeps no note and no history (T174)',
     expect(await historyCount(profileId)).toBe(0);
   });
 
+  // PR #157's review, round 1, Major 1 (T174; T005 rule 1): `requestInfo` reads the applicant under
+  // the application's lock, as `reject` does, so a request after the deletion lands on nothing.
+  it('a request for information after the deletion of an applicant never approved is NOT_FOUND and writes nothing', async () => {
+    const { userId, adminId, profileId } = await applicantWith({ approved: false });
+    await remove(userId);
+
+    const outcome = await applicationsAs(adminId)
+      .requestInfo({ teacherUserId: userId, needed: ['other'], note: NOTE })
+      .then(
+        () => 'written',
+        // The caller answers the domain's refusal as the cause of the error it raises.
+        (error: unknown) =>
+          (error as { readonly cause?: { readonly code?: string } }).cause?.code ?? 'other',
+      );
+
+    expect(outcome).toBe('NOT_FOUND');
+    expect(await profileNotes(profileId)).toEqual({
+      application_note: null,
+      verification_call_notes: null,
+    });
+    expect(await historyCount(profileId)).toBe(0);
+    const { rows: audit } = await db.query<{ action: string }>(
+      'SELECT action FROM audit_logs WHERE target_id = $1 AND action = $2',
+      [userId, 'application.request_info'],
+    );
+    expect(audit).toEqual([]);
+  });
+
   it('a teacher once approved keeps both notes and the history, also after the kept data is erased', async () => {
     const { userId, adminId, profileId } = await applicantWith({ approved: true });
     await database.$transaction((tx) =>

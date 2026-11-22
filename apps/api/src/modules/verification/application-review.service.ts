@@ -365,6 +365,9 @@ export class ApplicationReviewService {
     input: z.output<typeof applicationsRequestInfoInput>,
   ): Promise<DecisionMove> {
     await this.#store.lockApplication(tx, input.teacherUserId);
+    // PR #157's review, round 1, Major 1 (T174; T005 rule 1): read again under the lock, as `reject`
+    // does, so a deleted applicant is `NOT_FOUND` and keeps no note, history row or audit entry.
+    await this.#readOrRefuse(tx, input.teacherUserId);
     await this.#decide(tx, adminId, input.teacherUserId, 'request_info', input.note);
     return { before: { status: 'in_review' }, after: { status: 'needs_document' } };
   }
