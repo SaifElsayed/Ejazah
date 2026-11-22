@@ -41,7 +41,12 @@ export type EnrollmentCancellationReason =
   | 'teacher_suspended'
   | 'slot_unavailable'
   | 'checkout_abandoned'
-  | 'account_deleted';
+  | 'account_deleted'
+  // 006:T001: the programme's closings (R-510).
+  | 'offer_declined'
+  | 'offer_lapsed'
+  | 'assessment_refused'
+  | 'programme_stopped';
 
 /** One outcome as its row records it; `occurredAt` is the instant of the transaction that made it. */
 export type EnrollmentOutcome =

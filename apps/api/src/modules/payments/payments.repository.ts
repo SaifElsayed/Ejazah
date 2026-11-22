@@ -24,7 +24,14 @@ type Client = Pick<Transaction, 'paymentEvent' | 'payment'>;
 export type OrderStatus = 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
 
 /** The event types of a gateway order: every `payment_events.event_type` but the recipient's. */
-export type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded' | 'refund_reported';
+export type OrderEventType =
+  | 'paid'
+  | 'failed'
+  | 'expired'
+  | 'refunded'
+  | 'refund_reported'
+  // 006:T001 (R-510): a programme's card saved at a payment.
+  | 'card_saved';
 
 /** 003:T102 (DEC-82): what a refund is decided on, read under `lockOrder`. */
 export interface OrderRefunds {

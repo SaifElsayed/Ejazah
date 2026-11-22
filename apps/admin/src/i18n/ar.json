@@ -1981,7 +1981,9 @@
           "ijazahHalf": "إجازة: عند منتصف الحصص",
           "recitationEnd": "باقة تلاوة",
           "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب",
-          "teacherDropout": "باقة أُنهيت بانسحاب المعلم"
+          "teacherDropout": "باقة أُنهيت بانسحاب المعلم",
+          "assessment": "جلسة الاختبار (لم يكمل الطالب)",
+          "programmeStopped": "برنامج أُوقف: الحصص التي تمت"
         },
         "state": {
           "due": "مستحق",
@@ -2196,7 +2198,12 @@
           "enrollmentTerminatedNoShow": "انتهى الاشتراك لغياب المعلم",
           "enrollmentRestored": "استُعيد الاشتراك",
           "enrollmentSlotReleased": "حُرّر موعد الاشتراك",
-          "enrollmentSlotHoldEnded": "انتهى حجز موعد الاشتراك"
+          "enrollmentSlotHoldEnded": "انتهى حجز موعد الاشتراك",
+          "cardSaved": "حُفظت بطاقة الطالب للتجديد التلقائي",
+          "programmeOffered": "أرسل المعلم عرض البرنامج",
+          "programmePaused": "توقّف البرنامج مؤقتًا لعدم دفع الشهر",
+          "programmeResumed": "استؤنف البرنامج بعد الدفع",
+          "programmeReopened": "أعادت الإدارة فتح البرنامج"
         },
         "eventsTitle": "ما حدث للطلب",
         "footer": "لا توجد إجراءات مالية في لوحة الإدارة. إن قررت الإدارة تعويض الطالب يُنفَّذ ذلك خارج المنصة، وتظهر حالة الطلب «مُسترد» حين تُبلغ بها البوابة.",
@@ -2244,7 +2251,11 @@
         "paymentExpired": "انتهت مهلة الدفع",
         "paymentFailed": "فشل الدفع",
         "slotUnavailable": "تعذّر حجز الموعد بعد الدفع",
-        "teacherSuspended": "إيقاف المعلم أو حظره أو سحب اعتماده"
+        "teacherSuspended": "إيقاف المعلم أو حظره أو سحب اعتماده",
+        "offerDeclined": "رفض الطالب عرض البرنامج",
+        "offerLapsed": "انتهت مهلة دفع عرض البرنامج",
+        "assessmentRefused": "رفض المعلم الاستمرار بعد الاختبار",
+        "programmeStopped": "أُوقف البرنامج بموافقة الإدارة على طلب الإيقاف"
       },
       "enrollmentFilter": "طلبات اشتراك واحد",
       "holdReasons": {
@@ -3270,7 +3281,11 @@
           "instantsReresolved": "أُعيد حساب توقيت الجلسة",
           "counterBookingRefused": "تعذّر حجز اقتراح الطالب فأُلغي الاقتراح",
           "slotReleased": "حُرّر موعد الاشتراك",
-          "slotHoldEnded": "انتهى حجز موعد الاشتراك"
+          "slotHoldEnded": "انتهى حجز موعد الاشتراك",
+          "programmeOffered": "أرسل المعلم عرض البرنامج",
+          "programmePaused": "توقّف البرنامج مؤقتًا لعدم دفع الشهر",
+          "programmeResumed": "استؤنف البرنامج بعد الدفع",
+          "programmeReopened": "أعادت الإدارة فتح البرنامج"
         }
       },
       "cancel": {

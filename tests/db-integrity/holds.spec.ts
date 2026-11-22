@@ -251,6 +251,8 @@ async function hold(
     orderBy: { id: 'asc' },
     select: { id: true, sessionCount: true },
   });
+  // 006:T001: the count is NULL-able now (a programme package); these worlds hold fixed packages.
+  if (pkg.sessionCount === null) throw new Error('a fixed package expected');
   const { id } = await tx.slotHold.create({
     data: {
       slotId,

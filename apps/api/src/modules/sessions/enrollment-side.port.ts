@@ -41,7 +41,12 @@ export type EnrollmentCancellationReason =
   | 'teacher_suspended'
   | 'slot_unavailable'
   | 'checkout_abandoned'
-  | 'account_deleted';
+  | 'account_deleted'
+  // 006:T001: the programme's closings (R-510).
+  | 'offer_declined'
+  | 'offer_lapsed'
+  | 'assessment_refused'
+  | 'programme_stopped';
 
 /** `snapshot_track`, the package's track frozen at purchase (ADR 0018 D1, `package_track`). */
 export type EnrollmentTrack = 'recitation' | 'ijazah_track';
@@ -58,7 +63,12 @@ export type EnrollmentEventKind =
   | 'terminated_no_show'
   | 'restored'
   | 'slot_released'
-  | 'slot_hold_ended';
+  | 'slot_hold_ended'
+  // 006:T001: the programme's four kinds.
+  | 'programme_offered'
+  | 'programme_paused'
+  | 'programme_resumed'
+  | 'programme_reopened';
 
 /**
  * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two

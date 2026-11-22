@@ -1981,7 +1981,9 @@
           "ijazahHalf": "Ijazah: at half the sessions",
           "recitationEnd": "Recitation package",
           "studentComplaintClose": "Package closed on a complaint against the student",
-          "teacherDropout": "Package ended on the teacher's withdrawal"
+          "teacherDropout": "Package ended on the teacher's withdrawal",
+          "assessment": "Assessment session (not continued)",
+          "programmeStopped": "Programme stopped: the sessions held"
         },
         "state": {
           "due": "Due",
@@ -2196,7 +2198,12 @@
           "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
           "enrollmentRestored": "The enrollment was restored",
           "enrollmentSlotReleased": "The enrollment's slot was released",
-          "enrollmentSlotHoldEnded": "The hold on the enrollment's slot ended"
+          "enrollmentSlotHoldEnded": "The hold on the enrollment's slot ended",
+          "cardSaved": "The student's card was saved for automatic renewal",
+          "programmeOffered": "The teacher sent the programme's offer",
+          "programmePaused": "The programme was paused, the month unpaid",
+          "programmeResumed": "The programme resumed after payment",
+          "programmeReopened": "The administration reopened the programme"
         },
         "eventsTitle": "What happened to the order",
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
@@ -2244,7 +2251,11 @@
         "paymentExpired": "Payment time ran out",
         "paymentFailed": "Payment failed",
         "slotUnavailable": "Slot unavailable after payment",
-        "teacherSuspended": "Teacher suspended, banned or approval revoked"
+        "teacherSuspended": "Teacher suspended, banned or approval revoked",
+        "offerDeclined": "The student declined the programme's offer",
+        "offerLapsed": "The programme's offer lapsed unpaid",
+        "assessmentRefused": "The teacher declined to continue after the assessment",
+        "programmeStopped": "The programme was stopped on an approved stop request"
       },
       "enrollmentFilter": "One enrollment's orders",
       "holdReasons": {
@@ -3270,7 +3281,11 @@
           "instantsReresolved": "The session's time was recomputed",
           "counterBookingRefused": "The student's proposal could not be booked and was released",
           "slotReleased": "The enrollment's slot was released",
-          "slotHoldEnded": "The hold on the enrollment's slot ended"
+          "slotHoldEnded": "The hold on the enrollment's slot ended",
+          "programmeOffered": "The teacher sent the programme's offer",
+          "programmePaused": "The programme was paused, the month unpaid",
+          "programmeResumed": "The programme resumed after payment",
+          "programmeReopened": "The administration reopened the programme"
         }
       },
       "cancel": {
