@@ -134,7 +134,7 @@ export const discoveryFixedPackage = z.object({
  * 006:T003 (ADR 0024, FR-701, FR-704; R-503): an active programme package on the profile, shown
  * only while `programme_enabled` is on and the assessment's price is above zero (Q-5 (a)): its three
  * session prices, their lowest and highest, and the assessment's price (the §3.14 setting
- * `assessment_fee_piasters`; app-surface.md's `assessmentFee`), read at the request.
+ * `assessment_price_piasters`; app-surface.md's `assessmentFee`), read at the request.
  */
 export const discoveryProgrammePackage = z.object({
   packageId: z.uuid(),

@@ -52,7 +52,7 @@ export const programmeRequestStatus = z.enum([
 /**
  * Why a programme cannot start (R-503, R-515; I-3, Q-5 (a)): the switch `programme_enabled` is off
  * (`checkout.hold` and `checkout.pay` on a programme package), or the assessment's price is not set
- * (§3.14 `assessment_fee_piasters` 0: creating or activating a programme package, a draft allowed,
+ * (§3.14 `assessment_price_piasters` 0: creating or activating a programme package, a draft allowed,
  * and the hold). A programme already running goes on whatever the switch says.
  */
 export const programmeStartRefusal = z.enum(['programme_disabled', 'assessment_fee_unset']);
