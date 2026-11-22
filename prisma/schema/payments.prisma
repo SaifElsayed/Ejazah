@@ -14,8 +14,11 @@ model Payment {
   enrollmentId            String         @map("enrollment_id") @db.Uuid
   // Which gateway took the order. Independent of the adapter config selects (R-API-4).
   gateway                 PaymentGateway
-  // Created by the platform on the gateway (FR-PAYG-2). One record per order (ERD section 15.14).
-  gatewayOrderId          String         @unique @map("gateway_order_id")
+  // Created by the platform on the gateway (FR-PAYG-2). One record per order (ERD section 15.14):
+  // NULLs do not collide. 006:T001 (R-509, N-3, PR #153 r3 Major 1): NULL only on an automatic order
+  // `created` until the gateway answers, `expired` with no answer, or `failed` with a `hard`
+  // decline refused before the gateway (ERD section 15 rule 72, in the migration).
+  gatewayOrderId          String?        @unique @map("gateway_order_id")
   // Reported by the paid event. Unique where present: NULLs do not collide (ERD section 15.14).
   gatewayTransactionId    String?        @unique @map("gateway_transaction_id")
   // The snapshot price charged.
@@ -51,6 +54,18 @@ model Payment {
   // (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Read back
   // only by `checkout.continue` (data-model §2.4.1); reached by the `reencrypt-columns` job (002:T134).
   checkoutUrlEncrypted    Bytes?         @map("checkout_url_encrypted")
+  // 006:T001 (R-502): what the order pays for, `package` on every order before the programme; the
+  // instalment's month, set (1 and up) exactly on an `instalment` (ERD section 15 rule 70).
+  kind                    OrderKind      @default(package)
+  instalmentMonth         Int?           @map("instalment_month") @db.SmallInt
+  // 006:T001 (R-508, R-509): an automatic charge of a saved card, its attempt (0 to 4, rule 71), and
+  // why it failed, set on a `failed` automatic order.
+  attempt                 Int?           @db.SmallInt
+  automatic               Boolean        @default(false)
+  declineKind             DeclineKind?   @map("decline_kind")
+  // 006:T001 (R-502, V-3): the confirm step's marker for the order it processed, so a replayed
+  // event finds it and does nothing.
+  confirmedAt             DateTime?      @map("confirmed_at") @db.Timestamptz(6)
   createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -60,6 +75,9 @@ model Payment {
   enrollmentEvents EnrollmentEvent[]
 
   @@index([enrollmentId])
+  // 006:T001 (R-502): an enrollment's orders by kind and month. Not unique: a second paid order for
+  // a month is recorded and goes to the case (FR-718).
+  @@index([enrollmentId, kind, instalmentMonth])
   @@map("payments")
 }
 
@@ -122,4 +140,25 @@ model TeacherShareRelease {
   @@index([teacherUserId])
   @@index([markedByAdminId])
   @@map("teacher_share_releases")
+}
+
+// 006:T001 (R-510; ERD changelog row 73): the card a student consented to save at a programme's
+// payment, one per programme, keyed by its enrollment. The token is encrypted by `ColumnCipher`, the
+// row id bound (R-DB-8), never logged, audited or returned; `last4` and the brand are shown to the
+// student only. The row is deleted by the close hook, at the programme's end, by the account's
+// erasure, when the student turns the automatic renewal off (DEC-95), and at a teacher's suspension,
+// ban or departure (DEC-94).
+model ProgrammeCard {
+  enrollmentId   String   @id @map("enrollment_id") @db.Uuid
+  tokenEncrypted Bytes    @map("token_encrypted")
+  last4          String
+  brand          String
+  // The student's consent at the payment that saved it.
+  consentedAt    DateTime @map("consented_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@map("programme_cards")
 }

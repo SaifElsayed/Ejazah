@@ -105,6 +105,8 @@ const AGGREGATE_NAMES_ALLOWED: ReadonlyMap<string, string> = new Map([
   ['otp_codes.attempt_count', 'the state of a code, counted as attempts happen'],
   // Phase 1 (T013, ADR 0019 D3): the lockout pair's count, counted as attempts fail.
   ['admin_users.failed_sign_in_count', 'the state of the lockout, counted as sign-ins fail'],
+  // 006:T001 (B-P1, Q-A2 (a)): the bound of rule 78's paid months, frozen with the offer's snapshot.
+  ['programmes.month_count', "the offer's month count, frozen at the offer, a snapshot"],
 ]);
 
 // Prisma's own bookkeeping table: its columns are Prisma's, not this schema's.

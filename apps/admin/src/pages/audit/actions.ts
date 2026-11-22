@@ -115,6 +115,9 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // 005:T024 (B49; FR-624): the settings page's read, on the reader, and its change, on the key.
   'settings.listed': 'admin.audit.actions.settings.listed',
   'setting.changed': 'admin.audit.actions.settings.changed',
+  // 006:T002 (SRS DEC-110, Q-3 (a)(a)): the programme's switch turned on deactivates the old ijazah
+  // packages, its own entry on the switch's key, so no new target type.
+  'packages.retired_by_switch': 'admin.audit.actions.settings.retiredBySwitch',
   // 003:T105 (track 2, B-M2; SRS DEC-89): «تحويلات المعلمين», its two reads and the mark «تم الصرف»,
   // each on the reader or the teacher (`admin`, `user`), so no new target type.
   'payouts.listed': 'admin.money.audit.payoutsListed',

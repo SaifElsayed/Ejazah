@@ -41,7 +41,12 @@ export type EnrollmentCancellationReason =
   | 'teacher_suspended'
   | 'slot_unavailable'
   | 'checkout_abandoned'
-  | 'account_deleted';
+  | 'account_deleted'
+  // 006:T001: the programme's closings (R-510).
+  | 'offer_declined'
+  | 'offer_lapsed'
+  | 'assessment_refused'
+  | 'programme_stopped';
 
 /** One outcome as its row records it; `occurredAt` is the instant of the transaction that made it. */
 export type EnrollmentOutcome =
@@ -65,6 +70,13 @@ export type EnrollmentOutcome =
   | {
       // T069's two kinds (Q-69-2 (b)): a held slot's release (T070) and a hold's end (T074).
       readonly kind: 'slot_released' | 'slot_hold_ended';
+      readonly enrollmentId: string;
+      readonly occurredAt: Date;
+    }
+  | {
+      // 006:T001: the programme's four kinds, written by B-P2's and B-P3's steps.
+      readonly kind:
+        'programme_offered' | 'programme_paused' | 'programme_resumed' | 'programme_reopened';
       readonly enrollmentId: string;
       readonly occurredAt: Date;
     };

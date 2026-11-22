@@ -20,6 +20,10 @@
 // restore. With none, the snapshot's count numbered from one, as before; a count of none writes
 // nothing.
 //
+// A PROGRAMME'S MONTHS (006:T006 of specs/006-programme; R-507). A plan may name each session's
+// month (`months`, one per session), written as `programme_month`; a plan that names none writes
+// none, as before (the assessment's session 1 and every other enrollment's).
+//
 // THE LOCKS (T005's rules, `platform/db/row-lock.ts`). A `sessions` row references both accounts
 // and the enrollment, so this function takes the caller's transaction and expects it to hold, in
 // this order: both accounts in one `lockRows(tx, 'users', [studentUserId, teacherUserId])` call,
@@ -83,6 +87,8 @@ function recurringSlotOf(enrollment: EnrollmentToSchedule): RecurringSlot {
 export interface GenerationPlan {
   readonly count: number;
   readonly firstSequenceNumber: number;
+  /** 006:T006: each session's programme month, in order; absent, none is written. */
+  readonly months?: readonly number[];
 }
 
 /**
@@ -112,8 +118,13 @@ export function sessionsFor(
 }
 
 /** A generated session as its `sessions` row, the accounts copied from the enrollment (ADR 0010 D2). */
-function rowOf(enrollment: EnrollmentToSchedule, session: ScheduledSession): NewSessionRow {
+function rowOf(
+  enrollment: EnrollmentToSchedule,
+  session: ScheduledSession,
+  month: number | undefined,
+): NewSessionRow {
   return {
+    ...(month === undefined ? {} : { programmeMonth: month }),
     enrollmentId: enrollment.id,
     teacherUserId: enrollment.teacherUserId,
     studentUserId: enrollment.studentUserId,
@@ -145,7 +156,7 @@ export async function generateForEnrollment(
   if (sessions.length === 0) return sessions;
   await insertSessions(
     tx,
-    sessions.map((session) => rowOf(enrollment, session)),
+    sessions.map((session, index) => rowOf(enrollment, session, plan?.months?.[index])),
   );
   return sessions;
 }

@@ -467,6 +467,8 @@ describe('the checkout pushes (005:T016)', () => {
       where: { enrollmentId: own.enrollmentId },
       select: { gatewayOrderId: true },
     });
+    // 006:T001: `gateway_order_id` is NULL-able now; a manual order always carries one.
+    if (gatewayOrderId === null) throw new Error('no gateway id');
     await services.hold(
       { userId: own.studentId, gender: 'female' as RequesterGender },
       { packageId: second.packageId, slotId: second.slotId, idempotencyKey: randomUUID() },

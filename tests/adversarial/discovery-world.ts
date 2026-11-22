@@ -39,6 +39,10 @@
 // T032: every teacher, in every state, also has one active slot of the packages' length (Thursday
 // 09:00 in Cairo), and its package and slot ids are kept, so `booking.slots` is attacked in the same
 // world (`booking.attacks.ts`).
+// 006:T004 (FR-704, R-516; Q-5 (a)): every teacher, in every state, also has an active programme
+// package in the shared subject, its id kept apart from `packageIds` (`programmePackageId`), and the
+// programme is open here (the switch on, the assessment's price 500 EGP, unlike the seed's), so the
+// profile's programme package and its prices are attacked in both directions.
 // T036: the surface's `checkout` is the one `main.ts` binds, over the stand-in gateway this file
 // already serves, so `checkout.hold`, `checkout.retry` and `checkout.pay` are attacked in the same world
 // (`checkout.attacks.ts`).
@@ -352,6 +356,15 @@ export interface SubjectRow {
   readonly nameEn: string;
 }
 
+/** 006:T004: the assessment's price while the programme is open here, 500 EGP. */
+export const WORLD_ASSESSMENT_PRICE = 50_000;
+/** 006:T004: every world programme package's three prices, above the packages' 25 000 a session. */
+export const WORLD_PROGRAMME_PRICES = {
+  m30_piasters: 30_000,
+  m45_piasters: 40_000,
+  m60_piasters: 50_000,
+} as const;
+
 export interface SeededTeacher {
   readonly id: string;
   readonly gender: Gender;
@@ -363,6 +376,8 @@ export interface SeededTeacher {
   readonly privateSubject: SubjectRow;
   /** The teacher's three active packages (T032). */
   readonly packageIds: readonly string[];
+  /** 006:T004: the teacher's active programme package in the shared subject. */
+  readonly programmePackageId: string;
   /** The teacher's one active slot, Thursday 09:00 for 60 minutes in Cairo (T032). */
   readonly slotId: string;
 }
@@ -397,6 +412,10 @@ export function excludedFrom(world: World, gender: Gender): SeededTeacher[] {
 /** The seeded values of `prisma/seed.ts` the surface reads (data-model §4). */
 const SETTINGS: Readonly<Record<string, unknown>> = {
   discovery_page_size: 20,
+  // 006:T004: the programme open (seeded off and 0), so programme packages are shown and attacked.
+  programme_enabled: 1,
+  assessment_price_piasters: WORLD_ASSESSMENT_PRICE,
+  assessment_duration_minutes: 30,
   document_link_ttl_seconds: 300,
   rate_limit_search: { limit: 60, window_seconds: 60 },
   rate_limit_payment_initiation: { limit: 10, window_seconds: 600 },
@@ -1712,6 +1731,20 @@ class Seeder {
         isActive: true,
       })),
     });
+    // 006:T004: a programme package in the shared subject, its three prices and no count.
+    const { id: programmePackageId } = await this.#database.package.create({
+      data: {
+        teacherUserId: id,
+        subjectId: shared.id,
+        track: 'ijazah_track',
+        isProgramme: true,
+        price30Piasters: BigInt(WORLD_PROGRAMME_PRICES.m30_piasters),
+        price45Piasters: BigInt(WORLD_PROGRAMME_PRICES.m45_piasters),
+        price60Piasters: BigInt(WORLD_PROGRAMME_PRICES.m60_piasters),
+        isActive: true,
+      },
+      select: { id: true },
+    });
     // T032: one slot of the packages' length, whatever the teacher's state, for `booking.slots`.
     const { id: slotId } = await this.#database.availabilitySlot.create({
       data: {
@@ -1734,6 +1767,7 @@ class Seeder {
       sharedRiwaya: riwaya,
       privateSubject,
       packageIds: packages.map((row) => row.id),
+      programmePackageId,
       slotId,
     };
   }

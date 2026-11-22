@@ -9,7 +9,10 @@
 // student (the enrollment's own among them), the enrollments of those holds with this one in one
 // call, then, through payments' `orders` handed in by the caller, those enrollments' orders in one
 // call. Each table's rows in id order. The parties and the slot are read first with no lock, an
-// enrollment's parties and slot never changing; what is decided on (the holds, the enrollment's
+// enrollment's parties and slot never changing. 006:T006 of specs/006-programme (the owner's
+// approval of 2026-11-22; kernel.md, the confirm step's row): the enrollment's programme row, keyed
+// by the enrollment, is locked after the holds and before the enrollments, and its state read under
+// the locks (null for an enrollment that is no programme). What is decided on (the holds, the enrollment's
 // state, its confirming order, and, by the caller, the order's status and the compensation cases)
 // is read again under the locks. So what FR-PAYG-19's re-hold and the release then lock again
 // (`reholdEnrollment`, `releaseHolds`) is already held: no hold can be added on the slot or for the
@@ -54,6 +57,7 @@ import {
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
 import { activeHoldsByIds, activeHoldsOf, lockRows } from './holds.repository.js';
+import { type ProgrammeState, programmeStateOf } from './programmes.repository.js';
 import { type OrderStandings, releaseHolds } from './holds.service.js';
 import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
@@ -86,6 +90,8 @@ export interface LockedEnrollment extends EnrollmentParties, EnrollmentState {
   readonly confirmed: boolean;
   /** Cancelled by a party's suspension, ban, revocation or deletion (R-219, FR-362). */
   readonly cancelledByTermination: boolean;
+  /** 006:T006: its programme's state under the programme's lock; null when it is no programme. */
+  readonly programmeState: ProgrammeState | null;
 }
 
 /** The enrollment's parties and slot, read with no lock (the notes under T039). */
@@ -131,15 +137,18 @@ export async function lockForConfirmation(
   const holdIds = await activeHoldIdsAround(tx, parties);
   if (holdIds.length > 0) await lockRows(tx, 'slot_holds', holdIds);
   const held = await activeHoldsByIds(tx, holdIds);
+  // 006:T006: the programme's row, keyed by the enrollment, between the holds and the enrollments.
+  await lockRows(tx, 'programmes', [parties.id]);
   const enrollmentIds = sortedUnique([
     parties.id,
     ...held.flatMap(({ enrollmentId }) => (enrollmentId === null ? [] : [enrollmentId])),
   ]);
   await lockRows(tx, 'enrollments', enrollmentIds);
   await dependencies.orders(tx, enrollmentIds);
-  const [state, confirmingPaymentId] = await Promise.all([
+  const [state, confirmingPaymentId, programmeState] = await Promise.all([
     enrollmentStateOf(tx, parties.id),
     confirmingOrderOf(tx, parties.id),
+    programmeStateOf(tx, parties.id),
   ]);
   return {
     ...parties,
@@ -151,6 +160,7 @@ export async function lockForConfirmation(
       state.status === 'cancelled' &&
       state.cancellationReason !== null &&
       TERMINATION_REASONS.has(state.cancellationReason),
+    programmeState,
   };
 }
 

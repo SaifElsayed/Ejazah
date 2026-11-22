@@ -63,6 +63,11 @@ describe('an enrollment’s outcome kinds', () => {
       'restored',
       'slot_released',
       'slot_hold_ended',
+      // 006:T003 (rule d): the programme's four, additively (R-API-9).
+      'programme_offered',
+      'programme_paused',
+      'programme_resumed',
+      'programme_reopened',
     ]);
   });
 });

@@ -50,11 +50,12 @@ export function SettingDialog({
     }) => change({ key: setting.key, value: asked.value, reason: asked.reason, idempotencyKey }),
   });
 
-  const value = parsedDraft(setting.bounds, draft);
+  // 006:T002 (Q-6): the setting's unit, so an amount is typed in pounds and sent in piasters.
+  const value = parsedDraft(setting, draft);
   const trimmed = reason.trim();
   const sendable =
     value !== undefined && value !== null && trimmed !== '' && trimmed.length <= REASON_MAX;
-  const bounds = boundsText(t, setting.bounds);
+  const bounds = boundsText(t, locale, setting);
   const effect =
     setting.key === SIGNED_IN_DEFAULT
       ? 'admin.dialogs.confirm.changeSetting.effects.withinMinute'

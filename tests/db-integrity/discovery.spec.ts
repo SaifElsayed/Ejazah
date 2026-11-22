@@ -94,6 +94,8 @@ function catalogWithPageSize(size: number): DiscoveryCatalog {
   return createDiscoveryCatalog(
     {
       async read(key, schema) {
+        // 006:T004 (rule d): the programme's switch off, as seeded, so no programme package shows.
+        if (key === 'programme_enabled') return schema.parse(0);
         if (key !== 'discovery_page_size') throw new SettingError(key, 'missing');
         return schema.parse(size);
       },

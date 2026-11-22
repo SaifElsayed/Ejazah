@@ -7,6 +7,7 @@
 // packages, approved subjects, every excluded state in both directions) are probed over the
 // database in `tests/db-integrity/discovery-teacher.spec.ts`. `discovery.browse`'s cards carry no
 // photo, even for a teacher who has one (FR-335; the owner's decision of 2026-11-02).
+import type { DiscoveryCard } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
@@ -40,7 +41,18 @@ function visible(values: Partial<VisibleTeacher> = {}): VisibleTeacher {
   };
 }
 
-function world(teachers: VisibleTeacher[], overrides: Partial<DiscoveryStore> = {}) {
+/** 006:T004 (Q-5 (a)): the programme's switch and the assessment's price; open by default. */
+interface Programme {
+  readonly enabled: 0 | 1;
+  readonly fee: number;
+}
+const OPEN: Programme = { enabled: 1, fee: 50_000 };
+
+function world(
+  teachers: VisibleTeacher[],
+  overrides: Partial<DiscoveryStore> = {},
+  programme: Programme = OPEN,
+) {
   const calls: unknown[][] = [];
   const unreached = (name: string) => async () => {
     calls.push([name]);
@@ -68,6 +80,7 @@ function world(teachers: VisibleTeacher[], overrides: Partial<DiscoveryStore> = 
           id: PACKAGE,
           subject: SUBJECT,
           track: 'ijazah_track',
+          isProgramme: false,
           sessionCount: 3,
           sessionDurationMinutes: 45,
           price_piasters: piasters(100_000),
@@ -81,6 +94,9 @@ function world(teachers: VisibleTeacher[], overrides: Partial<DiscoveryStore> = 
       async read(key, schema) {
         calls.push(['settings', key]);
         if (key === 'discovery_page_size') return schema.parse(PAGE_SIZE);
+        if (key === 'programme_enabled') return schema.parse(programme.enabled);
+        if (key === 'assessment_price_piasters') return schema.parse(programme.fee);
+        if (key === 'assessment_duration_minutes') return schema.parse(30);
         if (key !== 'document_link_ttl_seconds') throw new SettingError(key, 'missing');
         return schema.parse(TTL_SECONDS);
       },
@@ -160,7 +176,7 @@ describe('DiscoveryService.browse (FR-335)', () => {
   it('sends no photo on a card, even for a teacher who has one, and reads no link', async () => {
     const { calls, service } = world([visible()], {
       offerings: async () => [
-        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation' },
+        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation', isProgramme: false },
       ],
       activeSubjects: async () => [],
       visibleTeacherPage: async () => [visible()],
@@ -168,7 +184,9 @@ describe('DiscoveryService.browse (FR-335)', () => {
         {
           teacherUserId: TEACHER,
           track: 'recitation',
+          isProgramme: false,
           sessionCount: 4,
+          sessionDurationMinutes: 30,
           price_piasters: piasters(80_000),
         },
       ],
@@ -197,9 +215,9 @@ describe('DiscoveryService.browse: a search by subject (T070, FR-333)', () => {
     const asked: unknown[] = [];
     const { calls, service } = world([], {
       offerings: async () => [
-        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation' },
-        { teacherUserId: OTHER, subjectId: TAJWEED.id, track: 'recitation' },
-        { teacherUserId: THIRD, subjectId: TAJWEED.id, track: 'ijazah_track' },
+        { teacherUserId: TEACHER, subjectId: SUBJECT.id, track: 'recitation', isProgramme: false },
+        { teacherUserId: OTHER, subjectId: TAJWEED.id, track: 'recitation', isProgramme: false },
+        { teacherUserId: THIRD, subjectId: TAJWEED.id, track: 'ijazah_track', isProgramme: false },
       ],
       activeSubjects: async () => [SUBJECT, TAJWEED],
       fold: async (_tx, texts) => texts.map(fold),
@@ -212,7 +230,9 @@ describe('DiscoveryService.browse: a search by subject (T070, FR-333)', () => {
         ids.map((teacherUserId) => ({
           teacherUserId,
           track: 'recitation' as const,
+          isProgramme: false as const,
           sessionCount: 4,
+          sessionDurationMinutes: 30 as const,
           price_piasters: piasters(80_000),
         })),
       subjectsOf: async () => [],
@@ -265,5 +285,175 @@ describe('DiscoveryService.browse: a search by subject (T070, FR-333)', () => {
     expect(asked).toHaveLength(1);
     expect(asked[0]).not.toHaveProperty('alsoMatched');
     expect(asked[0]).not.toHaveProperty('namePrefix');
+  });
+});
+
+// 006:T004 (FR-704, R-516; Q-5 (a)): a programme package on discovery: its three prices, their
+// lowest and highest, and the assessment's price, only while the switch is on and the price above
+// 0; otherwise no programme package is shown, on the profile, the cards, the tabs or the filter.
+describe('discovery and the programme package (006:T004)', () => {
+  const PROGRAMME_ONLY = '0199d0a0-0000-7000-8000-0000000000e7';
+  const PROGRAMME_PACKAGE = '0199d0a0-0000-7000-8000-0000000000e8';
+  const PRICES = {
+    m30_piasters: piasters(28_000),
+    m45_piasters: piasters(20_000),
+    m60_piasters: piasters(35_000),
+  };
+  const FIXED = {
+    id: PACKAGE,
+    subject: SUBJECT,
+    track: 'recitation' as const,
+    isProgramme: false as const,
+    sessionCount: 4,
+    sessionDurationMinutes: 30 as const,
+    price_piasters: piasters(100_000),
+  };
+  const PROGRAMME = {
+    id: PROGRAMME_PACKAGE,
+    subject: SUBJECT,
+    track: 'ijazah_track' as const,
+    isProgramme: true as const,
+    prices: PRICES,
+  };
+
+  function profile(programme: Programme) {
+    return world([visible()], { profilePackagesOf: async () => [FIXED, PROGRAMME] }, programme);
+  }
+
+  it('answers a programme package on the profile with its prices, their range and the assessment’s price', async () => {
+    const { service } = profile(OPEN);
+    const { packages } = await service.teacher(TX, MALE, { teacherId: TEACHER });
+    expect(packages).toEqual([
+      {
+        packageId: PACKAGE,
+        subject: SUBJECT,
+        track: 'recitation',
+        sessionCount: 4,
+        sessionDurationMinutes: 30,
+        price_piasters: 100_000,
+        perSession_piasters: 25_000,
+      },
+      {
+        packageId: PROGRAMME_PACKAGE,
+        subject: SUBJECT,
+        track: 'ijazah_track',
+        isProgramme: true,
+        prices: { m30_piasters: 28_000, m45_piasters: 20_000, m60_piasters: 35_000 },
+        priceRange: { lowest_piasters: 20_000, highest_piasters: 35_000 },
+        assessmentPrice_piasters: 50_000,
+      },
+    ]);
+  });
+
+  it('shows no programme package on the profile while the switch is off', async () => {
+    const { service } = profile({ enabled: 0, fee: 50_000 });
+    const { packages } = await service.teacher(TX, MALE, { teacherId: TEACHER });
+    expect(packages.map(({ packageId }) => packageId)).toEqual([PACKAGE]);
+  });
+
+  it('shows no programme package on the profile while the assessment’s price is 0', async () => {
+    const { service } = profile({ enabled: 1, fee: 0 });
+    const { packages } = await service.teacher(TX, MALE, { teacherId: TEACHER });
+    expect(packages.map(({ packageId }) => packageId)).toEqual([PACKAGE]);
+  });
+
+  function browsing(programme: Programme) {
+    const asked: { readonly candidateIds: readonly string[] }[] = [];
+    const { service } = world(
+      [],
+      {
+        offerings: async () => [
+          {
+            teacherUserId: TEACHER,
+            subjectId: SUBJECT.id,
+            track: 'recitation',
+            isProgramme: false,
+          },
+          {
+            teacherUserId: TEACHER,
+            subjectId: SUBJECT.id,
+            track: 'ijazah_track',
+            isProgramme: true,
+          },
+          {
+            teacherUserId: PROGRAMME_ONLY,
+            subjectId: SUBJECT.id,
+            track: 'ijazah_track',
+            isProgramme: true,
+          },
+        ],
+        activeSubjects: async () => [],
+        visibleTeachers: async (_tx, _requester, { teacherIds }) =>
+          teacherIds.map((id) => visible({ id })),
+        visibleTeacherPage: async (_tx, _requester, query) => {
+          asked.push(query);
+          return query.candidateIds.map((id) => visible({ id }));
+        },
+        packagesOf: async () => [
+          { teacherUserId: TEACHER, ...FIXED },
+          { teacherUserId: TEACHER, ...PROGRAMME },
+          { teacherUserId: PROGRAMME_ONLY, ...PROGRAMME },
+        ],
+        subjectsOf: async () => [],
+        riwayas: async () => [
+          { teacherUserId: TEACHER, subjectId: SUBJECT.id, riwaya: 'حفص' },
+          { teacherUserId: PROGRAMME_ONLY, subjectId: SUBJECT.id, riwaya: 'ورش' },
+        ],
+        fold: async (_tx, texts) => [...texts],
+      },
+      programme,
+    );
+    return { asked, service };
+  }
+
+  const shown = (cards: readonly DiscoveryCard[]) =>
+    cards.map(({ teacherId, tracks, lowestPerSession_piasters }) => ({
+      teacherId,
+      tracks,
+      lowestPerSession_piasters,
+    }));
+
+  it('lists a teacher of a programme package alone while the programme is open, the card’s lowest from its prices', async () => {
+    const { asked, service } = browsing(OPEN);
+    const { cards, tabs } = await service.browse(TX, MALE, {});
+    expect(asked[0]?.candidateIds).toEqual([TEACHER, PROGRAMME_ONLY]);
+    expect(shown(cards)).toEqual([
+      {
+        teacherId: TEACHER,
+        tracks: ['recitation', 'ijazah_track'],
+        lowestPerSession_piasters: 20_000,
+      },
+      { teacherId: PROGRAMME_ONLY, tracks: ['ijazah_track'], lowestPerSession_piasters: 20_000 },
+    ]);
+    expect(tabs?.[0]).toEqual({ subjectId: null, count: 2 });
+  });
+
+  it('lists no teacher for a programme package, counts none and prices none, while the switch is off', async () => {
+    const { asked, service } = browsing({ enabled: 0, fee: 50_000 });
+    const { cards, tabs } = await service.browse(TX, MALE, {});
+    expect(asked[0]?.candidateIds).toEqual([TEACHER]);
+    expect(shown(cards)).toEqual([
+      { teacherId: TEACHER, tracks: ['recitation'], lowestPerSession_piasters: 25_000 },
+    ]);
+    expect(tabs?.[0]).toEqual({ subjectId: null, count: 1 });
+    await service.browse(TX, MALE, { track: 'ijazah_track' });
+    expect(asked[1]?.candidateIds).toEqual([]);
+  });
+
+  it('lists no teacher for a programme package while the assessment’s price is 0', async () => {
+    const { asked, service } = browsing({ enabled: 1, fee: 0 });
+    await service.browse(TX, MALE, {});
+    expect(asked[0]?.candidateIds).toEqual([TEACHER]);
+  });
+
+  it('gives the riwaya filter no value of a teacher of a programme package alone while it is closed', async () => {
+    const { service } = browsing({ enabled: 0, fee: 50_000 });
+    await expect(service.filters(TX, MALE, { subjectId: SUBJECT.id })).resolves.toEqual({
+      riwayas: ['حفص'],
+    });
+    const { service: open } = browsing(OPEN);
+    await expect(open.filters(TX, MALE, { subjectId: SUBJECT.id })).resolves.toEqual({
+      riwayas: ['حفص', 'ورش'],
+    });
   });
 });

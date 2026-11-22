@@ -30,3 +30,6 @@ export * from './gender-flags.js';
 export * from './settings.js';
 // 003:T105: the `payouts` namespace, «تحويلات المعلمين»: the list, a teacher's detail and the mark.
 export * from './payouts.js';
+// 006: specs/006-programme (ADR 0024).
+// 006:T003: the `programmes` namespace, the administrators' queue, decision and reopen.
+export * from './programme.js';

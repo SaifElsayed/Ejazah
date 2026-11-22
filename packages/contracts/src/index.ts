@@ -46,3 +46,6 @@ export * from './teacher-signature.js';
 export * from './teacher-students.js';
 // 003:T105: the teacher's «مستحقاتي», `teacher.dues.get`.
 export * from './teacher-dues.js';
+// 006: specs/006-programme (ADR 0024).
+// 006:T003: the `programme` namespace, the ijazah programme's assessment, offer and months.
+export * from './programme.js';

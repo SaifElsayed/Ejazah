@@ -8,12 +8,23 @@
 // shape (`draftOf`, `parsedDraft`), and a refused one is said by its code: VALIDATION_FAILED with
 // one of `settingUpdateRefusal`'s reasons in its own words, `CONFLICT` as the panel's reused-key
 // words, `RATE_LIMITED` with when to try again through T058's `errorMessageKey`, which keeps the
-// generic words for any other failure.
+// generic words for any other failure. 006:T002 (B-P1 Q-6, Q-B1 (a); the owner's «تظهر جنيه فقط»):
+// an amount of the unit `piasters` is drawn, bounded, opened and typed in pounds only, at most two
+// decimals, through `formatPounds` and `packages/money`'s `poundsText` and `piastersOfPoundsText`,
+// and sent in whole piasters; no word names a piaster.
 import { type AdminSetting, settingGroup, settingUpdateRefusal } from '@ijazah/contracts/admin';
+import {
+  isPiasters,
+  piasters,
+  piastersOfPoundsText,
+  poundsText,
+  toPlainNumber,
+} from '@ijazah/money';
 
 import { formattingTag, type Locale, type MessageKey, type MessageValues } from '../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../lib/client';
 import { type ErrorMessage, errorMessageKey } from '../../lib/error-message';
+import { formatPounds } from '../../lib/format';
 
 type Group = AdminSetting['group'];
 type Unit = AdminSetting['unit'];
@@ -58,6 +69,7 @@ const UNIT: Readonly<Record<Exclude<Unit, 'rate_limit' | 'version'>, MessageKey>
   weeks: 'admin.settings.units.weeks',
   count: 'admin.settings.units.count',
   bytes: 'admin.settings.units.bytes',
+  piasters: 'admin.settings.units.piasters',
 };
 
 interface RateLimit {
@@ -75,7 +87,15 @@ function isRateLimit(value: SettingValue): value is RateLimit & SettingValue {
   );
 }
 
-function amount(t: Translate, unit: Unit, value: SettingValue): string {
+/** Whether `value` is an amount of piasters the page draws and takes in pounds (006:T002). */
+function isAmount(unit: Unit, value: unknown): value is number {
+  return unit === 'piasters' && typeof value === 'number' && isPiasters(value);
+}
+
+function amount(t: Translate, locale: Locale, unit: Unit, value: SettingValue): string {
+  if (isAmount(unit, value)) {
+    return t(UNIT.piasters, { value: formatPounds(piasters(value), locale) });
+  }
   if (typeof value === 'number' && unit !== 'rate_limit' && unit !== 'version') {
     return t(UNIT[unit], { value });
   }
@@ -97,35 +117,44 @@ export function valueText(
   }
   if (Array.isArray(value)) {
     return new Intl.ListFormat(formattingTag(locale), { type: 'unit', style: 'short' }).format(
-      value.map((each) => amount(t, unit, each)),
+      value.map((each) => amount(t, locale, unit, each)),
     );
   }
-  return amount(t, unit, value);
+  return amount(t, locale, unit, value);
 }
 
-function boundText(t: Translate, { min, minExclusive, max }: Bound): string {
+/** A bound's number as the page writes it: an amount of piasters in pounds, any other as itself. */
+type BoundNumber = (value: number) => string | number;
+
+function boundText(t: Translate, { min, minExclusive, max }: Bound, written: BoundNumber): string {
   if (max === null) {
     return t(minExclusive ? 'admin.settings.bounds.above' : 'admin.settings.bounds.atLeast', {
-      min,
+      min: written(min),
     });
   }
   return t(minExclusive ? 'admin.settings.bounds.aboveUpTo' : 'admin.settings.bounds.between', {
-    min,
-    max,
+    min: written(min),
+    max: written(max),
   });
 }
 
-/** The bounds as the registry states them. */
-export function boundsText(t: Translate, bounds: Bounds): string {
+/** The bounds as the registry states them; an amount of piasters in pounds (006:T002). */
+export function boundsText(
+  t: Translate,
+  locale: Locale,
+  { bounds, unit }: Pick<AdminSetting, 'bounds' | 'unit'>,
+): string {
+  const written: BoundNumber = (value) =>
+    isAmount(unit, value) ? formatPounds(piasters(value), locale) : value;
   switch (bounds.shape) {
     case 'number':
-      return boundText(t, bounds.value);
+      return boundText(t, bounds.value, written);
     case 'list':
-      return t('admin.settings.bounds.each', { bound: boundText(t, bounds.each) });
+      return t('admin.settings.bounds.each', { bound: boundText(t, bounds.each, written) });
     case 'rate_limit':
       return t('admin.settings.bounds.rateLimit', {
-        limit: boundText(t, bounds.limit),
-        window: boundText(t, bounds.windowSeconds),
+        limit: boundText(t, bounds.limit, written),
+        window: boundText(t, bounds.windowSeconds, written),
       });
     case 'text':
       return t('admin.settings.bounds.none');
@@ -138,9 +167,10 @@ export interface Draft {
   readonly second: string;
 }
 
-/** The fields opened on the value now. */
-export function draftOf({ value }: Pick<AdminSetting, 'value'>): Draft {
+/** The fields opened on the value now; an amount of piasters in pounds (006:T002). */
+export function draftOf({ value, unit }: Pick<AdminSetting, 'value' | 'unit'>): Draft {
   if (value === null) return { first: '', second: '' };
+  if (isAmount(unit, value)) return { first: poundsText(piasters(value)), second: '' };
   if (isRateLimit(value)) {
     return { first: String(value.limit), second: String(value.window_seconds) };
   }
@@ -155,14 +185,24 @@ function numberOf(text: string): number | undefined {
   return NUMBER.test(trimmed) ? Number(trimmed) : undefined;
 }
 
+/** An amount typed in pounds, at most two decimals, as whole piasters; undefined otherwise. */
+function piastersTyped(text: string): number | undefined {
+  const typed_piasters = piastersOfPoundsText(text);
+  return typed_piasters === null ? undefined : toPlainNumber(typed_piasters);
+}
+
 /**
  * The value the fields say, in the setting's shape, or undefined while they say none. Whether it
- * is whole and inside its bounds is the server's to judge (`settingRefusal`).
+ * is whole and inside its bounds is the server's to judge (`settingRefusal`); an amount of
+ * piasters is typed in pounds and sent in piasters (006:T002).
  */
-export function parsedDraft(bounds: Bounds, { first, second }: Draft): SettingValue | undefined {
+export function parsedDraft(
+  { bounds, unit }: Pick<AdminSetting, 'bounds' | 'unit'>,
+  { first, second }: Draft,
+): SettingValue | undefined {
   switch (bounds.shape) {
     case 'number':
-      return numberOf(first);
+      return unit === 'piasters' ? piastersTyped(first) : numberOf(first);
     case 'list': {
       const each = first.split(/[,،]/).map(numberOf);
       return each.some((part) => part === undefined) ? undefined : (each as number[]);

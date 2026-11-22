@@ -50,7 +50,8 @@ export function PackageDeactivateSheet({
     <Sheet
       open={item !== undefined}
       onClose={close}
-      {...(item === undefined
+      // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's.
+      {...(item === undefined || item.isProgramme === true
         ? {}
         : {
             title: t('teacher.packages.deactivateSheet.title', {

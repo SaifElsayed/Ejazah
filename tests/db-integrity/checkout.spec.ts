@@ -422,7 +422,8 @@ describe('a new checkout over the student’s own unexpired hold (FR-BOOK-12)', 
       const own = await pendingEnrollment(student, first);
       await retryOn(student, own.enrollmentId);
       const [order] = await ordersOf(own.enrollmentId);
-      if (order === undefined) throw new Error('no order');
+      // 006:T001: `gateway_order_id` is NULL-able now; a manual order always carries one.
+      if (order?.gatewayOrderId == null) throw new Error('no order');
       stand.onCancel(order.gatewayOrderId, outcome);
 
       const error = await refusal(holdOn(student, second));

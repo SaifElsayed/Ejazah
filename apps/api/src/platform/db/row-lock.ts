@@ -73,6 +73,9 @@ export type LockedTable =
   | 'verification_documents'
   | 'availability_slots'
   | 'slot_holds'
+  // 006:T006 of specs/006-programme (the owner's approval of 2026-11-22; kernel.md, the confirm
+  // step's row): a programme, keyed by its enrollment, after the holds and before the enrollments.
+  | 'programmes'
   | 'enrollments'
   | 'sessions'
   | 'session_remedies'
@@ -108,6 +111,9 @@ export async function lockRows(
       return;
     case 'slot_holds':
       await tx.$queryRaw`SELECT 1 FROM slot_holds WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
+      return;
+    case 'programmes':
+      await tx.$queryRaw`SELECT 1 FROM programmes WHERE enrollment_id = ANY(${ids}::uuid[]) ORDER BY enrollment_id FOR UPDATE`;
       return;
     case 'enrollments':
       await tx.$queryRaw`SELECT 1 FROM enrollments WHERE id = ANY(${ids}::uuid[]) ORDER BY id FOR UPDATE`;
@@ -164,9 +170,11 @@ export async function keyShareRows(
 
 /**
  * What an advisory lock is taken over: `'teacher-slots'`, a teacher's slots by the teacher's user
- * id, taken in rule 2's place of the slot (R-206).
+ * id, taken in rule 2's place of the slot (R-206); 006:T004 (SRS DEC-110, Q-D1 (a)):
+ * `'programme-switch'`, the programme's switch, taken before it is read for a new old-style
+ * ijazah-track package and before it is written, ahead of every row lock of either path.
  */
-export type LockScope = 'teacher-slots';
+export type LockScope = 'teacher-slots' | 'programme-switch';
 
 /**
  * Takes the advisory lock of `scope` and `id` until the transaction ends, at commit or rollback; a

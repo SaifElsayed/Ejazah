@@ -256,8 +256,10 @@ export {
   type HeldTerms,
   type PayStore,
   payStoreOver,
+  type PayOrderTerms,
   type PayTarget,
   payTargetOf,
+  payTermsOf,
   type QuotedSummary,
   summaryChanges,
 } from './pay.service.js';
@@ -417,3 +419,16 @@ export {
 // first by a path that holds no lock yet (payments' order events, the sweeps).
 export { keyShareStudentsOfEnrollments } from './enrollment-events.repository.js';
 export { keyShareStudentsOfHolds } from './holds.repository.js';
+
+// ---------------------------------------------------------------------------------------------
+// 006:T005 of specs/006-programme (FR-701, R-504; U-1, N-12): the programme's side of a booking. A
+// reader that answers the programme closed, for a caller with no settings bound; the confirmed
+// assessment's programme row, written `awaiting_offer` by the confirm step on its transaction; and
+// the student's active programmes' weekly times in a window, which `EnrollmentSide` answers to
+// sessions.
+export {
+  closedProgramme,
+  type ProgrammeReader,
+  programmeTimesOf,
+  startProgramme,
+} from './programmes.service.js';

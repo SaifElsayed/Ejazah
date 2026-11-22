@@ -43,6 +43,10 @@
 // that lead after its `expires_at` (the dates generation writes at a confirmation, FR-368), so a
 // confirmation anywhere inside its payment window is covered. Only those overlapping the window are
 // answered, once each, by start.
+//
+// 006:T005 of specs/006-programme (U-1, N-12): `programmeTimesOf` answers the weekly times of the
+// students' active programmes (`programmes.service.ts`), the asking enrollment's own left out, so
+// sessions' make-up proposal, counter options and a postponement's placement never land on them.
 import { type DayOfWeek, firstOccurrenceAfter, type LocalDate } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -73,6 +77,7 @@ import {
   restoreEnrollment,
 } from './enrollment-side.repository.js';
 import { FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours } from './nearest-slot.service.js';
+import { programmeTimesOf } from './programmes.service.js';
 import { packageSessionsOn } from './session-overlap.service.js';
 import {
   isFreeOn,
@@ -122,6 +127,13 @@ export interface EnrollmentSideStore {
   teacherSlotsOf(tx: Transaction, teacherUserId: string): Promise<SlotRow[]>;
   /** A slot by its id, active or not (catalog's entry). */
   readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
+  /** 006:T005: the students' active programmes' weekly times (`programmes.service.ts`). */
+  programmeTimesOf(
+    tx: Transaction,
+    studentUserIds: readonly string[],
+    window: { readonly from: Date; readonly to: Date },
+    exceptEnrollmentId: string,
+  ): Promise<readonly HeldTime[]>;
 }
 
 /** Booking's repositories and catalog's entry, as `createEnrollmentSide` uses them by default. */
@@ -137,6 +149,8 @@ export const enrollmentSideStore: EnrollmentSideStore = {
   teacherSlotsOf,
   readSlot,
   releaseHeld: (tx, enrollmentId, windowDays) => releaseHeldSlot(tx, enrollmentId, { windowDays }),
+  programmeTimesOf: (tx, studentUserIds, window, exceptEnrollmentId) =>
+    programmeTimesOf(tx, studentUserIds, window, { exceptEnrollmentId }),
 };
 
 /** `userIds` once each, in id order. */
@@ -285,6 +299,9 @@ export function createEnrollmentSide({
       const outcome = await store.releaseHeld(tx, id, reads.windowDays);
       return outcome.released ? outcome.at : null;
     },
+    // 006:T005 (U-1, N-12): the students' active programmes' weekly times, the asker's left out.
+    programmeTimesOf: (tx, studentUserIds, window, exceptEnrollmentId) =>
+      store.programmeTimesOf(tx, studentUserIds, window, exceptEnrollmentId),
     eventsOf: (tx, enrollmentId) => store.enrollmentEventsOf(tx, enrollmentId),
     enrollmentPage: async (tx, filter, cursor, batchSize) => {
       // A batch the caller sizes (T024's name search, Q3) reads no setting.

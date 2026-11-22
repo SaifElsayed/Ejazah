@@ -39,7 +39,10 @@
 // entry re-exporting `confirmEnrollment`; and the job reaching it. And the second writer: the
 // `status` write inside `restoreEnrollment` (FR-455, R-322, ADR 0023), only `status` there, never a
 // `confirmedAt` or `confirmed_at` key nor raw SQL, since a restore never writes `confirmed_at`; and
-// its one reach, inside `enrollment-side.service`'s `restore`. Everything else is refused.
+// its one reach, inside `enrollment-side.service`'s `restore`. And (006:T006, PR #156 r1) the
+// `confirmed_at` key inside payments' `markOrderConfirmed`: an order's own marker, `payments.confirmed_at`,
+// that the confirm step processed it (R-502, V-3), never an enrollment's confirmation; the job is its
+// one reach, read below. Everything else is refused.
 // The real tree must show exactly those sites, so a scanner that saw nothing could not pass.
 //
 // NOT SEEN (the reviewer's, R-HONEST-1's second mechanism). A `status` key whose value is a variable
@@ -76,6 +79,8 @@ const ENTRY = `${BOOKING}/index.ts`;
 const JOB = 'apps/api/src/jobs/confirm-enrollment.ts';
 const SIDE_REPOSITORY = `${BOOKING}/enrollment-side.repository.ts`;
 const SIDE_SERVICE = `${BOOKING}/enrollment-side.service.ts`;
+/** 006:T006: payments' repository, where an order's own marker is written (this file's head). */
+const PAYMENTS_REPOSITORY = 'apps/api/src/modules/payments/payments.repository.ts';
 
 /** What a site is: a write of the columns, or a reach of one of the three functions. */
 export type SiteKind = 'write' | 'markConfirmed' | 'restoreEnrollment' | 'confirmEnrollment';
@@ -102,7 +107,11 @@ export function allowed(site: Site): boolean {
         (site.path === REPOSITORY && site.within === 'markConfirmed') ||
         (site.path === SIDE_REPOSITORY &&
           site.within === 'restoreEnrollment' &&
-          site.column === 'status')
+          site.column === 'status') ||
+        // 006:T006 (R-502, V-3): an order's marker, never an enrollment's (this file's head).
+        (site.path === PAYMENTS_REPOSITORY &&
+          site.within === 'markOrderConfirmed' &&
+          site.column === 'confirmed_at')
       );
     case 'markConfirmed':
       return site.path === SERVICE && site.within === 'confirmEnrollment';
@@ -1181,7 +1190,42 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
         `confirmEnrollment ${JOB} confirmationStepsOf`,
         `write ${SIDE_REPOSITORY} restoreEnrollment`,
         `restoreEnrollment ${SIDE_SERVICE} restore`,
+        // 006:T006 (PR #156 r1): an order's own marker, payments.confirmed_at.
+        `write ${PAYMENTS_REPOSITORY} markOrderConfirmed`,
       ].sort(),
     );
   });
+
+  // 006:T006 (PR #156 r1): the order's marker is reached by the confirm-enrollment job alone,
+  // through payments' entry, inside the steps' builder.
+  it('has one reach of markOrderConfirmed: the job, through payments’ entry', () => {
+    expect(identifierSites(files, 'markOrderConfirmed')).toEqual([
+      `${JOB} -`,
+      `${JOB} confirmationStepsOf`,
+      'apps/api/src/modules/payments/index.ts -',
+      `${PAYMENTS_REPOSITORY} markOrderConfirmed`,
+    ]);
+  });
 });
+
+/**
+ * Each place `name` is named in code (an identifier, never a comment or a string), as `path within`,
+ * sorted and without repeats; `within` the function it sits in, `-` at a file's top level.
+ */
+function identifierSites(files: readonly PathFile[], name: string): string[] {
+  const sites = new Set<string>();
+  for (const file of files) {
+    if (file.path.endsWith('.sql') || !file.text.includes(name)) continue;
+    const source = ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node, within: string | null): void => {
+      const named =
+        (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name !== undefined
+          ? node.name.getText(source)
+          : within;
+      if (ts.isIdentifier(node) && node.text === name) sites.add(`${file.path} ${named ?? '-'}`);
+      ts.forEachChild(node, (child) => visit(child, named));
+    };
+    visit(source, null);
+  }
+  return [...sites].sort();
+}

@@ -43,6 +43,8 @@ export function PackageCard({
   const locale = useLocale();
   const format = useFormatters();
   const nameOf = useSubjectName();
+  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
+  if (item.isProgramme === true) return null;
   const price_piasters = piasters(item.price_piasters);
   const tiles = item.isActive && published;
   const line = tiles

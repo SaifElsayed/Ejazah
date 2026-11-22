@@ -328,6 +328,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   postponement of another enrollment is never placed on that time. The setting `programme_enabled` gates only new
   programme packages and new assessments: while it is off, an ijazah-track package is sold as today (DEC-92's
   fallback); turning it off again stops no running programme and reactivates no old package.
+  > *(2026-11-22, SRS DEC-110, the owner's Q-3 (a)(a) on B-P1's conflict check.)* While the switch is on, reactivating
+  > an old-style ijazah package is refused with a named code; the switch's deactivation is its own audit entry with the
+  > count.
 - **FR-702**: The assessment's fee MUST NOT be refunded, except as part of an ijazah teacher's dropout (DEC-85); its
   order MUST carry the rate in force (70 % by default) and the 25 % in force, which become the programme's for every
   later order (ADR 0025 D6, Q6).
@@ -408,6 +411,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   details are verified (R-HONEST). Once it is verified, «pay now» and «change card» are shown and the student pays the
   month by hand: the refused charge is a hard decline and is never retried (PR #153's review, round 4, Minor 1). A push
   at that moment is v1.1 (SRS DEC-101).
+  > *(Amended 2026-11-22, SRS DEC-110, the owner's Q-2 on B-P1's conflict check.)* An automatic order with no answer is
+  > not expired, and no retry is made, before the gateway is asked by the merchant reference (the payment's id): paid →
+  > recorded paid, no new charge; no transaction → the soft decline above; no answer → no new charge, asked again later,
+  > and still none → an Administrator item.
 - **FR-717**: A failed charge MUST be retried only on a soft decline, at most 4 times, 1, 3, 5 and 7 days after the
   failure (§3.14), then only by hand; a hard decline MUST never be retried (DEC-92).
 - **FR-718**: At most one paid order MUST cover a month. A second paid order for a month already paid MUST be treated as
