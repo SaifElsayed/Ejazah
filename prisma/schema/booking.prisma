@@ -166,8 +166,9 @@ model Programme {
   state          ProgrammeState
   // The delivered assessment's end + `programme_offer_hours` (24); an extension adds 24 h (R-505).
   offerDueAt     DateTime?      @map("offer_due_at") @db.Timestamptz(6)
-  // The offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505).
-  payBy          DateTime?      @map("pay_by") @db.Timestamptz(6)
+  // The spec's «pay_by»: the offer's time + `programme_pay_rest_hours` (48), set at the offer
+  // (R-505).
+  payByAt        DateTime?      @map("pay_by_at") @db.Timestamptz(6)
   // The teacher's words at the offer, 1 to 500 characters each.
   level          String?
   readiness      String?

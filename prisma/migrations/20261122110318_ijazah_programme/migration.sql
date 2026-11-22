@@ -92,7 +92,7 @@ CREATE TABLE "programmes" (
     "enrollment_id" UUID NOT NULL,
     "state" "programme_state" NOT NULL,
     "offer_due_at" TIMESTAMPTZ(6),
-    "pay_by" TIMESTAMPTZ(6),
+    "pay_by_at" TIMESTAMPTZ(6),
     "level" TEXT,
     "readiness" TEXT,
     "expected_length" TEXT,

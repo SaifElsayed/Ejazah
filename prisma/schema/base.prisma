@@ -235,7 +235,7 @@ enum CancellationReason {
   // The student deleted their account (ADR 0015 D4; Phase 1, T012).
   account_deleted
   // 006:T001 (ADR 0024; specs/006-programme/data-model.md, ERD changelog row 65): a programme's
-  // closings. The student declined the offer; the offer lapsed unpaid by `pay_by`; an approved
+  // closings. The student declined the offer; the offer lapsed unpaid by `pay_by_at`; an approved
   // refusal of the assessment; an approved stop. Each frees the weekly time at once.
   offer_declined
   offer_lapsed
