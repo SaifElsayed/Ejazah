@@ -924,4 +924,135 @@ describe('a teacher’s credentials at the deletion (T174, DEC-97)', () => {
     const entries = JSON.stringify(await entriesOf([credentialId]));
     for (const text of [HOLDER, CORRECTED, NOTE, REASON]) expect(entries).not.toContain(text);
   });
+
+  // Q-A2-1 (the owner's approval of 2026-11-22, «موافق على التلاتة»): a decision racing a
+  // never-approved teacher's deletion. The deletion runs as `users.delete`'s own path does, catalog's
+  // consequence subscribed, and is held open after it, its account locked and its credentials
+  // blanked; the decision starts, is seen waiting on a lock, and the deletion commits. The deletion
+  // wins: the decision locks the account first, reads the credential again and answers NOT_FOUND,
+  // writing no text, no review reason, no holder name and no history row onto the blanked credential.
+  describe('a decision racing the deletion (Q-A2-1)', () => {
+    async function seenWaiting(pid: number): Promise<void> {
+      for (let look = 0; look < 100; look += 1) {
+        const [row] = await database.$queryRaw<{ waiting: boolean }[]>`
+          SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`;
+        if (row?.waiting === true) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error(`backend ${String(pid)} never waited on a lock`);
+    }
+
+    /** The deletion held open after its consequences; `decide` runs, waits, then the deletion commits. */
+    async function decidedDuringDeletion(
+      teacherId: string,
+      decide: (tx: Transaction) => Promise<unknown>,
+    ): Promise<{ readonly value: unknown } | { readonly thrown: unknown }> {
+      let release = (): void => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let held = (): void => undefined;
+      const deletionHeld = new Promise<void>((resolve) => {
+        held = resolve;
+      });
+      const consequences = new AccountConsequences();
+      consequences.subscribe(catalogDeletionConsequence());
+      consequences.subscribe(async () => {
+        held();
+        await released;
+      });
+      const deleting = deleteOwn(teacherId, deletionOver(bound(), consequences));
+      await Promise.race([deletionHeld, deleting]);
+      let pidOf = (_pid: number): void => undefined;
+      const started = new Promise<number>((resolve) => {
+        pidOf = resolve;
+      });
+      const decision = database
+        .$transaction(
+          async (tx: Transaction) => {
+            const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+            pidOf(row?.pid ?? 0);
+            return decide(tx);
+          },
+          { maxWait: 5_000, timeout: 15_000 },
+        )
+        .then(
+          (value: unknown) => ({ value }),
+          (thrown: unknown) => ({ thrown }),
+        );
+      try {
+        await seenWaiting(await started);
+      } finally {
+        release();
+        await deleting;
+      }
+      return decision;
+    }
+
+    const refusedNotFound = (outcome: { readonly value: unknown } | { readonly thrown: unknown }) =>
+      expect(
+        'thrown' in outcome && outcome.thrown instanceof DomainError
+          ? outcome.thrown.code
+          : outcome,
+      ).toBe('NOT_FOUND');
+
+    async function expectBlank(credentialId: string): Promise<void> {
+      const row = await credentialRow(credentialId);
+      expect(row.holderName).toBeNull();
+      expect(row.riwaya).toBeNull();
+      expect(row.tariq).toBeNull();
+      expect(row.reviewReason).toBeNull();
+      expect(await chainCount(credentialId)).toBe(0);
+      expect(await historyCount(credentialId)).toBe(0);
+    }
+
+    it('approve waits for the account, then is refused NOT_FOUND, writing nothing', async () => {
+      const teacherId = await teacher(false);
+      const credentialId = await pendingCredential(teacherId);
+      const outcome = await decidedDuringDeletion(teacherId, (tx) =>
+        review.approve(tx, adminId, { credentialId, ...TRANSCRIPTION, note: NOTE }),
+      );
+      refusedNotFound(outcome);
+      await expectBlank(credentialId);
+      expect((await credentialRow(credentialId)).status).toBe('pending');
+    });
+
+    it('reject waits for the account, then is refused NOT_FOUND, writing nothing', async () => {
+      const teacherId = await teacher(false);
+      const credentialId = await pendingCredential(teacherId);
+      const outcome = await decidedDuringDeletion(teacherId, (tx) =>
+        review.reject(tx, adminId, { credentialId, reason: REJECTION }),
+      );
+      refusedNotFound(outcome);
+      await expectBlank(credentialId);
+      expect((await credentialRow(credentialId)).status).toBe('pending');
+    });
+
+    it('requestDocument waits for the account, then is refused NOT_FOUND, writing nothing', async () => {
+      const teacherId = await teacher(false);
+      const credentialId = await pendingCredential(teacherId);
+      const outcome = await decidedDuringDeletion(teacherId, (tx) =>
+        review.requestDocument(tx, adminId, { credentialId, reason: REJECTION }),
+      );
+      refusedNotFound(outcome);
+      await expectBlank(credentialId);
+      expect((await credentialRow(credentialId)).status).toBe('pending');
+      const profile = await database.teacherProfile.findUniqueOrThrow({
+        where: { userId: teacherId },
+        select: { applicationStatus: true, applicationNote: true },
+      });
+      expect(profile).toEqual({ applicationStatus: 'in_review', applicationNote: null });
+    });
+
+    it('correct waits for the account, then is refused NOT_FOUND, writing nothing', async () => {
+      const teacherId = await teacher(false);
+      const credentialId = await pendingCredential(teacherId);
+      await reviewer().approve({ credentialId, ...TRANSCRIPTION });
+      const outcome = await decidedDuringDeletion(teacherId, (tx) =>
+        review.correct(tx, adminId, { credentialId, holderName: CORRECTED, reason: REASON }),
+      );
+      refusedNotFound(outcome);
+      await expectBlank(credentialId);
+    });
+  });
 });

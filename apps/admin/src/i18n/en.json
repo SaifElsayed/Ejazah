@@ -774,7 +774,7 @@
         "conflict": "This ijazah changed meanwhile, so it is shown as it is now.",
         "correctEffect1": "The corrected chain appears on the teacher's page, and on every ijazah issued after saving.",
         "correctEffect2": "Ijazahs issued before the correction stay as issued.",
-        "correctFooter": "Saving unlocks once the reason is written. The correction, its reason and the chain before and after are recorded under your name in the audit log.",
+        "correctFooter": "Saving unlocks once the reason is written. The correction, its reason, and the name and chain before and after are recorded under your name in the decision history below, not in the audit log.",
         "correctReason": "Reason for the correction (required)",
         "footer": "Approving makes the ijazah \"Verified\" with the riwaya, tariq and chain as you transcribed them. \"Request another document\" sets it to \"Another file needed\" until the teacher uploads a new file. Your decision is recorded under your name in the audit log.",
         "generation": "{n}",

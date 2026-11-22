@@ -82,6 +82,9 @@ export class MemoryReviewStore implements CredentialReviewStore {
   readonly applications = new Map<string, HeldApplication>();
   /** The credentials' history rows, in the order written (T174). */
   readonly history: HistoryEntry[] = [];
+  /** Teachers whose account is deleted the moment a decision waits on it (Q-A2-1), then deleted. */
+  readonly #deletedOnLock = new Set<string>();
+  readonly #deleted = new Set<string>();
 
   /** A credential waiting for review unless `status` says otherwise; its id. */
   plant(
@@ -180,7 +183,17 @@ export class MemoryReviewStore implements CredentialReviewStore {
 
   async read(_tx: Transaction, credentialId: string): Promise<ReviewRecord | null> {
     const row = this.#held.get(credentialId);
-    return row === undefined ? null : structuredClone(row);
+    // A deleted teacher's credentials are left out of every read, as `readForReview` does (R-DB-3).
+    if (row === undefined || this.#deleted.has(row.teacher.userId)) return null;
+    return structuredClone(row);
+  }
+
+  /**
+   * The teacher's deletion commits while a decision waits on the account's lock (Q-A2-1): the
+   * account is deleted once `lockAccount` is called for it.
+   */
+  deletedWhileWaiting(userId: string): void {
+    this.#deletedOnLock.add(userId);
   }
 
   async hasApproved(_tx: Transaction, teacherUserId: string, subjectId: string): Promise<boolean> {
@@ -212,6 +225,7 @@ export class MemoryReviewStore implements CredentialReviewStore {
 
   async lockAccount(_tx: Transaction, userId: string): Promise<void> {
     this.journal.push(`lock-account:${userId}`);
+    if (this.#deletedOnLock.has(userId)) this.#deleted.add(userId);
   }
 
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
