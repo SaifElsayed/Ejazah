@@ -236,7 +236,9 @@ export { packagesRouter } from './packages.router.js';
 export { slotsRouter } from './slots.router.js';
 /**
  * The active slots of the lengths of each teacher's active packages, on the caller's transaction:
- * what booking's discovery read decides is free (T026, R-205).
+ * what booking's discovery read decides is free (T026, R-205). 006:T004: a programme package's
+ * teacher's slots at least the third argument long (the assessment's length, named only while the
+ * programme is open); none named, a programme package offers nothing.
  */
 export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
 /**
@@ -253,8 +255,32 @@ export { readSlot } from './slots.repository.js';
  */
 export { lockTeacherSlots, slotsOf as teacherSlotsOf } from './slots.repository.js';
 export type { SlotRow } from './slots.service.js';
-/** An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350). */
-export { type BookablePackage, bookablePackageOf } from './packages.repository.js';
+/**
+ * An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350).
+ * 006:T004 (R-503): a union on `isProgramme`: a count and a length, or a programme package's three
+ * prices; `priceForLength` reads one of them.
+ */
+export {
+  type BookablePackage,
+  bookablePackageOf,
+  type FixedBookablePackage,
+  type FixedTerms,
+  priceForLength,
+  type ProgrammeBookablePackage,
+  type ProgrammePriceRow,
+  type ProgrammeTerms,
+} from './packages.repository.js';
+/**
+ * 006:T004 (R-503, R-515; Q-5 (a)): whether a programme package may be shown and booked now (the
+ * switch on and the assessment's price above 0), with the assessment's price and length; closed,
+ * the refusal a start answers. Read at each request through the settings reader.
+ */
+export {
+  ASSESSMENT_DURATION_SETTING,
+  ASSESSMENT_PRICE_SETTING,
+  type ProgrammeAvailability,
+  programmeAvailabilityOf,
+} from './packages.service.js';
 /**
  * A teacher's package by its id, with its subject, track and price, on the caller's transaction:
  * the checkout's payment summary (T036, FR-358). Null for an unknown id and for another teacher's.

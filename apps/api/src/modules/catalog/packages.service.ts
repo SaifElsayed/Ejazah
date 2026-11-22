@@ -52,24 +52,31 @@ import {
   type PackagesListOutput,
   type PackagesUpdateInput,
   priceAverageMinTeachers,
+  type ProgrammePrices,
+  type ProgrammeStartRefusal,
+  type SessionLengthMinutes,
+  sessionLengthMinutes,
   type TeacherPackage,
 } from '@ijazah/contracts';
-import { average, perSession, piasters, toPlainNumber } from '@ijazah/money';
+import { average, perSession, piasters, type Piasters, toPlainNumber } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
-import { programmeEnabled } from '../../platform/settings/registry.js';
+import { assessmentPricePiasters, programmeEnabled } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import type {
+  FixedTerms,
   NewPackageRow,
   PackageChange,
   PackageRow,
   PeerPackageRow,
   PeerPackagesQuery,
+  ProgrammePriceRow,
+  ProgrammeTerms,
 } from './packages.repository.js';
 
 /** 003:T113 (SRS DEC-88, §3.14; Q-T113-k): the fewest other teachers the average is shown over. */
@@ -104,6 +111,47 @@ export async function retirePreProgrammeIjazahPackages(
 /** 006:T002 (SRS §3.14, DEC-94; I-3): the programme's switch, 1 on. */
 export const PROGRAMME_ENABLED_SETTING = 'programme_enabled';
 const PROGRAMME_ON = 1;
+
+/** 006:T004 (SRS §3.14, DEC-93; P1 (a)): the assessment's price, whole piasters, 0 unset. */
+export const ASSESSMENT_PRICE_SETTING = 'assessment_price_piasters';
+/** 006:T004 (SRS §3.14, DEC-93): the assessment session's length, 30, 45 or 60 minutes. */
+export const ASSESSMENT_DURATION_SETTING = 'assessment_duration_minutes';
+
+/**
+ * 006:T004 (R-503, R-515; Q-5 (a)): whether a programme package may be shown and booked now. Open
+ * while `programme_enabled` is on and the assessment's price is above 0, with that price and the
+ * assessment's length; closed otherwise, with the refusal a start would answer
+ * (`programme_disabled`, then `assessment_fee_unset`).
+ */
+export type ProgrammeAvailability =
+  | {
+      readonly open: true;
+      readonly assessmentPrice_piasters: Piasters;
+      readonly assessmentDurationMinutes: SessionLengthMinutes;
+    }
+  | { readonly open: false; readonly refusal: ProgrammeStartRefusal };
+
+/**
+ * 006:T004 (Q-5 (a)): the programme's availability, read at each request: the switch, then the
+ * assessment's price, then its length, each only when the one before it leaves the programme open.
+ */
+export async function programmeAvailabilityOf(
+  settings: SettingsReader,
+): Promise<ProgrammeAvailability> {
+  if ((await settings.read(PROGRAMME_ENABLED_SETTING, programmeEnabled)) !== PROGRAMME_ON) {
+    return { open: false, refusal: 'programme_disabled' };
+  }
+  const fee = await settings.read(ASSESSMENT_PRICE_SETTING, assessmentPricePiasters);
+  if (fee === 0) return { open: false, refusal: 'assessment_fee_unset' };
+  return {
+    open: true,
+    assessmentPrice_piasters: piasters(fee),
+    assessmentDurationMinutes: await settings.read(
+      ASSESSMENT_DURATION_SETTING,
+      sessionLengthMinutes,
+    ),
+  };
+}
 
 /** 006:T002 (DEC-110): whether the change turns an inactive old-style ijazah package active. */
 function reactivatesPreProgrammeIjazah(current: PackageRow, change: PackageChange): boolean {
@@ -159,7 +207,41 @@ export interface PackagesServiceDependencies {
 
 const NONE: PackageEnrollmentCounts = { total: 0, active: 0 };
 
+/** 006:T004: a programme package's three prices as the contract carries them, plain piasters. */
+function plainPrices(prices: ProgrammePriceRow): ProgrammePrices {
+  return {
+    m30_piasters: toPlainNumber(prices.m30_piasters),
+    m45_piasters: toPlainNumber(prices.m45_piasters),
+    m60_piasters: toPlainNumber(prices.m60_piasters),
+  };
+}
+
+/** 006:T004: the contract's three prices made piasters (R-MONEY-1). */
+function pricesOfInput(prices: ProgrammePrices): ProgrammePriceRow {
+  return {
+    m30_piasters: piasters(prices.m30_piasters),
+    m45_piasters: piasters(prices.m45_piasters),
+    m60_piasters: piasters(prices.m60_piasters),
+  };
+}
+
 function answerOf(row: PackageRow, enrollments: PackageEnrollmentCounts): TeacherPackage {
+  const held = {
+    isActive: row.isActive,
+    activeEnrollmentCount: enrollments.active,
+    frozen: enrollments.total > 0,
+  };
+  if (row.isProgramme) {
+    // 006:T004 (R-503, K-3): the contract's programme member.
+    return {
+      id: row.id,
+      subject: row.subject,
+      track: row.track,
+      isProgramme: true,
+      prices: plainPrices(row.prices),
+      ...held,
+    };
+  }
   return {
     id: row.id,
     subject: row.subject,
@@ -168,13 +250,45 @@ function answerOf(row: PackageRow, enrollments: PackageEnrollmentCounts): Teache
     sessionDurationMinutes: row.sessionDurationMinutes,
     price_piasters: toPlainNumber(row.price_piasters),
     perSession_piasters: toPlainNumber(perSession(row.price_piasters, row.sessionCount)),
-    isActive: row.isActive,
-    activeEnrollmentCount: enrollments.active,
-    frozen: enrollments.total > 0,
+    ...held,
   };
 }
 
-/** The fields the input names, the price made piasters; the package's id left out. */
+/** A package's session length; a programme package has none until its offer (006:T004, R-506). */
+function lengthOf(row: PackageRow): SessionLengthMinutes | undefined {
+  return row.isProgramme ? undefined : row.sessionDurationMinutes;
+}
+
+/** A shape the contract's `hasOneShape` refuses, reached here by a caller that skipped it. */
+function shapeRefused(path: string): never {
+  throw new DomainError('VALIDATION_FAILED', undefined, { details: [{ path, code: 'custom' }] });
+}
+
+/**
+ * 006:T004 (R-503; data-model.md «packages»): the new package's terms by shape: its three prices on
+ * `ijazah_track`, or its count, length and price.
+ */
+function termsOfInput(
+  terms: Omit<PackagesCreateInput, 'idempotencyKey'>,
+): FixedTerms | ProgrammeTerms {
+  if (terms.prices !== undefined) {
+    if (terms.track !== 'ijazah_track') return shapeRefused('prices');
+    return { track: terms.track, isProgramme: true, prices: pricesOfInput(terms.prices) };
+  }
+  const { sessionCount, sessionDurationMinutes, price_piasters } = terms;
+  if (sessionCount === undefined) return shapeRefused('sessionCount');
+  if (sessionDurationMinutes === undefined) return shapeRefused('sessionDurationMinutes');
+  if (price_piasters === undefined) return shapeRefused('price_piasters');
+  return {
+    track: terms.track,
+    isProgramme: false,
+    sessionCount,
+    sessionDurationMinutes,
+    price_piasters: piasters(price_piasters),
+  };
+}
+
+/** The fields the input names, the prices made piasters; the package's id left out. */
 function changeOf(input: PackagesUpdateInput): PackageChange {
   return {
     ...(input.track === undefined ? {} : { track: input.track }),
@@ -185,8 +299,19 @@ function changeOf(input: PackagesUpdateInput): PackageChange {
     ...(input.price_piasters === undefined
       ? {}
       : { price_piasters: piasters(input.price_piasters) }),
+    ...(input.prices === undefined ? {} : { prices: pricesOfInput(input.prices) }),
     ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
   };
+}
+
+/**
+ * 003:T113 (DEC-88): a pool package's price per session; 006:T004 (DEC-88 as amended, FR-704a): a
+ * programme package's price for the length, already per session.
+ */
+function sessionPriceOf(row: PeerPackageRow): Piasters {
+  return row.isProgramme
+    ? row.sessionPrice_piasters
+    : perSession(row.price_piasters, row.sessionCount);
 }
 
 export class PackagesService {
@@ -242,11 +367,8 @@ export class PackagesService {
         const row = await this.#store.insert(tx, {
           teacherUserId,
           subjectId: terms.subjectId,
-          track: terms.track,
-          sessionCount: terms.sessionCount,
-          sessionDurationMinutes: terms.sessionDurationMinutes,
-          price_piasters: piasters(terms.price_piasters),
           isActive: terms.isActive,
+          ...termsOfInput(terms),
         });
         return answerOf(row, NONE);
       },
@@ -272,7 +394,7 @@ export class PackagesService {
       const newTerms =
         (change.track !== undefined && change.track !== current.track) ||
         (change.sessionDurationMinutes !== undefined &&
-          change.sessionDurationMinutes !== current.sessionDurationMinutes);
+          change.sessionDurationMinutes !== lengthOf(current));
       if (newTerms && (await this.#use.packageHasEnrollment(tx, current.id))) {
         throw new DomainError('PACKAGE_FROZEN');
       }
@@ -310,9 +432,7 @@ export class PackagesService {
       if (new Set(counted.map((row) => row.teacherUserId)).size < minTeachers) {
         return {};
       }
-      const [first_piasters, ...rest_piasters] = counted.map((row) =>
-        perSession(row.price_piasters, row.sessionCount),
-      );
+      const [first_piasters, ...rest_piasters] = counted.map(sessionPriceOf);
       if (first_piasters === undefined) return {};
       return {
         averagePerSession_piasters: toPlainNumber(average([first_piasters, ...rest_piasters])),

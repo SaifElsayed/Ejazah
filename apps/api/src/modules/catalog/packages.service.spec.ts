@@ -26,7 +26,11 @@ import {
   TEACHER,
   TX,
 } from './packages.fixtures.js';
-import { PackagesService, retirePreProgrammeIjazahPackages } from './packages.service.js';
+import {
+  PackagesService,
+  programmeAvailabilityOf,
+  retirePreProgrammeIjazahPackages,
+} from './packages.service.js';
 
 const KEY = 'spec-packages-key-0001';
 // The session's gender, the teacher's own.
@@ -398,11 +402,20 @@ describe('update', () => {
 });
 
 describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the editor's average-price hint", () => {
-  const PEERS = [OTHER_TEACHER, '0199d0a0-0000-7000-8000-0000000000d3', '0199d0a0-0000-7000-8000-0000000000d4'];
+  const PEERS = [
+    OTHER_TEACHER,
+    '0199d0a0-0000-7000-8000-0000000000d3',
+    '0199d0a0-0000-7000-8000-0000000000d4',
+  ];
   const ASKED = { track: 'recitation', sessionDurationMinutes: 45 } as const;
 
   /** A published teacher's package on the asked track and length: the price over the count. */
-  function peer(memory: MemoryPackages, teacherUserId: string, price: number, sessionCount: number) {
+  function peer(
+    memory: MemoryPackages,
+    teacherUserId: string,
+    price: number,
+    sessionCount: number,
+  ) {
     memory.publish(teacherUserId, REQUESTER);
     memory.plant(teacherUserId, { ...RECITATION, price_piasters: piasters(price), sessionCount });
   }
@@ -437,7 +450,9 @@ describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the edit
     peer(memory, PEERS[0] ?? '', 100_000, 3);
     peer(memory, PEERS[1] ?? '', 90_000, 3);
 
-    expect(await serviceOver(memory, settingsWith(2)).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({
+    expect(
+      await serviceOver(memory, settingsWith(2)).service.averagePrice(TEACHER, REQUESTER, ASKED),
+    ).toEqual({
       averagePerSession_piasters: 31_667,
     });
     expect(await serviceOver(memory).service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
@@ -468,7 +483,11 @@ describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the edit
     peer(memory, PEERS[1] ?? '', 90_000, 3);
     // The third is shown to the other gender only.
     memory.publish(PEERS[2] ?? '', 'male');
-    memory.plant(PEERS[2] ?? '', { ...RECITATION, price_piasters: piasters(45_002), sessionCount: 1 });
+    memory.plant(PEERS[2] ?? '', {
+      ...RECITATION,
+      price_piasters: piasters(45_002),
+      sessionCount: 1,
+    });
     const { service } = serviceOver(memory);
 
     expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
@@ -586,7 +605,7 @@ describe('update while the programme’s switch is on (006:T002, DEC-110)', () =
 
   it('reactivates a programme package while the switch is on', async () => {
     const memory = new MemoryPackages();
-    const id = memory.plant(TEACHER, { ...OLD_IJAZAH, isProgramme: true });
+    const id = memory.plant(TEACHER, { ...PROGRAMME, isActive: false });
     await expect(
       serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
         packageId: id,
@@ -625,7 +644,7 @@ describe('retirePreProgrammeIjazahPackages (006:T002, Q-3)', () => {
     memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track' });
     memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track', isActive: false });
     memory.plant(TEACHER, RECITATION);
-    memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track', isProgramme: true });
+    memory.plant(TEACHER, PROGRAMME);
     await expect(retirePreProgrammeIjazahPackages(memory, TX)).resolves.toBe(2);
     expect(memory.log).toEqual([
       'preProgrammeIjazahOwners',
@@ -652,5 +671,126 @@ describe('retirePreProgrammeIjazahPackages (006:T002, Q-3)', () => {
       'lockAccounts:',
       'deactivatePreProgrammeIjazah',
     ]);
+  });
+});
+
+// 006:T004 (R-503, FR-704; Q-5 (a)): a programme package, its three session prices and none of the
+// old three, answered as the contract's programme member.
+const PRICES = {
+  m30_piasters: piasters(20_000),
+  m45_piasters: piasters(28_000),
+  m60_piasters: piasters(35_000),
+} as const;
+const PROGRAMME = {
+  subject: SUBJECT,
+  track: 'ijazah_track',
+  isProgramme: true,
+  prices: PRICES,
+  isActive: true,
+} as const;
+const PLAIN_PRICES = { m30_piasters: 20_000, m45_piasters: 28_000, m60_piasters: 35_000 };
+
+describe('programme packages (006:T004)', () => {
+  it('lists a programme package with its three prices, enrolled and frozen as any other', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, PROGRAMME);
+    memory.enrol(id, { total: 2, active: 1 });
+    await expect(serviceOver(memory).service.list(TEACHER, REQUESTER)).resolves.toEqual({
+      published: false,
+      packages: [
+        {
+          id,
+          subject: SUBJECT,
+          track: 'ijazah_track',
+          isProgramme: true,
+          prices: PLAIN_PRICES,
+          isActive: true,
+          activeEnrollmentCount: 1,
+          frozen: true,
+        },
+      ],
+    });
+  });
+
+  it('creates a programme package with its three prices and no count, length or total', async () => {
+    const memory = new MemoryPackages();
+    memory.grant(TEACHER, SUBJECT);
+    const answer = await serviceOver(
+      memory,
+      programmeSettings({ enabled: 1, fee: 50_000 }),
+    ).service.create(TEACHER, {
+      subjectId: SUBJECT.id,
+      track: 'ijazah_track',
+      prices: PLAIN_PRICES,
+      isActive: true,
+      idempotencyKey: KEY,
+    });
+    const [written] = memory.all();
+    expect(written).toStrictEqual({ ...PROGRAMME, id: written?.id, teacherUserId: TEACHER });
+    expect(answer).toEqual({
+      id: written?.id,
+      subject: SUBJECT,
+      track: 'ijazah_track',
+      isProgramme: true,
+      prices: PLAIN_PRICES,
+      isActive: true,
+      activeEnrollmentCount: 0,
+      frozen: false,
+    });
+  });
+});
+
+/**
+ * 006:T004: the programme's settings: the switch, the assessment's price (0 unset) and length,
+ * each read logged as `read:<key>`; `price_average_min_teachers` at 3.
+ */
+function programmeSettings(
+  values: { readonly enabled: 0 | 1; readonly fee: number; readonly length?: number },
+  log: string[] = [],
+): SettingsReader {
+  const stored: Record<string, unknown> = {
+    programme_enabled: values.enabled,
+    assessment_price_piasters: values.fee,
+    assessment_duration_minutes: values.length ?? 30,
+    price_average_min_teachers: 3,
+  };
+  return {
+    read: async (key, schema) => {
+      if (!(key in stored)) throw new Error(`no setting ${key} in this spec`);
+      log.push(`read:${key}`);
+      return schema.parse(stored[key]);
+    },
+  };
+}
+
+describe('programmeAvailabilityOf (006:T004, Q-5 (a)): whether a programme package may be shown and booked', () => {
+  it('is open while the switch is on and the fee above 0, with the fee and the assessment’s length', async () => {
+    const log: string[] = [];
+    await expect(
+      programmeAvailabilityOf(programmeSettings({ enabled: 1, fee: 50_000, length: 45 }, log)),
+    ).resolves.toStrictEqual({
+      open: true,
+      assessmentPrice_piasters: piasters(50_000),
+      assessmentDurationMinutes: 45,
+    });
+    expect(log).toEqual([
+      'read:programme_enabled',
+      'read:assessment_price_piasters',
+      'read:assessment_duration_minutes',
+    ]);
+  });
+
+  it('is closed `programme_disabled` while the switch is off, the fee unread', async () => {
+    const log: string[] = [];
+    await expect(
+      programmeAvailabilityOf(programmeSettings({ enabled: 0, fee: 50_000 }, log)),
+    ).resolves.toStrictEqual({ open: false, refusal: 'programme_disabled' });
+    expect(log).toEqual(['read:programme_enabled']);
+  });
+
+  it('is closed `assessment_fee_unset` while the fee is 0', async () => {
+    await expect(
+      programmeAvailabilityOf(programmeSettings({ enabled: 1, fee: 0 })),
+    ).resolves.toStrictEqual({ open: false, refusal: 'assessment_fee_unset' });
   });
 });
