@@ -30,6 +30,12 @@ import {
   createOngoingEnrollments,
   enrollmentIdsOfTeacher,
 } from '../../apps/api/src/modules/booking/index';
+import {
+  catalogDeletionConsequence,
+  createCredentialReviewService,
+  credentialHistory,
+  credentialsAdminRouter,
+} from '../../apps/api/src/modules/catalog/index';
 import { openRequestCountOfTeacher } from '../../apps/api/src/modules/certification/index';
 import {
   AccountConsequences,
@@ -43,6 +49,7 @@ import {
   createKeptDataErasureSweep,
   createKeptSignatureErasure,
 } from '../../apps/api/src/modules/verification/index';
+import type { AuditRecord } from '../../apps/api/src/platform/audit/audit-writer';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing';
 import {
@@ -54,6 +61,7 @@ import {
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
 import { transactionsOver } from '../../apps/api/src/platform/db/transaction.repository';
 import { DomainError } from '../../apps/api/src/platform/errors/domain-error';
+import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard';
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
 import {
@@ -61,11 +69,18 @@ import {
   RequestLive,
   unboundBus,
 } from '../../apps/api/src/platform/live/live-publisher';
+import { createLogger } from '../../apps/api/src/platform/logging/logger';
 import { MemorySingleUseMarks } from '../../apps/api/src/platform/redis/single-use-marks.fixtures';
 import {
   SettingError,
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader';
+import { type AdminSurfaceServices, createAdminContext } from '../../apps/api/src/surfaces/context';
+import {
+  createAdminCallerFactory,
+  createAdminRouter,
+} from '../../apps/api/src/surfaces/procedures';
+import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures';
 import { confirmationWorld, NOW, SETTINGS as CONFIRMATION_SETTINGS } from './confirmation-world';
 
 // 005:T016 (rule d): the payment and cancellation pushes' port, which records nothing here.
@@ -132,7 +147,8 @@ const bound = (): Ports => ({
   },
 });
 
-function deletionOver(ports: Ports = bound()) {
+// T174: the registry handed in, so a probe subscribes catalog's consequence as `main.ts` does.
+function deletionOver(ports: Ports = bound(), consequences = new AccountConsequences()) {
   const unreachable = () => Promise.reject(new Error('probe: not reached'));
   return createIdentityServices({
     database,
@@ -153,7 +169,7 @@ function deletionOver(ports: Ports = bound()) {
       store: new IdempotencyRepository(database),
       settings,
     }),
-    consequences: new AccountConsequences(),
+    consequences,
     // As `main.ts` hands it (005:T031): the kept signature's erasure after the deletion's commit.
     fileErasures: [createKeptSignatureErasure({ database, storage })],
     ...ports,
@@ -673,5 +689,239 @@ describe('the kept signature (FR-631, R-411; Q-D3 (a), Q-D4 (a))', () => {
 
     await vi.waitFor(async () => expect(await signatureRow(teacherId)).toBeNull());
     expect(storage.removed).toContain(key);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T174 of specs/002-identity/tasks.md (R1a; SRS DEC-97, FR-AUTH-14; the note under T174): the
+// credential's side of a teacher's deletion, with catalog's consequence subscribed as `main.ts`
+// subscribes it and the credentials reviewed through the administrator surface as it is served, its
+// audit entries written to `audit_logs` as the admin module's writer writes them (a spec outside
+// admin may not import it, R-API-4; the label is the probe's own).
+// - A teacher never approved keeps nothing: every credential's holder name, riwaya, tariq and review
+//   reason null, its chain and its history gone; the audit entries hold no name and no note.
+// - A teacher once approved keeps all of it, after the kept data's erasure too, a corrected name
+//   with its old and new value in the history.
+// ⚠️ The blanking and the history's erasure cannot be undone.
+describe('a teacher’s credentials at the deletion (T174, DEC-97)', () => {
+  const HOLDER = 'عمر بن فاروق';
+  const CORRECTED = 'عمر بن فاروق الأنصاري';
+  const NOTE = 'السند مقروء كاملًا من أوله';
+  const REASON = 'الاسم كما في الملف بعد المراجعة';
+  const REJECTION = 'الختم غير واضح في الصفحة الأخيرة';
+  // The riwaya and the tariq stay in the entries (admin-surface.md:76 as amended); no name, no note.
+  const TEXTS = [HOLDER, CORRECTED, NOTE, REASON, REJECTION, 'جبريل'];
+
+  const review = createCredentialReviewService({
+    settings,
+    // 005:T006: the correction's re-freeze, which this probe does not assert.
+    openRequestsRefreeze: { refreeze: async () => undefined },
+  });
+  const callerFor = createAdminCallerFactory(
+    createAdminRouter({ credentials: credentialsAdminRouter }),
+  );
+  /** `audit_logs` as `AuditRepository.write` inserts a row, on the action's own transaction. */
+  const auditWriter = {
+    write: async (tx: Transaction, record: AuditRecord): Promise<void> => {
+      await tx.auditLog.create({
+        data: {
+          adminId: record.adminId,
+          action: record.action,
+          targetType: record.targetType,
+          targetId: record.targetId,
+          targetLabel: `probe · ${record.targetId}`,
+          reason: record.reason ?? null,
+          ...(record.before === undefined ? {} : { before: record.before }),
+          ...(record.after === undefined ? {} : { after: record.after }),
+        },
+      });
+    },
+  };
+  /** The `credentials` namespace as the administrator kind serves it, its entries in `audit_logs`. */
+  const reviewer = () =>
+    callerFor(
+      createAdminContext({
+        session: { adminId, sessionId: adminId, mfaVerified: true },
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        administration: {
+          transactions: {
+            run: <T>(work: (tx: Transaction) => Promise<T>): Promise<T> =>
+              database.$transaction((tx: Transaction) => work(tx), { timeout: 30_000 }),
+          },
+          auditWriter,
+        } as never,
+        services: new Proxy(unusedAdminServices, {
+          get: (target, name, receiver) =>
+            name === 'credentials' ? review : Reflect.get(target, name, receiver),
+        }) as AdminSurfaceServices,
+        rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+        clientAddress: '203.0.113.9',
+      }),
+    ).credentials;
+
+  /** The deletion with catalog's consequence subscribed, as `main.ts` subscribes it. */
+  const deletion = () => {
+    const consequences = new AccountConsequences();
+    consequences.subscribe(catalogDeletionConsequence());
+    return deletionOver(bound(), consequences);
+  };
+
+  /** A credential of the teacher's waiting for review, over its own PDF and subject. */
+  async function pendingCredential(teacherId: string): Promise<string> {
+    const { id: subjectId } = await database.subject.create({
+      data: { nameAr: 'مادة', nameEn: 'Subject', isActive: true },
+      select: { id: true },
+    });
+    const { id: documentId } = await database.verificationDocument.create({
+      data: {
+        userId: teacherId,
+        documentType: 'credential',
+        storageKeyEncrypted: Buffer.from('probe'),
+      },
+      select: { id: true },
+    });
+    const { id } = await database.teacherCredential.create({
+      data: {
+        teacherUserId: teacherId,
+        subjectId,
+        documentId,
+        status: 'pending',
+        submittedWithApplication: true,
+      },
+      select: { id: true },
+    });
+    return id;
+  }
+
+  const TRANSCRIPTION = {
+    holderName: HOLDER,
+    riwaya: 'حفص عن عاصم',
+    tariq: 'الشاطبية',
+    chain: [{ names: ['رسول الله ﷺ'] }, { names: ['جبريل'] }],
+  };
+
+  /** The application rejected, as a reviewer's rejection leaves the profile (written by the probe). */
+  async function rejectApplication(teacherId: string): Promise<void> {
+    await database.teacherProfile.update({
+      where: { userId: teacherId },
+      data: {
+        verificationStatus: 'rejected',
+        applicationStatus: 'rejected',
+        applicationDecidedAt: new Date('2026-10-24T10:00:00Z'),
+        applicationDecidedByAdminId: adminId,
+      },
+    });
+  }
+
+  const credentialRow = (id: string) =>
+    database.teacherCredential.findUniqueOrThrow({
+      where: { id },
+      select: { holderName: true, riwaya: true, tariq: true, reviewReason: true, status: true },
+    });
+  const chainCount = (credentialId: string) =>
+    database.isnadEntry.count({ where: { credentialId } });
+  const historyCount = (credentialId: string) =>
+    database.teacherCredentialHistory.count({ where: { credentialId } });
+  const entriesOf = (ids: readonly string[]) =>
+    database.auditLog.findMany({
+      where: { targetType: 'credential', targetId: { in: [...ids] } },
+      select: { action: true, reason: true, before: true, after: true, targetLabel: true },
+    });
+
+  it('a credential approved before its teacher, the teacher then rejected and deleted: no name in audit_logs, teacher_credentials or the history', async () => {
+    const teacherId = await teacher(false);
+    const credentialId = await pendingCredential(teacherId);
+    await reviewer().approve({ credentialId, ...TRANSCRIPTION });
+    expect(await historyCount(credentialId)).toBe(1);
+    await rejectApplication(teacherId);
+    await deleteOwn(teacherId, deletion());
+
+    const row = await credentialRow(credentialId);
+    // One assertion per blanked column (the line's red).
+    expect(row.holderName).toBeNull();
+    expect(row.riwaya).toBeNull();
+    expect(row.tariq).toBeNull();
+    expect(row.reviewReason).toBeNull();
+    expect(row.status).toBe('approved');
+    expect(await chainCount(credentialId)).toBe(0);
+    expect(await historyCount(credentialId)).toBe(0);
+    const entries = await entriesOf([credentialId]);
+    expect(entries.map(({ action }) => action)).toEqual(['credential.approve']);
+    for (const text of TEXTS) expect(JSON.stringify(entries)).not.toContain(text);
+  });
+
+  it('approved with a note, corrected with a reason, another rejected with a reason, the teacher then rejected and deleted: no text in audit_logs or the history', async () => {
+    const teacherId = await teacher(false);
+    const approved = await pendingCredential(teacherId);
+    const rejected = await pendingCredential(teacherId);
+    await reviewer().approve({ credentialId: approved, ...TRANSCRIPTION, note: NOTE });
+    await reviewer().correct({ credentialId: approved, holderName: CORRECTED, reason: REASON });
+    await reviewer().reject({ credentialId: rejected, reason: REJECTION });
+    expect([await historyCount(approved), await historyCount(rejected)]).toEqual([2, 1]);
+    expect((await credentialRow(rejected)).reviewReason).toBe(REJECTION);
+    await rejectApplication(teacherId);
+    await deleteOwn(teacherId, deletion());
+
+    for (const credentialId of [approved, rejected]) {
+      const row = await credentialRow(credentialId);
+      expect(row.holderName).toBeNull();
+      expect(row.riwaya).toBeNull();
+      expect(row.tariq).toBeNull();
+      expect(row.reviewReason).toBeNull();
+      expect(await historyCount(credentialId)).toBe(0);
+    }
+    expect(await chainCount(approved)).toBe(0);
+    const entries = await entriesOf([approved, rejected]);
+    expect(entries.map(({ action, reason }) => `${action} ${String(reason)}`).sort()).toEqual([
+      'credential.approve note_given',
+      'credential.correct note_given',
+      'credential.reject note_given',
+    ]);
+    for (const text of TEXTS) expect(JSON.stringify(entries)).not.toContain(text);
+  });
+
+  it('a corrected name of an approved teacher shows its old and new value in the history, and the deletion and the kept data’s erasure keep it', async () => {
+    const teacherId = await teacher();
+    const credentialId = await pendingCredential(teacherId);
+    await reviewer().approve({ credentialId, ...TRANSCRIPTION, note: NOTE });
+    await reviewer().correct({ credentialId, holderName: CORRECTED, reason: REASON });
+    await deleteOwn(teacherId, deletion());
+    await database.$transaction((tx: Transaction) =>
+      createKeptData({
+        storage,
+        cipher: new ColumnCipher(KEY),
+        settings,
+        log: SILENT,
+        idempotency: new IdempotencyService<Transaction>({
+          store: new IdempotencyRepository(database),
+          settings,
+        }),
+      }).eraseNow(tx, adminId, {
+        teacherUserId: teacherId,
+        reason: 'طلب الجهات',
+        idempotencyKey: randomUUID(),
+      }),
+    );
+
+    expect(await credentialRow(credentialId)).toEqual({
+      holderName: CORRECTED,
+      riwaya: 'حفص عن عاصم',
+      tariq: 'الشاطبية',
+      reviewReason: null,
+      status: 'approved',
+    });
+    expect(await chainCount(credentialId)).toBe(2);
+    const history = await database.$transaction((tx: Transaction) =>
+      credentialHistory.listOf(tx, credentialId),
+    );
+    expect(history.map(({ action, note }) => [action, note])).toEqual([
+      ['approve', NOTE],
+      ['correct', REASON],
+    ]);
+    expect(history[1]?.before?.holderName).toBe(HOLDER);
+    expect(history[1]?.after?.holderName).toBe(CORRECTED);
+    // The audit log carries no name, whoever the teacher (DEC-97).
+    const entries = JSON.stringify(await entriesOf([credentialId]));
+    for (const text of [HOLDER, CORRECTED, NOTE, REASON]) expect(entries).not.toContain(text);
   });
 });

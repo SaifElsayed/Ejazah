@@ -4,7 +4,8 @@
 // already approved (an application's credentials become subjects at the application's approval,
 // T068). Rejection and the request for another document carry the reason the teacher sees; a
 // correction is an approved credential's alone and answers the transcription before and after, for
-// the audit entry (FR-164). The reason's presence is the schema's (`credentials-admin.router.spec.ts`).
+// the audit entry (FR-164). T174: each decision and correction writes one row of the credential's
+// history, and the audit entry drawn from the answer holds no name and no chain. The reason's presence is the schema's (`credentials-admin.router.spec.ts`).
 // Over a store held in memory that keeps the database's rules; the queries are probed in
 // `tests/db-integrity/credential-review.spec.ts`.
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,7 @@ import {
   TEACHER,
   TX,
 } from './credential-review.fixtures.js';
-import { CredentialReviewService } from './credential-review.service.js';
+import { auditTranscriptionsOf, CredentialReviewService } from './credential-review.service.js';
 
 const NOW = new Date('2026-10-22T10:00:00Z');
 const PAGE_SIZE = 2;
@@ -96,7 +97,7 @@ describe('approve', () => {
       { position: 3, names: ['زر بن حبيش'] },
     ]);
     expect(answer).toEqual({
-      // The pending credential's transcription before it, for the audit entry's before (T116).
+      // The pending credential's transcription before it (T116).
       before: { holderName: null, riwaya: null, tariq: null, chain: [] },
       after: {
         holderName: TRANSCRIPTION.holderName,
@@ -105,6 +106,48 @@ describe('approve', () => {
         chain: held.chain,
       },
     });
+    // T174 (admin-surface.md:76 as amended): the audit entry's before and after carry no name and no
+    // chain, only the riwaya, the tariq, the chain's length and whether the name changed.
+    expect(auditTranscriptionsOf(answer)).toEqual({
+      before: { riwaya: null, tariq: null, chainLength: 0, holderNameChanged: false },
+      after: {
+        riwaya: TRANSCRIPTION.riwaya,
+        tariq: TRANSCRIPTION.tariq,
+        chainLength: 3,
+        holderNameChanged: true,
+      },
+    });
+    // The name and the chain written go into the credential's history, in the same call (T174).
+    expect(store.history).toEqual([
+      {
+        credentialId,
+        action: 'approve',
+        note: null,
+        after: {
+          holderName: TRANSCRIPTION.holderName,
+          riwaya: TRANSCRIPTION.riwaya,
+          tariq: TRANSCRIPTION.tariq,
+          chain: held.chain,
+        },
+        adminId: ADMIN,
+        at: NOW,
+      },
+    ]);
+  });
+
+  it('holds the note in the history only, and the audit entry drawn from the answer holds no name or chain (T174)', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    const answer = await serviceOver(store).approve(TX, ADMIN, {
+      credentialId,
+      ...TRANSCRIPTION,
+      note: 'السند مقروء كاملًا',
+    });
+    expect(store.history.map(({ note }) => note)).toEqual(['السند مقروء كاملًا']);
+    const audited = JSON.stringify(auditTranscriptionsOf(answer));
+    for (const text of [TRANSCRIPTION.holderName, 'جبريل', 'السند مقروء كاملًا']) {
+      expect(audited).not.toContain(text);
+    }
   });
 
   it('answers a missing tariq as null, the chain as written', async () => {
@@ -184,12 +227,28 @@ describe('approve', () => {
     store.approveTeacher(TEACHER);
     const credentialId = store.plant({ submittedWithApplication: false });
     await serviceOver(store).approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION });
+    // T174: the history row after the approval's conditional write, which holds the credential.
     expect(store.journal).toEqual([
       `lock-account:${TEACHER}`,
       `lock:${TEACHER}`,
       `approve:${credentialId}`,
+      `history:${credentialId}`,
       `approved-teacher:${TEACHER}`,
     ]);
+  });
+
+  it('writes no history row for an approval refused (T174)', async () => {
+    const store = new MemoryReviewStore();
+    store.plant({ status: 'approved' });
+    const taken = store.plant();
+    const moved = store.plant({ status: 'rejected', subject: OTHER_SUBJECT });
+    const service = serviceOver(store);
+    for (const credentialId of [taken, moved]) {
+      expect(await codeOf(service.approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION }))).toBe(
+        'CONFLICT',
+      );
+    }
+    expect(store.history).toEqual([]);
   });
 });
 
@@ -226,19 +285,42 @@ describe('reject and requestDocument', () => {
   });
 
   it.each([
+    ['reject', 'reject'],
+    ['requestDocument', 'request_document'],
+  ] as const)(
+    '%s writes one history row with its reason, after the credential moved (T174)',
+    async (procedure, action) => {
+      const store = new MemoryReviewStore();
+      const credentialId = store.plant();
+      await serviceOver(store)[procedure](TX, ADMIN, { credentialId, reason: 'الختم غير واضح' });
+      expect(store.history).toEqual([
+        { credentialId, action, note: 'الختم غير واضح', adminId: ADMIN, at: NOW },
+      ]);
+      expect(store.journal.slice(-2)).toEqual([
+        `decide:${credentialId}`,
+        `history:${credentialId}`,
+      ]);
+    },
+  );
+
+  it.each([
     ['reject', 'approved'],
     ['reject', 'rejected'],
     ['requestDocument', 'needs_document'],
     ['requestDocument', 'approved'],
     ['requestDocument', 'rejected'],
-  ] as const)('%s refuses a credential that is %s', async (action, status) => {
-    const store = new MemoryReviewStore();
-    const credentialId = store.plant({ status });
-    expect(
-      await codeOf(serviceOver(store)[action](TX, ADMIN, { credentialId, reason: 'سبب' })),
-    ).toBe('CONFLICT');
-    expect(store.held(credentialId).status).toBe(status);
-  });
+  ] as const)(
+    '%s refuses a credential that is %s, writing no history row',
+    async (action, status) => {
+      const store = new MemoryReviewStore();
+      const credentialId = store.plant({ status });
+      expect(
+        await codeOf(serviceOver(store)[action](TX, ADMIN, { credentialId, reason: 'سبب' })),
+      ).toBe('CONFLICT');
+      expect(store.held(credentialId).status).toBe(status);
+      expect(store.history).toEqual([]);
+    },
+  );
 
   it.each(['reject', 'requestDocument'] as const)(
     '%s answers NOT_FOUND for a credential that is not there',
@@ -276,6 +358,17 @@ describe("requestDocument and the teacher's application (T155)", () => {
       before: { applicationStatus: 'in_review' },
       after: { applicationStatus: 'needs_document' },
     });
+    // T174 (N10): the note written on the application is not a second decision: the credential's
+    // history holds the one row, and nothing here writes the application's.
+    expect(store.history).toEqual([
+      {
+        credentialId,
+        action: 'request_document',
+        note: 'الصفحة الأخيرة ناقصة',
+        adminId: ADMIN,
+        at: NOW,
+      },
+    ]);
   });
 
   it('leaves an application already waiting on the applicant as it is', async () => {
@@ -331,48 +424,92 @@ describe("requestDocument and the teacher's application (T155)", () => {
     const credentialId = store.plant();
     store.applyingAs(TEACHER, 'in_review');
     await serviceOver(store).requestDocument(TX, ADMIN, { credentialId, reason: 'سبب' });
-    expect(store.journal).toEqual([`lock:${TEACHER}`, `decide:${credentialId}`]);
+    // T174: the credential's history row once the credential moved.
+    expect(store.journal).toEqual([
+      `lock:${TEACHER}`,
+      `decide:${credentialId}`,
+      `history:${credentialId}`,
+    ]);
   });
 });
 
 describe('correct', () => {
-  it('answers the transcription before and after, and changes only the fields given', async () => {
+  const HELD = {
+    holderName: 'عمر بن فاروق',
+    riwaya: 'حفص عن عاصم',
+    tariq: 'الشاطبية',
+    chain: [
+      { position: 1, names: ['رسول الله ﷺ'] },
+      { position: 2, names: ['جبريل', 'ابن مسعود'] },
+    ],
+  };
+
+  it('changes only the fields given; the history holds the transcription before and after, the answer neither (T174)', async () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant({ status: 'approved' });
-    const { before, after } = await serviceOver(store).correct(TX, ADMIN, {
+    const answer = await serviceOver(store).correct(TX, ADMIN, {
       credentialId,
       chain: [{ names: ['رسول الله ﷺ'] }, { names: ['جبريل'] }],
       reason: 'اسم زائد في الجيل الثاني',
     });
-    expect(before).toEqual({
-      holderName: 'عمر بن فاروق',
-      riwaya: 'حفص عن عاصم',
-      tariq: 'الشاطبية',
-      chain: [
-        { position: 1, names: ['رسول الله ﷺ'] },
-        { position: 2, names: ['جبريل', 'ابن مسعود'] },
-      ],
-    });
-    expect(after).toEqual({
-      ...before,
+    const corrected = {
+      ...HELD,
       chain: [
         { position: 1, names: ['رسول الله ﷺ'] },
         { position: 2, names: ['جبريل'] },
       ],
+    };
+    expect(store.held(credentialId).chain).toEqual(corrected.chain);
+    expect(store.history).toEqual([
+      {
+        credentialId,
+        action: 'correct',
+        note: 'اسم زائد في الجيل الثاني',
+        before: HELD,
+        after: corrected,
+        adminId: ADMIN,
+        at: NOW,
+      },
+    ]);
+    expect(answer).toEqual({ before: HELD, after: corrected });
+    // admin-surface.md:76 as amended: `correct`'s before and after carry no name and no chain.
+    expect(auditTranscriptionsOf(answer)).toEqual({
+      before: {
+        riwaya: 'حفص عن عاصم',
+        tariq: 'الشاطبية',
+        chainLength: 2,
+        holderNameChanged: false,
+      },
+      after: { riwaya: 'حفص عن عاصم', tariq: 'الشاطبية', chainLength: 2, holderNameChanged: false },
     });
-    expect(store.held(credentialId).chain).toEqual(after.chain);
   });
 
-  it('corrects the holder name alone and keeps the chain', async () => {
+  it('corrects the holder name alone and keeps the chain: the history shows the old and the new name', async () => {
     const store = new MemoryReviewStore();
     const credentialId = store.plant({ status: 'approved' });
-    const { before, after } = await serviceOver(store).correct(TX, ADMIN, {
+    const answer = await serviceOver(store).correct(TX, ADMIN, {
       credentialId,
       holderName: 'عمر بن فاروق الأنصاري',
       reason: 'الاسم كما في الملف',
     });
-    expect(after).toEqual({ ...before, holderName: 'عمر بن فاروق الأنصاري' });
     expect(store.held(credentialId).holderName).toBe('عمر بن فاروق الأنصاري');
+    expect(store.history.map(({ before, after }) => [before, after])).toEqual([
+      [HELD, { ...HELD, holderName: 'عمر بن فاروق الأنصاري' }],
+    ]);
+    const audited = auditTranscriptionsOf(answer);
+    expect(audited.after).toEqual({ ...audited.before, holderNameChanged: true });
+    expect(JSON.stringify(audited)).not.toContain('عمر');
+  });
+
+  it('locks the credential before it reads the transcription before, and writes the history after the correction (T174)', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant({ status: 'approved' });
+    await serviceOver(store).correct(TX, ADMIN, { credentialId, riwaya: 'ورش', reason: 'سبب' });
+    expect(store.journal).toEqual([
+      `lock-credential:${credentialId}`,
+      `correct:${credentialId}`,
+      `history:${credentialId}`,
+    ]);
   });
 
   it.each(['pending', 'needs_document', 'rejected'] as const)(
@@ -385,6 +522,7 @@ describe('correct', () => {
           serviceOver(store).correct(TX, ADMIN, { credentialId, riwaya: 'ورش', reason: 'سبب' }),
         ),
       ).toBe('CONFLICT');
+      expect(store.history).toEqual([]);
     },
   );
 
@@ -507,6 +645,61 @@ describe('list and get', () => {
     });
     expect(credential.chain).toHaveLength(3);
     expect(credential).not.toHaveProperty('reviewReason');
+  });
+
+  it("gets the credential's history oldest first: each note, a correction's reason, the name and chain before and after (T174)", async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    const service = serviceOver(store);
+    await service.requestDocument(TX, ADMIN, { credentialId, reason: 'الختم غير واضح' });
+    store.held(credentialId).status = 'pending';
+    await service.approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION, note: 'مقروء' });
+    await service.correct(TX, ADMIN, {
+      credentialId,
+      holderName: 'عمر الأنصاري',
+      reason: 'الاسم كما في الملف',
+    });
+    const written = {
+      holderName: TRANSCRIPTION.holderName,
+      riwaya: TRANSCRIPTION.riwaya,
+      tariq: TRANSCRIPTION.tariq,
+      chain: store.held(credentialId).chain,
+    };
+    const { history } = await service.get(TX, credentialId);
+    expect(history).toEqual([
+      {
+        action: 'request_document',
+        note: 'الختم غير واضح',
+        adminName: 'هالة سعيد',
+        at: NOW.toISOString(),
+      },
+      {
+        action: 'approve',
+        note: 'مقروء',
+        after: written,
+        adminName: 'هالة سعيد',
+        at: NOW.toISOString(),
+      },
+      {
+        action: 'correct',
+        reason: 'الاسم كما في الملف',
+        before: written,
+        after: { ...written, holderName: 'عمر الأنصاري' },
+        adminName: 'هالة سعيد',
+        at: NOW.toISOString(),
+      },
+    ]);
+  });
+
+  it('gets an approval without a note as a row with no note (T174)', async () => {
+    const store = new MemoryReviewStore();
+    const credentialId = store.plant();
+    const service = serviceOver(store);
+    await service.approve(TX, ADMIN, { credentialId, ...TRANSCRIPTION });
+    const [row] = (await service.get(TX, credentialId)).history;
+    expect(row).not.toHaveProperty('note');
+    expect(row).not.toHaveProperty('reason');
+    expect(row).not.toHaveProperty('before');
   });
 
   it('gets a pending credential without a transcription or a chain', async () => {

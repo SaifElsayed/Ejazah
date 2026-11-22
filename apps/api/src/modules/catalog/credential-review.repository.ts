@@ -153,6 +153,14 @@ export async function approveCredential(
   return 'approved';
 }
 
+/**
+ * T174: locks the credential's row FOR UPDATE until the transaction ends, so a correction reads the
+ * transcription it replaces under the lock (rule 1). Nothing for an id that is not there.
+ */
+export function lockCredential(tx: Transaction, credentialId: string): Promise<void> {
+  return lockRows(tx, 'teacher_credentials', [credentialId]);
+}
+
 /** Writes a rejection or a request for another document while the credential is in `from`. */
 export async function decideCredential(tx: Client, decision: Decision): Promise<boolean> {
   const { count } = await tx.teacherCredential.updateMany({
@@ -260,7 +268,8 @@ export async function approvedCredentialChainById(
       isnadEntries: { orderBy: { position: 'asc' }, select: { names: true } },
     },
   });
-  // An approved credential holds its transcription (`approveCredential` writes it with the status).
+  // An approved credential holds its transcription (`approveCredential` writes it with the status),
+  // unless its teacher, never approved, was deleted (T174, `blankTranscriptionsOfTeacher`).
   if (row === null || row.holderName === null || row.riwaya === null) return null;
   return {
     credentialId: row.id,

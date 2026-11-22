@@ -741,6 +741,24 @@
           "title": "No ijazah awaits another file"
         }
       },
+      "history": {
+        "action": {
+          "approve": "Approved",
+          "correct": "Corrected",
+          "reject": "Rejected",
+          "requestDocument": "Another document requested"
+        },
+        "chainAfter": "Chain after: {chain}",
+        "chainBefore": "Chain before: {chain}",
+        "empty": "No decision is recorded on this ijazah yet.",
+        "lede": "Every decision on this ijazah and every correction, with its text, who wrote it and when. It is never edited.",
+        "meta": "{admin} · {date} {time}",
+        "nameAfter": "Name after: {name}",
+        "nameBefore": "Name before: {name}",
+        "noteLabel": "Note",
+        "reasonLabel": "Reason for the correction",
+        "title": "Decision history"
+      },
       "lede": "{count, plural, one {# ijazah awaits review} other {# ijazahs await review}}: one PDF per subject, from applications or from subjects teachers add.",
       "ledeEmpty": "No credentials awaiting review now.",
       "pagerSummary": "{shown} of {total}",
