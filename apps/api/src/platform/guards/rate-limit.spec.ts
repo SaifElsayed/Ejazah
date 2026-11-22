@@ -41,6 +41,7 @@ import {
   type RateLimitCounter,
   type RateLimitLog,
   RateLimiter,
+  type RateLimitKey,
   RedisRateLimitCounter,
   SIGNED_IN_DEFAULT_RATE_LIMIT,
 } from './rate-limit.guard.js';
@@ -128,6 +129,8 @@ function fixture(
     readonly windowSeconds?: number;
     readonly budgetLimit?: number;
     readonly defaultLimit?: number;
+    /** T172: both per-address keys at this limit, declared on the anonymous paths. */
+    readonly addressLimit?: number;
   } = {},
 ) {
   const settings = new FakeSettings();
@@ -152,6 +155,13 @@ function fixture(
     settings.values.set(defaultRateLimits.authenticationBudget, budget);
     settings.values.set(defaultRateLimits.oneTimeCodeBudget, budget);
   }
+  if (options.addressLimit !== undefined) {
+    const perAddress = { limit: options.addressLimit, window_seconds: 900 };
+    settings.values.set(defaultRateLimits.addressAuthentication, perAddress);
+    settings.values.set(defaultRateLimits.addressOneTimeCode, perAddress);
+  }
+  const addressKey = (key: RateLimitKey) =>
+    options.addressLimit === undefined ? {} : { addressKey: key };
 
   const phoneInput = z.object({ phone: z.string() });
   const text = z.string();
@@ -165,8 +175,22 @@ function fixture(
         ...(options.budgetLimit === undefined
           ? {}
           : { budget: defaultRateLimits.authenticationBudget }),
+        ...addressKey(defaultRateLimits.addressAuthentication),
       },
     }).mutation(() => 'signed-in'),
+    // T172: a second path on the same per-address key, as `auth.email.resetPassword` beside `signIn`.
+    resetPassword: publicProcedure({
+      input: phoneInput,
+      output: text,
+      rateLimit: {
+        key: defaultRateLimits.authentication,
+        subjectOf: ({ input }) => input.phone,
+        ...(options.budgetLimit === undefined
+          ? {}
+          : { budget: defaultRateLimits.authenticationBudget }),
+        ...addressKey(defaultRateLimits.addressAuthentication),
+      },
+    }).mutation(() => 'reset'),
     requestCode: publicProcedure({
       input: phoneInput,
       output: text,
@@ -176,6 +200,7 @@ function fixture(
         ...(options.budgetLimit === undefined
           ? {}
           : { budget: defaultRateLimits.oneTimeCodeBudget }),
+        ...addressKey(defaultRateLimits.addressOneTimeCode),
       },
     }).mutation(() => 'sent'),
     search: studentProcedure({
@@ -225,9 +250,15 @@ function fixture(
     moderation: unusedModerationServices,
   };
   const callerFor = createAppCallerFactory(router);
-  const anonymous = () =>
+  const anonymous = (address = clientAddress) =>
     callerFor(
-      createAppContext({ session: null, log, rateLimiter: limiter, clientAddress, services }),
+      createAppContext({
+        session: null,
+        log,
+        rateLimiter: limiter,
+        clientAddress: address,
+        services,
+      }),
     );
   const signedIn = () =>
     callerFor(
@@ -283,7 +314,7 @@ const defaultPaths: ReadonlyArray<{
 ];
 
 describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
-  it('names the four default paths and the two budgets by the settings keys the seed plants (T074, T170)', () => {
+  it('names the four default paths, the two budgets and the two per-address limits by the settings keys the seed plants (T074, T170, T172)', () => {
     expect(defaultRateLimits).toEqual({
       authentication: 'rate_limit_authentication',
       oneTimeCode: 'rate_limit_one_time_code',
@@ -291,6 +322,8 @@ describe('rate limiting (T137, FR-043, R-SEC-6)', () => {
       paymentInitiation: 'rate_limit_payment_initiation',
       oneTimeCodeBudget: 'rate_limit_one_time_code_budget',
       authenticationBudget: 'rate_limit_authentication_budget',
+      addressAuthentication: 'rate_limit_address_authentication',
+      addressOneTimeCode: 'rate_limit_address_one_time_code',
     });
   });
 
@@ -506,6 +539,88 @@ describe('a platform-wide budget beside the per-subject limit (T170, review find
     expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(500);
     expect(f.counter.counts.size).toBe(0);
     expect(f.settings.reads).toEqual([defaultRateLimits.authenticationBudget]);
+  });
+});
+
+// T172 (SRS NFR-SEC-10, DEC-103): an anonymous path that counts a budget also counts the client's
+// address under a key of its own, before the budget, so one address cannot spend it.
+describe('a per-address limit before the budget (T172, DEC-103)', () => {
+  const OTHER_ADDRESS = '198.51.100.4';
+  const countsUnder = (f: Fixture, key: string) =>
+    [...f.counter.counts.entries()].filter(([counted]) => counted.startsWith(`rate-limit:${key}:`));
+
+  it('counts the address first, then the budget, then the declared subject', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 10 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect(f.settings.reads).toEqual([
+      defaultRateLimits.addressAuthentication,
+      defaultRateLimits.authenticationBudget,
+      defaultRateLimits.authentication,
+    ]);
+  });
+
+  it('refuses a call past the address’s limit before it spends any of the budget or its subject’s count', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 2 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect((await outcome(() => f.anonymous().signIn({ phone: OTHER_PHONE }))).status).toBe(200);
+    expect(await outcome(() => f.anonymous().signIn({ phone: THIRD_PHONE }))).toEqual(throttled);
+
+    const [budget] = countsUnder(f, defaultRateLimits.authenticationBudget);
+    expect(budget?.[1]).toBe(2);
+    expect(countsUnder(f, defaultRateLimits.authentication)).toHaveLength(2);
+    expect(f.settings.reads.at(-1)).toBe(defaultRateLimits.addressAuthentication);
+  });
+
+  it('is one counter per address across the paths of its key, apart from the other key and from every other address', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 2 });
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(200);
+    expect((await outcome(() => f.anonymous().resetPassword({ phone: OTHER_PHONE }))).status).toBe(
+      200,
+    );
+    expect(await outcome(() => f.anonymous().resetPassword({ phone: THIRD_PHONE }))).toEqual(
+      throttled,
+    );
+    expect(await outcome(() => f.anonymous().signIn({ phone: THIRD_PHONE }))).toEqual(throttled);
+    // The one-time-code key counts the same address apart; another address is untouched.
+    expect((await outcome(() => f.anonymous().requestCode({ phone: PHONE }))).status).toBe(200);
+    expect(
+      (await outcome(() => f.anonymous(OTHER_ADDRESS).signIn({ phone: THIRD_PHONE }))).status,
+    ).toBe(200);
+
+    expect(countsUnder(f, defaultRateLimits.addressAuthentication)).toHaveLength(2);
+    expect(countsUnder(f, defaultRateLimits.addressOneTimeCode)).toHaveLength(1);
+  });
+
+  it('refuses in the one shape and logs the first refusal by the address’s digest only', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 1 });
+
+    expect((await outcome(() => f.anonymous().requestCode({ phone: PHONE }))).status).toBe(200);
+    expect(await outcome(() => f.anonymous().requestCode({ phone: OTHER_PHONE }))).toEqual(
+      throttled,
+    );
+    expect(await outcome(() => f.anonymous().requestCode({ phone: THIRD_PHONE }))).toEqual(
+      throttled,
+    );
+
+    expect(f.log.lines).toEqual([
+      [
+        { procedure: 'requestCode', subjectDigest: expect.stringMatching(/^[0-9a-f]{64}$/) },
+        'rate limit refused',
+      ],
+    ]);
+    expect(JSON.stringify(f.log.lines)).not.toContain(clientAddress);
+  });
+
+  it('fails closed when the address’s row is missing, before the budget is read', async () => {
+    const f = fixture({ limit: 10, budgetLimit: 10, addressLimit: 10 });
+    f.settings.values.delete(defaultRateLimits.addressAuthentication);
+
+    expect((await outcome(() => f.anonymous().signIn({ phone: PHONE }))).status).toBe(500);
+    expect(f.counter.counts.size).toBe(0);
+    expect(f.settings.reads).toEqual([defaultRateLimits.addressAuthentication]);
   });
 });
 

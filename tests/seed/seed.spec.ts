@@ -163,6 +163,9 @@ const SETTINGS: Record<string, unknown> = {
   // 005:T017 (SRS DEC-74, §3.14): a notification whose push was not queued after its commit.
   notification_requeue_after_minutes: 5,
   notification_requeue_max_age_minutes: 30,
+  // 002:T172 (SRS DEC-103, §3.14): the two limits per client address, before the budgets.
+  rate_limit_address_authentication: { limit: 100, window_seconds: 900 },
+  rate_limit_address_one_time_code: { limit: 30, window_seconds: 3600 },
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -372,6 +375,7 @@ describe('the seed (T074)', () => {
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
     // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two.
-    expect(counts).toEqual([{ subjects: '5', settings: '95', admins: '1' }]);
+    // 002:T172 (SRS DEC-103): + the two limits per client address.
+    expect(counts).toEqual([{ subjects: '5', settings: '97', admins: '1' }]);
   });
 });

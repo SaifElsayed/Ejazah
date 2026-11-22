@@ -250,14 +250,20 @@ describe('POST /delete-account: the email step (FR-143, public-pages.md)', () =>
     expect(deletion.requestWebCode.mock.calls).toEqual([['one@example.com'], ['two@example.com']]);
   });
 
-  it('counts the one-time-code budget and the address, in lower case, before any work', async () => {
+  it('counts the client address (T172), the one-time-code budget, then the e-mail in lower case, before any work', async () => {
     await submit(DELETE_ACCOUNT_PATH, { email: 'Someone@Example.com' });
     expect(counted).toEqual([
+      // The socket's peer: this spec's own request, from the loopback address.
+      [defaultRateLimits.addressOneTimeCode, expect.stringMatching(/^(::ffff:)?127\.0\.0\.1$/)],
       [defaultRateLimits.oneTimeCodeBudget, '*'],
       [defaultRateLimits.oneTimeCode, 'someone@example.com'],
     ]);
     // The step's path names it in a refusal's record (T062).
-    expect(procedures.slice(-2)).toEqual([DELETE_ACCOUNT_PATH, DELETE_ACCOUNT_PATH]);
+    expect(procedures.slice(-3)).toEqual([
+      DELETE_ACCOUNT_PATH,
+      DELETE_ACCOUNT_PATH,
+      DELETE_ACCOUNT_PATH,
+    ]);
     refusedSubjects.add('limited@example.com');
     const refused = await submit(DELETE_ACCOUNT_PATH, { email: 'limited@example.com' });
     expect(refused.status).toBe(429);

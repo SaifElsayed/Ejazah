@@ -237,6 +237,10 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 5 minutes old, and no longer sent once it is 30 minutes old.
   ['notification_requeue_after_minutes', 5],
   ['notification_requeue_max_age_minutes', 30],
+  // T172 of specs/002-identity (SRS DEC-103, §3.14; the note under T172): the two limits per client
+  // address, counted before the platform-wide budgets they guard, each a tenth of its budget.
+  ['rate_limit_address_authentication', { limit: 100, window_seconds: 900 }],
+  ['rate_limit_address_one_time_code', { limit: 30, window_seconds: 3600 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

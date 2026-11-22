@@ -233,9 +233,10 @@ const envObject = z.object({
   SUPPORT_EMAIL: emailAddress,
 
   // T001 (contracts/kernel.md): the one proxy header the contexts read the client address from, by
-  // its last hop; optional, absent before launch.
+  // its last hop; optional in development and test, required on a hosted server (002:T172).
   TRUSTED_PROXY: headerName.optional(),
-  // 002:T147: the proxy's own address; the header is read only from it. Required with TRUSTED_PROXY.
+  // 002:T147: the proxy's own address; the header is read only from it. Required with TRUSTED_PROXY,
+  // and on a hosted server (002:T172).
   TRUSTED_PROXY_ADDRESS: ipAddress.optional(),
 
   // Provider credentials are optional: the suite passes with every one unset (FR-054).
@@ -526,6 +527,22 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       path: ['TRUSTED_PROXY_ADDRESS'],
       message: "required when TRUSTED_PROXY is set: the proxy's own IP address (T147)",
     });
+  }
+
+  // 002:T172 (SRS DEC-103): the anonymous paths count the client's address before the platform's
+  // budgets, and without the proxy's header every person is the proxy's one address, so a hosted
+  // server refuses to start without both keys. Each missing key is named, never a value.
+  if (!standInsAllowed) {
+    for (const key of ['TRUSTED_PROXY', 'TRUSTED_PROXY_ADDRESS'] as const) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message:
+            "required outside development and test: the client's address is read through the proxy (T172)",
+        });
+      }
+    }
   }
 
   // T023: a reserved address is for development and test only; the key is named, never the value.
