@@ -11,22 +11,36 @@ function detailOf(error: unknown, path: string): string | undefined {
   return errorDetailsOf(error).find((each) => each.path === path)?.code;
 }
 
-/** A chat read refused (`disputes.chat`, T040). */
-export function chatFailure(error: unknown): ErrorMessage {
-  switch (errorCodeOf(error)) {
-    case 'CONFLICT':
-      return {
-        key:
-          detailOf(error, 'cause') === 'not_open'
-            ? 'admin.disputes.chat.notOpen'
-            : 'admin.common.loadError.text',
-      };
-    case 'NOT_FOUND':
-      return { key: 'admin.disputes.chat.notFound' };
-    default:
-      return errorMessageKey(error, 'admin.common.loadError.text');
-  }
+/** The words of a chat read's two refusals, in the words of the matter that opens the chat. */
+export interface ChatRefusalWords {
+  /** `CONFLICT` `not_open`: the matter is no longer open. */
+  readonly notOpen: MessageKey;
+  /** `NOT_FOUND`. */
+  readonly notFound: MessageKey;
 }
+
+/** A chat read refused, said in `words` (005:T034: a dispute's or a report's). */
+export function chatFailureIn(words: ChatRefusalWords): (error: unknown) => ErrorMessage {
+  return (error) => {
+    switch (errorCodeOf(error)) {
+      case 'CONFLICT':
+        return {
+          key:
+            detailOf(error, 'cause') === 'not_open' ? words.notOpen : 'admin.common.loadError.text',
+        };
+      case 'NOT_FOUND':
+        return { key: words.notFound };
+      default:
+        return errorMessageKey(error, 'admin.common.loadError.text');
+    }
+  };
+}
+
+/** A chat read refused (`disputes.chat`, T040). */
+export const chatFailure = chatFailureIn({
+  notOpen: 'admin.disputes.chat.notOpen',
+  notFound: 'admin.disputes.chat.notFound',
+});
 
 /**
  * The standing move a `party_*` ruling asks, refused by `StandingService` (Q3 (a)): `CONFLICT`

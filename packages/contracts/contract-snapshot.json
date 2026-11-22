@@ -2273,6 +2273,37 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "reports.chat": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.reportId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.messages": { "required": true, "type": "array" },
+          "$.messages[]": { "type": "object" },
+          "$.messages[].attachment": { "type": "object" },
+          "$.messages[].attachment.filename": { "required": true, "type": "string" },
+          "$.messages[].attachment.mime": {
+            "required": true,
+            "type": "string",
+            "values": ["application/pdf", "text/plain"]
+          },
+          "$.messages[].body": { "type": "string" },
+          "$.messages[].messageId": { "required": true, "type": "string" },
+          "$.messages[].purged": { "required": true, "type": "boolean" },
+          "$.messages[].senderRole": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
+          "$.messages[].sentAt": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
       "reports.get": {
         "input": {
           "$": { "type": "object" },
@@ -2281,6 +2312,7 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.chatAvailable": { "required": true, "type": "boolean" },
           "$.context": {
             "required": true,
             "type": "string",

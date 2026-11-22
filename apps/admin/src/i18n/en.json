@@ -2291,6 +2291,11 @@
       "teacherShare": "{amount} at {percent}%"
     },
     "reports": {
+      "chat": {
+        "banner": "This chat is shown because the report is open, and is not shown otherwise. Your opening it is recorded in the audit log with your name and the time. Nothing can be written in it or deleted from it.",
+        "notFound": "This report's chat was not found.",
+        "notOpen": "This report is no longer open, so the enrollment's chat is not shown here."
+      },
       "columns": {
         "context": "Context",
         "date": "Date",

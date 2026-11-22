@@ -31,7 +31,9 @@
 //
 // THE ADMINISTRATOR'S (on the administrator kind's transaction, which audits the call).
 // `list`: the queue by status (the contract's default `open`) under `admin_list_page_size`, a report
-// id as the cursor. `get`: one report, its reason, and its resolution once there is one. `resolve`
+// id as the cursor. `get`: one report, its reason, and its resolution once there is one; and
+// `chatAvailable` (005:T034), true while it is open and names an enrollment, as `reports.chat`
+// (`report-chat.service.ts`) admits it. `resolve`
 // (keyed `reports.resolve` on the kind's transaction, `runOn`): one conditional update `WHERE status
 // = 'open'` writing the outcome, the note (`resolution_notes`), the database's instant and the
 // administrator together (rule 59), so a report already resolved is refused `already_resolved` and
@@ -150,6 +152,8 @@ export interface ReportDetail extends ReportItem {
     readonly resolvedAt: string;
     readonly resolvedByAdminId: string;
   } | null;
+  /** 005:T034: an open report that names an enrollment opens its chat (`reports.chat`). */
+  readonly chatAvailable: boolean;
 }
 
 export interface UserReportsDependencies {
@@ -383,7 +387,12 @@ export function createUserReports({
     get: async (tx, adminId, { reportId }, log) => {
       const row = await store.reportOf(tx, reportId);
       if (row === null) throw refusal(log, { adminId, reportId }, 'NOT_FOUND', 'no_report');
-      return { ...itemOf(row), reason: row.reason, resolution: resolutionOf(row) };
+      return {
+        ...itemOf(row),
+        reason: row.reason,
+        resolution: resolutionOf(row),
+        chatAvailable: row.status === 'open' && row.enrollmentId !== null,
+      };
     },
 
     resolve: async (tx, adminId, { reportId, outcome, note, idempotencyKey }, log) => {
