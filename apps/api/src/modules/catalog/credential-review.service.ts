@@ -15,6 +15,14 @@
 // `in_review` only, so one already waiting keeps its note and an approved teacher's added subject
 // moves no application. The move is the entry's before and after.
 //
+// T174 (SRS DEC-97, FR-AUTH-14; the note under T174): every decision and correction writes one row of
+// the credential's history on its transaction, after the conditional write that holds the
+// credential's row: the note or the reason, and on an approval and a correction the name and the
+// chain before and after. A request for another document that moves the application writes the
+// credential's row only. The audit entry is drawn from the answer with no name, no chain and no
+// text (`auditTranscriptionsOf`). A correction locks the credential before it reads what it
+// replaces, so two corrections at once chain their history.
+//
 // Every write is conditional on the state it moves from, decided by the database (the store), so two
 // reviewers racing on one credential cannot both move it; the one that lost reads the state again to
 // answer NOT_FOUND or CONFLICT. Each method runs on the administrator kind's transaction (`tx`), so
@@ -31,6 +39,7 @@ import type {
 } from '@ijazah/contracts/admin';
 import { z } from 'zod';
 
+import type { AuditJson, AuditSnapshot } from '../../platform/audit/audit-writer.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
@@ -120,6 +129,42 @@ export interface Correction {
   readonly adminId: string;
 }
 
+/** A decision or a correction the credential's history records (T174, ERD rule 68). */
+export type HistoryAction = 'approve' | 'reject' | 'request_document' | 'correct';
+
+/** The name and the chain a history row holds before or after an approval or a correction (T174). */
+export interface HistoryTranscription {
+  readonly holderName: string;
+  readonly riwaya: string;
+  readonly tariq: string | null;
+  readonly chain: readonly Generation[];
+}
+
+/**
+ * One row of the credential's history, written in the decision's transaction (T174): `before` on a
+ * correction only, `after` on an approval and a correction (rule 68); the note is the reviewer's,
+ * required except on an approval, or the correction's reason.
+ */
+export interface HistoryEntry {
+  readonly credentialId: string;
+  readonly action: HistoryAction;
+  readonly note: string | null;
+  readonly before?: HistoryTranscription;
+  readonly after?: HistoryTranscription;
+  readonly adminId: string;
+  readonly at: Date;
+}
+
+/** A history row as `credentials.get` reads it: the administrator by name, oldest first (T174). */
+export interface HistoryRow {
+  readonly action: HistoryAction;
+  readonly note: string | null;
+  readonly before: HistoryTranscription | null;
+  readonly after: HistoryTranscription | null;
+  readonly adminName: string;
+  readonly at: Date;
+}
+
 /** What the review reads and writes, each on the call's transaction (`credential-review.repository.ts`). */
 export interface CredentialReviewStore {
   page(tx: Transaction, filter: ReviewFilter, skip: number, take: number): Promise<ReviewListRow[]>;
@@ -153,6 +198,15 @@ export interface CredentialReviewStore {
     teacherUserId: string,
     subjectIds: readonly string[],
   ): Promise<void>;
+  /**
+   * Locks the credential's own row FOR UPDATE until the transaction ends (T174): a correction reads
+   * the transcription before it under the lock, so two corrections at once chain their history.
+   */
+  lockCredential(tx: Transaction, credentialId: string): Promise<void>;
+  /** Inserts one row of the credential's history, after the decision's write (T174). */
+  recordHistory(tx: Transaction, entry: HistoryEntry): Promise<void>;
+  /** The credential's history, oldest first (T174). */
+  historyOf(tx: Transaction, credentialId: string): Promise<HistoryRow[]>;
 }
 
 /**
@@ -179,15 +233,63 @@ type DecisionInput = z.output<typeof adminCredentialsRejectInput>;
 type CorrectInput = z.output<typeof adminCredentialsCorrectInput>;
 type Transcription = z.input<typeof adminCredentialTranscription>;
 
+type HistoryItem = z.input<typeof adminCredentialsGetOutput>['history'][number];
+
 /** The transcription a pending credential holds before its approval, none of it written yet. */
 type PriorTranscription = {
   readonly [K in keyof Omit<Transcription, 'chain'>]-?: Transcription[K] | null;
 } & { readonly chain: Transcription['chain'] };
 
-/** An approval's transcription before and after it, for the audit entry (T116). */
+/**
+ * An approval's transcription before and after it (T116). The router's audit entry is drawn from it
+ * by `auditTranscriptionsOf`, with no name and no chain (T174).
+ */
 export interface ApprovalMove {
   readonly before: PriorTranscription;
   readonly after: Transcription;
+}
+
+/**
+ * A transcription as an audit entry holds it (T174, SRS DEC-97; admin-surface.md:76 as amended): no
+ * name and no chain, which the credential's history holds; the riwaya, the tariq, how many
+ * generations the chain has, and whether the action changed the holder's name (always `false` on
+ * a `before`, the state the action started from).
+ */
+export type AuditTranscription = {
+  readonly riwaya: string | null;
+  readonly tariq: string | null;
+  readonly chainLength: number;
+  readonly holderNameChanged: boolean;
+};
+
+/**
+ * The audit entry's before and after of an approval or a correction (T174), drawn by the router from
+ * what the service answered. The before is read as the surface types an approval's (`AuditSnapshot`,
+ * `surfaces/context.ts`): a pending credential's fields are null and its chain empty.
+ */
+export function auditTranscriptionsOf(move: {
+  readonly before: AuditSnapshot;
+  readonly after: Transcription;
+}): { readonly before: AuditTranscription; readonly after: AuditTranscription } {
+  const { holderName, riwaya, tariq, chain } = move.before;
+  return {
+    before: {
+      riwaya: textOf(riwaya),
+      tariq: textOf(tariq),
+      chainLength: Array.isArray(chain) ? chain.length : 0,
+      holderNameChanged: false,
+    },
+    after: {
+      riwaya: move.after.riwaya,
+      tariq: move.after.tariq ?? null,
+      chainLength: move.after.chain.length,
+      holderNameChanged: move.after.holderName !== textOf(holderName),
+    },
+  };
+}
+
+function textOf(value: AuditJson | undefined): string | null {
+  return typeof value === 'string' ? value : null;
 }
 
 export class CredentialReviewService {
@@ -232,6 +334,8 @@ export class CredentialReviewService {
       ...(record.chain.length === 0 ? {} : { chain: record.chain.map(generationOf) }),
       ...(record.reviewReason === null ? {} : { reviewReason: record.reviewReason }),
       ...(record.reviewedByName === null ? {} : { reviewedByName: record.reviewedByName }),
+      // T174: one row per decision and correction, oldest first, read after the credential.
+      history: (await this.#store.historyOf(tx, record.id)).map(historyItemOf),
     };
   }
 
@@ -252,6 +356,7 @@ export class CredentialReviewService {
       throw conflict('subject_approved');
     }
     const chain = input.chain.map(({ names }) => names);
+    const at = this.#now();
     const outcome = await this.#store.approve(tx, {
       credentialId: record.id,
       holderName: input.holderName,
@@ -259,27 +364,39 @@ export class CredentialReviewService {
       tariq: input.tariq ?? null,
       chain,
       adminId,
-      at: this.#now(),
+      at,
     });
     // Another reviewer moved the credential, or approved another for the subject, meanwhile.
     if (outcome === 'moved') return this.#refuseMoved(tx, record.id);
     if (outcome === 'taken') throw conflict('subject_approved');
+    const after: HistoryTranscription = {
+      holderName: input.holderName,
+      riwaya: input.riwaya,
+      tariq: input.tariq ?? null,
+      chain: positioned(chain),
+    };
+    // T174: the name, the chain and the note go into the credential's history, after the write
+    // that holds the credential's row (the insert references it), never into the audit entry.
+    await this.#store.recordHistory(tx, {
+      credentialId: record.id,
+      action: 'approve',
+      note: input.note ?? null,
+      after,
+      adminId,
+      at,
+    });
     if (await this.#store.isApprovedTeacher(tx, record.teacher.userId)) {
       await this.#store.grantSubjects(tx, record.teacher.userId, [record.subject.id]);
     }
     return {
+      // The pending credential's transcription, none of it written yet (T116).
       before: {
         holderName: record.holderName,
         riwaya: record.riwaya,
         tariq: record.tariq,
         chain: record.chain.map(generationOf),
       },
-      after: {
-        holderName: input.holderName,
-        riwaya: input.riwaya,
-        tariq: input.tariq ?? null,
-        chain: positioned(chain),
-      },
+      after: copyOf(after),
     };
   }
 
@@ -323,11 +440,15 @@ export class CredentialReviewService {
     adminId: string,
     input: CorrectInput,
   ): Promise<z.input<typeof adminCredentialCorrection>> {
+    // T174: the credential's row locked, then read (rule 1), so the transcription before is the one
+    // the correction replaces: a second correction meanwhile waits, then reads this one's after.
+    // The kernel's order: the credential, then its open ijazah requests (the re-freeze below).
+    await this.#store.lockCredential(tx, input.credentialId);
     const record = await this.#readOrRefuse(tx, input.credentialId);
     if (record.status !== 'approved') throw conflict(record.status);
     const before = transcriptionOf(record);
     const chain = input.chain?.map(({ names }) => names);
-    const after: Transcription = {
+    const after: HistoryTranscription = {
       holderName: input.holderName ?? before.holderName,
       riwaya: input.riwaya ?? before.riwaya,
       tariq: input.tariq ?? before.tariq,
@@ -342,11 +463,21 @@ export class CredentialReviewService {
       adminId,
     });
     if (!written) return this.#refuseMoved(tx, record.id);
+    // T174: the name and the chain before and after, with the reason, in the credential's history.
+    await this.#store.recordHistory(tx, {
+      credentialId: record.id,
+      action: 'correct',
+      note: input.reason,
+      before,
+      after,
+      adminId,
+      at: this.#now(),
+    });
     // T006 of specs/005-certification (P4 (a)): after the conditional write landed, which holds the
     // credential's row lock, on the same transaction; the order credential → ijazah_requests of the
     // kernel row (specs/004-sessions/contracts/kernel.md, the ijazah request's row).
     await this.#refreeze.refreeze(tx, record.id);
-    return { before, after };
+    return { before: copyOf(before), after: copyOf(after) };
   }
 
   async #decide(
@@ -366,6 +497,14 @@ export class CredentialReviewService {
       at,
     });
     if (!written) await this.#refuseMoved(tx, input.credentialId);
+    // T174: the reason, in the credential's history, after the write that holds the credential.
+    await this.#store.recordHistory(tx, {
+      credentialId: input.credentialId,
+      action: HISTORY_ACTION[to],
+      note: input.reason,
+      adminId,
+      at,
+    });
   }
 
   /** A conditional write that did not land: NOT_FOUND, or CONFLICT naming the state it is in now. */
@@ -379,6 +518,12 @@ export class CredentialReviewService {
     return record;
   }
 }
+
+/** The history's action of each decision's state (T174). */
+const HISTORY_ACTION = {
+  rejected: 'reject',
+  needs_document: 'request_document',
+} as const satisfies Record<Decision['to'], HistoryAction>;
 
 /** CONFLICT naming the state the credential is in, or `subject_approved` for rule 23. */
 function conflict(code: string): DomainError {
@@ -396,7 +541,34 @@ function positioned(
   return chain.map((names, index) => ({ position: index + 1, names: [...names] }));
 }
 
-function transcriptionOf(record: ReviewRecord): Transcription {
+/** A history row as `credentials.get` answers it; a correction's note is its `reason` (admin-surface.md:70). */
+function historyItemOf(row: HistoryRow): HistoryItem {
+  return {
+    action: row.action,
+    ...textOfRow(row),
+    ...(row.before === null ? {} : { before: copyOf(row.before) }),
+    ...(row.after === null ? {} : { after: copyOf(row.after) }),
+    adminName: row.adminName,
+    at: row.at.toISOString(),
+  };
+}
+
+/** A row's note, answered as a correction's `reason`; nothing where it holds none. */
+function textOfRow(row: HistoryRow): { note?: string; reason?: string } {
+  if (row.note === null) return {};
+  return row.action === 'correct' ? { reason: row.note } : { note: row.note };
+}
+
+function copyOf(transcription: HistoryTranscription): Transcription {
+  return {
+    holderName: transcription.holderName,
+    riwaya: transcription.riwaya,
+    tariq: transcription.tariq,
+    chain: transcription.chain.map(generationOf),
+  };
+}
+
+function transcriptionOf(record: ReviewRecord): HistoryTranscription {
   return {
     holderName: record.holderName ?? '',
     riwaya: record.riwaya ?? '',

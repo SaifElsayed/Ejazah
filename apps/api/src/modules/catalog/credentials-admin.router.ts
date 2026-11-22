@@ -2,15 +2,17 @@
 // credential review"; FR-163, FR-164). Thin: the input validated, one service call on the call's
 // transaction, the action's audit entry described, the output parsed by its schema (R-API-1). The
 // actor is the session's administrator, never the input's. The reason of a rejection, of a request
-// for another document and of a correction is mandatory in the schema and goes into the entry as
-// typed; an approval's optional note goes there too, the transcription it wrote is the entry's
-// after and the pending one's, none of it written, its before (T116); a correction's entry holds
-// the transcription before and after (FR-164); a request for another document's, the application it
-// set waiting on the applicant, when it set one, as its before and after (T155). The list and the
+// for another document and of a correction is mandatory in the schema; T174 (SRS DEC-97): its text,
+// and an approval's optional note, go into the credential's history alone, and the entry records
+// that one was given (`AUDIT_REASON_NOTE_GIVEN`). An approval's and a correction's entry hold the
+// transcription before and after with no name and no chain (`auditTranscriptionsOf`; T116, FR-164
+// as amended); a request for another document's, the application it set waiting on the applicant,
+// when it set one, as its before and after (T155). The list and the
 // panel are reads (`credentials.read`) naming the reader, which no audit list shows (owner's
 // decision 2026-10-21).
 // Mounted under `credentials` by `admin.router.ts`.
 import {
+  AUDIT_REASON_NOTE_GIVEN,
   adminCredentialsApproveInput,
   adminCredentialsCorrectInput,
   adminCredentialsGetInput,
@@ -23,6 +25,7 @@ import {
 import { z } from 'zod';
 
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
+import { auditTranscriptionsOf } from './credential-review.service.js';
 
 export const credentialsAdminRouter = createAdminRouter({
   list: adminProcedure({
@@ -44,18 +47,13 @@ export const credentialsAdminRouter = createAdminRouter({
 
   approve: adminProcedure({ input: adminCredentialsApproveInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      const { before, after } = await ctx.services.credentials.approve(
-        ctx.tx,
-        ctx.administrator.adminId,
-        input,
-      );
+      const move = await ctx.services.credentials.approve(ctx.tx, ctx.administrator.adminId, input);
       ctx.audit.record({
         action: 'credential.approve',
         targetType: 'credential',
         targetId: input.credentialId,
-        ...(input.note === undefined ? {} : { reason: input.note }),
-        before,
-        after,
+        ...(input.note === undefined ? {} : { reason: AUDIT_REASON_NOTE_GIVEN }),
+        ...auditTranscriptionsOf(move),
       });
     },
   ),
@@ -67,7 +65,7 @@ export const credentialsAdminRouter = createAdminRouter({
         action: 'credential.reject',
         targetType: 'credential',
         targetId: input.credentialId,
-        reason: input.reason,
+        reason: AUDIT_REASON_NOTE_GIVEN,
       });
     },
   ),
@@ -85,25 +83,20 @@ export const credentialsAdminRouter = createAdminRouter({
       action: 'credential.request_document',
       targetType: 'credential',
       targetId: input.credentialId,
-      reason: input.reason,
+      reason: AUDIT_REASON_NOTE_GIVEN,
       ...move,
     });
   }),
 
   correct: adminProcedure({ input: adminCredentialsCorrectInput, output: z.void() }).mutation(
     async ({ ctx, input }) => {
-      const { before, after } = await ctx.services.credentials.correct(
-        ctx.tx,
-        ctx.administrator.adminId,
-        input,
-      );
+      const move = await ctx.services.credentials.correct(ctx.tx, ctx.administrator.adminId, input);
       ctx.audit.record({
         action: 'credential.correct',
         targetType: 'credential',
         targetId: input.credentialId,
-        reason: input.reason,
-        before,
-        after,
+        reason: AUDIT_REASON_NOTE_GIVEN,
+        ...auditTranscriptionsOf(move),
       });
     },
   ),

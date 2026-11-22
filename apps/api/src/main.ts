@@ -185,6 +185,11 @@ const cipher = createColumnCipher(config);
 const consequences = new identity.AccountConsequences();
 consequences.subscribe(verification.documentErasureConsequence());
 consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf, log }));
+// T174 of specs/002-identity (R1a; SRS DEC-97, FR-AUTH-14; the note under T174, (5)): catalog's
+// consequence, so no module reaches another's tables. The deletion of a teacher never approved blanks
+// their credentials' holder name, riwaya, tariq and review reason, deletes their chains and erases
+// the credentials' history; a teacher once approved keeps all of it.
+consequences.subscribe(catalog.catalogDeletionConsequence());
 const idempotency = new IdempotencyService({
   store: new IdempotencyRepository(database),
   settings,

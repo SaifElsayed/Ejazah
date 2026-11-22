@@ -2,9 +2,10 @@
 // credential review"; FR-163, FR-164). One ijazah PDF per subject, reviewed beside the transcription
 // form: the holder's name as on the PDF, the riwaya, the tariq where there is one, and the chain
 // origin first as generations of one or more names, with no limit on the generations (ADR 0017 D1,
-// ADR 0019 D1). The chain is the administrator's alone; a correction needs a reason and its audit
-// entry holds the transcription before and after (FR-ISNAD-4). The list's search is the teacher's
-// name as typed (screens.md `AdminCredentials`: «اسم المعلم»).
+// ADR 0019 D1). The chain is the administrator's alone; a correction needs a reason (FR-ISNAD-4).
+// T174 (SRS DEC-97): the name and the chain before and after, and every note and reason, are held in
+// the credential's history, which `credentials.get` answers; the audit entry holds neither. The
+// list's search is the teacher's name as typed (screens.md `AdminCredentials`: «اسم المعلم»).
 import { z } from 'zod';
 
 import { subjectSummary } from '../catalog.js';
@@ -53,6 +54,41 @@ export const adminCredentialsListOutput = z.object({
 
 export const adminCredentialsGetInput = z.object({ credentialId: z.uuid() });
 
+/**
+ * A credential's transcription: the approval's after, a correction's before and after (FR-164), as
+ * the credential's history holds them (T174). A chain's generations carry their positions, origin
+ * first.
+ */
+export const adminCredentialTranscription = z.object({
+  holderName: z.string(),
+  riwaya: z.string(),
+  tariq: z.string().nullable(),
+  chain: z.array(chainGeneration),
+});
+
+/** What the credential's history records (T174, ERD `teacher_credential_history`). */
+export const adminCredentialHistoryAction = z.enum([
+  'approve',
+  'reject',
+  'request_document',
+  'correct',
+]);
+
+/**
+ * One row of the credential's history, oldest first (T174; admin-surface.md:70): a decision's note,
+ * or a correction's `reason`; the name and the chain `before` a correction and `after` an approval
+ * and a correction; who decided and when.
+ */
+export const adminCredentialHistoryItem = z.object({
+  action: adminCredentialHistoryAction,
+  note: z.string().optional(),
+  reason: z.string().optional(),
+  before: adminCredentialTranscription.optional(),
+  after: adminCredentialTranscription.optional(),
+  adminName: z.string(),
+  at: z.iso.datetime(),
+});
+
 export const adminCredentialsGetOutput = adminCredentialsListRow.extend({
   documentId: z.uuid(),
   holderName: z.string().optional(),
@@ -61,6 +97,8 @@ export const adminCredentialsGetOutput = adminCredentialsListRow.extend({
   chain: z.array(chainGeneration).optional(),
   reviewReason: z.string().optional(),
   reviewedByName: z.string().optional(),
+  /** T174: every decision and correction, oldest first (PR #154's review, round 4, N9). */
+  history: z.array(adminCredentialHistoryItem),
 });
 
 export const adminCredentialsApproveInput = z.object({
@@ -69,7 +107,7 @@ export const adminCredentialsApproveInput = z.object({
   riwaya: transcribed,
   tariq: transcribed.optional(),
   chain: chainInput,
-  /** The reviewer's own note; it reaches the audit log, not the teacher. */
+  /** The reviewer's own note; it reaches neither the teacher nor the audit log: the history holds it (T174). */
   note: adminReason.optional(),
 });
 
@@ -98,17 +136,7 @@ export const adminCredentialsCorrectInput = z
     { message: 'A correction changes at least one field.', path: ['chain'] },
   );
 
-/**
- * A credential's transcription as an audit entry holds it: the approval's after, a correction's
- * before and after (FR-164). A chain's generations carry their positions, origin first.
- */
-export const adminCredentialTranscription = z.object({
-  holderName: z.string(),
-  riwaya: z.string(),
-  tariq: z.string().nullable(),
-  chain: z.array(chainGeneration),
-});
-
+/** A correction's transcription before and after, as the service answers it (FR-164). */
 export const adminCredentialCorrection = z.object({
   before: adminCredentialTranscription,
   after: adminCredentialTranscription,

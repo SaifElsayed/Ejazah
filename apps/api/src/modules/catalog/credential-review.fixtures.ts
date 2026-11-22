@@ -3,7 +3,8 @@
 // teacher and subject, rule 23), so the service's own rules are what the spec proves; the real
 // queries are `tests/db-integrity/credential-review.spec.ts`'s. T155 adds the teachers' applications,
 // which a request for another document moves only from `in_review`, as identity's
-// `decideApplication` does.
+// `decideApplication` does. T174 adds the credential's history, its rows kept in the order written,
+// and the credential's lock, each in the journal.
 import { randomUUID } from 'node:crypto';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -13,6 +14,8 @@ import type {
   CredentialReviewStore,
   Correction,
   Decision,
+  HistoryEntry,
+  HistoryRow,
   ReviewFilter,
   ReviewListRow,
   ReviewRecord,
@@ -77,6 +80,8 @@ export class MemoryReviewStore implements CredentialReviewStore {
   readonly journal: string[] = [];
   /** The teachers' applications, by teacher; a teacher with none planted has none to move (T155). */
   readonly applications = new Map<string, HeldApplication>();
+  /** The credentials' history rows, in the order written (T174). */
+  readonly history: HistoryEntry[] = [];
 
   /** A credential waiting for review unless `status` says otherwise; its id. */
   plant(
@@ -227,6 +232,7 @@ export class MemoryReviewStore implements CredentialReviewStore {
   }
 
   async correct(_tx: Transaction, correction: Correction): Promise<boolean> {
+    this.journal.push(`correct:${correction.credentialId}`);
     const row = this.#held.get(correction.credentialId);
     if (row?.status !== 'approved') return false;
     Object.assign(row, {
@@ -259,6 +265,28 @@ export class MemoryReviewStore implements CredentialReviewStore {
       decidedBy: request.adminId,
     });
     return true;
+  }
+
+  async lockCredential(_tx: Transaction, credentialId: string): Promise<void> {
+    this.journal.push(`lock-credential:${credentialId}`);
+  }
+
+  async recordHistory(_tx: Transaction, entry: HistoryEntry): Promise<void> {
+    this.journal.push(`history:${entry.credentialId}`);
+    this.history.push(structuredClone(entry));
+  }
+
+  async historyOf(_tx: Transaction, credentialId: string): Promise<HistoryRow[]> {
+    return this.history
+      .filter((entry) => entry.credentialId === credentialId)
+      .map((entry) => ({
+        action: entry.action,
+        note: entry.note,
+        before: entry.before ?? null,
+        after: entry.after ?? null,
+        adminName: this.administrators.get(entry.adminId) ?? '',
+        at: entry.at,
+      }));
   }
 
   async isApprovedTeacher(_tx: Transaction, userId: string): Promise<boolean> {

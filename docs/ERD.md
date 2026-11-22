@@ -326,7 +326,7 @@ One ijazah PDF per subject with its transcription; the chain hangs under it (ADR
 | teacher_user_id | FK → users | |
 | subject_id | FK → subjects | |
 | document_id | FK → verification_documents | The ijazah PDF |
-| holder_name | text, nullable | The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1) |
+| holder_name | text, nullable | The teacher's full name as on the PDF, transcribed at approval (ADR 0019 D1), blanked with the riwaya, the tariq and the review reason by the deletion of a teacher never approved (SRS DEC-97, T174) |
 | riwaya / tariq | text, nullable | Transcribed at approval, Arabic as typed (ADR 0021 D1) |
 | status | enum pending · needs_document · approved · rejected | |
 | review_reason | text, nullable | Mandatory on reject and needs_document; the teacher sees it |
