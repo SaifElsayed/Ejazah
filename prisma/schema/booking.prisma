@@ -6,6 +6,9 @@
 // (T064, ERD section 15.2), the two partial uniques on active holds (T066, section 15.17-18) and the
 // revoked DELETE on enrollments (T065, section 15.10), and the partial index on the held closings
 // (T069 of specs/004-sessions/tasks.md, section 14).
+//
+// 006:T001 (ADR 0024, specs/006-programme/data-model.md): `programmes` and `programme_requests`; their
+// checks and the partial unique on an open item live in the migration (ERD section 15 rules 76 to 81).
 
 // A checkout reservation with a TTL (FR-BOOK-9). NULL `released_at` means active, even past
 // `expires_at`: at most one active hold per slot and per student (T066, ADR 0010 D1, D6).
@@ -112,6 +115,11 @@ model Enrollment {
   events        EnrollmentEvent[]
   // Phase 3 (T001): sessions' record of the enrollment's session events.
   sessionEvents SessionEvent[]
+  // 006:T001: the programme an assessment's enrollment carries and its administrator items; and
+  // payments' saved card, a back-relation only.
+  programme         Programme?
+  programmeRequests ProgrammeRequest[]
+  programmeCard     ProgrammeCard?
 
   @@index([studentUserId])
   @@index([teacherUserId])
@@ -145,4 +153,80 @@ model EnrollmentEvent {
   @@index([enrollmentId])
   @@index([paymentId])
   @@map("enrollment_events")
+}
+
+// 006:T001 (ADR 0024; specs/006-programme/data-model.md «programmes», R-501, R-505 to R-508, R-510;
+// ERD changelog row 71): one row per programme, keyed by the `ijazah_track` enrollment an
+// assessment created; the assessment is that enrollment's session 1 (R-501). The offer's figures are
+// frozen on the enrollment (`snapshot_session_count` N+1, the length, the total) when `offered_at`
+// is set. The state checks, the paid months' bound and the text bounds (ERD section 15 rules 76 to
+// 78) live in the migration.
+model Programme {
+  enrollmentId   String         @id @map("enrollment_id") @db.Uuid
+  state          ProgrammeState
+  // The delivered assessment's end + `programme_offer_hours` (24); an extension adds 24 h (R-505).
+  offerDueAt     DateTime?      @map("offer_due_at") @db.Timestamptz(6)
+  // The spec's «pay_by»: the offer's time + `programme_pay_rest_hours` (48), set at the offer
+  // (R-505).
+  payByAt        DateTime?      @map("pay_by_at") @db.Timestamptz(6)
+  // The teacher's words at the offer, 1 to 500 characters each.
+  level          String?
+  readiness      String?
+  expectedLength String?        @map("expected_length")
+  // Set once, at the offer; set in every state from `offered` to `paused` (rule 76).
+  offeredAt      DateTime?      @map("offered_at") @db.Timestamptz(6)
+  // ⌈N ÷ 4⌉, set at the offer (R-507).
+  monthCount     Int?           @map("month_count") @db.SmallInt
+  // NULL until the first payment.
+  paymentPlan    ProgrammePlan? @map("payment_plan")
+  // The highest paid month; in full, `month_count`. Never above it (rule 78).
+  monthsPaid     Int            @default(0) @map("months_paid") @db.SmallInt
+  // The paid month's last session's end (`lastToEnd`, R-507).
+  nextDueAt      DateTime?      @map("next_due_at") @db.Timestamptz(6)
+  // The current month's automatic attempts (R-508): the first failure and the retries done, 0 to 4.
+  firstFailureAt DateTime?      @map("first_failure_at") @db.Timestamptz(6)
+  retriesDone    Int            @default(0) @map("retries_done") @db.SmallInt
+  // Set exactly while `paused` (rule 77): by the sweep, cleared by a payment; a reopen's time.
+  pausedAt       DateTime?      @map("paused_at") @db.Timestamptz(6)
+  // Set exactly once `closed` (rule 77), by the close hook (R-510).
+  closedAt       DateTime?      @map("closed_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  // The `advance-programmes` sweep (R-508).
+  @@index([state, nextDueAt])
+  @@map("programmes")
+}
+
+// 006:T001 (R-513, I-2 (a), FR-706b; ERD changelog row 72): an item for an administrator on a
+// programme. `stop` and `refusal` are the teacher's, with a reason; `no_offer` and `pay_blocked` are
+// raised by the sweep. The enrollment and the teacher come from the enrollment, never the input. One
+// open item per enrollment and kind (a partial unique), the reason's bounds, `extended`'s kinds and
+// the decision's pair (ERD section 15 rules 79 to 81) live in the migration.
+model ProgrammeRequest {
+  id               String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  enrollmentId     String                 @map("enrollment_id") @db.Uuid
+  teacherUserId    String                 @map("teacher_user_id") @db.Uuid
+  kind             ProgrammeRequestKind
+  // Mandatory for `stop` and `refusal`, 1 to 500 characters (rule 80).
+  reason           String?
+  status           ProgrammeRequestStatus
+  // Set together on an approval or a decline (rule 81).
+  decidedByAdminId String?                @map("decided_by_admin_id") @db.Uuid
+  decidedAt        DateTime?              @map("decided_at") @db.Timestamptz(6)
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
+  teacher        User       @relation(fields: [teacherUserId], references: [id])
+  decidedByAdmin AdminUser? @relation(fields: [decidedByAdminId], references: [id], onDelete: Restrict)
+
+  // The administrators' queue, oldest first.
+  @@index([status, createdAt])
+  @@index([enrollmentId])
+  @@index([teacherUserId])
+  @@index([decidedByAdminId])
+  @@map("programme_requests")
 }
