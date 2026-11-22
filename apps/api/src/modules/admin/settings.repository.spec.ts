@@ -48,6 +48,7 @@ import {
   toErrorShape,
 } from '../../surfaces/procedures.js';
 import { unusedAdminServices } from '../../surfaces/services.fixtures.js';
+import { lockProgrammeSwitch, retirePreProgrammeIjazahPackages } from '../catalog/index.js';
 import { openSpecDatabase, rolledBack, SPEC_ENCRYPTION_KEY } from './__fixtures__/admin.js';
 import { MFA_SECRET_COLUMN } from './admin-users.repository.js';
 import { AuditRepository } from './audit.repository.js';
@@ -511,5 +512,94 @@ describe(
         [{ value: firstValue }, { value: secondValue }],
       ]);
     });
+
+    // 006:T004 (Q-D1 (a); PR #156 r1 Minor 1): the turn-on as the panel runs it, `settings.update`
+    // over the real writer and idempotency with catalog's two entries, as `index.ts` binds them,
+    // waits on the switch's advisory key a create of an old-style package holds (catalog's entry,
+    // taken and held here). The turn-on's transaction is rolled back once it answers, its row
+    // planted on it too, so nothing it writes or deactivates outlives the case. Red with the key
+    // taken out of `settings.service.ts` (M11): the turn-on then reaches the writer at once.
+    it('the programme switch’s turn-on waits on the switch’s key before it writes the switch', async () => {
+      const adminId = await committedAdministrator();
+      let entered = false;
+      const administration = createSettingsAdministration({
+        idempotency: new IdempotencyService<Transaction>({
+          store: new IdempotencyRepository(database),
+          settings: retention,
+        }),
+        log,
+        writerOn: (tx) => {
+          const writer = new SettingsRepository(tx);
+          return {
+            valuesOf: (keys) => writer.valuesOf(keys),
+            update: (key, value, actor) => {
+              entered = true;
+              return writer.update(key, value, actor);
+            },
+          };
+        },
+        retirePreProgrammeIjazahPackages,
+        lockProgrammeSwitch,
+      });
+
+      let letGo: () => void = () => undefined;
+      const held = new Promise<void>((resolve) => {
+        letGo = resolve;
+      });
+      let taken: () => void = () => undefined;
+      const keyTaken = new Promise<void>((resolve) => {
+        taken = resolve;
+      });
+      const holder = database.$transaction(
+        async (tx: Transaction) => {
+          await lockProgrammeSwitch(tx);
+          taken();
+          await held;
+        },
+        { timeout: 30_000 },
+      );
+      await keyTaken;
+
+      const rolledBackTurnOn = database
+        .$transaction(
+          async (tx: Transaction) => {
+            // Planted only where no row holds it (CI never seeds), locking no row that exists: the
+            // key comes before the switch's row (kernel.md, the 006:T004 row).
+            await tx.setting.createMany({
+              data: [{ key: PROGRAMME_SWITCH, value: 0, updatedByAdminId: adminId }],
+              skipDuplicates: true,
+            });
+            const answer = await administration.update(tx, adminId, {
+              key: PROGRAMME_SWITCH,
+              value: 1,
+              reason: REASON,
+              idempotencyKey: freshKey(),
+            });
+            throw new TurnOnAnswered(answer.retiredPackages);
+          },
+          { timeout: 30_000 },
+        )
+        .catch((error: unknown) => error);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const enteredWhileHeld = entered;
+
+      letGo();
+      await holder;
+      const answered = await rolledBackTurnOn;
+
+      expect(enteredWhileHeld).toBe(false);
+      expect(answered).toBeInstanceOf(TurnOnAnswered);
+      expect(entered).toBe(true);
+    });
   },
 );
+
+/** The programme's switch (006:T002), turned on by the case above on a transaction rolled back. */
+const PROGRAMME_SWITCH = 'programme_enabled';
+
+/** How the case above rolls its turn-on back once it answered: what the turn-on retired. */
+class TurnOnAnswered extends Error {
+  constructor(readonly retiredPackages: number | undefined) {
+    super(`the turn-on answered (retired ${String(retiredPackages)}); rolled back`);
+  }
+}
