@@ -103,7 +103,7 @@ No open question remains.
   > `pages/settings/settings.spec.tsx` red first («150» typed stores 15000), and a negative under a mutant. Outside
   > files: `modules/admin/settings.service.ts`, `admin/index.ts`, `admin/settings.router.ts`, `modules/catalog/index.ts`,
   > `apps/admin/src/pages/audit/actions.ts`, `packages/contracts/src/admin/settings.ts`,
-  > `apps/admin/src/pages/settings/words.ts`, `apps/admin/src/pages/settings/settings.spec.tsx`. Settings 95 → 103 (106
+  > `apps/admin/src/pages/settings/words.ts`, `apps/admin/src/pages/settings/settings.spec.tsx`. Settings 95 → 103 (107
   > at the second merge with R1a).
 - [ ] T003 [P] The contracts (contracts/*):
   - `packages/contracts/src/programme.ts`, `packages/contracts/src/admin/programme.ts`;
