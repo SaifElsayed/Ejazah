@@ -127,20 +127,23 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   teacher_share_releases: 'teacherShareRelease',
   // 003:T112 (ERD changelog row 59).
   session_postponements: 'sessionPostponement',
+  // 002:T174 (ERD changelog rows 62 and 63).
+  teacher_application_history: 'teacherApplicationHistory',
+  teacher_credential_history: 'teacherCredentialHistory',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 48 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105, the one of 003:T112)', () => {
+  it('holds the ERD’s 50 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105, the one of 003:T112, the two of 002:T174)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(48);
-    expect(new Set(tables).size).toBe(48);
+    expect(tables).toHaveLength(50);
+    expect(new Set(tables).size).toBe(50);
   });
 
-  it('gives 48 distinct delegates, one per table', () => {
+  it('gives 50 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(48);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(50);
   });
 });
 

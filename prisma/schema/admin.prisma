@@ -48,6 +48,9 @@ model AdminUser {
   decidedApplications  TeacherProfile[]      @relation("TeacherApplicationDecidedBy")
   verificationRequests VerificationRequest[]
   reviewedCredentials  TeacherCredential[]
+  // R1a (002:T174): the decision histories this administrator wrote, back-relations only.
+  applicationHistory   TeacherApplicationHistory[] @relation("TeacherApplicationHistoryAdmin")
+  credentialHistory    TeacherCredentialHistory[]  @relation("TeacherCredentialHistoryAdmin")
   createdIsnadEntries  IsnadEntry[]
   settledSessions      Session[]
   revokedIjazahs       Ijazah[]              @relation("IjazahRevokedBy")

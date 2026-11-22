@@ -107,6 +107,17 @@ enum TeacherApplicationStatus {
   @@map("teacher_application_status")
 }
 
+// R1a (002:T174, SRS DEC-97; ERD changelog row 62): a row of the application's history.
+enum TeacherApplicationHistoryAction {
+  approve
+  reject
+  request_info
+  ban
+  revoke
+
+  @@map("teacher_application_history_action")
+}
+
 // Phase 1 (T011): the identity document's kind on an application and on a verification request
 // (`VerifyIdentity`'s segmented control). One type for both columns: two enums with the same labels
 // fail the schema check.
@@ -207,6 +218,16 @@ enum TeacherCredentialStatus {
   rejected
 
   @@map("teacher_credential_status")
+}
+
+// R1a (002:T174, SRS DEC-97; ERD changelog row 63): a row of the credential's history.
+enum TeacherCredentialHistoryAction {
+  approve
+  reject
+  request_document
+  correct
+
+  @@map("teacher_credential_history_action")
 }
 
 // booking (ERD section 5)

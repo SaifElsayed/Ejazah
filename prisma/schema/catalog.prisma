@@ -129,12 +129,38 @@ model TeacherCredential {
   reviewedByAdmin AdminUser?           @relation(fields: [reviewedByAdminId], references: [id], onDelete: Restrict)
 
   isnadEntries IsnadEntry[]
+  // R1a (002:T174): the credential's history, a back-relation only.
+  history      TeacherCredentialHistory[]
 
   @@index([teacherUserId])
   @@index([subjectId])
   @@index([documentId])
   @@index([reviewedByAdminId])
   @@map("teacher_credentials")
+}
+
+// R1a (002:T174, SRS DEC-97, FR-AUTH-14; ERD §4, changelog row 63): one row per decision on the
+// credential and per correction, with its note or reason and, on an approval and a correction, the
+// name and the chain before and after; written once, never edited (rule 69, as the application's).
+model TeacherCredentialHistory {
+  id           String                         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  credentialId String                         @map("credential_id") @db.Uuid
+  action       TeacherCredentialHistoryAction
+  // Required except on approve; not blank, at most 1,000 characters (rule 68).
+  note         String?
+  // { holderName, riwaya, tariq, chain }: before only on a correction, after on an approval and a
+  // correction (rule 68).
+  before       Json?
+  after        Json?
+  adminId      String                         @map("admin_id") @db.Uuid
+  createdAt    DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  credential TeacherCredential @relation(fields: [credentialId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  admin      AdminUser         @relation("TeacherCredentialHistoryAdmin", fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([credentialId, createdAt])
+  @@index([adminId])
+  @@map("teacher_credential_history")
 }
 
 // The chain of transmission, one generation per row under a credential, not a graph (FR-ISNAD-1..6).
