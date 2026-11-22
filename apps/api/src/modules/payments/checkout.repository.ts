@@ -8,6 +8,10 @@
 // them again under the lock; an order cannot be added meanwhile, its insert referencing the locked
 // enrollment. The insert of an order references its enrollment alone, which the caller holds.
 // Every read is bounded: the orders of one enrollment (a handful: one per Pay or Retry), one order.
+//
+// 006:T001 (Q-2 (a)): `gateway_order_id` is NULL-able (ERD §15 rule 72), NULL only on a programme's
+// automatic order, which T014 writes. The reads that hand the reference on as a string refuse a NULL
+// as a broken invariant (`withGatewayOrderId`), never answer it as a reference or as no order.
 import type { Piasters } from '@ijazah/money';
 import { toPlainNumber } from '@ijazah/money';
 import type { $Enums } from '@prisma/client';
@@ -18,6 +22,17 @@ import type { HeldOrders } from '../booking/index.js';
 import type { OrderStatus } from './payments.repository.js';
 
 type Client = Pick<Transaction, 'payment'>;
+
+/** The order with its gateway reference; one without is a broken invariant on the checkout's path. */
+function withGatewayOrderId<T extends { readonly gatewayOrderId: string | null }>(
+  row: T,
+): T & { readonly gatewayOrderId: string } {
+  const { gatewayOrderId } = row;
+  if (gatewayOrderId === null) {
+    throw new Error('checkout: an order with no gateway id on a manual path');
+  }
+  return { ...row, gatewayOrderId };
+}
 
 /**
  * The orders of the enrollment a new checkout finds on the student's own hold (FR-BOOK-12): the last
@@ -48,7 +63,8 @@ export async function heldOrdersOf(
   const payable = orders.filter(
     ({ status, expiresAt }) => status === 'created' && expiresAt.getTime() > at.getTime(),
   );
-  const last = payable.at(-1);
+  const latest = payable.at(-1);
+  const last = latest === undefined ? undefined : withGatewayOrderId(latest);
   return {
     payable:
       last === undefined
@@ -108,8 +124,8 @@ export interface AddressedOrder {
 }
 
 /** The order of that id, or null. */
-export function orderById(tx: Client, paymentId: string): Promise<AddressedOrder | null> {
-  return tx.payment.findUnique({
+export async function orderById(tx: Client, paymentId: string): Promise<AddressedOrder | null> {
+  const row = await tx.payment.findUnique({
     where: { id: paymentId },
     select: {
       id: true,
@@ -120,11 +136,15 @@ export function orderById(tx: Client, paymentId: string): Promise<AddressedOrder
       checkoutUrlEncrypted: true,
     },
   });
+  return row === null ? null : withGatewayOrderId(row);
 }
 
 /** The enrollment's latest order (ids are UUIDv7, so the greatest is the latest), or null. */
-export function lastOrderOf(tx: Client, enrollmentId: string): Promise<AddressedOrder | null> {
-  return tx.payment.findFirst({
+export async function lastOrderOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<AddressedOrder | null> {
+  const row = await tx.payment.findFirst({
     where: { enrollmentId },
     orderBy: { id: 'desc' },
     select: {
@@ -136,6 +156,7 @@ export function lastOrderOf(tx: Client, enrollmentId: string): Promise<Addressed
       checkoutUrlEncrypted: true,
     },
   });
+  return row === null ? null : withGatewayOrderId(row);
 }
 
 /** The gateway's reference of the order, as FR-384's message gives it. */
@@ -144,5 +165,5 @@ export async function orderReferenceOf(tx: Client, paymentId: string): Promise<s
     where: { id: paymentId },
     select: { gatewayOrderId: true },
   });
-  return row?.gatewayOrderId ?? null;
+  return row === null ? null : withGatewayOrderId(row).gatewayOrderId;
 }
