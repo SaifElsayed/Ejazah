@@ -183,11 +183,13 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // each session it covers, and the interval per party per enrollment.
   ['postponement_notice_hours', 12],
   ['postponement_interval_weeks', 4],
-  // 006:T002 (research R-515; SRS §3.14's programme rows, DEC-92, DEC-93, DEC-94; I-3): the
-  // programme's switch, off (0: the registry's `count` of 0 or 1); the assessment's length; the
-  // offer's 24 hours; the 48 hours to pay the rest, from the offer; a pause's 7 days before a stop
-  // request; the 3 days before a paid month ends; and the four retries' days.
+  // 006:T002 (research R-515; SRS §3.14's eight programme rows, DEC-92, DEC-93, DEC-94; I-3, P1 (a)):
+  // the programme's switch, off (0: the registry's `count` of 0 or 1); the assessment's fee in
+  // piasters, 0 until an Administrator sets it (named `_price_`, B-P1 Q-B4 (a)); the assessment's
+  // length; the offer's 24 hours; the 48 hours to pay the rest, from the offer; a pause's 7 days
+  // before a stop request; the 3 days before a paid month ends; and the four retries' days.
   ['programme_enabled', 0],
+  ['assessment_price_piasters', 0],
   ['assessment_duration_minutes', 30],
   ['programme_offer_hours', 24],
   ['programme_pay_rest_hours', 48],

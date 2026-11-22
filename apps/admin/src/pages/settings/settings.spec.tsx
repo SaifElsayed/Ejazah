@@ -7,10 +7,12 @@
 // leads to `/settings/admins`. A change: the new value in the setting's shape, the mandatory reason,
 // trimmed, and a key, sent once; the dialog says the change applies to every later read at once (the
 // signed-in default within 60 s); the list is read again. Each refusal in its own words.
+import { piasters } from '@ijazah/money';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { formattingTag, type MessageKey, setLocale, translate } from '../../i18n';
+import { formatPounds } from '../../lib/format';
 import { actionText } from '../audit/actions';
 import {
   currentPath,
@@ -420,6 +422,101 @@ describe('a change (FR-624: a reason, audited before and after)', () => {
     write(dialog, 'admin.settings.reasonLabel', 'تعديل');
     fireEvent.click(confirmOf(dialog));
     expect(await dialog.findByText(words)).toBeTruthy();
+  });
+});
+
+// 006:T002 (research R-515; the note under T002, Q-6, the owner's «تظهر جنيه فقط»): the assessment's
+// fee (`assessment_price_piasters`, B-P1 Q-B4 (a)) is stored in whole piasters and shown and typed in
+// pounds only, at most two decimals, through the panel's one amount format
+// (`formatPounds`), never as piasters and never with a «قرش» word.
+const assessmentFee = {
+  key: 'assessment_price_piasters',
+  value: 15_000,
+  default: 0,
+  bounds: { shape: 'number', value: from(0) },
+  unit: 'piasters',
+  group: 'booking',
+  srsRow:
+    "Programme: the assessment's fee (EGP, one amount for every ijazah-track Teacher; an ijazah-track Package is not published while it is unset)",
+} as const;
+
+function withFee() {
+  const api = fakeApi();
+  api.settings.list.query.mockResolvedValue({ items: [...ITEMS, assessmentFee] });
+  return open(api);
+}
+
+describe('the assessment’s fee in pounds (006:T002, Q-6)', () => {
+  it('shows the fee and its default in pounds, in both languages', async () => {
+    await inBothLocales(withFee, async (t, locale) => {
+      const label = t(labelOf(assessmentFee.key));
+      await screen.findByText(label);
+      const region = within(screen.getByRole('region', { name: t(groupOf('booking')) }));
+      const cell = (header: MessageKey) => cellIn(region, label, t(header));
+      const pounds = (amount: number) =>
+        t('admin.settings.units.piasters', { value: formatPounds(piasters(amount), locale) });
+      expect(within(cell('admin.settings.columns.value')).getByText(pounds(15_000))).toBeTruthy();
+      expect(cell('admin.settings.columns.default').textContent).toBe(pounds(0));
+    });
+  });
+
+  it('never names a piaster', async () => {
+    withFee();
+    const label = ar(labelOf(assessmentFee.key));
+    await screen.findByText(label);
+    const row = rowIn(screen, label);
+    expect(row.queryByText(/15000|15,000|قرش|piaster/i)).toBeNull();
+  });
+});
+
+describe('the assessment’s fee typed in pounds (006:T002, Q-6, Q-B1 (a))', () => {
+  it('states its bound in pounds', async () => {
+    withFee();
+    const label = ar(labelOf(assessmentFee.key));
+    await screen.findByText(label);
+    const region = within(screen.getByRole('region', { name: ar(groupOf('booking')) }));
+    expect(cellIn(region, label, ar('admin.settings.columns.bounds')).textContent).toBe(
+      ar('admin.settings.bounds.atLeast', { min: formatPounds(piasters(0), 'ar') }),
+    );
+  });
+
+  it('opens the change on the fee in pounds', async () => {
+    withFee();
+    const dialog = await changeDialog(assessmentFee);
+    expect(
+      (
+        dialog.getByLabelText(
+          ar('admin.dialogs.confirm.changeSetting.valueLabel'),
+        ) as HTMLInputElement
+      ).value,
+    ).toBe('150');
+  });
+
+  it.each([
+    ['200', 20_000],
+    ['150.5', 15_050],
+    ['٢٠٠', 20_000],
+    ['0', 0],
+  ] as const)('stores «%s» typed as %i piasters', async (typed, stored) => {
+    const { api } = withFee();
+    const dialog = await changeDialog(assessmentFee);
+    write(dialog, 'admin.dialogs.confirm.changeSetting.valueLabel', typed);
+    write(dialog, 'admin.settings.reasonLabel', 'تحديد رسوم الاختبار');
+    fireEvent.click(confirmOf(dialog));
+    await waitFor(() => expect(api.settings.update.mutate).toHaveBeenCalledTimes(1));
+    expect(api.settings.update.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ key: assessmentFee.key, value: stored }),
+    );
+  });
+
+  it('refuses «150.555»: no value, the confirm stays off, nothing sent', async () => {
+    const { api } = withFee();
+    const dialog = await changeDialog(assessmentFee);
+    write(dialog, 'admin.dialogs.confirm.changeSetting.valueLabel', '150.555');
+    write(dialog, 'admin.settings.reasonLabel', 'تعديل');
+    expect(confirmOf(dialog).hasAttribute('disabled')).toBe(true);
+    fireEvent.click(confirmOf(dialog));
+    expect(api.settings.update.mutate).not.toHaveBeenCalled();
   });
 });
 

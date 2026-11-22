@@ -104,7 +104,7 @@ automatic renewal off (DEC-95), and at a teacher's suspension, ban or departure 
 
 Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_enabled` (off);
-- `assessment_fee_piasters` (0);
+- `assessment_price_piasters` (0) *(2026-11-22, B-P1 Q-B4 (a): named `_price_` because R-MONEY-6's lint refuses «fee» with an amount outside payments)*;
 - `assessment_duration_minutes` (30);
 - `programme_offer_hours` (24);
 - `programme_pay_rest_hours` (48, from the offer);

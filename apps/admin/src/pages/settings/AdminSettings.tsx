@@ -75,7 +75,8 @@ const COLUMNS: readonly Column[] = [
   {
     table: { key: 'bounds', wrap: true },
     header: 'admin.settings.columns.bounds',
-    cell: (setting, { t }) => boundsText(t, setting.bounds),
+    // 006:T002 (Q-6): the setting's unit, so an amount's bound is written in pounds.
+    cell: (setting, { t, locale }) => boundsText(t, locale, setting),
   },
   {
     table: { key: 'srsRow', wrap: true },

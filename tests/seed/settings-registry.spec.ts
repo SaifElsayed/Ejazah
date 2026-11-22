@@ -201,16 +201,18 @@ describe('the settings registry (T002, R-410)', () => {
   });
 });
 
-// 006:T002 (research R-515; spec.md FR-732; SRS §3.14's programme rows, DEC-93, DEC-94; I-3): the
-// programme's keys in track 2's block, each with its unit, its bounds, its group and its §3.14 row;
-// `programme_enabled` a `count` of 0 or 1 (the bounds shapes hold no boolean), off; the retries
-// at most four increasing days. The eighth, the assessment's fee, waits for lane b's question Q-B4.
-describe('the programme’s settings (006:T002, R-515)', () => {
+// 006:T002 (research R-515; spec.md FR-732; SRS §3.14's eight programme rows, DEC-93, DEC-94; I-3,
+// P1 (a)): the programme's eight keys in track 2's block, each with its unit, its bounds, its group
+// and its §3.14 row; `programme_enabled` a `count` of 0 or 1 (the bounds shapes hold no boolean),
+// off; the assessment's fee in the new unit `piasters`, 0 = unset (named `_price_`, B-P1 Q-B4
+// (a)); the retries at most four increasing days.
+describe('the programme’s eight settings (006:T002, R-515)', () => {
   const at = (key: string) => SETTINGS_REGISTRY[key];
   const atLeast = (min: number, max: number | null = null) => ({ min, minExclusive: false, max });
 
   it.each([
     ['programme_enabled', 'count', { shape: 'number', value: atLeast(0, 1) }, 0],
+    ['assessment_price_piasters', 'piasters', { shape: 'number', value: atLeast(0) }, 0],
     ['assessment_duration_minutes', 'minutes', { shape: 'number', value: atLeast(30, 60) }, 30],
     ['programme_offer_hours', 'hours', { shape: 'number', value: atLeast(1) }, 24],
     ['programme_pay_rest_hours', 'hours', { shape: 'number', value: atLeast(1) }, 48],
@@ -226,6 +228,7 @@ describe('the programme’s settings (006:T002, R-515)', () => {
       Object.fromEntries(
         [
           'programme_enabled',
+          'assessment_price_piasters',
           'assessment_duration_minutes',
           'programme_offer_hours',
           'programme_pay_rest_hours',
@@ -237,6 +240,8 @@ describe('the programme’s settings (006:T002, R-515)', () => {
     ).toEqual({
       programme_enabled:
         'Programme: the programme turned on (off: ijazah-track Packages sold as before)',
+      assessment_price_piasters:
+        "Programme: the assessment's fee (EGP, one amount for every ijazah-track Teacher; an ijazah-track Package is not published while it is unset)",
       assessment_duration_minutes:
         "Programme: the assessment session's length (minutes: 30, 45 or 60)",
       programme_offer_hours:
@@ -258,6 +263,11 @@ describe('the programme’s settings (006:T002, R-515)', () => {
   it('refuses the switch as a boolean or a fraction', () => {
     expect(settingRefusal('programme_enabled', true)).toBe('invalid');
     expect(settingRefusal('programme_enabled', 0.5)).toBe('invalid');
+  });
+
+  it('takes the fee in whole piasters: 20 000 admitted, a fraction of a piaster refused', () => {
+    expect(settingRefusal('assessment_price_piasters', 20_000)).toBeUndefined();
+    expect(settingRefusal('assessment_price_piasters', 150.5)).toBe('invalid');
   });
 
   it('takes the assessment’s length as 30, 45 or 60 only', () => {

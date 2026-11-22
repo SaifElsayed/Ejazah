@@ -119,9 +119,10 @@ const SETTINGS: Record<string, unknown> = {
   // 003:T112 (SRS §3.14, DEC-86, DEC-90): the postponement's notice and interval.
   postponement_notice_hours: 12,
   postponement_interval_weeks: 4,
-  // 006:T002 (research R-515; SRS §3.14, DEC-92, DEC-93, DEC-94): the programme's seven so far, the
-  // switch off (the assessment's fee waits for lane b's question Q-B4).
+  // 006:T002 (research R-515; SRS §3.14, DEC-92, DEC-93, DEC-94): the programme's eight, the switch
+  // off and the fee unset.
   programme_enabled: 0,
+  assessment_price_piasters: 0,
   assessment_duration_minutes: 30,
   programme_offer_hours: 24,
   programme_pay_rest_hours: 48,
@@ -382,7 +383,7 @@ describe('the seed (T074)', () => {
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
     // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two;
-    // 006:T002: + the programme's seven so far (95 + 7; the eighth, the assessment's fee, waits).
-    expect(counts).toEqual([{ subjects: '5', settings: '102', admins: '1' }]);
+    // 006:T002: + the programme's eight (95 + 8).
+    expect(counts).toEqual([{ subjects: '5', settings: '103', admins: '1' }]);
   });
 });

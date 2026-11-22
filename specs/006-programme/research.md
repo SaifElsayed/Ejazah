@@ -343,7 +343,7 @@ month, not an operational number (K-2, settled).
 | Key | Default | Bounds | Unit | Group |
 |---|---|---|---|---|
 | `programme_enabled` (I-3) | false | boolean | — | `booking` |
-| `assessment_fee_piasters` | 0 = unset (P1 (a)) | ≥ 0 | a new unit `piasters` | `booking` |
+| `assessment_price_piasters` | 0 = unset (P1 (a)) | ≥ 0 | a new unit `piasters` | `booking` |
 | `assessment_duration_minutes` | 30 | list 30, 45, 60 | `minutes` | `booking` |
 | `programme_offer_hours` (I-2 (a)) | 24 | ≥ 1 | `hours` | `booking` |
 | `programme_pay_rest_hours` | 48, from the offer | ≥ 1 | `hours` | `booking` |

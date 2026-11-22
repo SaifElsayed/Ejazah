@@ -11,6 +11,8 @@ import {
   lowest,
   perSession,
   piasters,
+  piastersOfPoundsText,
+  poundsText,
   RefundPastGrossError,
   refundedTotal,
   sessionValues,
@@ -477,6 +479,60 @@ describe('average (T113, SRS DEC-88)', () => {
   it('refuses an empty list, which has no average', () => {
     expect(() => average([] as unknown as [Piasters])).toThrow(RangeError);
     expect(() => average([] as unknown as [Piasters])).toThrow(/average/);
+  });
+});
+
+// 006:T002 (B-P1 Q-B1 (a), Q-6, the owner's «تظهر جنيه فقط»): an amount typed in pounds, read as
+// whole piasters on its digits (never through a float), and written back as the pounds a field
+// shows. Moved here from the phone's package editor (`apps/mobile/src/features/teacher/packages/
+// price.ts`), which keeps its own «above zero» rule; the panel's settings page reads the
+// assessment's fee with it, where 0 is «unset».
+describe('piastersOfPoundsText (006:T002, Q-B1)', () => {
+  it('reads whole pounds and up to two decimals as whole piasters', () => {
+    expect(piastersOfPoundsText('200')).toBe(20_000);
+    expect(piastersOfPoundsText('150')).toBe(15_000);
+    expect(piastersOfPoundsText('150.5')).toBe(15_050);
+    expect(piastersOfPoundsText(' 0.05 ')).toBe(5);
+  });
+
+  it('reads the digits and the decimal mark an Arabic keyboard types', () => {
+    expect(piastersOfPoundsText('١٢٠٠٫٥٠')).toBe(120_050);
+    expect(piastersOfPoundsText('۲۰۰')).toBe(20_000);
+  });
+
+  it('reads zero as zero piasters', () => {
+    expect(piastersOfPoundsText('0')).toBe(0);
+    expect(piastersOfPoundsText('0.00')).toBe(0);
+  });
+
+  it('refuses a third decimal', () => {
+    expect(piastersOfPoundsText('150.555')).toBeNull();
+    expect(piastersOfPoundsText('1.234')).toBeNull();
+  });
+
+  it('refuses a sign, grouping and anything not a number', () => {
+    for (const text of ['', '-5', '+5', '1,200', '12a', '.5', '5.', 'مئتان']) {
+      expect(piastersOfPoundsText(text)).toBeNull();
+    }
+  });
+
+  it('refuses an amount past the safe range rather than rounding it', () => {
+    expect(piastersOfPoundsText('900719925474099.93')).toBeNull();
+  });
+});
+
+describe('poundsText (006:T002, Q-B1)', () => {
+  it('writes piasters as the pounds a field shows: whole, or with two decimals', () => {
+    expect(poundsText(piasters(20_000))).toBe('200');
+    expect(poundsText(piasters(120_050))).toBe('1200.50');
+    expect(poundsText(piasters(5))).toBe('0.05');
+    expect(poundsText(piasters(0))).toBe('0');
+  });
+
+  it('reads back what it writes', () => {
+    for (const amount of [0, 5, 15_050, 120_000, 99_999_999]) {
+      expect(piastersOfPoundsText(poundsText(piasters(amount)))).toBe(amount);
+    }
   });
 });
 

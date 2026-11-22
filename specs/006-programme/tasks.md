@@ -86,7 +86,7 @@ No open question remains.
 - [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3, P1 (a)):
   - `apps/api/src/platform/settings/registry.ts`:
     - a new unit `piasters`;
-    - the eight keys in track 2's block, `programme_enabled` off, `assessment_fee_piasters` 0 = unset, `programme_offer_hours` 24;
+    - the eight keys in track 2's block, `programme_enabled` off, `assessment_price_piasters` 0 = unset, `programme_offer_hours` 24;
     - if the bounds shapes refuse a boolean, a `count` 0/1.
   - `prisma/seed.ts` after `postponement_interval_weeks` (`:185`); `tests/seed/seed.spec.ts` 95 → 103.
   - Both admin catalogues' labels (`tests/admin-i18n/settings-labels.spec.ts`).
