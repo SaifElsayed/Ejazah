@@ -12,6 +12,7 @@ import type {
   ApplicationReviewStore,
   ApplicationDecision,
   ApplicationHistoryEntry,
+  ApplicationHistoryRow,
   CallRecord,
   CredentialClosure,
   CredentialOfApplicant,
@@ -19,6 +20,8 @@ import type {
 } from '../application-review.service.js';
 
 export const ADMIN = '0199d0a0-0000-7000-8000-0000000000a1';
+/** R1a (002:T174): `ADMIN`'s display name, as the history reads it. */
+export const ADMIN_NAME = 'أ. سعاد';
 export const SUBMITTED = new Date('2026-10-18T09:00:00Z');
 export const HAFS = { id: '0199d0a0-0000-7000-8000-000000000051', nameAr: 'حفص', nameEn: 'Hafs' };
 export const WARSH = { id: '0199d0a0-0000-7000-8000-000000000052', nameAr: 'ورش', nameEn: 'Warsh' };
@@ -233,6 +236,19 @@ export class MemoryReviewStore implements ApplicationReviewStore {
 
   async recordHistory(_tx: Transaction, entry: ApplicationHistoryEntry): Promise<void> {
     this.history.push(entry);
+  }
+
+  /** The applicant's rows as identity reads them: oldest first, each with its administrator's name. */
+  async historyOf(_tx: Transaction, userId: string): Promise<ApplicationHistoryRow[]> {
+    return this.history
+      .filter((entry) => entry.teacherUserId === userId)
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .map(({ action, note, adminId, at }) => ({
+        action,
+        note,
+        adminName: adminId === ADMIN ? ADMIN_NAME : 'مشرف آخر',
+        at,
+      }));
   }
 
   async grantSubjects(

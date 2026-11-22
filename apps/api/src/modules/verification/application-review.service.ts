@@ -39,6 +39,7 @@ export type {
   ApplicantsFilter,
   ApplicantStatus,
   ApplicationHistoryEntry,
+  ApplicationHistoryRow,
   CallRecord,
 } from '../identity/index.js';
 import type {
@@ -47,6 +48,7 @@ import type {
   ApplicantsFilter,
   ApplicantStatus,
   ApplicationHistoryEntry,
+  ApplicationHistoryRow,
   CallRecord,
 } from '../identity/index.js';
 
@@ -109,6 +111,8 @@ export interface ApplicationReviewStore {
    * decision holds locked.
    */
   recordHistory(tx: Transaction, entry: ApplicationHistoryEntry): Promise<void>;
+  /** R1a (002:T174): the application's history, oldest first, identity's entry. */
+  historyOf(tx: Transaction, userId: string): Promise<ApplicationHistoryRow[]>;
 }
 
 /** The standing's ban, identity's (`standing.service.ts`): the application status it moved from. */
@@ -180,9 +184,10 @@ export class ApplicationReviewService {
   }
 
   /**
-   * `applications.get`: the detail; the decision history is `audit.list` on the target. B42b, T075
-   * (Q-O2 (a)): also `banRestoreWindowDays`, the `ban_restore_window_days` setting (R-MONEY-12), the
-   * panel's `{days}` in an approved teacher's ban.
+   * `applications.get`: the detail. B42b, T075 (Q-O2 (a)): also `banRestoreWindowDays`, the
+   * `ban_restore_window_days` setting (R-MONEY-12), the panel's `{days}` in an approved teacher's
+   * ban. R1a (002:T174, DEC-97): the decision history is `history`, read from the application's
+   * history, oldest first; the audit log keeps the entries without the text.
    */
   async get(tx: Transaction, userId: string): Promise<z.input<typeof applicationsGetOutput>> {
     const applicant = await this.#readOrRefuse(tx, userId);
@@ -192,6 +197,7 @@ export class ApplicationReviewService {
       documentId === null ? null : await this.#store.documentUploadedAt(tx, documentId);
     const request = await this.#store.openRequestOf(tx, userId);
     const banRestoreWindowDays = await windowDaysOf(this.#settings)(BAN_RESTORE_WINDOW_SETTING);
+    const history = await this.#store.historyOf(tx, userId);
     return {
       ...this.#rowOf(applicant, credentials),
       qualificationSummary: applicant.qualificationSummary,
@@ -219,6 +225,12 @@ export class ApplicationReviewService {
       ...(applicant.note === null ? {} : { note: applicant.note }),
       ...(request === null ? {} : { identityRequest: request }),
       banRestoreWindowDays,
+      history: history.map(({ action, note, adminName, at }) => ({
+        action,
+        ...(note === null ? {} : { note }),
+        adminName,
+        at: at.toISOString(),
+      })),
     };
   }
 

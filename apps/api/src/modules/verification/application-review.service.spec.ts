@@ -14,6 +14,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   ADMIN,
+  ADMIN_NAME,
   HAFS,
   MemoryReviewStore,
   SUBMITTED,
@@ -588,5 +589,37 @@ describe("R1a: the application's history (T174)", () => {
     );
     await refusal(service.approve(TX, ADMIN, { teacherUserId: blocked }));
     expect(store.history).toEqual([]);
+  });
+});
+
+describe('R1a: applications.get reads the history (T174)', () => {
+  it('answers each decision oldest first: the action, its note (none on an approval without one), who and when', async () => {
+    const userId = store.plant({
+      callRecorded: true,
+      credentials: [{ subject: HAFS, status: 'approved' }],
+    });
+    const earlier = new Date('2026-10-21T08:00:00Z');
+    store.history.push({
+      teacherUserId: userId,
+      action: 'request_info',
+      note: 'أرسل صورة أوضح',
+      adminId: '0199d0a0-0000-7000-8000-0000000000a2',
+      at: earlier,
+    });
+    await service.approve(TX, ADMIN, { teacherUserId: userId });
+    const { history } = await service.get(TX, userId);
+    expect(history).toEqual([
+      {
+        action: 'request_info',
+        note: 'أرسل صورة أوضح',
+        adminName: 'مشرف آخر',
+        at: earlier.toISOString(),
+      },
+      { action: 'approve', adminName: ADMIN_NAME, at: NOW.toISOString() },
+    ]);
+  });
+
+  it('answers an empty history for an application not yet decided', async () => {
+    expect((await service.get(TX, store.plant())).history).toEqual([]);
   });
 });

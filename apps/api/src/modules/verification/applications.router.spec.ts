@@ -55,6 +55,16 @@ function surface() {
       call: {},
       // B42b, T075 of specs/004-sessions (rule d): the ban restore window's days (Q-O2 (a)).
       banRestoreWindowDays: 14,
+      // R1a (002:T174): the application's history, as the review answers it.
+      history: [
+        {
+          action: 'request_info',
+          note: 'أرسل صورة أوضح',
+          adminName: 'أ. سعاد',
+          at: '2026-10-19T09:00:00.000Z',
+        },
+        { action: 'approve', adminName: 'أ. خالد', at: '2026-10-20T09:00:00.000Z' },
+      ],
     }),
     recordCall: record('recordCall', {
       before: { completedOn: '2026-10-20', outcome: 'unsuitable' },
@@ -259,5 +269,21 @@ describe('the inputs', () => {
     expect(await codeOf(call(as(VERIFIED)))).toBe('VALIDATION_FAILED');
     expect(written).toEqual([]);
     expect(reached).toEqual([]);
+  });
+});
+
+describe('applications.get (R1a, 002:T174)', () => {
+  it('answers the history through the output schema, oldest first, an approval with no note', async () => {
+    const { as } = surface();
+    const detail = await CALLS['applications.get']!(as(VERIFIED));
+    expect((detail as { history: unknown }).history).toEqual([
+      {
+        action: 'request_info',
+        note: 'أرسل صورة أوضح',
+        adminName: 'أ. سعاد',
+        at: '2026-10-19T09:00:00.000Z',
+      },
+      { action: 'approve', adminName: 'أ. خالد', at: '2026-10-20T09:00:00.000Z' },
+    ]);
   });
 });
