@@ -15,6 +15,9 @@ const ERASURE_FILE = 'modules/catalog/credentials-history.repository.ts';
 const DELETES = [
   /teacherCredentialHistory\s*\.\s*delete(?:Many)?\b/g,
   /DELETE\s+FROM\s+"?teacher_credential_history"?/gi,
+  // A delete through a parent's relation (PR #157's review, round 1, Minor 1): the credential's
+  // `history`, or the administrator's `credentialHistory`.
+  /\b(?:history|credentialHistory)\s*:\s*\{[^}]*\bdelete(?:Many)?\b/g,
 ];
 
 /** Every `.ts` file under `directory`, specs left out, as paths relative to `apps/api/src`. */

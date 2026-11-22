@@ -162,6 +162,9 @@ describe('no other delete path (rule 69, Q-2 (a))', () => {
   const DELETES = [
     /teacherApplicationHistory\s*\.\s*delete(?:Many)?\b/g,
     /DELETE\s+FROM\s+"?teacher_application_history"?/gi,
+    // A delete through a parent's relation (PR #157's review, round 1, Minor 1): the profile's or
+    // the administrator's `applicationHistory`.
+    /\bapplicationHistory\s*:\s*\{[^}]*\bdelete(?:Many)?\b/g,
   ];
 
   async function sourcesUnder(directory: string): Promise<string[]> {
