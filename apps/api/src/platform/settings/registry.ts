@@ -28,6 +28,7 @@
 import {
   checkoutPolling,
   priceAverageMinTeachers,
+  sessionLengthMinutes,
   teacherSharePercent,
   termsVersion,
 } from '@ijazah/contracts';
@@ -47,6 +48,8 @@ export type SettingUnit =
   | 'weeks'
   | 'count'
   | 'bytes'
+  // 006:T002 (R-515, Q-6): an amount in whole piasters, which the panel shows and takes in pounds.
+  | 'piasters'
   | 'rate_limit'
   | 'version';
 
@@ -122,6 +125,42 @@ const PERCENT_MAX = 100;
  * site's schema: payments' checkout imports it from here (the kernel depends on no module).
  */
 export const ijazahHalfReleasePercent = z.int().min(0).max(PERCENT_MAX);
+
+/**
+ * `programme_enabled` (006:T002; SRS §3.14, DEC-94; I-3): the programme's switch, 0 off or 1 on.
+ * The bounds shapes hold no boolean (research R-515), so it is a `count` of 0 or 1. The read site's
+ * schema: catalog's `teacher.packages.update` and the admin module's change of it import it from
+ * here (the kernel depends on no module).
+ */
+export const programmeEnabled = z.int().min(0).max(1);
+
+/** The switch's ceiling: on (006:T002). */
+const PROGRAMME_ENABLED_MAX = 1;
+
+/**
+ * `assessment_price_piasters` (006:T002; SRS §3.14, DEC-93; P1 (a); B-P1 Q-B4 (a)): the
+ * assessment's fee in whole piasters, 0 while an Administrator has not set it.
+ */
+export const assessmentPricePiasters = z.int().nonnegative();
+
+/** The retries' most (006:T002; SRS §3.14, DEC-92: «4, at 1, 3, 5 and 7»). */
+const PROGRAMME_CHARGE_RETRIES_MAX = 4;
+
+/**
+ * `programme_charge_retry_days` (006:T002; SRS §3.14, DEC-92; research R-515): the days after a
+ * soft-declined automatic charge on which it is retried, at most four, each a whole day, each later
+ * than the one before it.
+ */
+export const programmeChargeRetryDays = z
+  .array(z.int().positive())
+  .max(PROGRAMME_CHARGE_RETRIES_MAX)
+  .refine((days) => days.every((day, at) => at === 0 || day > (days[at - 1] as number)), {
+    message: 'The retry days must increase',
+  });
+
+/** The assessment's shortest and longest lengths, the contract's 30, 45 or 60 (006:T002, DEC-93). */
+const ASSESSMENT_LENGTH_MIN = 30;
+const ASSESSMENT_LENGTH_MAX = 60;
 
 /** `price_average_min_teachers`' ceiling: SRS §3.14's row, «2–100» (003:T113, DEC-88). */
 const PRICE_AVERAGE_MIN_TEACHERS_MAX = 100;
@@ -550,6 +589,71 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Postponement interval per party (weeks, at least 1)',
     4,
   ),
+  // 006:T002 (research R-515; spec.md FR-732; SRS §3.14's eight programme rows, DEC-92, DEC-93,
+  // DEC-94; I-3, P1 (a)): track 2's programme block, on the panel's booking page. The switch is off;
+  // the assessment's fee is 0 until an Administrator sets it, named `_price_` (B-P1 Q-B4 (a)).
+  programme_enabled: whole(
+    programmeEnabled,
+    'count',
+    'booking',
+    'Programme: the programme turned on (off: ijazah-track Packages sold as before)',
+    0,
+    { min: 0, max: PROGRAMME_ENABLED_MAX },
+  ),
+  assessment_price_piasters: whole(
+    assessmentPricePiasters,
+    'piasters',
+    'booking',
+    "Programme: the assessment's fee (EGP, one amount for every ijazah-track Teacher; an ijazah-track Package is not published while it is unset)",
+    0,
+    { min: 0 },
+  ),
+  assessment_duration_minutes: whole(
+    sessionLengthMinutes,
+    'minutes',
+    'booking',
+    "Programme: the assessment session's length (minutes: 30, 45 or 60)",
+    30,
+    { min: ASSESSMENT_LENGTH_MIN, max: ASSESSMENT_LENGTH_MAX },
+  ),
+  programme_offer_hours: whole(
+    positiveWhole,
+    'hours',
+    'booking',
+    'Programme: time for the Teacher to send the offer after the assessment (hours; none sent: an Administrator item)',
+    24,
+  ),
+  programme_pay_rest_hours: whole(
+    positiveWhole,
+    'hours',
+    'booking',
+    'Programme: time to pay the rest after the assessment (hours)',
+    48,
+  ),
+  programme_stop_request_days: whole(
+    positiveWhole,
+    'days',
+    'booking',
+    'Programme: pause before a Teacher may request a stop (days)',
+    7,
+  ),
+  programme_renew_early_days: whole(
+    wholeNonNegative,
+    'days',
+    'booking',
+    'Programme: days before a paid month ends that a Student without a saved card may renew (days)',
+    3,
+    { min: 0 },
+  ),
+  programme_charge_retry_days: {
+    schema: programmeChargeRetryDays,
+    bounds: { shape: 'list', each: atLeast(1) },
+    unit: 'days',
+    group: 'booking',
+    srsRow:
+      'Programme: retries of a failed automatic charge on a soft decline (count, and days after the failure)',
+    default: [1, 3, 5, 7],
+  },
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,
     'minutes',

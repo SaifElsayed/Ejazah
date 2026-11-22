@@ -8,10 +8,26 @@
 // primary key; its events by `payment_events_payment_id_idx`; an enrollment's paid orders by
 // `payments_enrollment_id_idx`, an enrollment holding a few orders at most (a failed attempt, a
 // Retry, a second payment).
+//
+// 006:T001 (Q-2 (a)): `gateway_order_id` is NULL-able (ERD §15 rule 72), NULL only on a programme's
+// automatic order, which T014 writes. The monitor's contract keeps the reference a string until T014
+// and T018 widen it, so the three order reads refuse a NULL as a broken invariant
+// (`withGatewayOrderId`) rather than hand it to the contract.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { OrderEventType, OrderStatus } from './payments.repository.js';
 
 type Client = Pick<Transaction, 'payment' | 'paymentEvent'>;
+
+/** The order with its gateway reference; one without is a broken invariant for the monitor. */
+function withGatewayOrderId<T extends { readonly gatewayOrderId: string | null }>(
+  row: T,
+): T & { readonly gatewayOrderId: string } {
+  const { gatewayOrderId } = row;
+  if (gatewayOrderId === null) {
+    throw new Error('payments monitor: an order with no gateway id on a manual path');
+  }
+  return { ...row, gatewayOrderId };
+}
 
 /** One gateway order as the monitor reads it: the amounts as the gateway reported them. */
 export interface MonitorOrderRow {
@@ -53,11 +69,11 @@ export interface OrderPageQuery {
  * Up to `limit` orders, newest first, after `after`, of `status` and of `enrollmentId` when given;
  * an enrollment's orders over `payments_enrollment_id_idx`, an enrollment holding a few at most.
  */
-export function orderPage(
+export async function orderPage(
   tx: Pick<Transaction, 'payment'>,
   { status, after, limit, enrollmentId }: OrderPageQuery,
 ): Promise<MonitorOrderRow[]> {
-  return tx.payment.findMany({
+  const rows = await tx.payment.findMany({
     where: {
       ...(status === undefined ? {} : { status }),
       ...(enrollmentId === undefined ? {} : { enrollmentId }),
@@ -82,14 +98,15 @@ export function orderPage(
       createdAt: true,
     },
   });
+  return rows.map(withGatewayOrderId);
 }
 
 /** The order of that id, or null. */
-export function monitoredOrderOf(
+export async function monitoredOrderOf(
   tx: Pick<Transaction, 'payment'>,
   paymentId: string,
 ): Promise<MonitorOrderRow | null> {
-  return tx.payment.findUnique({
+  const row = await tx.payment.findUnique({
     where: { id: paymentId },
     select: {
       id: true,
@@ -108,6 +125,7 @@ export function monitoredOrderOf(
       createdAt: true,
     },
   });
+  return row === null ? null : withGatewayOrderId(row);
 }
 
 /** The order's signed events, oldest first, the id breaking a tie. */
@@ -126,11 +144,11 @@ export async function orderEventsOf(tx: Client, paymentId: string): Promise<Moni
 }
 
 /** Every order of the enrollment the gateway reported paid, a refunded one included, oldest first. */
-export function paidOrdersOf(
+export async function paidOrdersOf(
   tx: Pick<Transaction, 'payment'>,
   enrollmentId: string,
 ): Promise<MonitorOrderRow[]> {
-  return tx.payment.findMany({
+  const rows = await tx.payment.findMany({
     where: { enrollmentId, status: { in: ['paid', 'refunded'] } },
     orderBy: { id: 'asc' },
     select: {
@@ -150,4 +168,5 @@ export function paidOrdersOf(
       createdAt: true,
     },
   });
+  return rows.map(withGatewayOrderId);
 }

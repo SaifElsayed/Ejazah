@@ -52,7 +52,7 @@ changes.
 | `enrollment_id` | uuid PK, FK → `enrollments` | an `ijazah_track` enrollment created by an assessment |
 | `state` | enum `programme_state`: `awaiting_offer` · `offered` · `active` · `paused` · `closed` | |
 | `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); set when session 1 is settled `done` or `student_no_show`, or by the make-up's delivery (R-505, I-2 (a)); an extension adds 24 h |
-| `pay_by` | timestamptz NULL | the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505) |
+| `pay_by_at` | timestamptz NULL | the spec's «pay_by»: the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505); named `_at` by ERD §0 (B-P1, Q-A1 (a), 2026-11-22) |
 | `level`, `readiness`, `expected_length` | text NULL (1–500) | set at the offer |
 | `offered_at` | timestamptz NULL | set once; the count (N+1), length and total frozen on the enrollment then |
 | `month_count` | smallint NULL | ⌈N ÷ 4⌉, set at the offer |
@@ -104,7 +104,7 @@ automatic renewal off (DEC-95), and at a teacher's suspension, ban or departure 
 
 Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_enabled` (off);
-- `assessment_fee_piasters` (0);
+- `assessment_price_piasters` (0) *(2026-11-22, B-P1 Q-B4 (a): named `_price_` because R-MONEY-6's lint refuses «fee» with an amount outside payments)*;
 - `assessment_duration_minutes` (30);
 - `programme_offer_hours` (24);
 - `programme_pay_rest_hours` (48, from the offer);
@@ -122,8 +122,8 @@ A new registry unit `piasters`.
     `no_offer` item;
   - closed by any of today's closings.
 - `offered` →
-  - `active` (the rest in full or month 1 paid by `pay_by`);
-  - closed by `offer_declined`, `offer_lapsed` (`pay_by` passed unpaid; with a `pay_blocked` item open, only by its
+  - `active` (the rest in full or month 1 paid by `pay_by_at`);
+  - closed by `offer_declined`, `offer_lapsed` (`pay_by_at` passed unpaid; with a `pay_blocked` item open, only by its
     approval, FR-706b) or today's closings; a close withdraws an open item.
 - `active` →
   - `paused` (the next month unpaid at its first occurrence);

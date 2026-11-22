@@ -52,7 +52,13 @@ const UPDATE = { key: 'chat_page_size', value: 40, reason: REASON, idempotencyKe
 function surface({
   replayed = false,
   refusal,
-}: { readonly replayed?: boolean; readonly refusal?: Error } = {}) {
+  answer = { key: 'chat_page_size', before: 50, after: 40 },
+}: {
+  readonly replayed?: boolean;
+  readonly refusal?: Error;
+  // 006:T002 (rule d): what the service answers, the switch's turn-on with its count among them.
+  readonly answer?: Readonly<Record<string, unknown>>;
+} = {}) {
   const reached: unknown[][] = [];
   const settings = {
     list: async (tx: unknown, adminId: string) => {
@@ -62,7 +68,7 @@ function surface({
     update: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['update', tx, adminId, input]);
       if (refusal !== undefined) throw refusal;
-      return { key: 'chat_page_size', before: 50, after: 40, replayed };
+      return { ...answer, replayed };
     },
   };
   const services = new Proxy(unusedAdminServices, {
@@ -218,6 +224,57 @@ describe('settings.update (FR-624)', () => {
       code: 'VALIDATION_FAILED',
       details: [{ path: 'value', code: 'out_of_bounds' }],
     });
+    expect(s.written).toEqual([]);
+  });
+});
+
+// 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): the switch's turn-on is audited twice
+// on its transaction: `setting.changed` as every change, then `packages.retired_by_switch` on the
+// same key with the count of old-style ijazah packages it deactivated, so the audit list names the
+// automatic deactivation apart from the change. A change with no count records only the first.
+describe('settings.update of the programme’s switch (006:T002, Q-3)', () => {
+  const TURN_ON = { key: 'programme_enabled', value: 1, reason: REASON, idempotencyKey: KEY };
+  const TURNED_ON = { key: 'programme_enabled', before: 0, after: 1, retiredPackages: 12 };
+
+  it('records packages.retired_by_switch on the switch with the count, after setting.changed', async () => {
+    const s = surface({ answer: TURNED_ON });
+    expect(await s.verified().settings.update(TURN_ON)).toEqual({
+      key: 'programme_enabled',
+      value: 1,
+    });
+    expect(s.written).toEqual([
+      {
+        action: 'setting.changed',
+        targetType: 'setting',
+        targetId: 'programme_enabled',
+        reason: REASON,
+        before: { value: 0 },
+        after: { value: 1 },
+        adminId: ADMIN,
+      },
+      {
+        action: 'packages.retired_by_switch',
+        targetType: 'setting',
+        targetId: 'programme_enabled',
+        reason: REASON,
+        after: { count: 12 },
+        adminId: ADMIN,
+      },
+    ]);
+  });
+
+  it('records it with a count of 0 too: the turn-on found no old package', async () => {
+    const s = surface({ answer: { ...TURNED_ON, retiredPackages: 0 } });
+    await s.verified().settings.update(TURN_ON);
+    expect(s.written.map(({ action }) => action)).toEqual([
+      'setting.changed',
+      'packages.retired_by_switch',
+    ]);
+  });
+
+  it('a replay of the turn-on records neither', async () => {
+    const s = surface({ answer: TURNED_ON, replayed: true });
+    await s.verified().settings.update(TURN_ON);
     expect(s.written).toEqual([]);
   });
 });

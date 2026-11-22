@@ -232,7 +232,8 @@
         "sessionsReviewViewed": "View a session's connection record",
         "settings": {
           "changed": "Change a setting",
-          "listed": "View settings"
+          "listed": "View settings",
+          "retiredBySwitch": "Deactivate the old ijazah packages when the programme is turned on"
         },
         "studentBan": "Ban student",
         "studentReinstate": "Reinstate student",
@@ -2013,7 +2014,9 @@
           "ijazahHalf": "Ijazah: at half the sessions",
           "recitationEnd": "Recitation package",
           "studentComplaintClose": "Package closed on a complaint against the student",
-          "teacherDropout": "Package ended on the teacher's withdrawal"
+          "teacherDropout": "Package ended on the teacher's withdrawal",
+          "assessment": "Assessment session (not continued)",
+          "programmeStopped": "Programme stopped: the sessions held"
         },
         "state": {
           "due": "Due",
@@ -2228,7 +2231,12 @@
           "enrollmentTerminatedNoShow": "The enrollment ended for the teacher's absence",
           "enrollmentRestored": "The enrollment was restored",
           "enrollmentSlotReleased": "The enrollment's slot was released",
-          "enrollmentSlotHoldEnded": "The hold on the enrollment's slot ended"
+          "enrollmentSlotHoldEnded": "The hold on the enrollment's slot ended",
+          "cardSaved": "The student's card was saved for automatic renewal",
+          "programmeOffered": "The teacher sent the programme's offer",
+          "programmePaused": "The programme was paused, the month unpaid",
+          "programmeResumed": "The programme resumed after payment",
+          "programmeReopened": "The administration reopened the programme"
         },
         "eventsTitle": "What happened to the order",
         "footer": "There are no financial actions in the admin panel. If the administration decides to compensate the student, that is executed outside the platform, and the order status shows \"Refunded\" when the gateway reports it.",
@@ -2276,7 +2284,11 @@
         "paymentExpired": "Payment time ran out",
         "paymentFailed": "Payment failed",
         "slotUnavailable": "Slot unavailable after payment",
-        "teacherSuspended": "Teacher suspended, banned or approval revoked"
+        "teacherSuspended": "Teacher suspended, banned or approval revoked",
+        "offerDeclined": "The student declined the programme's offer",
+        "offerLapsed": "The programme's offer lapsed unpaid",
+        "assessmentRefused": "The teacher declined to continue after the assessment",
+        "programmeStopped": "The programme was stopped on an approved stop request"
       },
       "enrollmentFilter": "One enrollment's orders",
       "holdReasons": {
@@ -2634,6 +2646,8 @@
         "admin_recovery_code_count": "Admin recovery codes issued",
         "admin_session_idle_minutes": "Admin idle timeout",
         "admin_session_max_hours": "Admin sign-in maximum length",
+        "assessment_duration_minutes": "Ijazah programme: the assessment session's length",
+        "assessment_price_piasters": "Ijazah programme: the assessment's fee",
         "attendance_threshold_pct": "Attendance threshold",
         "ban_restore_window_days": "Ban restore window",
         "cancellation_requests_recent_days": "Recent cancellation requests period",
@@ -2668,6 +2682,12 @@
         "postponement_interval_weeks": "Interval between postponements, per party",
         "postponement_notice_hours": "Postponement notice before a session",
         "price_average_min_teachers": "Fewest teachers for the average price",
+        "programme_charge_retry_days": "Ijazah programme: retry days of a failed automatic charge",
+        "programme_enabled": "Ijazah programme: turned on",
+        "programme_offer_hours": "Ijazah programme: time to send the offer after the assessment",
+        "programme_pay_rest_hours": "Ijazah programme: time to pay the rest, from the offer",
+        "programme_renew_early_days": "Ijazah programme: renewal by hand before a paid month ends",
+        "programme_stop_request_days": "Ijazah programme: pause before a stop request",
         "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
         "push_token_stale_days": "Unused push tokens deleted after",
         "rate_limit_absence_complaint": "Absence complaints",
@@ -2773,6 +2793,7 @@
         "hours": "{value, plural, one {# hour} other {# hours}}",
         "minutes": "{value, plural, one {# minute} other {# minutes}}",
         "percent": "{value}%",
+        "piasters": "{value}",
         "seconds": "{value, plural, one {# second} other {# seconds}}",
         "weeks": "{value, plural, one {# week} other {# weeks}}"
       },
@@ -3311,7 +3332,11 @@
           "instantsReresolved": "The session's time was recomputed",
           "counterBookingRefused": "The student's proposal could not be booked and was released",
           "slotReleased": "The enrollment's slot was released",
-          "slotHoldEnded": "The hold on the enrollment's slot ended"
+          "slotHoldEnded": "The hold on the enrollment's slot ended",
+          "programmeOffered": "The teacher sent the programme's offer",
+          "programmePaused": "The programme was paused, the month unpaid",
+          "programmeResumed": "The programme resumed after payment",
+          "programmeReopened": "The administration reopened the programme"
         }
       },
       "cancel": {

@@ -1039,6 +1039,9 @@ export interface AdminSurfaceServices {
       readonly key: string;
       readonly before: z.input<typeof adminSettingsUpdateOutput>['value'];
       readonly after: z.input<typeof adminSettingsUpdateOutput>['value'];
+      // 006:T002 (SRS DEC-110; B-P1 Q-3 (a)(a), Q-B3 (a)): the old ijazah packages the programme's
+      // switch deactivated, set only on its turn-on, for `packages.retired_by_switch`.
+      readonly retiredPackages?: number;
       readonly replayed: boolean;
     }>;
   };

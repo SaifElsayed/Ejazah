@@ -255,6 +255,13 @@ enum CancellationReason {
   checkout_abandoned
   // The student deleted their account (ADR 0015 D4; Phase 1, T012).
   account_deleted
+  // 006:T001 (ADR 0024; specs/006-programme/data-model.md, ERD changelog row 65): a programme's
+  // closings. The student declined the offer; the offer lapsed unpaid by `pay_by_at`; an approved
+  // refusal of the assessment; an approved stop. Each frees the weekly time at once.
+  offer_declined
+  offer_lapsed
+  assessment_refused
+  programme_stopped
 
   @@map("cancellation_reason")
 }
@@ -290,8 +297,60 @@ enum EnrollmentEventKind {
   // and a hold's end recorded by the hourly sweep (T074).
   slot_released
   slot_hold_ended
+  // 006:T001 (ADR 0024; data-model.md, ERD changelog row 65): the programme's offer sent, its pause,
+  // its resumption by a paid month, and an administrator's reopen of a stopped programme.
+  programme_offered
+  programme_paused
+  programme_resumed
+  programme_reopened
 
   @@map("enrollment_event_kind")
+}
+
+// 006:T001 (ADR 0024, R-501, R-505 to R-508; data-model.md «programmes», ERD changelog rows 65 and
+// 71): where a programme stands. `awaiting_offer` from the assessment's confirmation, `offered` once
+// the teacher sent the offer, `active` once the rest or month 1 is paid, `paused` while the next
+// month is unpaid at its first occurrence, `closed` by the close hook (R-510). Members are permanent
+// (R-API-9).
+enum ProgrammeState {
+  awaiting_offer
+  offered
+  active
+  paused
+  closed
+
+  @@map("programme_state")
+}
+
+// 006:T001 (R-502, R-507): how the student pays the programme; NULL until the first payment.
+enum ProgrammePlan {
+  in_full
+  monthly
+
+  @@map("programme_plan")
+}
+
+// 006:T001 (R-513, I-2 (a), FR-706b): an item for an administrator. `stop` and `refusal` are the
+// teacher's, with a reason; `no_offer` and `pay_blocked` are raised by the sweep.
+enum ProgrammeRequestKind {
+  stop
+  refusal
+  no_offer
+  pay_blocked
+
+  @@map("programme_request_kind")
+}
+
+// 006:T001 (R-513): an item's state; `extended` only on a `no_offer` or `pay_blocked` item (ERD
+// section 15 rule 80, in the migration).
+enum ProgrammeRequestStatus {
+  open
+  approved
+  declined
+  withdrawn
+  extended
+
+  @@map("programme_request_status")
 }
 
 // Phase 1 (T012, ADR 0018 D1): every package has a track, and the enrollment keeps it in its
@@ -438,8 +497,32 @@ enum PaymentEventType {
   // 003:T102 (Q-2 (a)'s safety net, DEC-82; ERD changelog row 56): a refund the gateway flagged on
   // the original payment, which reports no amount.
   refund_reported
+  // 006:T001 (R-510; ERD changelog row 65): the gateway's token callback for a card the student
+  // consented to save, recorded under `paymob:<txId>:token`.
+  card_saved
 
   @@map("payment_event_type")
+}
+
+// 006:T001 (R-502; ERD changelog rows 65 and 66): what an order pays for. `package` is today's order
+// and every existing row's; `assessment` the programme's first; `rest_in_full` and `instalment` the
+// offer's. Members are permanent (R-API-9).
+enum OrderKind {
+  package
+  assessment
+  rest_in_full
+  instalment
+
+  @@map("order_kind")
+}
+
+// 006:T001 (R-509; ERD changelog row 67): why an automatic order failed. A `soft` decline is
+// retried; a `hard` one, refused before the gateway (`no_payee`), never is.
+enum DeclineKind {
+  soft
+  hard
+
+  @@map("decline_kind")
 }
 
 // 003:T105 (ADR 0025 D2, SRS DEC-81; ERD changelog row 57): why a release of the teacher's share
@@ -450,6 +533,10 @@ enum ShareReleaseMilestone {
   ijazah_end
   teacher_dropout
   student_complaint_close
+  // 006:T001 (R-512, DEC-94; ERD changelog row 65): the assessment's release when the student does
+  // not continue, and a programme closed by an approved stop.
+  assessment
+  programme_stopped
 
   @@map("share_release_milestone")
 }

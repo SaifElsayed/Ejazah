@@ -22,6 +22,12 @@
 // again, then the enrollment, in T005's order (the hold, then the enrollment, then the payment), and
 // the order is refused unless the hold is still active, still the enrollment's and the student's,
 // and an order can still be created on it, and the enrollment is still awaiting payment.
+//
+// 006:T005 (FR-701, R-504). A programme package's summary is its assessment's
+// (`programmes.service.ts`' `purchaseTermsOf`): one session at the assessment's length, at the fee,
+// read through the hold's terms; a programme closed between the placement and the summary refuses
+// `CONFLICT` with its cause. Retry's target names the order's kind, `assessment` for a programme
+// package's enrollment, read through catalog's entry.
 import type { CheckoutSummary } from '@ijazah/contracts';
 import { toPlainNumber } from '@ijazah/money';
 import type { Occurrence } from '@ijazah/time';
@@ -63,6 +69,12 @@ import {
   type ReleasedHolds,
   releaseHolds,
 } from './holds.service.js';
+import {
+  closedProgramme,
+  type PurchaseTerms,
+  purchaseTermsOf,
+  refusedStart,
+} from './programmes.service.js';
 
 export type { CheckoutEnrollmentRow };
 
@@ -194,21 +206,45 @@ function sortedUnique(ids: readonly string[]): string[] {
   return [...new Set(ids)].sort();
 }
 
-/** FR-358's payment summary of a package, in its order. */
+/** What a summary shows: the subject, the track, the count, the length and the price (FR-358). */
+export interface SummaryTerms extends Pick<
+  PurchaseTerms,
+  'sessionCount' | 'sessionDurationMinutes' | 'price_piasters'
+> {
+  readonly subject: PackageRow['subject'];
+  readonly track: PackageRow['track'];
+}
+
+/** FR-358's payment summary, in its order. */
 export function summaryOf(
   teacher: { readonly teacherId: string; readonly displayName: string },
-  pkg: Pick<
-    PackageRow,
-    'subject' | 'track' | 'sessionCount' | 'sessionDurationMinutes' | 'price_piasters'
-  >,
+  terms: SummaryTerms,
 ): CheckoutSummary {
   return {
     teacher,
+    subject: terms.subject,
+    track: terms.track,
+    sessionCount: terms.sessionCount,
+    // A length a package or the assessment's setting holds: 30, 45 or 60 (ERD section 15 rule 13).
+    sessionDurationMinutes:
+      terms.sessionDurationMinutes as CheckoutSummary['sessionDurationMinutes'],
+    price_piasters: toPlainNumber(terms.price_piasters),
+  };
+}
+
+/** 006:T005: the summary's terms of `pkg` as it is now, its assessment's for a programme package. */
+export async function summaryTermsOf(
+  pkg: PackageRow,
+  programme: HoldTerms['programme'],
+): Promise<SummaryTerms> {
+  const terms = await purchaseTermsOf(pkg, programme ?? closedProgramme);
+  if ('refusal' in terms) throw refusedStart(terms.refusal);
+  return {
     subject: pkg.subject,
     track: pkg.track,
-    sessionCount: pkg.sessionCount,
-    sessionDurationMinutes: pkg.sessionDurationMinutes,
-    price_piasters: toPlainNumber(pkg.price_piasters),
+    sessionCount: terms.sessionCount,
+    sessionDurationMinutes: terms.sessionDurationMinutes,
+    price_piasters: terms.price_piasters,
   };
 }
 
@@ -283,10 +319,11 @@ export async function placeCheckoutHold(
   if (pkg === null || displayName === null) {
     throw new Error('checkout: the package or the teacher just held is not there to read');
   }
+  const terms = await summaryTermsOf(pkg, dependencies.terms.programme);
   return {
     holdId: placed.holdId,
     expiresAt: placed.expiresAt,
-    summary: summaryOf({ teacherId: teacherUserId, displayName }, pkg),
+    summary: summaryOf({ teacherId: teacherUserId, displayName }, terms),
     firstSession: placed.firstSession,
     lastSession: placed.lastSession,
   };
@@ -296,6 +333,8 @@ export async function placeCheckoutHold(
 export interface RetryTarget {
   readonly enrollment: CheckoutEnrollmentRow;
   readonly hold: HeldRow | null;
+  /** 006:T005: the order's kind, `assessment` for a programme package's enrollment (FR-701). */
+  readonly kind: PurchaseTerms['kind'];
 }
 
 /** What the order reads and locks of booking's rows. */
@@ -312,6 +351,8 @@ export interface OrderTargetStore {
     tx: Transaction,
     enrollmentId: string,
   ): Promise<CheckoutEnrollmentRow['status'] | null>;
+  /** 006:T005: the enrollment's package, active or not (catalog's entry). */
+  packageOf(tx: Transaction, teacherUserId: string, packageId: string): Promise<PackageRow | null>;
 }
 
 export const orderTargetStore: OrderTargetStore = {
@@ -320,6 +361,7 @@ export const orderTargetStore: OrderTargetStore = {
   activeHoldOfEnrollment,
   activeHoldsByIds,
   enrollmentStatus,
+  packageOf: teacherPackageOf,
 };
 
 /**
@@ -334,7 +376,13 @@ export async function retryTargetOf(
 ): Promise<RetryTarget> {
   const enrollment = await store.studentEnrollment(tx, enrollmentId, studentUserId);
   if (enrollment === null) throw new DomainError('NOT_FOUND');
-  return { enrollment, hold: await store.activeHoldOfEnrollment(tx, enrollmentId) };
+  const [hold, pkg] = await Promise.all([
+    store.activeHoldOfEnrollment(tx, enrollmentId),
+    store.packageOf(tx, enrollment.teacherUserId, enrollment.packageId),
+  ]);
+  // `enrollments.package_id` is a foreign key to the package (ERD `enrollments`).
+  if (pkg === null) throw new Error('checkout: an enrollment without its package');
+  return { enrollment, hold, kind: pkg.isProgramme ? 'assessment' : 'package' };
 }
 
 /**

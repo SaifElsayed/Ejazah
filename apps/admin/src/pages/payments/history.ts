@@ -39,6 +39,11 @@ export const CANCELLATION_REASONS: Readonly<Record<CancellationReason, MessageKe
   slot_unavailable: 'admin.payments.cancellationReasons.slotUnavailable',
   checkout_abandoned: 'admin.payments.cancellationReasons.checkoutAbandoned',
   account_deleted: 'admin.payments.cancellationReasons.accountDeleted',
+  // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's closings.
+  offer_declined: 'admin.payments.cancellationReasons.offerDeclined',
+  offer_lapsed: 'admin.payments.cancellationReasons.offerLapsed',
+  assessment_refused: 'admin.payments.cancellationReasons.assessmentRefused',
+  programme_stopped: 'admin.payments.cancellationReasons.programmeStopped',
 };
 
 type HoldReleaseReason = NonNullable<
@@ -63,6 +68,8 @@ const EVENTS: Readonly<Record<PaymentDetail['events'][number]['eventType'], Mess
   refunded: 'admin.payments.detail.events.refunded',
   // 003:T102 (Q-2 (a)'s safety net): a refund flagged with no amount, never a second «refunded».
   refund_reported: 'admin.payments.detail.events.refundReported',
+  // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's card saved.
+  card_saved: 'admin.payments.detail.events.cardSaved',
 };
 
 /** One step of the history and the instant it happened, as the server wrote it (ISO 8601, UTC). */
@@ -95,6 +102,15 @@ function outcomeTitle(outcome: PaymentDetail['outcomes'][number], t: Translate):
       return t('admin.payments.detail.events.enrollmentSlotReleased');
     case 'slot_hold_ended':
       return t('admin.payments.detail.events.enrollmentSlotHoldEnded');
+    // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's four events.
+    case 'programme_offered':
+      return t('admin.payments.detail.events.programmeOffered');
+    case 'programme_paused':
+      return t('admin.payments.detail.events.programmePaused');
+    case 'programme_resumed':
+      return t('admin.payments.detail.events.programmeResumed');
+    case 'programme_reopened':
+      return t('admin.payments.detail.events.programmeReopened');
   }
 }
 

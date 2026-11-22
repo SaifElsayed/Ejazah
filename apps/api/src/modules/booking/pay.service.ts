@@ -31,6 +31,15 @@
 // the teacher changed the count still sends it, and is still refused: the hold was checked for the
 // old one), or when its length differs from the held slot's. A refusal carries the package as it now
 // is in `details` (`domain-error.ts`, `SUMMARY_CHANGED`).
+//
+// 006:T005 (FR-701, FR-702, R-504; Q-5 (a)). A programme package is bought as its assessment
+// (`programmes.service.ts`): the student saw one session at the assessment's length, at the fee, on
+// a weekly time at least that long. Before the gateway, the target answers the kind `assessment`
+// with no price, all the rest checked as above, and `payTermsOf` reads the programme's availability
+// and answers the order's gross, the fee: `SUMMARY_CHANGED` when the fee or the length is no longer
+// what the student saw, `CONFLICT` with its cause while the programme is closed. Under the locks
+// the same is read again through the enrolment's reader, and the enrollment's snapshot is the
+// assessment's: count 1, the assessment's length, the fee.
 import type { PackageTrack } from '@ijazah/contracts';
 import type { Piasters } from '@ijazah/money';
 import { type DayOfWeek, firstOccurrenceAfter } from '@ijazah/time';
@@ -48,6 +57,14 @@ import {
 } from '../catalog/index.js';
 import { lockRows } from './holds.repository.js';
 import { holdsStore } from './holds.service.js';
+import {
+  closedProgramme,
+  fitsSlot,
+  type ProgrammeReader,
+  type PurchaseTerms,
+  purchaseTermsOf,
+  refusedStart,
+} from './programmes.service.js';
 import {
   insertEnrollment,
   linkActiveHold,
@@ -70,34 +87,48 @@ export interface HeldTerms {
   readonly slotLengthMinutes: number;
 }
 
+/** A package's terms as it is now: today's own, or (006:T005) its assessment's, given. */
+function termsNow(pkg: PackageRow, assessment: PurchaseTerms | undefined): PurchaseTerms {
+  if (!pkg.isProgramme) {
+    return {
+      kind: 'package',
+      sessionCount: pkg.sessionCount,
+      sessionDurationMinutes: pkg.sessionDurationMinutes,
+      price_piasters: pkg.price_piasters,
+    };
+  }
+  if (assessment === undefined) throw new Error('pay: a programme package without its assessment');
+  return assessment;
+}
+
 /**
  * How the package now differs from what the student saw or from what it is held against, as
  * `SUMMARY_CHANGED`'s details: empty when it does not. A deactivated package is `package: inactive`;
- * otherwise every field of the package as it now is.
+ * otherwise every field of the package as it now is. 006:T005: a programme package is compared by
+ * its assessment's terms, `assessment`, on a weekly time at least the assessment's length.
  */
 export function summaryChanges(
-  pkg: Pick<
-    PackageRow,
-    'isActive' | 'price_piasters' | 'sessionCount' | 'sessionDurationMinutes' | 'track'
-  > | null,
+  pkg: PackageRow | null,
   quoted: QuotedSummary,
   held: HeldTerms,
+  assessment?: PurchaseTerms,
 ): FieldIssue[] {
   if (pkg?.isActive !== true) return [{ path: 'package', code: 'inactive' }];
+  const terms = termsNow(pkg, assessment);
   if (
-    pkg.price_piasters === quoted.price_piasters &&
-    pkg.sessionCount === quoted.sessionCount &&
-    pkg.sessionDurationMinutes === quoted.sessionDurationMinutes &&
+    terms.price_piasters === quoted.price_piasters &&
+    terms.sessionCount === quoted.sessionCount &&
+    terms.sessionDurationMinutes === quoted.sessionDurationMinutes &&
     pkg.track === quoted.track &&
-    pkg.sessionCount === held.sessionCount &&
-    pkg.sessionDurationMinutes === held.slotLengthMinutes
+    terms.sessionCount === held.sessionCount &&
+    fitsSlot(terms, held.slotLengthMinutes)
   ) {
     return [];
   }
   return [
-    { path: 'summary.price_piasters', code: String(pkg.price_piasters) },
-    { path: 'summary.sessionCount', code: String(pkg.sessionCount) },
-    { path: 'summary.sessionDurationMinutes', code: String(pkg.sessionDurationMinutes) },
+    { path: 'summary.price_piasters', code: String(terms.price_piasters) },
+    { path: 'summary.sessionCount', code: String(terms.sessionCount) },
+    { path: 'summary.sessionDurationMinutes', code: String(terms.sessionDurationMinutes) },
     { path: 'summary.track', code: pkg.track },
   ];
 }
@@ -150,12 +181,27 @@ export function payStoreOver(): PayStore {
   };
 }
 
-/** The hold Pay is for, its package and teacher, read before the gateway. */
-export interface PayTarget {
+/**
+ * The hold Pay is for, its package and teacher, read before the gateway; 006:T005: the order's
+ * kind, and the package's price, null for an assessment, which `payTermsOf` prices at the fee.
+ */
+export type PayTarget = {
   readonly hold: PayHoldRow;
   readonly packageId: string;
   readonly teacherUserId: string;
-  readonly price_piasters: Piasters;
+} & (
+  | { readonly kind: 'package'; readonly price_piasters: Piasters }
+  | { readonly kind: 'assessment'; readonly price_piasters: null }
+);
+
+/** 006:T005: the assessment as the student saw it, checked by `payTermsOf` against the fee. */
+function seenAssessment(quoted: QuotedSummary): PurchaseTerms {
+  return {
+    kind: 'assessment',
+    sessionCount: 1,
+    sessionDurationMinutes: quoted.sessionDurationMinutes,
+    price_piasters: quoted.price_piasters,
+  };
 }
 
 /** The count the hold checked and the held slot's length. */
@@ -189,9 +235,50 @@ export async function payTargetOf(
     store.slotById(tx, hold.slotId),
   ]);
   if (slot === null) throw new Error('pay: a hold without its slot');
-  refuseChanged(summaryChanges(pkg, quoted, heldTermsOf(hold, slot)));
+  refuseChanged(summaryChanges(pkg, quoted, heldTermsOf(hold, slot), seenAssessment(quoted)));
   if (pkg === null || teacherUserId === null) throw new Error('pay: unreachable');
-  return { hold, packageId, teacherUserId, price_piasters: pkg.price_piasters };
+  return pkg.isProgramme
+    ? { hold, packageId, teacherUserId, kind: 'assessment', price_piasters: null }
+    : { hold, packageId, teacherUserId, kind: 'package', price_piasters: pkg.price_piasters };
+}
+
+/** The order Pay creates: its kind and its gross. */
+export interface PayOrderTerms {
+  readonly kind: PurchaseTerms['kind'];
+  readonly price_piasters: Piasters;
+}
+
+/**
+ * 006:T005: the order's kind and gross before the gateway: the package's total, or the assessment
+ * at the fee, the fee and the length checked against what the student saw (`SUMMARY_CHANGED`), a
+ * closed programme refused `CONFLICT` with its cause. No lock, nothing written.
+ */
+export async function payTermsOf(
+  target: PayTarget,
+  quoted: QuotedSummary,
+  programme: ProgrammeReader,
+): Promise<PayOrderTerms> {
+  if (target.kind === 'package') {
+    return { kind: 'package', price_piasters: target.price_piasters };
+  }
+  const availability = await programme();
+  if (!availability.open) throw refusedStart(availability.refusal);
+  const assessmentPrice_piasters = availability.assessmentPrice_piasters;
+  if (
+    assessmentPrice_piasters !== quoted.price_piasters ||
+    availability.assessmentDurationMinutes !== quoted.sessionDurationMinutes
+  ) {
+    refuseChanged([
+      { path: 'summary.price_piasters', code: String(assessmentPrice_piasters) },
+      { path: 'summary.sessionCount', code: '1' },
+      {
+        path: 'summary.sessionDurationMinutes',
+        code: String(availability.assessmentDurationMinutes),
+      },
+      { path: 'summary.track', code: quoted.track },
+    ]);
+  }
+  return { kind: 'assessment', price_piasters: assessmentPrice_piasters };
 }
 
 /** What `enrollOnHold` writes with, beside the target. */
@@ -201,6 +288,8 @@ export interface Enrolment {
   readonly at: Date;
   readonly leadHours: number;
   readonly quoted: QuotedSummary;
+  /** 006:T005: the programme's availability, read for a programme package only; none, closed. */
+  readonly programme?: ProgrammeReader;
 }
 
 /**
@@ -233,8 +322,12 @@ export async function enrollOnHold(
     store.slotById(tx, hold.slotId),
   ]);
   if (slot === null) throw new Error('pay: a hold without its slot');
-  refuseChanged(summaryChanges(pkg, enrolment.quoted, heldTermsOf(hold, slot)));
-  if (pkg === null) throw new Error('pay: unreachable');
+  const now =
+    pkg === null ? null : await purchaseTermsOf(pkg, enrolment.programme ?? closedProgramme);
+  if (pkg?.isActive === true && now !== null && 'refusal' in now) throw refusedStart(now.refusal);
+  const terms = now === null || 'refusal' in now ? undefined : now;
+  refuseChanged(summaryChanges(pkg, enrolment.quoted, heldTermsOf(hold, slot), terms));
+  if (pkg === null || terms === undefined) throw new Error('pay: unreachable');
   const first = firstOccurrenceAfter(
     // `availability_slots.day_of_week` is 0 to 6 by its check (ERD §15 rule 37); the package asserts it.
     { ...slot, dayOfWeek: slot.dayOfWeek as DayOfWeek },
@@ -247,9 +340,9 @@ export async function enrollOnHold(
     teacherUserId,
     packageId,
     slotId: hold.slotId,
-    price_piasters: pkg.price_piasters,
-    sessionCount: pkg.sessionCount,
-    sessionDurationMinutes: pkg.sessionDurationMinutes,
+    price_piasters: terms.price_piasters,
+    sessionCount: terms.sessionCount,
+    sessionDurationMinutes: terms.sessionDurationMinutes,
     subjectId: pkg.subject.id,
     track: pkg.track,
     slotTimezone: slot.timezone,

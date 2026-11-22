@@ -8,12 +8,13 @@
 // and October change; the zone the teacher's line is labelled with. Over the real tables,
 // `tests/db-integrity/booking-slots.spec.ts`, which also holds the previews against T034's
 // generation for the same instant.
+import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
-import type { BookablePackage, OfferedSlot } from '../catalog/index.js';
+import type { BookablePackage, OfferedSlot, ProgrammeAvailability } from '../catalog/index.js';
 import type { SessionTime } from '../sessions/index.js';
 import {
   type BookingSlotsStore,
@@ -50,8 +51,28 @@ function slot(values: Partial<OfferedSlot> & Pick<OfferedSlot, 'dayOfWeek' | 'st
 const sixtyMinutes: BookablePackage = {
   id: PACKAGE,
   teacherUserId: TEACHER,
+  isProgramme: false,
   sessionCount: 4,
   sessionDurationMinutes: 60,
+};
+
+/** 006:T005: a programme package, booked as its assessment (R-504). */
+const programmePackage: BookablePackage = {
+  id: PACKAGE,
+  teacherUserId: TEACHER,
+  isProgramme: true,
+  prices: {
+    m30_piasters: piasters(20_000),
+    m45_piasters: piasters(28_000),
+    m60_piasters: piasters(35_000),
+  },
+};
+
+/** The programme open, its assessment 45 minutes at 200 EGP. */
+const OPEN: ProgrammeAvailability = {
+  open: true,
+  assessmentPrice_piasters: piasters(20_000),
+  assessmentDurationMinutes: 45,
 };
 
 interface World {
@@ -75,8 +96,8 @@ function storeOf(world: World) {
       reads.push(['bookable', requester, teacherUserId]);
       return world.bookable ?? true;
     },
-    offeredSlotsOf: async (_tx, teacherIds) => {
-      reads.push(['offeredSlotsOf', teacherIds]);
+    offeredSlotsOf: async (_tx, teacherIds, programmeMinMinutes) => {
+      reads.push(['offeredSlotsOf', teacherIds, programmeMinMinutes]);
       return [...(world.slots ?? [])];
     },
     occupancyOf: async (_tx, slotIds) => {
@@ -106,11 +127,19 @@ const clockAt = (now: string, bufferWeeks = 0): DiscoveryClock => ({
 /** Tuesday 2026-11-03, 10:00 in Cairo (+02:00 since the October change). */
 const TUESDAY = '2026-11-03T08:00:00Z';
 
-const ask = (world: World, now = TUESDAY, who: BookingStudent = student) => {
+const ask = (
+  world: World,
+  now = TUESDAY,
+  who: BookingStudent = student,
+  programme: ProgrammeAvailability = OPEN,
+) => {
   const { store, reads } = storeOf(world);
   return {
     reads,
-    answer: bookingSlotsOf(tx, store, who, { packageId: PACKAGE }, clockAt(now)),
+    answer: bookingSlotsOf(tx, store, who, { packageId: PACKAGE }, clockAt(now), async () => {
+      reads.push(['programme']);
+      return programme;
+    }),
   };
 };
 
@@ -150,7 +179,7 @@ describe('the predicate first (R-GENDER-2, R-201)', () => {
     expect(reads.slice(0, 3)).toEqual([
       ['packageOf', PACKAGE],
       ['bookable', male, TEACHER],
-      ['offeredSlotsOf', [TEACHER]],
+      ['offeredSlotsOf', [TEACHER], undefined],
     ]);
   });
 });
@@ -336,5 +365,72 @@ describe('the zones (R-TIME-6, ADR 0009 D5)', () => {
     const { answer, reads } = ask({ slots: [riyadh, cairo], accountZone: CAIRO });
     expect((await answer).teacherTimezone).toBe(CAIRO);
     expect(reads).toContainEqual(['teacherTimezone', TEACHER]);
+  });
+});
+
+describe('a programme package, booked as its assessment (006:T005; FR-701, R-504, Q-5 (a))', () => {
+  const thirty = () => slot({ dayOfWeek: 4, startTimeLocal: '09:00:00', durationMinutes: 30 });
+  const fortyFive = () => slot({ dayOfWeek: 5, startTimeLocal: '09:00:00', durationMinutes: 45 });
+  const sixty = () => slot({ dayOfWeek: 6, startTimeLocal: '10:00:00', durationMinutes: 60 });
+
+  it('offers every weekly time at least the assessment’s length, each with its own length and its one session', async () => {
+    const short = thirty();
+    const middle = fortyFive();
+    const long = sixty();
+    const { answer, reads } = ask({ pkg: programmePackage, slots: [short, middle, long] });
+    expect((await answer).slots).toEqual([
+      {
+        slotId: middle.id,
+        dayOfWeek: 5,
+        startTimeLocal: '09:00',
+        durationMinutes: 45,
+        firstSession: { localDate: '2026-11-06', startsAt: '2026-11-06T07:00:00Z' },
+        lastSession: { localDate: '2026-11-06', startsAt: '2026-11-06T07:00:00Z' },
+      },
+      {
+        slotId: long.id,
+        dayOfWeek: 6,
+        startTimeLocal: '10:00',
+        durationMinutes: 60,
+        firstSession: { localDate: '2026-11-07', startsAt: '2026-11-07T08:00:00Z' },
+        lastSession: { localDate: '2026-11-07', startsAt: '2026-11-07T08:00:00Z' },
+      },
+    ]);
+    expect(reads).toContainEqual(['offeredSlotsOf', [TEACHER], 45]);
+  });
+
+  it('checks the one session at the assessment’s length, not the weekly time’s', async () => {
+    const long = sixty();
+    const { answer, reads } = ask({
+      pkg: programmePackage,
+      slots: [long],
+      // From 08:50 (after the 45 minutes from 08:00 end), so the assessment does not overlap it.
+      sessions: [session('2026-11-07T08:50:00Z', '2026-11-07T09:30:00Z')],
+    });
+    expect((await answer).slots.map(({ slotId }) => slotId)).toEqual([long.id]);
+    expect(reads).toContainEqual([
+      'sessionsBetween',
+      { studentUserId: STUDENT, teacherUserId: TEACHER },
+      '2026-11-07T08:00:00.000Z',
+      '2026-11-07T08:45:00.000Z',
+    ]);
+  });
+
+  it('offers nothing while the switch is off or the fee is unset, reading no slot', async () => {
+    for (const refusal of ['programme_disabled', 'assessment_fee_unset'] as const) {
+      const { answer, reads } = ask({ pkg: programmePackage, slots: [sixty()] }, TUESDAY, student, {
+        open: false,
+        refusal,
+      });
+      expect(await answer).toEqual({ teacherTimezone: CAIRO, slots: [] });
+      expect(reads.map(([name]) => name)).not.toContain('offeredSlotsOf');
+    }
+  });
+
+  it('reads no programme setting for a package with a count and a length', async () => {
+    const { answer, reads } = ask({ slots: [slot({ dayOfWeek: 4, startTimeLocal: '09:00:00' })] });
+    await answer;
+    expect(reads.map(([name]) => name)).not.toContain('programme');
+    expect(reads).toContainEqual(['offeredSlotsOf', [TEACHER], undefined]);
   });
 });

@@ -59,6 +59,10 @@ model Session {
   // 003:T112 (SRS FR-POSTPONE-1, DEC-90): the postponement that moved the session, set exactly
   // when `status = 'postponed'` (ERD §15 rule 66, in the migration).
   postponementId               String?        @map("postponement_id") @db.Uuid
+  // 006:T001 (R-507, V-4): a programme offer session's month, set at generation (1 and up, ERD
+  // section 15 rule 75); NULL for the assessment (session 1) and for every other enrollment's
+  // session. A make-up or a postponed session's new row copies its original's.
+  programmeMonth               Int?           @map("programme_month") @db.SmallInt
   // Soft deletion: DELETE is revoked from the application role (T065, ERD section 15.10).
   deletedAt                    DateTime?      @map("deleted_at") @db.Timestamptz(6)
   createdAt                    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)

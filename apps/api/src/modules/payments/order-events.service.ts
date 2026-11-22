@@ -140,6 +140,8 @@ const MOVES_FROM: Readonly<Record<OrderEventType, readonly OrderStatus[]>> = {
   expired: ['created'],
   refunded: ['paid'],
   refund_reported: [],
+  // 006:T001 (R-510): a programme's card saved moves no status, as `refund_reported` (T013).
+  card_saved: [],
 };
 
 export class OrderEventsService {

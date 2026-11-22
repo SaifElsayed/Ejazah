@@ -14,7 +14,8 @@ import type {
   PeerPackageRow,
   PeerPackagesQuery,
 } from './packages.repository.js';
-import type { PackagesStore } from './packages.service.js';
+import { priceForLength } from './packages.repository.js';
+import type { PackagesStore, PreProgrammeRetirementStore } from './packages.service.js';
 
 export const TEACHER = '0199d0a0-0000-7000-8000-0000000000d1';
 export const OTHER_TEACHER = '0199d0a0-0000-7000-8000-0000000000d2';
@@ -29,14 +30,23 @@ export const OTHER_SUBJECT = {
   nameEn: 'Tajweed',
 };
 
+function fail(reason: string): never {
+  throw new Error(`packages fixture: ${reason}`);
+}
+
 /** Stands in for the call's transaction, which the memory store never reads. */
 export const TX = {} as Transaction;
 
-interface Held extends PackageRow {
-  readonly teacherUserId: string;
-}
+type Held = PackageRow & { readonly teacherUserId: string };
 
-export class MemoryPackages implements PackagesStore, CatalogUse {
+/** A package as planted: either shape, without its id (006:T004). */
+export type PlantedPackage = PackageRow extends infer Row
+  ? Row extends PackageRow
+    ? Omit<Row, 'id'>
+    : never
+  : never;
+
+export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStore, CatalogUse {
   /** Every lock and question, in order: `lockAccount:<id>`, `holdsSubject`, `packageOf`, … */
   readonly log: string[] = [];
   readonly #rows = new Map<string, Held>();
@@ -55,9 +65,9 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
   }
 
   /** A package of the teacher, as written; its id. */
-  plant(teacherUserId: string, row: Omit<PackageRow, 'id'>): string {
+  plant(teacherUserId: string, row: PlantedPackage): string {
     const id = randomUUID();
-    this.#rows.set(id, { ...row, id, teacherUserId });
+    this.#rows.set(id, { ...row, id, teacherUserId } as Held);
     return id;
   }
 
@@ -84,6 +94,11 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
 
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
     this.log.push(`lockApplication:${userId}`);
+  }
+
+  /** 006:T004 (Q-D1 (a)): the programme switch's advisory key. */
+  async lockProgrammeSwitch(_tx: Transaction): Promise<void> {
+    this.log.push('lockProgrammeSwitch');
   }
 
   async isPublished(
@@ -124,7 +139,8 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
     const subject = [SUBJECT, OTHER_SUBJECT].find(({ id }) => id === row.subjectId);
     if (subject === undefined) throw new Error(`no subject ${row.subjectId}`);
     const { subjectId: _subject, teacherUserId, ...rest } = row;
-    const id = this.plant(teacherUserId, { ...rest, subject });
+    // 006:T004: either shape, as written.
+    const id = this.plant(teacherUserId, { ...rest, subject } as PlantedPackage);
     const { teacherUserId: _teacher, ...written } = this.held(id);
     return written;
   }
@@ -138,7 +154,23 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
     this.log.push('change');
     const row = this.#rows.get(packageId);
     if (row === undefined || row.teacherUserId !== teacherUserId) return false;
-    this.#rows.set(packageId, { ...row, ...change });
+    // 006:T004: `isProgramme` turns the package into a programme one, the old three dropped.
+    const { isProgramme, prices, ...fields } = change;
+    if (isProgramme === true || row.isProgramme) {
+      const { id, subject, isActive, teacherUserId: teacher } = row;
+      const kept = row.isProgramme ? row.prices : undefined;
+      this.#rows.set(packageId, {
+        id,
+        subject,
+        teacherUserId: teacher,
+        track: 'ijazah_track',
+        isProgramme: true,
+        prices: prices ?? kept ?? fail('a programme package with no prices'),
+        isActive: fields.isActive ?? isActive,
+      });
+      return true;
+    }
+    this.#rows.set(packageId, { ...row, ...fields } as Held);
     return true;
   }
 
@@ -150,14 +182,23 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
         (row) =>
           row.isActive &&
           row.track === query.track &&
-          row.sessionDurationMinutes === query.sessionDurationMinutes &&
+          (row.isProgramme || row.sessionDurationMinutes === query.sessionDurationMinutes) &&
           row.teacherUserId !== query.viewer,
       )
-      .map(({ teacherUserId, price_piasters, sessionCount }) => ({
-        teacherUserId,
-        price_piasters,
-        sessionCount,
-      }));
+      .map((row): PeerPackageRow =>
+        row.isProgramme
+          ? {
+              teacherUserId: row.teacherUserId,
+              isProgramme: true,
+              sessionPrice_piasters: priceForLength(row.prices, query.sessionDurationMinutes),
+            }
+          : {
+              teacherUserId: row.teacherUserId,
+              isProgramme: false,
+              price_piasters: row.price_piasters,
+              sessionCount: row.sessionCount,
+            },
+      );
   }
 
   /** 003:T113: those of `teacherIds` the predicate shows a student of `requester`'s gender. */
@@ -168,6 +209,36 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
   ): Promise<string[]> {
     this.log.push(`visibleTeacherIds:${requester}`);
     return teacherIds.filter((id) => this.#published.has(`${id}:${requester}`));
+  }
+
+  /** 006:T002: the teachers of every old-style ijazah package, active or not, ascending. */
+  async preProgrammeIjazahOwners(_tx: Transaction): Promise<string[]> {
+    this.log.push('preProgrammeIjazahOwners');
+    return [
+      ...new Set(
+        this.all()
+          .filter((row) => row.track === 'ijazah_track' && !row.isProgramme)
+          .map((row) => row.teacherUserId),
+      ),
+    ].sort();
+  }
+
+  /** 006:T002: the accounts' locks, in one call. */
+  async lockAccounts(_tx: Transaction, userIds: readonly string[]): Promise<void> {
+    this.log.push(`lockAccounts:${userIds.join(',')}`);
+  }
+
+  /** 006:T002: deactivates every active old-style ijazah package; how many. */
+  async deactivatePreProgrammeIjazah(_tx: Transaction): Promise<number> {
+    this.log.push('deactivatePreProgrammeIjazah');
+    let count = 0;
+    for (const row of this.all()) {
+      if (row.track === 'ijazah_track' && !row.isProgramme && row.isActive) {
+        this.#rows.set(row.id, { ...row, isActive: false });
+        count += 1;
+      }
+    }
+    return count;
   }
 
   async slotInUse(): Promise<boolean> {

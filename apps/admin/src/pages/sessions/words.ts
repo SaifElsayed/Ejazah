@@ -152,6 +152,11 @@ const EVENT_KIND: Readonly<Record<MonitoredEvent['kind'], MessageKey>> = {
   slot_hold_ended: 'admin.sessions.event.kind.slotHoldEnded',
   // 003:T112 (Q-2 (a)): a session its party postponed.
   postponed: 'admin.sessions.postponement.event',
+  // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's four events.
+  programme_offered: 'admin.sessions.event.kind.programmeOffered',
+  programme_paused: 'admin.sessions.event.kind.programmePaused',
+  programme_resumed: 'admin.sessions.event.kind.programmeResumed',
+  programme_reopened: 'admin.sessions.event.kind.programmeReopened',
 };
 
 const CANCELLATION_REASON: Readonly<
@@ -165,6 +170,11 @@ const CANCELLATION_REASON: Readonly<
   slot_unavailable: 'admin.payments.cancellationReasons.slotUnavailable',
   checkout_abandoned: 'admin.payments.cancellationReasons.checkoutAbandoned',
   account_deleted: 'admin.payments.cancellationReasons.accountDeleted',
+  // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's closings.
+  offer_declined: 'admin.payments.cancellationReasons.offerDeclined',
+  offer_lapsed: 'admin.payments.cancellationReasons.offerLapsed',
+  assessment_refused: 'admin.payments.cancellationReasons.assessmentRefused',
+  programme_stopped: 'admin.payments.cancellationReasons.programmeStopped',
 };
 
 /** An instant in the panel's zone: «14 أكتوبر · 2:00 م». */

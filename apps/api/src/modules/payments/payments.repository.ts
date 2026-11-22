@@ -24,7 +24,14 @@ type Client = Pick<Transaction, 'paymentEvent' | 'payment'>;
 export type OrderStatus = 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
 
 /** The event types of a gateway order: every `payment_events.event_type` but the recipient's. */
-export type OrderEventType = 'paid' | 'failed' | 'expired' | 'refunded' | 'refund_reported';
+export type OrderEventType =
+  | 'paid'
+  | 'failed'
+  | 'expired'
+  | 'refunded'
+  | 'refund_reported'
+  // 006:T001 (R-510): a programme's card saved at a payment.
+  | 'card_saved';
 
 /** 003:T102 (DEC-82): what a refund is decided on, read under `lockOrder`. */
 export interface OrderRefunds {
@@ -96,6 +103,70 @@ export async function lockOrder(
 ): Promise<void> {
   await lockRows(tx, 'enrollments', [enrollmentId]);
   await lockRows(tx, 'payments', [paymentId]);
+}
+
+/** 006:T005 (R-502): what an order pays for, as the confirm step decides on it. */
+export interface OrderTerms {
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** Set (1 and up) exactly on an `instalment` (ERD section 15 rule 70). */
+  readonly instalmentMonth: number | null;
+  /** The confirm step's per-order marker (V-3); null until it processed the order. */
+  readonly confirmedAt: Date | null;
+}
+
+/** The order's terms; the caller holds the order's lock (`lockForConfirmation`'s `orders`). */
+export function orderTermsOf(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+): Promise<OrderTerms> {
+  return tx.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: { kind: true, instalmentMonth: true, confirmedAt: true },
+  });
+}
+
+/** 006:T006 (R-502, FR-718): a month or the rest the confirm step already processed. */
+export interface ProcessedProgrammeOrder {
+  readonly kind: 'rest_in_full' | 'instalment';
+  readonly instalmentMonth: number | null;
+}
+
+/**
+ * The enrollment's `rest_in_full` and `instalment` orders the confirm step processed
+ * (`confirmed_at` set), in the order it processed them (`confirmed_at`, then id: the awaited month is
+ * walked from them, PR #156 r1 Major 1); the caller holds the orders' locks.
+ */
+export async function processedProgrammeOrdersOf(
+  tx: Pick<Transaction, 'payment'>,
+  enrollmentId: string,
+): Promise<ProcessedProgrammeOrder[]> {
+  const rows = await tx.payment.findMany({
+    where: {
+      enrollmentId,
+      kind: { in: ['rest_in_full', 'instalment'] },
+      confirmedAt: { not: null },
+    },
+    orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
+    select: { kind: true, instalmentMonth: true },
+  });
+  return rows.flatMap(({ kind, instalmentMonth }) =>
+    kind === 'rest_in_full' || kind === 'instalment' ? [{ kind, instalmentMonth }] : [],
+  );
+}
+
+/**
+ * 006:T006 (V-3): the confirm step's per-order marker, written once (`WHERE confirmed_at IS NULL`);
+ * the caller holds the order's lock.
+ */
+export async function markOrderConfirmed(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+  at: Date,
+): Promise<void> {
+  await tx.payment.updateMany({
+    where: { id: paymentId, confirmedAt: null },
+    data: { confirmedAt: at },
+  });
 }
 
 /** A signed recipient event as it is kept: never the body, only its hash (R-SEC-2). */

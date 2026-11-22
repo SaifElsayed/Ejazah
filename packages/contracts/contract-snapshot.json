@@ -12,10 +12,14 @@
       "enrollmentCancellationReason": [
         "account_deleted",
         "admin",
+        "assessment_refused",
         "checkout_abandoned",
         "gender_correction",
+        "offer_declined",
+        "offer_lapsed",
         "payment_expired",
         "payment_failed",
+        "programme_stopped",
         "slot_unavailable",
         "teacher_suspended"
       ],
@@ -50,10 +54,46 @@
         "proposed",
         "refund_case"
       ],
+      "packageReactivationRefusal": ["programme_switch_on"],
       "packageTrack": ["ijazah_track", "recitation"],
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "programmeOfferRefusal": [
+        "assessment_not_delivered",
+        "count_out_of_bounds",
+        "length_exceeds_slot",
+        "not_awaiting_offer",
+        "offer_due_passed",
+        "teacher_not_active"
+      ],
+      "programmePayRefusal": [
+        "not_offered",
+        "party_suspended",
+        "pay_by_passed",
+        "payee_unverified",
+        "rest_not_positive"
+      ],
+      "programmePlan": ["in_full", "monthly"],
+      "programmeRenewRefusal": [
+        "charge_pending",
+        "closed",
+        "not_due_yet",
+        "nothing_due",
+        "party_suspended",
+        "payee_unverified"
+      ],
+      "programmeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "programmeRequestRefusal": [
+        "assessment_not_delivered",
+        "not_paused",
+        "offer_sent",
+        "request_open",
+        "too_early"
+      ],
+      "programmeRequestStatus": ["approved", "declined", "extended", "open", "withdrawn"],
+      "programmeStartRefusal": ["assessment_fee_unset", "programme_disabled"],
+      "programmeState": ["active", "awaiting_offer", "closed", "offered", "paused"],
       "reportContext": ["chat", "profile", "session"],
       "reportCreateRefusal": ["open_exists", "self"],
       "role": ["student", "teacher"],
@@ -77,8 +117,10 @@
         "no_session_in_week"
       ],
       "shareReleaseMilestone": [
+        "assessment",
         "ijazah_end",
         "ijazah_half",
+        "programme_stopped",
         "recitation_end",
         "student_complaint_close",
         "teacher_dropout"
@@ -110,14 +152,19 @@
       "CancellationReason": [
         "account_deleted",
         "admin",
+        "assessment_refused",
         "checkout_abandoned",
         "gender_correction",
+        "offer_declined",
+        "offer_lapsed",
         "payment_expired",
         "payment_failed",
+        "programme_stopped",
         "slot_unavailable",
         "teacher_suspended"
       ],
       "CancellationRequestStatus": ["accepted", "declined", "expired", "pending"],
+      "DeclineKind": ["hard", "soft"],
       "DevicePlatform": ["android", "ios"],
       "DisputeKind": ["absence_complaint", "compensation_case", "session_dispute"],
       "DisputeResolution": [
@@ -135,6 +182,10 @@
         "completed",
         "confirmed",
         "order_failed",
+        "programme_offered",
+        "programme_paused",
+        "programme_reopened",
+        "programme_resumed",
         "restored",
         "slot_hold_ended",
         "slot_released",
@@ -182,10 +233,12 @@
         "session_reminder",
         "teacher_application_status_changed"
       ],
+      "OrderKind": ["assessment", "instalment", "package", "rest_in_full"],
       "OtpPurpose": ["account_deletion", "login", "password_reset", "signup"],
       "PackageTrack": ["ijazah_track", "recitation"],
       "ParticipantEventType": ["joined", "left", "room_ended"],
       "PaymentEventType": [
+        "card_saved",
         "expired",
         "failed",
         "paid",
@@ -196,6 +249,10 @@
       ],
       "PaymentGateway": ["fake", "paymob"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
+      "ProgrammePlan": ["in_full", "monthly"],
+      "ProgrammeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "ProgrammeRequestStatus": ["approved", "declined", "extended", "open", "withdrawn"],
+      "ProgrammeState": ["active", "awaiting_offer", "closed", "offered", "paused"],
       "RemedyKind": ["makeup", "refund"],
       "RemedyStatus": [
         "awaiting_choice",
@@ -259,8 +316,10 @@
         "under_threshold"
       ],
       "ShareReleaseMilestone": [
+        "assessment",
         "ijazah_end",
         "ijazah_half",
+        "programme_stopped",
         "recitation_end",
         "student_complaint_close",
         "teacher_dropout"
@@ -1996,18 +2055,24 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.automatic": { "type": "boolean" },
           "$.createdAt": { "required": true, "type": "string" },
           "$.currency": { "required": true, "type": "string" },
+          "$.declineKind": { "type": "string", "values": ["hard", "soft"] },
           "$.enrollment": { "type": "object" },
           "$.enrollment.cancellationReason": {
             "type": "string",
             "values": [
               "account_deleted",
               "admin",
+              "assessment_refused",
               "checkout_abandoned",
               "gender_correction",
+              "offer_declined",
+              "offer_lapsed",
               "payment_expired",
               "payment_failed",
+              "programme_stopped",
               "slot_unavailable",
               "teacher_suspended"
             ]
@@ -2067,13 +2132,18 @@
           "$.events[].eventType": {
             "required": true,
             "type": "string",
-            "values": ["expired", "failed", "paid", "refund_reported", "refunded"]
+            "values": ["card_saved", "expired", "failed", "paid", "refund_reported", "refunded"]
           },
           "$.events[].receivedAt": { "required": true, "type": "string" },
           "$.gatewayFee_piasters": { "type": "integer" },
           "$.gatewayOrderId": { "required": true, "type": "string" },
           "$.gatewayTransactionId": { "type": "string" },
           "$.gross_piasters": { "required": true, "type": "integer" },
+          "$.instalmentMonth": { "type": "integer" },
+          "$.kind": {
+            "type": "string",
+            "values": ["assessment", "instalment", "package", "rest_in_full"]
+          },
           "$.net_piasters": { "type": "integer" },
           "$.outcomes": { "required": true, "type": "array" },
           "$.outcomes[]": { "type": "object" },
@@ -2082,10 +2152,14 @@
             "values": [
               "account_deleted",
               "admin",
+              "assessment_refused",
               "checkout_abandoned",
               "gender_correction",
+              "offer_declined",
+              "offer_lapsed",
               "payment_expired",
               "payment_failed",
+              "programme_stopped",
               "slot_unavailable",
               "teacher_suspended"
             ]
@@ -2098,6 +2172,10 @@
               "completed",
               "confirmed",
               "order_failed",
+              "programme_offered",
+              "programme_paused",
+              "programme_reopened",
+              "programme_resumed",
               "restored",
               "slot_hold_ended",
               "slot_released",
@@ -2107,8 +2185,15 @@
           "$.outcomes[].occurredAt": { "required": true, "type": "string" },
           "$.paidOrders": { "required": true, "type": "array" },
           "$.paidOrders[]": { "type": "object" },
+          "$.paidOrders[].automatic": { "type": "boolean" },
           "$.paidOrders[].createdAt": { "required": true, "type": "string" },
+          "$.paidOrders[].declineKind": { "type": "string", "values": ["hard", "soft"] },
           "$.paidOrders[].gatewayOrderId": { "required": true, "type": "string" },
+          "$.paidOrders[].instalmentMonth": { "type": "integer" },
+          "$.paidOrders[].kind": {
+            "type": "string",
+            "values": ["assessment", "instalment", "package", "rest_in_full"]
+          },
           "$.paidOrders[].paymentId": { "required": true, "type": "string" },
           "$.paidOrders[].status": {
             "required": true,
@@ -2145,11 +2230,18 @@
           "$": { "type": "object" },
           "$.items": { "required": true, "type": "array" },
           "$.items[]": { "type": "object" },
+          "$.items[].automatic": { "type": "boolean" },
           "$.items[].createdAt": { "required": true, "type": "string" },
+          "$.items[].declineKind": { "type": "string", "values": ["hard", "soft"] },
           "$.items[].enrollmentCancelled": { "required": true, "type": "boolean" },
           "$.items[].gatewayFee_piasters": { "type": "integer" },
           "$.items[].gatewayOrderId": { "required": true, "type": "string" },
           "$.items[].gross_piasters": { "required": true, "type": "integer" },
+          "$.items[].instalmentMonth": { "type": "integer" },
+          "$.items[].kind": {
+            "type": "string",
+            "values": ["assessment", "instalment", "package", "rest_in_full"]
+          },
           "$.items[].net_piasters": { "type": "integer" },
           "$.items[].paymentId": { "required": true, "type": "string" },
           "$.items[].refunded_piasters": { "required": true, "type": "integer" },
@@ -2202,8 +2294,10 @@
             "required": true,
             "type": "string",
             "values": [
+              "assessment",
               "ijazah_end",
               "ijazah_half",
+              "programme_stopped",
               "recitation_end",
               "student_complaint_close",
               "teacher_dropout"
@@ -2514,10 +2608,14 @@
             "values": [
               "account_deleted",
               "admin",
+              "assessment_refused",
               "checkout_abandoned",
               "gender_correction",
+              "offer_declined",
+              "offer_lapsed",
               "payment_expired",
               "payment_failed",
+              "programme_stopped",
               "slot_unavailable",
               "teacher_suspended"
             ]
@@ -2551,6 +2649,10 @@
               "outage_reclassified",
               "outcome_corrected",
               "postponed",
+              "programme_offered",
+              "programme_paused",
+              "programme_reopened",
+              "programme_resumed",
               "remedy_frozen",
               "remedy_handed_to_case",
               "remedy_lapsed",
@@ -3024,6 +3126,7 @@
               "hours",
               "minutes",
               "percent",
+              "piasters",
               "rate_limit",
               "seconds",
               "version",
@@ -3977,10 +4080,14 @@
             "values": [
               "account_deleted",
               "admin",
+              "assessment_refused",
               "checkout_abandoned",
               "gender_correction",
+              "offer_declined",
+              "offer_lapsed",
               "payment_expired",
               "payment_failed",
+              "programme_stopped",
               "slot_unavailable",
               "teacher_suspended"
             ]
@@ -4107,9 +4214,22 @@
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
           "$.packages": { "required": true, "type": "array" },
           "$.packages[]": { "type": "object" },
+          "$.packages[].assessmentPrice_piasters": { "required": true, "type": "integer" },
+          "$.packages[].isProgramme": {
+            "required": true,
+            "type": "boolean",
+            "values": ["false", "true"]
+          },
           "$.packages[].packageId": { "required": true, "type": "string" },
           "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
+          "$.packages[].priceRange": { "required": true, "type": "object" },
+          "$.packages[].priceRange.highest_piasters": { "required": true, "type": "integer" },
+          "$.packages[].priceRange.lowest_piasters": { "required": true, "type": "integer" },
           "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices": { "required": true, "type": "object" },
+          "$.packages[].prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices.m60_piasters": { "required": true, "type": "integer" },
           "$.packages[].sessionCount": { "required": true, "type": "integer" },
           "$.packages[].sessionDurationMinutes": {
             "required": true,
@@ -5161,8 +5281,10 @@
             "required": true,
             "type": "string",
             "values": [
+              "assessment",
               "ijazah_end",
               "ijazah_half",
+              "programme_stopped",
               "recitation_end",
               "student_complaint_close",
               "teacher_dropout"
@@ -5267,13 +5389,13 @@
           "$": { "type": "object" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.isActive": { "required": true, "type": "boolean" },
-          "$.price_piasters": { "required": true, "type": "integer" },
-          "$.sessionCount": { "required": true, "type": "integer" },
-          "$.sessionDurationMinutes": {
-            "required": true,
-            "type": "number",
-            "values": ["30", "45", "60"]
-          },
+          "$.price_piasters": { "type": "integer" },
+          "$.prices": { "type": "object" },
+          "$.prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.prices.m60_piasters": { "required": true, "type": "integer" },
+          "$.sessionCount": { "type": "integer" },
+          "$.sessionDurationMinutes": { "type": "number", "values": ["30", "45", "60"] },
           "$.subjectId": { "required": true, "type": "string" },
           "$.track": {
             "required": true,
@@ -5288,8 +5410,13 @@
           "$.frozen": { "required": true, "type": "boolean" },
           "$.id": { "required": true, "type": "string" },
           "$.isActive": { "required": true, "type": "boolean" },
+          "$.isProgramme": { "required": true, "type": "boolean", "values": ["false", "true"] },
           "$.perSession_piasters": { "required": true, "type": "integer" },
           "$.price_piasters": { "required": true, "type": "integer" },
+          "$.prices": { "required": true, "type": "object" },
+          "$.prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.prices.m60_piasters": { "required": true, "type": "integer" },
           "$.sessionCount": { "required": true, "type": "integer" },
           "$.sessionDurationMinutes": {
             "required": true,
@@ -5319,8 +5446,17 @@
           "$.packages[].frozen": { "required": true, "type": "boolean" },
           "$.packages[].id": { "required": true, "type": "string" },
           "$.packages[].isActive": { "required": true, "type": "boolean" },
+          "$.packages[].isProgramme": {
+            "required": true,
+            "type": "boolean",
+            "values": ["false", "true"]
+          },
           "$.packages[].perSession_piasters": { "required": true, "type": "integer" },
           "$.packages[].price_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices": { "required": true, "type": "object" },
+          "$.packages[].prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.packages[].prices.m60_piasters": { "required": true, "type": "integer" },
           "$.packages[].sessionCount": { "required": true, "type": "integer" },
           "$.packages[].sessionDurationMinutes": {
             "required": true,
@@ -5346,6 +5482,10 @@
           "$.isActive": { "type": "boolean" },
           "$.packageId": { "required": true, "type": "string" },
           "$.price_piasters": { "type": "integer" },
+          "$.prices": { "type": "object" },
+          "$.prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.prices.m60_piasters": { "required": true, "type": "integer" },
           "$.sessionCount": { "type": "integer" },
           "$.sessionDurationMinutes": { "type": "number", "values": ["30", "45", "60"] },
           "$.track": { "type": "string", "values": ["ijazah_track", "recitation"] }
@@ -5357,8 +5497,13 @@
           "$.frozen": { "required": true, "type": "boolean" },
           "$.id": { "required": true, "type": "string" },
           "$.isActive": { "required": true, "type": "boolean" },
+          "$.isProgramme": { "required": true, "type": "boolean", "values": ["false", "true"] },
           "$.perSession_piasters": { "required": true, "type": "integer" },
           "$.price_piasters": { "required": true, "type": "integer" },
+          "$.prices": { "required": true, "type": "object" },
+          "$.prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.prices.m60_piasters": { "required": true, "type": "integer" },
           "$.sessionCount": { "required": true, "type": "integer" },
           "$.sessionDurationMinutes": {
             "required": true,

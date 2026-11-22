@@ -36,13 +36,15 @@
 // entry), its first occurrence at or after max(now + A + L, `choice_closes_at`), A and L the remedy's
 // own snapshots, never the live settings, that overlaps no session, open hold
 // (`EnrollmentSide.heldTimesOf`) or reservation (T027, the remedy's own proposal among them, so the
-// proposal is never an option) of either party, on a week no other package keeps the slot
+// proposal is never an option) of either party, or (006:T005 of specs/006-programme, N-12) the
+// weekly time of another active programme of the student (`EnrollmentSide.programmeTimesOf`), on a week no other package keeps the slot
 // (`EnrollmentSide.slotsFreeFrom`, read once for every slot, the remedy's own enrollment left out, as
 // T028's proposal reads `slotWeekTaken`: the owner's rule of 2026-11-10, a package's slot returns only
 // once it is completed, and decision (a) on the follow-up under T031 and T029): a slot taken on every
 // date is no option, one a completed package holds is searched from its release. Each resolved on
 // its own date in the slot's own zone by `packages/time` (R-TIME-2, `003:T077`). The search ends:
-// what can make a week busy is finite.
+// what can make a week busy is finite, and a slot over the programme's weekly time, which recurs on
+// every week, is no option at all (PR #156 r1 Major 2).
 //
 // WHAT A COUNTER WRITES. The five `counter_*` columns (the slot, its local date and start, the slot's
 // zone, `counter_proposed_at` the database's clock), `counter_proposed`, and one `counter_proposed`
@@ -304,7 +306,12 @@ export interface RemedyDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken' | 'slotsFreeFrom'
+    | 'enrollmentFor'
+    | 'lockEnrollments'
+    | 'heldTimesOf'
+    | 'slotWeekTaken'
+    | 'slotsFreeFrom'
+    | 'programmeTimesOf'
   >;
   /** The database's clock on a transaction (Q8 (a)). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
@@ -673,14 +680,19 @@ export function createRemedyServices({
         from: new Date(Math.min(...times.map(({ startsAt }) => startsAt.getTime()))),
         to: new Date(Math.max(...times.map(({ endsAt }) => endsAt.getTime()))),
       };
-      const [own, held, reserved] = await Promise.all([
+      const [own, held, reserved, programme] = await Promise.all([
         store.sessionsBetween(tx, parties, window),
         enrollments.heldTimesOf(tx, people, window),
         store.reservedTimesOf(tx, people, window, enrollments),
+        // 006:T005 (N-12): the student's other active programmes' weekly times.
+        enrollments.programmeTimesOf(tx, [session.studentUserId], window, session.enrollmentId),
       ]);
       const busy = [...own, ...held, ...reserved];
       const next: Candidate[] = [];
       for (const candidate of pending) {
+        // A programme's weekly time recurs on every week: the slot under it is no option, never
+        // stepped over (PR #156 r1 Major 2; sessions, holds and reservations are finite).
+        if (overlapsAny(timeOf(candidate.occurrence), programme)) continue;
         if (!overlapsAny(timeOf(candidate.occurrence), busy)) {
           found.push(candidate);
           continue;

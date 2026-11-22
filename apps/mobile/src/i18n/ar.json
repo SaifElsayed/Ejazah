@@ -436,7 +436,9 @@
         "ijazahHalf": "إجازة: عند منتصف الحصص",
         "ijazahEnd": "إجازة: الباقي عند الختام",
         "teacherDropout": "باقة أُنهيت بانسحابك: الحصص التي تمت",
-        "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب"
+        "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب",
+        "assessment": "جلسة الاختبار (لم يكمل الطالب)",
+        "programmeStopped": "برنامج أُوقف: الحصص التي تمت"
       },
       "state": {
         "held": "محجوز",

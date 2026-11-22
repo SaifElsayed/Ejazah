@@ -16,6 +16,7 @@ import {
   MAX_SESSION_COUNT,
   packagePricePiasters,
   packageTrack,
+  programmePrices,
   sessionLengthMinutes,
 } from './packages.js';
 
@@ -112,16 +113,50 @@ export const discoveryFiltersOutput = z.object({ riwayas: z.array(z.string()) })
 
 export const discoveryTeacherInput = z.object({ teacherId: z.uuid() });
 
-/** One of the teacher's active packages on the profile; the remedy line is the phone's, by track. */
-export const discoveryTeacherPackage = z.object({
+/**
+ * One of the teacher's active packages with a count, a length and a total, on the profile; the
+ * remedy line is the phone's, by track. 006:T003 (K-3): unchanged and non-null; `isProgramme` is
+ * absent or false on it.
+ */
+export const discoveryFixedPackage = z.object({
   packageId: z.uuid(),
   subject: subjectSummary,
   track: packageTrack,
+  /** 006:T003 (Q-4 (a)): the union's discriminant; an answer may leave it out on this member. */
+  isProgramme: z.literal(false).exactOptional(),
   sessionCount: z.int().min(1).max(MAX_SESSION_COUNT),
   sessionDurationMinutes: sessionLengthMinutes,
   price_piasters: packagePricePiasters,
   perSession_piasters: perSessionPiasters,
 });
+
+/**
+ * 006:T003 (ADR 0024, FR-701, FR-704; R-503): an active programme package on the profile, shown
+ * only while `programme_enabled` is on and the assessment's price is above zero (Q-5 (a)): its three
+ * session prices, their lowest and highest, and the assessment's price (the §3.14 setting
+ * `assessment_price_piasters`; app-surface.md's `assessmentFee`), read at the request.
+ */
+export const discoveryProgrammePackage = z.object({
+  packageId: z.uuid(),
+  subject: subjectSummary,
+  track: z.literal('ijazah_track'),
+  isProgramme: z.literal(true),
+  prices: programmePrices,
+  priceRange: z.object({
+    lowest_piasters: packagePricePiasters,
+    highest_piasters: packagePricePiasters,
+  }),
+  assessmentPrice_piasters: packagePricePiasters,
+});
+
+/**
+ * One of the teacher's active packages on the profile. 006:T003 (R-503, K-3, Q-4 (a)): a union on
+ * `isProgramme`, today's package unchanged beside the programme's.
+ */
+export const discoveryTeacherPackage = z.discriminatedUnion('isProgramme', [
+  discoveryFixedPackage,
+  discoveryProgrammePackage,
+]);
 
 /** `discovery.teacher`'s answer (FR-336): no riwaya, tariq or chain, which are Phase 4's. */
 export const discoveryTeacherOutput = z.object({
@@ -148,4 +183,6 @@ export type DiscoveryFiltersInput = z.infer<typeof discoveryFiltersInput>;
 export type DiscoveryFiltersOutput = z.infer<typeof discoveryFiltersOutput>;
 export type DiscoveryTeacherInput = z.infer<typeof discoveryTeacherInput>;
 export type DiscoveryTeacherPackage = z.infer<typeof discoveryTeacherPackage>;
+export type DiscoveryFixedPackage = z.infer<typeof discoveryFixedPackage>;
+export type DiscoveryProgrammePackage = z.infer<typeof discoveryProgrammePackage>;
 export type DiscoveryTeacherOutput = z.infer<typeof discoveryTeacherOutput>;

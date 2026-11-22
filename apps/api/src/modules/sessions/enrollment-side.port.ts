@@ -41,7 +41,12 @@ export type EnrollmentCancellationReason =
   | 'teacher_suspended'
   | 'slot_unavailable'
   | 'checkout_abandoned'
-  | 'account_deleted';
+  | 'account_deleted'
+  // 006:T001: the programme's closings (R-510).
+  | 'offer_declined'
+  | 'offer_lapsed'
+  | 'assessment_refused'
+  | 'programme_stopped';
 
 /** `snapshot_track`, the package's track frozen at purchase (ADR 0018 D1, `package_track`). */
 export type EnrollmentTrack = 'recitation' | 'ijazah_track';
@@ -58,7 +63,12 @@ export type EnrollmentEventKind =
   | 'terminated_no_show'
   | 'restored'
   | 'slot_released'
-  | 'slot_hold_ended';
+  | 'slot_hold_ended'
+  // 006:T001: the programme's four kinds.
+  | 'programme_offered'
+  | 'programme_paused'
+  | 'programme_resumed'
+  | 'programme_reopened';
 
 /**
  * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two
@@ -219,6 +229,20 @@ export interface EnrollmentSide {
     tx: Transaction,
     userIds: readonly string[],
     window: { readonly from: Date; readonly to: Date },
+  ): Promise<readonly HeldTime[]>;
+  /**
+   * 006:T005 of specs/006-programme (FR-701, U-1, N-12): the occurrences of the weekly times of the
+   * active programmes (`awaiting_offer`, `offered`, `active`, `paused`) of `studentUserIds` that
+   * overlap `window`, `exceptEnrollmentId`'s own left out: the months still to come keep that time,
+   * so a make-up's proposal, its counter options and a postponement's placement of another
+   * enrollment never land on it. Each week resolved on its own date in the enrollment's zone, for
+   * the slot's length. No lock: the caller holds both accounts first (T005's rule 2).
+   */
+  programmeTimesOf(
+    tx: Transaction,
+    studentUserIds: readonly string[],
+    window: { readonly from: Date; readonly to: Date },
+    exceptEnrollmentId: string,
   ): Promise<readonly HeldTime[]>;
   /** The enrollment's `enrollment_events` rows, oldest first, with no lock (T024, GAP-1). */
   eventsOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentEventEntry[]>;

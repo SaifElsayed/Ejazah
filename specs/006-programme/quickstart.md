@@ -1,7 +1,7 @@
 # Quickstart: validating the programme
 
 Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT_GATEWAY=fake`, `PAYMENT_MODE=test`,
-`programme_enabled` on and `assessment_fee_piasters` set (e.g. 50,000 = 500 EGP). Contracts:
+`programme_enabled` on and `assessment_price_piasters` set (e.g. 50,000 = 500 EGP). Contracts:
 [app-surface.md](contracts/app-surface.md), [admin-surface.md](contracts/admin-surface.md),
 [jobs.md](contracts/jobs.md), [gateway.md](contracts/gateway.md).
 

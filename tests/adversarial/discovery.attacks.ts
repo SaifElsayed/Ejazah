@@ -4,7 +4,7 @@
 //
 // Each of `discovery.browse`, `discovery.filters` and `discovery.teacher` registers FR-410's five
 // attacks, each run by the harness once per direction against the real user surface and the real
-// discovery services (`discovery-world.ts`): a male requester against female teachers and a female
+// discovery services (`discovery-world.ts`), the programme open there (006:T004): a male requester against female teachers and a female
 // requester against male teachers, each also against the own gender's teachers in every excluded
 // state. What every attack holds, for every teacher the requester may not see: absent from the cards
 // and from anything else serialized, counted in no subject tab nor in the tab of all subjects,
@@ -52,6 +52,8 @@ import {
   SUBJECT_PLAIN,
   tabCount,
   visibleTo,
+  WORLD_ASSESSMENT_PRICE,
+  WORLD_PROGRAMME_PRICES,
   WORLD_RATING,
   WORLD_REVIEW_COUNT,
 } from './discovery-world.js';
@@ -85,6 +87,8 @@ function expectNothingOf(answer: unknown, excluded: readonly SeededTeacher[]): v
   for (const teacher of excluded) {
     const which = `${teacher.gender} ${teacher.state}`;
     expect(serialized, `${which}: its id`).not.toContain(teacher.id);
+    // 006:T004: nor its programme package.
+    expect(serialized, `${which}: its programme package`).not.toContain(teacher.programmePackageId);
     if (!isVisibleRole(teacher.state)) {
       expect(serialized, `${which}: its name`).not.toContain(`"${teacher.displayName}"`);
     }
@@ -469,6 +473,19 @@ const teacher: ProcedureAttacks = {
       for (const one of visible) {
         const profile = await caller.discovery.teacher({ teacherId: one.id });
         expect(profile).toMatchObject({ teacherId: one.id, gender: direction.requester });
+        // 006:T004 (FR-704, R-516): its programme package, its prices, range and the assessment's.
+        expect(profile.packages).toContainEqual({
+          packageId: one.programmePackageId,
+          subject: expect.objectContaining({ id: expect.any(String) }),
+          track: 'ijazah_track',
+          isProgramme: true,
+          prices: WORLD_PROGRAMME_PRICES,
+          priceRange: {
+            lowest_piasters: WORLD_PROGRAMME_PRICES.m30_piasters,
+            highest_piasters: WORLD_PROGRAMME_PRICES.m60_piasters,
+          },
+          assessmentPrice_piasters: WORLD_ASSESSMENT_PRICE,
+        });
       }
       for (const one of excluded) {
         await expectAnswersAsNonexistent(

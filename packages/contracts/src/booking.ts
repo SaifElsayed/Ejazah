@@ -21,11 +21,18 @@ export const sessionPreview = z.object({
 
 export const bookingSlotsInput = z.object({ packageId: z.uuid() });
 
-/** One offerable slot of the booking sheet, with its two previews (FR-386). */
+/**
+ * One offerable slot of the booking sheet, with its two previews (FR-386). 006:T003
+ * (app-surface.md, `booking.slots` changed; FR-701, R-504, U-1): for a programme package, every
+ * active weekly time at least as long as the assessment (`assessment_duration_minutes`), each with
+ * its own length, its one session as both previews, and none overlapping the student's own active
+ * programme's weekly time. No field changes.
+ */
 export const bookingSlot = z.object({
   slotId: z.uuid(),
   dayOfWeek: slotDayOfWeek,
   startTimeLocal: slotStartTimeLocal,
+  /** The slot's length; for a programme package, at least the assessment's (006:T003). */
   durationMinutes: sessionLengthMinutes,
   firstSession: sessionPreview,
   lastSession: sessionPreview,

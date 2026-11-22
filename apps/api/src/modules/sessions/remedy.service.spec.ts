@@ -16,7 +16,7 @@
 // now + A + L = 2026-11-07T08:00Z falls before C and the counter options' bound is C (H2).
 import { Writable } from 'node:stream';
 
-import { addMinutes } from '@ijazah/time';
+import { addMinutes, addWeeks } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -153,7 +153,15 @@ let remedy: RemedyRow | null;
 let genders: Map<string, 'male' | 'female'>;
 let terms: EnrollmentTerms;
 let now: Date;
-let busy: { sessions: SessionTime[]; held: HeldTime[]; reserved: ReservedTime[] };
+let busy: {
+  sessions: SessionTime[];
+  held: HeldTime[];
+  reserved: ReservedTime[];
+  /** 006:T005 (N-12): the student's other active programmes' weekly times. */
+  programme?: HeldTime[];
+};
+/** 006:T005: what each programme read asked: the students and the enrollment left out. */
+let programmeAsked: unknown[] = [];
 /** The slots another package keeps (`slotsFreeFrom`): null on every date, else free from that date. */
 let freeFrom: Map<string, string | null>;
 let freeFromReads: { slotIds: readonly string[]; enrollmentId: string }[];
@@ -312,6 +320,10 @@ function dependencies() {
         calls.push(['lockEnrollments', ids]);
       },
       heldTimesOf: async (_tx, _userIds, window) => overlapping(busy.held, window),
+      programmeTimesOf: async (_tx, students, window, except) => {
+        programmeAsked.push([students, except]);
+        return overlapping(busy.programme ?? [], window);
+      },
       slotWeekTaken: async () => false,
       slotsFreeFrom: async (_tx, slotIds, enrollmentId) => {
         freeFromReads.push({ slotIds, enrollmentId });
@@ -786,6 +798,45 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
         enrollmentId: ENROLLMENT,
       },
     ]);
+  });
+
+  // PR #156 r1 Major 2: a programme's weekly time recurs on every week, so a slot under it is no
+  // option (the owner's choice: dropped, not stepped over).
+  it('006:T005 (N-12): drops a slot over the student’s other active programme’s weekly time, asking for the student alone, this enrollment’s own left out', async () => {
+    programmeAsked = [];
+    busy.programme = [
+      {
+        startsAt: new Date('2026-11-19T17:30:00.000Z'),
+        endsAt: new Date('2026-11-19T18:30:00.000Z'),
+      },
+    ];
+    const { options } = await services().counterOptions(
+      { userId: STUDENT },
+      { sessionId: SESSION },
+      log,
+    );
+    expect(options.map(({ slotId }) => slotId)).not.toContain(RIYADH_SLOT);
+    expect(options).toContainEqual(OWN_FREE);
+    expect(programmeAsked.length).toBeGreaterThan(0);
+    expect(new Set(programmeAsked.map((asked) => JSON.stringify(asked)))).toEqual(
+      new Set([JSON.stringify([[STUDENT], ENROLLMENT])]),
+    );
+  });
+
+  it('006:T005 (N-12): ends over a programme time on every week, the slot under it dropped (PROBE-P2)', async () => {
+    programmeAsked = [];
+    // The programme's Thursday 17:30Z on 600 consecutive weeks from 2026-11-19.
+    busy.programme = Array.from({ length: 600 }, (_, week) => ({
+      startsAt: new Date(addWeeks(new Date('2026-11-19T17:30:00.000Z'), week)),
+      endsAt: new Date(addWeeks(new Date('2026-11-19T18:30:00.000Z'), week)),
+    }));
+    const { options } = await services().counterOptions(
+      { userId: STUDENT },
+      { sessionId: SESSION },
+      log,
+    );
+    expect(options.map(({ slotId }) => slotId)).not.toContain(RIYADH_SLOT);
+    expect(programmeAsked.length).toBeLessThan(10);
   });
 
   it('per active slot of the session’s length, its first free occurrence at or after max(now + A + L, C), by start, in each slot’s zone', async () => {

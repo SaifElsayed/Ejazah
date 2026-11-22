@@ -87,6 +87,7 @@ import {
   type CheckoutEnrollmentRow,
   type CheckoutHold,
   checkoutTeacherName,
+  closedProgramme,
   type CurrentHold,
   currentHoldOf,
   type EnrollmentStatusAnswer,
@@ -106,6 +107,7 @@ import {
   placeCheckoutHold,
   previousCheckout,
   type PaymentOutcomeNotices,
+  payTermsOf,
   readHoldTerms,
   recordOrderFailed,
   type RetryTarget,
@@ -338,6 +340,11 @@ interface OrderToCreate {
   readonly gross_piasters: ReturnType<typeof piasters>;
   /** 003:T105: the package's track, which decides whether the ijazah half's percent is kept. */
   readonly track: 'recitation' | 'ijazah_track';
+  /**
+   * 006:T005 (R-502, R-511, FR-701): `assessment` for a programme package's assessment, its gross
+   * the fee and its rate and 25 % read as a package's; `package` otherwise.
+   */
+  readonly kind: 'package' | 'assessment';
   readonly latestExpiry: Date;
   /** Locks and checks what the order is recorded on, in the recording transaction. */
   readonly lockTarget: (tx: Transaction) => Promise<void>;
@@ -437,7 +444,7 @@ export class CheckoutService {
     const lastMoment = (holdExpiresAt: Date) => payByOf(holdExpiresAt, terms);
     const stillPayable = (holdExpiresAt: Date) =>
       lastMoment(holdExpiresAt).getTime() > now.getTime();
-    const { enrollment, hold } = await this.#steps.transaction((tx) =>
+    const { enrollment, hold, kind } = await this.#steps.transaction((tx) =>
       this.#steps.retryTarget(tx, student.userId, enrollmentId),
     );
     if (hold === null || enrollment.status !== 'pending_payment' || !stillPayable(hold.expiresAt)) {
@@ -448,6 +455,7 @@ export class CheckoutService {
       teacherUserId: enrollment.teacherUserId,
       gross_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
       track: enrollment.snapshotTrack,
+      kind,
       latestExpiry: lastMoment(hold.expiresAt),
       lockTarget: (tx) =>
         this.#steps.lockOrderTarget(
@@ -494,15 +502,18 @@ export class CheckoutService {
     );
     const latestExpiry = payByOf(target.hold.expiresAt, terms);
     if (latestExpiry.getTime() <= now.getTime()) throw new DomainError('HOLD_EXPIRED');
+    // 006:T005: the order's kind and gross, an assessment's fee checked before the gateway.
+    const payOrder = await payTermsOf(target, quoted, terms.programme ?? closedProgramme);
     const enrollmentId = await this.#steps.drawRowId();
     const recorded = await this.#createAndRecord(
       request,
       {
         enrollmentId,
         teacherUserId: target.teacherUserId,
-        gross_piasters: target.price_piasters,
+        gross_piasters: payOrder.price_piasters,
         // The quoted track: booking checks it against the package under the locks (SUMMARY_CHANGED).
         track: quoted.track,
+        kind: payOrder.kind,
         latestExpiry,
         lockTarget: (tx) =>
           this.#steps.enrollOnHold(tx, target, {
@@ -511,6 +522,7 @@ export class CheckoutService {
             at: now,
             leadHours,
             quoted,
+            ...(terms.programme === undefined ? {} : { programme: terms.programme }),
           }),
       },
       { enrollmentId },
@@ -579,6 +591,7 @@ export class CheckoutService {
           teacherShareRatePercent,
           teacherShare_piasters,
           halfReleaseRatePercent,
+          kind: order.kind,
         });
         const outcome: StoredOrder = {
           ...alsoStored,

@@ -56,6 +56,10 @@ const settings: SettingsReader = {
         teacher_share_percent: 70,
         // 003:T105: the ijazah half's percent, the seed's.
         ijazah_half_release_percent: 25,
+        // 006:T005: the programme on, its assessment 30 minutes at 200 EGP.
+        programme_enabled: 1,
+        assessment_price_piasters: 20_000,
+        assessment_duration_minutes: 30,
       }[key],
     ),
 };
@@ -176,6 +180,10 @@ interface World {
   readonly recipient?: string | null;
   /** T175: the teacher's name a replay reads through visibility; null once not visible. */
   readonly visibleName?: string | null;
+  /** 006:T005: the order's kind the retry's target and Pay's target answer; `package` by default. */
+  readonly kind?: 'package' | 'assessment';
+  /** 006:T005: the switch, when not on. */
+  readonly programmeEnabled?: number;
 }
 
 function setUp(world: World = {}) {
@@ -184,6 +192,7 @@ function setUp(world: World = {}) {
   /** T101: the payee each gateway order was asked with, and whose recipient was read. */
   const payees: (CheckoutPayee | undefined)[] = [];
   const recipientsAsked: string[] = [];
+  const readers: unknown[] = [];
   const idempotency = fakeIdempotency(log);
   let placement = 0;
   let draws = 0;
@@ -209,6 +218,8 @@ function setUp(world: World = {}) {
       return {
         enrollment: world.retryEnrollment ?? enrollmentRow,
         hold: world.hold === undefined ? holdRow : world.hold,
+        // 006:T005 (rule d): the order's kind.
+        kind: world.kind ?? 'package',
       };
     },
     lockOrderTarget: async (_tx, target, stillPayable) => {
@@ -269,21 +280,32 @@ function setUp(world: World = {}) {
     payTarget: async (_tx, request, quoted) => {
       log.push(['read pay target', request.holdId, quoted.price_piasters]);
       if (world.payTargetError !== undefined) throw world.payTargetError;
-      return {
-        hold: {
-          id: HOLD,
-          slotId: SLOT,
-          studentUserId: STUDENT,
-          packageId: PACKAGE,
-          sessionCount: 4,
-          enrollmentId: null,
-          expiresAt: world.hold?.expiresAt ?? HOLD_EXPIRES,
-          releasedAt: null,
-        },
+      const hold = {
+        id: HOLD,
+        slotId: SLOT,
+        studentUserId: STUDENT,
         packageId: PACKAGE,
-        teacherUserId: TEACHER,
-        price_piasters: piasters(100_000),
+        sessionCount: 4,
+        enrollmentId: null,
+        expiresAt: world.hold?.expiresAt ?? HOLD_EXPIRES,
+        releasedAt: null,
       };
+      // 006:T005 (rule d): the order's kind, an assessment priced by the fee.
+      return world.kind === 'assessment'
+        ? {
+            hold,
+            packageId: PACKAGE,
+            teacherUserId: TEACHER,
+            kind: 'assessment',
+            price_piasters: null,
+          }
+        : {
+            hold,
+            packageId: PACKAGE,
+            teacherUserId: TEACHER,
+            kind: 'package',
+            price_piasters: piasters(100_000),
+          };
     },
     payoutRecipient: async (teacherUserId) => {
       recipientsAsked.push(teacherUserId);
@@ -291,6 +313,8 @@ function setUp(world: World = {}) {
     },
     enrollOnHold: async (_tx, target, enrolment) => {
       log.push(['enroll', target.hold.id, enrolment.enrollmentId, enrolment.leadHours]);
+      // 006:T005: the programme's reader reaches the enrolment's check under the locks.
+      readers.push(await enrolment.programme?.());
       if (world.lockError !== undefined) throw world.lockError;
     },
   };
@@ -335,6 +359,9 @@ function setUp(world: World = {}) {
         if (key === 'ijazah_half_release_percent' && world.halfPercent !== undefined) {
           return Promise.resolve(schema.parse(world.halfPercent));
         }
+        if (key === 'programme_enabled' && world.programmeEnabled !== undefined) {
+          return Promise.resolve(schema.parse(world.programmeEnabled));
+        }
         return settings.read(key, schema);
       },
     },
@@ -346,7 +373,7 @@ function setUp(world: World = {}) {
     report: (error) => void reported.push(error),
     steps,
   });
-  return { log, service, idempotency, reported, inserted, payees, recipientsAsked };
+  return { log, service, idempotency, reported, inserted, payees, recipientsAsked, readers };
 }
 
 describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR-PAYG-7 as amended)', () => {
@@ -355,7 +382,10 @@ describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR
     await service.retry(student, retryInput);
 
     expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 70, teacherShare_piasters: 70_000 });
+    expect(inserted[0]).toMatchObject({
+      teacherShareRatePercent: 70,
+      teacherShare_piasters: 70_000,
+    });
   });
 
   it('records the rate and the share when a payment creates the order', async () => {
@@ -363,14 +393,20 @@ describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR
     await service.pay(student, payInput);
 
     expect(inserted).toHaveLength(1);
-    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 70, teacherShare_piasters: 70_000 });
+    expect(inserted[0]).toMatchObject({
+      teacherShareRatePercent: 70,
+      teacherShare_piasters: 70_000,
+    });
   });
 
   it('reads the rate when the order is created, so a changed setting reaches the next order', async () => {
     const { service, inserted } = setUp({ sharePercent: 33 });
     await service.retry(student, retryInput);
 
-    expect(inserted[0]).toMatchObject({ teacherShareRatePercent: 33, teacherShare_piasters: 33_000 });
+    expect(inserted[0]).toMatchObject({
+      teacherShareRatePercent: 33,
+      teacherShare_piasters: 33_000,
+    });
   });
 
   it('refuses a setting outside 0 to 100 before the gateway, creating no order (fails closed)', async () => {
@@ -383,7 +419,10 @@ describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR
 });
 
 describe('the ijazah half kept on the order (003:T105; ADR 0025 D2, D6, SRS DEC-81; Q-4 (a))', () => {
-  const ijazahEnrollment: CheckoutEnrollmentRow = { ...enrollmentRow, snapshotTrack: 'ijazah_track' };
+  const ijazahEnrollment: CheckoutEnrollmentRow = {
+    ...enrollmentRow,
+    snapshotTrack: 'ijazah_track',
+  };
 
   it('records the setting’s percent on an ijazah_track order a retry creates', async () => {
     const { service, inserted } = setUp({ retryEnrollment: ijazahEnrollment });
@@ -413,7 +452,10 @@ describe('the ijazah half kept on the order (003:T105; ADR 0025 D2, D6, SRS DEC-
   });
 
   it('refuses a setting outside 0 to 100 on an ijazah_track order before the gateway (fails closed)', async () => {
-    const { service, log, inserted } = setUp({ retryEnrollment: ijazahEnrollment, halfPercent: 101 });
+    const { service, log, inserted } = setUp({
+      retryEnrollment: ijazahEnrollment,
+      halfPercent: 101,
+    });
     await expect(service.retry(student, retryInput)).rejects.toThrow();
 
     expect(log.some(([kind]) => kind === 'gateway create')).toBe(false);
@@ -904,5 +946,79 @@ describe('checkout.status: the enrollment as the server holds it (FR-380 to FR-3
     const { service } = setUp({ enrollment: null });
     const error = await refusal(service.status(student, { enrollmentId: ENROLLMENT }));
     expect(error.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('the order’s kind (006:T005; FR-701, FR-702, R-504, R-511)', () => {
+  const assessmentQuote = {
+    ...payInput,
+    quoted: {
+      price_piasters: 20_000,
+      sessionCount: 1,
+      sessionDurationMinutes: 30 as const,
+      track: 'ijazah_track' as const,
+    },
+  };
+
+  it('records a package’s order as `package`, at its total, on Pay and on Retry', async () => {
+    const { service, inserted } = setUp();
+    await service.pay(student, payInput);
+    await service.retry(student, { enrollmentId: ENROLLMENT, idempotencyKey: KEY });
+    expect(inserted.map((order) => order.kind)).toEqual(['package', 'package']);
+    expect(inserted.map((order) => order.gross_piasters)).toEqual([100_000, 100_000]);
+  });
+
+  it('records a programme package’s Pay as an `assessment` at the fee, with the rate and the 25 % read as today', async () => {
+    const { service, inserted, log, readers } = setUp({ kind: 'assessment' });
+    await service.pay(student, assessmentQuote);
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        kind: 'assessment',
+        gross_piasters: 20_000,
+        teacherShareRatePercent: 70,
+        teacherShare_piasters: 14_000,
+        halfReleaseRatePercent: 25,
+      }),
+    ]);
+    expect(log).toContainEqual([
+      'gateway create',
+      ENROLLMENT_DRAWN,
+      20_000,
+      'EGP',
+      ORDER_EXPIRES.toISOString(),
+    ]);
+    expect(readers).toEqual([
+      { open: true, assessmentPrice_piasters: 20_000, assessmentDurationMinutes: 30 },
+    ]);
+  });
+
+  it('records an assessment’s Retry as an `assessment` at the snapshot’s price', async () => {
+    const assessment = {
+      ...enrollmentRow,
+      snapshotPricePiasters: 20_000n,
+      snapshotSessionCount: 1,
+      snapshotDurationMinutes: 30,
+      snapshotTrack: 'ijazah_track' as const,
+    };
+    const { service, inserted } = setUp({ kind: 'assessment', retryEnrollment: assessment });
+    await service.retry(student, { enrollmentId: ENROLLMENT, idempotencyKey: KEY });
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        kind: 'assessment',
+        gross_piasters: 20_000,
+        halfReleaseRatePercent: 25,
+      }),
+    ]);
+  });
+
+  it('refuses a programme package’s Pay while the switch is off, before the gateway, writing nothing', async () => {
+    const { service, log } = setUp({ kind: 'assessment', programmeEnabled: 0 });
+    const refused = await refusal(service.pay(student, assessmentQuote));
+    expect(refused).toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'programme_disabled' }],
+      }),
+    );
+    expect(log.some(([kind]) => kind === 'gateway create' || kind === 'transaction')).toBe(false);
   });
 });

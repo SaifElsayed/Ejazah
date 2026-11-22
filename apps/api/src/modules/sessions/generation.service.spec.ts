@@ -315,3 +315,39 @@ describe('sessionsFor and generateForEnrollment: a count and a first sequence nu
     ).toEqual([1, 2, 3, 4]);
   });
 });
+
+describe('generateForEnrollment: a programme month on each session (006:T006; R-507)', () => {
+  const thursdayTen = enrollment({ dayOfWeek: 4, startTimeLocal: '10:00:00' });
+  const paidAt = new Date('2026-11-04T08:00:00Z');
+
+  it('writes each planned session with its month, numbered after the last', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 3 });
+    await generateForEnrollment(transactionWith(createMany), thursdayTen, paidAt, LEAD, {
+      count: 3,
+      firstSequenceNumber: 4,
+      months: [1, 2, 2],
+    });
+    const data = (
+      createMany.mock.calls[0]?.[0] as {
+        data: { sequenceNumber: number; programmeMonth?: number }[];
+      }
+    ).data;
+    expect(
+      data.map(({ sequenceNumber, programmeMonth }) => [sequenceNumber, programmeMonth]),
+    ).toEqual([
+      [4, 1],
+      [5, 2],
+      [6, 2],
+    ]);
+  });
+
+  it('writes no month on a plan that names none, as before', async () => {
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    await generateForEnrollment(transactionWith(createMany), thursdayTen, paidAt, LEAD, {
+      count: 1,
+      firstSequenceNumber: 1,
+    });
+    const [row] = (createMany.mock.calls[0]?.[0] as { data: object[] }).data;
+    expect(row).not.toHaveProperty('programmeMonth');
+  });
+});

@@ -92,6 +92,8 @@ model User {
   teacherShareReleases    TeacherShareRelease[]
   // 003:T112: the postponements a party asked for, a back-relation only.
   sessionPostponements    SessionPostponement[]
+  // 006:T001: the programme items of a teacher's programmes, a back-relation only.
+  programmeRequests       ProgrammeRequest[]
 
   @@map("users")
 }

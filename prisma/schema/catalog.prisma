@@ -4,7 +4,8 @@
 // Every timestamp is timestamptz and ends _at; every money column is an integer ending _piasters (ERD section 0).
 //
 // What the schema language cannot say lives in the migrations: one approved credential per teacher
-// and subject, a partial unique (rule 23, T011).
+// and subject, a partial unique (rule 23, T011); a package's shape by `is_programme` and its three
+// prices above zero (rules 73 and 74, 006:T001).
 
 // An administrator-managed list, named in both languages (FR-LOC-1).
 model Subject {
@@ -45,15 +46,27 @@ model Package {
   teacherUserId          String       @map("teacher_user_id") @db.Uuid
   // A foreign key, not an enum.
   subjectId              String       @map("subject_id") @db.Uuid
-  sessionCount           Int          @map("session_count")
+  // 006:T001 (R-503): the three set on every package but a programme one, which holds NULL in each
+  // and its three prices instead (ERD section 15 rule 73, in the migration). A programme's count,
+  // length and total come at the offer.
+  sessionCount           Int?         @map("session_count")
   // Must equal the slot's duration at booking (FR-PROFILE-8).
-  sessionDurationMinutes Int          @map("session_duration_minutes")
+  sessionDurationMinutes Int?         @map("session_duration_minutes")
   // Integer piasters, charged in full through the gateway at checkout (FR-PAYG-1, R-MONEY-1).
-  pricePiasters          BigInt       @map("price_piasters")
+  pricePiasters          BigInt?      @map("price_piasters")
   currency               String       @default("EGP") @db.Char(3)
   // The teacher's choice at creation (ADR 0018 D1; Phase 1, T012). The default is the migration's:
   // no row existed, and the service always writes it.
   track                  PackageTrack @default(recitation)
+  // 006:T001 (R-503, DEC-94): a programme package, an `ijazah_track` one created while
+  // `programme_enabled` is on; false on every other package, a pre-switch ijazah-track one included,
+  // so the shape check and every reader branch on it, not on the track alone.
+  isProgramme            Boolean      @default(false) @map("is_programme")
+  // 006:T001 (R-503): a programme package's session price for each length, set exactly on one, each
+  // above zero (ERD section 15 rules 73 and 74).
+  price30Piasters        BigInt?      @map("price_30_piasters")
+  price45Piasters        BigInt?      @map("price_45_piasters")
+  price60Piasters        BigInt?      @map("price_60_piasters")
   // Deactivation never touches existing enrollments (FR-PROFILE-3).
   isActive               Boolean      @map("is_active")
   createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)

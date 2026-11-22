@@ -215,11 +215,17 @@ Settled by the review session on recorded precedents:
   - After commit it calls `PaymentPort.chargeSavedCard(paymentId, gross, currency, cardToken, payee)`, which answers
     `{ gatewayOrderId }`; the result arrives by the same signed webhook as every order.
   - **Never called twice.** A crash between commit and call leaves the order `created` with no gateway id. It is never
-    called again: at its `expires_at` it is `expired`, and the next retry is a new order. If the call had reached the
-    gateway, its webhook is matched by the merchant reference (the payment's id) and an expired-then-paid order is
-    FR-PAYG-19's (analyze G-6, N-3). No double charge rests on the gateway refusing a duplicate.
-  - **An automatic order that expires with no answer** counts as a soft decline (PR #153 r1 Minor 1): `first_failure_at`
-    is set, the student is shown «pay now», and the retry schedule starts. Otherwise a card holder would have no button
+    called again: at its `expires_at` the gateway is first asked by the merchant reference (the payment's id), and so
+    before every retry: paid → recorded paid, no new charge; no transaction → `expired` and a soft decline, the next
+    retry a new order; no answer → no new charge, asked again later, and still none → an Administrator item (the owner,
+    2026-11-22, B-P1's Q-2; SRS DEC-110). If the call had reached the gateway, its webhook is matched by the merchant
+    reference (the payment's id) and an expired-then-paid order is FR-PAYG-19's (analyze G-6, N-3). No double charge
+    rests on the gateway refusing a duplicate.
+  - **The inquiry:** Paymob's inquiry by merchant order id is `/api/ecommerce/orders/transaction_inquiry` (the Oman
+    docs); Egypt's page «Retrieve Transaction with Merchant Order ID (Special Reference)»: its fields are verified on
+    the test account at T014.
+  - **An automatic order that expires with no transaction found by the inquiry** counts as a soft decline (PR #153
+    r1 Minor 1): `first_failure_at` is set, the student is shown «pay now», and the retry schedule starts. Otherwise a card holder would have no button
     and the programme would pause with no way to pay.
   - **Manual programme orders** (`programme.pay`, `programme.renew`; analyze G-7, N-11) have no hold. They expire at
     min(`slot_hold_ttl_minutes`, `pay_by` for the first payment). FR-BOOK-12's one checkout per student applies: while
@@ -337,7 +343,7 @@ month, not an operational number (K-2, settled).
 | Key | Default | Bounds | Unit | Group |
 |---|---|---|---|---|
 | `programme_enabled` (I-3) | false | boolean | — | `booking` |
-| `assessment_fee_piasters` | 0 = unset (P1 (a)) | ≥ 0 | a new unit `piasters` | `booking` |
+| `assessment_price_piasters` | 0 = unset (P1 (a)) | ≥ 0 | a new unit `piasters` | `booking` |
 | `assessment_duration_minutes` | 30 | list 30, 45, 60 | `minutes` | `booking` |
 | `programme_offer_hours` (I-2 (a)) | 24 | ≥ 1 | `hours` | `booking` |
 | `programme_pay_rest_hours` | 48, from the offer | ≥ 1 | `hours` | `booking` |

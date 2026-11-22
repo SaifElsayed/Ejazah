@@ -18,6 +18,9 @@ export const PART: Readonly<Record<ShareReleaseMilestone, MessageKey>> = {
   ijazah_end: 'admin.money.payouts.part.ijazahEnd',
   teacher_dropout: 'admin.money.payouts.part.teacherDropout',
   student_complaint_close: 'admin.money.payouts.part.studentComplaintClose',
+  // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's two parts.
+  assessment: 'admin.money.payouts.part.assessment',
+  programme_stopped: 'admin.money.payouts.part.programmeStopped',
 };
 
 export const STATE: Readonly<

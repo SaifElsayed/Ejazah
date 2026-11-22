@@ -9,6 +9,7 @@
 // a week over a session, a reservation or an open hold of either party, resolved per date across a
 // DST change; a frozen remedy offered again as a new offer; one `remedy_offered` row; and the offer
 // row's locks. Over the real tables: `tests/db-integrity/remedy-offer.spec.ts`.
+import { addWeeks } from '@ijazah/time';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -51,6 +52,9 @@ let everyWeekTaken: boolean;
 let warnings: { readonly fields: unknown; readonly message: string }[];
 let ownSessions: SessionTime[];
 let held: HeldTime[];
+/** 006:T005 (N-12): the student's active programmes' weekly times, and what each read asked. */
+let programmeTimes: HeldTime[];
+let programmeAsked: unknown[];
 let reserved: ReservedTime[];
 let now: Date;
 let inserted: { sessionId: string; row: OfferedRow }[];
@@ -111,6 +115,17 @@ const enrollments = {
     _users: readonly string[],
     window: { from: Date; to: Date },
   ) => held.filter(({ startsAt, endsAt }) => startsAt < window.to && window.from < endsAt),
+  programmeTimesOf: async (
+    _tx: Transaction,
+    students: readonly string[],
+    window: { from: Date; to: Date },
+    except: string,
+  ) => {
+    programmeAsked.push([students, except]);
+    return programmeTimes.filter(
+      ({ startsAt, endsAt }) => startsAt < window.to && window.from < endsAt,
+    );
+  },
 } as unknown as EnrollmentSide;
 
 function offerOf() {
@@ -157,6 +172,8 @@ beforeEach(() => {
   warnings = [];
   ownSessions = [];
   held = [];
+  programmeTimes = [];
+  programmeAsked = [];
   reserved = [];
   // The dispute window's close: the scheduled end plus 72 hours.
   now = new Date('2026-11-29T08:00:00Z');
@@ -384,6 +401,46 @@ describe('remedy offer: the proposal (H1, F5, R-TIME-2)', () => {
     ];
     // The week over the hold at 06:00Z is skipped: the occurrence was resolved at summer time.
     expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2027-05-13');
+  });
+});
+
+describe('remedy offer: the student’s own programme’s weekly time (006:T005; N-12, U-1)', () => {
+  it('skips a week over the weekly time of another active programme of the student', async () => {
+    // C + A + L lands on 12-17 (the first test above); the programme's Thursday 09:00 there.
+    programmeTimes = [
+      { startsAt: new Date('2026-12-17T07:30:00Z'), endsAt: new Date('2026-12-17T08:30:00Z') },
+    ];
+    expect((await offerOf().offerLocked(tx, SESSION))?.proposedDate).toBe('2026-12-24');
+  });
+
+  // PR #156 r1 Major 2: a programme's weekly time recurs on every week, as a taken slot does, so
+  // its weeks count toward the bound (PROBE-P3).
+  it('counts a week over a programme time toward the bound: over every week, it ends with none', async () => {
+    programmeTimes = Array.from({ length: 600 }, (_, week) => ({
+      startsAt: new Date(addWeeks(new Date('2026-12-17T07:30:00Z'), week)),
+      endsAt: new Date(addWeeks(new Date('2026-12-17T08:30:00Z'), week)),
+    }));
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+    expect(programmeAsked.length).toBeLessThanOrEqual(4);
+  }, 3_000);
+
+  it('counts programme weeks and taken weeks together: two of each reach the bound of four', async () => {
+    programmeTimes = [
+      { startsAt: new Date('2026-12-17T07:30:00Z'), endsAt: new Date('2026-12-17T08:30:00Z') },
+      { startsAt: new Date('2026-12-31T07:30:00Z'), endsAt: new Date('2026-12-31T08:30:00Z') },
+    ];
+    takenDates = new Set(['2026-12-24', '2027-01-07']);
+    expect(await offerOf().offerLocked(tx, SESSION)).toBeNull();
+  });
+
+  it('asks for the student’s programmes alone, this enrollment’s own left out', async () => {
+    await offerOf().offerLocked(tx, SESSION);
+    expect(programmeAsked).toContainEqual([[STUDENT], ENROLLMENT]);
+    expect(
+      programmeAsked.every(
+        (asked) => JSON.stringify(asked) === JSON.stringify([[STUDENT], ENROLLMENT]),
+      ),
+    ).toBe(true);
   });
 });
 

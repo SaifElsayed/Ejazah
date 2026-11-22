@@ -6,7 +6,9 @@
 //
 //   payment      `Payment` and `PaymentEvent` are written only in `modules/payments` (ADR 0007, ERD §7).
 //   confirmedAt  an enrollment's `confirmedAt` only in `booking/confirmation.repository.ts`
-//                (`markConfirmed`, R-HONEST-1; its reaches are T042's `confirmation-path.spec.ts`).
+//                (`markConfirmed`, R-HONEST-1; its reaches are T042's `confirmation-path.spec.ts`); and
+//                an order's own marker, `payments.confirmed_at`, only in payments' `markOrderConfirmed`
+//                (006:T006, R-502, V-3; its one reach is read there too).
 //   amount       a `…Piasters` field only in `modules/payments`, and by the two owning paths outside
 //                it: the enrollment's snapshot at pay (`snapshotPricePiasters`,
 //                `booking/pay.repository.ts`) and a teacher's package (`pricePiasters`,
@@ -80,11 +82,20 @@ const PAYMENTS = 'apps/api/src/modules/payments/';
 const CONFIRMATION = 'apps/api/src/modules/booking/confirmation.repository.ts';
 const PAY = 'apps/api/src/modules/booking/pay.repository.ts';
 const PACKAGES = 'apps/api/src/modules/catalog/packages.repository.ts';
+/** 006:T006: payments' repository, where an order's own marker is written. */
+const PAYMENTS_REPOSITORY = `${PAYMENTS}payments.repository.ts`;
 
 /** The writes SC-413 allows, each by name, with its reason; every other write is refused. */
 export function allowedBecause(write: Write): string | null {
   if (write.path.startsWith(PAYMENTS) && write.kind !== 'confirmedAt') {
     return 'ADR 0007, ERD §7: the payments module owns the gateway orders, their signed events and the amounts the gateway reports (the note under T053, Q4 (a))';
+  }
+  if (
+    write.path === PAYMENTS_REPOSITORY &&
+    write.kind === 'confirmedAt' &&
+    write.within === 'markOrderConfirmed'
+  ) {
+    return "006:T006 (R-502, V-3; FR-718): an order's own marker, payments.confirmed_at, that the confirm step processed it, never an enrollment's confirmation; written by markOrderConfirmed, reached only by the confirm-enrollment job (PR #156 r1)";
   }
   if (write.path === CONFIRMATION && write.kind === 'confirmedAt') {
     return 'R-HONEST-1, FR-366: markConfirmed, reached only by the confirm-enrollment job on a signature-verified paid event (T042; the note under T053, Q4 (a))';
@@ -491,13 +502,16 @@ describe('the repository’s writes of payments, amounts and the confirmation (S
       [
         `confirmedAt ${CONFIRMATION} markConfirmed confirmedAt`,
         `amount ${PAY} insertEnrollment snapshotPricePiasters`,
-        `amount ${PACKAGES} insertPackage pricePiasters`,
+        // 006:T004 (rule d): the old-style insert's terms are now built by a helper (NOT SEEN, this
+        // file's head); the programme's NULL terms are an object built aside in the same file.
+        `amount ${PACKAGES} NO_FIXED_TERMS pricePiasters`,
         `amount ${PACKAGES} changePackage pricePiasters`,
       ].sort(),
     );
     const kindsInPayments = new Set(
       writes.filter(({ path: where }) => where.startsWith(PAYMENTS)).map(({ kind }) => kind),
     );
-    expect([...kindsInPayments].sort()).toEqual(['amount', 'payment']);
+    // 006:T006 (PR #156 r1): with an order's own marker, markOrderConfirmed's.
+    expect([...kindsInPayments].sort()).toEqual(['amount', 'confirmedAt', 'payment']);
   });
 });

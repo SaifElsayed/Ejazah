@@ -6,7 +6,7 @@
 
 This is the complete data model for the MVP — 44 tables across twelve module domains plus the platform kernel, every one traceable to an SRS requirement. If a feature needs a table that isn't here, the feature is out of spec: stop and raise it (Architecture principle 10), don't add the table silently.
 
-> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. v1.12 adds `enrollment_events` (Phase 2's T004) and defines **42**. v1.15 adds `session_events` and `provider_outages` (Phase 3's pass) and defines **44**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
+> **Count history.** v1.0 said 36 and defined 35; v1.1 corrected the figure to 35. v1.2 removed the five managed-payment tables (ADR 0005 D1) and defined 30. v1.3 adds `payments` and `payment_events` — records of gateway orders and their signed events, never balances (ADR 0007) — and defined 32. v1.3 addendum (ADR 0008) adds `idempotency_keys` for the kernel and defined 33. v1.4 adds the six tables of the Phase 1 ERD pass (`specs/002-identity/data-model.md` §1) and defines **39**. v1.5 adds `user_session_retired_tokens` (T094) and defines **40**. v1.10 adds `banned_identifiers` (T097) and defines **41**. v1.12 adds `enrollment_events` (Phase 2's T004) and defines **42**. v1.15 adds `session_events` and `provider_outages` (Phase 3's pass) and defines **44**. Phase 4's T001, 003:T105 and 003:T112 bring it to **48**; 006:T001 adds `programmes`, `programme_requests` and `programme_cards` (changelog rows 71 to 73) and defines **51**. The domain map below, the table sections and `packages/config/module-tables.json` all agree on that number and on which module owns each table.
 
 Conventions, binding on every table:
 
@@ -33,8 +33,8 @@ Twelve domains, named exactly as the backend modules that own them (ADR 0005 D2,
 | IDENTITY | `identity` | `users` · `user_roles` · `teacher_profiles` · `otp_codes` · `device_push_tokens` · `terms_acceptances` · `user_sessions` · `user_session_retired_tokens` · `auth_identities` · `banned_identifiers` · `teacher_application_history` |
 | VERIFICATION | `verification` | `verification_documents` · `verification_requests` |
 | CATALOG | `catalog` | `subjects` · `teacher_subjects` · `packages` · `availability_slots` · `isnad_entries` · `teacher_signatures` · `teacher_credentials` · `teacher_credential_history` |
-| BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` |
-| PAYMENTS | `payments` | `payments` · `payment_events` · `teacher_share_releases` |
+| BOOKING | `booking` | `slot_holds` · `enrollments` · `enrollment_events` · `programmes` · `programme_requests` |
+| PAYMENTS | `payments` | `payments` · `payment_events` · `teacher_share_releases` · `programme_cards` |
 | SESSIONS | `sessions` | `sessions` · `session_participant_events` · `cancellation_requests` · `session_remedies` · `session_events` · `provider_outages` · `session_postponements` |
 | CHAT | `chat` | `chat_messages` |
 | CERTIFICATION | `certification` | `ijazahs` · `ijazah_bars` |
@@ -293,12 +293,14 @@ Admin-initiated "provide ID" demands (FR-VERIFY-10) — distinct from the teache
 | id | uuid | PK |
 | teacher_user_id | FK → users | |
 | subject_id | FK → subjects | FK, not enum |
-| session_count | int | ≥ 1 (§15 rule 36) |
-| session_duration_minutes | int | 30, 45 or 60 (FR-PROFILE-2, §15 rule 36). Must equal slot duration at booking (FR-PROFILE-8) |
-| price_piasters | bigint | > 0 (§15 rule 36). Charged in full through the gateway at checkout; the gateway settles the net to the teacher (FR-PAYG-1) |
+| session_count | int, nullable | ≥ 1 (§15 rule 36). NULL exactly on a programme package, whose count comes at the offer (§15 rule 73; 006:T001, changelog row 69) |
+| session_duration_minutes | int, nullable | 30, 45 or 60 (FR-PROFILE-2, §15 rule 36); NULL exactly on a programme package (§15 rule 73). Must equal slot duration at booking (FR-PROFILE-8) |
+| price_piasters | bigint, nullable | > 0 (§15 rule 36); NULL exactly on a programme package, which sets its three prices instead (§15 rule 73). Charged in full through the gateway at checkout; the gateway settles the net to the teacher (FR-PAYG-1) |
 | currency | char(3), default 'EGP' | |
 | is_active | boolean | Deactivation never touches existing enrollments (FR-PROFILE-3) |
 | track | enum recitation · ijazah_track | The teacher's choice at creation (ADR 0018 D1; Phase 1 pass, migration `20261018000300`, default `recitation` since no row existed). An ijazah can be requested only from the ijazah track (FR-IJAZAH-1) |
+| is_programme | boolean, default false | A programme package: an `ijazah_track` one created while `programme_enabled` is on (R-503, DEC-94). False on every other package, a pre-switch ijazah-track one included, so the shape check and every reader branch on it, not on the track alone (§15 rule 73; 006:T001, changelog row 69) |
+| price_30_piasters / price_45_piasters / price_60_piasters | bigint, nullable | A programme package's session price for each length, all three set exactly on one, each > 0 (§15 rules 73 and 74; R-503; changelog row 69) |
 
 **ADR 0018, landed by the Phase 1 pass (migration `20261018000300`).** `packages.track`; `enrollments.snapshot_track` (§5); `sessions.makeup_for_session_id` and the `session_remedies` table (§5) record what each session not consumed is owed (FR-MAKEUP-1..6); `settings` holds the make-up choice window (seeded by T002).
 
@@ -373,7 +375,7 @@ Required before Mode A granting (FR-IJAZAH-12).
 
 ## 5. Booking and sessions
 
-Two modules share this section. `booking` owns `slot_holds`, `enrollments` and `enrollment_events`; `sessions` owns `sessions`, `session_participant_events` and `cancellation_requests` (ADR 0005 D2).
+Two modules share this section. `booking` owns `slot_holds`, `enrollments`, `enrollment_events`, `programmes` and `programme_requests`; `sessions` owns `sessions`, `session_participant_events` and `cancellation_requests` (ADR 0005 D2).
 
 ### `slot_holds`
 
@@ -410,7 +412,7 @@ The central entity: one student's purchase of one package. Snapshots everything 
 | snapshot_track | enum recitation · ijazah_track | The package's track at purchase (ADR 0018 D1, DEC-24; Phase 1 pass, migration `20261018000300`, default `recitation` as `packages.track`'s) |
 | status | enum pending_payment · confirmed · completed · terminated_no_show · cancelled | `pending_payment` from creation; `confirmed` only by the confirm-enrollment job on the gateway's paid event (FR-PAYG-5), and, for an enrollment that job confirmed and an administrator's decision later closed, by an administrator's restore (below); `cancelled` when its hold is released without conversion (FR-PAYG-6, ADR 0010 D7), and a paid event after that may still confirm it (FR-PAYG-19, ADR 0010 D5); `terminated_no_show` only by an administrator's decision on a student's complaint of the teacher's absence (FR-NOSHOW-4 as rewritten on 2026-11-05, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md); was: at the teacher no-show threshold, removed); `completed` when every session is settled and not frozen, no remedy is owed, the last session's dispute window has closed and no `student_suspended` compensation case is open on it (FR-449 of `specs/004-sessions/spec.md`; the owner's decision of 2026-11-05). A student's suspension leaves it `confirmed` (SRS FR-ADMIN-5 as amended on 2026-11-05). An administrator's restore (SRS FR-CANCEL-8, ADR 0023) returns to `confirmed`, within `enrollment_restore_window_days` of its closing, a `terminated_no_show` enrollment ended on a complaint or one `cancelled` (`admin`) on a suspended student's confirmed fault: the second exit from a terminal state beside ADR 0010 D5's; nothing in the database forbids either, and it writes no `confirmed_at` |
 | confirmed_at | timestamptz, nullable | Set once, by the confirm-enrollment job (FR-PAYG-5). There is no other write path (R-HONEST-1) |
-| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`). `admin` also for a student's ban (at once) and for a suspended student's fault confirmed (SRS FR-ADMIN-5 as amended on 2026-11-05, the owner's decision of 2026-11-05). Returned to NULL by an administrator's restore, as by ADR 0010 D5's late confirmation (SRS FR-CANCEL-8, ADR 0023) |
+| cancellation_reason | enum payment_expired · payment_failed · admin · gender_correction · teacher_suspended · slot_unavailable · checkout_abandoned · account_deleted · offer_declined · offer_lapsed · assessment_refused · programme_stopped, nullable | Why a `cancelled` enrollment was cancelled. `slot_unavailable`: paid, but the database refused its confirmation (FR-PAYG-19); `checkout_abandoned`: its hold was released by the student's own new checkout (FR-BOOK-12). Both added by ADR 0010 D7. `account_deleted`: the student deleted their account (ADR 0015 D4), landed by the Phase 1 pass (migration `20261018000300`). `admin` also for a student's ban (at once) and for a suspended student's fault confirmed (SRS FR-ADMIN-5 as amended on 2026-11-05, the owner's decision of 2026-11-05). Returned to NULL by an administrator's restore, as by ADR 0010 D5's late confirmation (SRS FR-CANCEL-8, ADR 0023). `offer_declined`, `offer_lapsed`, `assessment_refused` and `programme_stopped`: a programme's closings, the student declining the offer, the offer lapsing unpaid by `programmes.pay_by_at`, an approved refusal of the assessment, an approved stop; each frees the weekly time at once (ADR 0024; 006:T001, changelog row 65) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 | slot_released_at | timestamptz, nullable | An administrator's release of the weekly slot of a closed enrollment before its hold ended, with a reason, audited, one `enrollment_events` row `slot_released`; the slot is free from then on (SRS FR-CANCEL-9, DEC-66, DEC-69; T069, T070; changelog row 37). The held closings carry a partial index (§14) |
 | admin_end_reason | text, nullable | The reason both parties are shown of an Administrator's direct end of the enrollment (`sessions.endEnrollment`), written with the end and cleared by the restore; the internal note is kept in the audit entry only, never here (SRS FR-CANCEL-10, DEC-68; T082; changelog row 45). Only on an enrollment `cancelled` with the reason `admin`, 1 to 500 characters (§15 rule 51) |
@@ -429,13 +431,55 @@ Append-only record of each outcome a later notification needs: an enrollment con
 |---|---|---|
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | Plain index (§14) |
-| kind | enum confirmed · order_failed · cancelled · completed · terminated_no_show · restored · slot_released · slot_hold_ended | `completed` and `terminated_no_show` written by Phase 3 (v1.15, `specs/004-sessions/data-model.md` §2.8); `restored`, an administrator's restore of an enrollment an administrator's decision closed, with no reason and no payment (SRS FR-CANCEL-8; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)); `slot_released`, an administrator's release of a held slot, and `slot_hold_ended`, a hold's end recorded once by the hourly sweep, each with no reason and no payment (SRS FR-CANCEL-9; T069, T070, T074; changelog row 41) |
+| kind | enum confirmed · order_failed · cancelled · completed · terminated_no_show · restored · slot_released · slot_hold_ended · programme_offered · programme_paused · programme_resumed · programme_reopened | `completed` and `terminated_no_show` written by Phase 3 (v1.15, `specs/004-sessions/data-model.md` §2.8); `restored`, an administrator's restore of an enrollment an administrator's decision closed, with no reason and no payment (SRS FR-CANCEL-8; v1.15, [ADR 0023](adr/0023-no-automatic-termination-complaint-and-restore.md)); `slot_released`, an administrator's release of a held slot, and `slot_hold_ended`, a hold's end recorded once by the hourly sweep, each with no reason and no payment (SRS FR-CANCEL-9; T069, T070, T074; changelog row 41) |
 | cancellation_reason | enum `cancellation_reason`, nullable | Set exactly when `kind = 'cancelled'` (§15 rule 39) |
 | payment_id | FK → payments, nullable | The order that failed (`order_failed`) or that confirmed the enrollment (`confirmed`), so a later paid order is told apart from a replay (FR-375); set exactly for those two kinds (§15 rule 39). A reference only: `booking` never reads a `payments` row (R-API-6) |
 | occurred_at | timestamptz | The instant of the transaction that recorded the outcome |
 | created_at | timestamptz | |
 
 A row never changes, so it carries no `updated_at`; the application role may not UPDATE, DELETE or TRUNCATE it, and its foreign keys are `ON UPDATE RESTRICT` as rule 21's are (§15 rule 39).
+
+### `programmes`
+
+One row per programme, keyed by the `ijazah_track` enrollment its assessment created; the assessment is that enrollment's session 1 and the offer's sessions are 2..N+1 (ADR 0024, R-501; `specs/006-programme/data-model.md`). Owned by `booking`. Added by migration `20261122110318_ijazah_programme` (006:T001; changelog row 71).
+
+| Column | Type | Notes |
+|---|---|---|
+| enrollment_id | uuid | PK, FK → enrollments |
+| state | enum awaiting_offer · offered · active · paused · closed | `programme_state` |
+| offer_due_at | timestamptz, nullable | The delivered assessment's end + `programme_offer_hours` (24); an extension adds 24 h (R-505) |
+| pay_by_at | timestamptz, nullable | The spec's «pay_by»: the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505) |
+| level / readiness / expected_length | text, nullable | The teacher's words at the offer, 1 to 500 characters, not blank (§15 rule 78) |
+| offered_at | timestamptz, nullable | Set once, at the offer; set while `offered`, `active` or `paused` (§15 rule 76). The count (N+1), length and total are frozen on the enrollment then |
+| month_count | smallint, nullable | ⌈N ÷ 4⌉, frozen at the offer (R-507); ≥ 1 (§15 rule 78) |
+| payment_plan | enum in_full · monthly, nullable | `programme_plan`; NULL until the first payment |
+| months_paid | smallint, default 0 | The highest paid month; in full, `month_count`. Never above it, none before the offer (§15 rule 78) |
+| next_due_at | timestamptz, nullable | The paid month's last session's end (`lastToEnd`, R-507) |
+| first_failure_at | timestamptz, nullable | The current month's first automatic failure (R-508) |
+| retries_done | smallint, default 0 | 0 to 4 (§15 rule 78; R-508) |
+| paused_at | timestamptz, nullable | Set exactly while `paused` (§15 rule 77): by the sweep, cleared by a payment; a reopen's time |
+| closed_at | timestamptz, nullable | Set exactly once `closed` (§15 rule 77), by the close hook (R-510) |
+| created_at / updated_at | timestamptz | |
+
+Indexed on (`state`, `next_due_at`) for the `advance-programmes` sweep (R-508).
+
+### `programme_requests`
+
+An item for an administrator on a programme (R-513, I-2 (a), FR-706b). Owned by `booking`. Added by migration `20261122110318_ijazah_programme` (006:T001; changelog row 72).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| enrollment_id | FK → enrollments | From the enrollment, never the input; plain index (§14) |
+| teacher_user_id | FK → users | The enrollment's teacher; plain index |
+| kind | enum stop · refusal · no_offer · pay_blocked | `programme_request_kind`: `stop` and `refusal` are the teacher's; `no_offer` and `pay_blocked` are raised by the sweep |
+| reason | text, nullable | 1 to 500 characters, not blank; set on every `stop` and `refusal` (§15 rule 80) |
+| status | enum open · approved · declined · withdrawn · extended | `programme_request_status`; `extended` only on a `no_offer` or `pay_blocked` item (§15 rule 80). One open item per enrollment and kind (§15 rule 79) |
+| decided_by_admin_id | FK → admin_users, nullable | Set with `decided_at`, on every approval and decline (§15 rule 81); plain index |
+| decided_at | timestamptz, nullable | |
+| created_at / updated_at | timestamptz | |
+
+Indexed on (`status`, `created_at`) for the administrators' queue.
 
 ### `sessions`
 
@@ -461,6 +505,7 @@ One scheduled occurrence. Its local date, local start time and zone are the sche
 | admin_settled_at | timestamptz, nullable | When an administrator settled it; both NULL or both set with `settled_by_admin_id` (v1.15; §15 rule 40) |
 | makeup_for_session_id | FK → sessions, nullable | The session this one makes up for (ADR 0018 D3; Phase 1 pass, migration `20261018000300`) |
 | postponement_id | FK → session_postponements, nullable | The postponement that moved the session; set exactly when `status = 'postponed'` (§15 rule 66; T112; changelog row 59); indexed |
+| programme_month | smallint, nullable | A programme offer session's month, set at generation, ≥ 1 (§15 rule 75); NULL for the assessment (session 1) and for every other enrollment's session; a make-up or a postponed session's new row copies its original's (R-507; 006:T001, changelog row 70) |
 | deleted_at | timestamptz, nullable | Soft deletion. Hard DELETE is revoked (§15.10) |
 
 ### `session_remedies`
@@ -590,7 +635,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | |
 | gateway | enum fake, then one value per integrated gateway | Declared in `base.prisma` by T059 with the single member `fake`, the recording stand-in the port carries from day one; production refuses `fake` in config (note under T059 in tasks.md). A real gateway's member is added when it is integrated (OPEN-11): `paymob` since T056 of `specs/003-booking/tasks.md` (migration `20261104120000_payment_gateway_paymob`). The adapter is selected by config (R-API-4), independently of this enum |
-| gateway_order_id | text, unique | Created by the platform on the gateway (FR-PAYG-2) |
+| gateway_order_id | text, unique, nullable | Created by the platform on the gateway (FR-PAYG-2). NULL only on an automatic order `created` until the gateway answers, `expired` with no answer, or `failed` with a `hard` decline refused before the gateway (§15 rule 72; R-509; 006:T001, changelog row 68); the unique index keeps the others unique (§15 rule 14) |
 | gateway_transaction_id | text, unique, nullable | Reported by the paid event |
 | gross_piasters | bigint | Gross — the snapshot price charged. Named for what it is, so the R-MONEY-6 confinement rule recognises it by its words (PR #20) |
 | gateway_fee_piasters | bigint, nullable | Reported by the gateway on the paid event |
@@ -604,6 +649,12 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | status | enum created · paid · failed · expired · refunded | `refunded` records a refund Platform Administration executed through the gateway after a compensation decision (FR-DISPUTE-6), learned from the gateway's signed event; the platform's code never initiates one (FR-PAYG-10). *(Amended 2026-11-18, T102: an order becomes `refunded` when its `refunded_piasters` reaches the gross; a partial refund leaves it `paid`, DEC-82.)* |
 | expires_at | timestamptz | The order's expiry as created: no later than the hold's expiry minus the grace (FR-355). Read by Retry and by FR-BOOK-12's "still payable" (v1.12) |
 | checkout_url_encrypted | bytea, nullable | The hosted checkout's address, encrypted (R-DB-8: it may carry a payment token), kept so FR-BOOK-12 (c) can offer "continue the previous payment"; NULL once the order leaves `created`. Decrypted only by `checkout.continue`, for the student who owns the order's enrollment, while the order is `created` and `expires_at` is in the future; never logged (`specs/003-booking/data-model.md` §2.4.1). Reached by the `reencrypt-columns` job through the payments repository (v1.12) |
+| kind | enum package · assessment · rest_in_full · instalment, default `package` | `order_kind`: what the order pays for; every order before the programme is a `package` one (R-502; 006:T001, changelog row 66) |
+| instalment_month | smallint, nullable | Set (≥ 1) exactly on an `instalment` (§15 rule 70). With `enrollment_id` and `kind`, a plain index, not unique: a second paid order for a month is recorded (FR-718; changelog row 68) |
+| attempt | smallint, nullable | An automatic charge's attempt, 0 to 4 (§15 rule 71; R-508; changelog row 67) |
+| automatic | boolean, default false | A charge of a saved card, recorded by the sweep (R-509) |
+| decline_kind | enum soft · hard, nullable | `decline_kind`: why an automatic order failed; `soft` is retried, `hard` never (R-509) |
+| confirmed_at | timestamptz, nullable | The confirm step's marker for the order it processed, so a replayed event finds it and does nothing (R-502, V-3) |
 | created_at / updated_at | timestamptz | |
 
 ### `payment_events`
@@ -615,7 +666,7 @@ Append-only record of every signed inbound gateway event. Replay safety is the u
 | id | uuid | PK |
 | payment_id | FK → payments, nullable | NULL exactly when `event_type` is `recipient_verified` or `recipient_rejected`: those report on a teacher's payout account, not a gateway order, and are recorded here so the unique `provider_event_id` makes their replay a no-op too (FR-PAYG-4, FR-PAYG-15, §15.20) |
 | provider_event_id | text, unique, NOT NULL | Idempotency — a replayed webhook cannot double-insert (FR-PAYG-4, R-MONEY-8) |
-| event_type | enum paid · failed · expired · refunded · recipient_verified · recipient_rejected · refund_reported | `refunded`: a refund child transaction, its signed amount added to the order's `refunded_piasters`. `refund_reported` (T102, changelog row 56): a refund flagged on the original payment, which records no money and sets `payments.refund_reported_at` once (DEC-82) |
+| event_type | enum paid · failed · expired · refunded · recipient_verified · recipient_rejected · refund_reported · card_saved | `refunded`: a refund child transaction, its signed amount added to the order's `refunded_piasters`. `refund_reported` (T102, changelog row 56): a refund flagged on the original payment, which records no money and sets `payments.refund_reported_at` once (DEC-82). `card_saved` (006:T001, changelog row 65): the gateway's token callback for a card the student consented to save, recorded under `paymob:<txId>:token` (R-510) |
 | signature_verified_at | timestamptz | Set by the signature guard before the row is written (R-MONEY-9). A row cannot exist for an unverified event |
 | payload_hash | text | Hash of the raw body, for audit; the body itself is never stored (R-SEC-2) |
 | received_at | timestamptz | |
@@ -629,12 +680,26 @@ One release of a teacher's share per enrollment and milestone (SRS DEC-81, DEC-8
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | Unique with `milestone` (§15 rule 62) |
 | teacher_user_id | FK → users | The enrollment's teacher, for the per-teacher lists; indexed |
-| milestone | enum recitation_end · ijazah_half · ijazah_end · teacher_dropout · student_complaint_close | `share_release_milestone`: a recitation package's end; on the ijazah track, half the sessions delivered and the end; a recitation package closed on the teacher's dropout (`teacher_ended`, `absence_termination`); a package closed on a complaint against the student (`student_fault_confirmed`, `student_banned`) (Q-5 (a)) |
+| milestone | enum recitation_end · ijazah_half · ijazah_end · teacher_dropout · student_complaint_close · assessment · programme_stopped | `share_release_milestone`: a recitation package's end; on the ijazah track, half the sessions delivered and the end; a recitation package closed on the teacher's dropout (`teacher_ended`, `absence_termination`); a package closed on a complaint against the student (`student_fault_confirmed`, `student_banned`) (Q-5 (a)). `assessment`: a programme's assessment when the student does not continue; `programme_stopped`: a programme closed by an approved stop (R-512, DEC-94; 006:T001, changelog row 65) |
 | amount_piasters | bigint | Above zero (§15 rule 62) |
 | due_at | timestamptz | When it fell due by its milestone's rule, not when the sweep wrote it |
 | created_at | timestamptz | |
 | marked_at | timestamptz, nullable | When an administrator marked it executed in the gateway's dashboard; set once, by a conditional update. Both or neither with `marked_by_admin_id` (§15 rule 63) |
 | marked_by_admin_id | FK → admin_users, nullable | Who marked it; indexed |
+
+### `programme_cards`
+
+The card a student consented to save at a programme's payment, one per programme (R-510). Owned by `payments`. Added by migration `20261122110318_ijazah_programme` (006:T001; changelog row 73).
+
+| Column | Type | Notes |
+|---|---|---|
+| enrollment_id | uuid | PK, FK → enrollments |
+| token_encrypted | bytea | The gateway's token, encrypted by `ColumnCipher` under the column `programme_cards.token_encrypted`, the row id bound (R-DB-8); never logged, audited or returned |
+| last4 / brand | text | Shown to the student only |
+| consented_at | timestamptz | The student's consent at the payment that saved it |
+| created_at / updated_at | timestamptz | |
+
+The row is deleted by the close hook, at the programme's end, by the account's erasure, when the student turns the automatic renewal off (DEC-95), and at a teacher's suspension, ban or departure (DEC-94); the application role keeps DELETE.
 
 ## 8. Certification
 
@@ -1134,11 +1199,35 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 69. `teacher_application_history`, `teacher_credential_history`: no UPDATE and no TRUNCATE, revoked at the Postgres role level; each row records a decision and is written once (rule 21's pattern). DELETE stays granted, used only by the deletion of a teacher never approved (FR-AUTH-14, DEC-97): a spec finds no other code path deleting from them, and each erasure function refuses the history of a teacher once approved (`approved_at` set). A legal redaction of a note, if ever needed, is a documented migration, never application code (the owner's decision of 2026-11-22 on R1a's conflict check, Q-2 (a); T174).
 
+70. `payments`: `(kind = 'instalment') = (instalment_month IS NOT NULL) AND (instalment_month IS NULL OR instalment_month >= 1)` — check `payments_instalment_month_check`: an instalment names its month, from 1, and no other order names one (ADR 0024, R-502; 006:T001; changelog row 66).
+
+71. `payments`: `attempt IS NULL OR attempt BETWEEN 0 AND 4` — check `payments_attempt_check`: an automatic charge's attempt, at most four retries after the first (R-508; 006:T001; changelog row 67).
+
+72. `payments`: `gateway_order_id IS NOT NULL OR (automatic AND (status IN ('created', 'expired') OR (status = 'failed' AND decline_kind IS NOT DISTINCT FROM 'hard')))` — check `payments_gateway_order_id_check`: an order has no gateway id only while an automatic charge waits for the gateway's answer, when it expired with none, or when it was refused before the gateway with a hard decline (`no_payee`); the unique index of rule 14 is kept, NULLs not colliding (R-509, N-3, PR #153 r3 Major 1; 006:T001; changelog row 68).
+
+73. `packages`: `(NOT is_programme AND session_count, session_duration_minutes and price_piasters set AND price_30_piasters, price_45_piasters and price_60_piasters NULL) OR (is_programme AND track = 'ijazah_track' AND the old three NULL AND the three prices set)` — check `packages_programme_shape_check`: a recitation package, or an ijazah-track one created while `programme_enabled` is off, keeps its count, length and price; a programme package is an ijazah-track one with its three prices and none of the three, which come at the offer. Rule 36's three checks pass a NULL (R-503; 006:T001; changelog row 69).
+
+74. `packages`: each of `price_30_piasters`, `price_45_piasters` and `price_60_piasters` NULL or above zero — check `packages_programme_prices_positive_check` (rule 36's `price_piasters > 0`; R-503; 006:T001; changelog row 69).
+
+75. `sessions`: `programme_month IS NULL OR programme_month >= 1` — check `sessions_programme_month_check`: a programme session's month from 1. That it is NULL on the assessment and on every other enrollment's session spans `enrollments`, so no check can say it: the generation holds it (R-507; 006:T001; changelog row 70).
+
+76. `programmes`: `state NOT IN ('offered', 'active', 'paused') OR offered_at IS NOT NULL` — check `programmes_offered_at_check`: a programme past its offer has the offer's time (006:T001; changelog row 71).
+
+77. `programmes`: `(paused_at IS NOT NULL) = (state = 'paused')` and `(closed_at IS NOT NULL) = (state = 'closed')` — checks `programmes_paused_at_check` and `programmes_closed_at_check`: the pause's and the close's instants exactly in their states, so a payment that forgets to clear the pause, or a close that forgets its instant, is refused (R-508, R-510; 006:T001; changelog row 71).
+
+78. `programmes`: `(month_count IS NULL OR month_count >= 1) AND months_paid >= 0 AND months_paid <= COALESCE(month_count, 0)` — check `programmes_months_paid_check`: no paid month before the offer sets the count, and never more than the count; `retries_done BETWEEN 0 AND 4` — check `programmes_retries_done_check` (R-508); `level`, `readiness` and `expected_length` each NULL or 1 to 500 characters and not blank — check `programmes_offer_words_check` (rule 65's bounds) (006:T001; changelog row 71).
+
+79. `programme_requests`: one open item per enrollment and kind — partial unique `programme_requests_one_open_key` on `(enrollment_id, kind) WHERE status = 'open'`, so two sweeps or two requests at once leave one (R-513; 006:T001; changelog row 72).
+
+80. `programme_requests`: a reason NULL or 1 to 500 characters and not blank, and set on every `stop` and `refusal` — check `programme_requests_reason_check`; `status <> 'extended' OR kind IN ('no_offer', 'pay_blocked')` — check `programme_requests_extended_check`: only the sweep's two items are extended (R-513, I-2 (a), FR-706b; 006:T001; changelog row 72).
+
+81. `programme_requests`: `(decided_by_admin_id IS NULL) = (decided_at IS NULL) AND (status NOT IN ('approved', 'declined') OR decided_at IS NOT NULL)` — check `programme_requests_decided_check`: the deciding administrator and the instant set together, on every approval and decline (rule 54's pattern; R-513; 006:T001; changelog row 72).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
 
-*End of document. 50 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
+*End of document. 53 tables. Every table cites the SRS requirement it serves; every SRS entity in §6 of the spec resolves to a table here.*
 
 ## Changelog — v1.3 → v1.4 (the Phase 1 ERD pass, 2026-10-18)
 
@@ -1507,10 +1596,24 @@ Amended on 2026-11-19 by T112 of `specs/003-booking/tasks.md` (B-M3), on the own
 | 60 | `compensation_cases.reason` gains `student_complaint_ended` (003:T112, Q-4 (a): the administrator's direct end on a teacher's complaint against the student, `sessions.endEnrollment` with that cause, a close on a complaint against the student, SRS FR-POSTPONE-6 as amended, DEC-90; `reason` is text, the closed list is `COMPENSATION_REASONS` in code) | none |
 | 61 | §12 `settings`: `postponement_notice_hours` (12, at least 1), the notice before each session a postponement covers, a nearer session standing (SRS §3.14, FR-POSTPONE-3), and `postponement_interval_weeks` (4, at least 1), once per interval per party per enrollment, from that party's last request on it (SRS §3.14, FR-POSTPONE-4, DEC-90); group `sessions` | none (the seed) |
 
-Amended on 2026-11-22 by T174 of `specs/002-identity/tasks.md` (R1a), on the owner's decisions of 2026-11-21 (SRS DEC-97: an applicant never approved keeps nothing; the text of a decision's note in a history, not in the audit log) and of 2026-11-22 on R1a's conflict check (Q-2 (a): UPDATE and TRUNCATE revoked, DELETE for the erasure alone); the numbers agreed with B-P1's review session (rows 62 to 64, rules 67 to 69); `C:\Users\amrkn\Documents\ejazah-tools\r1a\conflict-check.md`. Two tables are added: 50 tables.
+Amended on 2026-11-22 by T174 of `specs/002-identity/tasks.md` (R1a), on the owner's decisions of 2026-11-21 (SRS DEC-97: an applicant never approved keeps nothing; the text of a decision's note in a history, not in the audit log) and of 2026-11-22 on R1a's conflict check (Q-2 (a): UPDATE and TRUNCATE revoked, DELETE for the erasure alone); the numbers agreed with B-P1's review session (rows 62 to 64, rules 67 to 69); `C:\Users\amrkn\Documents\ejazah-tools\r1a\conflict-check.md`. Two tables are added (with B-P1's three, merged from develop: 53 tables).
 
 | # | Change | Migration |
 |---|---|---|
 | 62 | §2 new table `teacher_application_history` (`teacher_profile_id`, `action`, `note`, `admin_id`, `created_at`) and enum `teacher_application_history_action` (approve · reject · request_info · ban · revoke), its indexes `(teacher_profile_id, created_at)` and `(admin_id)`, its foreign keys `RESTRICT` on delete and update, and §15 rules 67 and 69 | `20261122111346_teacher_decision_histories` |
 | 63 | §4 new table `teacher_credential_history` (`credential_id`, `action`, `note`, `before`, `after`, `admin_id`, `created_at`) and enum `teacher_credential_history_action` (approve · reject · request_document · correct), its indexes `(credential_id, created_at)` and `(admin_id)`, its foreign keys `RESTRICT` on delete and update, and §15 rules 68 and 69 | `20261122111346_teacher_decision_histories` |
 | 64 | §12 `settings`: `rate_limit_address_authentication` (100 per 900 s) and `rate_limit_address_one_time_code` (30 per 3,600 s), the two limits per client address counted before the platform-wide budgets they guard (SRS §3.14, NFR-SEC-10, DEC-103; T172); `rate_limit_failed_one_time_code` (10 per 86,400 s), failed one-time codes per e-mail address and purpose before issuing stops (SRS §3.14, DEC-100; T173); group `rateLimits`; and `identity_document_retention_days` (90, at least 1), the days after its decision an identity document on a live account is erased, a teacher once approved excepted (SRS §3.14, DEC-100, DEC-67; counsel, OPEN-05; T176); group `accounts` | none (the seed) |
+
+Amended on 2026-11-22 by T001 of `specs/006-programme/tasks.md` (B-P1), on the owner's decisions of 2026-11-19 (SRS DEC-94: the assessment, the offer within 24 hours, the 48 hours from the offer, the old ijazah packages deactivated by the switch, not by the migration) and of 2026-11-22 on B-P1's conflict check (Q-2 (a): `gateway_order_id` NULL-able as written, the reads that need a string refusing a NULL; SRS DEC-110); [ADR 0024](adr/0024-assessment-and-ijazah-programme-by-instalments.md), `specs/006-programme/data-model.md`; the numbers agreed with R1a's review session (rows 65 to 73 and rules 70 to 81; rows 62 to 64 and rules 67 to 69 are R1a's). No existing row is changed. Three tables are added: 51 tables.
+
+| # | Change | Migration |
+|---|---|---|
+| 65 | Enums: `cancellation_reason` gains `offer_declined`, `offer_lapsed`, `assessment_refused` and `programme_stopped`; `share_release_milestone` gains `assessment` and `programme_stopped`; `enrollment_event_kind` gains `programme_offered`, `programme_paused`, `programme_resumed` and `programme_reopened`; `payment_event_type` gains `card_saved` (the gateway's token callback, R-510), each at its end, `IF NOT EXISTS`, committed before the rest (`20261108120000_sessions_pass`'s precedent); new enums `order_kind`, `decline_kind`, `programme_state`, `programme_plan`, `programme_request_kind` (with `pay_blocked`, FR-706b) and `programme_request_status` (with `extended`) | `20261122110318_ijazah_programme` (B-P1) |
+| 66 | §7 `payments.kind` (`order_kind` NOT NULL, default `package`: every existing order a package one) and `instalment_month` (smallint, nullable), §15 rule 70 (R-502) | the same |
+| 67 | §7 `payments.attempt` (smallint, nullable), `automatic` (boolean NOT NULL, default false) and `decline_kind` (nullable), §15 rule 71 (R-508, R-509); `payments.confirmed_at` (timestamptz, nullable), the confirm step's marker for the order it processed (R-502, V-3) | the same |
+| 68 | §7 `payments.gateway_order_id` NULL-able under §15 rule 72, its unique index kept (rule 14); a plain index on (`enrollment_id`, `kind`, `instalment_month`), not unique, since a second paid order for a month is recorded and goes to the case (FR-718) (R-502, R-509; Q-2 (a)) | the same |
+| 69 | §4 `packages.is_programme` (boolean NOT NULL, default false), `price_30_piasters`, `price_45_piasters` and `price_60_piasters` (bigint, nullable); `session_count`, `session_duration_minutes` and `price_piasters` NULL-able; §15 rules 73 and 74 (R-503). The old ijazah-track packages are deactivated when `programme_enabled` is turned on (T002), not here | the same |
+| 70 | §5 `sessions.programme_month` (smallint, nullable; NULL on every existing row), §15 rule 75 (R-507) | the same |
+| 71 | §5 new table `programmes` (booking), keyed by its enrollment: `state`, `offer_due_at`, `pay_by_at` (the spec's «pay_by»), `level`, `readiness`, `expected_length`, `offered_at`, `month_count`, `payment_plan`, `months_paid`, `next_due_at`, `first_failure_at`, `retries_done`, `paused_at`, `closed_at`; its index on (`state`, `next_due_at`) for the sweep; §15 rules 76 to 78 (R-501, R-505 to R-508, R-510) | the same |
+| 72 | §5 new table `programme_requests` (booking): `enrollment_id`, `teacher_user_id`, `kind`, `reason`, `status`, `decided_by_admin_id`, `decided_at`; its queue index on (`status`, `created_at`) and its foreign keys' plain indexes; §15 rules 79 to 81 (R-513) | the same |
+| 73 | §7 new table `programme_cards` (payments), keyed by its enrollment: `token_encrypted` (bytea, `ColumnCipher`, R-DB-8), `last4`, `brand`, `consented_at`; deleted by the close hook, at the programme's end, by the account's erasure, when the student turns the automatic renewal off and at a teacher's suspension, ban or departure (R-510, DEC-94, DEC-95). `packages/config/module-tables.json` names the three tables: 51 | the same |
