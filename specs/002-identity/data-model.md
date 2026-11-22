@@ -256,6 +256,7 @@ follows.
 | `rate_limit_admin_authentication_budget` | `{ limit: 1000, window_seconds: 900 }` | T133: the admin sign-in's budget, its own, at the authentication budget's value |
 | `document_unreferenced_purge_after_hours` | 72                                   | `purge-unreferenced-documents` (T093): an upload no submission points at is deleted after it                                                                    |
 | `document_unreferenced_max_per_user`      | 30                                   | `POST /uploads/documents` (T093): the unreferenced documents a person may hold; an application needs eleven at most (ten credentials and the identity document) |
+| `identity_document_retention_days` | 90 | R1a T176 (SRS §3.14, DEC-100; counsel, OPEN-05): `erase-identity-documents` erases an identity document on a live account this many days after its decision (a rejected or banned application's, a satisfied or replaced request's), a teacher once approved excepted (DEC-67), a ban's never before its restore window ends (Q-3 (a)); group `accounts` |
 
 SRS §3.14's table gains the rows a person would change (the admin lockout pair
 is already there; the session, code and upload limits join it); the purge

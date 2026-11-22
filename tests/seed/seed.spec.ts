@@ -372,6 +372,7 @@ describe('the seed (T074)', () => {
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
     // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two.
-    expect(counts).toEqual([{ subjects: '5', settings: '95', admins: '1' }]);
+    // R1a (002:T176): + identity_document_retention_days.
+    expect(counts).toEqual([{ subjects: '5', settings: '96', admins: '1' }]);
   });
 });

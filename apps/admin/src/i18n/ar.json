@@ -2647,6 +2647,7 @@
         "enrollment_restore_window_days": "مهلة استعادة الاشتراك",
         "first_session_lead_hours": "مهلة أول جلسة بعد التأكيد",
         "idempotency_key_ttl_hours": "مدة منع تكرار الدفع",
+        "identity_document_retention_days": "مدة الاحتفاظ بمستند الهوية بعد القرار",
         "ijazah_half_release_percent": "مسار الإجازة: النصيب المصروف عند منتصف الجلسات",
         "join_window_minutes": "مهلة الدخول",
         "live_channel_max_connections_per_user": "اتصالات القناة المباشرة لكل مستخدم",

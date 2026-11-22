@@ -237,6 +237,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 5 minutes old, and no longer sent once it is 30 minutes old.
   ['notification_requeue_after_minutes', 5],
   ['notification_requeue_max_age_minutes', 30],
+  // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account
+  // erased 90 days after its decision, a teacher once approved excepted (DEC-67).
+  ['identity_document_retention_days', 90],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';
