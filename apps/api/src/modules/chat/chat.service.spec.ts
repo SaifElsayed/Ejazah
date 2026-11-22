@@ -72,6 +72,8 @@ let terms: Map<string, ChatEnrollmentTerms>;
 let genders: Map<string, 'male' | 'female'>;
 let messages: ChatMessageRow[];
 let inserted: unknown[];
+/** T175: the messages the send wrote, by id, as the table holds them. */
+let sentRows: Map<string, ChatMessageRow>;
 /** Applied once the enrollment's lock is taken: what another transaction committed meanwhile. */
 let underLock: (() => void) | undefined;
 let pageSize: number;
@@ -153,7 +155,7 @@ const store: ChatStore = {
   insertMessage: async (_tx, row) => {
     trace.push(`insert message by ${row.senderUserId}`);
     inserted.push(row);
-    return {
+    const written: ChatMessageRow = {
       id: NEW_MESSAGE,
       senderUserId: row.senderUserId,
       body: row.body,
@@ -162,6 +164,13 @@ const store: ChatStore = {
       sentAt: row.sentAt,
       purgedAt: null,
     };
+    sentRows.set(written.id, written);
+    return written;
+  },
+  // T175: a sent message read again by its id, as a replay reads it.
+  messageById: async (_tx, messageId) => {
+    trace.push(`read message ${messageId}`);
+    return sentRows.get(messageId) ?? null;
   },
   // T038.
   attachmentOf: async (_tx, messageId) => {
@@ -197,6 +206,7 @@ beforeEach(() => {
   ]);
   messages = [];
   inserted = [];
+  sentRows = new Map();
   underLock = undefined;
   pageSize = 2;
   attachments = new Map();
@@ -755,5 +765,81 @@ describe('chat.send: the live event (T066)', () => {
     await asUserKind((live) => send(STUDENT, ENROLLMENT, 'نص سري لا يُكتب', live));
     expect(lines.length).toBeGreaterThan(0);
     expect(JSON.stringify(lines)).not.toContain('نص سري');
+  });
+});
+
+// T175 (R1a; the note under T175, (1)): the key stores `{ messageId }` and never the body; a replay
+// reads the message by its id, and a purged one answers `purged` with nothing of it.
+describe('chat.send’s key holds no body (T175)', () => {
+  const BODY = 'نص لا يبقى في المفتاح';
+  const none: LivePublisher = { afterCommit: () => undefined };
+
+  function keyedChat() {
+    const outcomes = new Map<string, unknown>();
+    const chat = createChatServices({
+      transactions,
+      idempotency: {
+        run: async <T>(request: IdempotentRequest, effect: (tx: Transaction) => Promise<T>) => {
+          if (outcomes.has(request.key)) return outcomes.get(request.key) as T;
+          const outcome = await transactions.run(effect);
+          outcomes.set(request.key, outcome);
+          return outcome;
+        },
+      },
+      settings,
+      enrollments,
+      store,
+      storage,
+      clock: async () => SENT,
+    });
+    const send = () =>
+      chat.send(
+        { userId: STUDENT },
+        { enrollmentId: ENROLLMENT, body: BODY, idempotencyKey: KEY },
+        log,
+        none,
+      );
+    return { outcomes, send };
+  }
+
+  it('stores the message’s id only', async () => {
+    const { outcomes, send } = keyedChat();
+    await send();
+    expect(outcomes.get(KEY)).toEqual({ messageId: NEW_MESSAGE });
+    expect(JSON.stringify([...outcomes.values()])).not.toContain(BODY);
+  });
+
+  it('answers a replay with the message read by its id, as the first call answered it', async () => {
+    const { send } = keyedChat();
+    const first = await send();
+    trace.length = 0;
+    await expect(send()).resolves.toEqual(first);
+    expect(trace).toContain(`read message ${NEW_MESSAGE}`);
+  });
+
+  it('answers a replay of a purged message purged, with no body', async () => {
+    const { send } = keyedChat();
+    await send();
+    const row = sentRows.get(NEW_MESSAGE);
+    if (row === undefined) throw new Error('no message written');
+    sentRows.set(NEW_MESSAGE, { ...row, body: null, purgedAt: NOW });
+    await expect(send()).resolves.toEqual({
+      messageId: NEW_MESSAGE,
+      mine: true,
+      sentAt: SENT.toISOString(),
+      purged: true,
+    });
+  });
+
+  it('answers a replay NOT_FOUND when the message is gone, logged with the ids and its reason', async () => {
+    const { send } = keyedChat();
+    await send();
+    sentRows.delete(NEW_MESSAGE);
+    lines.length = 0;
+    const refusal = await refusalOf(send());
+    expect(refusal.code).toBe('NOT_FOUND');
+    expect(lines).toMatchObject([
+      { messageId: NEW_MESSAGE, userId: STUDENT, errorCode: 'NOT_FOUND', reason: 'no_message' },
+    ]);
   });
 });

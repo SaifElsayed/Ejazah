@@ -29,7 +29,9 @@
 //   one ever approved (T076 of specs/004-sessions, FR-508; SRS FR-AUTH-14 as amended, DEC-67;
 //   `eraseAccount`); then the consequences registry with `account_deleted` (FR-142, decision 2):
 //   the verification module marks a teacher ever approved's identity and credential documents kept
-//   there and every other document erased. A throw anywhere rolls all of it back.
+//   there and every other document erased. T175 (R1a): after the erasure, the person's idempotency
+//   keys removed through the kernel's `removeOfActor`, all but the running `account.delete`'s own,
+//   which the kernel completes after the effect. A throw anywhere rolls all of it back.
 // - AFTER THE COMMIT, outside the transaction and detached from the request: the photo's file
 //   removed and only then its key cleared; each other module's files handed over (the verification
 //   module's documents, decision 1); the Apple grant revoked through the port (decision 3); the
@@ -104,6 +106,10 @@ import {
   RequestLive,
   unboundBus,
 } from '../../platform/live/live-publisher.js';
+import {
+  type KeptKey,
+  removeOfActor,
+} from '../../platform/idempotency/idempotency.repository.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { EmailPort } from '../../platform/ports/email/email.port.js';
 import { IdentityTokenError, type SignInPort } from '../../platform/ports/sign-in/sign-in.port.js';
@@ -287,7 +293,10 @@ export class DeletionService {
           input: { confirmation: input.confirmation, reauth: input.reauth.kind },
         },
         async (tx) => {
-          call.erased = await this.#eraseOwn(tx, userId, at, live);
+          call.erased = await this.#eraseOwn(tx, userId, at, live, {
+            scope: 'account.delete',
+            key: input.idempotencyKey,
+          });
           return null;
         },
       );
@@ -332,7 +341,9 @@ export class DeletionService {
           if (cause !== null)
             throw this.#refusedOpenMatter({ adminId, userId: targetUserId }, cause);
         }
-        const erased = await this.#eraseLocked(keyed, targetUserId, this.#now(), { adminId });
+        const erased = await this.#eraseLocked(keyed, targetUserId, this.#now(), {
+          actor: { adminId },
+        });
         if (erased === null) throw this.#notFound(adminId, targetUserId);
         list.afterCommitDo?.(() => {
           this.#endLiveStreams(targetUserId);
@@ -422,13 +433,15 @@ export class DeletionService {
   /**
    * The person's own deletion's transaction (ADR 0015 D3); null when the person was already deleted.
    * `live` is bound to `tx` while it runs (T066), so a consequence reaches it through
-   * `publisherOn(tx)`. T080: the account's lock first, then the count, then the erasure.
+   * `publisherOn(tx)`. T080: the account's lock first, then the count, then the erasure. T175: `own`
+   * is the app's running key, which the erasure keeps (none on the web).
    */
   async #eraseOwn(
     tx: Transaction,
     userId: string,
     at: Date,
     live: RequestLive,
+    own?: KeptKey,
   ): Promise<ErasureSnapshot | null> {
     const unbind = bindToTransaction(tx, live);
     try {
@@ -440,7 +453,7 @@ export class DeletionService {
       if ((await this.#dependencies.openIjazahRequests.count(tx, userId)) > 0) {
         throw this.#refusedOwn(userId, 'pending_ijazah_requests');
       }
-      return await this.#eraseLocked(tx, userId, at);
+      return await this.#eraseLocked(tx, userId, at, own === undefined ? {} : { own });
     } finally {
       unbind();
     }
@@ -460,13 +473,15 @@ export class DeletionService {
 
   /**
    * The erasure under the account's lock (ADR 0015 D3); null when the person was already deleted.
-   * `actor`, an administrator's deletion's (T081, N6), reaches every consequence.
+   * `actor`, an administrator's deletion's (T081, N6), reaches every consequence. T175: the person's
+   * idempotency keys removed after the erasure, but `own`, the running call's key, which the kernel
+   * completes after this effect (deleting it would roll the deletion back).
    */
   async #eraseLocked(
     tx: Transaction,
     userId: string,
     at: Date,
-    actor?: TerminationActor,
+    { actor, own }: { readonly actor?: TerminationActor; readonly own?: KeptKey } = {},
   ): Promise<ErasureSnapshot | null> {
     const snapshot = await readErasureSnapshot(tx, userId);
     if (snapshot === null) return null;
@@ -475,6 +490,7 @@ export class DeletionService {
     // deletions racing on one person both may keep the hashes; a hash kept twice stays one row.
     if (banned !== null) await this.#banned.keep(tx, banned);
     if (!(await eraseAccount(tx, userId, at))) return null;
+    await removeOfActor(tx, userId, own);
     await this.#sessions.revokeAll(tx, userId, 'account_deleted', { at });
     await this.#dependencies.consequences.onAccountTerminated(tx, userId, 'account_deleted', actor);
     return snapshot;

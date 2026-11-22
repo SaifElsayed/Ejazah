@@ -82,6 +82,8 @@ class MemoryCertificateNameStore implements CertificateNameStore {
 let store: MemoryCertificateNameStore;
 let keyed: { readonly on: 'run' | 'runOn'; readonly request: IdempotentRequest }[];
 let replayed: boolean;
+/** T175: what the student's own key stored, by key. */
+let stored: Map<string, unknown>;
 let ownTransaction: Transaction;
 let infos: { readonly entry: object; readonly message: string }[];
 let service: CertificateNameService;
@@ -96,6 +98,7 @@ beforeEach(() => {
   store.plant(TEACHER, { student: false, certificateName: null });
   keyed = [];
   replayed = false;
+  stored = new Map();
   ownTransaction = transaction('the student’s own transaction');
   infos = [];
   live = { afterCommit: () => undefined };
@@ -103,9 +106,17 @@ beforeEach(() => {
   service = new CertificateNameService({
     store,
     idempotency: {
-      run: async (request, effect) => {
+      // T175: the kernel's `run` as a key store would answer it: the first outcome stored, a
+      // repeat of the key answered through the reader on its own transaction.
+      run: async (request, effect, replay) => {
         keyed.push({ on: 'run', request });
-        return effect(ownTransaction);
+        if (stored.has(request.key)) {
+          const outcome = stored.get(request.key) as never;
+          return replay === undefined ? outcome : replay(ownTransaction, outcome);
+        }
+        const outcome = await effect(ownTransaction);
+        stored.set(request.key, outcome);
+        return outcome;
       },
       runOn: async (tx, request, effect) => {
         keyed.push({ on: 'runOn', request });
@@ -215,6 +226,34 @@ describe('the student’s own name, account.certificateName.set', () => {
     await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
     expect(seen).toEqual([live]);
     expect(publisherOn(ownTransaction)).toBeUndefined();
+  });
+
+  // T175 (R1a; the note under T175, (1)): the key stores no name; a replay reads the account's row.
+  it('stores no name in the key: its outcome is null (T175)', async () => {
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
+    expect(stored.get('name-key-0001')).toBeNull();
+  });
+
+  it('answers a replay with the name the account holds now, read from its row (T175)', async () => {
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
+    store.plant(STUDENT, { student: true, certificateName: OTHER_NAME });
+    store.calls.length = 0;
+    await expect(
+      service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live),
+    ).resolves.toEqual({ name: OTHER_NAME });
+    expect(store.calls).toEqual([['read', ownTransaction, STUDENT]]);
+  });
+
+  it('answers a replay NOT_FOUND once the account is no live student’s, logged with the ids and its reason (T175)', async () => {
+    await service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live);
+    store.plant(STUDENT, { student: false, certificateName: null });
+    infos.length = 0;
+    const refusal = await refusalOf(
+      service.setOwn(STUDENT, { name: NAME, idempotencyKey: 'name-key-0001' }, live),
+    );
+    expect(refusal.code).toBe('NOT_FOUND');
+    expect(isRefusalLogged(refusal)).toBe(true);
+    expect(infos.map(({ entry }) => entry)).toEqual([{ userId: STUDENT, reason: 'not_student' }]);
   });
 
   it('unbinds the list when the work is refused (005:T019, Q-T1)', async () => {
