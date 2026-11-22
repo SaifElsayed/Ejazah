@@ -148,8 +148,10 @@ describe('005:T014: gender_correction and gender_mismatch', () => {
   });
 
   it('adds gender_mismatch to the restore refusal causes, at the end, keeping refunded before it', () => {
-    expect(restoreRefusalCause.options.slice(-2)).toEqual(['refunded', 'gender_mismatch']);
-    expect(restoreRefusalCause.options).toHaveLength(10);
+    // 006:T003 (rule d): `programme_enrollment` follows it, additively (R-API-9).
+    expect(restoreRefusalCause.options.slice(-3, -1)).toEqual(['refunded', 'gender_mismatch']);
+    expect(restoreRefusalCause.options.at(-1)).toBe('programme_enrollment');
+    expect(restoreRefusalCause.options).toHaveLength(11);
   });
 });
 
@@ -182,7 +184,8 @@ describe('003:T112: the end on a complaint against the student', () => {
       sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
       occurredAt: '2026-11-19T10:00:00.000Z',
     };
-    expect(timelineEventKind.options.at(-1)).toBe('postponed');
+    // 006:T003 (rule d): the programme's four enrollment event kinds follow it, additively (R-API-9).
+    expect(timelineEventKind.options.at(-5)).toBe('postponed');
     expect(timelineEvent.safeParse(row).success).toBe(true);
   });
 

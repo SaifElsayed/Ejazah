@@ -43,6 +43,13 @@ export const enrollmentCancellationReason = z.enum([
   'slot_unavailable',
   'checkout_abandoned',
   'account_deleted',
+  // 006:T003 (ADR 0024; ERD changelog row 65): a programme's closings, the student's declined
+  // offer, the offer lapsed unpaid, an approved refusal and an approved stop; added, additively
+  // (R-API-9).
+  'offer_declined',
+  'offer_lapsed',
+  'assessment_refused',
+  'programme_stopped',
 ]);
 
 /** ERD `payment_status`: a gateway order's status, moved only by its signed events (FR-365). */

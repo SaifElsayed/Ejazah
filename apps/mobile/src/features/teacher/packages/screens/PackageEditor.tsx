@@ -12,7 +12,7 @@ import type {
   PackageTrack,
   SessionLengthMinutes,
   SubjectSummary,
-  TeacherPackage,
+  TeacherFixedPackage,
 } from '@ijazah/contracts';
 import { MAX_SESSION_COUNT, SESSION_LENGTHS_MINUTES } from '@ijazah/contracts';
 import { perSession, piasters, teacherShare } from '@ijazah/money';
@@ -55,7 +55,11 @@ export function PackageEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const list = usePackages();
   if (id === NEW) return <PackageForm />;
-  const item = list.data?.packages.find((candidate) => candidate.id === id);
+  // 006:T003 (Q-4 (a)): today's package only; a programme package's editor is B-P4's (T020).
+  const item = list.data?.packages.find(
+    (candidate): candidate is TeacherFixedPackage =>
+      candidate.id === id && candidate.isProgramme !== true,
+  );
   if (item !== undefined) return <PackageForm key={item.id} item={item} />;
   return (
     <StackScreen header={<EditorHeader title={t('teacher.packages.editor.title')} />}>
@@ -72,7 +76,7 @@ function EditorHeader({ title }: { readonly title: string }) {
   return <NavHeader title={title} back={{ kind: 'back', onPress: () => router.back() }} />;
 }
 
-function PackageForm({ item }: { readonly item?: TeacherPackage }) {
+function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
   const t = useT();
   const locale = useLocale();
   const nameOf = useSubjectName();

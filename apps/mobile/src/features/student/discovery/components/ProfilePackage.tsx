@@ -32,6 +32,8 @@ export function ProfilePackage({
   const t = useT();
   const locale = useLocale();
   const nameOf = useSubjectName();
+  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
+  if (item.isProgramme === true) return null;
   return (
     <Card variant={selected ? 'selected' : 'compact'} onPress={onPress}>
       <View
