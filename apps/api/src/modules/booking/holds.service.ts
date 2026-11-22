@@ -21,6 +21,14 @@
 // specs/004-sessions, H3; the check `booking.slots` shares, FR-BOOK-5). A refusal is
 // thrown, so the caller's transaction keeps nothing, the releases included (FR-351).
 //
+// 006:T005 (FR-701, R-504; U-1; Q-5 (a)). A programme package is held as its assessment
+// (`programmes.service.ts`): its terms read after the package under the teacher's lock, a closed
+// programme refused `CONFLICT` with its cause before the slot's lock, nothing written; one of the
+// teacher's active weekly times at least the assessment's length, one session, checked at the
+// assessment's length. The availability is read through `HoldTerms.programme`, which
+// `readHoldTerms` binds; none bound reads as closed. Every placement also reads the student's own
+// active programmes' weekly times as busy (`withProgrammeTimes`), `SLOT_TAKEN` as any overlap.
+//
 // RELEASING (FR-363, the owner's decision of 2026-11-03). One function serves the placement here,
 // T040's sweep, FR-BOOK-12's new checkout and R-219's terminations. It locks the holds, reads them
 // again, locks their enrollments, then asks payments for their orders (which locks the orders' rows,
@@ -58,6 +66,7 @@ import {
   bookablePackageOf,
   type OfferedSlot,
   offeredSlotsOf,
+  programmeAvailabilityOf,
 } from '../catalog/index.js';
 import { readStanding, type VisibilityPurpose, visibleTeachers } from '../identity/index.js';
 import { type SessionTime, windowDaysOf } from '../sessions/index.js';
@@ -87,6 +96,14 @@ import {
   firstSessionLeadHours,
   offerableOccurrences,
 } from './nearest-slot.service.js';
+import {
+  bookingTermsOf,
+  closedProgramme,
+  fitsSlot,
+  type ProgrammeReader,
+  refusedStart,
+  withProgrammeTimes,
+} from './programmes.service.js';
 import {
   freeOfPartiesSessions,
   packageSessionsOn,
@@ -167,7 +184,12 @@ export interface PlacementReads {
     purpose: VisibilityPurpose,
   ): Promise<boolean>;
   studentActive(tx: Transaction, userId: string): Promise<boolean>;
-  offeredSlotsOf(tx: Transaction, teacherIds: readonly string[]): Promise<OfferedSlot[]>;
+  /** 006:T004: `programmeMinMinutes`, the assessment's length, offers a programme package's slots. */
+  offeredSlotsOf(
+    tx: Transaction,
+    teacherIds: readonly string[],
+    programmeMinMinutes?: number,
+  ): Promise<OfferedSlot[]>;
   occupancyOf(
     tx: Transaction,
     slotIds: readonly string[],
@@ -205,8 +227,9 @@ export const holdsStore: HoldsStore = {
   studentActive: async (tx, userId) => (await readStanding(tx, userId))?.accountStatus === 'active',
   offeredSlotsOf,
   occupancyOf,
-  // T027: the parties' sessions and the times their open remedies reserve (H3).
-  sessionsBetween: partiesBusyBetween,
+  // T027: the parties' sessions and the times their open remedies reserve (H3); 006:T005 (U-1):
+  // and the student's own active programmes' weekly times.
+  sessionsBetween: withProgrammeTimes(partiesBusyBetween),
 };
 
 /**
@@ -249,6 +272,11 @@ export interface HoldTerms extends OccupancyReads {
   readonly ttlMinutes: number;
   readonly graceMinutes: number;
   readonly leadHours: number;
+  /**
+   * 006:T005 (Q-5 (a)): the programme's availability, read for a programme package only; absent,
+   * the programme reads as closed.
+   */
+  readonly programme?: ProgrammeReader;
 }
 
 /** The hold's terms from settings, read before the caller's transaction (R-MONEY-12). */
@@ -266,6 +294,8 @@ export async function readHoldTerms(settings: SettingsReader, now: Date): Promis
     bufferWeeks: () => settings.read(SLOT_RELEASE_BUFFER_SETTING, slotReleaseBufferWeeks),
     // T070 of specs/004-sessions: a closing's hold reads its window.
     windowDays: windowDaysOf(settings),
+    // 006:T005: a programme package's assessment reads the switch, the fee and the length.
+    programme: () => programmeAvailabilityOf(settings),
   };
 }
 
@@ -499,11 +529,16 @@ export async function placeHold(
   }
   const pkg = await store.packageOf(tx, request.packageId);
   if (pkg === null) throw new DomainError('NOT_FOUND');
+  const booking = await bookingTermsOf(pkg, terms.programme ?? closedProgramme);
+  if ('refusal' in booking) throw refusedStart(booking.refusal);
   await store.lockRows(tx, 'availability_slots', [request.slotId]);
-  const slot = (await store.offeredSlotsOf(tx, [teacherUserId])).find(
-    ({ id, durationMinutes }) =>
-      id === request.slotId && durationMinutes === pkg.sessionDurationMinutes,
-  );
+  const slot = (
+    await store.offeredSlotsOf(
+      tx,
+      [teacherUserId],
+      booking.kind === 'assessment' ? booking.sessionDurationMinutes : undefined,
+    )
+  ).find(({ id, durationMinutes }) => id === request.slotId && fitsSlot(booking, durationMinutes));
   if (slot === undefined) throw new DomainError('NOT_FOUND');
   await releaseExpiredHolds(
     tx,
@@ -526,11 +561,15 @@ export async function placeHold(
     slotId: slot.id,
     studentUserId: student.userId,
     packageId: pkg.id,
-    sessionCount: pkg.sessionCount,
+    sessionCount: booking.sessionCount,
     enrollmentId: null,
     expiresAt,
   });
-  const sessions = packageSessionsOn(slot, free.first, pkg.sessionCount);
+  const sessions = packageSessionsOn(
+    { ...slot, durationMinutes: booking.sessionDurationMinutes },
+    free.first,
+    booking.sessionCount,
+  );
   const parties = { studentUserId: student.userId, teacherUserId };
   if (
     (await freeOfPartiesSessions(tx, store.sessionsBetween, parties, [{ sessions }])).length === 0

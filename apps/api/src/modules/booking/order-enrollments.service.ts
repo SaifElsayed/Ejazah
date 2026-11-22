@@ -13,7 +13,7 @@
 import type { EnrollmentStatus, EnrollmentTerms, SubjectSummary } from '@ijazah/contracts';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
+import { subjectSummariesOf } from '../catalog/index.js';
 import {
   type EnrollmentSessionRow,
   sessionProgress,
@@ -123,7 +123,8 @@ export async function monitoredEnrollmentOf(
       subject,
       track: row.snapshotTrack,
       sessionCount: row.snapshotSessionCount,
-      sessionDurationMinutes: row.snapshotDurationMinutes as PackageRow['sessionDurationMinutes'],
+      sessionDurationMinutes:
+        row.snapshotDurationMinutes as EnrollmentTerms['sessionDurationMinutes'],
     },
     completed: progress.completed,
     total: row.snapshotSessionCount,

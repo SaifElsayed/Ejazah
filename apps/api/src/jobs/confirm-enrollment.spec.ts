@@ -64,6 +64,17 @@ interface World {
   failAt?: { step: 'rehold' | 'generate' | 'confirm'; error: Error };
   /** The times open remedies reserve for the parties (T027). */
   reserved?: readonly { startsAt: Date; endsAt: Date }[];
+  /** 006:T005: the order's kind; `package` when not named. */
+  kind?: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T006: an instalment's month, and the order's marker when already set (V-3). */
+  instalmentMonth?: number;
+  confirmedAt?: Date;
+  /** 006:T006: the enrollment's other programme orders the confirm step already processed. */
+  processed?: readonly { kind: 'rest_in_full' | 'instalment'; instalmentMonth: number | null }[];
+  /** 006:T006: an open suspension case of the enrollment. */
+  suspension?: 'teacher_suspended' | 'student_suspended';
+  /** 006:T006: the enrollment's sessions, by number and end. */
+  sessions?: readonly { sequenceNumber: number; endsAt: Date }[];
 }
 
 interface Recorded {
@@ -88,6 +99,8 @@ function locked(overrides: Partial<LockedEnrollment>): LockedEnrollment {
     confirmingPaymentId: null,
     confirmed: false,
     cancelledByTermination: false,
+    // 006:T006 (rule d): no programme unless the world names one.
+    programmeState: null,
     ...overrides,
   };
 }
@@ -121,6 +134,36 @@ function harness(world: World) {
       return locked(world.enrollment);
     },
     paidOrderOf: async () => ({ status: world.status, paidRecordedAt: world.paidRecordedAt }),
+    // 006:T005: the order's kind, read under the locks with its status.
+    orderTermsOf: async (_tx, paymentId) => {
+      expect(paymentId).toBe(PAYMENT);
+      return {
+        kind: world.kind ?? 'package',
+        instalmentMonth: world.instalmentMonth ?? null,
+        confirmedAt: world.confirmedAt ?? null,
+      };
+    },
+    // 006:T006: the per-order marker, the processed programme orders, a suspension, the sessions.
+    markConfirmed: async (_tx, paymentId, at) => {
+      expect([paymentId, at]).toEqual([PAYMENT, NOW]);
+      calls.push('mark confirmed');
+    },
+    programmeOrdersOf: async (_tx, enrollmentId) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      return world.processed ?? [];
+    },
+    openCaseOf: async (_tx, enrollmentId, reason) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      return world.suspension === reason ? 'open-case' : null;
+    },
+    sessionsOf: async (_tx, enrollmentId) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      return world.sessions ?? [];
+    },
+    startProgramme: async (_tx, enrollmentId) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      calls.push('programme awaiting_offer');
+    },
     casesOf: async (_tx, enrollmentId) => {
       expect(enrollmentId).toBe(ENROLLMENT);
       return world.cases;
@@ -161,26 +204,36 @@ function harness(world: World) {
     reservedTimesOf: async (_tx, userIds, window) => {
       calls.push('reserved');
       expect([...userIds].sort()).toEqual([STUDENT, TEACHER].sort());
-      // The four Thursdays generation would write from NOW with a lead of 24 hours.
-      expect(window).toEqual({
-        from: new Date('2026-11-05T07:00:00Z'),
-        to: new Date('2026-11-26T08:00:00Z'),
-      });
+      // The four Thursdays generation would write from NOW with a lead of 24 hours; 006:T005: an
+      // assessment's one Thursday, for its 30 minutes.
+      expect(window).toEqual(
+        world.kind === 'assessment'
+          ? { from: new Date('2026-11-05T07:00:00Z'), to: new Date('2026-11-05T07:30:00Z') }
+          : { from: new Date('2026-11-05T07:00:00Z'), to: new Date('2026-11-26T08:00:00Z') },
+      );
       return (world.reserved ?? []).map((time) => ({ remedyId: 'r', sessionId: 's', ...time }));
     },
-    generate: async (_tx, enrollment, confirmedAt, leadHours) => {
+    generate: async (_tx, enrollment, confirmedAt, leadHours, plan) => {
       failing('generate');
       expect(enrollment).toEqual({
         id: ENROLLMENT,
         teacherUserId: TEACHER,
         studentUserId: STUDENT,
-        snapshotSessionCount: 4,
-        snapshotDurationMinutes: 60,
+        snapshotSessionCount: world.enrollment.snapshotSessionCount ?? 4,
+        snapshotDurationMinutes: world.enrollment.snapshotDurationMinutes ?? 60,
         snapshotSlotTimezone: 'Africa/Cairo',
         slot: { dayOfWeek: 4, startTimeLocal: '09:00:00' },
       });
-      expect([confirmedAt, leadHours]).toEqual([NOW, 24]);
-      calls.push('generate');
+      if (plan === undefined || plan.months === undefined) {
+        expect([confirmedAt, leadHours]).toEqual([NOW, 24]);
+      }
+      calls.push(
+        plan === undefined
+          ? 'generate'
+          : `generate ${String(plan.count)} from ${String(plan.firstSequenceNumber)}${
+              plan.months === undefined ? '' : ` months ${plan.months.join(',')}`
+            } after ${confirmedAt.toISOString()} lead ${String(leadHours)}`,
+      );
     },
   };
   const job = confirmEnrollment({
@@ -255,6 +308,49 @@ describe('confirm-enrollment: with the hold active (FR-361)', () => {
   it('confirms an enrollment kept awaiting payment whose hold is still active', async () => {
     const recorded = await run(paid({ enrollment: { status: 'pending_payment' } }));
     expect(recorded.transactions).toBe(1);
+  });
+});
+
+describe('confirm-enrollment: an assessment (006:T005; FR-701, R-504)', () => {
+  /** The assessment's snapshot: one session of 30 minutes. */
+  const assessment = { snapshotSessionCount: 1, snapshotDurationMinutes: 30 };
+
+  it('confirms the hold, generates session 1 only and writes the programme awaiting its offer', async () => {
+    expect((await run(paid({ kind: 'assessment', enrollment: assessment }))).calls).toEqual([
+      ...PREAMBLE,
+      'confirm',
+      'generate 1 from 1 after 2026-11-03T08:00:00.000Z lead 24',
+      'programme awaiting_offer',
+      'mark confirmed',
+    ]);
+  });
+
+  it('does the same on a late payment, after the parties’ check and the re-hold', async () => {
+    const late = { ...assessment, activeHoldId: null, status: 'cancelled' as const };
+    expect((await run(paid({ kind: 'assessment', enrollment: late }))).calls).toEqual([
+      ...PREAMBLE,
+      'confirm: no hold',
+      'pair',
+      'reserved',
+      'rehold',
+      'confirm',
+      'generate 1 from 1 after 2026-11-03T08:00:00.000Z lead 24',
+      'programme awaiting_offer',
+      'mark confirmed',
+    ]);
+  });
+
+  it('writes no programme for a package’s order, and no plan', async () => {
+    const { calls } = await run(paid());
+    expect(calls).not.toContain('programme awaiting_offer');
+    expect(calls.at(-1)).toBe('generate');
+  });
+
+  it('writes no programme when the assessment’s confirmation is refused', async () => {
+    const { calls } = await run(
+      paid({ kind: 'assessment', enrollment: { ...assessment, cancelledByTermination: true } }),
+    );
+    expect(calls).not.toContain('programme awaiting_offer');
   });
 });
 
@@ -595,5 +691,216 @@ describe('confirm-enrollment: each attempt’s own after-commit list (005:T016, 
     );
     await expect(job.handle({ paymentId: PAYMENT })).rejects.toThrow('lost');
     expect(recorded().sent).toEqual([]);
+  });
+});
+
+describe('confirm-enrollment: the per-order marker (006:T006; R-502, V-3)', () => {
+  const assessment = { snapshotSessionCount: 1, snapshotDurationMinutes: 30 };
+
+  it('does nothing on a replay of an order the step already processed', async () => {
+    const replay = paid({ kind: 'assessment', enrollment: assessment, confirmedAt: PAID_AT });
+    expect((await run(replay)).calls).toEqual(PREAMBLE);
+  });
+
+  it('writes no marker on a package’s order, which keeps the enrollment’s own', async () => {
+    expect((await run(paid())).calls).not.toContain('mark confirmed');
+  });
+
+  it('confirms an expected assessment over an open case that would cover a package’s order', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'assessment',
+        enrollment: assessment,
+        cases: { open: true, lastOpenedAt: new Date('2026-11-03T07:00:00Z'), lastClosedAt: null },
+      }),
+    );
+    expect(recorded.calls).toContain('programme awaiting_offer');
+    expect(recorded.calls).not.toContain('case duplicate_payment');
+  });
+});
+
+describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)', () => {
+  /** An offer of 10 sessions after the assessment: N + 1 = 11, three months (4, 4, 2). */
+  const offered = (state: 'offered' | 'active' | 'paused' = 'active') => ({
+    status: 'confirmed' as const,
+    activeHoldId: null,
+    confirmed: true,
+    confirmingPaymentId: OTHER_PAYMENT,
+    snapshotSessionCount: 11,
+    snapshotDurationMinutes: 60,
+    programmeState: state,
+  });
+  /** Month 1's four sessions after the assessment, the last ending 2026-12-03 08:00Z. */
+  const monthOne = [
+    { sequenceNumber: 1, endsAt: new Date('2026-11-01T08:00:00Z') },
+    { sequenceNumber: 2, endsAt: new Date('2026-11-02T08:00:00Z') },
+    { sequenceNumber: 3, endsAt: new Date('2026-11-03T08:00:00Z') },
+    { sequenceNumber: 4, endsAt: new Date('2026-11-04T08:00:00Z') },
+    { sequenceNumber: 5, endsAt: new Date('2026-12-03T08:00:00Z') },
+  ];
+
+  it('generates month 2’s four sessions from the last number + 1, after month 1’s last session, with its month', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 2,
+        enrollment: offered(),
+        processed: [{ kind: 'instalment', instalmentMonth: 1 }],
+        sessions: monthOne,
+      }),
+    );
+    expect(recorded.calls).toEqual([
+      ...PREAMBLE,
+      'generate 4 from 6 months 2,2,2,2 after 2026-12-03T08:00:00.000Z lead 0',
+      'mark confirmed',
+    ]);
+  });
+
+  it('generates month m+1 while month m’s duplicate_payment case is open: the case gates are skipped', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 2,
+        enrollment: offered(),
+        processed: [{ kind: 'instalment', instalmentMonth: 1 }],
+        sessions: monthOne,
+        cases: { open: true, lastOpenedAt: new Date('2026-11-03T07:00:00Z'), lastClosedAt: null },
+      }),
+    );
+    expect(recorded.calls).toContain(
+      'generate 4 from 6 months 2,2,2,2 after 2026-12-03T08:00:00.000Z lead 0',
+    );
+    expect(recorded.calls).not.toContain('case duplicate_payment');
+  });
+
+  it('generates the last month’s remainder: month 3 of 4, 4 and 2 sessions', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 3,
+        enrollment: offered('paused'),
+        processed: [
+          { kind: 'instalment', instalmentMonth: 1 },
+          { kind: 'instalment', instalmentMonth: 2 },
+        ],
+        sessions: [{ sequenceNumber: 9, endsAt: new Date('2026-10-01T08:00:00Z') }],
+      }),
+    );
+    expect(recorded.calls).toContain(
+      'generate 2 from 10 months 3,3 after 2026-11-03T08:00:00.000Z lead 24',
+    );
+  });
+
+  it('generates the rest in full, every session from 2 with its month', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'rest_in_full',
+        enrollment: offered('offered'),
+        sessions: [{ sequenceNumber: 1, endsAt: new Date('2026-10-29T08:00:00Z') }],
+      }),
+    );
+    expect(recorded.calls).toEqual([
+      ...PREAMBLE,
+      'generate 10 from 2 months 1,1,1,1,2,2,2,2,3,3 after 2026-11-03T08:00:00.000Z lead 24',
+      'mark confirmed',
+    ]);
+  });
+
+  it('treats a second paid order for a paid month as duplicate_payment, generating nothing', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        enrollment: offered(),
+        processed: [{ kind: 'instalment', instalmentMonth: 1 }],
+        sessions: monthOne,
+      }),
+    );
+    expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment', 'mark confirmed']);
+  });
+
+  it('treats a month after the rest was paid in full, and the rest twice, as duplicate_payment', async () => {
+    for (const [kind, instalmentMonth] of [
+      ['instalment', 2],
+      ['rest_in_full', undefined],
+    ] as const) {
+      const recorded = await run(
+        paid({
+          kind,
+          ...(instalmentMonth === undefined ? {} : { instalmentMonth }),
+          enrollment: offered(),
+          processed: [{ kind: 'rest_in_full', instalmentMonth: null }],
+        }),
+      );
+      expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment', 'mark confirmed']);
+    }
+  });
+
+  it('treats a month order on a programme not awaiting a payment as duplicate_payment', async () => {
+    for (const programmeState of ['awaiting_offer', 'closed', null] as const) {
+      const recorded = await run(
+        paid({
+          kind: 'instalment',
+          instalmentMonth: 1,
+          enrollment: { ...offered(), programmeState },
+        }),
+      );
+      expect(recorded.calls).toEqual([...PREAMBLE, 'case duplicate_payment', 'mark confirmed']);
+    }
+  });
+
+  it('opens a case instead of generating while a suspension case is open, one log line', async () => {
+    for (const suspension of ['teacher_suspended', 'student_suspended'] as const) {
+      const { job, recorded, logged } = harness(
+        paid({
+          kind: 'instalment',
+          instalmentMonth: 1,
+          enrollment: offered('offered'),
+          suspension,
+        }),
+      );
+      await job.handle({ paymentId: PAYMENT });
+      expect(recorded().calls).toEqual([...PREAMBLE, 'case party_restricted', 'mark confirmed']);
+      expect(logged).toEqual([
+        [
+          { enrollmentId: ENROLLMENT, paymentId: PAYMENT, reason: 'party_suspended' },
+          'A paid programme order was not generated',
+        ],
+      ]);
+    }
+  });
+
+  it('never cancels a programme on a refused generation: the order stays paid, a case, one log line', async () => {
+    const { job, recorded, logged } = harness(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        enrollment: offered('offered'),
+        failAt: { step: 'generate', error: refusedBy('23P01', 'sessions_student_no_overlap') },
+      }),
+    );
+    await job.handle({ paymentId: PAYMENT });
+    expect(recorded().calls).toEqual([
+      // The first attempt's generation is refused by the database (the stand-in throws before it
+      // records), the second transaction settles it.
+      ...PREAMBLE,
+      ...PREAMBLE,
+      'case slot_unavailable',
+      'mark confirmed',
+    ]);
+    expect(recorded().calls.some((call) => call.startsWith('refuse'))).toBe(false);
+    expect(logged).toEqual([
+      [
+        { enrollmentId: ENROLLMENT, paymentId: PAYMENT, reason: 'generation_refused' },
+        'A paid programme order was not generated',
+      ],
+    ]);
+  });
+
+  it('does nothing on a replay of a month already processed', async () => {
+    const recorded = await run(
+      paid({ kind: 'instalment', instalmentMonth: 1, enrollment: offered(), confirmedAt: PAID_AT }),
+    );
+    expect(recorded.calls).toEqual(PREAMBLE);
   });
 });

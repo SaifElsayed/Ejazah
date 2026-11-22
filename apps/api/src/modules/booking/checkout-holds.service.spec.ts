@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
-import type { BookablePackage, PackageRow } from '../catalog/index.js';
+import type { BookablePackage, PackageRow, ProgrammeAvailability } from '../catalog/index.js';
 import type { CheckoutEnrollmentRow } from './checkout-holds.repository.js';
 import {
   type CheckoutHoldStore,
@@ -55,6 +55,7 @@ const terms: HoldTerms = {
 const bookable: BookablePackage = {
   id: PACKAGE,
   teacherUserId: TEACHER,
+  isProgramme: false,
   sessionCount: 4,
   sessionDurationMinutes: 60,
 };
@@ -69,6 +70,25 @@ const row: PackageRow = {
   // 006:T002 (rule d): `PackageRow` names whether it is a programme package.
   isProgramme: false,
 };
+/** 006:T005: a programme package, sold as its assessment (R-504). */
+const programmeRow: PackageRow = {
+  id: PACKAGE,
+  subject: { id: id(5), nameAr: 'تجويد', nameEn: 'Tajweed' },
+  track: 'ijazah_track',
+  isProgramme: true,
+  isActive: true,
+  prices: {
+    m30_piasters: piasters(20_000),
+    m45_piasters: piasters(28_000),
+    m60_piasters: piasters(35_000),
+  },
+};
+/** The fee 200 EGP, the assessment 30 minutes. */
+const OPEN = {
+  open: true,
+  assessmentPrice_piasters: piasters(20_000),
+  assessmentDurationMinutes: 30,
+} as const;
 const occurrence = (date: string): Occurrence =>
   ({
     requestedLocalDate: date,
@@ -85,6 +105,9 @@ interface World {
   readonly name?: string | null;
   /** 005:T016: the active holds on the slot and of the student, beside the own one. */
   readonly around?: readonly HeldRow[];
+  /** 006:T005: the package as catalog now answers it, and the programme's availability. */
+  readonly row?: PackageRow;
+  readonly programme?: ProgrammeAvailability;
 }
 
 function setUp(world: World = {}) {
@@ -101,7 +124,7 @@ function setUp(world: World = {}) {
       ...(world.own === undefined || world.own === null ? [] : [world.own]),
       ...(world.around ?? []),
     ],
-    teacherPackageOf: async () => row,
+    teacherPackageOf: async () => world.row ?? row,
     teacherName: async () => (world.name === undefined ? 'الشيخ' : world.name),
   };
   const placed: PlacedHold = {
@@ -125,7 +148,10 @@ function setUp(world: World = {}) {
       { userId: STUDENT, gender: female },
       { packageId: PACKAGE, slotId: SLOT },
       {
-        terms,
+        terms:
+          world.programme === undefined
+            ? terms
+            : { ...terms, programme: async () => world.programme ?? OPEN },
         orders: async () => new Map(),
         // 005:T016: the placement is a stand-in here, and records no push.
         notices: { record: () => Promise.reject(new Error('no push is recorded here')) },
@@ -227,6 +253,33 @@ describe('placeCheckoutHold: FR-BOOK-12 (a), the own hold with no payable order'
   });
 });
 
+describe('placeCheckoutHold: a programme package’s assessment (006:T005; FR-701, R-504)', () => {
+  it('answers the summary of the assessment: one session at its length, at the fee', async () => {
+    const { run } = setUp({ row: programmeRow, programme: OPEN });
+    await expect(run()).resolves.toMatchObject({
+      summary: {
+        subject: programmeRow.subject,
+        track: 'ijazah_track',
+        sessionCount: 1,
+        sessionDurationMinutes: 30,
+        price_piasters: 20_000,
+      },
+    });
+  });
+
+  it('refuses CONFLICT with the cause when the programme closed after the placement', async () => {
+    const { run } = setUp({
+      row: programmeRow,
+      programme: { open: false, refusal: 'assessment_fee_unset' },
+    });
+    await expect(run()).rejects.toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'assessment_fee_unset' }],
+      }),
+    );
+  });
+});
+
 describe('placeCheckoutHold: FR-BOOK-12 (b), the own hold with a payable or paid order', () => {
   it('throws PayableCheckout with the order, releasing nothing and placing nothing', async () => {
     const order = { paymentId: PAYMENT, gatewayOrderId: 'fake_ord_1', expiresAt: LATER };
@@ -273,6 +326,8 @@ function targetStore(world: {
   enrollment?: CheckoutEnrollmentRow | null;
   hold?: HeldRow | null;
   status?: CheckoutEnrollmentRow['status'] | null;
+  /** 006:T005: the enrollment's package as catalog answers it. */
+  pkg?: PackageRow | null;
 }) {
   const log: unknown[][] = [];
   const store: OrderTargetStore = {
@@ -283,6 +338,10 @@ function targetStore(world: {
     activeHoldsByIds: async () =>
       world.hold === undefined || world.hold === null ? [] : [world.hold],
     enrollmentStatus: async () => (world.status === undefined ? 'pending_payment' : world.status),
+    packageOf: async (_tx, teacherUserId, packageId) => {
+      log.push(['packageOf', teacherUserId, packageId]);
+      return world.pkg === undefined ? row : world.pkg;
+    },
   };
   return { log, store };
 }
@@ -300,7 +359,16 @@ describe('retryTargetOf: only the student’s own enrollment (M3)', () => {
     await expect(retryTargetOf(tx, STUDENT, ENROLLMENT, store)).resolves.toEqual({
       enrollment: enrollment(),
       hold,
+      kind: 'package',
     });
+  });
+
+  it('answers an assessment for a programme package’s enrollment, reading its package (006:T005)', async () => {
+    const { store, log } = targetStore({ pkg: programmeRow, hold: ownHold() });
+    await expect(retryTargetOf(tx, STUDENT, ENROLLMENT, store)).resolves.toMatchObject({
+      kind: 'assessment',
+    });
+    expect(log).toEqual([['packageOf', TEACHER, PACKAGE]]);
   });
 });
 

@@ -115,3 +115,20 @@ describe('sessionProgress (FR-392)', () => {
     expect(sessionProgress(sessions, { sessionCount: 1, now: NOW }).remaining).toBe(0);
   });
 });
+
+describe('a one-session enrollment, an assessment (006:T005, U-8)', () => {
+  it('has its one session remaining before it is delivered, and none after', () => {
+    const before = [session(1, '2026-11-17T12:00:00Z')];
+    expect(sessionProgress(before, { sessionCount: 1, now: NOW })).toMatchObject({
+      upcoming: 1,
+      completed: 0,
+      remaining: 1,
+    });
+    const after = [session(1, '2026-11-03T12:00:00Z', 'done')];
+    expect(sessionProgress(after, { sessionCount: 1, now: NOW })).toMatchObject({
+      upcoming: 0,
+      completed: 1,
+      remaining: 0,
+    });
+  });
+});

@@ -153,7 +153,15 @@ let remedy: RemedyRow | null;
 let genders: Map<string, 'male' | 'female'>;
 let terms: EnrollmentTerms;
 let now: Date;
-let busy: { sessions: SessionTime[]; held: HeldTime[]; reserved: ReservedTime[] };
+let busy: {
+  sessions: SessionTime[];
+  held: HeldTime[];
+  reserved: ReservedTime[];
+  /** 006:T005 (N-12): the student's other active programmes' weekly times. */
+  programme?: HeldTime[];
+};
+/** 006:T005: what each programme read asked: the students and the enrollment left out. */
+let programmeAsked: unknown[] = [];
 /** The slots another package keeps (`slotsFreeFrom`): null on every date, else free from that date. */
 let freeFrom: Map<string, string | null>;
 let freeFromReads: { slotIds: readonly string[]; enrollmentId: string }[];
@@ -312,6 +320,10 @@ function dependencies() {
         calls.push(['lockEnrollments', ids]);
       },
       heldTimesOf: async (_tx, _userIds, window) => overlapping(busy.held, window),
+      programmeTimesOf: async (_tx, students, window, except) => {
+        programmeAsked.push([students, except]);
+        return overlapping(busy.programme ?? [], window);
+      },
       slotWeekTaken: async () => false,
       slotsFreeFrom: async (_tx, slotIds, enrollmentId) => {
         freeFromReads.push({ slotIds, enrollmentId });
@@ -786,6 +798,30 @@ describe('sessions.remedy.counterOptions (T031; H2, H4; Q5 (a))', () => {
         enrollmentId: ENROLLMENT,
       },
     ]);
+  });
+
+  it('006:T005 (N-12): steps over a week over the student’s other active programme’s weekly time, asking for the student alone, this enrollment’s own left out', async () => {
+    programmeAsked = [];
+    busy.programme = [
+      {
+        startsAt: new Date('2026-11-19T17:30:00.000Z'),
+        endsAt: new Date('2026-11-19T18:30:00.000Z'),
+      },
+    ];
+    const { options } = await services().counterOptions(
+      { userId: STUDENT },
+      { sessionId: SESSION },
+      log,
+    );
+    expect(options).toContainEqual({
+      ...RIYADH_FREE,
+      localDate: '2026-11-26',
+      startsAt: '2026-11-26T17:00:00Z',
+    });
+    expect(programmeAsked.length).toBeGreaterThan(0);
+    expect(new Set(programmeAsked.map((asked) => JSON.stringify(asked)))).toEqual(
+      new Set([JSON.stringify([[STUDENT], ENROLLMENT])]),
+    );
   });
 
   it('per active slot of the session’s length, its first free occurrence at or after max(now + A + L, C), by start, in each slot’s zone', async () => {

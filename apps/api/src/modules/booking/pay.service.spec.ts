@@ -10,13 +10,14 @@ import { describe, expect, it } from 'vitest';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
-import type { PackageRow, SlotRow } from '../catalog/index.js';
+import type { FixedTerms, PackageRow, ProgrammeAvailability, SlotRow } from '../catalog/index.js';
 import type { NewEnrollment, PayHoldRow } from './pay.repository.js';
 import {
   enrollOnHold,
   type PayStore,
   type PayTarget,
   payTargetOf,
+  payTermsOf,
   type QuotedSummary,
   summaryChanges,
 } from './pay.service.js';
@@ -113,19 +114,27 @@ const target: PayTarget = {
   hold: openHold,
   packageId: PACKAGE,
   teacherUserId: TEACHER,
+  // 006:T005 (rule d): the order's kind beside the package's price.
+  kind: 'package',
   price_piasters: piasters(100_000),
 };
 
-const enrol = (store: PayStore, quoted: QuotedSummary = seen) =>
+const enrol = (
+  store: PayStore,
+  quoted: QuotedSummary = seen,
+  programme?: () => Promise<ProgrammeAvailability>,
+  payTarget: PayTarget = target,
+) =>
   enrollOnHold(
     tx,
-    target,
+    payTarget,
     {
       student: { userId: STUDENT, gender: female },
       enrollmentId: ENROLLMENT,
       at: NOW,
       leadHours: 24,
       quoted,
+      ...(programme === undefined ? {} : { programme }),
     },
     store,
   );
@@ -142,7 +151,8 @@ async function refusal(promise: Promise<unknown>): Promise<DomainError> {
   );
 }
 
-const asNow = (values: Partial<PackageRow>) => [
+// 006:T005 (rule d): the fields a package with a count and a length shows.
+const asNow = (values: Partial<FixedTerms>) => [
   { path: 'summary.price_piasters', code: String(values.price_piasters ?? 100_000) },
   { path: 'summary.sessionCount', code: String(values.sessionCount ?? 4) },
   { path: 'summary.sessionDurationMinutes', code: String(values.sessionDurationMinutes ?? 60) },
@@ -307,5 +317,158 @@ describe('enrollOnHold: under the locks (FR-354, T005)', () => {
     const { store } = setUp({ linked: false });
     const error = await refusal(enrol(store));
     expect(error.code).toBe('HOLD_EXPIRED');
+  });
+});
+
+describe('a programme package’s assessment (006:T005; FR-701, FR-702, R-504)', () => {
+  const programmePackage: PackageRow = {
+    id: PACKAGE,
+    subject: { id: id(5), nameAr: 'تجويد', nameEn: 'Tajweed' },
+    track: 'ijazah_track',
+    isProgramme: true,
+    isActive: true,
+    prices: {
+      m30_piasters: piasters(20_000),
+      m45_piasters: piasters(28_000),
+      m60_piasters: piasters(35_000),
+    },
+  };
+  /** The fee 200 EGP = 20,000 piasters, the assessment 30 minutes. */
+  const OPEN: ProgrammeAvailability = {
+    open: true,
+    assessmentPrice_piasters: piasters(20_000),
+    assessmentDurationMinutes: 30,
+  };
+  const assessment = {
+    kind: 'assessment',
+    sessionCount: 1,
+    sessionDurationMinutes: 30,
+    price_piasters: piasters(20_000),
+  } as const;
+  const seenAssessment: QuotedSummary = {
+    price_piasters: piasters(20_000),
+    sessionCount: 1,
+    sessionDurationMinutes: 30,
+    track: 'ijazah_track',
+  };
+  const heldAssessment = { sessionCount: 1, slotLengthMinutes: 60 };
+  const assessmentHold: PayHoldRow = { ...openHold, sessionCount: 1 };
+  const assessmentTarget: PayTarget = {
+    hold: assessmentHold,
+    packageId: PACKAGE,
+    teacherUserId: TEACHER,
+    kind: 'assessment',
+    price_piasters: null,
+  };
+
+  it('passes the assessment as the student saw it, on a weekly time longer than it', () => {
+    expect(summaryChanges(programmePackage, seenAssessment, heldAssessment, assessment)).toEqual(
+      [],
+    );
+  });
+
+  it('refuses a changed fee, a hold of another count and a weekly time shorter than the assessment', () => {
+    const now = [
+      { path: 'summary.price_piasters', code: '25000' },
+      { path: 'summary.sessionCount', code: '1' },
+      { path: 'summary.sessionDurationMinutes', code: '30' },
+      { path: 'summary.track', code: 'ijazah_track' },
+    ];
+    expect(
+      summaryChanges(programmePackage, seenAssessment, heldAssessment, {
+        ...assessment,
+        price_piasters: piasters(25_000),
+      }),
+    ).toEqual(now);
+    const asNowOne = now.map((issue) =>
+      issue.path === 'summary.price_piasters' ? { ...issue, code: '20000' } : issue,
+    );
+    expect(
+      summaryChanges(
+        programmePackage,
+        seenAssessment,
+        { ...heldAssessment, sessionCount: 4 },
+        assessment,
+      ),
+    ).toEqual(asNowOne);
+    expect(
+      summaryChanges(
+        programmePackage,
+        { ...seenAssessment, sessionDurationMinutes: 45 },
+        { ...heldAssessment, slotLengthMinutes: 30 },
+        { ...assessment, sessionDurationMinutes: 45 },
+      ).length,
+    ).toBe(4);
+  });
+
+  it('answers the target as an assessment, priced by the fee later, before the gateway', async () => {
+    const { store } = setUp({ pkg: programmePackage, hold: assessmentHold });
+    await expect(
+      payTargetOf(tx, { studentUserId: STUDENT, holdId: HOLD, at: NOW }, seenAssessment, store),
+    ).resolves.toEqual(assessmentTarget);
+  });
+
+  it('answers the order: the package’s total, or the assessment at the fee', async () => {
+    await expect(payTermsOf(target, seen, async () => OPEN)).resolves.toEqual({
+      kind: 'package',
+      price_piasters: piasters(100_000),
+    });
+    await expect(payTermsOf(assessmentTarget, seenAssessment, async () => OPEN)).resolves.toEqual({
+      kind: 'assessment',
+      price_piasters: piasters(20_000),
+    });
+  });
+
+  it('refuses the assessment’s order before the gateway when the fee or the length is no longer as seen', async () => {
+    for (const availability of [
+      { ...OPEN, assessmentPrice_piasters: piasters(25_000) },
+      { ...OPEN, assessmentDurationMinutes: 45 as const },
+    ]) {
+      const error = await refusal(
+        payTermsOf(assessmentTarget, seenAssessment, async () => availability),
+      );
+      expect(error.code).toBe('SUMMARY_CHANGED');
+    }
+  });
+
+  it('refuses the assessment’s order while the programme is closed, CONFLICT with the cause', async () => {
+    await expect(
+      payTermsOf(assessmentTarget, seenAssessment, async () => ({
+        open: false,
+        refusal: 'programme_disabled',
+      })),
+    ).rejects.toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'programme_disabled' }],
+      }),
+    );
+  });
+
+  it('writes the enrollment with the assessment’s snapshot: one session, its length, the fee (R-504)', async () => {
+    const { store, written } = setUp({ pkg: programmePackage, hold: assessmentHold });
+    await enrol(store, seenAssessment, async () => OPEN, assessmentTarget);
+    expect(written).toEqual([
+      expect.objectContaining({
+        price_piasters: 20_000,
+        sessionCount: 1,
+        sessionDurationMinutes: 30,
+        track: 'ijazah_track',
+      }),
+    ]);
+  });
+
+  it('refuses under the locks while the programme is closed, writing nothing', async () => {
+    const { store, written, log } = setUp({ pkg: programmePackage, hold: assessmentHold });
+    const error = await refusal(
+      enrol(
+        store,
+        seenAssessment,
+        async () => ({ open: false, refusal: 'assessment_fee_unset' }),
+        assessmentTarget,
+      ),
+    );
+    expect(error.code).toBe('CONFLICT');
+    expect(written).toEqual([]);
+    expect(log.some(([kind]) => kind === 'link')).toBe(false);
   });
 });

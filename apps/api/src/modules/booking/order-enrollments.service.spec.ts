@@ -191,3 +191,17 @@ describe('monitoredEnrollmentOf', () => {
     expect(store.asked).toEqual([['enrollmentsAmong', [E1]]]);
   });
 });
+
+describe('a one-session enrollment, an assessment (006:T005, U-8)', () => {
+  it('answers its one session of 30 minutes as one of one once delivered', async () => {
+    const store = storeOf(
+      [row(E1, { snapshotSessionCount: 1, snapshotDurationMinutes: 30 })],
+      [session(1, '2026-11-03T12:00:00.000Z', 'done')],
+    );
+    expect(await monitoredEnrollmentOf(tx, E1, NOW, store)).toMatchObject({
+      summary: { sessionCount: 1, sessionDurationMinutes: 30 },
+      completed: 1,
+      total: 1,
+    });
+  });
+});

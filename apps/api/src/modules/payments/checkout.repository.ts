@@ -95,6 +95,11 @@ export interface NewOrder {
    * created; null on every other order (ERD §15 rule 64).
    */
   readonly halfReleaseRatePercent: number | null;
+  /**
+   * 006:T005 (R-502, FR-701; the owner's approval of 2026-11-22): what the order pays for, a
+   * package as today or a programme's `assessment`; the later kinds are T009's and T014's.
+   */
+  readonly kind: 'package' | 'assessment';
 }
 
 /** Writes the order. The caller holds its enrollment's lock. */

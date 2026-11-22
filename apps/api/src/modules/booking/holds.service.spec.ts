@@ -5,12 +5,13 @@
 // cancels with, and that an enrollment with a paid order is left awaiting payment. Over the real
 // tables, with the concurrency probes, `tests/db-integrity/holds.spec.ts` and
 // `tests/db-integrity/hold-concurrency.spec.ts`.
+import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
-import type { BookablePackage, OfferedSlot } from '../catalog/index.js';
+import type { BookablePackage, OfferedSlot, ProgrammeAvailability } from '../catalog/index.js';
 import type { SessionTime } from '../sessions/index.js';
 import type { EnrollmentOutcome } from './enrollment-events.repository.js';
 import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
@@ -52,8 +53,20 @@ const LATER = new Date('2026-11-03T08:10:00Z');
 const sixtyMinutes: BookablePackage = {
   id: PACKAGE,
   teacherUserId: TEACHER,
+  isProgramme: false,
   sessionCount: 4,
   sessionDurationMinutes: 60,
+};
+/** 006:T005: a programme package, held as its assessment (R-504). */
+const programmePackage: BookablePackage = {
+  id: PACKAGE,
+  teacherUserId: TEACHER,
+  isProgramme: true,
+  prices: {
+    m30_piasters: piasters(20_000),
+    m45_piasters: piasters(28_000),
+    m60_piasters: piasters(35_000),
+  },
 };
 const thursday: OfferedSlot = {
   id: SLOT,
@@ -71,6 +84,8 @@ interface Hold extends HeldRow {
 
 interface World {
   pkg?: BookablePackage | null;
+  /** 006:T005: the programme's availability the hold's terms read (none: the reader is absent). */
+  programme?: ProgrammeAvailability;
   discoverable?: boolean;
   bookable?: boolean;
   studentActive?: boolean;
@@ -91,6 +106,7 @@ function storeOf(world: World) {
   const events: EnrollmentOutcome[] = [];
   const ports: (PaymentOutcomeNotices | undefined)[] = [];
   const inserted: Hold[] = [];
+  const offeredAsked: (number | undefined)[] = [];
   const active = (hold: Hold) => hold.releasedAt === null;
   const store: HoldsStore = {
     lockRows: async (_tx, table, ids) => void log.push(['lock', table, [...ids]]),
@@ -98,7 +114,10 @@ function storeOf(world: World) {
     visible: async (_tx, _requester, _teacher, purpose) =>
       purpose === 'discover' ? (world.discoverable ?? true) : (world.bookable ?? true),
     studentActive: async () => world.studentActive ?? true,
-    offeredSlotsOf: async () => [...(world.slots ?? [thursday])],
+    offeredSlotsOf: async (_tx, _teachers, programmeMinMinutes) => {
+      offeredAsked.push(programmeMinMinutes);
+      return [...(world.slots ?? [thursday])];
+    },
     occupancyOf: async () => world.occupancy ?? new Map(),
     sessionsBetween: async () => world.sessions ?? [],
     expiredHoldIds: async (_tx, scope, at) =>
@@ -158,7 +177,7 @@ function storeOf(world: World) {
       ),
     );
   };
-  return { store, orders, log, holds, pending, cancelled, events, ports, inserted };
+  return { store, orders, log, holds, pending, cancelled, events, ports, inserted, offeredAsked };
 }
 
 const terms: HoldTerms = {
@@ -178,8 +197,9 @@ const hold = (
 
 function place(world: World, request = { packageId: PACKAGE, slotId: SLOT }) {
   const fake = storeOf(world);
+  const { programme } = world;
   const answer = placeHold(tx, { userId: STUDENT, gender: female }, request, {
-    terms,
+    terms: programme === undefined ? terms : { ...terms, programme: async () => programme },
     orders: fake.orders,
     store: fake.store,
     notices: NOTICES,
@@ -596,5 +616,81 @@ describe('the payment pushes reach booking’s writer (005:T016, the note under 
     const none = expiredWithEnrollment();
     await releaseHolds(tx, [id(1)], 'admin', { at: NOW, orders: none.orders, store: none.store });
     expect([given.ports, none.ports]).toEqual([[NOTICES], [undefined]]);
+  });
+});
+
+describe('placeHold: a programme package, held as its assessment (006:T005; FR-701, R-504, Q-5 (a))', () => {
+  /** The fee 200 EGP, the assessment 30 minutes (§3.14's default). */
+  const OPEN: ProgrammeAvailability = {
+    open: true,
+    assessmentPrice_piasters: piasters(20_000),
+    assessmentDurationMinutes: 30,
+  };
+
+  it('holds a weekly time longer than the assessment for one session, asking the slots at the assessment’s length', async () => {
+    const placing = place({ pkg: programmePackage, programme: OPEN });
+    const placed = await placing.answer;
+    expect(placing.inserted).toEqual([
+      expect.objectContaining({ slotId: SLOT, packageId: PACKAGE, sessionCount: 1 }),
+    ]);
+    expect(placed.firstSession.requestedLocalDate).toBe('2026-11-05');
+    expect(placed.lastSession.requestedLocalDate).toBe('2026-11-05');
+    expect(placing.offeredAsked).toEqual([30]);
+  });
+
+  it('refuses a weekly time shorter than the assessment, NOT_FOUND, writing nothing', async () => {
+    const placing = place({
+      pkg: programmePackage,
+      programme: { ...OPEN, assessmentDurationMinutes: 45 },
+      slots: [{ ...thursday, durationMinutes: 30 }],
+    });
+    await expect(placing.answer).rejects.toEqual(new DomainError('NOT_FOUND'));
+    expect(writes(placing.log)).toEqual([]);
+  });
+
+  it('checks the one session at the assessment’s length: a session after its end stands, one inside it refuses', async () => {
+    const after = place({
+      pkg: programmePackage,
+      programme: OPEN,
+      sessions: [
+        { startsAt: new Date('2026-11-05T07:40:00Z'), endsAt: new Date('2026-11-05T08:00:00Z') },
+      ],
+    });
+    const placed = await after.answer;
+    expect(placed.holdId).toBe(after.inserted[0]?.id);
+    const inside = place({
+      pkg: programmePackage,
+      programme: OPEN,
+      sessions: [
+        { startsAt: new Date('2026-11-05T07:20:00Z'), endsAt: new Date('2026-11-05T07:50:00Z') },
+      ],
+    });
+    await expect(inside.answer).rejects.toEqual(new DomainError('SLOT_TAKEN'));
+  });
+
+  it('refuses while the switch is off or the fee is unset, CONFLICT with the cause, before the slot’s lock', async () => {
+    for (const refusal of ['programme_disabled', 'assessment_fee_unset'] as const) {
+      const placing = place({ pkg: programmePackage, programme: { open: false, refusal } });
+      await expect(placing.answer).rejects.toEqual(
+        new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: refusal }] }),
+      );
+      expect(writes(placing.log)).toEqual([]);
+      expect(placing.log).not.toContainEqual(['lock', 'availability_slots', [SLOT]]);
+    }
+  });
+
+  it('refuses a programme package as closed when the terms carry no reader', async () => {
+    const placing = place({ pkg: programmePackage });
+    await expect(placing.answer).rejects.toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'programme_disabled' }],
+      }),
+    );
+  });
+
+  it('asks a package with a count and a length for no programme slot', async () => {
+    const placing = place({});
+    await placing.answer;
+    expect(placing.offeredAsked).toEqual([undefined]);
   });
 });

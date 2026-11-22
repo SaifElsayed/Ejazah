@@ -36,7 +36,8 @@
 // entry), its first occurrence at or after max(now + A + L, `choice_closes_at`), A and L the remedy's
 // own snapshots, never the live settings, that overlaps no session, open hold
 // (`EnrollmentSide.heldTimesOf`) or reservation (T027, the remedy's own proposal among them, so the
-// proposal is never an option) of either party, on a week no other package keeps the slot
+// proposal is never an option) of either party, or (006:T005 of specs/006-programme, N-12) the
+// weekly time of another active programme of the student (`EnrollmentSide.programmeTimesOf`), on a week no other package keeps the slot
 // (`EnrollmentSide.slotsFreeFrom`, read once for every slot, the remedy's own enrollment left out, as
 // T028's proposal reads `slotWeekTaken`: the owner's rule of 2026-11-10, a package's slot returns only
 // once it is completed, and decision (a) on the follow-up under T031 and T029): a slot taken on every
@@ -304,7 +305,12 @@ export interface RemedyDependencies {
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'run'>;
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken' | 'slotsFreeFrom'
+    | 'enrollmentFor'
+    | 'lockEnrollments'
+    | 'heldTimesOf'
+    | 'slotWeekTaken'
+    | 'slotsFreeFrom'
+    | 'programmeTimesOf'
   >;
   /** The database's clock on a transaction (Q8 (a)). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
@@ -673,12 +679,14 @@ export function createRemedyServices({
         from: new Date(Math.min(...times.map(({ startsAt }) => startsAt.getTime()))),
         to: new Date(Math.max(...times.map(({ endsAt }) => endsAt.getTime()))),
       };
-      const [own, held, reserved] = await Promise.all([
+      const [own, held, reserved, programme] = await Promise.all([
         store.sessionsBetween(tx, parties, window),
         enrollments.heldTimesOf(tx, people, window),
         store.reservedTimesOf(tx, people, window, enrollments),
+        // 006:T005 (N-12): the student's other active programmes' weekly times.
+        enrollments.programmeTimesOf(tx, [session.studentUserId], window, session.enrollmentId),
       ]);
-      const busy = [...own, ...held, ...reserved];
+      const busy = [...own, ...held, ...reserved, ...programme];
       const next: Candidate[] = [];
       for (const candidate of pending) {
         if (!overlapsAny(timeOf(candidate.occurrence), busy)) {

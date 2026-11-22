@@ -97,7 +97,7 @@ import type { Database, Transaction } from '../../platform/db/prisma.repository.
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
-import { type PackageRow, subjectSummariesOf } from '../catalog/index.js';
+import { subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
 import {
   compensationCasesAmong,
@@ -348,7 +348,8 @@ function termsOf(
     subject,
     track: row.snapshotTrack,
     sessionCount: row.snapshotSessionCount,
-    sessionDurationMinutes: row.snapshotDurationMinutes as PackageRow['sessionDurationMinutes'],
+    sessionDurationMinutes:
+      row.snapshotDurationMinutes as EnrollmentTerms['sessionDurationMinutes'],
   };
 }
 

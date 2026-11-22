@@ -108,6 +108,8 @@ interface World {
   readonly visible?: boolean;
   readonly enrollment?: CheckoutEnrollmentRow | null;
   readonly sessions?: readonly EnrollmentSessionRow[];
+  /** 006:T005: the package the hold names, as catalog now answers it. */
+  readonly pkg?: PackageRow;
 }
 
 function storeOf(world: World): CheckoutReadsStore {
@@ -118,7 +120,7 @@ function storeOf(world: World): CheckoutReadsStore {
         : world.hold,
     slotOf: async () => slotRow,
     packageOwnerOf: async () => TEACHER,
-    teacherPackageOf: async () => pkg,
+    teacherPackageOf: async () => world.pkg ?? pkg,
     visibleTeacherName: async () => (world.visible === false ? null : 'الشيخ'),
     teacherName: async () => 'الشيخ',
     studentEnrollment: async () => (world.enrollment === undefined ? enrollment : world.enrollment),
@@ -212,6 +214,62 @@ describe('currentHoldOf: what CheckoutPrevious shows (FR-BOOK-12 (c), T037)', ()
     ]) {
       await expect(currentHoldOf(tx, student, RULE, storeOf(world))).resolves.toBeNull();
     }
+  });
+});
+
+describe('a programme package’s assessment (006:T005; FR-701, R-504, U-8)', () => {
+  const programmePackage: PackageRow = {
+    id: PACKAGE,
+    subject,
+    track: 'ijazah_track',
+    isProgramme: true,
+    isActive: true,
+    prices: {
+      m30_piasters: piasters(20_000),
+      m45_piasters: piasters(28_000),
+      m60_piasters: piasters(35_000),
+    },
+  };
+  /** The fee 200 EGP, the assessment 30 minutes. */
+  const programme = async () =>
+    ({
+      open: true,
+      assessmentPrice_piasters: piasters(20_000),
+      assessmentDurationMinutes: 30,
+    }) as const;
+
+  it('answers the held assessment’s summary and its one session as both previews', async () => {
+    const held = await currentHoldOf(
+      tx,
+      student,
+      { ...RULE, programme },
+      storeOf({ pkg: programmePackage }),
+    );
+    expect(held).toMatchObject({
+      summary: {
+        track: 'ijazah_track',
+        sessionCount: 1,
+        sessionDurationMinutes: 30,
+        price_piasters: 20_000,
+      },
+      firstSession: { localDate: '2026-11-05' },
+      lastSession: { localDate: '2026-11-05' },
+    });
+  });
+
+  it('answers a one-session enrollment’s status from its snapshot: the assessment at its length and fee', async () => {
+    const assessment = {
+      ...enrollment,
+      snapshotPricePiasters: 20_000n,
+      snapshotSessionCount: 1,
+      snapshotDurationMinutes: 30,
+      snapshotTrack: 'ijazah_track' as const,
+    };
+    await expect(
+      enrollmentStatusOf(tx, STUDENT, ENROLLMENT, storeOf({ enrollment: assessment })),
+    ).resolves.toMatchObject({
+      summary: { sessionCount: 1, sessionDurationMinutes: 30, price_piasters: 20_000 },
+    });
   });
 });
 
