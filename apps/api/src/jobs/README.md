@@ -6,7 +6,10 @@ Queued work executed by `src/worker.ts`. Arrives with the phase that needs it:
 `expire-pending-payments`, `confirm-enrollment` (Phase 2), `reresolve-session-instants` (Phase 2, T048: the time zone re-resolution of ADR 0009 D3, at worker start and daily), `evaluate-sessions`, `advance-remedies`,
 `expire-cancellation-requests` (every minute), `purge-chat` (daily), `close-slot-holds` (hourly, T074), `erase-kept-data` (daily at 04:25, T077 ⚠️ automatic and final) (Phase 3, `specs/004-sessions/contracts/kernel.md`),
 `send-reminder`, `render-certificate`, `deliver-notification` (Phase 4; `send-reminder` moved from Phase 3 with the
-reminders, `specs/004-sessions/spec.md` Assumptions, amended 2026-11-05).
+reminders, `specs/004-sessions/spec.md` Assumptions, amended 2026-11-05), `erase-identity-documents` (daily at
+04:40, R1a `specs/002-identity/tasks.md` T176 ⚠️ automatic: an identity document on a live account marked erased
+`identity_document_retention_days` after its decision, a teacher once approved excepted, its file then removed by
+`erase-deleted-files`).
 
 `advance-remedies` (every minute; T028 and T032 of specs/004-sessions) runs sessions' remedy sweep through the
 module's entry: remedies offered and frozen ones offered again, the completion check, then the windows' ends (a
