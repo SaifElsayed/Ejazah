@@ -59,7 +59,7 @@ No open question remains.
 
 ## Phase 1: Foundations (B-P1)
 
-- [ ] T001 The migration, the schema and the ERD (data-model.md; R-501, R-502, R-503, R-507, R-510, R-513):
+- [x] T001 The migration, the schema and the ERD (data-model.md; R-501, R-502, R-503, R-507, R-510, R-513):
   - A forward migration stamped after the latest merged one, the enum values committed first:
     - `order_kind`, `decline_kind`, `programme_state`, `programme_plan`, `programme_request_kind`,
       `programme_request_status`;
@@ -83,7 +83,14 @@ No open question remains.
   > stays `string` (T014/T018 widen it). ERD rows 65–73 and §15 rules 70–81 (R1a: rows 62–64, rules 67–69, agreed
   > 2026-11-22); the ERD footer, `module-tables.json`, `tests/seed/seed.spec.ts:346` 45 → 48 and
   > `tests/seed/migrate-from-empty.spec.ts:96` 48 → 51 (50 and 53 at the second merge with R1a).
-- [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3, P1 (a)):
+  > **Done (B-P1, 2026-11-22).** Migration `20261122110318_ijazah_programme` (the enum values first): `payments`'
+  > six columns with `gateway_order_id` NULL-able under rule 72, `packages.is_programme` and the three prices (rules
+  > 73–74), `sessions.programme_month`, `programmes`, `programme_requests`, `programme_cards`; ERD rows 65–73, rules
+  > 70–81, the footer 51; `module-tables.json`; the seed spec 48 tables, `migrate-from-empty` 51. `programmes.pay_by_at`
+  > (Q-A1 (a): ERD §0's `_at`), `month_count` kept as a snapshot (Q-A2 (a), `schema-check.ts`). The two Q-2 readers refuse
+  > a NULL gateway id. `ijazah_integrity_b` rebuilt from empty on the owner's word (2026-11-22). The migration spec: 61
+  > cases, each red against the base and under 19 mutants.
+- [x] T002 [P] The settings and the switch (R-515; FR-732; I-3, P1 (a)):
   - `apps/api/src/platform/settings/registry.ts`:
     - a new unit `piasters`;
     - the eight keys in track 2's block, `programme_enabled` off, `assessment_price_piasters` 0 = unset, `programme_offer_hours` 24;
@@ -105,7 +112,12 @@ No open question remains.
   > `apps/admin/src/pages/audit/actions.ts`, `packages/contracts/src/admin/settings.ts`,
   > `apps/admin/src/pages/settings/words.ts`, `apps/admin/src/pages/settings/settings.spec.tsx`. Settings 95 → 103 (107
   > at the second merge with R1a).
-- [ ] T003 [P] The contracts (contracts/*):
+  > **Done (B-P1, 2026-11-22).** The eight keys (`assessment_price_piasters` by Q-B4 (a), R-MONEY-6), the seed 103,
+  > both catalogues; the switch's turn-on deactivates the old ijazah packages on its own transaction (audit
+  > `packages.retired_by_switch` with the count, one log line); `programme_switch_on` refuses a reactivation while it is
+  > on; the fee shown and typed in pounds only (`packages/money`'s `piastersOfPoundsText`/`poundsText`, Q-B1 (a)); kernel.md's
+  > `006:T002` row.
+- [x] T003 [P] The contracts (contracts/*):
   - `packages/contracts/src/programme.ts`, `packages/contracts/src/admin/programme.ts`;
   - the package output as a union by track (recitation and pre-switch ijazah unchanged, non-null; K-3);
   - discovery, slots, monitor and restore changes;
@@ -114,7 +126,11 @@ No open question remains.
   - the snapshot regenerated.
   > **B-P1's conflict check, Q-4 (a) (the owner, 2026-11-22).** The union's discriminant is `isProgramme`; the mobile
   > readers the type check names narrow to today's member until B-P4's screens (T019, T020).
-- [ ] T004 [US1] The three prices and the catalogue (FR-704, FR-704a; R-503, R-516), behind `programme_enabled`:
+  > **Done (B-P1, 2026-11-22).** `programme.ts`, `admin/programme.ts`, the package union on `isProgramme`, the enum
+  > members, the monitor's optional fields, `idempotent-procedures.ts`'s eight mutations, the snapshot. The money names
+  > carry `_piasters` (R-MONEY-2; the fee `assessmentPrice_piasters`, R-MONEY-6 (b); Q-C1). Six phone readers narrow to
+  > today's member until B-P4.
+- [x] T004 [US1] The three prices and the catalogue (FR-704, FR-704a; R-503, R-516), behind `programme_enabled`:
   - `modules/catalog/packages.service.ts`, `packages.repository.ts`, `packages.router.ts`: a programme package takes
     `prices {m30, m45, m60}`; publishing is refused `assessment_fee_unset` while the fee is 0.
   - Discovery: `assessmentFee`, `priceRange`.
@@ -124,7 +140,12 @@ No open question remains.
   > **B-P1's conflict check, Q-5 (a) (the owner, 2026-11-22, «س5 (أ) تمام»).** A programme package is created or
   > activated only while the fee is above 0 (`assessment_fee_unset`; a draft allowed); discovery and `booking.slots`
   > show none while the fee is 0 or the switch is off. Platform-funded promotions are v1.1.
-- [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
+  > **Done (B-P1, 2026-11-22).** Packages by shape (`PackageRow`, `BookablePackage` unions), `programmeAvailabilityOf`,
+  > `priceForLength`; the create/update rules (`programme_switch_on`, `programme_disabled`, `assessment_fee_unset`, a draft
+  > allowed); discovery's `prices`, `priceRange`, `assessmentPrice_piasters`, none shown while closed; DEC-88's programme
+  > pool (kept counting while the switch is off, the owner's (a)); the nearest slot at the assessment's length. Q-D1 (a):
+  > one advisory key `programme-switch` taken by an old-style create or edit and by the turn-on (kernel.md `006:T004`).
+- [x] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
   - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
     the assessment's for a programme package, and refuse one overlapping the student's own active
     programme's weekly time (active = `awaiting_offer`, `offered`, `active`, `paused`). The same time is excluded from
@@ -142,7 +163,12 @@ No open question remains.
   - Adversarial registrations.
   > **B-P1's conflict check, Q-7 (a) (the owner, 2026-11-22, «س7 أ»).** The outside files of T005 and T006 named in the
   > conflict check are approved; any further one is batched at the lane's end.
-- [ ] T006 The confirm step by kind (FR-718; R-502; V-3), `jobs/confirm-enrollment.ts:229-284`:
+  > **Done (B-P1, 2026-11-22).** `booking/programmes.*`; a programme package booked as its assessment (one session at
+  > `assessment_duration_minutes`, the fee) on the sheet, the hold, the summary, current, pay and retry; the student's
+  > active programme time busy everywhere (U-1) and for the make-ups (N-12, `EnrollmentSide.programmeTimesOf`); the order
+  > `kind = 'assessment'`; session 1 only and the row `awaiting_offer`. A closed programme answers an empty slot list (the
+  > hidden-times rule, Q-5 (a)). The U-8 inventory: `ejazah-tools\track2\runs\b-p1\lane-e\u8-inventory.md` (21 readers).
+- [x] T006 The confirm step by kind (FR-718; R-502; V-3), `jobs/confirm-enrollment.ts:229-284`:
   - the per-order marker `payments.confirmed_at`;
   - expected kinds skip the cover and case gates; one paid during an open `teacher_suspended` or `student_suspended`
     case opens a case instead of generating (PR #153 r1 Minor 2);
@@ -162,6 +188,14 @@ No open question remains.
   > money-lane review. Not scheduled apart from T006.
   > **B-P1's conflict check (2026-11-22).** The close hook's lock order stays with the 11/30 money review; T006's
   > `kernel.md` row states the confirm step's own order only.
+  > **Done (B-P1, 2026-11-22).** The per-order `confirmed_at`; the expected kinds skip the cover and case gates; a month
+  > paid during an open suspension case opens `party_restricted` (PR #153 r1 Minor 2's precedent); the no-hold path from
+  > max+1 with `programme_month`; a second paid month → `duplicate_payment`; a refused generation opens a case and cancels
+  > nothing; the programme row locked by `enrollment_id` (`row-lock.ts`); kernel.md's T006 row (T008's close hook takes
+  > the same order).
+  > **Integration note (B-P1, 2026-11-22).** `specs/004-sessions/contracts/kernel.md:9`'s one-order list does not name
+  > `programmes`; T006's row states it. The shared line is track 1's too, so it is amended at an integration both
+  > tracks agree.
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
@@ -233,6 +267,9 @@ No open question remains.
   - `sessions/restore.service.ts` refuses `programme_enrollment` (G-1).
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
+  > **Follow-up (B-P1's lane e, 2026-11-22).** Today `share-release.rules.ts` would list `ijazah_half` at session 1 for
+  > an assessment-only enrollment (count 1, half reached). The rules branch on the `assessment` kind (FR-703, R-512)
+  > before the switch is turned on (B-P4); red first on «an assessment-only enrollment lists no `ijazah_half`».
   - `assessment` only when not continued (at the close, or at `pay_by` where an offer was sent, whichever is later, once session 1's 72 h have passed, no
     case: DEC-94); never while a `pay_blocked` item is open, the programme not being closed (FR-706b), red first on
     «the item open past `pay_by`: no `assessment` release»;
@@ -443,3 +480,7 @@ No open question remains.
   ERD's numbering, the seed's counts (T001: tables 45 → 48; T002: settings 95 → 103) and the settings registry.
   `tracks-coordination.md` §2 holds: the numbers are agreed between the two review sessions before either merges, and
   both migrations are proven on one database at integration (PR #155's review, round 1, N1).
+  > **W5 note (B-P1, 2026-11-22).** At the second merge with R1a: `CheckoutSteps.currentHold`'s type
+  > (`payments/checkout.service.ts` ~`:208`, R1a's region) names `programme` beside `now` and `leadHours` (B-P1's
+  > `checkout.current` reads it through `HoldTerms` meanwhile); the counts become tables 50, settings 107,
+  > `migrate-from-empty` 53, the ERD footer and `module-tables.json` 53.
