@@ -11,6 +11,7 @@ import type {
   ApplicantsFilter,
   ApplicationReviewStore,
   ApplicationDecision,
+  ApplicationHistoryEntry,
   CallRecord,
   CredentialClosure,
   CredentialOfApplicant,
@@ -45,6 +46,8 @@ export class MemoryReviewStore implements ApplicationReviewStore {
    * `lock:<id>` (the application's, T126), `read:<id>`.
    */
   readonly journal: string[] = [];
+  /** R1a (002:T174): each row the review wrote to the application's history, in order. */
+  readonly history: ApplicationHistoryEntry[] = [];
 
   /** An application in `status`, sent with a credential per subject in `credentials`; its user id. */
   plant(
@@ -226,6 +229,10 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       moved += 1;
     }
     return moved;
+  }
+
+  async recordHistory(_tx: Transaction, entry: ApplicationHistoryEntry): Promise<void> {
+    this.history.push(entry);
   }
 
   async grantSubjects(

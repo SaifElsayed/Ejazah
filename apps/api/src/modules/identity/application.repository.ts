@@ -72,8 +72,9 @@ export class ApplicationRepository {
 
   /**
    * Opens the application `in_review` from the state it names; the earlier decision, note, call
-   * record and approved screen belong to the earlier application and are cleared (the audit log
-   * keeps them), so a reapproval shows `ApplicationApproved` again. Whether it wrote.
+   * record and approved screen belong to the earlier application and are cleared (each decision's
+   * note stays in the application's history, R1a 002:T174; the call's day and outcome in its audit
+   * entry), so a reapproval shows `ApplicationApproved` again. Whether it wrote.
    */
   async open(userId: string, application: OpenedApplication): Promise<boolean> {
     const data = {

@@ -2,7 +2,7 @@
 
 ## Owns
 
-`users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances, user_sessions, user_session_retired_tokens, auth_identities, banned_identifiers`
+`users, user_roles, teacher_profiles, otp_codes, device_push_tokens, terms_acceptances, user_sessions, user_session_retired_tokens, auth_identities, banned_identifiers, teacher_application_history`
 
 Listed in `packages/config/module-tables.json`. Reaching a table outside this list fails the build citing R-API-6.
 
