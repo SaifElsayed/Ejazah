@@ -172,6 +172,13 @@ function storeOver(w: World): IdentityRetentionStore {
       const d = w.documents.get(documentId);
       return d === undefined ? null : { ...d };
     },
+    unmarkedAmong: async (_tx, documentIds) =>
+      new Set(
+        documentIds.filter((id) => {
+          const d = w.documents.get(id);
+          return d !== undefined && d.erasedAt === null && d.keptAt === null;
+        }),
+      ),
     // Unconditional here, so the sweep's own read under the locks is what refuses an erased or kept
     // document; the real update's `WHERE` (C1-5) is the database spec's.
     markErased: async (_tx, documentId, at) => {
@@ -365,6 +372,21 @@ describe('erase-identity-documents: what is never marked, and how', () => {
       if (userId === user(2)) (w.documents.get(doc(2)) as Doc).keptAt = daysAgo(1);
     };
     expect(await sweepOver(w).run()).toEqual({ erased: [], failed: [] });
+  });
+
+  it('leaves out a page’s documents already erased or kept, with no lock taken on them', async () => {
+    const w = emptyWorld();
+    applicant(w, 1, 'rejected', 91);
+    applicant(w, 2, 'rejected', 91);
+    applicant(w, 3, 'rejected', 91);
+    (w.documents.get(doc(1)) as Doc).erasedAt = daysAgo(1);
+    (w.documents.get(doc(2)) as Doc).keptAt = daysAgo(1);
+    expect(await sweepOver(w, 2).run()).toEqual({ erased: [doc(3)], failed: [] });
+    expect(w.locks).toEqual([
+      `users:${user(3)}`,
+      `teacher_profiles:${user(3)}`,
+      `verification_documents:${doc(3)}`,
+    ]);
   });
 
   it('takes the account, then the application, then the document, before reading them again', async () => {

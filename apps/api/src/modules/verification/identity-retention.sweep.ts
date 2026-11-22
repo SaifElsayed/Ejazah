@@ -14,9 +14,11 @@
 // an open matter holds (`held`, FR-AUTH-14's held files), never one already erased or kept.
 //
 // THE CANDIDATES. Each source a page at a time in its own id order, read with no lock: the
-// applications through identity's entry, the requests from this module's table; each page's owners
-// asked once through `held` (booking's `heldFileOwnersAmong`, bound in `worker.ts`, as
-// `erase-deleted-files` is), a held owner's document left for a later run.
+// applications through identity's entry (`identityDocumentsDecidedBefore`, never approved, by the
+// cutoffs), the requests from this module's table; the page's documents already erased or kept left
+// out by one read of this module's table, so a decided applicant's erased document is not locked
+// again every day; each page's owners asked once through `held` (booking's `heldFileOwnersAmong`,
+// bound in `worker.ts`, as `erase-deleted-files` is), a held owner's document left for a later run.
 //
 // THE LOCKS (kernel.md, the document sweep's row; `platform/db/row-lock.ts`'s one order). Each
 // document on its own transaction: the account (`lockAccount`), the application (`lockApplication`,
@@ -40,6 +42,7 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import {
   type ApplicationStatus,
   everApprovedTeacher,
+  identityDocumentsDecidedBefore,
   lockAccount,
   lockApplication,
   readApplicant,
@@ -52,6 +55,7 @@ import {
   markIdentityDocumentErased,
   requestDocumentsDue,
   requestHoldingDocument,
+  unmarkedDocumentsAmong,
 } from './verification.repository.js';
 
 /** SRS §3.14 «Identity document retention on a live account after its decision…» (DEC-100). */
@@ -123,6 +127,8 @@ export interface IdentityRetentionStore {
   applicationOf(tx: Transaction, userId: string): Promise<RetainedApplication | null>;
   requestHolding(tx: Transaction, documentId: string): Promise<RetainedRequest | null>;
   documentOf(tx: Transaction, documentId: string): Promise<RetainedDocument | null>;
+  /** Of `documentIds`, those neither erased nor kept, read with no lock (a page's filter). */
+  unmarkedAmong(tx: Transaction, documentIds: readonly string[]): Promise<ReadonlySet<string>>;
   /** `erased_at` set where the row is neither erased nor kept, its key kept; whether it did. */
   markErased(tx: Transaction, documentId: string, at: Date): Promise<boolean>;
 }
@@ -154,7 +160,8 @@ export interface IdentityRetentionDependencies {
   readonly report?: (error: Error) => void;
   /** The database's clock on the transaction (`clockTimestamp`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
-  readonly store: IdentityRetentionStore;
+  /** The store over the modules' entries (`identityRetentionStore`) unless a spec sets one. */
+  readonly store?: IdentityRetentionStore;
 }
 
 /** The days a decision waits: the retention, and for a ban the later of it and the window. */
@@ -211,7 +218,7 @@ export function createIdentityRetentionSweep({
   pageSize,
   report = reportError,
   clock = clockTimestamp,
-  store,
+  store = identityRetentionStore,
 }: IdentityRetentionDependencies): IdentityRetentionSweep {
   const failedWith = (error: unknown): Error =>
     error instanceof Error ? error : new Error(String(error));
@@ -224,15 +231,27 @@ export function createIdentityRetentionSweep({
     return { retention, banned: Math.max(retention, window) };
   };
 
-  const pageOf = (
+  /** One page of a source, and of it the documents neither erased nor kept. */
+  const pageOf = async (
     tx: Transaction,
     source: Source,
     cutoffs: RetentionCutoffs,
     after: string | undefined,
-  ) =>
-    source === 'application'
-      ? store.applicationsDue(tx, cutoffs, after, pageSize)
-      : store.requestsDue(tx, cutoffs.decidedBefore, after, pageSize);
+  ): Promise<{
+    readonly rows: readonly RetentionCandidate[];
+    readonly candidates: readonly RetentionCandidate[];
+  }> => {
+    const rows =
+      source === 'application'
+        ? await store.applicationsDue(tx, cutoffs, after, pageSize)
+        : await store.requestsDue(tx, cutoffs.decidedBefore, after, pageSize);
+    if (rows.length === 0) return { rows, candidates: [] };
+    const unmarked = await store.unmarkedAmong(
+      tx,
+      rows.map(({ documentId }) => documentId),
+    );
+    return { rows, candidates: rows.filter(({ documentId }) => unmarked.has(documentId)) };
+  };
 
   /** One document under its locks, read and judged again; the reason it was marked, or null. */
   const markOne = async (
@@ -271,12 +290,14 @@ export function createIdentityRetentionSweep({
       for (const source of SOURCES) {
         let after: string | undefined;
         for (;;) {
-          const page = await transactions.run((tx) => pageOf(tx, source, cutoffs, after));
+          const { rows, candidates } = await transactions.run((tx) =>
+            pageOf(tx, source, cutoffs, after),
+          );
           const holding =
-            page.length === 0
+            candidates.length === 0
               ? new Set<string>()
-              : await held([...new Set(page.map(({ userId }) => userId))]);
-          for (const candidate of page) {
+              : await held([...new Set(candidates.map(({ userId }) => userId))]);
+          for (const candidate of candidates) {
             if (holding.has(candidate.userId)) continue;
             const { documentId, userId } = candidate;
             try {
@@ -293,8 +314,8 @@ export function createIdentityRetentionSweep({
               report(failedWith(error));
             }
           }
-          if (page.length < pageSize) break;
-          after = page.at(-1)?.cursor;
+          if (rows.length < pageSize) break;
+          after = rows.at(-1)?.cursor;
         }
       }
       return { erased, failed };
@@ -306,7 +327,7 @@ export function createIdentityRetentionSweep({
  * The store over identity's entry and this module's rows (R-API-6; R-121: verification imports
  * identity, never the reverse). `applicationsDue` is identity's page of the applicants due, handed in.
  */
-export function identityRetentionStoreOver(
+function identityRetentionStoreOver(
   applicationsDue: IdentityRetentionStore['applicationsDue'],
 ): IdentityRetentionStore {
   return {
@@ -328,6 +349,23 @@ export function identityRetentionStoreOver(
     },
     requestHolding: requestHoldingDocument,
     documentOf: documentMarksOf,
+    unmarkedAmong: unmarkedDocumentsAmong,
     markErased: markIdentityDocumentErased,
   };
 }
+
+/**
+ * The sweep's store over the modules' entries: the applicants' page is identity's
+ * `identityDocumentsDecidedBefore` (Q-C1-1 (a), the owner's «موافق على الاتنين» of 2026-11-22).
+ */
+export const identityRetentionStore: IdentityRetentionStore = identityRetentionStoreOver(
+  async (tx, { decidedBefore, bannedBefore }, after, limit) =>
+    (
+      await identityDocumentsDecidedBefore(
+        tx,
+        { rejectedBefore: decidedBefore, bannedBefore },
+        after,
+        limit,
+      )
+    ).map(({ profileId, userId, documentId }) => ({ cursor: profileId, userId, documentId })),
+);

@@ -297,6 +297,11 @@ export {
   recordApplicationCall,
 } from './application.repository.js';
 /**
+ * R1a (002:T176; Q-C1-1 (a), the owner's «موافق على الاتنين» of 2026-11-22): the live applicants
+ * never approved whose identity document is due, paged for verification's `erase-identity-documents`.
+ */
+export { identityDocumentsDecidedBefore } from './application.repository.js';
+/**
  * R1a (002:T174; SRS DEC-97): the application's history, the one entry verification's approve,
  * reject and requestInfo write through, as standing's ban and revocation do; read by
  * `applications.get`. Its erasure is the deletion's alone (`eraseAccount`), so it is not exported.

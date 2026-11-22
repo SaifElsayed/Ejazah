@@ -4,10 +4,9 @@
 // read again under the kernel's real locks, the conditional mark, and the hourly
 // `erase-deleted-files` removing the file of a marked live-account document through a storage fake.
 //
-// The applicants' page is identity's entry, not yet written (the question in R1a lane C1's report):
-// here a spec function lists this probe's own applicants, so every other part runs as it will. The
-// requests' page is the real query, its rows narrowed to this probe's people so no other probe's row
-// is touched. ⚠️ Automatic: the hourly job's removal leaves no way back.
+// The applicants' page is identity's `identityDocumentsDecidedBefore` (Q-C1-1 (a), the owner's
+// «موافق على الاتنين» of 2026-11-22) and the requests' page verification's query, both real, their
+// rows narrowed to this probe's people so no other probe's row is touched. ⚠️ Automatic: the hourly job's removal leaves no way back.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { randomUUID } from 'node:crypto';
 
@@ -22,8 +21,9 @@ import {
   createDocumentErasure,
   createIdentityRetentionSweep,
   type IdentityRetentionStore,
-  identityRetentionStoreOver,
+  identityRetentionStore,
 } from '../../apps/api/src/modules/verification/index.js';
+import { identityDocumentsDecidedBefore } from '../../apps/api/src/modules/identity/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import {
   closeDatabase,
@@ -185,16 +185,14 @@ function storeFor(
   applicants: readonly (Probe & { readonly profileId: string })[],
   people: readonly Probe[],
 ): IdentityRetentionStore {
-  const mine = new Set(people.map(({ userId }) => userId));
-  const own = [...applicants].sort((a, b) => a.profileId.localeCompare(b.profileId));
-  const real = identityRetentionStoreOver(async (_tx, _cutoffs, after, limit) =>
-    own
-      .filter(({ profileId }) => after === undefined || profileId > after)
-      .slice(0, limit)
-      .map(({ profileId, userId, documentId }) => ({ cursor: profileId, userId, documentId })),
-  );
+  const mine = new Set([...applicants, ...people].map(({ userId }) => userId));
+  const real = identityRetentionStore;
   return {
     ...real,
+    applicationsDue: async (tx, cutoffs, after, limit) =>
+      (await real.applicationsDue(tx, cutoffs, after, limit)).filter(({ userId }) =>
+        mine.has(userId),
+      ),
     requestsDue: async (tx, decidedBefore, after, limit) =>
       (await real.requestsDue(tx, decidedBefore, after, limit)).filter(({ userId }) =>
         mine.has(userId),
@@ -273,7 +271,7 @@ describe('erase-identity-documents over the real tables (T176) ⚠️', () => {
     await db.query('UPDATE verification_documents SET erased_at = now() WHERE id = $1', [
       erased.documentId,
     ]);
-    const store = identityRetentionStoreOver(async () => []);
+    const store = identityRetentionStore;
     const listed = await database.$transaction((tx) =>
       store.requestsDue(tx, daysAgo(90), undefined, 100_000),
     );
@@ -287,6 +285,33 @@ describe('erase-identity-documents over the real tables (T176) ⚠️', () => {
     const run = await sweepFor(storeFor([], [probe]), [], new Set([probe.userId])).run();
     expect(run.erased).toEqual([]);
     expect(await marks(probe.documentId)).toEqual(UNTOUCHED);
+  });
+
+  it('identity’s page lists the live applicants never approved by the cutoffs: rejected and banned, never approved, open or recent', async () => {
+    const rejected = await applicant('rejected', 91);
+    const banned = await applicant('banned', 91);
+    const bannedRecent = await applicant('banned', 50);
+    const early = await applicant('rejected', 20);
+    const waiting = await applicant('needs_document', 120);
+    const reapplied = await applicant('rejected', 120, { approved: true });
+    const listed = await database.$transaction((tx) =>
+      identityDocumentsDecidedBefore(
+        tx,
+        { rejectedBefore: daysAgo(30), bannedBefore: daysAgo(90) },
+        undefined,
+        100_000,
+      ),
+    );
+    const ids = new Set(listed.map(({ documentId }) => documentId));
+    for (const probe of [rejected, banned]) expect(ids.has(probe.documentId)).toBe(true);
+    for (const probe of [bannedRecent, early, waiting, reapplied]) {
+      expect(ids.has(probe.documentId)).toBe(false);
+    }
+    expect(listed.find(({ documentId }) => documentId === rejected.documentId)).toEqual({
+      profileId: rejected.profileId,
+      userId: rejected.userId,
+      documentId: rejected.documentId,
+    });
   });
 
   it('two runs at once mark each document once, serialised on its locks', async () => {
@@ -307,7 +332,7 @@ describe('erase-identity-documents over the real tables (T176) ⚠️', () => {
     const erased = await documentOf(userId, { erased_at: daysAgo(1) });
     const at = new Date();
     // The store's mark is verification's `markIdentityDocumentErased`.
-    const mark = identityRetentionStoreOver(async () => []).markErased;
+    const mark = identityRetentionStore.markErased;
     expect(await database.$transaction((tx) => mark(tx, kept.id, at))).toBe(false);
     expect(await database.$transaction((tx) => mark(tx, erased.id, at))).toBe(false);
     expect(await marks(kept.id)).toEqual({ erased: false, kept: true, has_key: true });

@@ -17,7 +17,6 @@ import { z } from 'zod';
 
 import {
   createIdentityRetentionSweep,
-  type IdentityRetentionStore,
   type IdentityRetentionSweep,
 } from '../modules/verification/index.js';
 import type { Database } from '../platform/db/prisma.repository.js';
@@ -44,8 +43,6 @@ export interface EraseIdentityDocumentsDependencies {
   readonly held: (userIds: readonly string[]) => Promise<ReadonlySet<string>>;
   /** The sweep's lines: one info per document marked, one error per document failed. */
   readonly log: Pick<Logger, 'info' | 'error'>;
-  /** The sweep's store over the modules' entries (verification's). */
-  readonly store: IdentityRetentionStore;
   /** Error tracking; `reportError` unless a spec sets one. */
   readonly report?: (error: Error) => void;
 }
@@ -62,7 +59,6 @@ export function eraseIdentityDocuments(
           held: options.held,
           log: options.log,
           pageSize: IDENTITY_RETENTION_PAGE_SIZE,
-          store: options.store,
           ...(options.report === undefined ? {} : { report: options.report }),
         });
   return defineJob({

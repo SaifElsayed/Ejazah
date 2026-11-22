@@ -312,7 +312,7 @@ export {
   type IdentityRetentionRun,
   type IdentityRetentionStore,
   type IdentityRetentionSweep,
-  identityRetentionStoreOver,
+  identityRetentionStore,
 } from './identity-retention.sweep.js';
 
 // ---------------------------------------------------------------------------------------------

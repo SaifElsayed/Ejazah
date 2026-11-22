@@ -355,6 +355,18 @@ export async function documentMarksOf(
   });
 }
 
+/** R1a T176: of `ids`, the documents neither erased nor kept, by primary key, with no lock. */
+export async function unmarkedDocumentsAmong(
+  tx: Pick<Transaction, 'verificationDocument'>,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  const rows = await tx.verificationDocument.findMany({
+    where: { id: { in: [...ids] }, erasedAt: null, keptAt: null },
+    select: { id: true },
+  });
+  return new Set(rows.map(({ id }) => id));
+}
+
 /**
  * R1a T176 (kernel.md of specs/004-sessions, the document sweep's row): locks the document `id` FOR
  * UPDATE, after its owner's account and application (the one order of `platform/db/row-lock.ts`).
