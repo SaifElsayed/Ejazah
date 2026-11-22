@@ -2677,6 +2677,7 @@
         "rate_limit_dispute_revision": "Dispute ruling revisions",
         "rate_limit_enrollment_end": "Enrollment ends",
         "rate_limit_enrollment_restore": "Enrollment restores",
+        "rate_limit_failed_one_time_code": "Wrong one-time codes before no more codes are sent",
         "rate_limit_gender_decision": "Gender decisions",
         "rate_limit_gender_flag": "Gender flags",
         "rate_limit_ijazah_decision": "Ijazah decisions",

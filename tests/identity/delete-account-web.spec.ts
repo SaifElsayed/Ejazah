@@ -69,7 +69,8 @@ const settings: SettingsReader = {
 /** Every limit admits every call here; the limits are the page specs'. */
 const admitAll = new RateLimiter({
   settings: { read: async (_key, schema) => schema.parse({ limit: 1_000, window_seconds: 60 }) },
-  counter: { hit: async () => 1 },
+  // 002:T173 (rule d): `count` lets it read the failed codes' cap too, which it never closes.
+  counter: { hit: async () => 1, count: async () => 0 },
   subjectKey: Buffer.alloc(32, 1),
 });
 
@@ -145,6 +146,8 @@ describe('the web deletion end to end (T081, FR-143)', () => {
       // 005:T031 (rule d): a teacher's two counts, none in this spec's worlds.
       openIjazahRequests: { count: async () => 0 },
       openCases: { count: async () => 0 },
+      // 002:T173 (rule d): the failed codes' cap on the process's limiter, here the admitting one.
+      failedCodes: admitAll,
     });
     const routes = deleteAccountRoutes({
       deletion: services.deletion,

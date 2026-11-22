@@ -176,6 +176,11 @@ export interface RateLimitCounter {
    * expiry or no key; T062). Read on a refusal only. A counter without it gives a refusal no time.
    */
   remainingMilliseconds?(key: string): Promise<number>;
+  /**
+   * How many the key's current window holds, read without counting (T173): 0 before a window opens
+   * and once it has ended. A counter without it backs no cap: `isCapped` then fails closed.
+   */
+  count?(key: string): Promise<number>;
 }
 
 /** What the limiter writes: the first refusal's record and the default breaker's warning (T062). */
@@ -279,6 +284,44 @@ export class RateLimiter {
     if (count <= limit) return;
     if (count === limit + 1) this.#logRefusal(key, subject, digest, procedure);
     throw await this.#refusal(this.#counter, counterKey);
+  }
+
+  /**
+   * A CAP ON EVENTS (T173 of specs/002-identity; SRS §3.14 «Failed one-time codes before issuing
+   * stops»): one event by `subject` counted under `key`'s fixed window, which the window's first
+   * event opens, and never refused, since the call it follows has its own answer. Answers the
+   * subject's digest when this event is the one that fills the limit (the count exactly the limit),
+   * so the caller writes the window's one record by the digest, never the subject; otherwise
+   * nothing.
+   */
+  async countEvent(key: RateLimitKey, subject: RateLimitSubject): Promise<string | undefined> {
+    const digest = this.#subjectDigest(key, subject);
+    const { limit, window_seconds } = await this.#settings.read(key, rateLimitSetting);
+    const count = await this.#counter.hit(`rate-limit:${key}:${digest}`, window_seconds);
+    return count === limit ? digest : undefined;
+  }
+
+  /**
+   * Whether `subject`'s window under `key` holds the limit or more (T173): read on the counter
+   * without counting, so asking never fills the cap. The limit is read on every call; a counter
+   * that cannot read a count fails closed, as every declared limit does.
+   */
+  async isCapped(key: RateLimitKey, subject: RateLimitSubject): Promise<boolean> {
+    const digest = this.#subjectDigest(key, subject);
+    const { limit } = await this.#settings.read(key, rateLimitSetting);
+    if (this.#counter.count === undefined) {
+      throw new Error(`Rate limit ${key}: the counter cannot read a count; nothing was answered.`);
+    }
+    return (await this.#counter.count(`rate-limit:${key}:${digest}`)) >= limit;
+  }
+
+  /** The digest `subject` is counted under; a subject that names nothing is refused. */
+  #subjectDigest(key: RateLimitKey, subject: RateLimitSubject): string {
+    const counted = countedAs(subject);
+    if (counted === '') {
+      throw new Error(`Rate limit ${key}: the caller named no subject; nothing was counted.`);
+    }
+    return this.#digest(counted);
   }
 
   /** The default: its held setting, its own counter under the timer, and the breaker. */
@@ -482,6 +525,16 @@ end
 return count
 `;
 
+// GET only (T173): a read that never increments and never opens or stretches a window; a key no
+// window holds reads 0.
+const COUNT_SCRIPT = `
+local count = redis.call('GET', KEYS[1])
+if count then
+  return tonumber(count)
+end
+return 0
+`;
+
 /** The two commands of a Redis client the counter needs. */
 export interface ScriptRunner {
   eval(script: string, keyCount: number, ...keysAndArgs: Array<string | number>): Promise<unknown>;
@@ -510,6 +563,14 @@ export class RedisRateLimitCounter implements RateLimitCounter {
       throw new TypeError('The rate-limit counter answered something other than a time to live.');
     }
     return remaining;
+  }
+
+  async count(key: string): Promise<number> {
+    const count = await this.#redis.eval(COUNT_SCRIPT, 1, key);
+    if (typeof count !== 'number' || !Number.isInteger(count)) {
+      throw new TypeError('The rate-limit counter answered something other than a count.');
+    }
+    return count;
   }
 }
 

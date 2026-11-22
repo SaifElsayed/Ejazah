@@ -241,6 +241,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // address, counted before the platform-wide budgets they guard, each a tenth of its budget.
   ['rate_limit_address_authentication', { limit: 100, window_seconds: 900 }],
   ['rate_limit_address_one_time_code', { limit: 30, window_seconds: 3600 }],
+  // T173 of specs/002-identity (SRS DEC-100, §3.14; the note under T173): after 10 failed codes for
+  // one e-mail address and purpose, no code is issued for them until the 24-hour window ends.
+  ['rate_limit_failed_one_time_code', { limit: 10, window_seconds: 86400 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

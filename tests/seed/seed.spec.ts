@@ -166,6 +166,8 @@ const SETTINGS: Record<string, unknown> = {
   // 002:T172 (SRS DEC-103, §3.14): the two limits per client address, before the budgets.
   rate_limit_address_authentication: { limit: 100, window_seconds: 900 },
   rate_limit_address_one_time_code: { limit: 30, window_seconds: 3600 },
+  // 002:T173 (SRS DEC-100, §3.14): failed one-time codes before issuing stops, per address and purpose.
+  rate_limit_failed_one_time_code: { limit: 10, window_seconds: 86400 },
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -375,7 +377,7 @@ describe('the seed (T074)', () => {
     );
     // 003:T105 (rule d): + ijazah_half_release_percent + rate_limit_payout_mark; with B48 (005:T017)'s two
     // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two.
-    // 002:T172 (SRS DEC-103): + the two limits per client address.
-    expect(counts).toEqual([{ subjects: '5', settings: '97', admins: '1' }]);
+    // 002:T172 (SRS DEC-103): + the two limits per client address; 002:T173: + the failed codes' cap.
+    expect(counts).toEqual([{ subjects: '5', settings: '98', admins: '1' }]);
   });
 });

@@ -13,6 +13,11 @@ import { z } from 'zod';
 
 import { columnKeyId, createColumnCipher } from '../../../platform/crypto/encryption.js';
 import { openDatabase, type Database } from '../../../platform/db/prisma.repository.js';
+import {
+  deriveRateLimitSubjectKey,
+  type RateLimitCounter,
+  RateLimiter,
+} from '../../../platform/guards/rate-limit.guard.js';
 import { specDatabaseUrl, whenDatabaseSpecs } from '../../../platform/db/spec-database.fixtures.js';
 import type { EmailPort, Mail } from '../../../platform/ports/email/email.port.js';
 import type { StoragePort } from '../../../platform/ports/storage/storage.port.js';
@@ -46,6 +51,8 @@ export const SEEDED_SETTINGS: Readonly<Record<string, unknown>> = {
   provider_nonce_ttl_minutes: 10,
   terms_version: '2026-10',
   document_link_ttl_seconds: 300,
+  // T173 (SRS §3.14, DEC-100): failed codes before issuing stops, per address and purpose.
+  rate_limit_failed_one_time_code: { limit: 10, window_seconds: 86400 },
 };
 
 /** A settings reader over `values`, failing closed as the real one does. */
@@ -106,6 +113,36 @@ export class SpecClock {
 
   advance(seconds: number): void {
     this.#now = new Date(addSeconds(this.#now, seconds));
+  }
+}
+
+/**
+ * The limiter's counter on the spec's clock (T173): a fixed window per key, opened by its first hit
+ * for the seconds it names and ended once the clock reaches its end, as Redis's expiry ends it.
+ */
+export class ClockedRateLimitCounter implements RateLimitCounter {
+  readonly #windows = new Map<string, { count: number; readonly endsAt: Date }>();
+  readonly #now: () => Date;
+
+  constructor(now: () => Date) {
+    this.#now = now;
+  }
+
+  async hit(key: string, windowSeconds: number): Promise<number> {
+    const open = this.#open(key);
+    const window = open ?? { count: 0, endsAt: new Date(addSeconds(this.#now(), windowSeconds)) };
+    window.count += 1;
+    this.#windows.set(key, window);
+    return window.count;
+  }
+
+  async count(key: string): Promise<number> {
+    return this.#open(key)?.count ?? 0;
+  }
+
+  #open(key: string): { count: number; readonly endsAt: Date } | undefined {
+    const window = this.#windows.get(key);
+    return window !== undefined && this.#now() < window.endsAt ? window : undefined;
   }
 }
 
@@ -247,10 +284,18 @@ export function buildIdentity(
   });
   const base = { database, settings, encryptionKey, now: clock.now };
   const sessions = new SessionService(base);
+  // T173: the failed codes' cap on the process's limiter, its counter on the spec's clock.
+  const failedCodeCounter = new ClockedRateLimitCounter(clock.now);
+  const failedCodes = new RateLimiter({
+    settings,
+    counter: failedCodeCounter,
+    subjectKey: deriveRateLimitSubjectKey(encryptionKey),
+  });
   const codes = new OneTimeCodes({
     ...base,
     email,
     log,
+    failedCodes,
     ...(overrides.codeHasher === undefined ? {} : { hasher: overrides.codeHasher }),
   });
   const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });

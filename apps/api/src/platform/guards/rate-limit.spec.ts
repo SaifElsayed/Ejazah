@@ -94,6 +94,14 @@ class FakeCounter implements RateLimitCounter {
     this.remainingReads += 1;
     return this.remaining();
   }
+
+  /** T173: the window's count, read without counting; each such read is counted. */
+  countReads = 0;
+
+  async count(key: string): Promise<number> {
+    this.countReads += 1;
+    return this.counts.get(key) ?? 0;
+  }
 }
 
 type LogLine = readonly [Readonly<Record<string, unknown>>, string];
@@ -660,6 +668,104 @@ describe('the counter key is an HMAC of the subject (T170, review finding SEC-2)
   });
 });
 
+// T173 of specs/002-identity (SRS §3.14 «Failed one-time codes before issuing stops», DEC-100): a
+// cap on events counted apart from any call. `countEvent` counts and never refuses; `isCapped`
+// reads the count without adding to it.
+describe('a cap on events counted apart from the calls (T173)', () => {
+  const CAP = 'rate_limit_failed_one_time_code';
+  const subject = { kind: 'identifier', value: 'password_reset:someone@example.com' } as const;
+  const other = { kind: 'identifier', value: 'signup:someone@example.com' } as const;
+
+  function capFixture(limit = 3, windowSeconds = 86_400) {
+    const settings = new FakeSettings();
+    settings.values.set(CAP, { limit, window_seconds: windowSeconds });
+    const counter = new FakeCounter();
+    const log = recordingLog();
+    const limiter = new RateLimiter({
+      settings,
+      counter,
+      subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
+      log,
+    });
+    return { settings, counter, log, limiter };
+  }
+
+  it('counts each event under the window the setting names, and never refuses past the limit', async () => {
+    const { counter, limiter } = capFixture(2, 86_400);
+    // Past the limit too: an event is counted, never refused.
+    for (let event = 0; event < 5; event += 1) await limiter.countEvent(CAP, subject);
+    expect([...counter.counts.values()]).toEqual([5]);
+    expect(counter.windows).toEqual([86_400, 86_400, 86_400, 86_400, 86_400]);
+  });
+
+  it('answers the digest for the event that fills the limit only, and logs nothing itself', async () => {
+    const { counter, log, limiter } = capFixture(3);
+    const answers = [];
+    for (let event = 0; event < 5; event += 1) answers.push(await limiter.countEvent(CAP, subject));
+    const [counterKey] = [...counter.counts.keys()];
+    const digest = counterKey?.split(':').at(-1);
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(answers).toEqual([undefined, undefined, digest, undefined, undefined]);
+    expect(counterKey).toBe(`rate-limit:${CAP}:${String(digest)}`);
+    expect(counterKey).not.toContain('someone');
+    expect(log.lines).toEqual([]);
+  });
+
+  it('reads the cap without counting: open below the limit, capped at it and past it', async () => {
+    const { counter, limiter } = capFixture(3);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    for (let event = 0; event < 2; event += 1) await limiter.countEvent(CAP, subject);
+    for (let read = 0; read < 4; read += 1) {
+      await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    }
+    expect([...counter.counts.values()]).toEqual([2]);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    expect([...counter.counts.values()]).toEqual([4]);
+    expect(counter.countReads).toBe(7);
+  });
+
+  it('counts each subject apart', async () => {
+    const { limiter } = capFixture(1);
+    await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    await expect(limiter.isCapped(CAP, other)).resolves.toBe(false);
+  });
+
+  it('reads the limit from the setting on every read, never from a constant', async () => {
+    const { settings, limiter } = capFixture(5);
+    for (let event = 0; event < 2; event += 1) await limiter.countEvent(CAP, subject);
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(false);
+    settings.values.set(CAP, { limit: 2, window_seconds: 86_400 });
+    await expect(limiter.isCapped(CAP, subject)).resolves.toBe(true);
+    expect(settings.reads.filter((key) => key === CAP)).toHaveLength(4);
+  });
+
+  it('fails closed: a missing row, and a counter that cannot read a count, refuse to answer', async () => {
+    const { settings, limiter } = capFixture();
+    settings.values.delete(CAP);
+    await expect(limiter.isCapped(CAP, subject)).rejects.toBeInstanceOf(SettingError);
+    await expect(limiter.countEvent(CAP, subject)).rejects.toBeInstanceOf(SettingError);
+
+    const blind = new RateLimiter({
+      settings: capFixture().settings,
+      counter: { hit: async () => 1 },
+      subjectKey: deriveRateLimitSubjectKey(ENCRYPTION_KEY),
+    });
+    await expect(blind.isCapped(CAP, subject)).rejects.toThrow(/cannot read a count/);
+  });
+
+  it('refuses a subject that names nothing, counting nothing', async () => {
+    const { counter, limiter } = capFixture();
+    const empty = { kind: 'identifier', value: '' } as const;
+    await expect(limiter.countEvent(CAP, empty)).rejects.toThrow(/named no subject/);
+    await expect(limiter.isCapped(CAP, empty)).rejects.toThrow(/named no subject/);
+    expect(counter.counts.size).toBe(0);
+  });
+});
+
 describe('the Redis counter (T103)', () => {
   function client(reply: unknown, remaining: unknown = 30_500) {
     const calls: unknown[][] = [];
@@ -705,6 +811,25 @@ describe('the Redis counter (T103)', () => {
     await expect(
       new RedisRateLimitCounter(client(4, 'OK')).remainingMilliseconds('rate-limit:k:abc'),
     ).rejects.toThrow(TypeError);
+  });
+
+  it('reads a count with one script that GETs the key and neither increments nor opens a window (T173)', async () => {
+    const redis = client(7);
+    expect(await new RedisRateLimitCounter(redis).count('rate-limit:k:abc')).toBe(7);
+
+    expect(redis.calls).toHaveLength(1);
+    const [script, keyCount, key, ...rest] = redis.calls[0] ?? [];
+    expect(script).toEqual(expect.stringContaining("redis.call('GET', KEYS[1])"));
+    expect(script).not.toEqual(expect.stringContaining('INCR'));
+    expect(script).not.toEqual(expect.stringContaining('EXPIRE'));
+    expect([keyCount, key, rest]).toEqual([1, 'rate-limit:k:abc', []]);
+  });
+
+  it('reads 0 for a key no window holds, and refuses a reply that is not a count (T173)', async () => {
+    expect(await new RedisRateLimitCounter(client(0)).count('rate-limit:k:none')).toBe(0);
+    await expect(new RedisRateLimitCounter(client('OK')).count('rate-limit:k:abc')).rejects.toThrow(
+      TypeError,
+    );
   });
 });
 
