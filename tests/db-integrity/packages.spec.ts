@@ -20,13 +20,15 @@
 // The rows are committed, as in `account-locks.spec.ts`: each probe writes people of its own and
 // leaves them as the other probes here leave theirs.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
 import {
   PackagesService,
   packagesRouter,
   packagesStore,
+  PROGRAMME_ENABLED_SETTING,
+  retirePreProgrammeIjazahPackages,
   revokeSubjects,
 } from '../../apps/api/src/modules/catalog/index.js';
 import {
@@ -47,6 +49,7 @@ import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/i
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service.js';
 import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
+import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
 import { createAppContext } from '../../apps/api/src/surfaces/context.js';
 import {
   createAppCallerFactory,
@@ -66,7 +69,14 @@ import {
   unusedTeacherProfileServices,
   unusedVerificationServices,
 } from '../../apps/api/src/surfaces/services.fixtures.js';
-import { connectAsApplication, type Db, insertRow, makeSubject, makeUser } from './harness';
+import {
+  connectAsApplication,
+  type Db,
+  insertRow,
+  makeAdmin,
+  makeSubject,
+  makeUser,
+} from './harness';
 
 let db: Db;
 let watcher: Db;
@@ -588,5 +598,188 @@ describe('the locks (T005’s rules)', () => {
 
     expect(refusalOf(outcome)).toBe('SUBJECT_NOT_APPROVED');
     expect(await packagesOfTeacher(teacherId)).toBe(0);
+  });
+});
+
+// 006:T002 (SRS DEC-110; the note under T002, Q-3 (a)(a)): the programme's switch over the real
+// tables. Its turn-on (`retirePreProgrammeIjazahPackages`, on the setting change's transaction)
+// deactivates every active old-style ijazah-track package (`is_programme = false`) and no other: a
+// recitation package, a programme package and an inactive one stay as they are; it answers how many
+// it changed. Two races, staged as above (A holds, B is seen waiting on a lock, A commits):
+//
+//   - the turn-on first: it locks the account of every teacher holding an old-style ijazah package,
+//     so a reactivation of one waits on the account's lock and then reads the switch on, answering
+//     CONFLICT `programme_switch_on`, the package left inactive;
+//   - the reactivation first: it read the switch off and wrote the package active under the
+//     account's lock; the turn-on waits on that lock, then deactivates it, so no old-style package
+//     is active once the switch is on.
+//
+// The switch's row is planted where none holds it (CI migrates and never seeds), at 0, and put back
+// to 0 after each case, deleted at the end if this file planted it. The turn-on deactivates the
+// old-style ijazah packages other probes left too, committed as theirs are: the count is checked
+// against the active ones counted on the same transaction just before.
+describe('the programme’s switch (006:T002, DEC-110)', () => {
+  let planter = '';
+  let planted = false;
+
+  /** The switch as `teacher.packages.update` reads it: the committed row, on a connection of its own. */
+  const committedSwitch: SettingsReader = {
+    read: async (key, schema) => {
+      const { rows } = await watcher.query<{ value: unknown }>(
+        'SELECT value FROM settings WHERE key = $1',
+        [key],
+      );
+      return schema.parse(rows[0]?.value);
+    },
+  };
+
+  /** The service run on `tx`, reading the switch's committed row. */
+  function switchedServiceOn(tx: Transaction): PackagesService {
+    return new PackagesService({
+      transactions: { run: (work) => work(tx) },
+      store: packagesStore,
+      use,
+      idempotency: { run: (_request, effect) => effect(tx) },
+      settings: committedSwitch,
+    });
+  }
+
+  /** The turn-on on `tx`: the row set to 1, as the panel's writer sets it, then the catalog entry. */
+  async function turnOn(tx: Transaction): Promise<number> {
+    await tx.setting.updateMany({ where: { key: PROGRAMME_ENABLED_SETTING }, data: { value: 1 } });
+    return retirePreProgrammeIjazahPackages(tx);
+  }
+
+  async function switchOff(): Promise<void> {
+    await db.query(`UPDATE settings SET value = '0'::jsonb WHERE key = $1`, [
+      PROGRAMME_ENABLED_SETTING,
+    ]);
+  }
+
+  beforeAll(async () => {
+    planter = await makeAdmin(db);
+    const { rowCount } = await db.query(
+      `INSERT INTO settings (key, value, updated_by_admin_id, updated_at) VALUES ($1, '0'::jsonb, $2, now())
+       ON CONFLICT (key) DO NOTHING`,
+      [PROGRAMME_ENABLED_SETTING, planter],
+    );
+    planted = rowCount === 1;
+  });
+
+  afterEach(switchOff);
+
+  afterAll(async () => {
+    if (planted) {
+      await db.query('DELETE FROM settings WHERE key = $1 AND updated_by_admin_id = $2', [
+        PROGRAMME_ENABLED_SETTING,
+        planter,
+      ]);
+    }
+  });
+
+  /** A committed package of the teacher on the subject: old-style unless `programme`. */
+  function packageRow(
+    teacherId: string,
+    subjectId: string,
+    values: { readonly track: 'recitation' | 'ijazah_track'; readonly isActive: boolean },
+    programme = false,
+  ): Promise<string> {
+    return insertRow(db, 'packages', {
+      teacher_user_id: teacherId,
+      subject_id: subjectId,
+      track: values.track,
+      is_active: values.isActive,
+      is_programme: programme,
+      ...(programme
+        ? { price_30_piasters: 10_000, price_45_piasters: 15_000, price_60_piasters: 20_000 }
+        : { session_count: 8, session_duration_minutes: 60, price_piasters: 240_000 }),
+    });
+  }
+
+  async function activeOf(packageId: string): Promise<boolean | undefined> {
+    return (await rowOf(packageId))?.['is_active'] as boolean | undefined;
+  }
+
+  it('deactivates every active old-style ijazah package and no other, answering how many', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+    const otherId = await approvedTeacher(subjectId, 'male');
+    const old = await packageRow(teacherId, subjectId, { track: 'ijazah_track', isActive: true });
+    const otherOld = await packageRow(otherId, subjectId, {
+      track: 'ijazah_track',
+      isActive: true,
+    });
+    const inactiveOld = await packageRow(teacherId, subjectId, {
+      track: 'ijazah_track',
+      isActive: false,
+    });
+    const recitation = await packageRow(teacherId, subjectId, {
+      track: 'recitation',
+      isActive: true,
+    });
+    const programme = await packageRow(
+      teacherId,
+      subjectId,
+      { track: 'ijazah_track', isActive: true },
+      true,
+    );
+    const { before, count } = await database.$transaction(async (tx) => {
+      const counted = await tx.package.count({
+        where: { track: 'ijazah_track', isProgramme: false, isActive: true },
+      });
+      return { before: counted, count: await turnOn(tx) };
+    }, OPTIONS);
+    expect(before).toBeGreaterThanOrEqual(2);
+    expect(count).toBe(before);
+    expect(await activeOf(old)).toBe(false);
+    expect(await activeOf(otherOld)).toBe(false);
+    expect(await activeOf(inactiveOld)).toBe(false);
+    expect(await activeOf(recitation)).toBe(true);
+    expect(await activeOf(programme)).toBe(true);
+  });
+
+  it('turned off, reactivates none', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+    const old = await packageRow(teacherId, subjectId, { track: 'ijazah_track', isActive: true });
+    await database.$transaction(turnOn, OPTIONS);
+    await switchOff();
+    expect(await activeOf(old)).toBe(false);
+  });
+
+  it('a reactivation against the turn-on waits on the account’s lock, then answers programme_switch_on', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+    const packageId = await packageRow(teacherId, subjectId, {
+      track: 'ijazah_track',
+      isActive: false,
+    });
+
+    const outcome = await race(turnOn, (tx) =>
+      switchedServiceOn(tx).update(teacherId, { packageId, isActive: true }),
+    );
+
+    expect('thrown' in outcome && outcome.thrown).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'isActive', code: 'programme_switch_on' }],
+    });
+    expect(await activeOf(packageId)).toBe(false);
+  });
+
+  it('the turn-on against a reactivation that read the switch off waits on the account’s lock, then deactivates it', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'male');
+    const packageId = await packageRow(teacherId, subjectId, {
+      track: 'ijazah_track',
+      isActive: false,
+    });
+
+    const outcome = await race(
+      (tx) => switchedServiceOn(tx).update(teacherId, { packageId, isActive: true }),
+      turnOn,
+    );
+
+    expect('value' in outcome && outcome.value).toBeGreaterThanOrEqual(1);
+    expect(await activeOf(packageId)).toBe(false);
   });
 });

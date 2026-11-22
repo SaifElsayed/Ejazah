@@ -26,7 +26,7 @@ import {
   TEACHER,
   TX,
 } from './packages.fixtures.js';
-import { PackagesService } from './packages.service.js';
+import { PackagesService, retirePreProgrammeIjazahPackages } from './packages.service.js';
 
 const KEY = 'spec-packages-key-0001';
 // The session's gender, the teacher's own.
@@ -66,6 +66,8 @@ const RECITATION = {
   sessionDurationMinutes: 45,
   price_piasters: piasters(100_000),
   isActive: true,
+  // 006:T002 (rule d): `PackageRow` names whether it is a programme package.
+  isProgramme: false,
 } as const;
 
 async function codeOf(call: Promise<unknown>): Promise<string> {
@@ -471,5 +473,184 @@ describe("averagePrice (003:T113; SRS DEC-88, FR-PROFILE-2 as amended): the edit
 
     expect(await service.averagePrice(TEACHER, REQUESTER, ASKED)).toEqual({});
     expect(memory.log).toContain('visibleTeacherIds:female');
+  });
+});
+
+// 006:T002 (SRS DEC-110, FR-PROFILE-3 as amended; spec.md FR-701's note; the note under T002,
+// Q-3 (a)(a)): while `programme_enabled` is on, an old-style ijazah-track package (one made before
+// the programme, `is_programme = false`) is not reactivated: CONFLICT with the detail code
+// `programme_switch_on`, nothing written. The switch is read after the account's lock, the lock
+// the switch's turn-on takes on that teacher too (`retirePreProgrammeIjazahPackages`). Deactivating
+// it, any other edit of it, and reactivating a recitation or a programme package stay as today;
+// with the switch off the teacher reactivates by hand (DEC-110).
+describe('update while the programme’s switch is on (006:T002, DEC-110)', () => {
+  const OLD_IJAZAH = {
+    ...RECITATION,
+    track: 'ijazah_track',
+    sessionCount: 8,
+    sessionDurationMinutes: 60,
+    isActive: false,
+  } as const;
+
+  /** The switch at on (1) or off (0), each read logged in the store's log, in order. */
+  function switchAt(memory: MemoryPackages, value: 0 | 1): SettingsReader {
+    return {
+      read: async (key, schema) => {
+        if (key !== 'programme_enabled') throw new Error(`no setting ${key} in this spec`);
+        memory.log.push('read:programme_enabled');
+        return schema.parse(value);
+      },
+    };
+  }
+
+  async function refusalOf(call: Promise<unknown>): Promise<unknown> {
+    return call.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+  }
+
+  it('refuses reactivating an old-style ijazah package CONFLICT programme_switch_on, and writes nothing', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, OLD_IJAZAH);
+    const before = memory.held(id);
+    const thrown = await refusalOf(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+      }),
+    );
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect(thrown).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'isActive', code: 'programme_switch_on' }],
+    });
+    expect(memory.held(id)).toEqual(before);
+    expect(memory.log).not.toContain('change');
+  });
+
+  it('refuses it with the price changed beside it too, writing neither', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, OLD_IJAZAH);
+    const before = memory.held(id);
+    const thrown = await refusalOf(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+        price_piasters: 1_000,
+      }),
+    );
+    expect(thrown).toMatchObject({ details: [{ code: 'programme_switch_on' }] });
+    expect(memory.held(id)).toEqual(before);
+  });
+
+  it('reads the switch after the account’s lock and the package’s read', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, OLD_IJAZAH);
+    await refusalOf(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+      }),
+    );
+    expect(memory.log.slice(0, 3)).toEqual([
+      `lockAccount:${TEACHER}`,
+      'packageOf',
+      'read:programme_enabled',
+    ]);
+  });
+
+  it('reactivates it while the switch is off (DEC-110: by hand)', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, OLD_IJAZAH);
+    await expect(
+      serviceOver(memory, switchAt(memory, 0)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+      }),
+    ).resolves.toMatchObject({ isActive: true });
+    expect(memory.held(id).isActive).toBe(true);
+  });
+
+  it('reactivates a recitation package while the switch is on, reading no switch', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, { ...RECITATION, isActive: false });
+    await expect(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+      }),
+    ).resolves.toMatchObject({ isActive: true });
+    expect(memory.log).not.toContain('read:programme_enabled');
+  });
+
+  it('reactivates a programme package while the switch is on', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, { ...OLD_IJAZAH, isProgramme: true });
+    await expect(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        isActive: true,
+      }),
+    ).resolves.toMatchObject({ isActive: true });
+  });
+
+  it('lets an old-style ijazah package be deactivated or re-priced while the switch is on', async () => {
+    const memory = new MemoryPackages();
+    const active = memory.plant(TEACHER, { ...OLD_IJAZAH, isActive: true });
+    const inactive = memory.plant(TEACHER, OLD_IJAZAH);
+    const { service } = serviceOver(memory, switchAt(memory, 1));
+    await expect(
+      service.update(TEACHER, { packageId: active, isActive: false }),
+    ).resolves.toMatchObject({ isActive: false });
+    await expect(
+      service.update(TEACHER, { packageId: inactive, price_piasters: 120_000 }),
+    ).resolves.toMatchObject({ isActive: false, price_piasters: 120_000 });
+    // An active one asked to stay active is no reactivation.
+    const stays = memory.plant(TEACHER, { ...OLD_IJAZAH, isActive: true });
+    await expect(
+      service.update(TEACHER, { packageId: stays, isActive: true }),
+    ).resolves.toMatchObject({ isActive: true });
+  });
+});
+
+// 006:T002 (Q-3 (a)(a), DEC-110): the switch's turn-on deactivates every old-style ijazah package,
+// on the change's transaction: the owners' accounts locked first, in one call, then the one update;
+// the count answered for the audit entry and the log line. The query's filter is
+// `tests/db-integrity/packages.spec.ts`'s.
+describe('retirePreProgrammeIjazahPackages (006:T002, Q-3)', () => {
+  it('locks the owners’ accounts, then deactivates, on the transaction it is handed, and answers the count', async () => {
+    const memory = new MemoryPackages();
+    memory.plant(OTHER_TEACHER, { ...RECITATION, track: 'ijazah_track' });
+    memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track' });
+    memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track', isActive: false });
+    memory.plant(TEACHER, RECITATION);
+    memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track', isProgramme: true });
+    await expect(retirePreProgrammeIjazahPackages(memory, TX)).resolves.toBe(2);
+    expect(memory.log).toEqual([
+      'preProgrammeIjazahOwners',
+      `lockAccounts:${[TEACHER, OTHER_TEACHER].sort().join(',')}`,
+      'deactivatePreProgrammeIjazah',
+    ]);
+    expect(
+      memory
+        .all()
+        .filter((row) => row.isActive)
+        .map(({ track, isProgramme }) => [track, isProgramme]),
+    ).toEqual([
+      ['recitation', false],
+      ['ijazah_track', true],
+    ]);
+  });
+
+  it('answers 0 and locks nobody when no old-style ijazah package exists', async () => {
+    const memory = new MemoryPackages();
+    memory.plant(TEACHER, RECITATION);
+    await expect(retirePreProgrammeIjazahPackages(memory, TX)).resolves.toBe(0);
+    expect(memory.log).toEqual([
+      'preProgrammeIjazahOwners',
+      'lockAccounts:',
+      'deactivatePreProgrammeIjazah',
+    ]);
   });
 });

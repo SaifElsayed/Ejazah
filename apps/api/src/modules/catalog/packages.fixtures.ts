@@ -14,7 +14,7 @@ import type {
   PeerPackageRow,
   PeerPackagesQuery,
 } from './packages.repository.js';
-import type { PackagesStore } from './packages.service.js';
+import type { PackagesStore, PreProgrammeRetirementStore } from './packages.service.js';
 
 export const TEACHER = '0199d0a0-0000-7000-8000-0000000000d1';
 export const OTHER_TEACHER = '0199d0a0-0000-7000-8000-0000000000d2';
@@ -36,7 +36,7 @@ interface Held extends PackageRow {
   readonly teacherUserId: string;
 }
 
-export class MemoryPackages implements PackagesStore, CatalogUse {
+export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStore, CatalogUse {
   /** Every lock and question, in order: `lockAccount:<id>`, `holdsSubject`, `packageOf`, … */
   readonly log: string[] = [];
   readonly #rows = new Map<string, Held>();
@@ -124,7 +124,8 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
     const subject = [SUBJECT, OTHER_SUBJECT].find(({ id }) => id === row.subjectId);
     if (subject === undefined) throw new Error(`no subject ${row.subjectId}`);
     const { subjectId: _subject, teacherUserId, ...rest } = row;
-    const id = this.plant(teacherUserId, { ...rest, subject });
+    // 006:T002 (rule d): a package written today is no programme package (the column's default).
+    const id = this.plant(teacherUserId, { ...rest, subject, isProgramme: false });
     const { teacherUserId: _teacher, ...written } = this.held(id);
     return written;
   }
@@ -168,6 +169,36 @@ export class MemoryPackages implements PackagesStore, CatalogUse {
   ): Promise<string[]> {
     this.log.push(`visibleTeacherIds:${requester}`);
     return teacherIds.filter((id) => this.#published.has(`${id}:${requester}`));
+  }
+
+  /** 006:T002: the teachers of every old-style ijazah package, active or not, ascending. */
+  async preProgrammeIjazahOwners(_tx: Transaction): Promise<string[]> {
+    this.log.push('preProgrammeIjazahOwners');
+    return [
+      ...new Set(
+        this.all()
+          .filter((row) => row.track === 'ijazah_track' && !row.isProgramme)
+          .map((row) => row.teacherUserId),
+      ),
+    ].sort();
+  }
+
+  /** 006:T002: the accounts' locks, in one call. */
+  async lockAccounts(_tx: Transaction, userIds: readonly string[]): Promise<void> {
+    this.log.push(`lockAccounts:${userIds.join(',')}`);
+  }
+
+  /** 006:T002: deactivates every active old-style ijazah package; how many. */
+  async deactivatePreProgrammeIjazah(_tx: Transaction): Promise<number> {
+    this.log.push('deactivatePreProgrammeIjazah');
+    let count = 0;
+    for (const row of this.all()) {
+      if (row.track === 'ijazah_track' && !row.isProgramme && row.isActive) {
+        this.#rows.set(row.id, { ...row, isActive: false });
+        count += 1;
+      }
+    }
+    return count;
   }
 
   async slotInUse(): Promise<boolean> {

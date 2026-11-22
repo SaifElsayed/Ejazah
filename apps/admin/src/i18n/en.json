@@ -220,7 +220,8 @@
         "sessionsReviewViewed": "View a session's connection record",
         "settings": {
           "changed": "Change a setting",
-          "listed": "View settings"
+          "listed": "View settings",
+          "retiredBySwitch": "Deactivate the old ijazah packages when the programme is turned on"
         },
         "studentBan": "Ban student",
         "studentReinstate": "Reinstate student",
@@ -2608,6 +2609,7 @@
         "admin_recovery_code_count": "Admin recovery codes issued",
         "admin_session_idle_minutes": "Admin idle timeout",
         "admin_session_max_hours": "Admin sign-in maximum length",
+        "assessment_duration_minutes": "Ijazah programme: the assessment session's length",
         "attendance_threshold_pct": "Attendance threshold",
         "ban_restore_window_days": "Ban restore window",
         "cancellation_requests_recent_days": "Recent cancellation requests period",
@@ -2641,6 +2643,12 @@
         "postponement_interval_weeks": "Interval between postponements, per party",
         "postponement_notice_hours": "Postponement notice before a session",
         "price_average_min_teachers": "Fewest teachers for the average price",
+        "programme_charge_retry_days": "Ijazah programme: retry days of a failed automatic charge",
+        "programme_enabled": "Ijazah programme: turned on",
+        "programme_offer_hours": "Ijazah programme: time to send the offer after the assessment",
+        "programme_pay_rest_hours": "Ijazah programme: time to pay the rest, from the offer",
+        "programme_renew_early_days": "Ijazah programme: renewal by hand before a paid month ends",
+        "programme_stop_request_days": "Ijazah programme: pause before a stop request",
         "provider_nonce_ttl_minutes": "Provider sign-in nonce validity",
         "push_token_stale_days": "Unused push tokens deleted after",
         "rate_limit_absence_complaint": "Absence complaints",

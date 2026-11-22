@@ -10,8 +10,11 @@
 //   idempotency, so a retry answers the first outcome.
 // - `update` changes the caller's own package only: another teacher's id answers NOT_FOUND and
 //   writes nothing (PR #109's review, M3). Deactivation and reactivation are always allowed
-//   (FR-314). Once the package has an enrollment, a new track or a new length is refused
-//   (`PACKAGE_FROZEN`, FR-312), asked through T020's port; the same value is no change. The count,
+//   (FR-314), but for 006:T002's (SRS DEC-110, FR-PROFILE-3 as amended): while `programme_enabled`
+//   is on, an old-style ijazah-track package (`is_programme = false`) is not reactivated, CONFLICT
+//   with the detail `programme_switch_on`; the switch is read after the account's lock. Once the
+//   package has an enrollment, a new track or a new length is refused (`PACKAGE_FROZEN`, FR-312),
+//   asked through T020's port; the same value is no change. The count,
 //   the price and the state still change, and a new price reaches later purchases only, since an
 //   enrollment keeps its own snapshot of the terms.
 // - `list` answers each package with its price per session from `packages/money` (R-212), its
@@ -38,6 +41,10 @@
 //   the payment reads the new terms, or the edit reads the enrollment and refuses. Packages need
 //   no lock of their own (`LockedTable` has none).
 // - `list` decides nothing and takes no lock.
+// - 006:T002 (Q-3 (a)(a)): `retirePreProgrammeIjazahPackages`, the switch's turn-on on the setting
+//   change's transaction, locks the account of every teacher holding an old-style ijazah package in
+//   one `lockRows(tx, 'users', …)` call, then deactivates them; a reactivation locks the same
+//   account before it reads the switch, so the two never cross (`tests/db-integrity/packages.spec.ts`).
 import {
   type PackagesAveragePriceInput,
   type PackagesAveragePriceOutput,
@@ -54,6 +61,7 @@ import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
+import { programmeEnabled } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CatalogUse, PackageEnrollmentCounts } from './catalog-use.port.js';
 import type {
@@ -66,6 +74,46 @@ import type {
 
 /** 003:T113 (SRS DEC-88, §3.14; Q-T113-k): the fewest other teachers the average is shown over. */
 export const PRICE_AVERAGE_MIN_TEACHERS_SETTING = 'price_average_min_teachers';
+
+/** 006:T002 (Q-3 (a)(a), DEC-110): what the switch's turn-on reads, locks and writes, on its transaction. */
+export interface PreProgrammeRetirementStore {
+  /** The teachers of every old-style ijazah-track package, active or not, ascending. */
+  preProgrammeIjazahOwners(tx: Transaction): Promise<string[]>;
+  /** Locks the accounts' `users` rows, in id order, in one statement. */
+  lockAccounts(tx: Transaction, userIds: readonly string[]): Promise<void>;
+  /** Deactivates every active old-style ijazah-track package; how many it did. */
+  deactivatePreProgrammeIjazah(tx: Transaction): Promise<number>;
+}
+
+/**
+ * 006:T002 (Q-3 (a)(a), DEC-110): the switch's turn-on, on the setting change's transaction. Locks
+ * the account of every teacher holding an old-style ijazah package, active or not, in one call,
+ * then deactivates the active ones in one update, and answers how many. A reactivation locks the
+ * same account before it reads the switch (`update`), so the two never cross: a reactivation that
+ * read the switch off commits first and this update then deactivates it, or it waits for this
+ * transaction and reads the switch on. Turning the switch off reactivates none.
+ */
+export async function retirePreProgrammeIjazahPackages(
+  store: PreProgrammeRetirementStore,
+  tx: Transaction,
+): Promise<number> {
+  await store.lockAccounts(tx, await store.preProgrammeIjazahOwners(tx));
+  return store.deactivatePreProgrammeIjazah(tx);
+}
+
+/** 006:T002 (SRS §3.14, DEC-94; I-3): the programme's switch, 1 on. */
+export const PROGRAMME_ENABLED_SETTING = 'programme_enabled';
+const PROGRAMME_ON = 1;
+
+/** 006:T002 (DEC-110): whether the change turns an inactive old-style ijazah package active. */
+function reactivatesPreProgrammeIjazah(current: PackageRow, change: PackageChange): boolean {
+  return (
+    change.isActive === true &&
+    !current.isActive &&
+    current.track === 'ijazah_track' &&
+    !current.isProgramme
+  );
+}
 
 /** What the packages read and write, each on the transaction it is handed. */
 export interface PackagesStore {
@@ -212,6 +260,15 @@ export class PackagesService {
       const current = await this.#store.packageOf(tx, teacherUserId, input.packageId);
       if (current === null) throw new DomainError('NOT_FOUND');
       const change = changeOf(input);
+      // 006:T002 (DEC-110): read after the account's lock, which the switch's turn-on takes too.
+      if (
+        reactivatesPreProgrammeIjazah(current, change) &&
+        (await this.#settings.read(PROGRAMME_ENABLED_SETTING, programmeEnabled)) === PROGRAMME_ON
+      ) {
+        throw new DomainError('CONFLICT', undefined, {
+          details: [{ path: 'isActive', code: 'programme_switch_on' }],
+        });
+      }
       const newTerms =
         (change.track !== undefined && change.track !== current.track) ||
         (change.sessionDurationMinutes !== undefined &&
