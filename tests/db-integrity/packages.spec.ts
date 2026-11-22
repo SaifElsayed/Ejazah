@@ -22,6 +22,8 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { piasters } from '../../packages/money/src/index.js';
+
 import { createCatalogUse } from '../../apps/api/src/modules/booking/index.js';
 import {
   lockProgrammeSwitch,
@@ -829,6 +831,50 @@ describe('the programme’s switch (006:T002, DEC-110)', () => {
     expect(await packagesOfTeacherRows(teacherId)).toEqual([]);
   });
 
+  // 006:T004 (the owner's «موافق على التلاتة (أ)», 2026-11-22): the edit that turns a recitation
+  // package of a teacher holding no old-style one to the ijazah track takes the key too.
+  async function recitationOf(teacherId: string, subjectId: string): Promise<string> {
+    return insertRow(db, 'packages', {
+      teacher_user_id: teacherId,
+      subject_id: subjectId,
+      track: 'recitation',
+      is_active: true,
+      session_count: 8,
+      session_duration_minutes: 60,
+      price_piasters: 240_000,
+    });
+  }
+
+  it('a turn of a recitation package to the ijazah track against the turn-on waits on the switch’s key, then answers programme_switch_on', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+    const packageId = await recitationOf(teacherId, subjectId);
+
+    const outcome = await race(turnOn, (tx) =>
+      switchedServiceOn(tx).update(teacherId, { packageId, track: 'ijazah_track' }),
+    );
+
+    expect('thrown' in outcome && outcome.thrown).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'track', code: 'programme_switch_on' }],
+    });
+    expect((await rowOf(packageId))?.['track']).toBe('recitation');
+  });
+
+  it('the turn-on against a turn to the ijazah track that read the switch off waits on the switch’s key, then deactivates it', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'male');
+    const packageId = await recitationOf(teacherId, subjectId);
+
+    const outcome = await race(
+      (tx) => switchedServiceOn(tx).update(teacherId, { packageId, track: 'ijazah_track' }),
+      turnOn,
+    );
+
+    expect('value' in outcome && outcome.value).toBeGreaterThanOrEqual(1);
+    expect(await rowOf(packageId)).toMatchObject({ track: 'ijazah_track', is_active: false });
+  });
+
   it('the turn-on against a create that read the switch off waits on the switch’s key, then deactivates it', async () => {
     const subjectId = await makeSubject(db);
     const teacherId = await approvedTeacher(subjectId, 'male');
@@ -840,5 +886,88 @@ describe('the programme’s switch (006:T002, DEC-110)', () => {
 
     expect('value' in outcome && outcome.value).toBeGreaterThanOrEqual(1);
     expect(await packagesOfTeacherRows(teacherId)).toEqual([{ is_active: false }]);
+  });
+});
+
+// 006:T004 (R-503; ERD section 15 rules 73 and 74; the owner's «موافق على التلاتة (أ)»,
+// 2026-11-22): a programme package's row as catalog's store writes it, over the real check. The
+// insert writes `is_programme`, the three prices and the old three NULL; a recitation package
+// turned into a programme one keeps one shape, its old three NULL, and its prices change in place.
+describe('a programme package’s row against rule 73 (006:T004)', () => {
+  const PRICES = {
+    m30_piasters: piasters(20_000),
+    m45_piasters: piasters(28_000),
+    m60_piasters: piasters(35_000),
+  };
+  const PROGRAMME_COLUMNS = {
+    is_programme: true,
+    track: 'ijazah_track',
+    session_count: null,
+    session_duration_minutes: null,
+    price_piasters: null,
+  };
+
+  it('inserts a programme package with its three prices and the old three NULL', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'female');
+    const written = await database.$transaction(
+      (tx) =>
+        packagesStore.insert(tx, {
+          teacherUserId: teacherId,
+          subjectId,
+          track: 'ijazah_track',
+          isProgramme: true,
+          prices: PRICES,
+          isActive: true,
+        }),
+      OPTIONS,
+    );
+    expect(written).toMatchObject({ isProgramme: true, prices: PRICES, isActive: true });
+    expect(await rowOf(written.id)).toMatchObject({
+      ...PROGRAMME_COLUMNS,
+      price_30_piasters: '20000',
+      price_45_piasters: '28000',
+      price_60_piasters: '35000',
+    });
+  });
+
+  it('turns a recitation package into a programme one, then changes its prices', async () => {
+    const subjectId = await makeSubject(db);
+    const teacherId = await approvedTeacher(subjectId, 'male');
+    const packageId = await insertRow(db, 'packages', {
+      teacher_user_id: teacherId,
+      subject_id: subjectId,
+      track: 'recitation',
+      is_active: true,
+      session_count: 8,
+      session_duration_minutes: 60,
+      price_piasters: 240_000,
+    });
+    await database.$transaction(
+      (tx) =>
+        packagesStore.change(tx, teacherId, packageId, {
+          track: 'ijazah_track',
+          isProgramme: true,
+          prices: PRICES,
+        }),
+      OPTIONS,
+    );
+    expect(await rowOf(packageId)).toMatchObject({
+      ...PROGRAMME_COLUMNS,
+      price_30_piasters: '20000',
+      price_45_piasters: '28000',
+      price_60_piasters: '35000',
+    });
+    await database.$transaction(
+      (tx) =>
+        packagesStore.change(tx, teacherId, packageId, {
+          prices: { ...PRICES, m45_piasters: piasters(30_000) },
+        }),
+      OPTIONS,
+    );
+    expect(await rowOf(packageId)).toMatchObject({
+      ...PROGRAMME_COLUMNS,
+      price_45_piasters: '30000',
+    });
   });
 });

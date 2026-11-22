@@ -10,7 +10,15 @@ import { describe, expect, it } from 'vitest';
 
 import { piasters } from '@ijazah/money';
 
-import { nearestFreeOf, offerableOccurrences, programmeFloorOf } from './nearest-slot.service.js';
+import type { Database } from '../../platform/db/prisma.repository.js';
+import type { RequesterGender } from '../../platform/guards/requester-gender.js';
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import {
+  createNearestSlots,
+  nearestFreeOf,
+  offerableOccurrences,
+  programmeFloorOf,
+} from './nearest-slot.service.js';
 import type { SlotOccupancy } from './slot-occupancy.service.js';
 
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000c1';
@@ -143,5 +151,58 @@ describe('programmeFloorOf (006:T004)', () => {
   it('is none while the programme is closed, by the switch or the price', () => {
     expect(programmeFloorOf({ open: false, refusal: 'programme_disabled' })).toBeUndefined();
     expect(programmeFloorOf({ open: false, refusal: 'assessment_fee_unset' })).toBeUndefined();
+  });
+});
+
+// 006:T004 (the owner's «موافق على التلاتة (أ)», 2026-11-22): the join of `createNearestSlots`:
+// the programme's availability read at each request and handed to the page's read as its floor,
+// the assessment's length while open, none while closed.
+describe('createNearestSlots and the programme (006:T004)', () => {
+  const TX = { tx: 'the read’s' };
+  const database = {
+    $transaction: (work: (tx: unknown) => unknown) => work(TX),
+  } as unknown as Database;
+
+  function floorsAsked(programme: { readonly enabled: 0 | 1; readonly fee: number }) {
+    const stored: Record<string, unknown> = {
+      first_session_lead_hours: LEAD,
+      programme_enabled: programme.enabled,
+      assessment_price_piasters: programme.fee,
+      assessment_duration_minutes: 45,
+    };
+    const settings: SettingsReader = {
+      read: async (key, schema) => {
+        if (!(key in stored)) throw new Error(`no setting ${key} in this spec`);
+        return schema.parse(stored[key]);
+      },
+    };
+    const asked: unknown[] = [];
+    const slots = createNearestSlots({
+      database,
+      settings,
+      now: () => TUESDAY,
+      nearest: async (tx, _requester, teacherIds, _clock, floor) => {
+        asked.push([tx, teacherIds, floor]);
+        return new Map();
+      },
+    });
+    return { slots, asked };
+  }
+
+  it('hands the page’s read the assessment’s length while the programme is open', async () => {
+    const { slots, asked } = floorsAsked({ enabled: 1, fee: 50_000 });
+    await slots.of('female' as RequesterGender, [TEACHER]);
+    expect(asked).toEqual([[TX, [TEACHER], 45]]);
+  });
+
+  it('hands it none while the switch is off or the assessment’s price is 0', async () => {
+    for (const programme of [
+      { enabled: 0, fee: 50_000 },
+      { enabled: 1, fee: 0 },
+    ] as const) {
+      const { slots, asked } = floorsAsked(programme);
+      await slots.of('female' as RequesterGender, [TEACHER]);
+      expect(asked).toEqual([[TX, [TEACHER], undefined]]);
+    }
   });
 });

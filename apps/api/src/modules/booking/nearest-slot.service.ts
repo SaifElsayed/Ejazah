@@ -161,10 +161,13 @@ export function createNearestSlots({
   database,
   settings,
   now = () => new Date(),
+  nearest = nearestFreeSlots,
 }: {
   readonly database: Database;
   readonly settings: SettingsReader;
   readonly now?: () => Date;
+  /** The page's read, `nearestFreeSlots`; a stand-in in the spec of how the programme joins it. */
+  readonly nearest?: typeof nearestFreeSlots;
 }): NearestSlots {
   const transactions = transactionsOver(database);
   return {
@@ -180,7 +183,7 @@ export function createNearestSlots({
       };
       // 006:T004 (Q-5 (a)): the programme's availability, read at each request.
       const floor = programmeFloorOf(await programmeAvailabilityOf(settings));
-      return transactions.run((tx) => nearestFreeSlots(tx, requester, teacherIds, clock, floor));
+      return transactions.run((tx) => nearest(tx, requester, teacherIds, clock, floor));
     },
   };
 }

@@ -39,7 +39,9 @@
 //   old-style ijazah-track package takes the switch's advisory key (`lockProgrammeSwitch`) before
 //   the account's lock, and `settings.update` of `programme_enabled` takes it before it writes, so a
 //   create and the turn-on never cross (kernel.md, the 006:T004 row; `tests/db-integrity/
-//   packages.spec.ts`, both orders).
+//   packages.spec.ts`, both orders). An edit whose input could give an active old-style package
+//   (its track turned to `ijazah_track` without prices, or `isActive` set) takes the key too,
+//   before the account's lock (the owner's «موافق على التلاتة (أ)», 2026-11-22).
 //
 // THE LOCKS (T005's rules, the owner's decisions of 2026-11-01). Lock, then read:
 // - `create` inserts a row referencing the teacher's `users` row, so it locks the account first
@@ -320,6 +322,16 @@ function changeOf(input: PackagesUpdateInput): PackageChange {
   };
 }
 
+/**
+ * 006:T004 (the owner's «موافق على التلاتة (أ)», 2026-11-22): whether an edit's input could give an
+ * active old-style ijazah-track package: its track turned to `ijazah_track` without prices, or
+ * `isActive` set (a reactivation). Read from the input alone, since the switch's key comes before
+ * the account's lock, ahead of the package's read; a recitation package's reactivation takes it too.
+ */
+function mayGiveOldStyleIjazah(input: PackagesUpdateInput): boolean {
+  return (input.track === 'ijazah_track' && input.prices === undefined) || input.isActive === true;
+}
+
 /** The fields of today's shape a change may name (006:T004). */
 const FIXED_FIELDS = ['sessionCount', 'sessionDurationMinutes', 'price_piasters'] as const;
 
@@ -434,6 +446,8 @@ export class PackagesService {
   /** `teacher.packages.update`: the caller's own package (FR-312, FR-314, M3). */
   update(teacherUserId: string, input: PackagesUpdateInput): Promise<TeacherPackage> {
     return this.#transactions.run(async (tx) => {
+      // 006:T004 (the owner's «موافق على التلاتة (أ)»): the switch's key first, as a create takes it.
+      if (mayGiveOldStyleIjazah(input)) await this.#store.lockProgrammeSwitch(tx);
       await this.#store.lockAccount(tx, teacherUserId);
       const current = await this.#store.packageOf(tx, teacherUserId, input.packageId);
       if (current === null) throw new DomainError('NOT_FOUND');

@@ -582,7 +582,9 @@ describe('update while the programme’s switch is on (006:T002, DEC-110)', () =
         isActive: true,
       }),
     );
-    expect(memory.log.slice(0, 3)).toEqual([
+    expect(memory.log.slice(0, 4)).toEqual([
+      // 006:T004 (the owner's «موافق على التلاتة (أ)»): a reactivation takes the switch's key first.
+      'lockProgrammeSwitch',
       `lockAccount:${TEACHER}`,
       'packageOf',
       'read:programme_enabled',
@@ -935,6 +937,41 @@ describe('create under the programme’s switch (006:T004)', () => {
       );
       expect(memory.log).not.toContain('lockProgrammeSwitch');
     }
+  });
+});
+
+// 006:T004 (the owner's «موافق على التلاتة (أ)», 2026-11-22): an edit whose input could give an
+// old-style ijazah-track package (its track turned to `ijazah_track` without prices, or `isActive`
+// set) takes the switch's key before the account's lock, as a create does; any other edit none.
+describe('update and the switch’s key (006:T004)', () => {
+  it('takes the switch’s key first, before the account, for a turn to the ijazah track without prices', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    await serviceOver(memory).service.update(TEACHER, { packageId: id, track: 'ijazah_track' });
+    expect(memory.log.slice(0, 2)).toEqual(['lockProgrammeSwitch', `lockAccount:${TEACHER}`]);
+  });
+
+  it('takes it first for a reactivation', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, { ...RECITATION, track: 'ijazah_track', isActive: false });
+    await serviceOver(memory).service.update(TEACHER, { packageId: id, isActive: true });
+    expect(memory.log.slice(0, 2)).toEqual(['lockProgrammeSwitch', `lockAccount:${TEACHER}`]);
+  });
+
+  it('takes none for a price, a deactivation, a count or a turn with prices', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, RECITATION);
+    const { service } = serviceOver(memory, programmeSettings({ enabled: 1, fee: 50_000 }));
+    await service.update(TEACHER, { packageId: id, price_piasters: 90_000 });
+    await service.update(TEACHER, { packageId: id, sessionCount: 5 });
+    await service.update(TEACHER, { packageId: id, isActive: false });
+    await service.update(TEACHER, {
+      packageId: id,
+      track: 'ijazah_track',
+      prices: PLAIN_PRICES,
+      isActive: false,
+    });
+    expect(memory.log).not.toContain('lockProgrammeSwitch');
   });
 });
 
