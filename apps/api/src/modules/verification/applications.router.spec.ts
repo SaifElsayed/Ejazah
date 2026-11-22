@@ -2,9 +2,13 @@
 // "`applications`"; FR-160 to FR-162). Every procedure is the administrator kind: it refuses an
 // anonymous caller and one whose second factor is not verified, and writes the action's audit entry
 // with the actor from the session, nothing of a refused call. Each decision is described on the
-// application (`teacher_application`) with the note the applicant sees as its reason, the status it
-// moved from as its before and the status it moved to beside the dialog's choice as its after (T116); the list and the detail are reads naming the reader. What the review
-// does is `application-review.service.spec.ts`'s; the services here record what reached them.
+// application (`teacher_application`) with the status it moved from as its before and the status it
+// moved to beside the dialog's choice as its after (T116); the list and the detail are reads naming
+// the reader. R1a (002:T174, SRS DEC-97; the owner's Q-1 (a)): a decision's note is not the entry's
+// reason; the entry records only that one was given (`note_given`), and the text is in the
+// application's history. What the review does is `application-review.service.spec.ts`'s; the
+// services here record what reached them.
+import { AUDIT_REASON_NOTE_GIVEN } from '@ijazah/contracts/admin';
 import { describe, expect, it } from 'vitest';
 
 import { adminContextsOver, SPEC_ADMIN, VERIFIED } from '../../surfaces/admin-surface.fixtures.js';
@@ -141,16 +145,17 @@ describe('the audit entries', () => {
     ]);
   });
 
-  it('approve: the status before (T116), the status and the subjects granted after, the note as the reason when there is one', async () => {
+  it('approve: the status before (T116), the status and the subjects granted after, `note_given` as the reason when a note is given (R1a), never its text', async () => {
     const { as, written } = surface();
     await as(VERIFIED).applications.approve({ teacherUserId: APPLICANT, note: 'مرحبًا' });
     await as(VERIFIED).applications.approve({ teacherUserId: APPLICANT });
     const before = { status: 'in_review' };
     const after = { status: 'approved', subjectIds: ['0199d0a0-0000-7000-8000-000000000051'] };
     expect(written).toEqual([
-      { ...target, action: 'application.approve', reason: 'مرحبًا', before, after },
+      { ...target, action: 'application.approve', reason: AUDIT_REASON_NOTE_GIVEN, before, after },
       { ...target, action: 'application.approve', before, after },
     ]);
+    expect(JSON.stringify(written)).not.toContain('مرحبًا');
   });
 
   it.each([
@@ -170,7 +175,7 @@ describe('the audit entries', () => {
       { needed: ['id_unclear', 'other'] },
     ],
   ] as const)(
-    '%s: the note as the reason, the status before (T116), the status and the choice after',
+    '%s: `note_given` as the reason (R1a), never the note, the status before (T116), the status and the choice after',
     async (procedure, action, from, to, choice) => {
       const { as, written, reached } = surface();
       await (as(VERIFIED).applications[procedure] as (input: object) => Promise<void>)({
@@ -182,11 +187,12 @@ describe('the audit entries', () => {
         {
           ...target,
           action,
-          reason: 'ما يراه المتقدّم',
+          reason: AUDIT_REASON_NOTE_GIVEN,
           before: { status: from },
           after: { status: to, ...choice },
         },
       ]);
+      expect(JSON.stringify(written)).not.toContain('ما يراه المتقدّم');
       expect(reached[0]?.[0]).toBe(procedure);
       expect(reached[0]?.[1]).toBe(SPEC_ADMIN);
     },

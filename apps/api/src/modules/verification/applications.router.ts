@@ -3,12 +3,16 @@
 // transaction, the action's audit entry described, the output parsed by its schema (R-API-1). The
 // actor is the session's administrator, never the input's. Each decision's entry targets the
 // application (`teacher_application`, the applicant's id), so its history is `audit.list` filtered on
-// that target; the note the applicant sees is the entry's reason, the status the decision moved from
-// its before, and the status it moved to beside the dialog's choice its after. The call's entry holds
-// its day and outcome before and after. Each as the review answers it (T116).
+// that target; the status the decision moved from is its before, and the status it moved to beside
+// the dialog's choice its after. The call's entry holds its day and outcome before and after. Each
+// as the review answers it (T116). R1a (002:T174; SRS DEC-97, R-API-12, NFR-SEC-6, FR-ADMIN-17 as
+// amended; the owner's Q-1 (a)): a decision's note never enters the entry; its reason is the marker
+// `note_given` whenever a note is given, and the text is in the application's history, written by
+// the decision itself (`applications.get` reads it).
 // The list and the detail are reads (`applications.read`) naming the reader. Mounted under
 // `applications` by `admin.router.ts`.
 import {
+  AUDIT_REASON_NOTE_GIVEN,
   applicationsApproveInput,
   applicationsBanInput,
   applicationsGetInput,
@@ -70,7 +74,7 @@ export const applicationsRouter = createAdminRouter({
         action: 'application.approve',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        ...(input.note === undefined ? {} : { reason: input.note }),
+        ...(input.note === undefined ? {} : { reason: AUDIT_REASON_NOTE_GIVEN }),
         before,
         after: { ...after, subjectIds },
       });
@@ -88,7 +92,7 @@ export const applicationsRouter = createAdminRouter({
         action: 'application.reject',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        reason: input.note,
+        reason: AUDIT_REASON_NOTE_GIVEN,
         before,
         after: { ...after, reasonChoice: input.reasonChoice },
       });
@@ -106,7 +110,7 @@ export const applicationsRouter = createAdminRouter({
         action: 'application.request_info',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        reason: input.note,
+        reason: AUDIT_REASON_NOTE_GIVEN,
         before,
         after: { ...after, needed: input.needed },
       });
@@ -124,7 +128,7 @@ export const applicationsRouter = createAdminRouter({
         action: 'application.ban',
         targetType: TARGET,
         targetId: input.teacherUserId,
-        reason: input.note,
+        reason: AUDIT_REASON_NOTE_GIVEN,
         before,
         after: { ...after, reasonChoice: input.reasonChoice },
       });
