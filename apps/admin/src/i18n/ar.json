@@ -341,6 +341,7 @@
         "no": "لا",
         "none": "—",
         "noteGiven": "السبب مكتوب في سجل الطلب",
+        "noteGivenCredential": "السبب مكتوب في سجل الشهادة",
         "retiredReasons": {
           "ijazahUnreadable": "ملف الإجازة غير مقروء أو ناقص"
         },

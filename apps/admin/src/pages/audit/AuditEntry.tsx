@@ -210,7 +210,7 @@ function Detail({ entry }: { readonly entry: Entry }) {
         <section className="section">
           <h2 className="group-label">{t('admin.audit.detail.reason')}</h2>
           <p className="text-callout">
-            <AuditReason reason={entry.reason} href={href} />
+            <AuditReason reason={entry.reason} action={entry.action} href={href} />
           </p>
         </section>
       )}
@@ -239,22 +239,35 @@ function Detail({ entry }: { readonly entry: Entry }) {
 }
 
 /**
+ * Which history holds the text of a `note_given` reason: a credential's entry (`credential.*`) the
+ * credential's, any other the application's (R1a, the owner's answer to Q-A1-3, 2026-11-22).
+ */
+function noteGivenText(action: string): MessageKey {
+  return action.startsWith('credential.')
+    ? 'admin.audit.values.noteGivenCredential'
+    : 'admin.audit.values.noteGiven';
+}
+
+/**
  * An entry's reason: as stored, or, for a reason kept in the application's or the credential's
- * history (R1a, Q-1 (a)), the words that say so, a link to the entry's target where it has a page.
+ * history (R1a, Q-1 (a), Q-A1-3), the words that say which, a link to the entry's target where it
+ * has a page.
  */
 export function AuditReason({
   reason,
+  action,
   href,
   className,
 }: {
   readonly reason: string;
+  readonly action: string;
   readonly href: string | undefined;
   readonly className?: string;
 }) {
   const t = useT();
   const navigate = useNavigate();
   if (reason !== AUDIT_REASON_NOTE_GIVEN) return <bdi className={className}>{reason}</bdi>;
-  const words = t('admin.audit.values.noteGiven');
+  const words = t(noteGivenText(action));
   return href === undefined ? (
     <span className={className}>{words}</span>
   ) : (
@@ -263,8 +276,8 @@ export function AuditReason({
 }
 
 /** The reason as the list's hover shows it in full: the marker in words, any other as stored. */
-export function reasonTitle(reason: string, t: ReturnType<typeof useT>): string {
-  return reason === AUDIT_REASON_NOTE_GIVEN ? t('admin.audit.values.noteGiven') : reason;
+export function reasonTitle(reason: string, action: string, t: ReturnType<typeof useT>): string {
+  return reason === AUDIT_REASON_NOTE_GIVEN ? t(noteGivenText(action)) : reason;
 }
 
 /** Each field the entry names, with its value before and after. */

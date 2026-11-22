@@ -131,10 +131,17 @@ export function AdminAudit() {
                 ),
               reason:
                 row.reason === undefined ? null : (
-                  <AuditReason reason={row.reason} href={href} className="tone-muted" />
+                  <AuditReason
+                    reason={row.reason}
+                    action={row.action}
+                    href={href}
+                    className="tone-muted"
+                  />
                 ),
             },
-            ...(row.reason === undefined ? {} : { titles: { reason: reasonTitle(row.reason, t) } }),
+            ...(row.reason === undefined
+              ? {}
+              : { titles: { reason: reasonTitle(row.reason, row.action, t) } }),
           };
         })}
         {...(selected === null ? {} : { selectedKey: selected })}

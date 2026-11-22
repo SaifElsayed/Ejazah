@@ -341,6 +341,7 @@
         "no": "No",
         "none": "—",
         "noteGiven": "The reason is in the application's history",
+        "noteGivenCredential": "The reason is in the credential's history",
         "retiredReasons": {
           "ijazahUnreadable": "Ijazah file unreadable or incomplete"
         },
