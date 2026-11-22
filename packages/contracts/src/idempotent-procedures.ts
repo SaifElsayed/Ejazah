@@ -102,6 +102,16 @@ export const idempotentProcedures = [
   'payouts.mark',
   // 003:T105: the undo of a mark made in error (the owner, 2026-11-18).
   'payouts.unmark',
+  // 006:T003 (specs/006-programme/contracts/app-surface.md and admin-surface.md): every programme
+  // mutation is keyed; each procedure is written by its own task (T007 to T017).
+  'programme.offer',
+  'programme.pay',
+  'programme.renew',
+  'programme.request',
+  'programme.autoRenewOff',
+  'programme.cancel',
+  'programmes.decide',
+  'programmes.reopen',
 ] as const;
 
 /** A scope the idempotency service accepts: one of the keyed procedures. */

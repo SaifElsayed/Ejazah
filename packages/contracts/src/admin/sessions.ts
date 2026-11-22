@@ -316,6 +316,12 @@ export const timelineEventKind = z.enum([
   // 003:T112 (SRS FR-POSTPONE-1, DEC-90; Q-2 (a)): the `session_event_kind` value a postponement
   // writes for each session it moves; added, additively (R-API-9).
   'postponed',
+  // 006:T003 (ADR 0024; ERD changelog row 65): the four `enrollment_event_kind` values of a
+  // programme, its offer, pause, resumption and reopen; added, additively (R-API-9).
+  'programme_offered',
+  'programme_paused',
+  'programme_resumed',
+  'programme_reopened',
 ]);
 
 /**
@@ -515,6 +521,9 @@ export const restoreRefusalCause = z.enum([
   // 005:T014 (B47; FR-617; research R-409): step 3, the pairing's two declared genders differ,
   // whatever closed the enrollment (DEC-69); added, additively (R-API-9).
   'gender_mismatch',
+  // 006:T003 (R-513, G-1; admin-surface.md, `sessions.restore` changed): a programme's enrollment is
+  // never restored (a stopped one is reopened by `programmes.reopen`); added, additively (R-API-9).
+  'programme_enrollment',
 ]);
 
 export const sessionsRestoreInput = z.object({

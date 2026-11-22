@@ -566,6 +566,11 @@ describe('the enums mirror the database’s (ERD §7, base.prisma)', () => {
       'slot_unavailable',
       'checkout_abandoned',
       'account_deleted',
+      // 006:T003 (rule d): the programme's four closings, additively (R-API-9).
+      'offer_declined',
+      'offer_lapsed',
+      'assessment_refused',
+      'programme_stopped',
     ]);
   });
 

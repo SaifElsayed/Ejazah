@@ -42,9 +42,35 @@ export const paymentsListInput = z.object({
 /** A person the monitor names: their display name alone. */
 const namedPerson = z.object({ displayName: z.string() });
 
+/**
+ * 006:T003 (ADR 0024, R-502; ERD `order_kind`): what an order pays for. `package` is today's order
+ * and every order's before the programme; `assessment` a programme's first; `rest_in_full` and
+ * `instalment` the offer's.
+ */
+export const orderKind = z.enum(['package', 'assessment', 'rest_in_full', 'instalment']);
+
+/**
+ * 006:T003 (R-509; ERD `decline_kind`): why an automatic order failed. A `soft` decline is retried; a
+ * `hard` one, a refusal before the gateway (`no_payee`) included, never is.
+ */
+export const declineKind = z.enum(['soft', 'hard']);
+
+/**
+ * 006:T003 (admin-surface.md, `payments.monitor`): what each order adds for the programme, absent
+ * until T018 answers them: its kind, its month (an `instalment` only), whether it is an automatic
+ * charge of a saved card, and why an automatic one failed. Additive (R-API-9).
+ */
+const programmeOrderTerms = {
+  kind: orderKind.optional(),
+  instalmentMonth: z.int().min(1).optional(),
+  automatic: z.boolean().optional(),
+  declineKind: declineKind.optional(),
+};
+
 /** One gateway order as the list shows it (FR-400). */
 export const paymentsListItem = z.object({
   paymentId: z.uuid(),
+  ...programmeOrderTerms,
   gatewayOrderId: z.string(),
   createdAt: z.iso.datetime(),
   student: namedPerson,
@@ -78,6 +104,9 @@ export const paymentEventType = z.enum([
   'refunded',
   // 003:T102 (Q-2 (a)'s safety net, DEC-82): a refund flagged on the original payment, no amount.
   'refund_reported',
+  // 006:T003 (R-510; ERD changelog row 65): the gateway's token callback for a card the student
+  // consented to save; added, additively (R-API-9). No card detail crosses with it.
+  'card_saved',
 ]);
 
 /**
@@ -94,6 +123,12 @@ export const enrollmentOutcomeKind = z.enum([
   'restored',
   'slot_released',
   'slot_hold_ended',
+  // 006:T003 (ADR 0024; ERD changelog row 65): a programme's offer sent, its pause, its resumption
+  // by a paid month, and an administrator's reopen; added, additively (R-API-9).
+  'programme_offered',
+  'programme_paused',
+  'programme_resumed',
+  'programme_reopened',
 ]);
 
 /**
@@ -140,6 +175,8 @@ export const paymentEnrollment = z.object({
 /** One order of the enrollment the gateway reported paid (the note under T052, T082). */
 export const paymentEnrollmentOrder = z.object({
   paymentId: z.uuid(),
+  /** 006:T003: as on the list. */
+  ...programmeOrderTerms,
   gatewayOrderId: z.string(),
   status: paymentStatus,
   createdAt: z.iso.datetime(),
@@ -147,6 +184,8 @@ export const paymentEnrollmentOrder = z.object({
 
 export const paymentsGetOutput = z.object({
   paymentId: z.uuid(),
+  /** 006:T003: as on the list. */
+  ...programmeOrderTerms,
   gatewayOrderId: z.string(),
   gatewayTransactionId: z.string().optional(),
   status: paymentStatus,
@@ -272,3 +311,7 @@ export const paymentsCaseAmountOutput = z.object({ amount: paymentsCaseAmount.op
 export type PaymentsCaseAmountInput = z.infer<typeof paymentsCaseAmountInput>;
 export type PaymentsCaseAmount = z.infer<typeof paymentsCaseAmount>;
 export type PaymentsCaseAmountOutput = z.infer<typeof paymentsCaseAmountOutput>;
+
+// 006:T003: the programme's order terms.
+export type OrderKind = z.infer<typeof orderKind>;
+export type DeclineKind = z.infer<typeof declineKind>;

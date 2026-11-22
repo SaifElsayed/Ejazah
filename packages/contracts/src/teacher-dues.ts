@@ -20,6 +20,10 @@ export const shareReleaseMilestone = z.enum([
   'ijazah_end',
   'teacher_dropout',
   'student_complaint_close',
+  // 006:T003 (R-512, DEC-94; ERD changelog row 65): the assessment's release when the student does
+  // not continue, and a programme closed by an approved stop; added, additively (R-API-9).
+  'assessment',
+  'programme_stopped',
 ]);
 
 /** Where a release stands: computed and not yet due, due and awaiting the mark, or marked paid. */
