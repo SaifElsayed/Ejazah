@@ -2665,6 +2665,8 @@
         "provider_nonce_ttl_minutes": "صلاحية رمز الدخول عبر مزوّد الهوية",
         "push_token_stale_days": "حذف رموز الإشعارات غير المستخدمة بعد",
         "rate_limit_absence_complaint": "شكاوى الغياب",
+        "rate_limit_address_authentication": "طلبات تسجيل الدخول من عنوان واحد",
+        "rate_limit_address_one_time_code": "طلبات رمز التحقق من عنوان واحد",
         "rate_limit_admin_authentication": "طلبات دخول المشرف",
         "rate_limit_admin_authentication_budget": "دخول المشرفين على مستوى المنصة",
         "rate_limit_admin_user_delete": "حذف الحسابات بيد المشرف",

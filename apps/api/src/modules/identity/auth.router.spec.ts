@@ -38,26 +38,45 @@ const PASSWORD = 'correct horse battery';
 
 describe('the namespace', () => {
   it('declares every public procedure with the limit the contract names, and signOut as a user procedure', () => {
-    const publicWith = (rateLimit: string) => ({ surface: 'app', caller: 'public', rateLimit });
-    expect(metaOf('auth.providerNonce')).toEqual(publicWith('rate_limit_provider_nonce'));
-    expect(metaOf('auth.signInWithProvider')).toEqual(publicWith('rate_limit_authentication'));
-    expect(metaOf('auth.email.requestSignUpCode')).toEqual(publicWith('rate_limit_one_time_code'));
-    expect(metaOf('auth.email.verifySignUpCode')).toEqual(publicWith('rate_limit_one_time_code'));
-    expect(metaOf('auth.email.signIn')).toEqual(publicWith('rate_limit_authentication'));
-    expect(metaOf('auth.email.requestPasswordReset')).toEqual(
-      publicWith('rate_limit_one_time_code'),
+    const publicWith = (rateLimit: string, addressRateLimit?: string) => ({
+      surface: 'app',
+      caller: 'public',
+      rateLimit,
+      ...(addressRateLimit === undefined ? {} : { addressRateLimit }),
+    });
+    // T172 (DEC-103): the paths that count a budget also name their key per client address.
+    const signInAddress = 'rate_limit_address_authentication';
+    const codeAddress = 'rate_limit_address_one_time_code';
+    expect(metaOf('auth.providerNonce')).toEqual(
+      publicWith('rate_limit_provider_nonce', signInAddress),
     );
-    expect(metaOf('auth.email.resetPassword')).toEqual(publicWith('rate_limit_authentication'));
+    expect(metaOf('auth.signInWithProvider')).toEqual(
+      publicWith('rate_limit_authentication', signInAddress),
+    );
+    expect(metaOf('auth.email.requestSignUpCode')).toEqual(
+      publicWith('rate_limit_one_time_code', codeAddress),
+    );
+    expect(metaOf('auth.email.verifySignUpCode')).toEqual(publicWith('rate_limit_one_time_code'));
+    expect(metaOf('auth.email.signIn')).toEqual(
+      publicWith('rate_limit_authentication', signInAddress),
+    );
+    expect(metaOf('auth.email.requestPasswordReset')).toEqual(
+      publicWith('rate_limit_one_time_code', codeAddress),
+    );
+    expect(metaOf('auth.email.resetPassword')).toEqual(
+      publicWith('rate_limit_authentication', signInAddress),
+    );
     expect(metaOf('auth.refresh')).toEqual(publicWith('rate_limit_token_refresh'));
     expect(metaOf('auth.signOut')).toEqual({ surface: 'app', caller: 'user' });
   });
 });
 
 describe('auth.providerNonce', () => {
-  it('counts its own budget (T133), then the client address, and mints a nonce', async () => {
+  it('counts the client address (T172), its own budget (T133), then the client address again under its own limit, and mints a nonce', async () => {
     const answer = await surface.anonymous().auth.providerNonce({});
     expect(answer).toEqual({ nonce: expect.any(String), expiresAt: '2026-10-20T08:10:00Z' });
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_authentication', SPEC_CLIENT],
       ['rate_limit_provider_nonce_budget', '*'],
       ['rate_limit_provider_nonce', SPEC_CLIENT],
     ]);
@@ -65,7 +84,7 @@ describe('auth.providerNonce', () => {
 });
 
 describe('auth.signInWithProvider', () => {
-  it('counts the budget, then the nonce, and answers a new identity with its onboarding token', async () => {
+  it('counts the client address (T172), the budget, then the nonce, and answers a new identity with its onboarding token', async () => {
     const { nonce } = await identity.signIn.providerNonce();
     const email = uniqueEmail();
     const answer = await surface.anonymous().auth.signInWithProvider({
@@ -85,6 +104,7 @@ describe('auth.signInWithProvider', () => {
       prefill: { email, emailVerified: true },
     });
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_authentication', SPEC_CLIENT],
       ['rate_limit_authentication_budget', '*'],
       ['rate_limit_authentication', nonce],
     ]);
@@ -126,12 +146,13 @@ describe('auth.signInWithProvider', () => {
 });
 
 describe('auth.email', () => {
-  it('requestSignUpCode counts the code budget, then the address in lower case, and mails a code', async () => {
+  it('requestSignUpCode counts the client address (T172), the code budget, then the e-mail in lower case, and mails a code', async () => {
     const address = uniqueEmail();
     await expect(
       surface.anonymous().auth.email.requestSignUpCode({ email: address.toUpperCase() }),
     ).resolves.toBeUndefined();
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_one_time_code', SPEC_CLIENT],
       ['rate_limit_one_time_code_budget', '*'],
       ['rate_limit_one_time_code', address],
     ]);
@@ -144,6 +165,7 @@ describe('auth.email', () => {
       surface.anonymous().auth.email.requestSignUpCode({ email: address, password: 'password123' }),
     ).rejects.toMatchObject({ cause: { code: 'PASSWORD_WEAK' } });
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_one_time_code', SPEC_CLIENT],
       ['rate_limit_one_time_code_budget', '*'],
       ['rate_limit_one_time_code', address],
     ]);
@@ -159,7 +181,7 @@ describe('auth.email', () => {
     expect(surface.counts()).toEqual([['rate_limit_one_time_code', address]]);
   });
 
-  it('signIn counts the budget, then the address, and signs a password account in', async () => {
+  it('signIn counts the client address (T172), the budget, then the e-mail, and signs a password account in', async () => {
     const address = uniqueEmail();
     await createAccount(database, { email: address, passwordHash: await hashPassword(PASSWORD) });
     const answer = await surface.anonymous().auth.email.signIn({
@@ -172,6 +194,7 @@ describe('auth.email', () => {
       landing: 'student_home',
     });
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_authentication', SPEC_CLIENT],
       ['rate_limit_authentication_budget', '*'],
       ['rate_limit_authentication', address],
     ]);
@@ -183,18 +206,19 @@ describe('auth.email', () => {
     ).rejects.toMatchObject({ cause: { code: 'SIGN_IN_FAILED' } });
   });
 
-  it('requestPasswordReset counts the code budget, then the address, with one answer for all', async () => {
+  it('requestPasswordReset counts the client address (T172), the code budget, then the e-mail, with one answer for all', async () => {
     const address = uniqueEmail();
     await expect(
       surface.anonymous().auth.email.requestPasswordReset({ email: address }),
     ).resolves.toBeUndefined();
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_one_time_code', SPEC_CLIENT],
       ['rate_limit_one_time_code_budget', '*'],
       ['rate_limit_one_time_code', address],
     ]);
   });
 
-  it('resetPassword counts the budget, then the address, and signs in with the new password', async () => {
+  it('resetPassword counts the client address (T172), the budget, then the e-mail, and signs in with the new password', async () => {
     const address = uniqueEmail();
     await createAccount(database, { email: address, passwordHash: await hashPassword(PASSWORD) });
     await identity.emailAuth.requestPasswordReset(address);
@@ -210,6 +234,7 @@ describe('auth.email', () => {
       landing: 'student_home',
     });
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_authentication', SPEC_CLIENT],
       ['rate_limit_authentication_budget', '*'],
       ['rate_limit_authentication', address],
     ]);

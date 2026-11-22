@@ -19,7 +19,7 @@ import {
   uniqueEmail,
   uniqueSubject,
 } from './__fixtures__/identity.js';
-import { metaOf, surfaceOf } from './__fixtures__/surface.js';
+import { metaOf, SPEC_CLIENT, surfaceOf } from './__fixtures__/surface.js';
 
 const database = openSpecDatabase();
 afterAll(() => closeDatabase(database));
@@ -57,6 +57,8 @@ describe('the namespace', () => {
       surface: 'app',
       caller: 'public',
       rateLimit: 'rate_limit_one_time_code',
+      // T172 (DEC-103): its key per client address, counted before the code budget.
+      addressRateLimit: 'rate_limit_address_one_time_code',
     });
     expect(metaOf('onboarding.complete')).toEqual({
       surface: 'app',
@@ -67,7 +69,7 @@ describe('the namespace', () => {
 });
 
 describe('onboarding.requestEmailCode', () => {
-  it('counts the code budget, then the address in lower case, and mails a code', async () => {
+  it('counts the client address (T172), the code budget, then the e-mail in lower case, and mails a code', async () => {
     const onboardingToken = await providerToken(null, false);
     const address = uniqueEmail();
     await expect(
@@ -77,6 +79,7 @@ describe('onboarding.requestEmailCode', () => {
       }),
     ).resolves.toBeUndefined();
     expect(surface.counts()).toEqual([
+      ['rate_limit_address_one_time_code', SPEC_CLIENT],
       ['rate_limit_one_time_code_budget', '*'],
       ['rate_limit_one_time_code', address],
     ]);

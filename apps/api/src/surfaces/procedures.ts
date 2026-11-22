@@ -24,12 +24,13 @@
 // request context minted from the session (T106); nothing here builds one.
 //
 // A RATE LIMIT IS DECLARED ON THE KIND, never applied by hand (T170, FR-043, R-SEC-6):
-// `rateLimit: { key, subjectOf, budget? }`, required on the two anonymous kinds (an anonymous
-// endpoint without one does not compile) and accepted by every signed-in kind, the administrator's
-// included (T062 of specs/004-sessions, FR-470), which also accept `subject: 'caller'`: the caller
-// the kind authenticated (`user:<userId>`, `admin:<adminId>`), never a value the endpoint computes.
-// After the input is validated, the kind applies `throttle` from the limiter the request context
-// carries, budget first and then the subject, and stamps the key in the procedure's meta beside its
+// `rateLimit: { key, subjectOf, budget?, addressKey? }`, required on the two anonymous kinds (an
+// anonymous endpoint without one does not compile) and accepted by every signed-in kind, the
+// administrator's included (T062 of specs/004-sessions, FR-470), which also accept `subject:
+// 'caller'`: the caller the kind authenticated (`user:<userId>`, `admin:<adminId>`), never a value
+// the endpoint computes. After the input is validated, the kind applies `throttle` from the limiter
+// the request context carries, the client address first when a key per address is declared (T172),
+// then the budget, then the subject, and stamps the keys in the procedure's meta beside its
 // surface, so what a surface serves can be read for its limits (surfaces.spec.ts). EVERY SIGNED-IN
 // KIND GIVEN NO `rateLimit` applies `throttleDefault` at the same place (T062; SRS NFR-SEC-12):
 // `rate_limit_signed_in_default`, the caller as subject, stamped nowhere since nothing is declared.
@@ -135,6 +136,8 @@ export interface AppMeta {
   readonly caller: AppCallerKind;
   /** The settings key of the procedure's declared rate limit, when it declares one (T170). */
   readonly rateLimit?: RateLimitKey;
+  /** The settings key of its limit per client address, when it declares one (T172). */
+  readonly addressRateLimit?: RateLimitKey;
   /**
    * A subscription's per-yield schema (T063): its output parser describes the stream it returns,
    * not what it yields, so the contract snapshot records this one in its place (R-API-9, R-324).
@@ -410,11 +413,11 @@ const streamedEvents = new WeakMap<object, z.ZodType>();
 
 /**
  * The meta a user-surface procedure is stamped with: its surface, its limit's key when declared,
- * and a subscription's per-yield schema.
+ * its key per client address when declared (T172), and a subscription's per-yield schema.
  */
 function appMeta(
   caller: AppCallerKind,
-  rateLimit: { readonly key: RateLimitKey } | undefined,
+  rateLimit: { readonly key: RateLimitKey; readonly addressKey?: RateLimitKey } | undefined,
   output: object,
 ): AppMeta {
   const events = streamedEvents.get(output);
@@ -422,6 +425,7 @@ function appMeta(
     surface: 'app',
     caller,
     ...(rateLimit === undefined ? {} : { rateLimit: rateLimit.key }),
+    ...(rateLimit?.addressKey === undefined ? {} : { addressRateLimit: rateLimit.addressKey }),
     ...(events === undefined ? {} : { events }),
   };
 }

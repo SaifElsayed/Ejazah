@@ -108,6 +108,9 @@ function surfaces({ subject, budget }: { readonly subject: number; readonly budg
       rate_limit_admin_authentication_budget: per(budget),
       rate_limit_provider_nonce: per(subject),
       rate_limit_provider_nonce_budget: per(budget),
+      // T172: the app's limit per client address, counted first; above every flood here, so these
+      // cases still reach the budgets (tests/adversarial/anonymous-flood.spec.ts holds its own).
+      rate_limit_address_authentication: per(1_000),
     }),
     counter: counter(),
     subjectKey: Buffer.alloc(32, 3),

@@ -723,6 +723,16 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Notification queued again after a lost enqueue: the age after which it is no longer sent (minutes)',
     30,
   ),
+  // T172 of specs/002-identity (SRS DEC-103, §3.14): the two limits per client address, counted
+  // before the platform-wide budgets they guard.
+  rate_limit_address_authentication: rateLimit(
+    'Anonymous sign-in rate limit (per client address, per window)',
+    { limit: 100, window_seconds: 900 },
+  ),
+  rate_limit_address_one_time_code: rateLimit(
+    'Anonymous one-time-code request rate limit (per client address, per window)',
+    { limit: 30, window_seconds: 3600 },
+  ),
 };
 
 /** Whether `key` is a setting the registry names (and so one the panel may change). */

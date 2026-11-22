@@ -8,6 +8,12 @@
 // password, and the SHA-256 of a refresh token, never the client address, so one carrier's NAT
 // does not throttle everyone behind it. A procedure whose output carries a token is never keyed
 // through the idempotency table (app-surface.md: the table stores the outcome in plain JSON).
+//
+// T172 (SRS NFR-SEC-10, DEC-103): every procedure that counts a platform-wide budget first counts
+// the client address, so one address sending made-up e-mails is refused before it spends the
+// budget: the sign-ins (`email.signIn`, `email.resetPassword`, `signInWithProvider`) and the nonce
+// under `rate_limit_address_authentication`, the code requests under
+// `rate_limit_address_one_time_code`; one counter per address per key, across its paths.
 import {
   emailSignInInput,
   emptyInput,
@@ -42,7 +48,14 @@ export const PROVIDER_NONCE_BUDGET = 'rate_limit_provider_nonce_budget' satisfie
 /** `auth.refresh`'s own limit (research R-101), a seeded setting. */
 export const TOKEN_REFRESH_RATE_LIMIT = 'rate_limit_token_refresh' satisfies RateLimitKey;
 
-const { authentication, authenticationBudget, oneTimeCode, oneTimeCodeBudget } = defaultRateLimits;
+const {
+  authentication,
+  authenticationBudget,
+  oneTimeCode,
+  oneTimeCodeBudget,
+  addressAuthentication,
+  addressOneTimeCode,
+} = defaultRateLimits;
 
 /** The subject of an address-keyed limit: the address as it is stored and compared. */
 const byAddress = ({ input }: { readonly input: { readonly email: string } }) =>
@@ -52,7 +65,12 @@ const email = createAppRouter({
   requestSignUpCode: publicProcedure({
     input: requestSignUpCodeInput,
     output: z.void(),
-    rateLimit: { key: oneTimeCode, budget: oneTimeCodeBudget, subjectOf: byAddress },
+    rateLimit: {
+      key: oneTimeCode,
+      budget: oneTimeCodeBudget,
+      addressKey: addressOneTimeCode,
+      subjectOf: byAddress,
+    },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.emailAuth.requestSignUpCode(input.email, input.password);
   }),
@@ -68,7 +86,12 @@ const email = createAppRouter({
   signIn: publicProcedure({
     input: emailSignInInput,
     output: sessionOutput,
-    rateLimit: { key: authentication, budget: authenticationBudget, subjectOf: byAddress },
+    rateLimit: {
+      key: authentication,
+      budget: authenticationBudget,
+      addressKey: addressAuthentication,
+      subjectOf: byAddress,
+    },
   }).mutation(({ ctx, input }) =>
     ctx.services.identity.emailAuth.signIn(input.email, input.password),
   ),
@@ -76,7 +99,12 @@ const email = createAppRouter({
   requestPasswordReset: publicProcedure({
     input: requestPasswordResetInput,
     output: z.void(),
-    rateLimit: { key: oneTimeCode, budget: oneTimeCodeBudget, subjectOf: byAddress },
+    rateLimit: {
+      key: oneTimeCode,
+      budget: oneTimeCodeBudget,
+      addressKey: addressOneTimeCode,
+      subjectOf: byAddress,
+    },
   }).mutation(async ({ ctx, input }) => {
     await ctx.services.identity.emailAuth.requestPasswordReset(input.email);
   }),
@@ -84,7 +112,12 @@ const email = createAppRouter({
   resetPassword: publicProcedure({
     input: resetPasswordInput,
     output: sessionOutput,
-    rateLimit: { key: authentication, budget: authenticationBudget, subjectOf: byAddress },
+    rateLimit: {
+      key: authentication,
+      budget: authenticationBudget,
+      addressKey: addressAuthentication,
+      subjectOf: byAddress,
+    },
   }).mutation(({ ctx, input }) =>
     ctx.services.identity.emailAuth.resetPassword(input.email, input.code, input.newPassword),
   ),
@@ -97,6 +130,7 @@ export const authRouter = createAppRouter({
     rateLimit: {
       key: PROVIDER_NONCE_RATE_LIMIT,
       budget: PROVIDER_NONCE_BUDGET,
+      addressKey: addressAuthentication,
       subjectOf: ({ ctx }) => ctx.clientAddress,
     },
   }).mutation(({ ctx }) => ctx.services.identity.signIn.providerNonce()),
@@ -107,6 +141,7 @@ export const authRouter = createAppRouter({
     rateLimit: {
       key: authentication,
       budget: authenticationBudget,
+      addressKey: addressAuthentication,
       subjectOf: ({ input }) => input.nonce,
     },
   }).mutation(({ ctx, input }) => ctx.services.identity.signIn.signInWithProvider(input)),
