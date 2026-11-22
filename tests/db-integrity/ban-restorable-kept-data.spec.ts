@@ -346,7 +346,8 @@ describe('ERD §15 rule 27, widened: the payout hash unique among the profiles n
 });
 
 describe('enrollment_event_kind gains slot_released and slot_hold_ended (T069; FR-503, FR-505)', () => {
-  it('holds the eight kinds, the two new ones last', async () => {
+  // 006:T001 adds four after these (PR #156 r1, rule (d)).
+  it('holds the twelve kinds, the two new ones after Phase 3’s, then 006:T001’s four', async () => {
     const { rows } = await db.query<{ label: string }>(
       `SELECT unnest(enum_range(NULL::enrollment_event_kind))::text AS label`,
     );
@@ -359,6 +360,10 @@ describe('enrollment_event_kind gains slot_released and slot_hold_ended (T069; F
       'restored',
       'slot_released',
       'slot_hold_ended',
+      'programme_offered',
+      'programme_paused',
+      'programme_resumed',
+      'programme_reopened',
     ]);
   });
 

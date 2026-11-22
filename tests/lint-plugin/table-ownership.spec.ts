@@ -127,20 +127,24 @@ const expectedDelegates: Readonly<Record<string, string>> = {
   teacher_share_releases: 'teacherShareRelease',
   // 003:T112 (ERD changelog row 59).
   session_postponements: 'sessionPostponement',
+  // 006:T001 (ERD changelog rows 71 to 73; PR #156 r1, rule (d)).
+  programmes: 'programme',
+  programme_requests: 'programmeRequest',
+  programme_cards: 'programmeCard',
 };
 
 describe('module-tables.json maps onto Prisma delegates (T047)', () => {
-  it('holds the ERD’s 48 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105, the one of 003:T112)', () => {
+  it('holds the ERD’s 51 tables, each under one owner (33 of Phase 0, the six of T003, the one of T094, the one of T097, the one of Phase 2’s T004, the two of Phase 3’s T001, the two of Phase 4’s T001, the one of 003:T105, the one of 003:T112, the three of 006:T001)', () => {
     const tables = ownedTables.map(({ table }) => table);
-    expect(tables).toHaveLength(48);
-    expect(new Set(tables).size).toBe(48);
+    expect(tables).toHaveLength(51);
+    expect(new Set(tables).size).toBe(51);
   });
 
-  it('gives 48 distinct delegates, one per table', () => {
+  it('gives 51 distinct delegates, one per table', () => {
     expect(Object.keys(expectedDelegates).sort()).toEqual(
       ownedTables.map(({ table }) => table).sort(),
     );
-    expect(new Set(Object.values(expectedDelegates)).size).toBe(48);
+    expect(new Set(Object.values(expectedDelegates)).size).toBe(51);
   });
 });
 
@@ -723,7 +727,7 @@ typeAwareRuleTester().run('api/table-ownership', loadRule('table-ownership.js'),
       ],
     },
     {
-      name: 'all 41 manifest tables, each reached through the delegate Prisma would generate',
+      name: 'all 51 manifest tables, each reached through the delegate Prisma would generate',
       code: [
         client(Object.values(expectedDelegates)),
         ...ownedTables.map(({ table }) => `prisma.${expectedDelegates[table]}.findMany();`),
