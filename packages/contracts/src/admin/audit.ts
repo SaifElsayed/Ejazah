@@ -9,6 +9,14 @@ import { calendarDate, timeZone } from '../onboarding.js';
 import { paymentMode } from '../platform.js';
 import { adminPage, adminSearch } from './admins.js';
 
+/**
+ * R1a (002:T174, SRS DEC-97, R-API-12, NFR-SEC-6, FR-ADMIN-17 as amended; the owner's Q-1 (a) of
+ * 2026-11-22): the audit `reason` of a decision whose note or reason is held in the application's
+ * or the credential's history. The entry records that a note was given, never its text; the panel
+ * shows it in words, linked to its target.
+ */
+export const AUDIT_REASON_NOTE_GIVEN = 'note_given';
+
 /** What an audit entry may point at in this phase (ADR 0021 D2). */
 export const auditTargetType = z.enum([
   'user',
