@@ -2,7 +2,10 @@
 // by whom; what it changed, field by field, before then after (an entry holds what its action
 // wrote, so many hold an after alone): a standing as its badge, a chain by its generations, a day
 // as a day, anything else as stored; its reason; its number and its target. Entries are only ever
-// added (the footer).
+// added (the footer). R1a (002:T174; SRS DEC-97, FR-ADMIN-17 as amended; the owner's Q-1 (a)): a
+// reason kept in a history is stored as the marker `note_given` and said in words, linked to the
+// entry's target, here and in the list (`AuditReason`); the marker itself is never shown.
+import { AUDIT_REASON_NOTE_GIVEN } from '@ijazah/contracts/admin';
 import { useNavigate } from 'react-router';
 
 import {
@@ -207,7 +210,7 @@ function Detail({ entry }: { readonly entry: Entry }) {
         <section className="section">
           <h2 className="group-label">{t('admin.audit.detail.reason')}</h2>
           <p className="text-callout">
-            <bdi>{entry.reason}</bdi>
+            <AuditReason reason={entry.reason} href={href} />
           </p>
         </section>
       )}
@@ -233,6 +236,35 @@ function Detail({ entry }: { readonly entry: Entry }) {
       </section>
     </Panel>
   );
+}
+
+/**
+ * An entry's reason: as stored, or, for a reason kept in the application's or the credential's
+ * history (R1a, Q-1 (a)), the words that say so, a link to the entry's target where it has a page.
+ */
+export function AuditReason({
+  reason,
+  href,
+  className,
+}: {
+  readonly reason: string;
+  readonly href: string | undefined;
+  readonly className?: string;
+}) {
+  const t = useT();
+  const navigate = useNavigate();
+  if (reason !== AUDIT_REASON_NOTE_GIVEN) return <bdi className={className}>{reason}</bdi>;
+  const words = t('admin.audit.values.noteGiven');
+  return href === undefined ? (
+    <span className={className}>{words}</span>
+  ) : (
+    <TextLink label={words} href={href} onPress={() => void navigate(href)} />
+  );
+}
+
+/** The reason as the list's hover shows it in full: the marker in words, any other as stored. */
+export function reasonTitle(reason: string, t: ReturnType<typeof useT>): string {
+  return reason === AUDIT_REASON_NOTE_GIVEN ? t('admin.audit.values.noteGiven') : reason;
 }
 
 /** Each field the entry names, with its value before and after. */

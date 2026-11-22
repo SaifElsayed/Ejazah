@@ -43,6 +43,8 @@ function detailOf(more: Record<string, unknown> = {}) {
     call: { completedOn: '2026-10-13', outcome: 'suitable', notes: 'مناسب' },
     // B42b, T075 (Q-O2 (a)): `applications.get`'s `banRestoreWindowDays`, unlike the seed's 14.
     banRestoreWindowDays: DAYS,
+    // R1a (002:T174, rule d): `applications.get`'s history.
+    history: [],
     ...more,
   };
 }

@@ -106,7 +106,19 @@
         "subjects": "المواد والمؤهل",
         "suitable": "مناسب",
         "unsuitable": "غير مناسب",
-        "liftBan": "رفع الحظر"
+        "liftBan": "رفع الحظر",
+        "history": {
+          "title": "سجل القرارات",
+          "empty": "لا قرار على الطلب بعد.",
+          "meta": "{date} · {time} · {admin}",
+          "actions": {
+            "approve": "اعتماد",
+            "reject": "رفض",
+            "requestInfo": "طلب معلومات",
+            "ban": "حظر",
+            "revoke": "سحب الاعتماد"
+          }
+        }
       },
       "empty": {
         "decided": {
@@ -328,6 +340,7 @@
       "values": {
         "no": "لا",
         "none": "—",
+        "noteGiven": "السبب مكتوب في سجل الطلب",
         "retiredReasons": {
           "ijazahUnreadable": "ملف الإجازة غير مقروء أو ناقص"
         },

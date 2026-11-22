@@ -106,7 +106,19 @@
         "subjects": "Subjects and qualification",
         "suitable": "Suitable",
         "unsuitable": "Unsuitable",
-        "liftBan": "Lift the ban"
+        "liftBan": "Lift the ban",
+        "history": {
+          "title": "Decision history",
+          "empty": "No decision on the application yet.",
+          "meta": "{date} · {time} · {admin}",
+          "actions": {
+            "approve": "Approved",
+            "reject": "Rejected",
+            "requestInfo": "Information requested",
+            "ban": "Banned",
+            "revoke": "Approval revoked"
+          }
+        }
       },
       "empty": {
         "decided": {
@@ -328,6 +340,7 @@
       "values": {
         "no": "No",
         "none": "—",
+        "noteGiven": "The reason is in the application's history",
         "retiredReasons": {
           "ijazahUnreadable": "Ijazah file unreadable or incomplete"
         },
