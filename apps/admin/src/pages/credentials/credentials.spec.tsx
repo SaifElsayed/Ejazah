@@ -10,7 +10,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getLocale, setLocale, translate, type MessageKey } from '../../i18n';
-import { dayMonth, dayMonthYear } from '../../lib/format';
+import { dayMonth, dayMonthYear, timeOfDay } from '../../lib/format';
 import { openPdf, type PdfFile } from '../../lib/pdf';
 import { panelTimeZone } from '../../lib/zone';
 import {
@@ -74,6 +74,8 @@ const rowV = {
 const detailOf = (row: Readonly<Record<string, unknown>>, more: Record<string, unknown> = {}) => ({
   ...row,
   documentId: '0193a6f0-0000-7000-8000-0000000000d1',
+  // T174: the credential's history, empty unless a case gives one.
+  history: [],
   ...more,
 });
 
@@ -667,6 +669,145 @@ describe('the correction of a verified chain (FR-164)', () => {
   });
 });
 
+// T174 (SRS DEC-97; admin-surface.md:70): the credential's history under its panel, oldest first:
+// the action in words, the note or a correction's reason, the name and the chain before and after a
+// correction, who decided and when.
+describe('the decision history (T174)', () => {
+  const FIRST = { holderName: 'أحمد المصري', riwaya: 'حفص عن عاصم', tariq: 'الشاطبية' };
+  const HISTORY = [
+    {
+      action: 'request_document',
+      note: 'الصفحة الثانية غير مقروءة',
+      adminName: 'سارة عادل',
+      at: '2026-03-12T09:00:00.000Z',
+    },
+    {
+      action: 'approve',
+      note: 'السند مقروء كاملًا',
+      after: { ...FIRST, chain: [{ position: 1, names: ['رسول الله ﷺ'] }] },
+      adminName: 'سارة عادل',
+      at: '2026-03-18T09:00:00.000Z',
+    },
+    {
+      action: 'correct',
+      reason: 'الاسم كما في الملف',
+      before: { ...FIRST, chain: [{ position: 1, names: ['رسول الله ﷺ'] }] },
+      after: {
+        ...FIRST,
+        holderName: 'أحمد بن عبد الله المصري',
+        chain: [
+          { position: 1, names: ['رسول الله ﷺ'] },
+          { position: 2, names: ['عثمان بن عفان', 'أُبيّ بن كعب'] },
+        ],
+      },
+      adminName: 'هالة سعيد',
+      at: '2026-04-02T09:00:00.000Z',
+    },
+  ] as const;
+
+  function withHistory(history: readonly unknown[]) {
+    const api = fakeApi();
+    api.credentials.get.query.mockImplementation(async () => ({ ...verifiedDetail, history }));
+    return api;
+  }
+
+  async function historySection(t: Translate, locale: 'ar' | 'en') {
+    await screen.findByText(rowA.teacher.displayName);
+    fireEvent.click(screen.getByRole('tab', { name: t('admin.credentials.tabs.verified') }));
+    await select(rowV.teacher.displayName, locale === 'ar' ? QURAN.nameAr : QURAN.nameEn);
+    const heading = await screen.findByRole('heading', {
+      level: 2,
+      name: t('admin.credentials.history.title'),
+    });
+    return within(heading.closest('section') as HTMLElement);
+  }
+
+  it('lists each decision oldest first, in words, with its note, who and when, in both languages', async () => {
+    await inBothLocales(
+      () => open(withHistory(HISTORY)),
+      async (t, locale) => {
+        const section = await historySection(t, locale);
+        const items = section.getAllByRole('listitem');
+        expect(items.map((item) => item.querySelector('strong')?.textContent)).toEqual([
+          t('admin.credentials.history.action.requestDocument'),
+          t('admin.credentials.history.action.approve'),
+          t('admin.credentials.history.action.correct'),
+        ]);
+        const [requested, approved, corrected] = items.map((item) => within(item));
+        expect(requested?.getByText('الصفحة الثانية غير مقروءة')).toBeTruthy();
+        expect(approved?.getByText('السند مقروء كاملًا')).toBeTruthy();
+        expect(corrected?.getByText('الاسم كما في الملف')).toBeTruthy();
+        const zone = panelTimeZone();
+        expect(
+          approved?.getByText(
+            t('admin.credentials.history.meta', {
+              admin: 'سارة عادل',
+              date: dayMonthYear('2026-03-18T09:00:00.000Z', locale, zone),
+              time: timeOfDay('2026-03-18T09:00:00.000Z', locale, zone),
+            }),
+          ),
+        ).toBeTruthy();
+        expect(
+          corrected?.getByText(
+            t('admin.credentials.history.meta', {
+              admin: 'هالة سعيد',
+              date: dayMonthYear('2026-04-02T09:00:00.000Z', locale, zone),
+              time: timeOfDay('2026-04-02T09:00:00.000Z', locale, zone),
+            }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('shows a correction’s name and chain before and after, and only on a correction', async () => {
+    await inBothLocales(
+      () => open(withHistory(HISTORY)),
+      async (t, locale) => {
+        const section = await historySection(t, locale);
+        const [, approved, corrected] = section
+          .getAllByRole('listitem')
+          .map((item) => within(item));
+        const names = locale === 'ar' ? '، ' : ', ';
+        expect(
+          corrected?.getByText(t('admin.credentials.history.nameBefore', { name: 'أحمد المصري' })),
+        ).toBeTruthy();
+        expect(
+          corrected?.getByText(
+            t('admin.credentials.history.nameAfter', { name: 'أحمد بن عبد الله المصري' }),
+          ),
+        ).toBeTruthy();
+        expect(
+          corrected?.getByText(
+            t('admin.credentials.history.chainBefore', { chain: 'رسول الله ﷺ' }),
+          ),
+        ).toBeTruthy();
+        expect(
+          corrected?.getByText(
+            t('admin.credentials.history.chainAfter', {
+              chain: `رسول الله ﷺ · عثمان بن عفان${names}أُبيّ بن كعب`,
+            }),
+          ),
+        ).toBeTruthy();
+        expect(
+          approved?.queryByText(t('admin.credentials.history.nameBefore', { name: 'أحمد المصري' })),
+        ).toBeNull();
+      },
+    );
+  });
+
+  it('says no decision is recorded yet for a credential decided before the history', async () => {
+    await inBothLocales(
+      () => open(withHistory([])),
+      async (t, locale) => {
+        const section = await historySection(t, locale);
+        expect(section.getByText(t('admin.credentials.history.empty'))).toBeTruthy();
+        expect(section.queryAllByRole('listitem')).toEqual([]);
+      },
+    );
+  });
+});
+
 describe('a long chain (the owner’s decision, B14c)', () => {
   it('shows its first five and last two generations, folds the middle, and opens it', async () => {
     const api = fakeApi();
@@ -732,7 +873,10 @@ describe('the decided and waiting credentials', () => {
 
 describe('T058: RATE_LIMITED on the credentials', () => {
   const limited = (seconds?: string) =>
-    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+    refusal(
+      'RATE_LIMITED',
+      seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+    );
 
   it('the queue says when to try again', async () => {
     const api = fakeApi();
