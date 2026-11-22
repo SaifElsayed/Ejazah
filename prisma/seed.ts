@@ -244,6 +244,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // R1a (002:T176; SRS §3.14, DEC-100; counsel, OPEN-05): an identity document on a live account
   // erased 90 days after its decision, a teacher once approved excepted (DEC-67).
   ['identity_document_retention_days', 90],
+  // T173 of specs/002-identity (SRS DEC-100, §3.14; the note under T173): after 10 failed codes for
+  // one e-mail address and purpose, no code is issued for them until the 24-hour window ends.
+  ['rate_limit_failed_one_time_code', { limit: 10, window_seconds: 86400 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

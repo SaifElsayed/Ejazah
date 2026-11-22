@@ -299,6 +299,8 @@ const services = {
       cipher,
       // T063: a deleted person's `account`, sent after the deletion's commit, ends their streams.
       live: liveBus,
+      // 002:T173 (SRS §3.14, DEC-100): the failed one-time codes' cap, on the process's limiter.
+      failedCodes: rateLimiter,
       marks: createRedisSingleUseMarks({
         redisUrl: config.REDIS_URL,
         onError: (error) => log.warn({ err: error }, 'Single-use marks unreachable'),

@@ -2678,6 +2678,7 @@
         "rate_limit_dispute_revision": "مراجعات أحكام النزاعات",
         "rate_limit_enrollment_end": "إنهاء الاشتراكات",
         "rate_limit_enrollment_restore": "استعادات الاشتراك",
+        "rate_limit_failed_one_time_code": "رموز التحقق الخاطئة قبل إيقاف إرسال الرموز",
         "rate_limit_gender_decision": "قرارات الجنس",
         "rate_limit_gender_flag": "بلاغات الجنس",
         "rate_limit_ijazah_decision": "قرارات الإجازة",

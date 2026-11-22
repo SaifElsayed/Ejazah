@@ -36,7 +36,12 @@ import {
   type OpenCases,
   type OpenIjazahRequests,
 } from './deletion.service.js';
-import { OneTimeCodes, type WarningLog } from './one-time-codes.js';
+import {
+  type FailedCodeCap,
+  OneTimeCodes,
+  UNBOUND_FAILED_CODE_CAP,
+  type WarningLog,
+} from './one-time-codes.js';
 import { PayoutService } from './payout.service.js';
 import { SignInService } from './sign-in.service.js';
 import {
@@ -194,6 +199,12 @@ export interface IdentityServiceDependencies extends IdentityDependencies {
    * deletion's commit, ends their live streams. Bound by `main.ts`.
    */
   readonly live?: Pick<LiveBus, 'publish'>;
+  /**
+   * R1a (002:T173; SRS §3.14, DEC-100): the process's rate limiter, which counts the failed
+   * one-time codes per e-mail address and purpose and is read before a code is issued. Bound by
+   * `main.ts`; unbound, every code request and every failed code fails closed.
+   */
+  readonly failedCodes?: FailedCodeCap;
 }
 
 /** The module's services over one set of dependencies (T048; the composition the specs use). */
@@ -214,10 +225,16 @@ export function createIdentityServices({
   openCases,
   report,
   live,
+  failedCodes,
   ...base
 }: IdentityServiceDependencies): Omit<IdentityServices, 'certificateName'> {
   const sessions = new SessionService(base);
-  const codes = new OneTimeCodes({ ...base, email, log });
+  const codes = new OneTimeCodes({
+    ...base,
+    email,
+    log,
+    failedCodes: failedCodes ?? UNBOUND_FAILED_CODE_CAP,
+  });
   const onboarding = new OnboardingService({ ...base, cipher, marks, sessions, codes });
   return {
     sessions,

@@ -352,3 +352,28 @@ describe('nothing before the account', () => {
     ).resolves.toMatchObject({ landing: 'student_home' });
   });
 });
+
+// R1a (002:T173; SRS §3.14, DEC-100): the onboarding's code is a sign-up code, capped with it.
+describe('an identity without a verified email, once the address’s sign-up codes are capped (T173)', () => {
+  it('answers the code request the same and mails nothing', async () => {
+    identity = buildIdentity(database, {
+      settings: { rate_limit_failed_one_time_code: { limit: 2, window_seconds: 86_400 } },
+    });
+    const { onboardingToken } = await providerToken('apple', { email: null, emailVerified: false });
+    const address = uniqueEmail();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        identity.onboarding.complete({
+          ...answers,
+          onboardingToken,
+          email: address,
+          emailCode: '000000',
+        }),
+      ).rejects.toMatchObject({ code: 'CODE_INVALID' });
+    }
+    await expect(
+      identity.onboarding.requestEmailCode(onboardingToken, address),
+    ).resolves.toBeUndefined();
+    expect(identity.mails().filter((mail) => mail.to === address)).toEqual([]);
+  });
+});

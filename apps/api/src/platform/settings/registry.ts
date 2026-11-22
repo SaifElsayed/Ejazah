@@ -743,6 +743,12 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Identity document retention on a live account after its decision, a Teacher once approved excepted (days)',
     90,
   ),
+  // T173 of specs/002-identity (SRS DEC-100, §3.14): failed one-time codes counted per e-mail
+  // address and purpose; at the limit no code is issued for them until the window ends.
+  rate_limit_failed_one_time_code: rateLimit(
+    'Failed one-time codes before issuing stops (per e-mail address and purpose, per window)',
+    { limit: 10, window_seconds: 86400 },
+  ),
 };
 
 /** Whether `key` is a setting the registry names (and so one the panel may change). */

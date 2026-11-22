@@ -371,3 +371,39 @@ describe('auth.email.resetPassword', () => {
     });
   });
 });
+
+// R1a (002:T173; SRS §3.14, DEC-100; research R-104): failed codes capped per address and purpose.
+describe('the code requests once the address’s failed codes are capped (T173)', () => {
+  const cappedAt = (limit: number) =>
+    buildIdentity(database, {
+      settings: { rate_limit_failed_one_time_code: { limit, window_seconds: 86_400 } },
+    });
+
+  it('a sign-up request answers the same and mails nothing once the address failed the setting’s count', async () => {
+    const capped = cappedAt(2);
+    const address = uniqueEmail();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(capped.emailAuth.verifySignUpCode(address, '000000')).rejects.toMatchObject({
+        code: 'CODE_INVALID',
+      });
+    }
+    await expect(capped.emailAuth.requestSignUpCode(address)).resolves.toBeUndefined();
+    expect(capped.mails().filter((mail) => mail.to === address)).toEqual([]);
+    await expect(rowsOf(database).codes(address)).resolves.toEqual([]);
+  });
+
+  it('a reset request answers the same and mails nothing once the account’s reset codes failed the setting’s count', async () => {
+    const capped = cappedAt(2);
+    const account = await emailAccount();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        capped.emailAuth.resetPassword(account.email, '000000', 'a new long passphrase'),
+      ).rejects.toMatchObject({ code: 'CODE_INVALID' });
+    }
+    await expect(capped.emailAuth.requestPasswordReset(account.email)).resolves.toBeUndefined();
+    expect(capped.mails().filter((mail) => mail.to === account.email)).toEqual([]);
+    // The sign-up purpose of the same address is not capped.
+    await expect(capped.emailAuth.requestSignUpCode(account.email)).resolves.toBeUndefined();
+    expect(capped.mails().filter((mail) => mail.to === account.email)).toHaveLength(1);
+  });
+});
