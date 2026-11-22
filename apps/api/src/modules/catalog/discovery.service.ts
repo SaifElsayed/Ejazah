@@ -192,7 +192,11 @@ function sessionPricesOf(pkg: FixedTerms | ProgrammeTerms): [Piasters, ...Piaste
 /** The highest of the amounts: compared, never computed (006:T004, `priceRange`). */
 function highestOf(amounts_piasters: readonly [Piasters, ...Piasters[]]): Piasters {
   const [first_piasters, ...rest_piasters] = amounts_piasters;
-  return rest_piasters.reduce((high, next) => (next > high ? next : high), first_piasters);
+  return rest_piasters.reduce(
+    (high_piasters, next_piasters) =>
+      next_piasters > high_piasters ? next_piasters : high_piasters,
+    first_piasters,
+  );
 }
 
 /** One profile package as the contract answers it; a programme package only while open (006:T004). */
