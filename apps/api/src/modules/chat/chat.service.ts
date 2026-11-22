@@ -34,6 +34,10 @@
 // with `mine` computed for each recipient. A replay runs no effect and adds nothing; the participant
 // kind sends the list once the handler resolves and drops it when it throws. No log line carries
 // the body (R-SEC-2).
+//
+// THE KEY HOLDS NO BODY (T175, R1a; the note under T175, (1)). The send's key stores `{ messageId }`;
+// the first call answers the message it wrote, and a replay reads the message again by its id
+// (`messageById`, no lock), so a purged one answers `purged` with nothing of it.
 import {
   type ChatAttachmentLinkInput,
   type ChatAttachmentLinkOutput,
@@ -52,10 +56,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError, type ErrorCode } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
-import type {
-  IdempotencyService,
-  JsonValue,
-} from '../../platform/idempotency/idempotency.service.js';
+import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { LivePublisher } from '../../platform/live/live-publisher.js';
 import type { Logger } from '../../platform/logging/logger.js';
 import type { StoragePort } from '../../platform/ports/storage/storage.port.js';
@@ -70,6 +71,7 @@ import {
   insertAttachment,
   insertMessage,
   lockSender,
+  messageById,
   messagePage,
   type NewChatAttachment,
   type NewChatMessage,
@@ -115,6 +117,8 @@ export interface ChatStore {
   lockSender(tx: Transaction, userId: string): Promise<void>;
   messagePage(tx: Transaction, query: ChatPageQuery): Promise<ChatMessageRow[]>;
   insertMessage(tx: Transaction, row: NewChatMessage): Promise<ChatMessageRow>;
+  /** T175: a message by its id, or null; no lock (`chat.send`'s replay). */
+  messageById(tx: Transaction, messageId: string): Promise<ChatMessageRow | null>;
   /** T038: a message's document, its enrollment and its purge, or null when there is no message. */
   attachmentOf(tx: Transaction, messageId: string): Promise<ChatAttachmentRow | null>;
   /** T038: a document's message, inserted. */
@@ -127,6 +131,7 @@ export const chatStore: ChatStore = {
   lockSender,
   messagePage,
   insertMessage,
+  messageById,
   attachmentOf,
   insertAttachment,
 };
@@ -245,15 +250,6 @@ export function tellParties(
   }
 }
 
-/** A message as the idempotency key stores it: its fields with a value, no `undefined` (JSON). */
-function storedOf({ body, attachment, ...message }: ChatMessage): JsonValue {
-  return {
-    ...message,
-    ...(body === undefined ? {} : { body }),
-    ...(attachment === undefined ? {} : { attachment }),
-  };
-}
-
 const SEND_SCOPE = 'chat.send';
 
 export function createChatServices({
@@ -287,28 +283,39 @@ export function createChatServices({
       });
     },
 
-    // The outcome is stored as it is answered and replayed from the store, so it is parsed by the
-    // contract's schema on its way out, the first answer and a replay alike (as remedy's counter).
-    send: async ({ userId }, { idempotencyKey, ...asked }, log, live) =>
-      chatSendOutput.parse(
-        await idempotency.run(
-          { scope: SEND_SCOPE, key: idempotencyKey, actorId: userId, input: asked },
-          async (tx) => {
-            const ids = { enrollmentId: asked.enrollmentId, userId };
-            const terms = await lockedParticipantOf(tx, ids, log);
-            const sentAt = await clock(tx);
-            const row = await store.insertMessage(tx, {
-              enrollmentId: asked.enrollmentId,
-              senderUserId: userId,
-              body: asked.body,
-              sentAt,
-            });
-            // T066: inside the keyed effect, so a replay adds nothing.
-            tellParties(live, terms, row);
-            return storedOf(chatMessageOf(row, userId));
-          },
-        ),
-      ),
+    // T175: the key stores the message's id; the first call answers the message it wrote, a replay
+    // the message read again by that id. Either is parsed by the contract's schema on its way out.
+    send: async ({ userId }, { idempotencyKey, ...asked }, log, live) => {
+      const sent: { message?: ChatMessage } = {};
+      const { messageId } = await idempotency.run(
+        { scope: SEND_SCOPE, key: idempotencyKey, actorId: userId, input: asked },
+        async (tx) => {
+          const ids = { enrollmentId: asked.enrollmentId, userId };
+          const terms = await lockedParticipantOf(tx, ids, log);
+          const sentAt = await clock(tx);
+          const row = await store.insertMessage(tx, {
+            enrollmentId: asked.enrollmentId,
+            senderUserId: userId,
+            body: asked.body,
+            sentAt,
+          });
+          // T066: inside the keyed effect, so a replay adds nothing.
+          tellParties(live, terms, row);
+          sent.message = chatMessageOf(row, userId);
+          return { messageId: row.id };
+        },
+      );
+      return chatSendOutput.parse(
+        sent.message ??
+          (await transactions.run(async (tx) => {
+            const row = await store.messageById(tx, messageId);
+            if (row === null) {
+              throw chatRefusal(log, { messageId, userId }, 'NOT_FOUND', 'no_message');
+            }
+            return chatMessageOf(row, userId);
+          })),
+      );
+    },
 
     // T038: the message and its enrollment's parties read with no lock (the note under T037, Q3
     // (a)); the link minted after the commit, so no transaction waits on the storage port.

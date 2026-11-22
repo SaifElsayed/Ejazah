@@ -50,6 +50,8 @@ const REASON = 'المستندات تثبت خطأ التسجيل';
 let order: unknown[][];
 let keyed: IdempotentRequest[];
 let replay: boolean;
+/** T175: what the key stored on a first call. */
+let stored: unknown[];
 let claim: boolean;
 let flagThere: boolean;
 let genders: Map<string, Gender>;
@@ -81,6 +83,7 @@ beforeEach(() => {
   order = [];
   keyed = [];
   replay = false;
+  stored = [];
   claim = true;
   flagThere = true;
   statuses = new Map([E1, E2, E3, E4].map((id) => [id, 'confirmed' as const]));
@@ -201,18 +204,16 @@ const decisions = () =>
         effect: (tx: Transaction) => Promise<T>,
       ) => {
         keyed.push(request);
+        // T175: the key's stored outcome, as the first correction stored it (ids only).
         if (replay) {
           return {
-            outcome: {
-              flaggedUserId: PERSON,
-              from: 'male',
-              to: 'female',
-              endedEnrollments: 3,
-            } as T,
+            outcome: { flaggedUserId: PERSON, endedEnrollmentIds: [E1, E2, E3] } as T,
             replayed: true,
           };
         }
-        return { outcome: await effect(tx), replayed: false };
+        const outcome = await effect(tx);
+        stored.push(outcome);
+        return { outcome, replayed: false };
       },
     },
     orders: async () => new Map(),
@@ -373,15 +374,18 @@ describe('genderFlags.correct (005:T014)', () => {
     expect(JSON.stringify(lines)).not.toContain(REASON);
   });
 
-  it('a replay answers the first correction and writes nothing', async () => {
+  // T175 (R1a; the note under T175, (1)): the key holds the person's and the ended enrollments' ids,
+  // never a gender; a replay answers their count.
+  it('stores the person’s and the ended enrollments’ ids only, no gender (T175)', async () => {
+    arrange('male');
+    await correct();
+    expect(stored).toEqual([{ flaggedUserId: PERSON, endedEnrollmentIds: [E1, E2, E3] }]);
+    expect(JSON.stringify(stored)).not.toMatch(/male|female/);
+  });
+
+  it('a replay answers the count of the stored ids and writes nothing (T175)', async () => {
     replay = true;
-    expect(await correct()).toEqual({
-      flaggedUserId: PERSON,
-      from: 'male',
-      to: 'female',
-      endedEnrollments: 3,
-      replayed: true,
-    });
+    expect(await correct()).toEqual({ replayed: true, endedEnrollments: 3 });
     expect(order).toEqual([]);
   });
 });

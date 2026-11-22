@@ -80,6 +80,25 @@ export async function insertMessage(
   });
 }
 
+/** T175: a message as a page shows it, by the primary key, or null; no lock (`chat.send`'s replay). */
+export async function messageById(
+  tx: Pick<Transaction, 'chatMessage'>,
+  messageId: string,
+): Promise<ChatMessageRow | null> {
+  return tx.chatMessage.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      senderUserId: true,
+      body: true,
+      attachmentFilename: true,
+      attachmentMime: true,
+      sentAt: true,
+      purgedAt: true,
+    },
+  });
+}
+
 /** T038: a message's document as `chat.attachmentLink` decides on it; the key never leaves chat. */
 export interface ChatAttachmentRow {
   readonly enrollmentId: string;

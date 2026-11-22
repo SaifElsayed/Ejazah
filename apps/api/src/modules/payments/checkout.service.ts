@@ -11,7 +11,10 @@
 // running the effect here, and the order this call created is cancelled at the gateway. The stored
 // outcome holds no address: a repeat reads it again from `payments.checkout_url_encrypted`, under
 // `checkout.continue`'s conditions (the order `created` and before its `expires_at`), which settles
-// R-DB-8 for the stored answer (the note under T036 of B28's T031).
+// R-DB-8 for the stored answer (the note under T036 of B28's T031). T175 (R1a): `hold`'s stored
+// outcome holds no teacher's name either; either replay (the key read first, or `run`'s duplicate)
+// reads it again through booking's `checkoutTeacherName`, the visibility predicate, and a teacher the
+// student may no longer see answers `NOT_FOUND`.
 //
 // A NEW CHECKOUT (`hold`, FR-BOOK-12). Booking's `placeCheckoutHold` releases the student's own
 // unexpired hold and places the new one in one transaction, or throws `PayableCheckout` when an
@@ -83,6 +86,7 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import {
   type CheckoutEnrollmentRow,
   type CheckoutHold,
+  checkoutTeacherName,
   type CurrentHold,
   currentHoldOf,
   type EnrollmentStatusAnswer,
@@ -176,6 +180,12 @@ function enrollmentOf(stored: StoredOrder): string {
 /** The steps the service takes on the database, each a function of an owner's entry; faked in a spec. */
 export interface CheckoutSteps {
   transaction<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+  /** T175: the teacher's name if the student may see the teacher, else null (booking's `checkoutTeacherName`). */
+  teacherName(
+    tx: Transaction,
+    requester: RequesterGender,
+    teacherUserId: string,
+  ): Promise<string | null>;
   placeHold(
     tx: Transaction,
     student: CheckoutStudent,
@@ -249,6 +259,7 @@ export function checkoutStepsOver(
     payTarget: (tx, request, quoted) => payTargetOf(tx, request, quoted, pay),
     enrollOnHold: (tx, target, enrolment) => enrollOnHold(tx, target, enrolment, pay),
     transaction: (work) => database.$transaction(work),
+    teacherName: checkoutTeacherName,
     placeHold: (tx, student, request, dependencies) =>
       placeCheckoutHold(tx, student, request, { ...dependencies, notices }),
     retryTarget: (tx, studentUserId, enrollmentId) =>
@@ -286,15 +297,28 @@ export interface CheckoutDependencies {
   readonly report?: (error: Error) => void;
 }
 
-function asHoldOutput(
-  held: CheckoutHold,
-  terms: Pick<HoldTerms, 'graceMinutes'>,
-): CheckoutHoldOutput {
+/**
+ * T175 (R1a; the note under T175, (1)): what `checkout.hold`'s key stores, its answer without the
+ * teacher's name; a replay reads the name again through the visibility predicate.
+ */
+type StoredHold = Omit<CheckoutHoldOutput, 'summary'> & {
+  readonly summary: Omit<CheckoutHoldOutput['summary'], 'teacher'> & {
+    readonly teacher: { readonly teacherId: string };
+  };
+};
+
+/** T175: the stored hold with the teacher's name, as `checkout.hold` answers it. */
+function namedHold(stored: StoredHold, displayName: string): CheckoutHoldOutput {
+  const { teacherId } = stored.summary.teacher;
+  return { ...stored, summary: { ...stored.summary, teacher: { teacherId, displayName } } };
+}
+
+function storedHoldOf(held: CheckoutHold, terms: Pick<HoldTerms, 'graceMinutes'>): StoredHold {
   return {
     holdId: held.holdId,
     expiresAt: held.expiresAt.toISOString(),
     payBy: payByOf(held.expiresAt, terms).toISOString(),
-    summary: held.summary,
+    summary: { ...held.summary, teacher: { teacherId: held.summary.teacher.teacherId } },
     firstSession: {
       localDate: held.firstSession.requestedLocalDate,
       startsAt: held.firstSession.startsAt,
@@ -349,26 +373,31 @@ export class CheckoutService {
       actorId: student.userId,
       input: { packageId, slotId },
     };
-    const stored = await this.#idempotency.completed<CheckoutHoldOutput>(request);
-    if (stored !== undefined) return stored;
+    const stored = await this.#idempotency.completed<StoredHold>(request);
+    if (stored !== undefined) return this.#namedAgain(student, stored);
     const recordedFailed = new Set<string>();
     for (;;) {
       const terms = await readHoldTerms(this.#settings, this.#now());
+      // T175: the name the placement read, kept in this call only; unset when `run` replayed a key.
+      const placed: { name?: string } = {};
       try {
         // 005:T016: the placement's releases can push `payment_expired` (this file's head).
-        return await withOutcomeNotices(
+        const outcome = await withOutcomeNotices<StoredHold>(
           (work) => this.#idempotency.run(request, work),
-          async (tx) =>
-            asHoldOutput(
-              await this.#steps.placeHold(
-                tx,
-                student,
-                { packageId, slotId },
-                { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
-              ),
-              terms,
-            ),
+          async (tx) => {
+            const held = await this.#steps.placeHold(
+              tx,
+              student,
+              { packageId, slotId },
+              { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
+            );
+            placed.name = held.summary.teacher.displayName;
+            return storedHoldOf(held, terms);
+          },
         );
+        return placed.name === undefined
+          ? await this.#namedAgain(student, outcome)
+          : namedHold(outcome, placed.name);
       } catch (error) {
         if (!(error instanceof PayableCheckout)) throw error;
         if (recordedFailed.has(error.order.paymentId)) {
@@ -378,6 +407,18 @@ export class CheckoutService {
         recordedFailed.add(error.order.paymentId);
       }
     }
+  }
+
+  /**
+   * T175: a replayed hold with the teacher's name read again through the visibility predicate,
+   * `NOT_FOUND` once the student may no longer see the teacher (R-GENDER-2).
+   */
+  async #namedAgain(student: CheckoutStudent, stored: StoredHold): Promise<CheckoutHoldOutput> {
+    const name = await this.#steps.transaction((tx) =>
+      this.#steps.teacherName(tx, student.gender, stored.summary.teacher.teacherId),
+    );
+    if (name === null) throw new DomainError('NOT_FOUND');
+    return namedHold(stored, name);
   }
 
   /** `checkout.retry` (FR-356, FR-357): a new order on the same hold. */

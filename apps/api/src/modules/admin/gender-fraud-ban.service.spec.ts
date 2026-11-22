@@ -35,6 +35,8 @@ const NOTE = 'رُفض طلبك لمخالفة الشروط';
 let order: unknown[][];
 let keyed: IdempotentRequest[];
 let replay: boolean;
+/** T175: what the key stored on a first call. */
+let stored: unknown[];
 let claim: boolean;
 let flagThere: boolean;
 let declared: Gender;
@@ -45,6 +47,7 @@ beforeEach(() => {
   order = [];
   keyed = [];
   replay = false;
+  stored = [];
   claim = true;
   flagThere = true;
   declared = 'female';
@@ -128,18 +131,11 @@ const decisions = () =>
         effect: (tx: Transaction) => Promise<T>,
       ) => {
         keyed.push(request);
-        if (replay) {
-          return {
-            outcome: {
-              flaggedUserId: PERSON,
-              from: 'female',
-              to: 'male',
-              accountStatus: 'active',
-            } as T,
-            replayed: true,
-          };
-        }
-        return { outcome: await effect(tx), replayed: false };
+        // T175: the key's stored outcome, as the first fraud ban stored it (null).
+        if (replay) return { outcome: null as T, replayed: true };
+        const outcome = await effect(tx);
+        stored.push(outcome);
+        return { outcome, replayed: false };
       },
     },
     orders: unreached,
@@ -296,15 +292,15 @@ describe('genderFlags.fraudBan (005:T015)', () => {
     expect(JSON.stringify(lines)).not.toContain(REASON);
   });
 
-  it('a replay answers the first fraud ban and writes nothing', async () => {
+  // T175 (R1a; the note under T175, (1)): the key stores null; a replay answers only that it is one.
+  it('stores null in the key: no gender, no standing (T175)', async () => {
+    await fraudBan();
+    expect(stored).toEqual([null]);
+  });
+
+  it('a replay answers replayed only and writes nothing (T175)', async () => {
     replay = true;
-    expect(await fraudBan()).toEqual({
-      flaggedUserId: PERSON,
-      from: 'female',
-      to: 'male',
-      accountStatus: 'active',
-      replayed: true,
-    });
+    expect(await fraudBan()).toEqual({ replayed: true });
     expect(order).toEqual([]);
   });
 });
