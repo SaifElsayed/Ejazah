@@ -420,6 +420,46 @@ describe('nearestFreeSlots (T026, R-205, FR-335)', () => {
     });
   });
 
+  // 006:T004 (FR-701, R-504; Q-5 (a); the owner's approval of 2026-11-22): a teacher whose only
+  // active package is a programme one offers each slot at least the assessment's length long, named
+  // only while the programme is open; with none named, no nearest slot. Both directions.
+  it.each([
+    ['female', FEMALE],
+    ['male', MALE],
+  ] as const)(
+    'answers a programme teacher’s nearest slot of at least the assessment’s length, %s, and none with no length named',
+    async (gender, requester) => {
+      await rolledBack(async (tx) => {
+        const teacherId = await teacher(tx, { gender });
+        const subjectId = await subject(tx);
+        await tx.package.create({
+          data: {
+            teacherUserId: teacherId,
+            subjectId,
+            track: 'ijazah_track',
+            isProgramme: true,
+            price30Piasters: 20_000n,
+            price45Piasters: 28_000n,
+            price60Piasters: 35_000n,
+            isActive: true,
+          },
+        });
+        // Thursday 09:00 for 30 minutes, Saturday 10:00 for 60.
+        await slot(tx, teacherId, { day: 4, time: '09:00:00', minutes: 30 });
+        await slot(tx, teacherId, { day: 6, time: '10:00:00' });
+        expect(await nearestFreeSlots(tx, requester, [teacherId], clock(TUESDAY), 45)).toEqual(
+          new Map([[teacherId, { startsAt: '2026-11-07T08:00:00Z', timezone: CAIRO }]]),
+        );
+        expect(await nearestFreeSlots(tx, requester, [teacherId], clock(TUESDAY), 30)).toEqual(
+          new Map([[teacherId, { startsAt: '2026-11-05T07:00:00Z', timezone: CAIRO }]]),
+        );
+        expect(await nearestFreeSlots(tx, requester, [teacherId], clock(TUESDAY))).toEqual(
+          new Map(),
+        );
+      });
+    },
+  );
+
   it('skips a slot an active hold takes and answers the teacher’s next free one', async () => {
     await rolledBack(async (tx) => {
       const on = await offer(tx);

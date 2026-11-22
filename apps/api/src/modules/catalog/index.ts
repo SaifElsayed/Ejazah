@@ -60,6 +60,7 @@ import { SlotsService, type SlotsStore, type TeacherSlots } from './slots.servic
 import {
   changePackage,
   deactivatePreProgrammeIjazah,
+  lockProgrammeSwitch,
   holdsSubject,
   insertPackage,
   lockPackageOwners,
@@ -198,6 +199,8 @@ export function createCatalogServices({
  * queries and locks (`tests/db-integrity/packages.spec.ts`).
  */
 export const packagesStore: PackagesStore = {
+  // 006:T004 (Q-D1 (a)): the programme switch's advisory key.
+  lockProgrammeSwitch,
   lockAccount,
   lockApplication,
   isPublished: isPublishedTeacher,
@@ -229,6 +232,12 @@ export function retirePreProgrammeIjazahPackages(tx: Transaction): Promise<numbe
 }
 /** 006:T002: the switch's key, which `teacher.packages.update` and the admin module read. */
 export { PROGRAMME_ENABLED_SETTING } from './packages.service.js';
+/**
+ * 006:T004 (SRS DEC-110, Q-D1 (a)): the programme switch's advisory key, on the caller's
+ * transaction until it ends; `settings.update` of `programme_enabled` takes it before it writes the
+ * value, ahead of every row lock (kernel.md, the 006:T004 row).
+ */
+export { lockProgrammeSwitch } from './packages.repository.js';
 
 /** The `teacher.packages` router, mounted under `teacher.packages` by `app.router.ts` (T018). */
 export { packagesRouter } from './packages.router.js';
@@ -236,7 +245,9 @@ export { packagesRouter } from './packages.router.js';
 export { slotsRouter } from './slots.router.js';
 /**
  * The active slots of the lengths of each teacher's active packages, on the caller's transaction:
- * what booking's discovery read decides is free (T026, R-205).
+ * what booking's discovery read decides is free (T026, R-205). 006:T004: a programme package's
+ * teacher's slots at least the third argument long (the assessment's length, named only while the
+ * programme is open); none named, a programme package offers nothing.
  */
 export { type OfferedSlot, offeredSlotsOf } from './slots.repository.js';
 /**
@@ -253,8 +264,32 @@ export { readSlot } from './slots.repository.js';
  */
 export { lockTeacherSlots, slotsOf as teacherSlotsOf } from './slots.repository.js';
 export type { SlotRow } from './slots.service.js';
-/** An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350). */
-export { type BookablePackage, bookablePackageOf } from './packages.repository.js';
+/**
+ * An active package's teacher and terms by its id alone, for booking's sheet (T032, FR-350).
+ * 006:T004 (R-503): a union on `isProgramme`: a count and a length, or a programme package's three
+ * prices; `priceForLength` reads one of them.
+ */
+export {
+  type BookablePackage,
+  bookablePackageOf,
+  type FixedBookablePackage,
+  type FixedTerms,
+  priceForLength,
+  type ProgrammeBookablePackage,
+  type ProgrammePriceRow,
+  type ProgrammeTerms,
+} from './packages.repository.js';
+/**
+ * 006:T004 (R-503, R-515; Q-5 (a)): whether a programme package may be shown and booked now (the
+ * switch on and the assessment's price above 0), with the assessment's price and length; closed,
+ * the refusal a start answers. Read at each request through the settings reader.
+ */
+export {
+  ASSESSMENT_DURATION_SETTING,
+  ASSESSMENT_PRICE_SETTING,
+  type ProgrammeAvailability,
+  programmeAvailabilityOf,
+} from './packages.service.js';
 /**
  * A teacher's package by its id, with its subject, track and price, on the caller's transaction:
  * the checkout's payment summary (T036, FR-358). Null for an unknown id and for another teacher's.

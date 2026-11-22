@@ -14,6 +14,7 @@ import type {
   PeerPackageRow,
   PeerPackagesQuery,
 } from './packages.repository.js';
+import { priceForLength } from './packages.repository.js';
 import type { PackagesStore, PreProgrammeRetirementStore } from './packages.service.js';
 
 export const TEACHER = '0199d0a0-0000-7000-8000-0000000000d1';
@@ -29,12 +30,21 @@ export const OTHER_SUBJECT = {
   nameEn: 'Tajweed',
 };
 
+function fail(reason: string): never {
+  throw new Error(`packages fixture: ${reason}`);
+}
+
 /** Stands in for the call's transaction, which the memory store never reads. */
 export const TX = {} as Transaction;
 
-interface Held extends PackageRow {
-  readonly teacherUserId: string;
-}
+type Held = PackageRow & { readonly teacherUserId: string };
+
+/** A package as planted: either shape, without its id (006:T004). */
+export type PlantedPackage = PackageRow extends infer Row
+  ? Row extends PackageRow
+    ? Omit<Row, 'id'>
+    : never
+  : never;
 
 export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStore, CatalogUse {
   /** Every lock and question, in order: `lockAccount:<id>`, `holdsSubject`, `packageOf`, … */
@@ -55,9 +65,9 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
   }
 
   /** A package of the teacher, as written; its id. */
-  plant(teacherUserId: string, row: Omit<PackageRow, 'id'>): string {
+  plant(teacherUserId: string, row: PlantedPackage): string {
     const id = randomUUID();
-    this.#rows.set(id, { ...row, id, teacherUserId });
+    this.#rows.set(id, { ...row, id, teacherUserId } as Held);
     return id;
   }
 
@@ -84,6 +94,11 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
 
   async lockApplication(_tx: Transaction, userId: string): Promise<void> {
     this.log.push(`lockApplication:${userId}`);
+  }
+
+  /** 006:T004 (Q-D1 (a)): the programme switch's advisory key. */
+  async lockProgrammeSwitch(_tx: Transaction): Promise<void> {
+    this.log.push('lockProgrammeSwitch');
   }
 
   async isPublished(
@@ -124,8 +139,8 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
     const subject = [SUBJECT, OTHER_SUBJECT].find(({ id }) => id === row.subjectId);
     if (subject === undefined) throw new Error(`no subject ${row.subjectId}`);
     const { subjectId: _subject, teacherUserId, ...rest } = row;
-    // 006:T002 (rule d): a package written today is no programme package (the column's default).
-    const id = this.plant(teacherUserId, { ...rest, subject, isProgramme: false });
+    // 006:T004: either shape, as written.
+    const id = this.plant(teacherUserId, { ...rest, subject } as PlantedPackage);
     const { teacherUserId: _teacher, ...written } = this.held(id);
     return written;
   }
@@ -139,7 +154,23 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
     this.log.push('change');
     const row = this.#rows.get(packageId);
     if (row === undefined || row.teacherUserId !== teacherUserId) return false;
-    this.#rows.set(packageId, { ...row, ...change });
+    // 006:T004: `isProgramme` turns the package into a programme one, the old three dropped.
+    const { isProgramme, prices, ...fields } = change;
+    if (isProgramme === true || row.isProgramme) {
+      const { id, subject, isActive, teacherUserId: teacher } = row;
+      const kept = row.isProgramme ? row.prices : undefined;
+      this.#rows.set(packageId, {
+        id,
+        subject,
+        teacherUserId: teacher,
+        track: 'ijazah_track',
+        isProgramme: true,
+        prices: prices ?? kept ?? fail('a programme package with no prices'),
+        isActive: fields.isActive ?? isActive,
+      });
+      return true;
+    }
+    this.#rows.set(packageId, { ...row, ...fields } as Held);
     return true;
   }
 
@@ -151,14 +182,23 @@ export class MemoryPackages implements PackagesStore, PreProgrammeRetirementStor
         (row) =>
           row.isActive &&
           row.track === query.track &&
-          row.sessionDurationMinutes === query.sessionDurationMinutes &&
+          (row.isProgramme || row.sessionDurationMinutes === query.sessionDurationMinutes) &&
           row.teacherUserId !== query.viewer,
       )
-      .map(({ teacherUserId, price_piasters, sessionCount }) => ({
-        teacherUserId,
-        price_piasters,
-        sessionCount,
-      }));
+      .map((row): PeerPackageRow =>
+        row.isProgramme
+          ? {
+              teacherUserId: row.teacherUserId,
+              isProgramme: true,
+              sessionPrice_piasters: priceForLength(row.prices, query.sessionDurationMinutes),
+            }
+          : {
+              teacherUserId: row.teacherUserId,
+              isProgramme: false,
+              price_piasters: row.price_piasters,
+              sessionCount: row.sessionCount,
+            },
+      );
   }
 
   /** 003:T113: those of `teacherIds` the predicate shows a student of `requester`'s gender. */

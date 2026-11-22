@@ -123,28 +123,48 @@ export interface OfferedSlot {
  * Of `teacherIds` (a page of discovery, already visible), each teacher's active slots whose length
  * is the length of one of that teacher's active packages, by id (T026, R-205: booking decides which
  * are free). Bounded by the page and the week: a teacher's active slots never overlap (R-206).
+ *
+ * 006:T004 (R-504, FR-701, FR-PROFILE-8 as amended by DEC-94; Q-5 (a)): a programme package has no
+ * length of its own; it offers each of its teacher's active slots at least `programmeMinMinutes`
+ * long, the assessment's length (`assessment_duration_minutes`), which the caller names only while
+ * the programme is open (`programmeAvailabilityOf`). With none named, a programme package offers
+ * nothing, so a closed programme is never offered by default.
  */
 export async function offeredSlotsOf(
   tx: Pick<Transaction, 'availabilitySlot' | 'package'>,
   teacherIds: readonly string[],
+  programmeMinMinutes?: number,
 ): Promise<OfferedSlot[]> {
   if (teacherIds.length === 0) return [];
-  const lengths = await tx.package.findMany({
-    where: { teacherUserId: { in: [...teacherIds] }, isActive: true },
-    distinct: ['teacherUserId', 'sessionDurationMinutes'],
-    select: { teacherUserId: true, sessionDurationMinutes: true },
+  const packages = await tx.package.findMany({
+    where: {
+      teacherUserId: { in: [...teacherIds] },
+      isActive: true,
+      ...(programmeMinMinutes === undefined ? { isProgramme: false } : {}),
+    },
+    distinct: ['teacherUserId', 'isProgramme', 'sessionDurationMinutes'],
+    select: { teacherUserId: true, isProgramme: true, sessionDurationMinutes: true },
   });
-  if (lengths.length === 0) return [];
-  const offered = new Set(
-    lengths.map(({ teacherUserId, sessionDurationMinutes }) =>
-      lengthKey(teacherUserId, sessionDurationMinutes),
-    ),
-  );
+  const lengths = new Set<number>();
+  const offered = new Set<string>();
+  const programmeTeachers = new Set<string>();
+  for (const { teacherUserId, isProgramme, sessionDurationMinutes } of packages) {
+    if (isProgramme) programmeTeachers.add(teacherUserId);
+    else if (sessionDurationMinutes !== null) {
+      lengths.add(sessionDurationMinutes);
+      offered.add(lengthKey(teacherUserId, sessionDurationMinutes));
+    }
+  }
+  const floor = programmeTeachers.size === 0 ? undefined : programmeMinMinutes;
+  if (lengths.size === 0 && floor === undefined) return [];
   const slots = await tx.availabilitySlot.findMany({
     where: {
       teacherUserId: { in: [...teacherIds] },
       isActive: true,
-      durationMinutes: { in: [...new Set(lengths.map((row) => row.sessionDurationMinutes))] },
+      OR: [
+        { durationMinutes: { in: [...lengths] } },
+        ...(floor === undefined ? [] : [{ durationMinutes: { gte: floor } }]),
+      ],
     },
     orderBy: { id: 'asc' },
     select: {
@@ -157,7 +177,13 @@ export async function offeredSlotsOf(
     },
   });
   return slots
-    .filter((row) => offered.has(lengthKey(row.teacherUserId, row.durationMinutes)))
+    .filter(
+      (row) =>
+        offered.has(lengthKey(row.teacherUserId, row.durationMinutes)) ||
+        (floor !== undefined &&
+          programmeTeachers.has(row.teacherUserId) &&
+          row.durationMinutes >= floor),
+    )
     .map(({ startTimeLocal, ...row }) => ({ ...row, startTimeLocal: localTimeOf(startTimeLocal) }));
 }
 

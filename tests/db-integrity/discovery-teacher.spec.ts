@@ -82,6 +82,8 @@ const TARIQ = 'طريق الشاطبية';
 const catalog: DiscoveryCatalog = createDiscoveryCatalog(
   {
     async read(key, schema) {
+      // 006:T004 (rule d): the programme's switch off, as seeded, so no programme package shows.
+      if (key === 'programme_enabled') return schema.parse(0);
       if (key !== 'document_link_ttl_seconds') throw new SettingError(key, 'missing');
       return schema.parse(TTL_SECONDS);
     },

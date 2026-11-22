@@ -8,7 +8,9 @@
 import type { OfferedSlot } from '../catalog/index.js';
 import { describe, expect, it } from 'vitest';
 
-import { nearestFreeOf, offerableOccurrences } from './nearest-slot.service.js';
+import { piasters } from '@ijazah/money';
+
+import { nearestFreeOf, offerableOccurrences, programmeFloorOf } from './nearest-slot.service.js';
 import type { SlotOccupancy } from './slot-occupancy.service.js';
 
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000c1';
@@ -121,5 +123,25 @@ describe('offerableOccurrences (R-205)', () => {
     expect(offerable.map(({ slot: { id }, first }) => [id, first.requestedLocalDate])).toEqual([
       [free.id, '2026-11-04'],
     ]);
+  });
+});
+
+// 006:T004 (FR-701, R-504; Q-5 (a); the owner's approval of 2026-11-22): a programme package's
+// teacher offers each active slot at least as long as the assessment, and only while the programme
+// is open; closed, it offers none, so no card shows a nearest slot for it.
+describe('programmeFloorOf (006:T004)', () => {
+  it('is the assessment’s length while the programme is open', () => {
+    expect(
+      programmeFloorOf({
+        open: true,
+        assessmentPrice_piasters: piasters(50_000),
+        assessmentDurationMinutes: 45,
+      }),
+    ).toBe(45);
+  });
+
+  it('is none while the programme is closed, by the switch or the price', () => {
+    expect(programmeFloorOf({ open: false, refusal: 'programme_disabled' })).toBeUndefined();
+    expect(programmeFloorOf({ open: false, refusal: 'assessment_fee_unset' })).toBeUndefined();
   });
 });
