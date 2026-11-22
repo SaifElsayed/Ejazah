@@ -333,21 +333,46 @@ export interface GenderDecisionsDependencies {
   readonly steps?: CorrectionSteps;
 }
 
-/** 005:T015: what a fraud ban did, for the router's audit (the gender and the standing before). */
-export type FraudBan = {
+/**
+ * 005:T015: what a fraud ban did, for the router's audit (the gender and the standing before).
+ * T175 (R1a): its key stores null, so a replay answers only that it is one (the first call's entry
+ * is the record).
+ */
+export type FraudBan =
+  | { readonly replayed: true }
+  | {
+      readonly replayed: false;
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly accountStatus: string;
+    };
+
+/**
+ * 005:T014: what a correction did, for the router's audit (Q-G6: the gender before and after).
+ * T175 (R1a): its key stores the person's and the ended enrollments' ids, so a replay answers their
+ * count and no gender.
+ */
+export type Correction =
+  | { readonly replayed: true; readonly endedEnrollments: number }
+  | {
+      readonly replayed: false;
+      readonly flaggedUserId: string;
+      readonly from: Gender;
+      readonly to: Gender;
+      readonly endedEnrollments: number;
+    };
+
+/** T175: what a correction's key stores: ids only (the note under T175, (1)). */
+type StoredCorrection = {
   readonly flaggedUserId: string;
-  readonly from: Gender;
-  readonly to: Gender;
-  readonly accountStatus: string;
+  readonly endedEnrollmentIds: readonly string[];
 };
 
-/** 005:T014: what a correction did, for the router's audit (Q-G6: the gender before and after). */
-export type Correction = {
-  readonly flaggedUserId: string;
-  readonly from: Gender;
-  readonly to: Gender;
-  readonly endedEnrollments: number;
-};
+/** T175: what a fraud ban did, kept in its call only; its key stores null. */
+type FraudBanDone = Extract<FraudBan, { readonly replayed: false }>;
+/** T175: what a correction did, kept in its call only. */
+type CorrectionDone = Extract<Correction, { readonly replayed: false }>;
 
 /** The administrator surface's `genderFlags.*`, each on the administrator kind's transaction. */
 export interface GenderDecisions {
@@ -376,13 +401,13 @@ export interface GenderDecisions {
     tx: Transaction,
     adminId: string,
     input: AdminGenderFlagsCorrectInput,
-  ): Promise<Correction & { readonly replayed: boolean }>;
+  ): Promise<Correction>;
   /** 005:T015: `genderFlags.fraudBan` (this file's head). */
   fraudBan(
     tx: Transaction,
     adminId: string,
     input: AdminGenderFlagsFraudBanInput,
-  ): Promise<FraudBan & { readonly replayed: boolean }>;
+  ): Promise<FraudBan>;
 }
 
 const CORRECT_SCOPE = 'genderFlags.correct';
@@ -481,7 +506,7 @@ export function createGenderDecisions({
     tx: Transaction,
     adminId: string,
     { flagId, reason }: { readonly flagId: string; readonly reason: string },
-  ): Promise<Correction> => {
+  ): Promise<{ readonly stored: StoredCorrection; readonly done: CorrectionDone }> => {
     const { person, from, to } = await corrected(tx, adminId, flagId, reason);
     const confirmed = await reads.confirmedEnrollmentsOf(tx, person);
     const genders = await reads.gendersOf(tx, [
@@ -545,7 +570,10 @@ export function createGenderDecisions({
       },
       'A declared gender was corrected',
     );
-    return { flaggedUserId: person, from, to, endedEnrollments: endedIds.length };
+    return {
+      stored: { flaggedUserId: person, endedEnrollmentIds: endedIds },
+      done: { replayed: false, flaggedUserId: person, from, to, endedEnrollments: endedIds.length },
+    };
   };
 
   /** 005:T015: the fraud ban on the keyed transaction (this file's head). */
@@ -561,7 +589,7 @@ export function createGenderDecisions({
       readonly reason: string;
       readonly applicantNote?: string | undefined;
     },
-  ): Promise<FraudBan> => {
+  ): Promise<FraudBanDone> => {
     let found: { readonly role: BanRole; readonly accountStatus: string } | undefined;
     const { person, from, to } = await corrected(
       tx,
@@ -592,7 +620,7 @@ export function createGenderDecisions({
       { adminId, flagId, userId: person, role },
       'A declared gender was found fraudulent and the account banned',
     );
-    return { flaggedUserId: person, from, to, accountStatus };
+    return { replayed: false, flaggedUserId: person, from, to, accountStatus };
   };
 
   return {
@@ -620,21 +648,34 @@ export function createGenderDecisions({
     },
     raise: (tx, adminId, input) => flags.raiseByAdministrator(tx, adminId, input, log),
     dismiss: (tx, adminId, input) => flags.dismiss(tx, adminId, input, log),
+    // T175 (R1a): the key stores ids only; what the call did is kept in the call, for its audit.
     correct: async (tx, adminId, { idempotencyKey, ...asked }) => {
-      const { outcome, replayed } = await idempotency.runOn(
+      const call: { done?: CorrectionDone } = {};
+      const { outcome, replayed } = await idempotency.runOn<StoredCorrection>(
         tx,
         { scope: CORRECT_SCOPE, key: idempotencyKey, actorId: adminId, input: asked },
-        (keyed) => correctLocked(keyed, adminId, asked),
+        async (keyed) => {
+          const { stored, done } = await correctLocked(keyed, adminId, asked);
+          call.done = done;
+          return stored;
+        },
       );
-      return { ...outcome, replayed };
+      if (!replayed && call.done !== undefined) return call.done;
+      return { replayed: true, endedEnrollments: outcome.endedEnrollmentIds.length };
     },
+    // T175 (R1a): the key stores null.
     fraudBan: async (tx, adminId, { idempotencyKey, ...asked }) => {
-      const { outcome, replayed } = await idempotency.runOn(
+      const call: { done?: FraudBanDone } = {};
+      const { replayed } = await idempotency.runOn(
         tx,
         { scope: FRAUD_BAN_SCOPE, key: idempotencyKey, actorId: adminId, input: asked },
-        (keyed) => fraudBanLocked(keyed, adminId, asked),
+        async (keyed) => {
+          call.done = await fraudBanLocked(keyed, adminId, asked);
+          return null;
+        },
       );
-      return { ...outcome, replayed };
+      if (!replayed && call.done !== undefined) return call.done;
+      return { replayed: true };
     },
   };
 }

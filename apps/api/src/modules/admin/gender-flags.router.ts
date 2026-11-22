@@ -118,20 +118,24 @@ export const genderFlagsAdminRouter = createAdminRouter({
     output: adminGenderFlagsCorrectOutput,
     rateLimit: GENDER_DECISION_LIMIT,
   }).mutation(async ({ ctx, input }) => {
-    const { flaggedUserId, from, to, endedEnrollments, replayed } =
-      await ctx.services.genderFlags.correct(ctx.tx, ctx.administrator.adminId, input);
-    if (replayed) ctx.audit.replayed();
+    // T175: a replay answers the stored count only; the genders are read on a first call alone.
+    const corrected = await ctx.services.genderFlags.correct(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (corrected.replayed) ctx.audit.replayed();
     else {
       ctx.audit.record({
         action: 'gender.corrected',
         targetType: PERSON_TARGET,
-        targetId: flaggedUserId,
+        targetId: corrected.flaggedUserId,
         reason: input.reason,
-        before: { gender: from },
-        after: { gender: to, flagId: input.flagId },
+        before: { gender: corrected.from },
+        after: { gender: corrected.to, flagId: input.flagId },
       });
     }
-    return { endedEnrollments };
+    return { endedEnrollments: corrected.endedEnrollments };
   }),
 
   // 005:T015 (FR-617; the note under T015, Q-G5 (b), Q-G6 (a)): ⚠️ a ban. The entry is on the person
@@ -142,12 +146,17 @@ export const genderFlagsAdminRouter = createAdminRouter({
     output: z.void(),
     rateLimit: GENDER_DECISION_LIMIT,
   }).mutation(async ({ ctx, input }) => {
-    const { flaggedUserId, from, to, accountStatus, replayed } =
-      await ctx.services.genderFlags.fraudBan(ctx.tx, ctx.administrator.adminId, input);
-    if (replayed) {
+    // T175: a replay answers only that it is one; the genders are read on a first call alone.
+    const banned = await ctx.services.genderFlags.fraudBan(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
+    if (banned.replayed) {
       ctx.audit.replayed();
       return;
     }
+    const { flaggedUserId, from, to, accountStatus } = banned;
     ctx.audit.record({
       action: 'gender.fraud_banned',
       targetType: PERSON_TARGET,

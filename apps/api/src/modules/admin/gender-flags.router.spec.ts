@@ -95,20 +95,31 @@ function surface({
       return { flaggedUserId: FLAGGED, replayed };
     },
     // 005:T014.
+    // T175: a replay answers the stored count only, never the genders.
     correct: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['correct', tx, adminId, input]);
-      return { flaggedUserId: FLAGGED, from: 'male', to: 'female', endedEnrollments: 2, replayed };
+      return replayed
+        ? { replayed: true as const, endedEnrollments: 3 }
+        : {
+            replayed: false as const,
+            flaggedUserId: FLAGGED,
+            from: 'male' as const,
+            to: 'female' as const,
+            endedEnrollments: 2,
+          };
     },
-    // 005:T015.
+    // 005:T015. T175: a replay answers that it is one, nothing else.
     fraudBan: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['fraudBan', tx, adminId, input]);
-      return {
-        flaggedUserId: FLAGGED,
-        from: 'female',
-        to: 'male',
-        accountStatus: 'active',
-        replayed,
-      };
+      return replayed
+        ? { replayed: true as const }
+        : {
+            replayed: false as const,
+            flaggedUserId: FLAGGED,
+            from: 'female' as const,
+            to: 'male' as const,
+            accountStatus: 'active',
+          };
     },
   };
   const services = new Proxy(unusedAdminServices, {
@@ -341,9 +352,9 @@ describe('genderFlags.correct (FR-616)', () => {
     ]);
   });
 
-  it('a replayed correction records no second entry', async () => {
+  it('a replayed correction answers the stored count and records no second entry (T175)', async () => {
     const s = surface({ replayed: true });
-    await calls['genderFlags.correct'](s.verified());
+    expect(await calls['genderFlags.correct'](s.verified())).toEqual({ endedEnrollments: 3 });
     expect(s.reached).toHaveLength(1);
     expect(s.written).toEqual([]);
   });
