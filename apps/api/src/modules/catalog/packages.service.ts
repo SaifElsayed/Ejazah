@@ -169,13 +169,16 @@ export async function programmeAvailabilityOf(
   };
 }
 
-/** 006:T002 (DEC-110): whether the change turns an inactive old-style ijazah package active. */
+/**
+ * 006:T002 (DEC-110): whether the change turns an inactive package active as an old-style ijazah
+ * one, read on the package the change leaves (PR #156 r1: one turned to recitation is not).
+ */
 function reactivatesPreProgrammeIjazah(current: PackageRow, change: PackageChange): boolean {
   return (
     change.isActive === true &&
     !current.isActive &&
-    current.track === 'ijazah_track' &&
-    !current.isProgramme
+    (change.track ?? current.track) === 'ijazah_track' &&
+    !(change.isProgramme ?? current.isProgramme)
   );
 }
 

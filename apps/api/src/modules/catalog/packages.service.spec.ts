@@ -603,6 +603,20 @@ describe('update while the programme’s switch is on (006:T002, DEC-110)', () =
     expect(memory.held(id).isActive).toBe(true);
   });
 
+  // PR #156 r1 nit: the rule reads the package the edit leaves, not the one it found.
+  it('activates an old-style ijazah package turned to recitation in the same edit, reading no switch', async () => {
+    const memory = new MemoryPackages();
+    const id = memory.plant(TEACHER, OLD_IJAZAH);
+    await expect(
+      serviceOver(memory, switchAt(memory, 1)).service.update(TEACHER, {
+        packageId: id,
+        track: 'recitation',
+        isActive: true,
+      }),
+    ).resolves.toMatchObject({ track: 'recitation', isActive: true });
+    expect(memory.log).not.toContain('read:programme_enabled');
+  });
+
   it('reactivates a recitation package while the switch is on, reading no switch', async () => {
     const memory = new MemoryPackages();
     const id = memory.plant(TEACHER, { ...RECITATION, isActive: false });

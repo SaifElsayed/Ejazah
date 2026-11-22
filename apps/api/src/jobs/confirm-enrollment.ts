@@ -435,10 +435,13 @@ class Confirmer {
       await done();
       return;
     }
-    const suspended = await Promise.all(
-      SUSPENSION_REASONS.map((reason) => steps.openCaseOf(tx, enrollment.id, reason)),
-    );
-    if (suspended.some((caseId) => caseId !== null)) {
+    // One query at a time on the one transaction (PR #156 r1 nit: pg's «already executing» warning).
+    let suspended = false;
+    for (const reason of SUSPENSION_REASONS) {
+      suspended = (await steps.openCaseOf(tx, enrollment.id, reason)) !== null;
+      if (suspended) break;
+    }
+    if (suspended) {
       await this.#ungenerated(tx, enrollment.id, paymentId, 'party_restricted', 'party_suspended');
       await done();
       return;
