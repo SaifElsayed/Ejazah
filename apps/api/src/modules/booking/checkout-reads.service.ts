@@ -10,7 +10,9 @@
 // hold (R-219). It carries the first and last session the student would get if confirmed at the
 // read's instant (FR-386, FR-368; T085): the held slot, read through catalog's entry as Pay and the
 // confirm job read it (`readSlot`), previewed by the booking sheet's own `sessionPreviewsOn` with the
-// package's session count the summary shows and the lead the caller read.
+// package's session count the summary shows and the lead the caller read. 006:T005 (R-504): a
+// programme package's summary is its assessment's (`summaryTermsOf`), read through
+// `rule.programme`, the hold's terms the caller passes; its one session is both previews.
 //
 // THE STATUS (`enrollmentStatusOf`): only the student's own enrollment (`NOT_FOUND` otherwise, M3),
 // its status and reason as the database holds them (R-HONEST-1), the snapshot's summary, its
@@ -40,7 +42,8 @@ import {
   ownCurrentHold,
   studentEnrollment,
 } from './checkout-holds.repository.js';
-import { summaryOf } from './checkout-holds.service.js';
+import { summaryOf, summaryTermsOf } from './checkout-holds.service.js';
+import type { HoldTerms } from './holds.service.js';
 import type { FirstSessionRule } from './nearest-slot.service.js';
 
 /** What the reads read, each through its owner's entry; faked in a spec. */
@@ -105,7 +108,7 @@ export interface CurrentHold extends SessionPreviews {
 export async function currentHoldOf(
   tx: Transaction,
   student: { readonly userId: string; readonly gender: RequesterGender },
-  rule: FirstSessionRule,
+  rule: FirstSessionRule & Pick<HoldTerms, 'programme'>,
   store: CheckoutReadsStore = checkoutReadsStore,
 ): Promise<CurrentHold | null> {
   const hold = await store.ownCurrentHold(tx, student.userId);
@@ -120,12 +123,13 @@ export async function currentHoldOf(
   if (pkg === null || displayName === null) return null;
   // `slot_holds.slot_id` is a foreign key to the slot (ERD `slot_holds`), as Pay reads it.
   if (slot === null) throw new Error('checkout: a hold without its slot');
+  const terms = await summaryTermsOf(pkg, rule.programme);
   return {
     holdId: hold.id,
     expiresAt: hold.expiresAt,
     enrollmentId: hold.enrollmentId,
-    summary: summaryOf({ teacherId: teacherUserId, displayName }, pkg),
-    ...sessionPreviewsOn(slot, rule, pkg.sessionCount),
+    summary: summaryOf({ teacherId: teacherUserId, displayName }, terms),
+    ...sessionPreviewsOn(slot, rule, terms.sessionCount),
   };
 }
 
@@ -159,8 +163,7 @@ export async function enrollmentStatusOf(
       subject,
       track: enrollment.snapshotTrack,
       sessionCount: enrollment.snapshotSessionCount,
-      sessionDurationMinutes:
-        enrollment.snapshotDurationMinutes as PackageRow['sessionDurationMinutes'],
+      sessionDurationMinutes: enrollment.snapshotDurationMinutes,
       price_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
     },
   );

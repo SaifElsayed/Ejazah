@@ -128,6 +128,11 @@ export { orderStandingsOf } from './order-standing.repository.js';
  * `orders` is `orderStandingsOf` above), the order's status and when its paid event was recorded.
  */
 export { orderEnrollmentOf, type PaidOrder, paidOrderOf } from './confirmation-order.repository.js';
+/**
+ * 006:T005 (R-502, FR-701): the order's kind, its instalment's month and its per-order marker, read
+ * by the confirm job under the same locks as the order's status.
+ */
+export { type OrderTerms, orderTermsOf } from './payments.repository.js';
 
 /**
  * What `expire-pending-payments` reads and writes of the orders (T040, FR-364; PR #109's review, M2

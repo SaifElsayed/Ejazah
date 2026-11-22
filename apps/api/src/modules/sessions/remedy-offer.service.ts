@@ -34,7 +34,10 @@
 // from moving while the remedy is open), on the first week after the latest of its sessions and its
 // other remedies' proposals whose occurrence starts no earlier than C + A + L, is not taken by
 // another enrollment (`EnrollmentSide.slotWeekTaken`) and overlaps no session, reservation (T027) or
-// open hold (`EnrollmentSide.heldTimesOf`) of either party. Each week is resolved on its own date by
+// open hold (`EnrollmentSide.heldTimesOf`) of either party, nor (006:T005 of specs/006-programme,
+// N-12) the weekly time of another active programme of the student
+// (`EnrollmentSide.programmeTimesOf`, this enrollment's own left out); a postponement's make-ups are
+// placed here too (`offerLocked`). Each week is resolved on its own date by
 // `packages/time` (R-TIME-2). Fixed at the offer, never moved. The search reads week by week and
 // stops at the first free one, or once the snapshot's count of weeks the slot is taken has been
 // passed: no offer now, one warn line `{ sessionId, enrollmentId, reason: 'no_free_week' }`, the next
@@ -211,7 +214,7 @@ function overlapsAny(
 export interface RemedyOfferDependencies {
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentFor' | 'lockEnrollments' | 'slotWeekTaken' | 'heldTimesOf'
+    'enrollmentFor' | 'lockEnrollments' | 'slotWeekTaken' | 'heldTimesOf' | 'programmeTimesOf'
   >;
   readonly settings: SettingsReader;
   /** The database's clock on a transaction (`clockTimestamp`), Q8. */
@@ -285,11 +288,13 @@ export function createRemedyOffer({
       };
       if (time.startsAt.getTime() < bound.getTime()) continue;
       const window = { from: time.startsAt, to: time.endsAt };
-      const [taken, own, reserved, held] = await Promise.all([
+      const [taken, own, reserved, held, programme] = await Promise.all([
         enrollments.slotWeekTaken(tx, terms.slotId, date, session.enrollmentId),
         store.sessionsBetween(tx, parties, window),
         store.reservedTimesOf(tx, people, window, enrollments),
         enrollments.heldTimesOf(tx, people, window),
+        // 006:T005 (N-12): the student's other active programmes' weekly times.
+        enrollments.programmeTimesOf(tx, [session.studentUserId], window, session.enrollmentId),
       ]);
       // Only a week the slot is taken counts toward the bound: sessions, reservations and holds are
       // finite, a slot taken on every date is not (the owner's amendment of 2026-11-11 under T028).
@@ -297,7 +302,12 @@ export function createRemedyOffer({
         weeks += 1;
         continue;
       }
-      if (overlapsAny(time, own) || overlapsAny(time, reserved) || overlapsAny(time, held)) {
+      if (
+        overlapsAny(time, own) ||
+        overlapsAny(time, reserved) ||
+        overlapsAny(time, held) ||
+        overlapsAny(time, programme)
+      ) {
         continue;
       }
       return date;

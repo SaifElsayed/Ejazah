@@ -312,6 +312,29 @@ describe('the student’s enrollments (FR-390, FR-392)', () => {
     });
   });
 
+  it('006:T005 (U-8): answers a one-session assessment as one of one, its 30 minutes, once delivered', async () => {
+    const { store } = storeOf({
+      active: [
+        row(E1, {
+          snapshotSessionCount: 1,
+          snapshotDurationMinutes: 30,
+          snapshotTrack: 'ijazah_track',
+        }),
+      ],
+      sessions: { [E1]: [session(1, '2026-11-10T09:00:00Z', 'done')] },
+      names: { [TEACHER]: 'أحمد سالم' },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'active' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item).toMatchObject({
+      summary: { track: 'ijazah_track', sessionCount: 1, sessionDurationMinutes: 30 },
+      upcoming: 0,
+      completed: 1,
+      remaining: 0,
+    });
+  });
+
   it('answers an enrollment awaiting payment with no session and the whole package remaining', async () => {
     const { store } = storeOf({
       active: [row(E1, { status: 'pending_payment' })],

@@ -166,7 +166,8 @@ export function bookingSlotOf({ slot, first, sessions }: Offerable): BookingSlot
     slotId: slot.id,
     dayOfWeek: slot.dayOfWeek,
     startTimeLocal: slot.startTimeLocal.slice(0, -SECONDS.length),
-    durationMinutes: slot.durationMinutes,
+    // `availability_slots.duration_minutes` is 30, 45 or 60 by its check (ERD section 15 rule 37).
+    durationMinutes: slot.durationMinutes as BookingSlot['durationMinutes'],
     ...previewsOf(first, sessions),
   };
 }

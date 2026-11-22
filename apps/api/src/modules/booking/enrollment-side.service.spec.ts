@@ -33,6 +33,8 @@ interface Recorded {
   readonly slotReads: string[];
   /** T082: the release core's calls, with the enrollment window it read. */
   readonly releases: { id: string; days: number }[];
+  /** 006:T005: the programmes' weekly times asked for. */
+  readonly programmeTimes: unknown[];
 }
 
 interface WorldOptions {
@@ -58,6 +60,7 @@ function world(options: WorldOptions) {
     holds: [],
     slotReads: [],
     releases: [],
+    programmeTimes: [],
   };
   const terms: EnrollmentTerms = {
     id: id(1),
@@ -117,6 +120,11 @@ function world(options: WorldOptions) {
         days: await windowDays('enrollment_restore_window_days'),
       });
       return options.release ?? { released: true, at: AT, caseId: id(9), kind: 'admin_ended' };
+    },
+    // 006:T005 (rule d for the store's other cases): the programmes' weekly times.
+    programmeTimesOf: async (_tx, studentUserIds, window, except) => {
+      recorded.programmeTimes.push({ studentUserIds, window, except });
+      return [{ startsAt: at('2026-11-12T07:00:00Z'), endsAt: at('2026-11-12T08:00:00Z') }];
     },
   };
   const values: Record<string, unknown> = {
@@ -451,5 +459,17 @@ describe('EnrollmentSide.releaseHeldSlot (T082, Q-R15 (a))', () => {
     const { side, recorded } = world({ release: { released: false, reason: 'already_released' } });
     expect(await side.releaseHeldSlot(tx, id(1))).toBeNull();
     expect(recorded.events).toEqual([]);
+  });
+});
+
+describe('EnrollmentSide.programmeTimesOf (006:T005; U-1, N-12)', () => {
+  it('answers the students’ active programmes’ weekly times, the asking enrollment’s own left out', async () => {
+    const { side, recorded } = world({});
+    expect(await side.programmeTimesOf(tx, [id(101)], WIDE, id(1))).toEqual([
+      { startsAt: at('2026-11-12T07:00:00Z'), endsAt: at('2026-11-12T08:00:00Z') },
+    ]);
+    expect(recorded.programmeTimes).toEqual([
+      { studentUserIds: [id(101)], window: WIDE, except: id(1) },
+    ]);
   });
 });

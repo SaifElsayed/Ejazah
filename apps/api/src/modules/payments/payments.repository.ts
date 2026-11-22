@@ -105,6 +105,26 @@ export async function lockOrder(
   await lockRows(tx, 'payments', [paymentId]);
 }
 
+/** 006:T005 (R-502): what an order pays for, as the confirm step decides on it. */
+export interface OrderTerms {
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** Set (1 and up) exactly on an `instalment` (ERD section 15 rule 70). */
+  readonly instalmentMonth: number | null;
+  /** The confirm step's per-order marker (V-3); null until it processed the order. */
+  readonly confirmedAt: Date | null;
+}
+
+/** The order's terms; the caller holds the order's lock (`lockForConfirmation`'s `orders`). */
+export function orderTermsOf(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+): Promise<OrderTerms> {
+  return tx.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: { kind: true, instalmentMonth: true, confirmedAt: true },
+  });
+}
+
 /** A signed recipient event as it is kept: never the body, only its hash (R-SEC-2). */
 export interface RecipientEventRecord {
   readonly providerEventId: string;

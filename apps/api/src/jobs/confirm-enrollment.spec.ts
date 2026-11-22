@@ -64,6 +64,8 @@ interface World {
   failAt?: { step: 'rehold' | 'generate' | 'confirm'; error: Error };
   /** The times open remedies reserve for the parties (T027). */
   reserved?: readonly { startsAt: Date; endsAt: Date }[];
+  /** 006:T005: the order's kind; `package` when not named. */
+  kind?: 'package' | 'assessment';
 }
 
 interface Recorded {
@@ -121,6 +123,15 @@ function harness(world: World) {
       return locked(world.enrollment);
     },
     paidOrderOf: async () => ({ status: world.status, paidRecordedAt: world.paidRecordedAt }),
+    // 006:T005: the order's kind, read under the locks with its status.
+    orderTermsOf: async (_tx, paymentId) => {
+      expect(paymentId).toBe(PAYMENT);
+      return { kind: world.kind ?? 'package', instalmentMonth: null, confirmedAt: null };
+    },
+    startProgramme: async (_tx, enrollmentId) => {
+      expect(enrollmentId).toBe(ENROLLMENT);
+      calls.push('programme awaiting_offer');
+    },
     casesOf: async (_tx, enrollmentId) => {
       expect(enrollmentId).toBe(ENROLLMENT);
       return world.cases;
@@ -161,26 +172,32 @@ function harness(world: World) {
     reservedTimesOf: async (_tx, userIds, window) => {
       calls.push('reserved');
       expect([...userIds].sort()).toEqual([STUDENT, TEACHER].sort());
-      // The four Thursdays generation would write from NOW with a lead of 24 hours.
-      expect(window).toEqual({
-        from: new Date('2026-11-05T07:00:00Z'),
-        to: new Date('2026-11-26T08:00:00Z'),
-      });
+      // The four Thursdays generation would write from NOW with a lead of 24 hours; 006:T005: an
+      // assessment's one Thursday, for its 30 minutes.
+      expect(window).toEqual(
+        world.kind === 'assessment'
+          ? { from: new Date('2026-11-05T07:00:00Z'), to: new Date('2026-11-05T07:30:00Z') }
+          : { from: new Date('2026-11-05T07:00:00Z'), to: new Date('2026-11-26T08:00:00Z') },
+      );
       return (world.reserved ?? []).map((time) => ({ remedyId: 'r', sessionId: 's', ...time }));
     },
-    generate: async (_tx, enrollment, confirmedAt, leadHours) => {
+    generate: async (_tx, enrollment, confirmedAt, leadHours, plan) => {
       failing('generate');
       expect(enrollment).toEqual({
         id: ENROLLMENT,
         teacherUserId: TEACHER,
         studentUserId: STUDENT,
-        snapshotSessionCount: 4,
-        snapshotDurationMinutes: 60,
+        snapshotSessionCount: world.enrollment.snapshotSessionCount ?? 4,
+        snapshotDurationMinutes: world.enrollment.snapshotDurationMinutes ?? 60,
         snapshotSlotTimezone: 'Africa/Cairo',
         slot: { dayOfWeek: 4, startTimeLocal: '09:00:00' },
       });
       expect([confirmedAt, leadHours]).toEqual([NOW, 24]);
-      calls.push('generate');
+      calls.push(
+        plan === undefined
+          ? 'generate'
+          : `generate ${String(plan.count)} from ${String(plan.firstSequenceNumber)}`,
+      );
     },
   };
   const job = confirmEnrollment({
@@ -255,6 +272,47 @@ describe('confirm-enrollment: with the hold active (FR-361)', () => {
   it('confirms an enrollment kept awaiting payment whose hold is still active', async () => {
     const recorded = await run(paid({ enrollment: { status: 'pending_payment' } }));
     expect(recorded.transactions).toBe(1);
+  });
+});
+
+describe('confirm-enrollment: an assessment (006:T005; FR-701, R-504)', () => {
+  /** The assessment's snapshot: one session of 30 minutes. */
+  const assessment = { snapshotSessionCount: 1, snapshotDurationMinutes: 30 };
+
+  it('confirms the hold, generates session 1 only and writes the programme awaiting its offer', async () => {
+    expect((await run(paid({ kind: 'assessment', enrollment: assessment }))).calls).toEqual([
+      ...PREAMBLE,
+      'confirm',
+      'generate 1 from 1',
+      'programme awaiting_offer',
+    ]);
+  });
+
+  it('does the same on a late payment, after the parties’ check and the re-hold', async () => {
+    const late = { ...assessment, activeHoldId: null, status: 'cancelled' as const };
+    expect((await run(paid({ kind: 'assessment', enrollment: late }))).calls).toEqual([
+      ...PREAMBLE,
+      'confirm: no hold',
+      'pair',
+      'reserved',
+      'rehold',
+      'confirm',
+      'generate 1 from 1',
+      'programme awaiting_offer',
+    ]);
+  });
+
+  it('writes no programme for a package’s order, and no plan', async () => {
+    const { calls } = await run(paid());
+    expect(calls).not.toContain('programme awaiting_offer');
+    expect(calls.at(-1)).toBe('generate');
+  });
+
+  it('writes no programme when the assessment’s confirmation is refused', async () => {
+    const { calls } = await run(
+      paid({ kind: 'assessment', enrollment: { ...assessment, cancelledByTermination: true } }),
+    );
+    expect(calls).not.toContain('programme awaiting_offer');
   });
 });
 

@@ -55,6 +55,14 @@
 // attempt runs with an after-commit list of its own (`withOutcomeNotices`), so a `'confirm'` attempt
 // the database refuses drops its push with everything else it wrote. A second run records no second
 // outcome, so no second push.
+//
+// THE ASSESSMENT (006:T005 of specs/006-programme; FR-701, R-504). The order's kind is read with
+// its status, under the same locks (payments' `orderTermsOf`). An `assessment` is confirmed as a
+// package is, branch 5 or 6 alike, and then generates session 1 only, at the assessment's length
+// (the snapshot holds count 1 and that length; the plan is named, since the snapshot grows at the
+// offer), and writes its programme `awaiting_offer` through booking's entry, on the same transaction;
+// a second run meets the confirmed enrollment (2) and writes no second row. A refused assessment
+// writes no programme.
 import { z } from 'zod';
 
 import { isExclusionViolation, isUniqueViolation } from '../platform/db/db-errors.js';
@@ -82,6 +90,8 @@ import {
 import {
   orderEnrollmentOf,
   orderStandingsOf,
+  type OrderTerms,
+  orderTermsOf,
   type PaidOrder,
   paidOrderOf,
 } from '../modules/payments/index.js';
@@ -111,6 +121,10 @@ export interface ConfirmationSteps {
   partiesOf(tx: Transaction, enrollmentId: string): Promise<EnrollmentParties | null>;
   lock(tx: Transaction, parties: EnrollmentParties): Promise<LockedEnrollment>;
   paidOrderOf(tx: Transaction, paymentId: string): Promise<PaidOrder>;
+  /** 006:T005: the order's kind, month and marker, read under the locks with its status. */
+  orderTermsOf(tx: Transaction, paymentId: string): Promise<OrderTerms>;
+  /** 006:T005: the confirmed assessment's programme, `awaiting_offer` (booking's entry). */
+  startProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
   casesOf(tx: Transaction, enrollmentId: string): Promise<CaseInstants | null>;
   openCase(tx: Transaction, enrollmentId: string, reason: CompensationReason): Promise<unknown>;
   confirm(tx: Transaction, confirmation: Confirmation): Promise<'confirmed' | 'no_active_hold'>;
@@ -135,8 +149,15 @@ export interface ConfirmationSteps {
     enrollment: EnrollmentToSchedule,
     confirmedAt: Date,
     leadHours: number,
+    plan?: GenerationPlan,
   ): Promise<unknown>;
 }
+
+/** Sessions' generation plan: a count and the first sequence number (T061). */
+type GenerationPlan = NonNullable<Parameters<typeof generateForEnrollment>[4]>;
+
+/** 006:T005 (R-504): the assessment's one session, numbered 1. */
+const ASSESSMENT_PLAN: GenerationPlan = { count: 1, firstSequenceNumber: 1 };
 
 /**
  * The steps over the modules' entries, the orders' locks and standing being payments'; 005:T016:
@@ -148,6 +169,8 @@ export function confirmationStepsOf(notices: PaymentOutcomeNotices): Confirmatio
     partiesOf: booking.confirmationPartiesOf,
     lock: (tx, parties) => booking.lockForConfirmation(tx, parties, { orders: orderStandingsOf }),
     paidOrderOf,
+    orderTermsOf,
+    startProgramme: booking.startProgramme,
     casesOf: caseInstantsOf,
     openCase: openCompensationCase,
     confirm: (tx, confirmation) => booking.confirmEnrollment(tx, confirmation, notices),
@@ -233,9 +256,10 @@ class Confirmer {
     const parties = await steps.partiesOf(tx, enrollmentId);
     if (parties === null) throw new Error(`No live enrollment has the id ${enrollmentId}`);
     const enrollment = await steps.lock(tx, parties);
-    const [order, cases] = await Promise.all([
+    const [order, cases, terms] = await Promise.all([
       steps.paidOrderOf(tx, paymentId),
       steps.casesOf(tx, enrollmentId),
+      steps.orderTermsOf(tx, paymentId),
     ]);
     if (order.status !== 'paid' || covers(cases, order.paidRecordedAt)) return;
     if (enrollment.confirmingPaymentId === paymentId) return;
@@ -252,11 +276,16 @@ class Confirmer {
       await this.#refuse(tx, enrollment, 'slot_unavailable');
       return;
     }
-    await this.#confirm(tx, enrollment, paymentId);
+    await this.#confirm(tx, enrollment, paymentId, terms);
   }
 
   /** FR-361 with the hold active, else FR-PAYG-19's late branch after the parties' check. */
-  async #confirm(tx: Transaction, enrollment: LockedEnrollment, paymentId: string): Promise<void> {
+  async #confirm(
+    tx: Transaction,
+    enrollment: LockedEnrollment,
+    paymentId: string,
+    terms: OrderTerms,
+  ): Promise<void> {
     const steps = this.#steps;
     const at = this.#terms.now;
     const confirmation = { enrollmentId: enrollment.id, paymentId, at };
@@ -282,6 +311,11 @@ class Confirmer {
       if ((await steps.confirm(tx, confirmation)) === 'no_active_hold') {
         throw new Error(`Enrollment ${enrollment.id} has no hold after its re-hold`);
       }
+    }
+    if (terms.kind === 'assessment') {
+      await steps.generate(tx, schedule, at, this.#terms.leadHours, ASSESSMENT_PLAN);
+      await steps.startProgramme(tx, enrollment.id);
+      return;
     }
     await steps.generate(tx, schedule, at, this.#terms.leadHours);
   }
