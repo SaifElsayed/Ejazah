@@ -17,7 +17,6 @@
 // flood paced under it passes, so the budget is what this case is about. No harness registration:
 // `auth.*` is exempt there (`procedure-harness.ts`).
 import { describe, expect, it } from 'vitest';
-import type { z } from 'zod';
 
 import {
   deleteAccountRoutes,
@@ -62,7 +61,8 @@ const log = createLogger({ level: 'fatal' });
 
 /** Every setting at the default the registry carries (equal to the seed's). */
 const defaults: SettingsReader = {
-  read: async <T>(key: string, schema: z.ZodType<T>): Promise<T> => {
+  // Typed by `SettingsReader` (no `zod` import: `tests/` does not resolve it under `pnpm typecheck`).
+  read: async (key, schema) => {
     const entry = SETTINGS_REGISTRY[key];
     if (entry === undefined) throw new SettingError(key, 'missing');
     return schema.parse(entry.default);
@@ -157,7 +157,7 @@ function platform() {
  * The code a call answered with; `ANSWERED` when it resolved. The surface's caller rejects with
  * tRPC's error around the domain one, the page's handler with the domain error itself.
  */
-async function codeOf(call: () => Promise<unknown>): Promise<string> {
+async function codeOf(call: () => unknown): Promise<string> {
   try {
     await call();
     return 'ANSWERED';
