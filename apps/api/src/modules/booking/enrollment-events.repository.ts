@@ -72,6 +72,13 @@ export type EnrollmentOutcome =
       readonly kind: 'slot_released' | 'slot_hold_ended';
       readonly enrollmentId: string;
       readonly occurredAt: Date;
+    }
+  | {
+      // 006:T001: the programme's four kinds, written by B-P2's and B-P3's steps.
+      readonly kind:
+        'programme_offered' | 'programme_paused' | 'programme_resumed' | 'programme_reopened';
+      readonly enrollmentId: string;
+      readonly occurredAt: Date;
     };
 
 /** One outcome's row: its order on an order's outcome, its reason on a cancellation, else neither. */
