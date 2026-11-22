@@ -16,9 +16,10 @@
 // shape, run by `test:adversarial`.
 //
 // NOTHING IS LEFT BEHIND: every case runs inside one Prisma interactive transaction that always ends
-// by throwing, and every transaction the services open is that one. Each case first deactivates
-// every package already in the database, inside that transaction, so rows other specs left cannot
-// enter the pool; that too rolls back.
+// by throwing, and every transaction the services open is that one. Each case first takes the
+// packages table in SHARE mode, so no other file commits a package meanwhile (006:T004), then
+// deactivates every package already in the database, inside that transaction, so rows other specs
+// left cannot enter the pool; that too rolls back.
 //
 // Observed red: every case against the router before the procedure existed; each exclusion and each
 // refusal against its mutant (M-A9 to M-A19 in `ejazah-tools\track2\b-m1\lane-a-report.md`), restored and
@@ -77,6 +78,10 @@ async function inRollback(attack: (tx: Transaction) => Promise<void>): Promise<v
   try {
     await database.$transaction(
       async (tx) => {
+        // 006:T004 (rule d): the discovery world, run beside this file, commits active programme
+        // packages, which every length's pool reads; the table held in SHARE mode first, before any
+        // row is touched, so no other file's package lands in the pool until this case rolls back.
+        await tx.$executeRaw`LOCK TABLE packages IN SHARE MODE`;
         await tx.package.updateMany({ data: { isActive: false } });
         await attack(tx);
         throw ROLLBACK;
