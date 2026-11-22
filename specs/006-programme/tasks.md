@@ -77,6 +77,12 @@ No open question remains.
   - `docs/ERD.md`: a dated block at its end, rows from 65 and §15 rules from 70.
   - `tests/seed/seed.spec.ts` table count 45 + 3.
   - A migration spec red under a mutant migration.
+  > **B-P1's conflict check, Q-2 (a) (the owner, 2026-11-22, «موافق على س2 وس3 وس4 (أ)»).** `gateway_order_id`
+  > NULL-able as written; the reads that need a string (`modules/payments/checkout.repository.ts`,
+  > `payments-monitor.repository.ts`) refuse a NULL with an invariant error until T014 writes one; the monitor's contract
+  > stays `string` (T014/T018 widen it). ERD rows 65–73 and §15 rules 70–81 (R1a: rows 62–64, rules 67–69, agreed
+  > 2026-11-22); the ERD footer, `module-tables.json`, `tests/seed/seed.spec.ts:346` 45 → 48 and
+  > `tests/seed/migrate-from-empty.spec.ts:96` 48 → 51 (50 and 53 at the second merge with R1a).
 - [ ] T002 [P] The settings and the switch (R-515; FR-732; I-3, P1 (a)):
   - `apps/api/src/platform/settings/registry.ts`:
     - a new unit `piasters`;
@@ -87,6 +93,18 @@ No open question remains.
   - Turning the switch on deactivates every old-style ijazah-track package (`modules/catalog/packages.service.ts`, an
     audited effect of the setting's change, logged once). It gates only new programme packages and new assessments;
     turning it off stops no running programme and reactivates nothing (N-4), red first.
+  > **B-P1's conflict check, Q-3 (a)(a) and Q-6 (the owner, 2026-11-22; SRS DEC-110).** The switch's effect is a
+  > catalog entry called by `settings.update` on its transaction, its own audit entry `packages.retired_by_switch` with
+  > the count, and one log line `{ adminId, count }`. While the switch is on, `teacher.packages.update` refuses
+  > reactivating an old-style ijazah package with a named code, red first; turning it off reactivates none. Q-6 («تظهر
+  > جنيه فقط»): the unit `piasters` is shown and typed in pounds only, with no «قرش» label, and stored in piasters:
+  > `apps/admin/src/pages/settings/words.ts` `boundsText`, `draftOf` and `parsedDraft` convert it, the value shown
+  > through `formatPounds` (`lib/format.ts`), typed with at most 2 decimals and × 100 to whole piasters; a spec in
+  > `pages/settings/settings.spec.tsx` red first («150» typed stores 15000), and a negative under a mutant. Outside
+  > files: `modules/admin/settings.service.ts`, `admin/index.ts`, `admin/settings.router.ts`, `modules/catalog/index.ts`,
+  > `apps/admin/src/pages/audit/actions.ts`, `packages/contracts/src/admin/settings.ts`,
+  > `apps/admin/src/pages/settings/words.ts`, `apps/admin/src/pages/settings/settings.spec.tsx`. Settings 95 → 103 (106
+  > at the second merge with R1a).
 - [ ] T003 [P] The contracts (contracts/*):
   - `packages/contracts/src/programme.ts`, `packages/contracts/src/admin/programme.ts`;
   - the package output as a union by track (recitation and pre-switch ijazah unchanged, non-null; K-3);
@@ -94,6 +112,8 @@ No open question remains.
   - `idempotent-procedures.ts`;
   - every refusal code named;
   - the snapshot regenerated.
+  > **B-P1's conflict check, Q-4 (a) (the owner, 2026-11-22).** The union's discriminant is `isProgramme`; the mobile
+  > readers the type check names narrow to today's member until B-P4's screens (T019, T020).
 - [ ] T004 [US1] The three prices and the catalogue (FR-704, FR-704a; R-503, R-516), behind `programme_enabled`:
   - `modules/catalog/packages.service.ts`, `packages.repository.ts`, `packages.router.ts`: a programme package takes
     `prices {m30, m45, m60}`; publishing is refused `assessment_fee_unset` while the fee is 0.
@@ -101,6 +121,9 @@ No open question remains.
   - DEC-88's average per length (T113's read).
   - Every reader of the three old columns branches on `is_programme`.
   - Adversarial registrations of the changed reads.
+  > **B-P1's conflict check, Q-5 (a) (the owner, 2026-11-22, «س5 (أ) تمام»).** A programme package is created or
+  > activated only while the fee is above 0 (`assessment_fee_unset`; a draft allowed); discovery and `booking.slots`
+  > show none while the fee is 0 or the switch is off. Platform-funded promotions are v1.1.
 - [ ] T005 [US1] The assessment's booking and confirmation (FR-701, FR-702; R-504, R-511; U-1):
   - **Slots:** `modules/booking/booking-slots.service.ts:198` and `holds.service.ts:505` take a weekly time of length ≥
     the assessment's for a programme package, and refuse one overlapping the student's own active
@@ -117,6 +140,8 @@ No open question remains.
   - **Snapshot readers:** the inventory of `snapshot_session_count`/`duration`/`price` readers is written and each is
     tested for a one-session enrollment (U-8).
   - Adversarial registrations.
+  > **B-P1's conflict check, Q-7 (a) (the owner, 2026-11-22, «س7 أ»).** The outside files of T005 and T006 named in the
+  > conflict check are approved; any further one is batched at the lane's end.
 - [ ] T006 The confirm step by kind (FR-718; R-502; V-3), `jobs/confirm-enrollment.ts:229-284`:
   - the per-order marker `payments.confirmed_at`;
   - expected kinds skip the cover and case gates; one paid during an open `teacher_suspended` or `student_suspended`
@@ -135,6 +160,8 @@ No open question remains.
   > enrollment. T006's kernel.md row states where the close hook takes the programme's lock (before the enrollment's,
   > or a key-share that cannot deadlock), with a DB race spec of a termination against the sweep. Passed to the
   > money-lane review. Not scheduled apart from T006.
+  > **B-P1's conflict check (2026-11-22).** The close hook's lock order stays with the 11/30 money review; T006's
+  > `kernel.md` row states the confirm step's own order only.
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
@@ -271,6 +298,15 @@ No open question remains.
   - **The failure's push:** `payment_failed` through today's path, unchanged, except on a `no_payee` refusal: no push,
     and neither «pay now» nor «change card» while `payeePending` is true; once the payout account is verified both are
     shown and the student pays by hand, with no retry (PR #153 r3 Minor 1, r4 Minor 1, R-HONEST), red first.
+  > **The owner, 2026-11-22, B-P1's conflict check, Q-2 (SRS DEC-110): never charge again while an earlier attempt's
+  > status is unknown.** (1) Before an automatic order is expired and before any retry, the gateway is asked by the
+  > merchant reference (the payment's id): a new `PaymentPort` method, the fake answering paid, none and no answer.
+  > (2) Paid → recorded paid, no new charge. (3) No transaction → failed (the soft decline above), the retries go on.
+  > (4) No answer → no new charge, asked again later; still none → an Administrator item. (5) A second paid order for a
+  > month stays T006's `duplicate_payment` case. This replaces this task's «an order left with no gateway id expires»
+  > and «an automatic order that expires with no answer counts as a soft decline». The asking interval, the count
+  > before the item and the item's kind are B-P3's conflict check. Paymob's inquiry: research.md R-509. Each step red
+  > first.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -285,6 +321,8 @@ No open question remains.
     `packages/time`, and a DST spec names the day-7 retry against the next occurrence across a DST change (PR #153 r1
     nit 5);
   - registered by the integration.
+  > **The owner, 2026-11-22, Q-2 (SRS DEC-110).** The retry step asks the gateway first (T014's note);
+  > `chargeSavedCard` is never called for a month whose earlier automatic order is unanswered.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -402,6 +440,6 @@ No open question remains.
 
 - **B-P1 is cut from `develop` after PR #155 merges** (T001's `programme_request_kind` carries `pay_blocked`).
 - **Shared with R1a on the same days** (`specs/002-identity/tasks.md`, T174's two tables): the migration order, the
-  ERD's numbering, the seed's counts (T001: 95 → 103) and the settings registry. `tracks-coordination.md` §2 holds: the
-  numbers are agreed between the two review sessions before either merges, and both migrations are proven on one
-  database at integration (PR #155's review, round 1, N1).
+  ERD's numbering, the seed's counts (T001: tables 45 → 48; T002: settings 95 → 103) and the settings registry.
+  `tracks-coordination.md` §2 holds: the numbers are agreed between the two review sessions before either merges, and
+  both migrations are proven on one database at integration (PR #155's review, round 1, N1).

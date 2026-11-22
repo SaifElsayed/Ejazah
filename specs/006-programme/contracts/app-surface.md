@@ -15,7 +15,7 @@ Additive only (R-API-9).
 | Procedure | Kind | Input | Output | Notes |
 |---|---|---|---|---|
 | `teacher.packages.create` / `.update` (changed) | teacher | a programme package: `{ subjectId, track: 'ijazah_track', prices: { m30, m45, m60 } }` | the package as a union by track: recitation (and a pre-switch ijazah package) as today, non-null; a programme package with `prices` | refusals: `assessment_fee_unset`, a price ≤ 0 |
-| `teacher.packages.priceAverage` (changed) | teacher | `{ track, durationMinutes }` | as today | on a programme package, over the other teachers' prices for that length (FR-704a) |
+| `teacher.packages.averagePrice` (changed) | teacher | `{ track, durationMinutes }` | as today | on a programme package, over the other teachers' prices for that length (FR-704a) |
 | `discovery.*` (changed) | participant | as today | a programme card adds `{ assessmentFee, priceRange: { lowest, highest } }` | gender-filtered as today |
 | `booking.slots` (changed) | student | as today | for a programme package: active weekly times of length ≥ `assessment_duration_minutes`, each with its length; none overlapping the student's own active programme's weekly time (U-1) | |
 | `checkout.hold` / `pay` (changed) | student | as today | as today | a programme package → an `assessment` order, gross = the fee; the hold checks length ≥, not = (`holds.service.ts:505`) |
