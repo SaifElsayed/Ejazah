@@ -47,6 +47,8 @@ describe('the registry’s words', () => {
       'weeks',
       'count',
       'bytes',
+      // 006:T002 (Q-6): the assessment's fee.
+      'piasters',
       'rate_limit',
       'version',
     ]);
@@ -125,7 +127,7 @@ describe('settings.list', () => {
       noGroup,
       noRow,
       { ...NUMBER_ITEM, bounds: { shape: 'range', value: BOUND } },
-      { ...NUMBER_ITEM, unit: 'piasters' },
+      { ...NUMBER_ITEM, unit: 'pounds' },
     ]) {
       expect(adminSettingsListOutput.safeParse({ items: [item] }).success).toBe(false);
     }

@@ -2610,6 +2610,7 @@
         "admin_session_idle_minutes": "Admin idle timeout",
         "admin_session_max_hours": "Admin sign-in maximum length",
         "assessment_duration_minutes": "Ijazah programme: the assessment session's length",
+        "assessment_price_piasters": "Ijazah programme: the assessment's fee",
         "attendance_threshold_pct": "Attendance threshold",
         "ban_restore_window_days": "Ban restore window",
         "cancellation_requests_recent_days": "Recent cancellation requests period",
@@ -2751,6 +2752,7 @@
         "hours": "{value, plural, one {# hour} other {# hours}}",
         "minutes": "{value, plural, one {# minute} other {# minutes}}",
         "percent": "{value}%",
+        "piasters": "{value}",
         "seconds": "{value, plural, one {# second} other {# seconds}}",
         "weeks": "{value, plural, one {# week} other {# weeks}}"
       },

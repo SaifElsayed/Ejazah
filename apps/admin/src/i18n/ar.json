@@ -2610,6 +2610,7 @@
         "admin_session_idle_minutes": "مهلة خمول المشرف",
         "admin_session_max_hours": "أقصى مدة لدخول المشرف",
         "assessment_duration_minutes": "برنامج الإجازة: مدة جلسة الاختبار",
+        "assessment_price_piasters": "برنامج الإجازة: رسوم جلسة الاختبار",
         "attendance_threshold_pct": "حد الحضور",
         "ban_restore_window_days": "مهلة الاستعادة بعد الحظر",
         "cancellation_requests_recent_days": "فترة طلبات الإلغاء الأخيرة",
@@ -2751,6 +2752,7 @@
         "hours": "{value, plural, one {ساعة واحدة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}",
         "minutes": "{value, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
         "percent": "{value}%",
+        "piasters": "{value}",
         "seconds": "{value, plural, one {ثانية واحدة} two {ثانيتان} few {# ثوانٍ} many {# ثانية} other {# ثانية}}",
         "weeks": "{value, plural, one {أسبوع واحد} two {أسبوعان} few {# أسابيع} many {# أسبوعًا} other {# أسبوع}}"
       },

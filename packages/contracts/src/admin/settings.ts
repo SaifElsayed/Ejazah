@@ -31,6 +31,8 @@ export const settingUnit = z.enum([
   'weeks',
   'count',
   'bytes',
+  // 006:T002 (R-515, Q-6): an amount in whole piasters, shown and typed in pounds on the panel.
+  'piasters',
   'rate_limit',
   'version',
 ]);

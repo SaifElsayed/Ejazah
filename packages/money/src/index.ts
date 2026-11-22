@@ -26,7 +26,9 @@ export type Piasters = number & { readonly [piastersBrand]: true };
 // the teacher's share at milestones and the payouts page's totals, records of what the gateway holds
 // and releases, never a balance. 003:T110 (ADR 0025 D4, SRS DEC-85, DEC-86) names `untakenValue` (the
 // sessions a closed enrollment refunds) and `dropoutParts` (an ijazah dropout's three parts): what a
-// compensation case shows, which an administrator executes by hand (DEC-82).
+// compensation case shows, which an administrator executes by hand (DEC-82). 006:T002 (B-P1 Q-B1
+// (a)) names `piastersOfPoundsText` and `poundsText`: an amount typed in pounds and written back,
+// for the panel's settings page and the phone's package editor.
 
 /**
  * Refusal of a value that is not a piaster amount. Named so a caller can identify it without
@@ -341,6 +343,43 @@ export function dropoutParts(
     platformPart_piasters: piasters(Number(paid - share)),
     released_piasters: piasters(Number(released)),
   };
+}
+
+const PIASTERS_PER_POUND = 100;
+/** Whole pounds and at most two decimals: «150», «150.5», «150.50»; no sign, no grouping. */
+const POUNDS_TEXT = /^(\d+)(?:\.(\d{1,2}))?$/;
+
+/** `text` with Arabic-Indic and Persian digits as Western ones and «٫» as the decimal point. */
+function westernDigits(text: string): string {
+  return text
+    .trim()
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+    .replace('٫', '.');
+}
+
+/**
+ * An amount typed in pounds, as whole piasters, or null while the text is not one: whole pounds and
+ * at most two decimals, the digits and the decimal mark an Arabic keyboard types read as the Western
+ * ones (006:T002, B-P1 Q-B1 (a); moved from the phone's package editor, T021). Computed on the typed
+ * digits, so no float ever holds the amount; one past the safe range is refused, never rounded.
+ * Zero is an amount (a setting's «unset»); a caller that needs one above zero says so itself.
+ */
+export function piastersOfPoundsText(text: string): Piasters | null {
+  const match = POUNDS_TEXT.exec(westernDigits(text));
+  if (match === null) return null;
+  const whole = Number(match[1]);
+  const fraction = Number((match[2] ?? '').padEnd(2, '0'));
+  const count = whole * PIASTERS_PER_POUND + fraction;
+  return isPiasters(count) ? piasters(count) : null;
+}
+
+/** An amount as a field shows it to be edited: «1200», «1200.50», «0.05»; no grouping (006:T002). */
+export function poundsText(amount_piasters: Piasters): string {
+  const count = toPlainNumber(amount_piasters);
+  const fraction = count % PIASTERS_PER_POUND;
+  const whole = (count - fraction) / PIASTERS_PER_POUND;
+  return fraction === 0 ? String(whole) : `${String(whole)}.${String(fraction).padStart(2, '0')}`;
 }
 
 function refusalReason(value: number): string {

@@ -48,6 +48,8 @@ export type SettingUnit =
   | 'weeks'
   | 'count'
   | 'bytes'
+  // 006:T002 (R-515, Q-6): an amount in whole piasters, which the panel shows and takes in pounds.
+  | 'piasters'
   | 'rate_limit'
   | 'version';
 
@@ -134,6 +136,12 @@ export const programmeEnabled = z.int().min(0).max(1);
 
 /** The switch's ceiling: on (006:T002). */
 const PROGRAMME_ENABLED_MAX = 1;
+
+/**
+ * `assessment_price_piasters` (006:T002; SRS §3.14, DEC-93; P1 (a); B-P1 Q-B4 (a)): the
+ * assessment's fee in whole piasters, 0 while an Administrator has not set it.
+ */
+export const assessmentPricePiasters = z.int().nonnegative();
 
 /** The retries' most (006:T002; SRS §3.14, DEC-92: «4, at 1, 3, 5 and 7»). */
 const PROGRAMME_CHARGE_RETRIES_MAX = 4;
@@ -582,8 +590,8 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     4,
   ),
   // 006:T002 (research R-515; spec.md FR-732; SRS §3.14's eight programme rows, DEC-92, DEC-93,
-  // DEC-94; I-3): track 2's programme block, on the panel's booking page. The switch is off. The
-  // assessment's fee (`assessment_fee_piasters`, unit `piasters`) waits for lane b's question Q-B4.
+  // DEC-94; I-3, P1 (a)): track 2's programme block, on the panel's booking page. The switch is off;
+  // the assessment's fee is 0 until an Administrator sets it, named `_price_` (B-P1 Q-B4 (a)).
   programme_enabled: whole(
     programmeEnabled,
     'count',
@@ -591,6 +599,14 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Programme: the programme turned on (off: ijazah-track Packages sold as before)',
     0,
     { min: 0, max: PROGRAMME_ENABLED_MAX },
+  ),
+  assessment_price_piasters: whole(
+    assessmentPricePiasters,
+    'piasters',
+    'booking',
+    "Programme: the assessment's fee (EGP, one amount for every ijazah-track Teacher; an ijazah-track Package is not published while it is unset)",
+    0,
+    { min: 0 },
   ),
   assessment_duration_minutes: whole(
     sessionLengthMinutes,

@@ -49,14 +49,11 @@ export const settingsAdminRouter = createAdminRouter({
     output: adminSettingsUpdateOutput,
     rateLimit: SETTINGS_UPDATE_LIMIT,
   }).mutation(async ({ ctx, input }) => {
-    const change = await ctx.services.settings.update(ctx.tx, ctx.administrator.adminId, input);
-    const { key, before, after, replayed } = change;
-    // 006:T002: the count the service answers on a turn-on (`SettingChange.retiredPackages`),
-    // read by its presence: `surfaces/context.ts`'s answer type does not name it yet.
-    const retiredPackages =
-      'retiredPackages' in change && typeof change.retiredPackages === 'number'
-        ? change.retiredPackages
-        : undefined;
+    const { key, before, after, retiredPackages, replayed } = await ctx.services.settings.update(
+      ctx.tx,
+      ctx.administrator.adminId,
+      input,
+    );
     if (replayed) ctx.audit.replayed();
     else {
       ctx.audit.record({
