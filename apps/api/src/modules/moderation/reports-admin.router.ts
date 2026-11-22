@@ -9,7 +9,14 @@
 // administrator's note as its reason) on the report (`user_report` + its id). `resolve` is keyed
 // (`idempotencyKey`, `runOn` on the kind's transaction); a replay records no second entry
 // (`audit.replayed()`). Mounted under `reports` by `admin.router.ts` (the integration's line).
+//
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): `reports.chat` reads an
+// open session or chat report's enrollment chat, under the default limit, and audits `chat.read`
+// on the enrollment the service names, one entry per page read, as `disputes.chat` does
+// (`sessions/disputes-admin.router.ts`). What it reads is `report-chat.service.ts`'.
 import {
+  adminReportsChatInput,
+  adminReportsChatOutput,
   adminReportsGetInput,
   adminReportsGetOutput,
   adminReportsListInput,
@@ -74,4 +81,18 @@ export const reportsAdminRouter = createAdminRouter({
       reason: input.note,
     });
   }),
+
+  // 005:T034: the enrollment's chat, inside the open report only.
+  chat: adminProcedure({ input: adminReportsChatInput, output: adminReportsChatOutput }).query(
+    async ({ ctx, input }) => {
+      const { enrollmentId, page } = await ctx.services.reports.chat(
+        ctx.tx,
+        ctx.administrator.adminId,
+        input,
+        ctx.log,
+      );
+      ctx.audit.record({ action: 'chat.read', targetType: 'enrollment', targetId: enrollmentId });
+      return page;
+    },
+  ),
 });

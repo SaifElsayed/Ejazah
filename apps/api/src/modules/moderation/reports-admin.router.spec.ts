@@ -6,9 +6,14 @@
 // report (`user_report` + its id, never a name); a replayed resolution records none. The calls run
 // under the signed-in default limit (admin-surface.md: «default»). What the actions do is
 // `user-report.service.spec.ts`'s.
+//
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100): `reports.chat` answers the page the service
+// reads and audits `chat.read` on the enrollment the service names, one entry per page read, as
+// `disputes.chat` does; a refusal records nothing. What it reads is `report-chat.service.spec.ts`'s.
 import { describe, expect, it } from 'vitest';
 
 import type { AuditRecord } from '../../platform/audit/audit-writer.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import type { RateLimiter } from '../../platform/guards/rate-limit.guard.js';
 import { createLogger } from '../../platform/logging/logger.js';
 import {
@@ -31,6 +36,20 @@ const REPORTED = '0199d0a0-0000-7000-8000-00000000d0a2';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-00000000d0e1';
 const KEY = 'resolve-key-for-the-spec-0001';
 const TX = { tx: 'admin' };
+const CLOSED_REPORT = '0199d0a0-0000-7000-8000-00000000d0f2';
+const MESSAGE = '0199d0a0-0000-7000-8000-00000000d0c1';
+const CHAT_PAGE = {
+  messages: [
+    {
+      messageId: MESSAGE,
+      senderRole: 'student' as const,
+      body: 'السلام عليكم',
+      sentAt: '2026-11-18T09:00:00.000Z',
+      purged: false,
+    },
+  ],
+  nextCursor: MESSAGE,
+};
 
 const log = createLogger({ level: 'info', destination: { write: () => undefined } });
 const router = createAdminRouter({ reports: reportsAdminRouter });
@@ -57,7 +76,16 @@ function surface({ replayed = false } = {}) {
     },
     get: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['get', tx, adminId, input]);
-      return { ...ITEM, reason: 'كلام غير لائق', resolution: null };
+      return { ...ITEM, reason: 'كلام غير لائق', resolution: null, chatAvailable: true };
+    },
+    chat: async (tx: unknown, adminId: string, input: { reportId: string }) => {
+      reached.push(['chat', tx, adminId, input]);
+      if (input.reportId === CLOSED_REPORT) {
+        throw new DomainError('CONFLICT', undefined, {
+          details: [{ path: 'cause', code: 'not_open' }],
+        });
+      }
+      return { enrollmentId: ENROLLMENT, page: { ...CHAT_PAGE, extra: 'not on the page' } };
     },
     resolve: async (tx: unknown, adminId: string, input: unknown) => {
       reached.push(['resolve', tx, adminId, input]);
@@ -122,6 +150,8 @@ const calls = {
       note: 'تم التنبيه',
       idempotencyKey: KEY,
     }),
+  'reports.chat': (caller: Caller) =>
+    caller.reports.chat({ reportId: REPORT, enrollmentId: ENROLLMENT }),
 } as const;
 
 describe('the administrator kind', () => {
@@ -216,6 +246,49 @@ describe('reports.resolve (FR-612)', () => {
           .reports.resolve({ reportId: REPORT, outcome: 'actioned', idempotencyKey: KEY } as never),
       ),
     ).toBe('VALIDATION_FAILED');
+    expect(s.reached).toEqual([]);
+  });
+});
+
+describe('reports.chat (005:T034; SRS FR-SESS-13 as amended)', () => {
+  it('answers the page through the service, audited chat.read on the enrollment it names', async () => {
+    const s = surface();
+    const page = await s.verified().reports.chat({
+      reportId: REPORT,
+      enrollmentId: ENROLLMENT,
+      cursor: MESSAGE,
+    });
+    expect(page).toEqual(CHAT_PAGE);
+    expect(s.reached).toEqual([
+      ['chat', TX, ADMIN, { reportId: REPORT, enrollmentId: ENROLLMENT, cursor: MESSAGE }],
+    ]);
+    expect(s.written).toEqual([
+      { action: 'chat.read', targetType: 'enrollment', targetId: ENROLLMENT, adminId: ADMIN },
+    ]);
+  });
+
+  it('records one entry per page read', async () => {
+    const s = surface();
+    await calls['reports.chat'](s.verified());
+    await calls['reports.chat'](s.verified());
+    expect(s.written.map(({ action }) => action)).toEqual(['chat.read', 'chat.read']);
+  });
+
+  it('records nothing when the service refuses (CONFLICT not_open)', async () => {
+    const s = surface();
+    expect(
+      await codeOf(
+        s.verified().reports.chat({ reportId: CLOSED_REPORT, enrollmentId: ENROLLMENT }),
+      ),
+    ).toBe('CONFLICT');
+    expect(s.written).toEqual([]);
+  });
+
+  it('refuses an input that names no enrollment before the service', async () => {
+    const s = surface();
+    expect(await codeOf(s.verified().reports.chat({ reportId: REPORT } as never))).toBe(
+      'VALIDATION_FAILED',
+    );
     expect(s.reached).toEqual([]);
   });
 });

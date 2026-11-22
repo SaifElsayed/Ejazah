@@ -607,10 +607,17 @@ const adminModuleServices = createAdminServices({
   genderFlags,
   orders: payments.orderStandingsOf,
 });
-// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's.
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): `reports.chat`, an open
+// report's enrollment chat, over moderation's `ReportChat` port bound here to chat's
+// `createDisputeChat()`, as sessions' `disputeChat` is above, so moderation imports no chat.
+const reportChat = moderation.createReportChat({
+  chat: chat.createDisputeChat({ enrollments: enrollmentSide, settings }),
+});
+// 005:T011 (B47): the administrators' `reports.*`, the same report service as the user surface's;
+// 005:T034: and `reports.chat`, the read above.
 const adminServices = {
   ...adminModuleServices,
-  reports: userReports,
+  reports: { ...userReports, ...reportChat },
   // 003:T105: `payouts.*`, the service above.
   payouts: payouts.admin,
 };

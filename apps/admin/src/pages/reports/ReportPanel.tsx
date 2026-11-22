@@ -5,6 +5,12 @@
 // the decision's date and note. While it is open: «action taken» or «dismissed», each with its
 // mandatory note (FR-612), and «open a gender dispute», which raises a gender flag on the reported
 // person from this report (`genderFlags.raise` with `reportId`, FR-614).
+//
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): while `reports.get`
+// answers `chatAvailable` (open, naming an enrollment), the enrollment's chat, read-only, through the
+// disputes page's view (`ChatLogSection`) over `reports.chat`, with the report's banner and words; a
+// session or chat report no longer open says the chat is shown only while it is open, and reads
+// nothing; a profile report names no enrollment and has no chat.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -22,11 +28,36 @@ import { UserText } from '../../i18n/UserText';
 import { errorMessageKey } from '../../lib/error-message';
 import { dayMonthYear } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
+import { ChatLogSection } from '../disputes/DisputeChatSection';
+import { chatFailureIn } from '../disputes/failures';
 import { DecisionDialog } from '../gender/DecisionDialog';
 import { PersonLink } from '../gender/PersonLink';
 import { RaiseFlagDialog } from '../gender/RaiseFlagDialog';
-import { type ReportDetail, useReport, useReportActions } from './queries';
+import { type ReportDetail, useReport, useReportActions, useReportChat } from './queries';
 import { REPORT_CONTEXT, REPORT_STATUS, reportFailure } from './words';
+
+/** 005:T034: the chat read's refusals, in the report's words. */
+const reportChatFailure = chatFailureIn({
+  notOpen: 'admin.reports.chat.notOpen',
+  notFound: 'admin.reports.chat.notFound',
+});
+
+/** 005:T034: the open report's enrollment chat, read-only; each page read audited on the server. */
+function ReportChat({
+  reportId,
+  enrollmentId,
+}: {
+  readonly reportId: string;
+  readonly enrollmentId: string;
+}) {
+  return (
+    <ChatLogSection
+      chat={useReportChat(reportId, enrollmentId)}
+      banner="admin.reports.chat.banner"
+      failureOf={reportChatFailure}
+    />
+  );
+}
 
 export function ReportPanel({ reportId }: { readonly reportId: string }) {
   const t = useT();
@@ -105,6 +136,14 @@ function ReportRecord({ report }: { readonly report: ReportDetail }) {
             <UserText>{report.reason}</UserText>
           </p>
         </section>
+        {report.enrollmentId === null ? null : report.chatAvailable ? (
+          <ReportChat reportId={report.reportId} enrollmentId={report.enrollmentId} />
+        ) : (
+          <section className="section">
+            <h2 className="group-label">{t('admin.disputes.detail.chatTitle')}</h2>
+            <p className="text-caption tone-muted">{t('admin.reports.detail.chatHint')}</p>
+          </section>
+        )}
         {report.resolution === null ? null : (
           <section className="section">
             <KeyValue

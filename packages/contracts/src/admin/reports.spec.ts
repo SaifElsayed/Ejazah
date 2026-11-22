@@ -7,10 +7,17 @@
 // links); `get` adds the reporter's reason and, once resolved, the outcome, the note and when;
 // `resolve` is keyed, takes `actioned` or `dismissed` and a note (stored in `resolution_notes`), and
 // is refused `already_resolved` once the report is no longer open.
+//
+// 005:T034 (R1a; SRS FR-SESS-13 as amended, DEC-100; the note under T034): `get` says whether the
+// report opens its enrollment's chat (`chatAvailable`), and `chat` takes the report and the
+// enrollment it names and answers the page `disputes.chat` answers.
 import { describe, expect, it } from 'vitest';
 
 import { isIdempotentProcedure } from '../idempotent-procedures.js';
+import { disputesChatOutput } from './disputes.js';
 import {
+  adminReportsChatInput,
+  adminReportsChatOutput,
   adminReportsGetInput,
   adminReportsGetOutput,
   adminReportsListInput,
@@ -74,12 +81,13 @@ describe('reports.get', () => {
   });
 
   it('answers the reason, and the resolution once there is one', () => {
-    const open = { ...ITEM, reason: 'كلام غير لائق', resolution: null };
+    const open = { ...ITEM, reason: 'كلام غير لائق', resolution: null, chatAvailable: true };
     expect(adminReportsGetOutput.parse(open)).toEqual(open);
     const resolved = {
       ...ITEM,
       status: 'actioned',
       reason: 'كلام غير لائق',
+      chatAvailable: false,
       resolution: {
         outcome: 'actioned',
         note: 'تم التواصل مع المعلم',
@@ -88,6 +96,57 @@ describe('reports.get', () => {
       },
     };
     expect(adminReportsGetOutput.parse(resolved)).toEqual(resolved);
+  });
+
+  it('answers whether the report opens its enrollment’s chat, never left out (005:T034)', () => {
+    const open = { ...ITEM, reason: 'كلام غير لائق', resolution: null };
+    expect(adminReportsGetOutput.safeParse(open).success).toBe(false);
+    expect(adminReportsGetOutput.safeParse({ ...open, chatAvailable: 'yes' }).success).toBe(false);
+  });
+});
+
+describe('reports.chat (005:T034)', () => {
+  const MESSAGE = '0199d0a0-0000-7000-8000-0000000000c1';
+
+  it('takes the report, the enrollment it names and an optional cursor', () => {
+    const input = { reportId: REPORT, enrollmentId: ENROLLMENT };
+    expect(adminReportsChatInput.parse(input)).toEqual(input);
+    expect(adminReportsChatInput.parse({ ...input, cursor: MESSAGE })).toEqual({
+      ...input,
+      cursor: MESSAGE,
+    });
+  });
+
+  it.each([
+    ['no enrollment', { reportId: REPORT }],
+    ['no report', { enrollmentId: ENROLLMENT }],
+    ['an enrollment that is not an id', { reportId: REPORT, enrollmentId: 'mine' }],
+    ['a cursor that is not an id', { reportId: REPORT, enrollmentId: ENROLLMENT, cursor: 'p2' }],
+  ])('refuses %s', (_name, input) => {
+    expect(adminReportsChatInput.safeParse(input).success).toBe(false);
+  });
+
+  it('answers the page `disputes.chat` answers, each sender by its role', () => {
+    const page = {
+      messages: [
+        {
+          messageId: MESSAGE,
+          senderRole: 'student',
+          body: 'السلام عليكم',
+          sentAt: '2026-11-18T09:00:00.000Z',
+          purged: false,
+        },
+      ],
+      nextCursor: MESSAGE,
+    };
+    expect(adminReportsChatOutput.parse(page)).toEqual(page);
+    expect(adminReportsChatOutput.parse(page)).toEqual(disputesChatOutput.parse(page));
+    const mine = { messages: [{ ...page.messages[0], senderRole: undefined, mine: true }] };
+    expect(adminReportsChatOutput.safeParse(mine).success).toBe(false);
+  });
+
+  it('is a read, not keyed', () => {
+    expect(isIdempotentProcedure('reports.chat')).toBe(false);
   });
 });
 
