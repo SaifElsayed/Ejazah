@@ -3053,6 +3053,7 @@
               "hours",
               "minutes",
               "percent",
+              "piasters",
               "rate_limit",
               "seconds",
               "version",
