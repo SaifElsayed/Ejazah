@@ -438,7 +438,8 @@
         "teacherDropout": "باقة أُنهيت بانسحابك: الحصص التي تمت",
         "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب",
         "assessment": "جلسة الاختبار (لم يكمل الطالب)",
-        "programmeStopped": "برنامج أُوقف: الحصص التي تمت"
+        "programmeStopped": "برنامج أُوقف: الحصص التي تمت",
+        "directEnd": "أنهت الإدارة الباقة"
       },
       "state": {
         "held": "محجوز",

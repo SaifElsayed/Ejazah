@@ -322,6 +322,9 @@ export const timelineEventKind = z.enum([
   'programme_paused',
   'programme_resumed',
   'programme_reopened',
+  // 004:T084 (SRS DEC-105; ERD changelog row 78): the `session_event_kind` value of a participant's
+  // phone that could not encrypt the room; added, additively (R-API-9).
+  'encryption_failed',
 ]);
 
 /**

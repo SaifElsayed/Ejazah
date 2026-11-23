@@ -2019,7 +2019,8 @@
           "studentComplaintClose": "Package closed on a complaint against the student",
           "teacherDropout": "Package ended on the teacher's withdrawal",
           "assessment": "Assessment session (not continued)",
-          "programmeStopped": "Programme stopped: the sessions held"
+          "programmeStopped": "Programme stopped: the sessions held",
+          "directEnd": "Ended by the administration"
         },
         "state": {
           "due": "Due",
@@ -3339,7 +3340,8 @@
           "programmeOffered": "The teacher sent the programme's offer",
           "programmePaused": "The programme was paused, the month unpaid",
           "programmeResumed": "The programme resumed after payment",
-          "programmeReopened": "The administration reopened the programme"
+          "programmeReopened": "The administration reopened the programme",
+          "encryptionFailed": "A party's phone could not encrypt the session"
         }
       },
       "cancel": {

@@ -119,6 +119,7 @@
       ],
       "shareReleaseMilestone": [
         "assessment",
+        "direct_end",
         "ijazah_end",
         "ijazah_half",
         "programme_stopped",
@@ -282,6 +283,7 @@
         "dispute_raised",
         "dispute_resolved",
         "dispute_revised",
+        "encryption_failed",
         "instants_reresolved",
         "makeup_booked",
         "outage_reclassified",
@@ -318,6 +320,7 @@
       ],
       "ShareReleaseMilestone": [
         "assessment",
+        "direct_end",
         "ijazah_end",
         "ijazah_half",
         "programme_stopped",
@@ -2296,6 +2299,7 @@
             "type": "string",
             "values": [
               "assessment",
+              "direct_end",
               "ijazah_end",
               "ijazah_half",
               "programme_stopped",
@@ -2667,6 +2671,7 @@
               "dispute_raised",
               "dispute_resolved",
               "dispute_revised",
+              "encryption_failed",
               "instants_reresolved",
               "makeup_booked",
               "order_failed",
@@ -5373,6 +5378,7 @@
             "type": "string",
             "values": [
               "assessment",
+              "direct_end",
               "ijazah_end",
               "ijazah_half",
               "programme_stopped",

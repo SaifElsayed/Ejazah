@@ -129,6 +129,9 @@ model TeacherShareRelease {
   amountPiasters  BigInt                @map("amount_piasters")
   // When it fell due by its milestone's rule, not when the sweep wrote it.
   dueAt           DateTime              @map("due_at") @db.Timestamptz(6)
+  // 003:T127 (ERD changelog row 76, section 15 rule 83): the teacher's share of the refunds the end
+  // release took off when it was written; 0 on every other milestone.
+  refundTakenOffPiasters BigInt         @default(0) @map("refund_taken_off_piasters")
   createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   // Both or neither (ERD section 15 rule 63).
   markedAt        DateTime?             @map("marked_at") @db.Timestamptz(6)

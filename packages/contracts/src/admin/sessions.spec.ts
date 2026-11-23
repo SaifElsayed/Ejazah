@@ -184,8 +184,9 @@ describe('003:T112: the end on a complaint against the student', () => {
       sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
       occurredAt: '2026-11-19T10:00:00.000Z',
     };
-    // 006:T003 (rule d): the programme's four enrollment event kinds follow it, additively (R-API-9).
-    expect(timelineEventKind.options.at(-5)).toBe('postponed');
+    // 006:T003 (rule d): the programme's four enrollment event kinds follow it, additively (R-API-9),
+    // then 004:T084's `encryption_failed` (R1b; a test broken by an approved change).
+    expect(timelineEventKind.options.at(-6)).toBe('postponed');
     expect(timelineEvent.safeParse(row).success).toBe(true);
   });
 

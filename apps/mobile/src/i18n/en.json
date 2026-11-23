@@ -438,7 +438,8 @@
         "teacherDropout": "Package ended on your withdrawal: the sessions held",
         "studentComplaintClose": "Package closed on a complaint against the student",
         "assessment": "Assessment session (not continued)",
-        "programmeStopped": "Programme stopped: the sessions held"
+        "programmeStopped": "Programme stopped: the sessions held",
+        "directEnd": "Ended by the administration"
       },
       "state": {
         "held": "Held",

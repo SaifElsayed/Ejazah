@@ -24,6 +24,9 @@ export const shareReleaseMilestone = z.enum([
   // not continue, and a programme closed by an approved stop; added, additively (R-API-9).
   'assessment',
   'programme_stopped',
+  // 003:T125 (SRS DEC-104; ERD changelog row 77): an administrator's direct end on the student's stop,
+  // a student's deletion by an administrator and a gender correction; added, additively (R-API-9).
+  'direct_end',
 ]);
 
 /** Where a release stands: computed and not yet due, due and awaiting the mark, or marked paid. */

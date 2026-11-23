@@ -229,6 +229,9 @@ model SessionEvent {
   outcomeAfter          SessionStatus?   @map("outcome_after")
   // On `instants_reresolved` only: the start before the run, or the start a session kept back keeps.
   previousStartAt       DateTime?        @map("previous_start_at") @db.Timestamptz(6)
+  // 004:T084 (ERD changelog row 78, section 15 rule 84): on `encryption_failed` only, the side whose
+  // phone could not encrypt.
+  party                 Role?
   // The transaction's instant.
   occurredAt            DateTime         @map("occurred_at") @db.Timestamptz(6)
   createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)

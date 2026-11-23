@@ -157,6 +157,8 @@ const EVENT_KIND: Readonly<Record<MonitoredEvent['kind'], MessageKey>> = {
   programme_paused: 'admin.sessions.event.kind.programmePaused',
   programme_resumed: 'admin.sessions.event.kind.programmeResumed',
   programme_reopened: 'admin.sessions.event.kind.programmeReopened',
+  // 004:T084 (SRS DEC-105, Q-5 (a)): a party's phone could not encrypt the room.
+  encryption_failed: 'admin.sessions.event.kind.encryptionFailed',
 };
 
 const CANCELLATION_REASON: Readonly<

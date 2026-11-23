@@ -2019,7 +2019,8 @@
           "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب",
           "teacherDropout": "باقة أُنهيت بانسحاب المعلم",
           "assessment": "جلسة الاختبار (لم يكمل الطالب)",
-          "programmeStopped": "برنامج أُوقف: الحصص التي تمت"
+          "programmeStopped": "برنامج أُوقف: الحصص التي تمت",
+          "directEnd": "أنهت الإدارة الباقة"
         },
         "state": {
           "due": "مستحق",
@@ -3339,7 +3340,8 @@
           "programmeOffered": "أرسل المعلم عرض البرنامج",
           "programmePaused": "توقّف البرنامج مؤقتًا لعدم دفع الشهر",
           "programmeResumed": "استؤنف البرنامج بعد الدفع",
-          "programmeReopened": "أعادت الإدارة فتح البرنامج"
+          "programmeReopened": "أعادت الإدارة فتح البرنامج",
+          "encryptionFailed": "تعذّر تشفير الحصة على جهاز أحد الطرفين"
         }
       },
       "cancel": {
