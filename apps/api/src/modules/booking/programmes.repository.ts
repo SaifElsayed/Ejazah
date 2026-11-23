@@ -248,3 +248,30 @@ export async function programmeTermsOf(
     select: { state: true, payByAt: true },
   });
 }
+
+/** 006:T009 (Q-C1 (a)): a programme's payment as the confirm step records it. */
+export interface ProgrammePayment {
+  readonly plan: 'in_full' | 'monthly';
+  /** The highest month paid: `month_count` in full, else the month (data-model.md). */
+  readonly monthsPaid: number;
+}
+
+/**
+ * 006:T009 (the owner's Q-C1 (a), 2026-11-23): the programme's payment, on the confirm step's
+ * transaction holding the programme's lock: from `offered`, `active` with its plan (a paused
+ * programme stays paused: its payment is T016's to resume); then the months paid.
+ */
+export async function writeProgrammePaid(
+  tx: Client,
+  enrollmentId: string,
+  payment: ProgrammePayment,
+): Promise<void> {
+  await tx.programme.updateMany({
+    where: { enrollmentId, state: 'offered' },
+    data: { state: 'active', paymentPlan: payment.plan },
+  });
+  await tx.programme.updateMany({
+    where: { enrollmentId },
+    data: { monthsPaid: payment.monthsPaid },
+  });
+}

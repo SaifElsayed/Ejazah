@@ -19,12 +19,26 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { runOnceAndTwice } from '../../apps/api/src/jobs/double-run';
+import {
+  checkedProgrammePay,
+  placeCheckoutHold,
+  readHoldTerms,
+} from '../../apps/api/src/modules/booking/index';
 import { openCompensationCase } from '../../apps/api/src/modules/moderation/index';
 import { createNotificationWriter } from '../../apps/api/src/modules/notifications/index';
+import {
+  checkoutOrdersAmong,
+  heldOrdersOf,
+  orderStandingsOf,
+  payableProgrammeOrderAmong,
+} from '../../apps/api/src/modules/payments/index';
+import { DomainError } from '../../apps/api/src/platform/errors/domain-error';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender';
 import {
   closeDatabase,
   type Database,
   openDatabase,
+  type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository';
 import { lockRows } from '../../apps/api/src/platform/db/row-lock';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
@@ -73,7 +87,7 @@ const PROCESSED_AT = new Date('2026-10-20T07:00:00Z');
  */
 async function order(
   enrollmentId: string,
-  kind: 'assessment' | 'instalment',
+  kind: 'assessment' | 'instalment' | 'rest_in_full',
   month: number | null,
   processed: boolean,
 ): Promise<string> {
@@ -344,6 +358,38 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     ]);
   });
 
+  // 006:T009 (the owner's Q-C1 (a)): the first payment moves the programme to active with its plan
+  // and months; a second first payment is a duplicate, and programme.pay then answers not_offered.
+  it('records month 1 on the programme, takes no second first payment, and refuses programme.pay after it', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: new Date('2026-11-06T10:00:00Z') });
+    await confirm(await order(enrollmentId, 'instalment', 1, false));
+    const row = () =>
+      database.programme.findUniqueOrThrow({
+        where: { enrollmentId },
+        select: { state: true, paymentPlan: true, monthsPaid: true },
+      });
+    expect(await row()).toEqual({ state: 'active', paymentPlan: 'monthly', monthsPaid: 1 });
+    await confirm(await order(enrollmentId, 'rest_in_full', null, false));
+    expect((await casesOf(enrollmentId)).map(({ reason }) => reason)).toEqual([
+      'duplicate_payment',
+    ]);
+    expect(await row()).toEqual({ state: 'active', paymentPlan: 'monthly', monthsPaid: 1 });
+    const { studentUserId } = await database.enrollment.findUniqueOrThrow({
+      where: { id: enrollmentId },
+      select: { studentUserId: true },
+    });
+    const refused: unknown = await database
+      .$transaction((tx) =>
+        checkedProgrammePay(
+          tx,
+          { studentUserId, enrollmentId },
+          { orders: checkoutOrdersAmong, log: { info: () => undefined } },
+        ),
+      )
+      .catch((error: unknown) => error);
+    expect((refused as DomainError).details).toEqual([{ path: 'cause', code: 'not_offered' }]);
+  });
+
   // 006:T009, PR #156 r2 Follow-up 1 (PROBE-R2a): the marker is the database's instant under the
   // locks, never the clock a job read before them, so the walk follows the order of settlement.
   it('walks month 2 after month 1 when month 2’s job read its clock before month 1’s marker, then month 3 generates', async () => {
@@ -387,5 +433,178 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     await holder;
     await taker;
     expect([whileHeld, finished]).toEqual([false, true]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T009 (FR-BOOK-12 both ways, R-509): a first payment and a new checkout of one student never
+// pass each other. programme.pay's check takes the student's account first, as a new hold does, so
+// the one that waits reads the other's payable order and is refused PREVIOUS_CHECKOUT.
+
+/** pay_by_at well after the database's clock, which the check reads. */
+const FAR_PAY_BY = new Date('2099-01-01T00:00:00Z');
+
+/** A created programme order of month 1, payable until well after the database's clock. */
+async function payableMonthOne(tx: Transaction, enrollmentId: string): Promise<void> {
+  await tx.$executeRaw`
+    INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                          status, expires_at, updated_at, kind, instalment_month)
+    VALUES (${enrollmentId}::uuid, 'fake', ${`probe-order-${randomUUID()}`}, 140000, 'EGP',
+            'created'::payment_status, ${FAR_PAY_BY}, now(), 'instalment'::order_kind, 1)`;
+}
+
+/** programme.pay's check, then its order, on a transaction held open until `gate` opens. */
+function payHeldOpen(enrollmentId: string, studentUserId: string, gate: Promise<void>) {
+  let held: () => void = () => undefined;
+  const holding = new Promise<void>((resolve) => {
+    held = resolve;
+  });
+  const done = database.$transaction(
+    async (tx) => {
+      await checkedProgrammePay(
+        tx,
+        { studentUserId, enrollmentId },
+        { orders: checkoutOrdersAmong, log: { info: () => undefined } },
+      );
+      await payableMonthOne(tx, enrollmentId);
+      held();
+      await gate;
+    },
+    { timeout: 30_000 },
+  );
+  return { holding, done };
+}
+
+async function studentOfProgramme(enrollmentId: string): Promise<string> {
+  const { studentUserId } = await database.enrollment.findUniqueOrThrow({
+    where: { id: enrollmentId },
+    select: { studentUserId: true },
+  });
+  return studentUserId;
+}
+
+/** Whether `call` was still waiting 750 ms after it began; its outcome after `release`. */
+async function waitsUntil(call: () => Promise<unknown>, release: () => void) {
+  let finished = false;
+  const outcome = call().then(
+    (value) => {
+      finished = true;
+      return value;
+    },
+    (error: unknown) => {
+      finished = true;
+      return error;
+    },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 750));
+  const waited = !finished;
+  release();
+  return { waited, outcome: await outcome };
+}
+
+describe('programme.pay against another checkout of the student (006:T009, FR-BOOK-12)', () => {
+  it('a second first payment waits on the first, then is refused PREVIOUS_CHECKOUT naming its order', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: FAR_PAY_BY });
+    const studentUserId = await studentOfProgramme(enrollmentId);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = payHeldOpen(enrollmentId, studentUserId, gate);
+    await first.holding;
+    const second = await waitsUntil(
+      () =>
+        database.$transaction((tx) =>
+          checkedProgrammePay(
+            tx,
+            { studentUserId, enrollmentId },
+            { orders: checkoutOrdersAmong, log: { info: () => undefined } },
+          ),
+        ),
+      release,
+    );
+    await first.done;
+    expect(second.waited).toBe(true);
+    expect((second.outcome as DomainError).code).toBe('PREVIOUS_CHECKOUT');
+    expect((second.outcome as DomainError).details).toEqual([
+      { path: 'enrollmentId', code: enrollmentId },
+      { path: 'state', code: 'payable' },
+      { path: 'expiresAt', code: FAR_PAY_BY.toISOString() },
+    ]);
+  });
+
+  it('a new hold waits on the first payment’s account, then is refused PREVIOUS_CHECKOUT, holding nothing', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: FAR_PAY_BY });
+    const studentUserId = await studentOfProgramme(enrollmentId);
+    // Another teacher's recitation package on Sunday 09:00, the student's new checkout.
+    const other = await person('female');
+    await database.teacherProfile.create({
+      data: {
+        userId: other,
+        bio: 'Probe',
+        qualificationSummary: 'Probe',
+        verificationStatus: 'approved',
+        payoutVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+      },
+    });
+    const { id: subjectId } = await database.subject.create({
+      data: { nameAr: 'مادة', nameEn: 'Subject', isActive: true },
+      select: { id: true },
+    });
+    const { id: packageId } = await database.package.create({
+      data: {
+        teacherUserId: other,
+        subjectId,
+        sessionCount: 4,
+        sessionDurationMinutes: 60,
+        pricePiasters: 100_000n,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const { id: slotId } = await database.availabilitySlot.create({
+      data: {
+        teacherUserId: other,
+        dayOfWeek: 0,
+        startTimeLocal: THURSDAY_0900,
+        durationMinutes: 60,
+        timezone: CAIRO,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = payHeldOpen(enrollmentId, studentUserId, gate);
+    await first.holding;
+    const terms = await readHoldTerms(settings, new Date());
+    const hold = await waitsUntil(
+      () =>
+        database.$transaction((tx) =>
+          placeCheckoutHold(
+            tx,
+            { userId: studentUserId, gender: 'female' as RequesterGender },
+            { packageId, slotId },
+            {
+              terms,
+              orders: orderStandingsOf,
+              heldOrders: heldOrdersOf,
+              programmeOrders: payableProgrammeOrderAmong,
+              notices: writer,
+            },
+          ),
+        ),
+      release,
+    );
+    await first.done;
+    expect(hold.waited).toBe(true);
+    expect((hold.outcome as DomainError).code).toBe('PREVIOUS_CHECKOUT');
+    expect((hold.outcome as DomainError).details?.[0]).toEqual({
+      path: 'enrollmentId',
+      code: enrollmentId,
+    });
+    expect(await database.slotHold.count({ where: { studentUserId, releasedAt: null } })).toBe(0);
   });
 });

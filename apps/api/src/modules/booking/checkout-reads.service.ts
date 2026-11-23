@@ -45,6 +45,7 @@ import {
 import { summaryOf, summaryTermsOf } from './checkout-holds.service.js';
 import type { HoldTerms } from './holds.service.js';
 import type { FirstSessionRule } from './nearest-slot.service.js';
+import { activeProgrammeSlotsOf } from './programmes.repository.js';
 
 /** What the reads read, each through its owner's entry; faked in a spec. */
 export interface CheckoutReadsStore {
@@ -131,6 +132,18 @@ export async function currentHoldOf(
     summary: summaryOf({ teacherId: teacherUserId, displayName }, terms),
     ...sessionPreviewsOn(slot, rule, terms.sessionCount),
   };
+}
+
+/**
+ * 006:T009 (the owner's Q-C2 (a); R-509): the enrollments of the student's active programmes, for
+ * `checkout.current` to ask payments which of them has an order still payable. No lock.
+ */
+export async function activeProgrammeEnrollmentsOf(
+  tx: Transaction,
+  studentUserId: string,
+): Promise<string[]> {
+  const programmes = await activeProgrammeSlotsOf(tx, [studentUserId]);
+  return programmes.map(({ enrollmentId }) => enrollmentId);
 }
 
 /** The status as `checkout.status` answers it, before payments adds its last order. */

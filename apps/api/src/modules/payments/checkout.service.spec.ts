@@ -25,6 +25,8 @@ import {
   type HeldRow,
   PayableCheckout,
 } from '../booking/index.js';
+import type { ProgrammePayTarget } from '../booking/index.js';
+import type { AssessmentOrder } from './checkout.repository.js';
 import { CHECKOUT_URL_COLUMN, CheckoutService, type CheckoutSteps } from './checkout.service.js';
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -44,6 +46,25 @@ const NOW = new Date('2026-11-03T08:00:00Z');
 /** The hold placed at NOW: ten minutes of checkout and five of grace. */
 const HOLD_EXPIRES = new Date('2026-11-03T08:15:00Z');
 const ORDER_EXPIRES = new Date('2026-11-03T08:10:00Z');
+
+/**
+ * 006:T009: an offer of 40 sessions at 250 EGP, 10,000 EGP in all (10 months of 1,000), its 48 hours
+ * ending Thursday 2026-11-05 at 08:00Z; the assessment paid 500 EGP at 70 % and 25 %.
+ */
+const PROGRAMME: ProgrammePayTarget = {
+  enrollmentId: ENROLLMENT,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
+  track: 'ijazah_track',
+  payByAt: new Date('2026-11-05T08:00:00Z'),
+  offerSessionCount: 40,
+  total_piasters: piasters(1_000_000),
+};
+const ASSESSMENT_ORDER: AssessmentOrder = {
+  gross_piasters: piasters(50_000),
+  teacherShareRatePercent: 70,
+  halfReleaseRatePercent: 25,
+};
 
 const settings: SettingsReader = {
   read: async (key, schema) =>
@@ -184,6 +205,14 @@ interface World {
   readonly kind?: 'package' | 'assessment';
   /** 006:T005: the switch, when not on. */
   readonly programmeEnabled?: number;
+  /** 006:T009: what booking's programme.pay check answers, when not the default offer. */
+  readonly programme?: Partial<ProgrammePayTarget>;
+  /** 006:T009: the check's refusal, before the gateway (`first`) or under the record's locks. */
+  readonly programmeRefusal?: { readonly at: 'first' | 'record'; readonly error: Error };
+  /** 006:T009: the programme's assessment order, when not the default's 500 EGP at 70 % and 25 %. */
+  readonly assessmentOrder?: AssessmentOrder;
+  /** 006:T009 (Q-C2 (a)): the student's payable programme order; none by default. */
+  readonly programmeOrder?: { readonly enrollmentId: string; readonly expiresAt: Date };
 }
 
 function setUp(world: World = {}) {
@@ -197,6 +226,9 @@ function setUp(world: World = {}) {
   let placement = 0;
   let draws = 0;
   let orders = 0;
+  let checks = 0;
+  /** 006:T009: what each placement was handed as payments' read of the programme orders. */
+  const handed: string[] = [];
   const steps: CheckoutSteps = {
     transaction: async (work) => work({} as Transaction),
     // T175: booking's read through the visibility predicate, as `checkoutHoldStore` reads it.
@@ -206,6 +238,8 @@ function setUp(world: World = {}) {
     },
     placeHold: async (_tx, who, request, dependencies) => {
       log.push(['place', who.userId, request.slotId, dependencies.terms.now.toISOString()]);
+      // 006:T009: payments' read of the student's payable programme orders, handed in.
+      handed.push(typeof dependencies.programmeOrders);
       const outcomes = world.placements ?? [heldAnswer];
       const outcome = outcomes[Math.min(placement, outcomes.length - 1)];
       placement += 1;
@@ -317,6 +351,25 @@ function setUp(world: World = {}) {
       readers.push(await enrolment.programme?.());
       if (world.lockError !== undefined) throw world.lockError;
     },
+    // 006:T009: booking's check of programme.pay, before the gateway and under the record's locks.
+    programmePayTarget: async (_tx, request, dependencies) => {
+      checks += 1;
+      log.push(['programme check', request.studentUserId, request.enrollmentId, checks]);
+      expect(typeof dependencies.orders).toBe('function');
+      const refused = world.programmeRefusal;
+      if (refused !== undefined && (refused.at === 'first') === (checks === 1)) {
+        throw refused.error;
+      }
+      return { ...PROGRAMME, ...world.programme };
+    },
+    programmeOrderOf: async (_tx, studentUserId, at) => {
+      log.push(['programme order', studentUserId, at.toISOString()]);
+      return world.programmeOrder ?? null;
+    },
+    assessmentOrderOf: async (_tx, enrollmentId) => {
+      log.push(['assessment order', enrollmentId]);
+      return world.assessmentOrder ?? ASSESSMENT_ORDER;
+    },
   };
   const payment = {
     createCheckout: async (
@@ -373,7 +426,17 @@ function setUp(world: World = {}) {
     report: (error) => void reported.push(error),
     steps,
   });
-  return { log, service, idempotency, reported, inserted, payees, recipientsAsked, readers };
+  return {
+    log,
+    service,
+    idempotency,
+    reported,
+    inserted,
+    payees,
+    recipientsAsked,
+    readers,
+    handed,
+  };
 }
 
 describe('the teacher share kept on the order (T104; ADR 0025 D1, SRS DEC-80, FR-PAYG-7 as amended)', () => {
@@ -1020,5 +1083,260 @@ describe('the order’s kind (006:T005; FR-701, FR-702, R-504, R-511)', () => {
       }),
     );
     expect(log.some(([kind]) => kind === 'gateway create' || kind === 'transaction')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T009 (FR-710 to FR-713; R-507, R-509, R-511; contracts/app-surface.md `programme.pay`).
+
+describe('programme.pay: the first payment of the rest, in full or a month (006:T009)', () => {
+  const payRest = (plan: 'in_full' | 'monthly', saveCard = false) => ({
+    enrollmentId: ENROLLMENT,
+    plan,
+    saveCard,
+    idempotencyKey: KEY,
+  });
+  const lines: [object, string][] = [];
+  const log = { info: (fields: object, message: string) => void lines.push([fields, message]) };
+
+  it('pays the rest in full as the total less the assessment’s 500: 9,500 EGP, a rest_in_full order', async () => {
+    const { service, inserted, log: steps } = setUp();
+    await expect(service.programmePay(student, payRest('in_full'), log)).resolves.toEqual({
+      checkoutUrl: 'https://pay.example/1',
+    });
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        enrollmentId: ENROLLMENT,
+        kind: 'rest_in_full',
+        gross_piasters: 950_000,
+        teacherShareRatePercent: 70,
+        teacherShare_piasters: 665_000,
+        halfReleaseRatePercent: 25,
+      }),
+    ]);
+    expect(inserted[0]).not.toHaveProperty('instalmentMonth');
+    expect(inserted[0]).not.toHaveProperty('cardConsentAt');
+    expect(steps).toContainEqual([
+      'gateway create',
+      ENROLLMENT,
+      950_000,
+      'EGP',
+      ORDER_EXPIRES.toISOString(),
+    ]);
+  });
+
+  it('pays month 1 as 4 × the session price: 1,000 EGP, an instalment of month 1', async () => {
+    const { service, inserted } = setUp();
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        gross_piasters: 100_000,
+        teacherShare_piasters: 70_000,
+      }),
+    ]);
+  });
+
+  it('pays month 1 of an offer of 3 sessions as the whole 3: 750 EGP (the remainder rule, FR-711)', async () => {
+    const { service, inserted } = setUp({
+      programme: { offerSessionCount: 3, total_piasters: piasters(75_000) },
+    });
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(inserted.map(({ gross_piasters }) => gross_piasters)).toEqual([75_000]);
+  });
+
+  it('pays the rest of an offer of 3 sessions in full: 750 − 500 = 250 EGP', async () => {
+    const { service, inserted } = setUp({
+      programme: { offerSessionCount: 3, total_piasters: piasters(75_000) },
+    });
+    await service.programmePay(student, payRest('in_full'), log);
+    expect(inserted.map(({ gross_piasters }) => gross_piasters)).toEqual([25_000]);
+  });
+
+  it('refuses rest_not_positive in full when the total is not above the fee (2 × 250 − 500 = 0), before the gateway, with one line', async () => {
+    lines.length = 0;
+    const {
+      service,
+      log: steps,
+      inserted,
+    } = setUp({
+      programme: { offerSessionCount: 2, total_piasters: piasters(50_000) },
+    });
+    const refused = await refusal(service.programmePay(student, payRest('in_full'), log));
+    expect(refused).toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'rest_not_positive' }],
+      }),
+    );
+    expect(steps.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+    expect(lines).toEqual([
+      [
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT, reason: 'rest_not_positive' },
+        'A programme payment was refused',
+      ],
+    ]);
+  });
+
+  it('pays month 1 of an offer of 2 sessions by months: 500 EGP, nothing refused', async () => {
+    const { service, inserted } = setUp({
+      programme: { offerSessionCount: 2, total_piasters: piasters(50_000) },
+    });
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(inserted.map(({ gross_piasters }) => gross_piasters)).toEqual([50_000]);
+  });
+
+  it('copies the rate and the 25 % from the assessment order, whatever the settings say now (R-511)', async () => {
+    const { service, inserted } = setUp({
+      sharePercent: 50,
+      halfPercent: 10,
+      assessmentOrder: {
+        gross_piasters: piasters(50_000),
+        teacherShareRatePercent: 65,
+        halfReleaseRatePercent: 20,
+      },
+    });
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        teacherShareRatePercent: 65,
+        teacherShare_piasters: 65_000,
+        halfReleaseRatePercent: 20,
+      }),
+    ]);
+  });
+
+  it('holds no hold: the order expires at now + slot_hold_ttl_minutes when pay_by_at is later', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(steps).toContainEqual([
+      'gateway create',
+      ENROLLMENT,
+      100_000,
+      'EGP',
+      ORDER_EXPIRES.toISOString(),
+    ]);
+  });
+
+  it('expires the order at pay_by_at when the 48 hours end within the checkout’s 10 minutes', async () => {
+    const payBy = new Date('2026-11-03T08:04:00Z');
+    const { service, log: steps } = setUp({ programme: { payByAt: payBy } });
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(steps).toContainEqual([
+      'gateway create',
+      ENROLLMENT,
+      100_000,
+      'EGP',
+      payBy.toISOString(),
+    ]);
+  });
+
+  it('records the consent to save the card at the request’s instant when ticked (Q-4 (a))', async () => {
+    const { service, inserted } = setUp();
+    await service.programmePay(student, payRest('monthly', true), log);
+    expect(inserted[0]).toMatchObject({ cardConsentAt: NOW });
+  });
+
+  it('checks the programme before the gateway and again under the record’s locks, the gateway between', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmePay(student, payRest('in_full'), log);
+    expect(
+      steps
+        .map(([kind]) => kind)
+        .filter((kind) =>
+          ['programme check', 'gateway create', 'transaction', 'insert order', 'commit'].includes(
+            kind as string,
+          ),
+        ),
+    ).toEqual([
+      'programme check',
+      'gateway create',
+      'transaction',
+      'programme check',
+      'insert order',
+      'commit',
+    ]);
+  });
+
+  it('answers the check’s refusal before the gateway, calling none and writing nothing', async () => {
+    const error = new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'pay_by_passed' }],
+    });
+    const {
+      service,
+      log: steps,
+      inserted,
+    } = setUp({
+      programmeRefusal: { at: 'first', error },
+    });
+    await expect(service.programmePay(student, payRest('in_full'), log)).rejects.toBe(error);
+    expect(steps.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+  });
+
+  it('cancels the order at the gateway when the check refuses under the record’s locks', async () => {
+    const error = new DomainError('PREVIOUS_CHECKOUT');
+    const {
+      service,
+      log: steps,
+      inserted,
+    } = setUp({
+      programmeRefusal: { at: 'record', error },
+    });
+    await expect(service.programmePay(student, payRest('monthly'), log)).rejects.toBe(error);
+    expect(steps).toContainEqual(['gateway cancel', 'fake_ord_1']);
+    expect(inserted).toEqual([]);
+  });
+
+  it('is keyed on programme.pay: a completed key answers the address read again, calling no gateway', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmePay(student, payRest('monthly'), log);
+    const created = steps.filter(([kind]) => kind === 'gateway create').length;
+    await expect(service.programmePay(student, payRest('monthly'), log)).resolves.toEqual({
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT}`,
+    });
+    expect(steps.filter(([kind]) => kind === 'gateway create').length).toBe(created);
+    expect(steps).toContainEqual(['key read', 'programme.pay']);
+  });
+});
+
+describe('a new hold while a programme order is payable (006:T009, FR-BOOK-12)', () => {
+  it('hands the placement payments’ read of the student’s payable programme orders', async () => {
+    const { service, handed } = setUp();
+    await service.hold(student, { packageId: PACKAGE, slotId: SLOT, idempotencyKey: KEY });
+    expect(handed).toEqual(['function']);
+  });
+});
+
+// 006:T009 (the owner's Q-C2 (a)): checkout.current shows the student's payable programme order,
+// which has no hold, beside the hold if there is one; continue hands its page back.
+describe('checkout.current shows a payable programme order (006:T009, Q-C2 (a), R-509)', () => {
+  const PROGRAMME_ENROLLMENT = id(61);
+  const PROGRAMME_ORDER_EXPIRES = new Date('2026-11-03T08:07:00Z');
+  const programmeOrder = { enrollmentId: PROGRAMME_ENROLLMENT, expiresAt: PROGRAMME_ORDER_EXPIRES };
+
+  it('answers the programme order alone while it is payable and the student holds nothing', async () => {
+    const { service, log } = setUp({ current: null, programmeOrder });
+    await expect(service.current(student)).resolves.toEqual({
+      programmeOrder: {
+        enrollmentId: PROGRAMME_ENROLLMENT,
+        expiresAt: PROGRAMME_ORDER_EXPIRES.toISOString(),
+        canContinue: true,
+      },
+    });
+    expect(log).toContainEqual(['programme order', STUDENT, NOW.toISOString()]);
+  });
+
+  it('answers it beside an own hold with no order yet', async () => {
+    const { service } = setUp({ programmeOrder, order: null });
+    const answer = await service.current(student);
+    expect(answer.hold?.holdId).toBe(HOLD);
+    expect(answer.programmeOrder?.enrollmentId).toBe(PROGRAMME_ENROLLMENT);
+  });
+
+  it('answers no programme order when none is payable', async () => {
+    const { service } = setUp({ current: null });
+    await expect(service.current(student)).resolves.toEqual({});
   });
 });

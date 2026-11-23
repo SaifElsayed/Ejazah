@@ -42,7 +42,14 @@ const surfaceRouter = createAppRouter({ programme: programmesRouter });
 const callerFor = createAppCallerFactory(surfaceRouter);
 type Caller = ReturnType<typeof callerFor>;
 
-type Who = 'student' | 'applicant' | 'approved' | 'suspended teacher' | 'banned teacher';
+type Who =
+  | 'student'
+  | 'applicant'
+  | 'approved'
+  | 'suspended teacher'
+  | 'banned teacher'
+  // 006:T009: programme.pay's caller kind.
+  | 'suspended student';
 
 function sessionOf(who: Who): UserSession {
   const base = {
@@ -52,6 +59,7 @@ function sessionOf(who: Who): UserSession {
     preferredLanguage: 'ar' as const,
   };
   if (who === 'student') return { ...base, role: 'student', accountStatus: 'active' };
+  if (who === 'suspended student') return { ...base, role: 'student', accountStatus: 'suspended' };
   const applicant = who === 'applicant';
   return {
     ...base,
@@ -81,6 +89,7 @@ const unreached = (name: string) => () => Promise.reject(new Error(`${name} is n
 
 function callerAs(who: UserSession | null) {
   const calls: unknown[][] = [];
+  const limited: unknown[][] = [];
   const booking = {
     slots: unreached('booking.slots'),
     enrollments: unreached('enrollments.list'),
@@ -113,18 +122,34 @@ function callerAs(who: UserSession | null) {
     catalog: unusedCatalogServices,
     discovery: unusedDiscoveryServices,
     booking,
-    checkout: unusedCheckoutServices,
+    // 006:T009: programme.pay reaches payments' checkout, which owns the orders and the gateway.
+    checkout: {
+      ...unusedCheckoutServices,
+      programmePay: async (...args: unknown[]) => {
+        calls.push(['programmePay', ...args]);
+        const [, input] = args as [unknown, typeof PAY_INPUT];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        if (input.plan === 'in_full' && input.saveCard) {
+          throw new DomainError('CONFLICT', undefined, {
+            details: [{ path: 'cause', code: 'pay_by_passed' }],
+          });
+        }
+        return { checkoutUrl: PAY_URL, paymentId: 'never shown' } as never;
+      },
+    } as AppServices['checkout'],
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
     certification: unusedCertificationServices,
     moderation: unusedModerationServices,
   };
   const log = createLogger({ level: 'info', destination: { write: () => undefined } });
-  const rateLimiter = { check: async () => undefined } as unknown as RateLimiter;
+  const rateLimiter = {
+    check: async (...args: unknown[]) => void limited.push(args),
+  } as unknown as RateLimiter;
   const caller: Caller = callerFor(
     createAppContext({ session: who, log, rateLimiter, clientAddress: '203.0.113.9', services }),
   );
-  return { caller, calls };
+  return { caller, calls, limited };
 }
 
 const refused = (code: string) =>
@@ -209,4 +234,88 @@ describe("'programme.offer' (006:T007, FR-705)", () => {
       expect(calls).toEqual([]);
     },
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T009 (FR-710 to FR-713; R-509): programme.pay, the student kind, counted as a payment's start.
+
+const PAY_INPUT = {
+  enrollmentId: OWN,
+  plan: 'monthly' as 'in_full' | 'monthly',
+  saveCard: true,
+  idempotencyKey: KEY,
+};
+const PAY_URL = 'https://pay.example/programme';
+
+describe("'programme.pay' callers (006:T009)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.pay'", async () => {
+    await expect(callerAs(null).caller.programme.pay(PAY_INPUT)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    await expect(caller.programme.pay(PAY_INPUT)).rejects.toEqual(refused('FORBIDDEN'));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended student ACCOUNT_RESTRICTED before the service: 'programme.pay'", async () => {
+    const { caller, calls } = callerAs(sessionOf('suspended student'));
+    await expect(caller.programme.pay(PAY_INPUT)).rejects.toEqual(refused('ACCOUNT_RESTRICTED'));
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("'programme.pay' (006:T009, FR-710)", () => {
+  it("hands payments' checkout the session's own account and gender, the validated input and the request's log", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await caller.programme.pay({ ...PAY_INPUT, studentUserId: OTHERS, amount: 1 } as never);
+    expect(calls).toHaveLength(1);
+    const [name, student, input, log] = calls[0] ?? [];
+    expect([name, student, input]).toEqual([
+      'programmePay',
+      { userId: CALLER, gender: 'female' },
+      PAY_INPUT,
+    ]);
+    expect(log).toHaveProperty('info');
+  });
+
+  it('answers the hosted checkout alone: a field the schema does not name is stripped', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    await expect(caller.programme.pay(PAY_INPUT)).resolves.toStrictEqual({ checkoutUrl: PAY_URL });
+  });
+
+  it("counts the call under rate_limit_payment_initiation by the caller's id, as checkout.pay", async () => {
+    const { caller, limited } = callerAs(sessionOf('student'));
+    await caller.programme.pay(PAY_INPUT);
+    expect(limited).toContainEqual([
+      'rate_limit_payment_initiation',
+      { kind: 'user', userId: CALLER },
+      'programme.pay',
+    ]);
+  });
+
+  it('sends another student’s enrollment NOT_FOUND, and a refusal CONFLICT with its cause', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const missing: unknown = await caller.programme
+      .pay({ ...PAY_INPUT, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(missing as Parameters<typeof toErrorShape>[0]).status).toBe(404);
+    const late: unknown = await caller.programme
+      .pay({ ...PAY_INPUT, plan: 'in_full' })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(late as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'pay_by_passed' }],
+    });
+  });
+
+  it('refuses a plan outside in_full and monthly VALIDATION_FAILED before the service', async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.programme
+      .pay({ ...PAY_INPUT, plan: 'weekly' } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+  });
 });

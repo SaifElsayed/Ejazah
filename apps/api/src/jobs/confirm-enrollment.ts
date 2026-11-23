@@ -85,6 +85,10 @@
 //   - a generation the database refuses never cancels the programme: the order stays paid, one
 //     `slot_unavailable` case, one log line `{ enrollmentId, paymentId, reason }`.
 // A month's case and its marker are written in the same transaction, so a replay opens no second.
+// 006:T009 (the owner's Q-C1 (a), 2026-11-23): an awaited month or rest is recorded on the programme
+// through booking's `recordProgrammePaid`, under the programme's lock, whatever follows (its
+// sessions, or the case a suspension or a refusal opens): `offered` to `active` with its plan, and
+// `months_paid` (`month_count` in full, else the month). A duplicate records nothing.
 import { z } from 'zod';
 
 import { addHours } from '@ijazah/time';
@@ -101,6 +105,7 @@ import type {
   HoldTerms,
   LockedEnrollment,
   PaymentOutcomeNotices,
+  ProgrammePayment,
   Refusal,
 } from '../modules/booking/index.js';
 import { readSlot } from '../modules/catalog/index.js';
@@ -159,6 +164,15 @@ export interface ConfirmationSteps {
    * Follow-up 1): at the database's clock read there, so no instant of the job's is handed in.
    */
   markConfirmed(tx: Transaction, paymentId: string): Promise<void>;
+  /**
+   * 006:T009 (the owner's Q-C1 (a)): the programme's payment, through booking's entry, under the
+   * programme's lock: `offered` to `active` with its plan, and the months paid.
+   */
+  recordProgrammePaid(
+    tx: Transaction,
+    enrollmentId: string,
+    payment: ProgrammePayment,
+  ): Promise<void>;
   /** 006:T006: the months and the rest already processed (payments' entry). */
   programmeOrdersOf(
     tx: Transaction,
@@ -282,6 +296,7 @@ export function confirmationStepsOf(notices: PaymentOutcomeNotices): Confirmatio
     orderTermsOf,
     startProgramme: booking.startProgramme,
     markConfirmed: markOrderConfirmed,
+    recordProgrammePaid: booking.recordProgrammePaid,
     programmeOrdersOf: processedProgrammeOrdersOf,
     openCaseOf,
     sessionsOf: enrollmentSessionsOf,
@@ -440,6 +455,12 @@ class Confirmer {
       await done();
       return;
     }
+    // 006:T009 (the owner's Q-C1 (a)): the awaited payment is recorded on the programme whatever
+    // follows (its sessions, or the case a suspension or a refusal opens): the month is paid.
+    await steps.recordProgrammePaid(tx, enrollment.id, {
+      plan: terms.kind === 'rest_in_full' ? 'in_full' : 'monthly',
+      monthsPaid: Math.max(...months),
+    });
     // One query at a time on the one transaction (PR #156 r1 nit: pg's «already executing» warning).
     let suspended = false;
     for (const reason of SUSPENSION_REASONS) {

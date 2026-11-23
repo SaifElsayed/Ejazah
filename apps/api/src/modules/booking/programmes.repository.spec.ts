@@ -15,6 +15,7 @@ import {
   programmeStateOf,
   programmeTermsOf,
   writeOffer,
+  writeProgrammePaid,
 } from './programmes.repository.js';
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000006d2';
@@ -323,5 +324,27 @@ describe('the programme as programme.pay reads it (006:T009)', () => {
       where: { enrollmentId: ENROLLMENT },
       select: { state: true, payByAt: true },
     });
+  });
+});
+
+describe('the programme’s payment, written by the confirm step (006:T009, Q-C1 (a))', () => {
+  it('moves an offered programme to active with its plan, then writes the months paid', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      programme: {
+        updateMany: async (query: unknown) => {
+          calls.push(query);
+          return { count: 1 };
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await writeProgrammePaid(client, ENROLLMENT, { plan: 'in_full', monthsPaid: 10 });
+    expect(calls).toEqual([
+      {
+        where: { enrollmentId: ENROLLMENT, state: 'offered' },
+        data: { state: 'active', paymentPlan: 'in_full' },
+      },
+      { where: { enrollmentId: ENROLLMENT }, data: { monthsPaid: 10 } },
+    ]);
   });
 });
