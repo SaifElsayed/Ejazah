@@ -126,6 +126,10 @@ Settled by the review session on recorded precedents:
     - a refusal (as R-513: the fee kept, the assessment's share released);
     - or an extension, giving the teacher `programme_offer_hours` more: the item is closed `extended`, and a new item may
       open at the new deadline (analyze N-10). A `no_offer` item has no «decline».
+    - Since 2026-11-23 (SRS DEC-112, the owner: «لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله ده») this approval is
+      the only refusal: the teacher's app has no refusal request, and a teacher who does not want to continue tells
+      support and sends no offer. Either decision carries the reason the teacher sent to support, as the
+      Administrator records it (1–500, written to the item's `reason`; refused without it; R-513).
   - **The 48 hours (the owner: «ال 48 ساعة دي بتبدأ من وقت عرض الباقة»):** `pay_by` = the offer's time + 48 h
     (§3.14). The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze
     U-5; FR-BOOK-15's «first weekly occurrence after»).
@@ -326,6 +330,18 @@ order (ADR 0025 D6, FR-702).
   - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
     one log line.
   - **`refusal`:** from the assessment's delivery until an offer is sent. Approval cancels `assessment_refused`.
+    - **Amended 2026-11-23 (SRS DEC-112, the owner: «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم
+      من الاعدادات ومش هنوضحله ده»).** No `refusal` request is raised: `programme.request` takes `stop` only, its
+      `refusal` input, refusals (`assessment_not_delivered`, `offer_sent`), service branch, attacks and specs removed.
+      The refusal is the approved `no_offer` item (R-505), which cancels `assessment_refused`. The enum keeps its
+      `refusal` value, unused, with no migration.
+    - **The `no_offer` item's reason** (the owner: «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم
+      بعته يعني»): there is no support channel in the app, so `programmes.decide` on a `no_offer` item requires the
+      reason (1–500) the Administrator records from what the teacher sent to support, written to the item's `reason`
+      (nullable; rule 80's check, `20261122110318_ijazah_programme/migration.sql:258-260`, requires it only on `stop`
+      and `refusal`, so no migration). «Required» is the service's rule, red first, not a database check. The queue
+      and `programmes.get` read it.
+    - **`stop`'s button** shows only from `paused_at` + 7 days (FR-723); `too_early` stays the server's guard.
   - The administrator's decisions are audited.
   - **An approved stop:** the enrollment `cancelled` `programme_stopped`, the weekly time free at once, the close hook
     (R-510), R-512's release.

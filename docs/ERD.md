@@ -472,8 +472,8 @@ An item for an administrator on a programme (R-513, I-2 (a), FR-706b). Owned by 
 | id | uuid | PK |
 | enrollment_id | FK → enrollments | From the enrollment, never the input; plain index (§14) |
 | teacher_user_id | FK → users | The enrollment's teacher; plain index |
-| kind | enum stop · refusal · no_offer · pay_blocked | `programme_request_kind`: `stop` and `refusal` are the teacher's; `no_offer` and `pay_blocked` are raised by the sweep |
-| reason | text, nullable | 1 to 500 characters, not blank; set on every `stop` and `refusal` (§15 rule 80) |
+| kind | enum stop · refusal · no_offer · pay_blocked | `programme_request_kind`: `stop` and `refusal` are the teacher's; `no_offer` and `pay_blocked` are raised by the sweep. `refusal` is unused since SRS DEC-112: the teacher's app raises `stop` only, and the refusal is an approved `no_offer` item; the value stays, with no migration (changelog row 75) |
+| reason | text, nullable | 1 to 500 characters, not blank; set on every `stop` and `refusal` (§15 rule 80). On a `no_offer` item, the administrator's record of why no offer was made (what the teacher sent to support), written at the decision; required there by `programmes.decide`, not by the database (SRS DEC-112; changelog row 75) |
 | status | enum open · approved · declined · withdrawn · extended | `programme_request_status`; `extended` only on a `no_offer` or `pay_blocked` item (§15 rule 80). One open item per enrollment and kind (§15 rule 79) |
 | decided_by_admin_id | FK → admin_users, nullable | Set with `decided_at`, on every approval and decline (§15 rule 81); plain index |
 | decided_at | timestamptz, nullable | |
@@ -1220,7 +1220,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 79. `programme_requests`: one open item per enrollment and kind — partial unique `programme_requests_one_open_key` on `(enrollment_id, kind) WHERE status = 'open'`, so two sweeps or two requests at once leave one (R-513; 006:T001; changelog row 72).
 
-80. `programme_requests`: a reason NULL or 1 to 500 characters and not blank, and set on every `stop` and `refusal` — check `programme_requests_reason_check`; `status <> 'extended' OR kind IN ('no_offer', 'pay_blocked')` — check `programme_requests_extended_check`: only the sweep's two items are extended (R-513, I-2 (a), FR-706b; 006:T001; changelog row 72).
+80. `programme_requests`: a reason NULL or 1 to 500 characters and not blank, and set on every `stop` and `refusal` — check `programme_requests_reason_check`; `status <> 'extended' OR kind IN ('no_offer', 'pay_blocked')` — check `programme_requests_extended_check`: only the sweep's two items are extended (R-513, I-2 (a), FR-706b; 006:T001; changelog row 72). *(Amended on 2026-11-23, SRS DEC-112; changelog row 75; no migration.)* On a `no_offer` item the reason is the administrator's record of why no offer was made, written at the decision; the check lets it through (bounded, not required), and `programmes.decide` requires it, a rule of the service, not of the database. No `refusal` row is written any more; the value and this check's clause on it stay.
 
 81. `programme_requests`: `(decided_by_admin_id IS NULL) = (decided_at IS NULL) AND (status NOT IN ('approved', 'declined') OR decided_at IS NOT NULL)` — check `programme_requests_decided_check`: the deciding administrator and the instant set together, on every approval and decline (rule 54's pattern; R-513; 006:T001; changelog row 72).
 
@@ -1626,3 +1626,9 @@ Amended on 2026-11-23 by T009 of `specs/006-programme/tasks.md` (B-P2), on the o
 | # | Change | Migration |
 |---|---|---|
 | 74 | §7 `payments.card_consent_at` (timestamptz, nullable; NULL on every existing row), the instant the student ticked «save my card» on a programme order paid by hand, copied into `programme_cards.consented_at` when the card is saved (T013); §15 rule 82 (FR-713, R-510) | `20261123104538_programme_card_consent` (B-P2) |
+
+Amended on 2026-11-23 for T008 of `specs/006-programme/tasks.md` (B-P2), on the owner's decision of 2026-11-23 typed in B-P2's review session (SRS DEC-112: the teacher's refusal goes through support; the administrator records, beside the `no_offer` item, why no offer was made); `specs/006-programme/data-model.md`, research R-513; the number in B-P2's range after lane c's row 74. No column, check or enum value is added or dropped, and no rule is added: 53 tables.
+
+| # | Change | Migration |
+|---|---|---|
+| 75 | §5 `programme_requests`: `kind`'s `refusal` is unused (the teacher's app raises `stop` only; the refusal is an approved `no_offer` item), kept in `programme_request_kind`; `reason` on a `no_offer` item is the administrator's record of why no offer was made, written at the decision and required by `programmes.decide`, not by the database; §15 rule 80's text amended to say so, its check unchanged (`20261122110318_ijazah_programme/migration.sql:258-260`) | none |

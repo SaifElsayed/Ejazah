@@ -1212,6 +1212,31 @@ describe('sessions.remedy.answerCounter: accept (T032; FR-465, FR-468; A3, A7)',
     expect(calls.filter(([name]) => name === 'book')).toEqual([]);
   });
 
+  // 006:T010 (Q-D1 (a), the review session under rule d): the student's programme time recurs every
+  // week, a lasting refusal as `slot_taken` is (the owner's decision (b) under T032).
+  it("red first: refused programme_time (the student's programme time), inside the choice window: released at once, not left for the answer window, one counter_booking_refused row, one warn line naming programme_time (006:T010)", async () => {
+    bookRefusal = new RefusedBooking({ cause: 'programme_time' });
+    expect((await refusalOf(answer(true))).code).toBe('MAKEUP_REFUSED');
+    expect(writes().slice(-2)).toEqual([
+      ['releaseCounter', REMEDY],
+      [
+        'recordEvents',
+        [
+          {
+            enrollmentId: ENROLLMENT,
+            sessionId: SESSION,
+            kind: 'counter_booking_refused',
+            occurredAt: NOW,
+          },
+        ],
+      ],
+    ]);
+    expect(linesAt('warn')).toEqual([
+      { sessionId: SESSION, enrollmentId: ENROLLMENT, constraint: 'programme_time' },
+    ]);
+    expect(remedy?.status).toBe('proposed');
+  });
+
   it('refused slot_taken after the choice window: released, then the proposal booked, never a counter_unanswered refund', async () => {
     now = new Date('2026-11-08T09:00:00.000Z');
     remedy = counterPending({
@@ -1439,6 +1464,35 @@ describe('advance-remedies: the choice window ends, and a refused proposal is re
       { remedyId: REMEDY, sessionId: SESSION, constraint: 'hold' },
       { remedyId: REMEDY, sessionId: SESSION, constraint: 'reservation' },
     ]);
+  });
+
+  // 006:T010 (PR #156 r1 Follow-up 1; the owner's rule of 2026-11-05): a proposal made before the
+  // student's programme existed is never booked onto the weekly time the programme now keeps.
+  it("red first: a proposal over the student's programme time is refused, read under the booking's locks, its own enrollment left out (006:T010)", async () => {
+    programmeAsked = [];
+    busy.programme = [
+      {
+        startsAt: new Date('2026-12-06T07:30:00.000Z'),
+        endsAt: new Date('2026-12-06T08:30:00.000Z'),
+      },
+    ];
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('refused');
+    expect(booked).toEqual([]);
+    expect(programmeAsked).toEqual([[[STUDENT], ENROLLMENT]]);
+    expect(linesAt('warn')).toEqual([
+      { remedyId: REMEDY, sessionId: SESSION, constraint: 'programme_time' },
+    ]);
+    expect(remedy?.status).toBe('proposed');
+  });
+
+  it('a programme time beside the proposal leaves it booked (006:T010)', async () => {
+    busy.programme = [
+      {
+        startsAt: new Date('2026-12-06T08:00:00.000Z'),
+        endsAt: new Date('2026-12-06T09:00:00.000Z'),
+      },
+    ];
+    expect(await windows().bookAtChoiceEnd(REMEDY)).toBe('booked');
   });
 
   it('a second deadlock is no refusal: nothing written, no line of its own, tried again next run', async () => {
