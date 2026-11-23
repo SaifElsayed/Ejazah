@@ -550,7 +550,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   port, and the closed test renews by hand.
 - The teacher's share held and released later rests on the owner's assumption of 2026-11-15 (ADR 0025 D8).
 - A package has one weekly time (FR-BOOK-4), so one session a week.
-- A refusal request approved after the assessment keeps the fee (the owner's answer, DEC-93).
+- A refusal request approved after the assessment keeps the fee (the owner's answer, DEC-93). *(2026-11-23, SRS
+  DEC-112: the refusal is the approved `no_offer` item; the fee is kept the same way.)*
 - The assessment fee has no default; an ijazah-track package cannot be published until an Administrator sets it
   (the owner did not give the amount).
 - A postponed or made-up session belongs to the month of its original session and is paid (G-6).
