@@ -1,6 +1,7 @@
 // T018 and T019 of specs/004-sessions: the API as the pre-session screen's and the room's specs see
 // it: the shared double (`features/shared/__tests__/api-double.ts`) with `sessions.get` and
-// `sessions.join` beside its procedures, each a mock answering what each case says.
+// `sessions.join` beside its procedures, each a mock answering what each case says (004:T084:
+// `sessions.encryptionFailed` too).
 import type { SessionsGetOutput, SessionsJoinOutput } from '@ijazah/contracts';
 import { jest } from '@jest/globals';
 
@@ -9,6 +10,8 @@ import { type FakeApi, fakeApi, type FakeProcedures } from '../../__tests__/api-
 export interface SessionProcedures {
   readonly get: { readonly query: jest.Mock<(input: unknown) => Promise<SessionsGetOutput>> };
   readonly join: { readonly mutate: jest.Mock<(input: unknown) => Promise<SessionsJoinOutput>> };
+  /** 004:T084 (R1b): this phone could not encrypt; answers nothing. */
+  readonly encryptionFailed: { readonly mutate: jest.Mock<(input: unknown) => Promise<void>> };
 }
 
 export interface RoomApi {
@@ -27,6 +30,9 @@ export function roomApi(): RoomApi {
   const sessions: SessionProcedures = {
     get: { query: jest.fn<(input: unknown) => Promise<SessionsGetOutput>>() },
     join: { mutate: jest.fn<(input: unknown) => Promise<SessionsJoinOutput>>() },
+    encryptionFailed: {
+      mutate: jest.fn<(input: unknown) => Promise<void>>(() => Promise.resolve()),
+    },
   };
   const api = { ...base.api, sessions };
   return {

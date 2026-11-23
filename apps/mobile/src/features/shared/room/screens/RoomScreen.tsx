@@ -11,7 +11,9 @@
 // B40a, T019's follow-up (a): leaving by the system's back is held (`usePreventRemove`) until the
 // connection is closed and the audio session stopped, as the header's back is, so the old room's
 // `stopAudio` never lands after a next room's `startAudio`; either back leaves once. T065: the
-// first join's failure says when to try again after `RATE_LIMITED` (`genericErrorKey`).
+// first join's failure says when to try again after `RATE_LIMITED` (`genericErrorKey`). 004:T084
+// (NFR-SEC-13, R-HONEST): a phone that could not encrypt is told why; the counterparty's tracks that
+// are not encrypted, or cannot be decrypted, are said in words; this side's encryption, when on.
 import type { SessionsGetOutput } from '@ijazah/contracts';
 import { type TrackReference, VideoTrack } from '@livekit/react-native';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
@@ -160,6 +162,12 @@ function Body({
       return <Text tone="muted">{t('session.pre.unavailable')}</Text>;
     case 'ended':
       return <Text tone="muted">{t('session.room.ended')}</Text>;
+    case 'encryptionFailed':
+      return (
+        <Banner icon={{ name: 'lock' }} tone="danger">
+          {t('session.room.encryption.failed')}
+        </Banner>
+      );
     case 'anotherDevice':
       return (
         <View style={{ gap: tokens.space['3'] }}>
@@ -244,6 +252,7 @@ function Counterparty({
       <Tile>
         <Video track={shown} />
         <Text variant="callout">{name}</Text>
+        <CounterpartyEncryption view={view} />
       </Tile>
     );
   }
@@ -256,8 +265,28 @@ function Counterparty({
         ) : (
           <Text tone="muted">{t('session.room.waitingFor', { name })}</Text>
         )}
+        <CounterpartyEncryption view={view} />
       </View>
     </Tile>
+  );
+}
+
+/** 004:T084 (R-HONEST): what of the counterparty is not played, and why. */
+function CounterpartyEncryption({ view }: { readonly view: RoomView | undefined }) {
+  const t = useT();
+  return (
+    <>
+      {view?.counterpartyUnencrypted === true ? (
+        <Text variant="caption" tone="danger">
+          {t('session.room.encryption.unencrypted')}
+        </Text>
+      ) : null}
+      {view?.counterpartyUndecryptable === true ? (
+        <Text variant="caption" tone="danger">
+          {t('session.room.encryption.undecryptable')}
+        </Text>
+      ) : null}
+    </>
   );
 }
 
@@ -275,6 +304,11 @@ function Self({ view }: { readonly view: RoomView | undefined }) {
       ) : (
         <Video track={view.ownCamera} mirror />
       )}
+      {view?.encrypted === true ? (
+        <Text variant="caption" tone="muted">
+          {t('session.room.encryption.on')}
+        </Text>
+      ) : null}
       {view?.sharing === true ? (
         <Text variant="caption" tone="muted">
           {t('session.room.sharing')}
