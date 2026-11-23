@@ -3303,6 +3303,10 @@
         "withSession": "{event} · الجلسة {n}",
         "outcomeChange": "{before} ← {after}",
         "previousStart": "كان موعدها {when}",
+        "party": {
+          "student": "على جهاز الطالب",
+          "teacher": "على جهاز المعلم"
+        },
         "kind": {
           "confirmed": "تأكّد الاشتراك",
           "orderFailed": "فشل طلب دفع",

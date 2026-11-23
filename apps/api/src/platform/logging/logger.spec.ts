@@ -38,6 +38,8 @@ describe('the declared redaction list (T095, FR-040)', () => {
       'authorization',
       'code',
       'storageKey',
+      // 004:T084 (SRS DEC-102): a session's media key, which `sessions.join` answers.
+      'mediaKey',
       'card',
       'gatewayEvent',
     ]) {

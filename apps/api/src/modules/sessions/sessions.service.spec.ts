@@ -27,7 +27,11 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { createLogger, type Logger } from '../../platform/logging/logger.js';
-import { bindJoinToken, type VideoPort } from '../../platform/ports/video/video.port.js';
+import {
+  bindJoinToken,
+  mediaKeyOf,
+  type VideoPort,
+} from '../../platform/ports/video/video.port.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CancellationRequestRow } from './cancellation.repository.js';
 import type { DisputeView, SessionDisputeFields } from './dispute-view.js';
@@ -40,6 +44,7 @@ import {
   type SessionsStore,
 } from './sessions.service.js';
 import type { RemedyViewRow } from './remedy-offer.repository.js';
+import type { SessionEventRecord } from './session-events.repository.js';
 
 const SESSION = '0199d0a0-0000-7000-8000-00000000a001';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-00000000e001';
@@ -47,6 +52,8 @@ const STUDENT = '0199d0a0-0000-7000-8000-00000000c001';
 const TEACHER = '0199d0a0-0000-7000-8000-00000000c002';
 const STRANGER = '0199d0a0-0000-7000-8000-00000000c003';
 const NOWHERE = '0199d0a0-0000-7000-8000-00000000a0ff';
+/** T084: another session of the same two parties. */
+const NEXT_SESSION = '0199d0a0-0000-7000-8000-00000000a002';
 
 /** Sunday 2026-11-08, 17:00 to 17:45 in Cairo (+02:00). */
 const STARTS = new Date('2026-11-08T15:00:00.000Z');
@@ -88,6 +95,8 @@ const active = (gender: 'male' | 'female', displayName: string): PartyStanding =
 });
 
 let trace: string[];
+/** T084: the session events the store was asked to record, in order. */
+let recorded: SessionEventRecord[];
 let sessions: Map<string, PartySessionRow>;
 let parties: Map<string, PartyStanding>;
 /** Applied once the accounts are locked: what another transaction committed meanwhile. */
@@ -100,6 +109,10 @@ let disputeFields: Map<string, SessionDisputeFields>;
 let disputeAsked: unknown[][];
 /** The provider's address this spec's port answers with every token. */
 const SERVER_URL = 'wss://video.spec.invalid';
+/** T084: the secret this spec's port keys the session media keys under; a stand-in shape (R-SEC-1). */
+const MEDIA_KEY_SECRET = Buffer.alloc(32, 4);
+/** T084: a media key's shape, 32 bytes in base64. */
+const BASE64_32 = /^[A-Za-z0-9+/]{43}=$/;
 
 /**
  * The video port as this spec sees it: what it was asked, in order, and the trace beside the
@@ -126,7 +139,13 @@ class RecordingVideo implements VideoPort {
     this.calls.push({ operation: 'createSessionToken', args });
     const [sessionId, participantUserId] = args;
     return Promise.resolve(
-      bindJoinToken(sessionId, participantUserId, `credential_${randomUUID()}`, SERVER_URL),
+      bindJoinToken(
+        sessionId,
+        participantUserId,
+        `credential_${randomUUID()}`,
+        SERVER_URL,
+        mediaKeyOf(MEDIA_KEY_SECRET, sessionId),
+      ),
     );
   }
 
@@ -206,6 +225,14 @@ const store: SessionsStore = {
     trace.push(`read slot ${slotId}`);
     return { startTimeLocal: '16:30:00' };
   },
+  // T084: the enrollment's lock and the events' writer.
+  lockEnrollment: async (_tx, enrollmentId) => {
+    trace.push(`lock enrollment ${enrollmentId}`);
+  },
+  recordEvents: async (_tx, events) => {
+    trace.push('record events');
+    recorded.push(...events);
+  },
   // 003:T112.
   postponementsOf: async (_tx, sessionIds) =>
     new Map(
@@ -245,6 +272,7 @@ const enrollmentSide = {
 
 beforeEach(() => {
   trace = [];
+  recorded = [];
   sessions = new Map([[SESSION, row()]]);
   parties = new Map([
     [STUDENT, active('female', 'يُسْرى عليّ')],
@@ -562,6 +590,8 @@ describe('sessions.join: admitted (FR-431, FR-435, R-GENDER-7)', () => {
       serverUrl: SERVER_URL,
       token: expect.stringMatching(/^credential_/) as unknown,
       validUntil: ENDS.toISOString(),
+      // T084: the session's media key, as the port minted it with the token.
+      mediaKey: mediaKeyOf(MEDIA_KEY_SECRET, SESSION),
     });
   });
 
@@ -597,6 +627,26 @@ describe('sessions.join: admitted (FR-431, FR-435, R-GENDER-7)', () => {
       [SESSION, STUDENT],
       [SESSION, TEACHER],
     ]);
+  });
+
+  // 004:T084 (SRS DEC-102, NFR-SEC-13): both participants of one session are handed one key, and
+  // another session's participants another; the key is never in a log line (R-SEC-2).
+  it('hands both parties of one session the same media key, and another session another (T084)', async () => {
+    const student = await services.join({ userId: STUDENT }, { sessionId: SESSION }, log);
+    const teacher = await services.join({ userId: TEACHER }, { sessionId: SESSION }, log);
+    sessions.set(NEXT_SESSION, row({ id: NEXT_SESSION }));
+    const next = await services.join({ userId: STUDENT }, { sessionId: NEXT_SESSION }, log);
+
+    expect(student.mediaKey).toMatch(BASE64_32);
+    expect(teacher.mediaKey).toBe(student.mediaKey);
+    expect(next.mediaKey).toMatch(BASE64_32);
+    expect(next.mediaKey).not.toBe(student.mediaKey);
+  });
+
+  it('writes the media key in no log line (T084, R-SEC-2)', async () => {
+    const joined = await services.join({ userId: STUDENT }, { sessionId: SESSION }, log);
+    expect(joined.mediaKey).toMatch(BASE64_32);
+    expect(JSON.stringify(lines)).not.toContain(joined.mediaKey);
   });
 
   it('writes the token and its credential in no log line (R-SEC-2)', async () => {
@@ -856,5 +906,116 @@ describe('sessions.get: the remedy (T028)', () => {
     expect(
       (await services.get({ userId: STUDENT }, { sessionId: SESSION }, log)).remedy,
     ).toBeUndefined();
+  });
+});
+
+// 004:T084 (SRS DEC-105, FR-SESS-2, FR-ADMIN-20 (a); the note under T084, (3), Q-5 (a)):
+// `sessions.encryptionFailed`, a participant's phone that could not set the session's media key or
+// turn its encryption on. FR-SESS-2's checks as the join makes them: a non-party and a nonexistent
+// session, and a counterparty of the other gender, answer one NOT_FOUND and write nothing. Locks
+// (contracts/kernel.md, rule 2 and the general rule): both accounts in one call, in id order, then the
+// enrollment (a `session_events` insert takes it), the session and the parties read again under them;
+// then one `encryption_failed` row naming the caller's side and the database's instant, and, after
+// the commit, one line of ids and a reason code.
+describe('sessions.encryptionFailed (T084, DEC-105)', () => {
+  it('records one encryption_failed event naming the student’s side and the database’s instant', async () => {
+    databaseNow = new Date('2026-11-08T15:05:00.000Z');
+    await services.encryptionFailed({ userId: STUDENT }, { sessionId: SESSION }, log);
+
+    expect(recorded).toEqual([
+      {
+        enrollmentId: ENROLLMENT,
+        sessionId: SESSION,
+        kind: 'encryption_failed',
+        party: 'student',
+        occurredAt: databaseNow,
+      },
+    ]);
+  });
+
+  it('names the teacher’s side when the teacher’s phone failed', async () => {
+    await services.encryptionFailed({ userId: TEACHER }, { sessionId: SESSION }, log);
+
+    expect(recorded.map(({ party }) => party)).toEqual(['teacher']);
+  });
+
+  it('locks both accounts in id order, then the enrollment, reads under the locks, then writes and commits', async () => {
+    await services.encryptionFailed({ userId: TEACHER }, { sessionId: SESSION }, log);
+
+    expect(trace).toEqual([
+      'begin',
+      `read session as ${TEACHER}`,
+      `lock users ${STUDENT},${TEACHER}`,
+      `lock enrollment ${ENROLLMENT}`,
+      `read session as ${TEACHER}`,
+      `read parties ${STUDENT},${TEACHER}`,
+      'record events',
+      'commit',
+    ]);
+  });
+
+  it('answers a non-party and a nonexistent session NOT_FOUND, as the join does, and writes nothing', async () => {
+    for (const [userId, sessionId] of [
+      [STRANGER, SESSION],
+      [STUDENT, NOWHERE],
+    ] as const) {
+      const refused = await refusalOf(services.encryptionFailed({ userId }, { sessionId }, log));
+      expect(refused.code).toBe('NOT_FOUND');
+      expect(refused.details).toBeUndefined();
+    }
+    expect(recorded).toEqual([]);
+    expect(trace.filter((step) => step.startsWith('lock'))).toEqual([]);
+  });
+
+  it('answers a counterparty of the other gender NOT_FOUND (FR-SESS-2), writing nothing', async () => {
+    parties.set(TEACHER, { ...active('male', 'المعلم سامي'), teacherApproved: true });
+    const refused = await refusalOf(
+      services.encryptionFailed({ userId: STUDENT }, { sessionId: SESSION }, log),
+    );
+
+    expect(refused.code).toBe('NOT_FOUND');
+    expect(recorded).toEqual([]);
+    expect(trace.at(-1)).toBe('rollback');
+  });
+
+  it('writes one line of ids and a reason code, after the commit', async () => {
+    await services.encryptionFailed({ userId: STUDENT }, { sessionId: SESSION }, log);
+
+    expect(
+      lines.map(({ msg, sessionId, userId, reason }) => ({ msg, sessionId, userId, reason })),
+    ).toEqual([
+      {
+        msg: 'A participant could not encrypt the session',
+        sessionId: SESSION,
+        userId: STUDENT,
+        reason: 'encryption_failed',
+      },
+    ]);
+    // Beyond the logger's own fields (level, time, pid, hostname, msg), the ids and the reason only.
+    expect(Object.keys(lines[0] ?? {}).sort()).toEqual(
+      ['hostname', 'level', 'msg', 'pid', 'reason', 'sessionId', 'time', 'userId'].sort(),
+    );
+  });
+
+  it('writes no such line when the record is not committed', async () => {
+    const failing = createSessionsServices({
+      transactions,
+      settings,
+      video,
+      enrollmentSide,
+      store: {
+        ...store,
+        recordEvents: () => Promise.reject(new Error('the insert failed')),
+      },
+      idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
+      notifications: { record: () => Promise.reject(new Error('no push is recorded here')) },
+      clock: async () => databaseNow,
+    });
+
+    await expect(
+      failing.encryptionFailed({ userId: STUDENT }, { sessionId: SESSION }, log),
+    ).rejects.toThrow('the insert failed');
+    expect(trace.at(-1)).toBe('rollback');
+    expect(lines).toEqual([]);
   });
 });

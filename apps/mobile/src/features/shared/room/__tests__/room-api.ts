@@ -75,6 +75,8 @@ export function grant(of: Partial<SessionsJoinOutput> = {}): SessionsJoinOutput 
     serverUrl: 'wss://video.ijazah.test',
     token: 'token-1',
     validUntil: '2026-11-11T16:45:00.000Z',
+    // 004:T084 (R1b): the session's media key, 32 bytes in base64 (a fixture value, never a real key).
+    mediaKey: 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
     ...of,
   };
 }

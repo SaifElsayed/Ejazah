@@ -111,6 +111,8 @@ const joined = {
   serverUrl: 'wss://video-stand-in.invalid',
   token: 'fake_vtk_spec',
   validUntil: '2026-11-12T08:00:00.000Z',
+  // 004:T084: required by the output schema; a stand-in shape, never a real key.
+  mediaKey: Buffer.alloc(32, 6).toString('base64'),
 };
 
 // T021.
@@ -180,6 +182,11 @@ const sessions: SessionsServices = {
     if (input.enrollmentId !== ENROLLMENT) throw new DomainError('NOT_FOUND');
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
     return { ...postponed, reason: input.reason } as never;
+  },
+  // 004:T084.
+  encryptionFailed: async (caller, input) => {
+    calls.push(['encryptionFailed', caller, input]);
+    if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
   },
   // T060.
   complaint: {
@@ -1255,4 +1262,109 @@ describe("'sessions.cancellation': the request's live list (T066)", () => {
       expect(published).toEqual([]);
     },
   );
+});
+
+// 004:T084 (SRS DEC-105; the note under T084, (3), Q-5 (a)): `sessions.encryptionFailed`, a mutation of
+// the participant kind handing the service the caller's own account and the session id only (the side
+// that failed is the server's reading of the caller, never the input), answering nothing. No limit of
+// its own yet (the open question in R1b's lane C1 report): the signed-in default counts it.
+describe("'sessions.encryptionFailed' (T084)", () => {
+  const report = (caller: Caller, input: Record<string, unknown>) =>
+    caller.sessions.encryptionFailed(input as never);
+
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted account ACCOUNT_RESTRICTED before the service: 'sessions.encryptionFailed'", async () => {
+    await expect(report(callerAs(null), { sessionId: SESSION })).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(report(callerAs(sessionOf(who)), { sessionId: SESSION }), who).rejects.toEqual(
+        refused('ACCOUNT_RESTRICTED'),
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the session id, whatever else the input says, and answers nothing: 'sessions.encryptionFailed'", async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      const answer = await report(callerAs(sessionOf(who)), {
+        sessionId: SESSION,
+        party: who === 'student' ? 'teacher' : 'student',
+        userId: OTHER,
+      });
+      expect(answer).toBeUndefined();
+    }
+    expect(calls).toEqual([
+      ['encryptionFailed', { userId: CALLER }, { sessionId: SESSION }],
+      ['encryptionFailed', { userId: CALLER }, { sessionId: SESSION }],
+    ]);
+  });
+
+  it("answers the service's NOT_FOUND with no field: 'sessions.encryptionFailed'", async () => {
+    await expect(report(callerAs(sessionOf('student')), { sessionId: OTHER })).rejects.toEqual(
+      refused('NOT_FOUND'),
+    );
+  });
+
+  it("refuses a session id that is not one VALIDATION_FAILED before the service: 'sessions.encryptionFailed'", async () => {
+    for (const input of [{}, { sessionId: 'not-an-id' }]) {
+      const thrown: unknown = await report(callerAs(sessionOf('student')), input).catch(
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("is a mutation of the participant kind: 'sessions.encryptionFailed'", () => {
+    expect(metaOf('sessions.encryptionFailed')).toEqual({ surface: 'app', caller: 'participant' });
+    expect(typeOf('sessions.encryptionFailed')).toBe('mutation');
+  });
+
+  it("refuses a call past the signed-in default RATE_LIMITED before the service, nothing reached: 'sessions.encryptionFailed'", async () => {
+    const read: string[] = [];
+    const rateLimiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          read.push(key);
+          return schema.parse({ limit: 1, window_seconds: 60 });
+        },
+      },
+      counter: { hit: async () => 2 },
+      subjectKey: Buffer.alloc(32, 7),
+    });
+    const services: AppServices = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions,
+      chat: unusedChatServices,
+      certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
+    };
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('teacher'),
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        rateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+      }),
+    );
+    const thrown: unknown = await report(caller, { sessionId: SESSION }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
+    expect(read).toEqual([SIGNED_IN_DEFAULT_RATE_LIMIT]);
+    expect(calls).toEqual([]);
+  });
 });

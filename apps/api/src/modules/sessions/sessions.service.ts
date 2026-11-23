@@ -51,7 +51,22 @@
 // rejoin finds the room), then `createSessionToken` bound to the session and the caller until the
 // scheduled end (R-GENDER-7, R-302). A rejoin is the same call again (FR-435). The token and its
 // credential are answered and never logged: the one line an issued token writes is the two ids.
+// 004:T084 (SRS DEC-102, NFR-SEC-13): the answer also carries the session's media key, which the
+// port minted with the token (`video.port.ts`, `mediaKeyOf`), only to the party the checks above
+// admitted; it is never logged, audited, published, pushed or stored (the join is not keyed).
+//
+// THE FAILURE'S RECORD (004:T084; SRS DEC-105, FR-ADMIN-20 (a); the note under T084, (3), Q-5 (a)):
+// `sessions.encryptionFailed`, a participant's phone that could not set the session's media key or
+// turn its encryption on. FR-SESS-2's checks as the join makes them: a non-party and a nonexistent
+// session, and a counterparty of the other gender, answer one NOT_FOUND, each with its one refusal
+// line, and nothing is written. One transaction: the session read once for its parties, both accounts
+// locked in one call in id order, then the enrollment (`session-events.repository.ts`: a
+// `session_events` insert always takes it, contracts/kernel.md's general rule), the session and the
+// parties read again under the locks; then one `encryption_failed` row naming the caller's side,
+// `party`, and the database's instant, nothing else. After the commit, one line of the two ids and a
+// reason code. The session is evaluated as today: nothing else reads the row but the monitor.
 import type {
+  SessionsEncryptionFailedInput,
   SessionsGetInput,
   SessionsGetOutput,
   SessionsJoinInput,
@@ -102,6 +117,11 @@ import { type RemedyViewRow, remedyViewRowOf } from './remedy-offer.repository.j
 import { createRemedyOffer, type RemedyOffer } from './remedy-offer.service.js';
 import { remedyViewOf } from './remedy-offer.view.js';
 import { createRemedyServices, type RemedyServices, type RemedyStore } from './remedy.service.js';
+import {
+  lockEventsEnrollment,
+  recordSessionEvents,
+  type SessionEventRecord,
+} from './session-events.repository.js';
 import { lockSessionParties, type PartySessionRow, sessionOfParty } from './sessions.repository.js';
 
 /** Minutes before a session's start its join opens (FR-431; SRS §3.14). */
@@ -152,6 +172,10 @@ export interface SessionsStore {
     tx: Transaction,
     sessionIds: readonly string[],
   ): Promise<ReadonlyMap<string, NonNullable<SessionsGetOutput['postponement']>>>;
+  /** 004:T084: the session's enrollment, `FOR UPDATE`, before its event is recorded. */
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  /** 004:T084: the events, one row each, on the caller's transaction. */
+  recordEvents(tx: Transaction, events: readonly SessionEventRecord[]): Promise<void>;
 }
 
 /** The store over this module's reads and lock and identity's accounts (R-API-6), as `main.ts` binds it. */
@@ -162,6 +186,8 @@ export const sessionsStore: SessionsStore = {
   latestCancellationOf: latestRequestOf,
   remedyOf: remedyViewRowOf,
   slotOf: readSlot,
+  lockEnrollment: lockEventsEnrollment,
+  recordEvents: recordSessionEvents,
   postponementsOf: postponementsAmong,
 };
 
@@ -182,6 +208,12 @@ export interface SessionsServices extends DisputeRaise {
   readonly complaint: AbsenceComplaint;
   /** 003:T112: `sessions.postpone`, a party's one-week postponement. */
   readonly postpone: Postponement['postpone'];
+  /** 004:T084: `sessions.encryptionFailed`, a participant's phone that could not encrypt. */
+  encryptionFailed(
+    caller: SessionsCaller,
+    input: SessionsEncryptionFailedInput,
+    log: Logger,
+  ): Promise<void>;
 }
 
 export interface SessionsDependencies {
@@ -239,6 +271,12 @@ type RefusalReason =
 /** The seconds a `time` column's local time carries, which the contract's `HH:MM` leaves out. */
 const SECONDS = ':00';
 
+/** The line a refusal writes, by what was refused (T084 adds the failure's report). */
+const REFUSED = {
+  readOrJoin: 'A session read or join was refused',
+  encryptionFailure: 'A report that a session could not be encrypted was refused',
+} as const;
+
 /**
  * Logs the refusal with ids and its reason only, and answers the error to throw, marked as logged so
  * the handler's one-place refusal log writes no second line (PR #130's review, Minor 4).
@@ -250,8 +288,9 @@ function refusal(
   reason: RefusalReason,
   // The shape of DomainError's own options (`domain-error.ts:144`), written out so no literal index is.
   details?: { readonly details?: readonly FieldIssue[]; readonly cause?: unknown },
+  message: string = REFUSED.readOrJoin,
 ): DomainError {
-  log.info({ ...ids, errorCode, reason }, 'A session read or join was refused');
+  log.info({ ...ids, errorCode, reason }, message);
   return markRefusalLogged(new DomainError(errorCode, undefined, details));
 }
 
@@ -270,6 +309,7 @@ async function partiesSeen(
   session: PartySessionRow,
   userId: string,
   log: Logger,
+  message: string = REFUSED.readOrJoin,
 ): Promise<Seen> {
   const counterpartyId =
     session.studentUserId === userId ? session.teacherUserId : session.studentUserId;
@@ -277,9 +317,9 @@ async function partiesSeen(
   const own = parties.get(userId);
   const counterparty = parties.get(counterpartyId);
   const ids = { sessionId: session.id, userId };
-  if (own === undefined) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party');
+  if (own === undefined) throw refusal(log, ids, 'NOT_FOUND', 'not_a_party', undefined, message);
   if (counterparty !== undefined && counterparty.gender !== own.gender) {
-    throw refusal(log, ids, 'NOT_FOUND', 'gender_differs');
+    throw refusal(log, ids, 'NOT_FOUND', 'gender_differs', undefined, message);
   }
   return { session, counterpartyId, counterparty, own };
 }
@@ -473,7 +513,41 @@ export function createSessionsServices({
         serverUrl: token.serverUrl,
         token: token.credential,
         validUntil: session.endsAt.toISOString(),
+        // 004:T084 (SRS DEC-102, NFR-SEC-13): the session's media key, only in this answer, beside
+        // the token; never in the line above or any other (R-SEC-2).
+        mediaKey: token.mediaKey,
       };
+    },
+
+    // 004:T084 (SRS DEC-105, FR-SESS-2, FR-ADMIN-20 (a); the note under T084, (3)): this file's
+    // «THE FAILURE'S RECORD».
+    encryptionFailed: async ({ userId }, { sessionId }, log) => {
+      const refused = (ids: { readonly sessionId: string; readonly userId: string }) =>
+        refusal(log, ids, 'NOT_FOUND', 'not_a_party', undefined, REFUSED.encryptionFailure);
+      await transactions.run(async (tx) => {
+        const seen = await store.sessionOfParty(tx, sessionId, userId);
+        if (seen === null) throw refused({ sessionId, userId });
+        // Both accounts in one call, in id order, then the enrollment the row references (kernel.md,
+        // rule 2 and the general rule); the session and the parties read again under them.
+        await store.lockAccounts(tx, [seen.studentUserId, seen.teacherUserId].sort());
+        await store.lockEnrollment(tx, seen.enrollmentId);
+        const locked = await store.sessionOfParty(tx, sessionId, userId);
+        if (locked === null) throw refused({ sessionId, userId });
+        await partiesSeen(tx, store, locked, userId, log, REFUSED.encryptionFailure);
+        await store.recordEvents(tx, [
+          {
+            enrollmentId: locked.enrollmentId,
+            sessionId: locked.id,
+            kind: 'encryption_failed',
+            party: locked.studentUserId === userId ? 'student' : 'teacher',
+            occurredAt: await clock(tx),
+          },
+        ]);
+      });
+      log.info(
+        { sessionId, userId, reason: 'encryption_failed' },
+        'A participant could not encrypt the session',
+      );
     },
   };
 }

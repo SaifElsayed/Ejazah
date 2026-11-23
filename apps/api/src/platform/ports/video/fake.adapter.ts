@@ -21,6 +21,7 @@ import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
 import { StandIn } from '../stand-in.js';
 import {
   bindJoinToken,
+  mediaKeyOf,
   type IgnoredEvent,
   type JoinToken,
   type ParticipantEvent,
@@ -94,11 +95,17 @@ export function standInConnectionRef(participantUserId: string): string {
 
 export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
   readonly #webhookSecret: string;
+  readonly #mediaKeySecret: Buffer;
   readonly #rooms = new Map<string, Room>();
 
-  constructor(options: { readonly webhookSecret: string }) {
+  /**
+   * T084: `mediaKeySecret` keys the session media keys its tokens carry, as LiveKit's adapter keys
+   * them (`mediaKeyOf`), so the stand-in answers the key the phone would get.
+   */
+  constructor(options: { readonly webhookSecret: string; readonly mediaKeySecret: Buffer }) {
     super();
     this.#webhookSecret = options.webhookSecret;
+    this.#mediaKeySecret = options.mediaKeySecret;
   }
 
   createRoom(sessionId: string, timeouts: RoomTimeouts): Promise<string> {
@@ -127,6 +134,7 @@ export class FakeVideoAdapter extends StandIn<VideoPort> implements VideoPort {
           participantUserId,
           `fake_vtk_${randomUUID()}`,
           STAND_IN_VIDEO_SERVER_URL,
+          mediaKeyOf(this.#mediaKeySecret, sessionId),
         ),
       );
     } catch (error: unknown) {

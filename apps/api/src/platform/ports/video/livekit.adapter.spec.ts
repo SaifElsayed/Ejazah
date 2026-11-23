@@ -16,6 +16,7 @@ import { LiveKitVideoAdapter } from './livekit.adapter.js';
 
 const API_KEY = `APIspec${randomBytes(6).toString('hex')}`;
 const API_SECRET = randomBytes(32).toString('base64url');
+const MEDIA_KEY_SECRET = randomBytes(32);
 // A reserved name (RFC 6761): never resolved, and not LiveKit Cloud's, so the SDK tries no failover.
 const LIVEKIT_URL = 'wss://video.ijazah.invalid';
 
@@ -75,7 +76,13 @@ afterEach(() => {
 });
 
 function adapter(): LiveKitVideoAdapter {
-  return new LiveKitVideoAdapter({ url: LIVEKIT_URL, apiKey: API_KEY, apiSecret: API_SECRET });
+  return new LiveKitVideoAdapter({
+    url: LIVEKIT_URL,
+    apiKey: API_KEY,
+    apiSecret: API_SECRET,
+    // T084: generated at each run, as the keys are (R-SEC-1).
+    mediaKeySecret: MEDIA_KEY_SECRET,
+  });
 }
 
 /** The room LiveKit answers `CreateRoom` with (protobuf JSON, as its server sends it). */

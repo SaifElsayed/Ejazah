@@ -33,6 +33,8 @@ import {
 import { sessionsCancellationAttacks } from './sessions-cancellation.attacks.js';
 // 003:T112 (B-M3): `sessions.postpone`.
 import { sessionsPostponeAttacks } from './sessions-postpone.attacks.js';
+// 004:T084 (R1b): `sessions.encryptionFailed`.
+import { sessionsEncryptionAttacks } from './sessions-encryption.attacks.js';
 import { sessionsRemedyAttacks } from './sessions-remedy.attacks.js';
 
 // T052 of specs/004-sessions: the registrations of `sessions`, `chat` and `live` are
@@ -50,6 +52,8 @@ export const registeredAttacks: readonly Registration[] = [
   ...sessionComplaintAttacks,
   // 003:T112 (B-M3).
   ...sessionsPostponeAttacks,
+  // 004:T084 (R1b).
+  ...sessionsEncryptionAttacks,
   ...liveAttacks,
   // T037 of specs/004-sessions.
   ...chatAttacks,

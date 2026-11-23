@@ -3303,6 +3303,10 @@
         "withSession": "{event} · session {n}",
         "outcomeChange": "{before} → {after}",
         "previousStart": "It was set for {when}",
+        "party": {
+          "student": "On the student's phone",
+          "teacher": "On the teacher's phone"
+        },
         "kind": {
           "confirmed": "The enrollment was confirmed",
           "orderFailed": "A payment order failed",

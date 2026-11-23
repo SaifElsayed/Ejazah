@@ -67,7 +67,8 @@ const together: ReadonlyArray<readonly [readonly string[], readonly string[]]> =
   [['payout'], ['ref', 'reference', 'account', 'recipient']],
   [['recipient'], ['ref', 'reference']],
   [['card'], ['number', 'pan', 'last', 'last4', 'digits', 'expiry', 'bin', 'fragment', 'holder']],
-  [['key'], ['api', 'private', 'signing', 'secret', 'encryption', 'webhook', 'access']],
+  // 004:T084: `media` beside `key`, a session's media key.
+  [['key'], ['api', 'private', 'signing', 'secret', 'encryption', 'webhook', 'access', 'media']],
 ];
 
 /** `one time code`, the one three-word entry. */

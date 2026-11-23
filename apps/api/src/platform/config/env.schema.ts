@@ -244,6 +244,10 @@ const envObject = z.object({
   LIVEKIT_URL: livekitUrl.optional(),
   LIVEKIT_API_KEY: nonEmpty.optional(),
   LIVEKIT_API_SECRET: nonEmpty.optional(),
+  // 004:T084 (SRS DEC-102): the platform's own secret the session media keys are keyed under, never
+  // LiveKit's; 32 bytes of base64 (openssl rand -base64 32). Required outside development and test
+  // (below); there, unset, the video port derives a stand-in from ENCRYPTION_KEY.
+  VIDEO_MEDIA_KEY_SECRET: encryptionKey.optional(),
   SMS_PROVIDER_KEY: nonEmpty.optional(),
   EXPO_ACCESS_TOKEN: nonEmpty.optional(),
 
@@ -323,6 +327,8 @@ const envKeyKinds = {
   LIVEKIT_URL: 'provider',
   LIVEKIT_API_KEY: 'provider',
   LIVEKIT_API_SECRET: 'provider',
+  // 004:T084: the platform's own secret, no third party's, as ENCRYPTION_KEY is.
+  VIDEO_MEDIA_KEY_SECRET: 'platform',
   SMS_PROVIDER_KEY: 'provider',
   EXPO_ACCESS_TOKEN: 'provider',
   // 005:T008: a path on the worker's own machine, no third party's: the template spec reads it in CI.
@@ -543,6 +549,18 @@ export const envSchema = envObject.superRefine((env, ctx) => {
         });
       }
     }
+  }
+
+  // 004:T084 (SRS DEC-102, NFR-SEC-13): a hosted server keys the session media keys under its own
+  // secret, never a stand-in derived from ENCRYPTION_KEY, so it refuses to start without it. The key
+  // is named, never a value.
+  if (!standInsAllowed && env.VIDEO_MEDIA_KEY_SECRET === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['VIDEO_MEDIA_KEY_SECRET'],
+      message:
+        'required outside development and test: the session media keys are keyed under it (T084)',
+    });
   }
 
   // T023: a reserved address is for development and test only; the key is named, never the value.

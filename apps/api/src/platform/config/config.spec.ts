@@ -897,6 +897,8 @@ describe('the gateway (T056)', () => {
       LIVEKIT_URL: 'wss://ejazah-placeholder.livekit.cloud',
       LIVEKIT_API_KEY: 'APIplaceholder',
       LIVEKIT_API_SECRET: 'secret-placeholder',
+      // 004:T084: the session media keys' secret, required on a hosted server; a stand-in shape.
+      VIDEO_MEDIA_KEY_SECRET: Buffer.alloc(32, 1).toString('base64'),
       PUSH_PROVIDER: 'expo',
       EXPO_ACCESS_TOKEN: 'expo-placeholder',
       SMS_PROVIDER: 'fake',
@@ -1221,5 +1223,62 @@ describe('the certificate renderer (T008)', () => {
 
   it('reads an empty value as unset', () => {
     expect(loadConfig({ ...validEnv, TYPST_BIN: '' }).TYPST_BIN).toBeUndefined();
+  });
+});
+
+// 004:T084 (SRS DEC-102, NFR-SEC-13; the note under T084, (2)): the secret the session media keys are
+// keyed under, the platform's own. A hosted server refuses to start without it (T172's pattern); in
+// development and test, unset, the video port derives a stand-in from ENCRYPTION_KEY. The key is
+// named in a refusal, never its value.
+describe('the session media key secret (T084)', () => {
+  const mediaKeyRefusals = (env: Record<string, string>): readonly string[] => {
+    try {
+      loadConfig(env);
+      return [];
+    } catch (error: unknown) {
+      if (!(error instanceof ConfigError)) throw error;
+      return error.offendingKeys.filter((key) => key === 'VIDEO_MEDIA_KEY_SECRET');
+    }
+  };
+  // A stand-in shape, never a real secret (R-SEC-1).
+  const secret = Buffer.alloc(32, 3).toString('base64');
+
+  it('refuses a hosted server without VIDEO_MEDIA_KEY_SECRET, naming the key', () => {
+    const production = { ...validEnv, NODE_ENV: 'production' };
+
+    expect(mediaKeyRefusals(production)).toEqual(['VIDEO_MEDIA_KEY_SECRET']);
+    expect(mediaKeyRefusals({ ...production, VIDEO_MEDIA_KEY_SECRET: '' })).toEqual([
+      'VIDEO_MEDIA_KEY_SECRET',
+    ]);
+    expect(mediaKeyRefusals({ ...production, VIDEO_MEDIA_KEY_SECRET: secret })).toEqual([]);
+  });
+
+  it('starts in development and test without it', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      expect(
+        loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).VIDEO_MEDIA_KEY_SECRET,
+      ).toBeUndefined();
+    }
+  });
+
+  it('takes 32 bytes of base64 and refuses another length, never quoting the value', () => {
+    expect(loadConfig({ ...validEnv, VIDEO_MEDIA_KEY_SECRET: secret }).VIDEO_MEDIA_KEY_SECRET).toBe(
+      secret,
+    );
+    const short = Buffer.alloc(16, 3).toString('base64');
+    let refused: unknown;
+    try {
+      loadConfig({ ...validEnv, VIDEO_MEDIA_KEY_SECRET: short });
+    } catch (error: unknown) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(ConfigError);
+    expect((refused as ConfigError).offendingKeys).toEqual(['VIDEO_MEDIA_KEY_SECRET']);
+    expect((refused as ConfigError).message).not.toContain(short);
+  });
+
+  it('classifies it as the platform’s own key, so a test run may hold it', () => {
+    expect(platformKeys).toContain('VIDEO_MEDIA_KEY_SECRET');
+    expect(providerKeys).not.toContain('VIDEO_MEDIA_KEY_SECRET');
   });
 });

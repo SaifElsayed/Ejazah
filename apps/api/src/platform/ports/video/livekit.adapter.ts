@@ -44,6 +44,7 @@ import { addSeconds, unixSeconds } from '@ijazah/time';
 import { EventSignatureError, MalformedEventError } from '../inbound-event.js';
 import {
   bindJoinToken,
+  mediaKeyOf,
   type IgnoredEvent,
   type JoinToken,
   type ParticipantEvent,
@@ -73,6 +74,11 @@ export interface LiveKitVideoOptions {
   readonly url: string;
   readonly apiKey: string;
   readonly apiSecret: string;
+  /**
+   * 004:T084: the platform's own secret the session media keys are keyed under (`mediaKeyOf`),
+   * `VIDEO_MEDIA_KEY_SECRET`; never the API secret, and never sent to LiveKit (SRS DEC-102).
+   */
+  readonly mediaKeySecret: Buffer;
 }
 
 export class LiveKitVideoAdapter implements VideoPort {
@@ -80,13 +86,15 @@ export class LiveKitVideoAdapter implements VideoPort {
   readonly #url: string;
   readonly #apiKey: string;
   readonly #apiSecret: string;
+  readonly #mediaKeySecret: Buffer;
   readonly #rooms: RoomServiceClient;
   readonly #receiver: WebhookReceiver;
 
-  constructor({ url, apiKey, apiSecret }: LiveKitVideoOptions) {
+  constructor({ url, apiKey, apiSecret, mediaKeySecret }: LiveKitVideoOptions) {
     this.#url = url;
     this.#apiKey = apiKey;
     this.#apiSecret = apiSecret;
+    this.#mediaKeySecret = mediaKeySecret;
     this.#rooms = new RoomServiceClient(url, apiKey, apiSecret, {
       requestTimeout: REQUEST_TIMEOUT_SECONDS,
     });
@@ -131,7 +139,14 @@ export class LiveKitVideoAdapter implements VideoPort {
       canSubscribe: true,
       canPublishData: false,
     });
-    return bindJoinToken(sessionId, participantUserId, await token.toJwt(), this.#url);
+    // T084: the media key travels with the token to the participant, never in the JWT LiveKit reads.
+    return bindJoinToken(
+      sessionId,
+      participantUserId,
+      await token.toJwt(),
+      this.#url,
+      mediaKeyOf(this.#mediaKeySecret, sessionId),
+    );
   }
 
   async verifyAndParseParticipantEvent(
