@@ -2367,6 +2367,28 @@
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
       },
+      "programmes.decide": {
+        "input": {
+          "$": { "type": "object" },
+          "$.decision": {
+            "required": true,
+            "type": "string",
+            "values": ["approve", "decline", "extend"]
+          },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.note": { "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "declined", "extended", "open", "withdrawn"]
+          }
+        }
+      },
       "reports.chat": {
         "input": {
           "$": { "type": "object" },
@@ -4697,6 +4719,19 @@
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
+      "programme.cancel": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.ok": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
       "programme.offer": {
         "caller": "teacher",
         "input": {
@@ -4715,6 +4750,21 @@
           "$.monthCount": { "required": true, "type": "integer" },
           "$.sessionPrice_piasters": { "required": true, "type": "integer" },
           "$.total_piasters": { "required": true, "type": "integer" }
+        }
+      },
+      "programme.request": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["refusal", "stop"] },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.requestId": { "required": true, "type": "string" }
         }
       },
       "reports.create": {

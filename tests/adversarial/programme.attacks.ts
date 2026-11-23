@@ -153,4 +153,146 @@ const offerAttacks: ProcedureAttacks = {
   },
 };
 
-export const programmeAttacks: readonly ProcedureAttacks[] = [offerAttacks];
+// ---------------------------------------------------------------------------------------------
+// 006:T008 of specs/006-programme — `programme.cancel` (the student's, FR-706) and
+// `programme.request` (the teacher's refusal, FR-709), attacked as the offer is: in the discovery
+// world, on programmes of each gender awaiting their offer (session 1 delivered an hour ago, so the
+// refusal may be asked). A programme the caller is not the party of, the other gender's above all,
+// answers exactly as an enrollment that never existed and is left as it was; the own party's call is
+// answered (the own student's cancellation `{ ok: true }`, the own teacher's request an item), so no
+// attack passes on a refusal of everything. The cancellation's other role (the teacher) is FORBIDDEN
+// by its kind, the request's (the student) too.
+
+type ActionInput = Parameters<SessionParty['caller']['programme']['cancel']>[0];
+type RequestInput = Parameters<SessionParty['caller']['programme']['request']>[0];
+
+function cancel(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.cancel({
+    enrollmentId,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as ActionInput);
+}
+
+function request(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.request({
+    enrollmentId,
+    kind: 'refusal',
+    reason: 'لا يناسبه البرنامج',
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as RequestInput);
+}
+
+type Call = (party: SessionParty, enrollmentId: string, extra?: object) => Promise<unknown>;
+
+/** `call` on `enrollmentId` answers exactly as on an enrollment that never existed. */
+function expectHiddenTo(call: Call, party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return expectAnswersAsNonexistent(
+    () => call(party, enrollmentId, extra),
+    () => call(party, randomUUID(), extra),
+  );
+}
+
+/** The kind's refusal of the other role, before anything is read. */
+async function expectForbidden(call: Promise<unknown>): Promise<void> {
+  const refusal: unknown = await call.catch((error: unknown) => error);
+  expect(toErrorShape(refusal as Parameters<typeof toErrorShape>[0]).body.code).toBe('FORBIDDEN');
+}
+
+/** A party call's attacks: `party` picks the caller of the procedure's role from a pair. */
+function partyAttacks(
+  path: string,
+  holds: string,
+  call: Call,
+  party: (pair: ProgrammePair) => SessionParty,
+  otherRole: (pair: ProgrammePair) => SessionParty,
+  answered: (answer: unknown) => void,
+): ProcedureAttacks {
+  const answers = async (pair: ProgrammePair, extra: object = {}) =>
+    answered(await call(party(pair), pair.enrollmentId, extra));
+  return {
+    path,
+    holds,
+    attacks: {
+      directCall: async (direction) => {
+        const { own, theirs, neighbour } = await worldFor(direction);
+        await expectHiddenTo(call, party(own), theirs.enrollmentId);
+        await expectHiddenTo(call, party(neighbour), own.enrollmentId);
+        await expectForbidden(call(otherRole(own), own.enrollmentId));
+        await answers(own);
+        // The refused attacks wrote nothing to the other gender's programme: its party is answered.
+        await answers(theirs);
+      },
+      forgedId: async (direction) => {
+        const { own, theirs, neighbour } = await worldFor(direction);
+        for (const forged of [
+          theirs.enrollmentId,
+          neighbour.enrollmentId,
+          own.student.userId,
+          own.teacher.userId,
+          party(theirs).userId,
+        ]) {
+          await expectHiddenTo(call, party(own), forged);
+        }
+        await answers(own);
+      },
+      guessedId: async (direction) => {
+        const { own } = await worldFor(direction);
+        for (const guessed of [
+          randomUUID(),
+          randomUUID(),
+          neighbourOf(own.enrollmentId),
+          neighbourOf(own.enrollmentId).toUpperCase(),
+        ]) {
+          await expectHiddenTo(call, party(own), guessed);
+        }
+        await answers(own);
+      },
+      tamperedToken: async (direction) => {
+        const { surface, own, theirs } = await worldFor(direction);
+        for (const token of tamperedTokens(
+          direction,
+          party(own).accessToken,
+          party(theirs).sessionId,
+        )) {
+          const tampered = await surface.bearing(token);
+          await expectUnauthenticated(() =>
+            call({ ...party(own), caller: tampered }, own.enrollmentId),
+          );
+        }
+        await answers(own);
+      },
+      clientSuppliedGender: async (direction) => {
+        const { own, theirs } = await worldFor(direction);
+        await expectHiddenTo(call, party(own), theirs.enrollmentId, { gender: direction.other });
+        await answers(own, { gender: direction.other });
+      },
+    },
+  };
+}
+
+const cancelAttacks = partyAttacks(
+  'programme.cancel',
+  'R-GENDER-2, R-GENDER-4, FR-706, FR-410',
+  cancel,
+  (pair) => pair.student,
+  (pair) => pair.teacher,
+  (answer) => expect(answer).toEqual({ ok: true }),
+);
+
+const requestAttacks = partyAttacks(
+  'programme.request',
+  'R-GENDER-2, R-GENDER-4, FR-709, FR-410',
+  request,
+  (pair) => pair.teacher,
+  (pair) => pair.student,
+  (answer) => expect(answer).toEqual({ requestId: expect.any(String) }),
+);
+
+export const programmeAttacks: readonly ProcedureAttacks[] = [
+  offerAttacks,
+  // 006:T008.
+  cancelAttacks,
+  requestAttacks,
+];

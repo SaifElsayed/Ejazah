@@ -11,7 +11,6 @@
 // 006:T007: the offer (its own section below).
 import type { ProgrammeOfferInput } from '@ijazah/contracts';
 import { piasters, programmeOfferAmounts, toPlainNumber } from '@ijazah/money';
-import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -22,7 +21,7 @@ import type {
   ProgrammeAvailability,
   SlotRow,
 } from '../catalog/index.js';
-import type { EnrollmentSessionRow } from '../sessions/index.js';
+import type { AssessmentOutcome } from '../sessions/index.js';
 import type { FrozenOffer, OfferEnrollment } from './programmes.repository.js';
 import {
   bookingTermsOf,
@@ -340,22 +339,10 @@ const KEY = '0199d0a0-0000-7000-8000-0000000005aa';
 const MONDAY_END = new Date('2026-11-23T16:00:00Z');
 const TUESDAY_MORNING = new Date('2026-11-24T10:00:00Z');
 
-function sessionRow(
-  sequenceNumber: number,
-  endsAt: Date,
-  status: EnrollmentSessionRow['status'],
-): EnrollmentSessionRow {
-  return {
-    id: `0199d0a0-0000-7000-8000-0000000007${String(sequenceNumber).padStart(2, '0')}`,
-    sequenceNumber,
-    localDate: '2026-11-23' as EnrollmentSessionRow['localDate'],
-    startTimeLocal: '17:30' as EnrollmentSessionRow['startTimeLocal'],
-    timezone: CAIRO,
-    startsAt: new Date(addMinutes(endsAt, -30)),
-    endsAt,
-    status,
-  };
-}
+// 006:T008 (rule d: T007's seam replaced, Q-3 (a) amended): session 1's outcome chain as sessions'
+// entry answers it, in place of the sessions' rows.
+const delivered = (endsAt: Date): AssessmentOutcome => ({ kind: 'delivered', endsAt });
+const WAITING: AssessmentOutcome = { kind: 'waiting' };
 
 const OFFER_INPUT: ProgrammeOfferInput = {
   enrollmentId: ENROLLMENT,
@@ -372,7 +359,9 @@ type Standing = Awaited<ReturnType<ProgrammeOfferStore['readStanding']>>;
 interface OfferWorld {
   enrollment: OfferEnrollment | null;
   standing: Standing;
-  sessions: EnrollmentSessionRow[];
+  outcome: AssessmentOutcome;
+  /** 006:T008: the latest `extended` `no_offer` item's decision instant. */
+  extendedAt: Date | null;
   slotMinutes: number;
   pkg: PackageRow | null;
   now: Date;
@@ -396,7 +385,8 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
       state: 'awaiting_offer',
     },
     standing: ACTIVE_TEACHER,
-    sessions: [sessionRow(1, MONDAY_END, 'done')],
+    outcome: delivered(MONDAY_END),
+    extendedAt: null,
     slotMinutes: 60,
     pkg: OFFER_PACKAGE,
     now: TUESDAY_MORNING,
@@ -410,6 +400,7 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
   const signals: [readonly string[], unknown][] = [];
   const lines: [Readonly<Record<string, unknown>>, string][] = [];
   const priced: [number, number][] = [];
+  const dues: (Date | null)[] = [];
   const store: ProgrammeOfferStore = {
     offerEnrollmentOf: async (_tx, id) => {
       calls.push(`read ${id}`);
@@ -428,9 +419,17 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
     lockEnrollment: async (_tx, id) => {
       calls.push(`lock enrollments ${id}`);
     },
-    sessionsOf: async (_tx, id) => {
-      calls.push(`sessions ${id}`);
-      return world.sessions;
+    assessmentOutcome: async (_tx, id) => {
+      calls.push(`outcome ${id}`);
+      return world.outcome;
+    },
+    lastExtendedAt: async (_tx, id) => {
+      calls.push(`extended ${id}`);
+      return world.extendedAt;
+    },
+    writeOfferDue: async (_tx, id, offerDueAt) => {
+      calls.push(`due ${id}`);
+      dues.push(offerDueAt);
     },
     readSlot: async (_tx, id) => {
       calls.push(`slot ${id}`);
@@ -485,7 +484,7 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
   } as unknown as Parameters<ProgrammeServices['offer']>[2];
   const offer = (teacherUserId: string = TEACHER, input: ProgrammeOfferInput = OFFER_INPUT) =>
     services.offer(teacherUserId, input, live);
-  return { world, offer, calls, written, events, keyed, signals, lines, priced };
+  return { world, offer, calls, written, events, keyed, signals, lines, priced, dues };
 }
 
 /** The refusal's cause; a failure when the call was not refused `CONFLICT` with one. */
@@ -533,9 +532,11 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
       `lock programmes ${ENROLLMENT}`,
       `lock enrollments ${ENROLLMENT}`,
       `read ${ENROLLMENT}`,
-      `sessions ${ENROLLMENT}`,
+      `outcome ${ENROLLMENT}`,
+      `extended ${ENROLLMENT}`,
       `slot ${SLOT}`,
       `package ${TEACHER} ${PACKAGE}`,
+      `due ${ENROLLMENT}`,
       `write ${ENROLLMENT}`,
       `event ${ENROLLMENT}`,
     ]);
@@ -622,20 +623,34 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
   });
 
   it('refuses assessment_not_delivered before session 1 or its make-up is settled done or student_no_show', async () => {
-    for (const sessions of [
-      [sessionRow(1, MONDAY_END, 'scheduled')],
-      [sessionRow(1, MONDAY_END, 'teacher_no_show')],
-      [sessionRow(1, MONDAY_END, 'disputed')],
-      [sessionRow(1, MONDAY_END, 'teacher_no_show'), sessionRow(2, TUESDAY_MORNING, 'scheduled')],
-      [],
-    ]) {
-      const { offer } = offerWorld({ sessions });
+    // 006:T008 (rule d): waiting for its make-up, or ended with no make-up pending (N-2).
+    for (const outcome of [WAITING, { kind: 'ended', endsAt: MONDAY_END } as const]) {
+      const { offer } = offerWorld({ outcome });
       expect(await causeOf(offer())).toBe('assessment_not_delivered');
     }
   });
 
+  it('writes the derived deadline with the offer, never a refusal’s (006:T008, Q-3 (a) amended)', async () => {
+    const { offer, dues } = offerWorld();
+    await offer();
+    expect(dues).toStrictEqual([new Date('2026-11-24T16:00:00Z')]);
+    const refused = offerWorld({ outcome: WAITING });
+    await causeOf(refused.offer());
+    expect(refused.dues).toEqual([]);
+  });
+
+  it('accepts the offer past the delivered deadline within an administrator’s extension (006:T008, I-2 (a))', async () => {
+    // Extended Wednesday 10:00 Cairo (08:00Z): 24 hours more, to Thursday 08:00Z.
+    const extendedAt = new Date('2026-11-25T08:00:00Z');
+    const within = offerWorld({ extendedAt, now: new Date('2026-11-26T07:59:00Z') });
+    await expect(within.offer()).resolves.toMatchObject({ monthCount: 10 });
+    expect(within.dues).toStrictEqual([new Date('2026-11-26T08:00:00Z')]);
+    const past = offerWorld({ extendedAt, now: new Date('2026-11-26T08:00:01Z') });
+    expect(await causeOf(past.offer())).toBe('offer_due_passed');
+  });
+
   it('accepts the offer after a student_no_show, the fee kept and the window open', async () => {
-    const { offer } = offerWorld({ sessions: [sessionRow(1, MONDAY_END, 'student_no_show')] });
+    const { offer } = offerWorld({ outcome: delivered(MONDAY_END) });
     await expect(offer()).resolves.toMatchObject({ monthCount: 10 });
   });
 
@@ -650,13 +665,11 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
   });
 
   it('follows the make-up: re-resolved a teacher’s no-show, the make-up delivered Thursday 18:00, the offer is due Friday (Q-3 (a) amended)', async () => {
-    const sessions = [
-      sessionRow(1, MONDAY_END, 'teacher_no_show'),
-      sessionRow(2, new Date('2026-11-26T16:00:00Z'), 'done'),
-    ];
-    const late = offerWorld({ sessions, now: new Date('2026-11-27T15:59:00Z') });
+    // 006:T008 (rule d): sessions' outcome chain answers the delivered make-up.
+    const outcome = delivered(new Date('2026-11-26T16:00:00Z'));
+    const late = offerWorld({ outcome, now: new Date('2026-11-27T15:59:00Z') });
     await expect(late.offer()).resolves.toMatchObject({ monthCount: 10 });
-    const past = offerWorld({ sessions, now: new Date('2026-11-27T16:00:01Z') });
+    const past = offerWorld({ outcome, now: new Date('2026-11-27T16:00:01Z') });
     expect(await causeOf(past.offer())).toBe('offer_due_passed');
   });
 
@@ -715,17 +728,24 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
   });
 });
 
-describe('offerWindowOf (006:T007, T008’s seam; R-505)', () => {
-  it('opens at the latest delivered end and closes programme_offer_hours later', () => {
-    expect(offerWindowOf([sessionRow(1, MONDAY_END, 'done')], 24)).toStrictEqual({
+describe('offerWindowOf (006:T008, the seam replaced; R-505, Q-3 (a) amended)', () => {
+  it('opens at the delivered end and closes programme_offer_hours later', () => {
+    expect(offerWindowOf(delivered(MONDAY_END), null, 24)).toStrictEqual({
       delivered: true,
       offerDueAt: new Date('2026-11-24T16:00:00Z'),
     });
   });
 
-  it('has no window while neither session 1 nor a make-up is settled done or student_no_show', () => {
-    expect(offerWindowOf([sessionRow(1, MONDAY_END, 'both_no_show')], 24)).toStrictEqual({
+  it('has no window while session 1 waits for its make-up, or ended with none pending', () => {
+    expect(offerWindowOf(WAITING, null, 24)).toStrictEqual({ delivered: false });
+    expect(offerWindowOf({ kind: 'ended', endsAt: MONDAY_END }, null, 24)).toStrictEqual({
       delivered: false,
     });
+  });
+
+  it('closes at the later of the delivered end’s and an extension’s deadline', () => {
+    expect(
+      offerWindowOf(delivered(MONDAY_END), new Date('2026-11-25T08:00:00Z'), 24),
+    ).toStrictEqual({ delivered: true, offerDueAt: new Date('2026-11-26T08:00:00Z') });
   });
 });

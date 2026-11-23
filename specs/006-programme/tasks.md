@@ -378,6 +378,12 @@ No open question remains.
   - **Erasure:** the card deleted by `identity/deletion.service.ts`, `identity/consequences.ts`,
     `jobs/erase-kept-data.ts`, with `main.ts`'s wiring by the integration.
   - **Specs:** no card detail in any log, audit entry or response (SC-707).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's close hook calls payments' `deleteProgrammeCard` (a stub)
+  > where `main.ts` builds it: the termination subscriber, `EnrollmentSide` and `programmes.decide`. Two builders
+  > outside lane b's files take booking's `noProgrammeCardYet` default (no card exists before T013, and the stub
+  > deletes none): `worker.ts:231`'s `createEnrollmentSide` (its closes also write no line, no log bound) and
+  > `createBookingServices` (`booking-slots.service.ts`) for `programme.cancel`. T013 binds payments' entry and the
+  > log in both when the card becomes real.
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
@@ -428,6 +434,11 @@ No open question remains.
   > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The pause step writes the
   > `programme_paused` enrollment event (`enrollment_event_kind`, data-model.md:48), one row on the pause's
   > transaction, red first, as T007's offer writes `programme_offered` (FU-A1 (a)).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's step (`createProgrammeWindows`, booking's entry) is what
+  > this sweep runs per programme; `worker.ts` binds it with payments' `createProgrammePayee({ paymentMode:
+  > config.PAYMENT_MODE, cipher })` (no T008 path in `main.ts` reads the mode) and `deleteProgrammeCard`. Its live
+  > signal goes on the transaction's bound publisher, none in the worker until T015 binds one. An order of
+  > `programme.pay` still `created` at `pay_by_at` (A-1) is not read by T008's lapse: T015's «pending» decides it.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -474,6 +485,9 @@ No open question remains.
   > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** `programmes.reopen` writes the
   > `programme_reopened` enrollment event, one row on the reopen's transaction, red first, as T007's offer writes
   > `programme_offered` (FU-A1 (a)).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's `programme.request` answers `stop` with `not_paused` while
+  > the programme is not `paused` and throws on a paused one (no path pauses before T015); `programmes.decide`
+  > refuses any decision on a `stop` item `decision_not_allowed`. T017 replaces both.
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:

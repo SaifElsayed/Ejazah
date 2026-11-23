@@ -127,6 +127,8 @@ export function surfaceOf(
     payouts: unusedAdminServices.payouts,
     // 005:T024 (B49, rule d): the settings have their own router spec (`admin/settings.router.spec.ts`).
     settings: unusedAdminServices.settings,
+    // 006:T008 (rule d): the programmes' decision has its own router spec (`booking/programmes-admin.router.spec.ts`).
+    programmes: unusedAdminServices.programmes,
   };
   const administration = {
     transactions: transactionsOver(database),

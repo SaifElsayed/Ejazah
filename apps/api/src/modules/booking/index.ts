@@ -447,3 +447,34 @@ export {
   type ProgrammeServiceDependencies,
   type ProgrammeServices,
 } from './programmes.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 006:T008 of specs/006-programme (FR-706, FR-706a, FR-706b, FR-709; R-505, R-508, R-510, R-513;
+// B-P2's conflict check, Q-2 (a), Q-3 (a) amended, Q-7 (a)): the windows as pure functions and their
+// step for T015's sweep (`advance-programmes` runs `createProgrammeWindows`' step under each
+// programme's row lock); the administrators' `programmes.decide` (`programmes-admin.router.ts`,
+// mounted under `programmes` by `admin.router.ts`), over the services `main.ts` builds; and the close
+// hook's payments' entry, which the composition root hands in (booking imports no payments, R-208).
+export {
+  type NoOfferFacts,
+  noOfferStep,
+  offerDueOf,
+  payByPassed,
+  type PayStep,
+  type PayWindowFacts,
+  payWindowStep,
+} from './programmes.rules.js';
+export {
+  createProgrammeWindows,
+  type ProgrammeWindowDependencies,
+  type ProgrammeWindows,
+  type WindowStepOutcome,
+} from './programmes.service.js';
+export {
+  createProgrammeDecisions,
+  type ProgrammeDecision,
+  type ProgrammeDecisionDependencies,
+  type ProgrammeDecisions,
+} from './programme-requests.service.js';
+export { type DeleteProgrammeCard } from './programme-close.service.js';
+export { programmesAdminRouter } from './programmes-admin.router.js';

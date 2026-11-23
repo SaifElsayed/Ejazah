@@ -49,9 +49,13 @@
 //   `count_out_of_bounds` (1 to 200, the contract's bound, held here too); `length_exceeds_slot`.
 // - `enrollment` to both parties after the commit, added inside the keyed effect: a replay sends none.
 import type {
+  ProgrammeActionInput,
+  ProgrammeActionOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammeOfferRefusal,
+  ProgrammeRequestInput,
+  ProgrammeRequestOutput,
 } from '@ijazah/contracts';
 import { MAX_PROGRAMME_SESSION_COUNT } from '@ijazah/contracts';
 import type { Piasters, ProgrammeOfferAmounts } from '@ijazah/money';
@@ -66,13 +70,14 @@ import { calendarDaysBefore } from '@ijazah/time/calendar';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { lockRows } from '../../platform/db/row-lock.js';
+import { keyShareRows, lockRows } from '../../platform/db/row-lock.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
-import type { LivePublisher } from '../../platform/live/live-publisher.js';
+import { type LivePublisher, publisherOn } from '../../platform/live/live-publisher.js';
 import { positiveWhole } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
+import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
   type BookablePackage,
   type PackageRow,
@@ -83,12 +88,25 @@ import {
   teacherPackageOf,
 } from '../catalog/index.js';
 import { lockAccount, readStanding } from '../identity/index.js';
-import {
-  type EnrollmentSessionRow,
-  enrollmentSessionsOf,
-  type HeldTime,
-} from '../sessions/index.js';
+import { type AssessmentOutcome, assessmentOutcome, type HeldTime } from '../sessions/index.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
+import {
+  type DeleteProgrammeCard,
+  endProgramme,
+  noProgrammeCardYet,
+  type ProgrammeEndStore,
+} from './programme-close.service.js';
+import {
+  insertRequest,
+  lastExtendedAt,
+  lastRequestAt,
+  openRequestExists,
+} from './programme-requests.repository.js';
+import {
+  type ProgrammeRequestDependencies,
+  type ProgrammeRequestStore,
+  requestProgramme,
+} from './programme-requests.service.js';
 import {
   type ActiveProgrammeSlot,
   activeProgrammeSlotsOf,
@@ -96,8 +114,13 @@ import {
   insertAwaitingOffer,
   type OfferEnrollment,
   offerEnrollmentOf,
+  type ProgrammeFacts,
+  programmeFactsOf,
+  type ProgrammeState,
   writeOffer,
+  writeOfferDue,
 } from './programmes.repository.js';
+import { noOfferStep, offerDueOf, payByPassed, payWindowStep } from './programmes.rules.js';
 import type { SessionsBetween } from './session-overlap.service.js';
 
 /** The programme's availability now (catalog's `programmeAvailabilityOf`, bound to settings). */
@@ -286,30 +309,25 @@ export const PROGRAMME_OFFER_HOURS_SETTING = 'programme_offer_hours';
 /** §3.14: the student's hours to pay the rest after the offer, `pay_by_at` (48 by default). */
 export const PROGRAMME_PAY_REST_HOURS_SETTING = 'programme_pay_rest_hours';
 
-/** R-505: the statuses that settle session 1 as delivered (consumed: the fee kept either way). */
-const DELIVERED: ReadonlySet<EnrollmentSessionRow['status']> = new Set(['done', 'student_no_show']);
-
 /** Where the offer's window stands: not opened while the assessment is undelivered (R-505). */
 export type OfferWindow =
   { readonly delivered: false } | { readonly delivered: true; readonly offerDueAt: Date };
 
 /**
- * 006:T007, T008's seam (B-P2, Q-3 (a) amended): the offer's deadline, derived from session 1's
- * current outcome on every read, never stored by the offer. Before the offer the enrollment holds
- * session 1 and its make-ups alone (each make-up takes max + 1, R-507), so the delivered assessment
- * is the latest to end among those settled `done` or `student_no_show`; a teacher's no-show, a
- * both-no-show, an agreement, a postponement or an open dispute has none until its make-up is
- * delivered. The deadline is its scheduled end + `programme_offer_hours`. T008 replaces this body
- * with sessions' outcome chain, its writing of `offer_due_at` and an administrator's extension.
+ * 006:T008 (B-P2, Q-3 (a) amended; T007's seam replaced): the offer's window, derived from session
+ * 1's current outcome chain (sessions' `assessmentOutcome`) and an administrator's latest extension
+ * of a `no_offer` item on every read, never set once (`programmes.rules.ts`' `offerDueOf`). Open
+ * only once session 1, or its make-up, is delivered (`done` or `student_no_show`); ended with no
+ * make-up pending (N-2) or waiting for one, the assessment is not delivered.
  */
 export function offerWindowOf(
-  sessions: readonly EnrollmentSessionRow[],
+  outcome: AssessmentOutcome,
+  extendedAt: Date | null,
   offerHours: number,
 ): OfferWindow {
-  const delivered = sessions.filter(({ status }) => DELIVERED.has(status));
-  if (delivered.length === 0) return { delivered: false };
-  const end = Math.max(...delivered.map(({ endsAt }) => endsAt.getTime()));
-  return { delivered: true, offerDueAt: new Date(addHours(new Date(end), offerHours)) };
+  const offerDueAt = offerDueOf({ outcome, extendedAt, offerHours });
+  if (outcome.kind !== 'delivered' || offerDueAt === null) return { delivered: false };
+  return { delivered: true, offerDueAt };
 }
 
 /** What the offer reads and writes, over the owners' entries (catalog, identity, sessions). */
@@ -319,7 +337,12 @@ export interface ProgrammeOfferStore {
   readStanding(tx: Transaction, userId: string): ReturnType<typeof readStanding>;
   lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
   lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
-  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly EnrollmentSessionRow[]>;
+  /** 006:T008 (Q-3 (a) amended): session 1's outcome chain, sessions' entry. */
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
+  /** 006:T008: the latest `extended` `no_offer` item's decision instant. */
+  lastExtendedAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  /** 006:T008 (Q-3 (a) amended): the derived deadline written while `awaiting_offer`. */
+  writeOfferDue(tx: Transaction, enrollmentId: string, offerDueAt: Date | null): Promise<void>;
   readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
   packageOf(tx: Transaction, teacherUserId: string, packageId: string): Promise<PackageRow | null>;
   writeOffer(tx: Transaction, enrollmentId: string, offer: FrozenOffer): Promise<boolean>;
@@ -333,7 +356,9 @@ export const programmeOfferStore: ProgrammeOfferStore = {
   readStanding,
   lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
   lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
-  sessionsOf: enrollmentSessionsOf,
+  assessmentOutcome,
+  lastExtendedAt: (tx, enrollmentId) => lastExtendedAt(tx, enrollmentId, 'no_offer'),
+  writeOfferDue,
   readSlot,
   packageOf: teacherPackageOf,
   writeOffer,
@@ -359,23 +384,59 @@ export interface ProgrammeServiceDependencies {
   /** The database's clock on the transaction (`clock_timestamp()`), the offer's instant. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: ProgrammeOfferStore;
+  /**
+   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard` for the close hook (a stub until T013); none
+   * deleted where the composition root binds none (no card exists before T013).
+   */
+  readonly deleteProgrammeCard?: DeleteProgrammeCard;
+  /** 006:T008: the cancellation's reads and the programme's own end, stood in by a spec. */
+  readonly cancelStore?: ProgrammeCancelStore;
+  readonly end?: ProgrammeEndStore;
+  /** 006:T008: the refusal request's reads and writes, stood in by a spec. */
+  readonly requests?: ProgrammeRequestStore;
 }
 
-/** The `programme` procedures' services (006:T007: `programme.offer`). */
+/**
+ * The `programme` procedures' services (006:T007: `programme.offer`; 006:T008: `programme.cancel`
+ * and `programme.request`).
+ */
 export interface ProgrammeServices {
   offer(
     teacherUserId: string,
     input: ProgrammeOfferInput,
     live: Pick<LivePublisher, 'afterCommit'>,
   ): Promise<ProgrammeOfferOutput>;
+  cancel(
+    studentUserId: string,
+    input: ProgrammeActionInput,
+    live: Pick<LivePublisher, 'afterCommit'>,
+  ): Promise<ProgrammeActionOutput>;
+  request(
+    teacherUserId: string,
+    input: ProgrammeRequestInput,
+    live: Pick<LivePublisher, 'afterCommit'>,
+  ): Promise<ProgrammeRequestOutput>;
 }
 
-/** The programme's services over `dependencies` (this file's head, THE OFFER). */
+/** The programme's services over `dependencies` (this file's head, THE OFFER; 006:T008 below). */
 export function createProgrammeServices(
   dependencies: ProgrammeServiceDependencies,
 ): ProgrammeServices {
   const offers = new ProgrammeOffers(dependencies);
-  return { offer: (teacherUserId, input, live) => offers.offer(teacherUserId, input, live) };
+  const requestDependencies: ProgrammeRequestDependencies = {
+    log: dependencies.log,
+    ...(dependencies.requests === undefined ? {} : { store: dependencies.requests }),
+  };
+  return {
+    offer: (teacherUserId, input, live) => offers.offer(teacherUserId, input, live),
+    cancel: (studentUserId, input, live) =>
+      cancelProgramme(studentUserId, input, live, dependencies),
+    request: (teacherUserId, { idempotencyKey, ...input }, live) =>
+      dependencies.idempotency.run(
+        { scope: 'programme.request', key: idempotencyKey, actorId: teacherUserId, input },
+        (tx) => requestProgramme(tx, teacherUserId, input, live, requestDependencies),
+      ),
+  };
 }
 
 /** The ids an offer's lines carry: never a name or the offer's words. */
@@ -450,7 +511,11 @@ class ProgrammeOffers {
     if (enrollment.state !== 'awaiting_offer' || enrollment.status !== 'confirmed') {
       throw this.#refused(ids, 'not_awaiting_offer');
     }
-    const window = offerWindowOf(await store.sessionsOf(tx, enrollment.id), hours.offer);
+    const window = offerWindowOf(
+      await store.assessmentOutcome(tx, enrollment.id),
+      await store.lastExtendedAt(tx, enrollment.id),
+      hours.offer,
+    );
     if (!window.delivered) throw this.#refused(ids, 'assessment_not_delivered');
     const now = await this.#clock(tx);
     if (now.getTime() > window.offerDueAt.getTime()) throw this.#refused(ids, 'offer_due_passed');
@@ -467,6 +532,8 @@ class ProgrammeOffers {
       await this.#priceFor(tx, enrollment, input.durationMinutes),
       input.sessionCount,
     );
+    // 006:T008 (Q-3 (a) amended): the column holds the last derived deadline.
+    await store.writeOfferDue(tx, enrollment.id, window.offerDueAt);
     const moved = await store.writeOffer(tx, enrollment.id, {
       level: input.level,
       readiness: input.readiness,
@@ -522,4 +589,243 @@ function isActiveTeacher(standing: Awaited<ReturnType<typeof readStanding>>): bo
   return (
     standing?.accountStatus === 'active' && standing.teacher?.verificationStatus === 'approved'
   );
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T008 (FR-706, FR-706a, FR-706b, FR-709; R-505, R-508, R-510, R-513; Q-2 (a), Q-3 (a) amended;
+// contracts/app-surface.md `programme.cancel`): the student's cancellation and the windows' step.
+//
+// THE CANCELLATION (`programme.cancel`, `offer_declined`). The student's, before any payment of the
+// rest: the programme `awaiting_offer` or `offered`. Keyed (`programme.cancel`). The programme read
+// once with no lock for its student, anyone else NOT_FOUND as an unknown id; then the programme's row
+// and the enrollment's (kernel.md's order), read again under them; then booking's own end
+// (`endProgramme`): the enrollment `cancelled` `offer_declined`, what is left of it cancelled, its
+// event, and the close hook, which withdraws an open item (a `pay_blocked` one among them, FR-706b)
+// and calls payments' card entry. The fee is kept (DEC-94). Refused `CONFLICT` with the cause, nothing
+// written, one line: `rest_paid` once the rest is paid (`active`, `paused`), `closed` once closed or
+// the enrollment no longer `confirmed`. `enrollment` to both parties after the commit.
+//
+// THE WINDOWS' STEP (R-508's step 1, for T015's `advance-programmes`). One programme in a transaction
+// of its own, under its row lock: the teacher's `users` row key-shared first (an item's insert
+// key-shares it through its foreign key, and `programme.offer` and `programme.request` take that row
+// `FOR UPDATE` before the programme, kernel.md, 006:T008's row), then the programme's row, then the
+// enrollment's; read again under them, a programme whose enrollment is not `confirmed` is left alone.
+// - `awaiting_offer`: the deadline derived from session 1's outcome chain and the latest extension
+//   (`noOfferStep`), written when it changed (Q-3 (a) amended); the `no_offer` item once per deadline.
+// - `offered`: past `pay_by_at` with no `pay_blocked` item open, payments' «unverified in live mode»
+//   read at that instant (FR-706b); the `pay_blocked` item once per deadline, or the lapse
+//   (`offer_lapsed`, through `endProgramme`) (`payWindowStep`).
+// Each item and each lapse writes one info line of ids and the reason; `enrollment` to both parties
+// after the commit on the transaction's bound publisher (none in a worker until T015 binds one).
+// Double run (R-API-14): the second run reads the item open, or the programme closed, and does
+// nothing.
+
+/** What the cancellation reads, over booking's rows. */
+export interface ProgrammeCancelStore {
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+}
+
+export const programmeCancelStore: ProgrammeCancelStore = {
+  programmeFactsOf,
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+};
+
+/** `programme.cancel`'s refusals (this section's head). */
+export type ProgrammeCancelRefusal = 'rest_paid' | 'closed';
+
+/** The states the student may cancel in: before any payment of the rest. */
+const CANCELLABLE: ReadonlySet<ProgrammeState> = new Set(['awaiting_offer', 'offered']);
+
+/** `programme.cancel` (this section's head, THE CANCELLATION). */
+export function cancelProgramme(
+  studentUserId: string,
+  { idempotencyKey, ...input }: ProgrammeActionInput,
+  live: Pick<LivePublisher, 'afterCommit'>,
+  dependencies: ProgrammeServiceDependencies,
+): Promise<ProgrammeActionOutput> {
+  const store = dependencies.cancelStore ?? programmeCancelStore;
+  const ids = { studentUserId, enrollmentId: input.enrollmentId };
+  const refused = (cause: ProgrammeCancelRefusal): DomainError => {
+    dependencies.log.info({ ...ids, reason: cause }, 'A programme cancellation was refused');
+    return markRefusalLogged(
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: cause }] }),
+    );
+  };
+  return dependencies.idempotency.run(
+    { scope: 'programme.cancel', key: idempotencyKey, actorId: studentUserId, input },
+    async (tx) => {
+      const seen = await store.programmeFactsOf(tx, input.enrollmentId);
+      if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+      await store.lockProgramme(tx, seen.enrollmentId);
+      await store.lockEnrollment(tx, seen.enrollmentId);
+      const facts = await store.programmeFactsOf(tx, seen.enrollmentId);
+      if (facts === null) throw new DomainError('NOT_FOUND');
+      if (facts.status !== 'confirmed' || facts.state === 'closed') throw refused('closed');
+      if (!CANCELLABLE.has(facts.state)) throw refused('rest_paid');
+      const ended = await endProgramme(tx, facts.enrollmentId, 'offer_declined', {
+        deleteProgrammeCard: dependencies.deleteProgrammeCard ?? noProgrammeCardYet,
+        log: dependencies.log,
+        ...(dependencies.clock === undefined ? {} : { clock: dependencies.clock }),
+        ...(dependencies.end === undefined ? {} : { end: dependencies.end }),
+      });
+      if (!ended) throw refused('closed');
+      live.afterCommit([facts.studentUserId, facts.teacherUserId], {
+        type: 'enrollment',
+        enrollmentId: facts.enrollmentId,
+      });
+      return { ok: true as const };
+    },
+  );
+}
+
+/** What one programme's windows' step did. */
+export type WindowStepOutcome = 'none' | 'no_offer_raised' | 'pay_blocked_raised' | 'lapsed';
+
+/** The windows' step for T015's sweep (this section's head, THE WINDOWS' STEP). */
+export interface ProgrammeWindows {
+  step(enrollmentId: string): Promise<WindowStepOutcome>;
+}
+
+/** The sweep's two items. */
+type ItemKind = 'no_offer' | 'pay_blocked';
+
+/** What the windows' step reads and writes, over booking's rows and the owners' entries. */
+export interface ProgrammeWindowStore {
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  keyShareTeacher(tx: Transaction, teacherUserId: string): Promise<void>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
+  lastExtendedAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  openRequestExists(tx: Transaction, enrollmentId: string, kind: ItemKind): Promise<boolean>;
+  lastRequestAt(tx: Transaction, enrollmentId: string, kind: ItemKind): Promise<Date | null>;
+  writeOfferDue(tx: Transaction, enrollmentId: string, offerDueAt: Date | null): Promise<void>;
+  insertItem(
+    tx: Transaction,
+    item: {
+      readonly enrollmentId: string;
+      readonly teacherUserId: string;
+      readonly kind: ItemKind;
+    },
+  ): Promise<string>;
+}
+
+export const programmeWindowStore: ProgrammeWindowStore = {
+  programmeFactsOf,
+  keyShareTeacher: (tx, teacherUserId) => keyShareRows(tx, 'users', [teacherUserId]),
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  assessmentOutcome,
+  lastExtendedAt: (tx, enrollmentId) => lastExtendedAt(tx, enrollmentId, 'no_offer'),
+  openRequestExists,
+  lastRequestAt,
+  writeOfferDue,
+  insertItem: (tx, { enrollmentId, teacherUserId, kind }) =>
+    insertRequest(tx, { enrollmentId, teacherUserId, kind }),
+};
+
+/** What the windows' step is built over (T015 binds it in the worker). */
+export interface ProgrammeWindowDependencies {
+  readonly transactions: Transactions;
+  readonly settings: SettingsReader;
+  /** Payments' «unverified in live mode» (`createProgrammePayee`), handed in. */
+  readonly payee: {
+    unverifiedInLiveMode(tx: Transaction, teacherUserId: string): Promise<boolean>;
+  };
+  readonly deleteProgrammeCard: DeleteProgrammeCard;
+  readonly log: ProgrammeLog;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
+  readonly store?: ProgrammeWindowStore;
+  readonly end?: ProgrammeEndStore;
+}
+
+/** The windows' step over `dependencies` (this section's head, THE WINDOWS' STEP). */
+export function createProgrammeWindows(
+  dependencies: ProgrammeWindowDependencies,
+): ProgrammeWindows {
+  const store = dependencies.store ?? programmeWindowStore;
+  const clock = dependencies.clock ?? clockTimestamp;
+
+  const awaitingOffer = async (
+    tx: Transaction,
+    facts: ProgrammeFacts,
+    now: Date,
+  ): Promise<WindowStepOutcome> => {
+    const offerHours = await dependencies.settings.read(
+      PROGRAMME_OFFER_HOURS_SETTING,
+      positiveWhole,
+    );
+    const outcome = await store.assessmentOutcome(tx, facts.enrollmentId);
+    const extendedAt = await store.lastExtendedAt(tx, facts.enrollmentId);
+    const openItem = await store.openRequestExists(tx, facts.enrollmentId, 'no_offer');
+    const lastItemAt = await store.lastRequestAt(tx, facts.enrollmentId, 'no_offer');
+    const step = noOfferStep({ outcome, extendedAt, offerHours, now, openItem, lastItemAt });
+    if (step.offerDueAt?.getTime() !== facts.offerDueAt?.getTime()) {
+      await store.writeOfferDue(tx, facts.enrollmentId, step.offerDueAt);
+    }
+    if (!step.raise) return 'none';
+    await store.insertItem(tx, { ...facts, kind: 'no_offer' });
+    return 'no_offer_raised';
+  };
+
+  const offeredUnpaid = async (
+    tx: Transaction,
+    facts: ProgrammeFacts,
+    now: Date,
+  ): Promise<WindowStepOutcome> => {
+    // `pay_by_at` is set with the offer (R-505; rule 76 sets `offered_at` in `offered`).
+    if (facts.payByAt === null) throw new Error('advance-programmes: an offer without pay_by_at');
+    if (!payByPassed(now, facts.payByAt)) return 'none';
+    const openItem = await store.openRequestExists(tx, facts.enrollmentId, 'pay_blocked');
+    const step = payWindowStep({
+      now,
+      payByAt: facts.payByAt,
+      openItem,
+      lastItemAt: await store.lastRequestAt(tx, facts.enrollmentId, 'pay_blocked'),
+      // Read only when it decides: past `pay_by_at` with no item open (FR-706b, «at that instant»).
+      unverifiedInLiveMode:
+        !openItem && (await dependencies.payee.unverifiedInLiveMode(tx, facts.teacherUserId)),
+    });
+    if (step === 'raise_pay_blocked') {
+      await store.insertItem(tx, { ...facts, kind: 'pay_blocked' });
+      return 'pay_blocked_raised';
+    }
+    if (step === 'none') return 'none';
+    const lapsed = await endProgramme(tx, facts.enrollmentId, 'offer_lapsed', {
+      deleteProgrammeCard: dependencies.deleteProgrammeCard,
+      log: dependencies.log,
+      clock,
+      ...(dependencies.end === undefined ? {} : { end: dependencies.end }),
+    });
+    return lapsed ? 'lapsed' : 'none';
+  };
+
+  return {
+    step: (enrollmentId) =>
+      dependencies.transactions.run(async (tx): Promise<WindowStepOutcome> => {
+        const seen = await store.programmeFactsOf(tx, enrollmentId);
+        if (seen === null) return 'none';
+        await store.keyShareTeacher(tx, seen.teacherUserId);
+        await store.lockProgramme(tx, enrollmentId);
+        await store.lockEnrollment(tx, enrollmentId);
+        const facts = await store.programmeFactsOf(tx, enrollmentId);
+        if (facts?.status !== 'confirmed') return 'none';
+        const now = await clock(tx);
+        let outcome: WindowStepOutcome = 'none';
+        if (facts.state === 'awaiting_offer') outcome = await awaitingOffer(tx, facts, now);
+        if (facts.state === 'offered') outcome = await offeredUnpaid(tx, facts, now);
+        if (outcome !== 'none') {
+          dependencies.log.info({ enrollmentId, reason: outcome }, 'A programme window acted');
+          publisherOn(tx)?.afterCommit([facts.studentUserId, facts.teacherUserId], {
+            type: 'enrollment',
+            enrollmentId,
+          });
+        }
+        return outcome;
+      }),
+  };
 }
