@@ -161,7 +161,12 @@ async function confirmedWorld(track: 'recitation' | 'ijazah_track' = 'recitation
       data: { snapshotTrack: track },
     });
   }
-  await confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
+  await confirmEnrollment({
+    database,
+    settings: worldSettings,
+    notices: NO_PUSH,
+    clock: () => NOW,
+  }).handle({
     paymentId: await order(made.enrollmentId),
   });
   return made;
@@ -172,7 +177,8 @@ interface EndAsked {
   readonly key?: string;
   readonly partyReason?: string;
   readonly internalNote?: string;
-  readonly cause?: 'admin_ended' | 'student_complaint_ended';
+  // 003:T125 (Q-1 (a)): the teacher's stop too.
+  readonly cause?: 'admin_ended' | 'student_complaint_ended' | 'teacher_ended';
 }
 
 function end(enrollmentId: string, asked: EndAsked = {}) {
@@ -641,6 +647,45 @@ describe('the restore of a direct end, at any time (DEC-69)', () => {
   });
 });
 
+// 003:T125, Q-A1 (a) (the owner, 2026-11-23; DEC-69, FR-CANCEL-10): a direct end «المعلم وقف»
+// (`teacher_ended` beside the cancellation `admin`) is a direct end: «hold» keeps the slot through
+// the enrollment's window, it is restorable as a direct end is, and «release» frees the slot. Run red
+// first (old code: no closing, so neither held nor restorable) and under mutant A-9.
+describe('the teacher’s stop by a direct end (003:T125, Q-A1 (a))', () => {
+  it('hold: the slot stays held, then the restore brings the enrollment back, its teacher_ended case dismissed', async () => {
+    const made = await confirmedWorld();
+    const { answer } = await end(made.enrollmentId, { slot: 'hold', cause: 'teacher_ended' });
+    expect(answer.slot).toBe('hold');
+    expect(await offered(made)).toEqual([]);
+    expect(await weekTaken(made)).toBe(true);
+    const ended = await stateOf(made.enrollmentId);
+    expect(ended.enrollment?.slotReleasedAt).toBeNull();
+    expect(ended.cases.map(({ reason }) => reason)).toEqual(['teacher_ended']);
+
+    await restore(made.enrollmentId);
+
+    const state = await stateOf(made.enrollmentId);
+    expect(state.enrollment).toEqual({
+      status: 'confirmed',
+      cancellationReason: null,
+      adminEndReason: null,
+      slotReleasedAt: null,
+    });
+    expect(state.cases.find(({ id }) => id === answer.caseId)?.status).toBe('dismissed');
+  });
+
+  it('release: the slot free at once, one slot_released row', async () => {
+    const made = await confirmedWorld();
+    const { answer } = await end(made.enrollmentId, { slot: 'release', cause: 'teacher_ended' });
+    expect(answer.slot).toBe('release');
+    const state = await stateOf(made.enrollmentId);
+    expect(state.enrollment?.slotReleasedAt).not.toBeNull();
+    expect(state.events.map(({ kind }) => kind).slice(-2)).toEqual(['cancelled', 'slot_released']);
+    expect(await offered(made)).toEqual([made.slotId]);
+    expect(await weekTaken(made)).toBe(false);
+  });
+});
+
 // Q-R2 (a), the integration's (B42c): «T080's deletion allowed after the end». T080's count (booking's
 // `OngoingEnrollments`, the port the deletion asks on its own transaction) is read on T082's real end:
 // an `admin_ended` closing is never counted (FR-511), so neither party is refused while its slot is held.
@@ -691,7 +736,12 @@ describe('races (kernel.md, the direct end’s row)', () => {
     });
     const paymentId = await order(made.enrollmentId);
     const [confirmed, ended] = await Promise.allSettled([
-      confirmEnrollment({ database, settings: worldSettings, notices: NO_PUSH, clock: () => NOW }).handle({
+      confirmEnrollment({
+        database,
+        settings: worldSettings,
+        notices: NO_PUSH,
+        clock: () => NOW,
+      }).handle({
         paymentId,
       }),
       end(made.enrollmentId),

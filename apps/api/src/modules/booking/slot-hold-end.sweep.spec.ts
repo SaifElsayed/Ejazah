@@ -239,8 +239,9 @@ describe('the hold’s end recorded (T074, FR-505)', () => {
         [E2]: [caseOf('student_banned', 'resolved')],
         [E3]: [caseOf('student_banned')],
         [E4]: [caseOf('student_banned')],
-        // A teacher's end case on a closing cancelled `admin`: no closing the rule admits.
-        [E5]: [caseOf('teacher_ended')],
+        // A termination's case on a closing cancelled `admin`: no closing the rule admits (003:T125,
+        // rule d: `teacher_ended` there is now the direct end «المعلم وقف», Q-A1 (a)).
+        [E5]: [caseOf('absence_termination')],
       },
       [E4],
     );
