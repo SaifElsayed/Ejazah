@@ -52,6 +52,8 @@ describe('enrollmentTermsById (T008)', () => {
         snapshotSlotTimezone: 'Africa/Cairo',
         snapshotDurationMinutes: 45,
         snapshotSessionCount: 12,
+        // 006:T010: no `programmes` row.
+        programme: null,
       },
     });
     expect(await enrollmentTermsById(client, id(1))).toEqual({
@@ -69,6 +71,63 @@ describe('enrollmentTermsById (T008)', () => {
 
   it('answers null for no enrollment', async () => {
     expect(await enrollmentTermsById(recorded({}).client, id(1))).toBeNull();
+  });
+
+  // 006:T010 of specs/006-programme (R-501 V-1; B-P2's conflict check, Q-8 (a)): the completion
+  // gate reads the programme through the terms, in the same one read.
+  it("answers the programme's state, month count, months paid and plan in the same read (006:T010)", async () => {
+    const { client, calls } = recorded({
+      findUnique: {
+        id: id(1),
+        status: 'confirmed',
+        slotId: id(2),
+        snapshotTrack: 'ijazah_track',
+        snapshotSlotTimezone: 'Africa/Cairo',
+        snapshotDurationMinutes: 45,
+        snapshotSessionCount: 41,
+        studentUserId: id(3),
+        teacherUserId: id(4),
+        programme: { state: 'active', monthCount: 10, monthsPaid: 3, paymentPlan: 'monthly' },
+      },
+    });
+    expect(await enrollmentTermsById(client, id(1))).toEqual({
+      id: id(1),
+      status: 'confirmed',
+      slotId: id(2),
+      track: 'ijazah_track',
+      timezone: 'Africa/Cairo',
+      durationMinutes: 45,
+      sessionCount: 41,
+      studentUserId: id(3),
+      teacherUserId: id(4),
+      programme: { state: 'active', monthCount: 10, monthsPaid: 3, paymentPlan: 'monthly' },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toMatchObject({
+      select: {
+        programme: {
+          select: { state: true, monthCount: true, monthsPaid: true, paymentPlan: true },
+        },
+      },
+    });
+  });
+
+  it('leaves the programme out of the terms of an enrollment that is none (006:T010)', async () => {
+    const { client } = recorded({
+      findUnique: {
+        id: id(1),
+        status: 'confirmed',
+        slotId: id(2),
+        snapshotTrack: 'recitation',
+        snapshotSlotTimezone: 'Africa/Cairo',
+        snapshotDurationMinutes: 45,
+        snapshotSessionCount: 12,
+        studentUserId: id(3),
+        teacherUserId: id(4),
+        programme: null,
+      },
+    });
+    expect(await enrollmentTermsById(client, id(1))).not.toHaveProperty('programme');
   });
 });
 

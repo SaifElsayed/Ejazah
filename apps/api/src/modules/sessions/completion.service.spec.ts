@@ -13,7 +13,7 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { CompletionSession } from './completion.repository.js';
 import { type CompletionStore, createCompletion } from './completion.service.js';
-import type { EnrollmentStatus, EnrollmentTerms } from './enrollment-side.port.js';
+import type { EnrollmentStatus, EnrollmentTerms, ProgrammeTerms } from './enrollment-side.port.js';
 
 const tx = {} as Transaction;
 const ENROLLMENT = '0199d0a0-0000-7000-8000-000000000001';
@@ -59,6 +59,7 @@ function world({
   teacherSuspendedCase = false,
   at = CLOSES,
   moves = true,
+  programme,
 }: {
   status?: EnrollmentStatus | null;
   sessions?: readonly CompletionSession[];
@@ -68,6 +69,8 @@ function world({
   teacherSuspendedCase?: boolean;
   at?: Date;
   moves?: boolean;
+  /** 006:T010: the enrollment's `programmes` row; none for a package. */
+  programme?: ProgrammeTerms;
 } = {}) {
   const completed: string[] = [];
   const keys: string[] = [];
@@ -94,7 +97,10 @@ function world({
   };
   const completion = createCompletion({
     enrollments: {
-      enrollmentFor: async () => (status === null ? null : terms(status)),
+      enrollmentFor: async () =>
+        status === null
+          ? null
+          : { ...terms(status), ...(programme === undefined ? {} : { programme }) },
       complete: async (_tx, id) => {
         completed.push(id);
         return moves;
@@ -242,6 +248,85 @@ describe('completeIfDue (T015, FR-449)', () => {
       settled('teacher_no_show', { remedyStatus: 'awaiting_choice' }),
     );
     const { completion, completed } = world({ sessions: [...DELIVERED, ...absences] });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+});
+
+// 006:T010 of specs/006-programme (FR-712; research R-501, V-1; B-P2's conflict check, Q-8 (a)): a
+// programme completes only when fully paid (`months_paid` = `month_count`, or `in_full`) and not
+// `awaiting_offer`, `offered` or `paused`, read through `enrollmentFor`'s terms; the existing checks
+// follow. A month's sessions are generated once it is paid, so every row that exists may be settled
+// with a month still unpaid.
+describe('completeIfDue on a programme (006:T010, FR-712, R-501 V-1)', () => {
+  const programme = (values: Partial<ProgrammeTerms> = {}): ProgrammeTerms => ({
+    state: 'active',
+    monthCount: 2,
+    monthsPaid: 2,
+    paymentPlan: 'monthly',
+    ...values,
+  });
+
+  it('red first: a paid month settled, the next unpaid, 72 h passed: not completed', async () => {
+    const { completion, completed } = world({ programme: programme({ monthsPaid: 1 }) });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  it('completes once every month is paid and the rest holds', async () => {
+    const { completion, completed } = world({ programme: programme() });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+    expect(completed).toEqual([ENROLLMENT]);
+  });
+
+  it('completes a programme paid in full', async () => {
+    const { completion, completed } = world({
+      programme: programme({ paymentPlan: 'in_full', monthCount: 10, monthsPaid: 10 }),
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+    expect(completed).toEqual([ENROLLMENT]);
+  });
+
+  it('takes in_full as fully paid on its own (the gate’s «or in_full»)', async () => {
+    const { completion, completed } = world({
+      programme: programme({ paymentPlan: 'in_full', monthCount: 10, monthsPaid: 0 }),
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+    expect(completed).toEqual([ENROLLMENT]);
+  });
+
+  it('W6: the assessment alone, awaiting its offer, is not completed 72 h after session 1', async () => {
+    const { completion, completed } = world({
+      sessions: [settled('done', { scheduledEndAt: LAST_END })],
+      programme: { state: 'awaiting_offer', monthCount: null, monthsPaid: 0, paymentPlan: null },
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  it('an offered programme, nothing paid yet, is not completed', async () => {
+    const { completion, completed } = world({
+      programme: programme({ state: 'offered', monthsPaid: 0, paymentPlan: null }),
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+    expect(completed).toEqual([]);
+  });
+
+  it.each<ProgrammeTerms['state']>(['awaiting_offer', 'offered', 'paused'])(
+    'a %s programme is not completed, even with every month paid',
+    async (state) => {
+      const { completion, completed } = world({ programme: programme({ state }) });
+      expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+      expect(completed).toEqual([]);
+    },
+  );
+
+  it('the existing checks follow the gate: a fully paid programme waits for the last window', async () => {
+    const { completion, completed } = world({
+      programme: programme(),
+      // One millisecond before CLOSES.
+      at: new Date('2026-11-04T07:59:59.999Z'),
+    });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
   });

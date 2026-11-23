@@ -24,7 +24,9 @@
 //     `admin_cancellation` one (B38, the owner's decision of 2026-11-10 under T023, Q3 (a): a hold
 //     can be undone, a completion cannot), nor (T071, FR-504) a `teacher_suspended` one, the
 //     enrollment paused until the teacher's reinstatement or its end closes it, moderation's rows
-//     read through its entry (R-301).
+//     read through its entry (R-301);
+//   - (006:T010 of specs/006-programme, FR-712, R-501 V-1) a programme's enrollment, first: fully
+//     paid and not `awaiting_offer`, `offered` or `paused` (`programmeMayComplete`).
 // An enrollment in any other state, or with no session, is left as it is.
 //
 // NO COUNT (FR-448, R-322, the owner's decision of 2026-11-05). Nothing here reads the
@@ -65,7 +67,7 @@ import {
   completionSessionsOf,
   type RemedyStatus,
 } from './completion.repository.js';
-import type { EnrollmentSide } from './enrollment-side.port.js';
+import type { EnrollmentSide, ProgrammeTerms } from './enrollment-side.port.js';
 import { OPEN_REMEDY_STATUSES } from './remaining-sessions.repository.js';
 
 /** The hours a participant may dispute a session after its scheduled end (SRS §3.14, FR-473). */
@@ -155,6 +157,29 @@ function lastDisputableEnd(sessions: readonly CompletionSession[]): Date | null 
   return last;
 }
 
+/** 006:T010: the states in which a programme is never completed (R-501 V-1). */
+const PROGRAMME_NOT_DUE: ReadonlySet<ProgrammeTerms['state']> = new Set([
+  'awaiting_offer',
+  'offered',
+  'paused',
+]);
+
+/**
+ * 006:T010 of specs/006-programme (FR-712; research R-501 V-1; B-P2's conflict check, Q-8 (a)): a
+ * programme completes only when fully paid (`months_paid` = `month_count`, or `in_full`) and not
+ * `awaiting_offer`, `offered` or `paused`. Its months are generated one paid month at a time, so
+ * every row that exists may be settled with a month unpaid; and the assessment alone, awaiting its
+ * offer, is never completed 72 h after session 1 (B-P1's W6). Read with no lock under the
+ * enrollment's, since every writer of the row takes `programmes` before `enrollments` (kernel.md,
+ * 006:T006): a payment only raises `months_paid`, a pause or an offer only moves a programme not
+ * fully paid, and a close or a reopen also moves this enrollment, whose row the caller holds; so a
+ * stale read only postpones a completion, never makes a wrong one.
+ */
+function programmeMayComplete({ state, monthCount, monthsPaid, paymentPlan }: ProgrammeTerms) {
+  const fullyPaid = paymentPlan === 'in_full' || (monthCount !== null && monthsPaid === monthCount);
+  return fullyPaid && !PROGRAMME_NOT_DUE.has(state);
+}
+
 /** Completion over the enrollment side, the dispute window read when the rest already holds. */
 export function createCompletion({
   enrollments,
@@ -172,6 +197,7 @@ export function createCompletion({
     completeIfDue: async (tx, enrollmentId) => {
       const terms = await enrollments.enrollmentFor(tx, enrollmentId);
       if (terms?.status !== 'confirmed') return false;
+      if (terms.programme !== undefined && !programmeMayComplete(terms.programme)) return false;
       const sessions = await store.sessionsOf(tx, enrollmentId);
       if (sessions.length === 0 || !settledAndOwesNothing(sessions)) return false;
       const lastEnd = lastDisputableEnd(sessions);
