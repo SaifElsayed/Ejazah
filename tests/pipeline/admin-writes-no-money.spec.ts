@@ -81,6 +81,11 @@ export interface Write {
   readonly within: string | null;
   /** The model written (`payment`), the key (`snapshotPricePiasters`), or `SQL <table>.<column>`. */
   readonly name: string;
+  /**
+   * 006:T009 (PR #156 r2 Minor 1): the Prisma delegate the write goes through: the call's
+   * `<client>.<delegate>`, or for a nested write the relation's key (`enrollment`); null for SQL.
+   */
+  readonly model: string | null;
 }
 
 const PAYMENTS = 'apps/api/src/modules/payments/';
@@ -106,7 +111,9 @@ export function allowedBecause(write: Write): string | null {
   if (
     write.path === PAYMENTS_REPOSITORY &&
     write.kind === 'confirmedAt' &&
-    write.within === 'markOrderConfirmed'
+    write.within === 'markOrderConfirmed' &&
+    // 006:T009 (PR #156 r2 Minor 1): the order's own row, never an enrollment's (M-G11).
+    write.model === 'payment'
   ) {
     return "006:T006 (R-502, V-3; FR-718): an order's own marker, payments.confirmed_at, that the confirm step processed it, never an enrollment's confirmation; written by markOrderConfirmed, reached only by the confirm-enrollment job (PR #156 r1)";
   }
@@ -271,13 +278,20 @@ function sourceWrites(file: PathFile): Write[] {
   // `site` is the write's own call: the function holding it names the write (`within`), so a key
   // reached through a helper or an object built aside is named where it is written (PR #156 r2
   // Minor 2); the line is the key's.
-  const write = (kind: Kind, node: ts.Node, name: string, site: ts.Node = node) =>
+  const write = (
+    kind: Kind,
+    node: ts.Node,
+    name: string,
+    site: ts.Node = node,
+    model: string | null = null,
+  ) =>
     writes.push({
       kind,
       path: file.path,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
       within: withinOf(site),
       name,
+      model,
     });
 
   // Objects built aside: every variable of the file given an object literal, by its name; and
@@ -380,13 +394,16 @@ function sourceWrites(file: PathFile): Write[] {
       }
     });
 
-  /** Judges one write's data, key by key, through spreads and nested writes. */
-  const judgeData = (data: ts.Expression, site: ts.Node): void => {
+  /**
+   * Judges one write's data, key by key, through spreads and nested writes; `model` is the delegate
+   * the data is written through, a nested write's being its relation's key (006:T009).
+   */
+  const judgeData = (data: ts.Expression, site: ts.Node, model: string): void => {
     for (const object of values(data)) {
       if (!ts.isObjectLiteralExpression(object)) continue;
       for (const property of object.properties) {
         if (ts.isSpreadAssignment(property)) {
-          judgeData(property.expression, site);
+          judgeData(property.expression, site, model);
           continue;
         }
         if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
@@ -394,8 +411,8 @@ function sourceWrites(file: PathFile): Write[] {
         }
         const key = keyOf(property.name);
         if (key === null) continue;
-        if (CONFIRMED_AT_KEYS.has(key)) write('confirmedAt', property, key, site);
-        if (isAmountKey(key)) write('amount', property, key, site);
+        if (CONFIRMED_AT_KEYS.has(key)) write('confirmedAt', property, key, site, model);
+        if (isAmountKey(key)) write('amount', property, key, site, model);
         if (!ts.isPropertyAssignment(property)) continue;
         for (const relation of values(property.initializer)) {
           if (!ts.isObjectLiteralExpression(relation)) continue;
@@ -404,8 +421,12 @@ function sourceWrites(file: PathFile): Write[] {
             if (name === null || !NESTED_WRITES.has(name) || !ts.isPropertyAssignment(operation)) {
               continue;
             }
-            if (PAYMENT_RELATIONS.has(key)) write('payment', operation, `${key}.${name}`, site);
-            for (const nested of nestedData(name, operation.initializer)) judgeData(nested, site);
+            if (PAYMENT_RELATIONS.has(key)) {
+              write('payment', operation, `${key}.${name}`, site, key);
+            }
+            for (const nested of nestedData(name, operation.initializer)) {
+              judgeData(nested, site, key);
+            }
           }
         }
       }
@@ -427,13 +448,13 @@ function sourceWrites(file: PathFile): Write[] {
           ? delegate.argumentExpression.text
           : null;
       if (model !== null) {
-        if (PAYMENT_MODELS.has(model)) write('payment', node, model);
+        if (PAYMENT_MODELS.has(model)) write('payment', node, model, node, model);
         const argument = node.arguments[0];
         for (const object of argument === undefined ? [] : values(argument)) {
           if (!ts.isObjectLiteralExpression(object)) continue;
           for (const key of method === 'upsert' ? ['create', 'update'] : ['data']) {
             const data = member(object, key);
-            if (data !== undefined) judgeData(data, node);
+            if (data !== undefined) judgeData(data, node, model);
           }
         }
       }
@@ -591,6 +612,53 @@ describe('SC-413 reads a write through a same-file helper (PR #156 r2 Minor 2, 0
         ({ name }) => name,
       ),
     ).toEqual(['snapshotPricePiasters']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// PR #156 r2 Minor 1 (carried into 006:T009, Q-6 (a)): the order's marker is allowed on the
+// `payment` delegate only, so an enrollment's `confirmedAt` written inside `markOrderConfirmed`,
+// directly or through a relation of the order, is refused.
+
+/** M-G11: an enrollment's confirmation written inside the allowed site, and the marker itself. */
+const MARKER_SITE = (body: string): PathFile => ({
+  path: PAYMENTS_REPOSITORY,
+  text: `
+export async function markOrderConfirmed(tx, paymentId) {
+  ${body}
+}
+`,
+});
+
+describe('SC-413 binds the order’s marker to the payment delegate (PR #156 r2 Minor 1, 006:T009)', () => {
+  it('refuses an enrollment’s confirmedAt written inside markOrderConfirmed (M-G11)', () => {
+    expect(
+      findViolations([
+        MARKER_SITE(
+          'await tx.enrollment.updateMany({ where: { id: paymentId }, data: { confirmedAt: new Date() } });',
+        ),
+      ]).map(({ kind, within, name }) => `${kind} ${within ?? '-'} ${name}`),
+    ).toEqual(['confirmedAt markOrderConfirmed confirmedAt']);
+  });
+
+  it('refuses it reached through the order’s enrollment relation', () => {
+    expect(
+      findViolations([
+        MARKER_SITE(
+          'await tx.payment.update({ where: { id: paymentId }, data: { enrollment: { update: { confirmedAt: new Date() } } } });',
+        ),
+      ]).map(({ kind, within, name }) => `${kind} ${within ?? '-'} ${name}`),
+    ).toEqual(['confirmedAt markOrderConfirmed confirmedAt']);
+  });
+
+  it('allows the order’s own marker on the payment delegate', () => {
+    const writes = findWrites([
+      MARKER_SITE(
+        'await tx.payment.updateMany({ where: { id: paymentId, confirmedAt: null }, data: { confirmedAt: at } });',
+      ),
+    ]).filter(({ kind }) => kind === 'confirmedAt');
+    expect(writes).toHaveLength(1);
+    expect(allowedBecause(writes[0]!)).toContain('006:T006');
   });
 });
 
