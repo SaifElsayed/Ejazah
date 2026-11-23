@@ -17,6 +17,10 @@ import { TeacherRoom } from './index';
 
 jest.mock('livekit-client', () => require('../../shared/room/__tests__/fake-room'));
 jest.mock('@livekit/react-native', () => require('../../shared/room/__tests__/fake-livekit-rn'));
+// 004:T084 (R1b): the room watches the native frame cryptors; the fake stands in for the native module.
+jest.mock('../../shared/room/frame-cryption', () =>
+  require('../../shared/room/__tests__/fake-frame-cryption'),
+);
 
 let mockApi = roomApi();
 jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));

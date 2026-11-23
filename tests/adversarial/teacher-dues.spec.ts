@@ -113,6 +113,9 @@ async function pair(gender: Gender) {
       milestone: 'recitation_end',
       amountPiasters: 99_999n,
       dueAt: new Date('2026-10-07T10:00:00Z'),
+      // 003:T127 (R1b, DEC-98): the end release took the 50,000 refund's share off when it was
+      // written, so «عليك» lists it (a refund after the release would be the platform's).
+      refundTakenOffPiasters: 35_000n,
     },
   });
   return { own, other };
