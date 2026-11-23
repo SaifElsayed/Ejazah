@@ -13,6 +13,8 @@ import {
   type PlannedRelease,
   plannedReleases,
   type ReleaseFacts,
+  type ReleaseOrder,
+  type ReleaseProgramme,
   type ReleaseSession,
   refundShareOf,
   takenOffAtEnd,
@@ -47,6 +49,15 @@ function facts(
   } = {},
 ): ReleaseFacts {
   const { track = 'recitation', status = 'completed', count = 10, ...rest } = overrides;
+  const order = rest.order ?? {
+    paymentId: PAYMENT,
+    kind: 'package' as const,
+    paid_piasters: piasters(1_000_000),
+    share_piasters: piasters(700_000),
+    sharePercent: 70,
+    halfPercent: track === 'ijazah_track' ? 25 : null,
+    refunded_piasters: piasters(0),
+  };
   return {
     enrollment: {
       enrollmentId: ENROLLMENT,
@@ -55,14 +66,11 @@ function facts(
       track,
       status,
       sessionCount: count,
+      cancellationReason: null,
+      programme: null,
     },
-    order: {
-      paymentId: PAYMENT,
-      share_piasters: piasters(700_000),
-      sharePercent: 70,
-      halfPercent: track === 'ijazah_track' ? 25 : null,
-      refunded_piasters: piasters(0),
-    },
+    order,
+    orders: [order],
     sessions: sessionsWith(count, count),
     caseReasons: [],
     caseOpen: false,
@@ -95,7 +103,12 @@ const madeUpMidPackage = (): ReleaseSession[] => [
   ...Array.from({ length: 10 }, (_, index) =>
     at(index + 1, index === 2 ? 'teacher_no_show' : 'done'),
   ),
-  { sequenceNumber: 11, endsAt: new Date(addHours(endOf(4), 6)), outcome: 'done', madeUpSequence: 3 },
+  {
+    sequenceNumber: 11,
+    endsAt: new Date(addHours(endOf(4), 6)),
+    outcome: 'done',
+    madeUpSequence: 3,
+  },
 ];
 
 describe('recitation_end (ADR 0025 D2: the whole share at the package’s end)', () => {
@@ -540,6 +553,461 @@ describe('the closes that release (Q-5 (a))', () => {
         }),
       ),
     ).toMatchObject([{ milestone: 'student_complaint_close', amount: 245_000 }]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T011 (FR-703, FR-706b, FR-725, FR-728; R-512; DEC-94; Q-5 (a)): the programme's releases. The
+// worked example: an offer of 40 sessions × 250 EGP = 10,000 EGP, the assessment's fee 500 EGP, the
+// share 70 %, the half 25 %; the snapshot's count N + 1 = 41, the assessment session 1. Orders: the
+// assessment 50,000 pt (share 35,000), the rest in full 950,000 (share 665,000), or a month
+// 100,000 (share 70,000).
+
+const programmeOrder = (
+  n: number,
+  kind: ReleaseOrder['kind'],
+  gross: number,
+  share: number,
+): ReleaseOrder => ({
+  paymentId: `0199d0a0-0000-7000-8000-0000000006${String(n).padStart(2, '0')}`,
+  kind,
+  paid_piasters: piasters(gross),
+  share_piasters: piasters(share),
+  sharePercent: 70,
+  halfPercent: 25,
+  refunded_piasters: piasters(0),
+});
+const ASSESSMENT = programmeOrder(0, 'assessment', 50_000, 35_000);
+const REST_IN_FULL = programmeOrder(1, 'rest_in_full', 950_000, 665_000);
+/** Months 1 to `count` paid, 100,000 pt each (4 × 25,000), share 70,000. */
+const months = (count: number): ReleaseOrder[] =>
+  Array.from({ length: count }, (_, index) =>
+    programmeOrder(index + 2, 'instalment', 100_000, 70_000),
+  );
+
+/** The offer sent 2026-10-03 12:00 UTC; its 48 hours end 2026-10-05 12:00 UTC. */
+const PAY_BY = new Date('2026-10-05T12:00:00Z');
+
+function programmeFacts({
+  orders,
+  status = 'confirmed',
+  cancellationReason = null,
+  programme = {},
+  delivered = 1,
+  count = 41,
+  caseOpen = false,
+  written = [],
+}: {
+  readonly orders: readonly ReleaseOrder[];
+  readonly status?: ReleaseFacts['enrollment']['status'];
+  readonly cancellationReason?: string | null;
+  readonly programme?: Partial<ReleaseProgramme>;
+  readonly delivered?: number;
+  readonly count?: number;
+  readonly caseOpen?: boolean;
+  readonly written?: ReleaseFacts['written'];
+}): ReleaseFacts {
+  const [first = ASSESSMENT] = orders;
+  return {
+    enrollment: {
+      enrollmentId: ENROLLMENT,
+      teacherUserId: TEACHER,
+      studentUserId: STUDENT,
+      track: 'ijazah_track',
+      status,
+      sessionCount: count,
+      cancellationReason,
+      programme: {
+        state: 'active',
+        total_piasters: piasters(1_000_000),
+        payByAt: PAY_BY,
+        closedAt: null,
+        payBlockedOpen: false,
+        ...programme,
+      },
+    },
+    order: first,
+    orders,
+    sessions: sessionsWith(delivered, count),
+    caseReasons: [],
+    caseOpen,
+    written,
+  };
+}
+
+const milestonesOf = (input: ReleaseFacts, now: Date = LATER) =>
+  plan(input, now).map(({ milestone }) => milestone);
+
+describe('006:T011 the assessment while the student has not continued (FR-703, R-512; B-P1 lane e follow-up)', () => {
+  it('lists no `ijazah_half` for an assessment-only enrollment (count 1, session 1 delivered)', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      count: 1,
+      programme: { state: 'awaiting_offer', total_piasters: piasters(50_000), payByAt: null },
+    });
+    expect(milestonesOf(input)).not.toContain('ijazah_half');
+    expect(plan(input)).toEqual([]);
+  });
+
+  it('lists nothing while the offer waits for the student: offered, the 48 hours running', () => {
+    expect(plan(programmeFacts({ orders: [ASSESSMENT], programme: { state: 'offered' } }))).toEqual(
+      [],
+    );
+  });
+
+  it('lists no `assessment` release, nor any other, while a `pay_blocked` item is open past pay_by (FR-706b)', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      programme: { state: 'offered', payBlockedOpen: true },
+    });
+    expect(plan(input)).toEqual([]);
+  });
+
+  it('never lets the `assessment` release fall due while a `pay_blocked` item is open (FR-706b)', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      status: 'cancelled',
+      cancellationReason: 'offer_lapsed',
+      programme: {
+        state: 'closed',
+        closedAt: new Date('2026-10-07T08:00:00Z'),
+        payBlockedOpen: true,
+      },
+    });
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'assessment',
+        amount: 35_000,
+        dueAt: '2026-10-07T08:00:00.000Z',
+        due: false,
+        waitsForCase: false,
+      },
+    ]);
+  });
+});
+
+describe('006:T011 the `assessment` release when the student does not continue (DEC-94: 350 of a 500 fee)', () => {
+  it('on `offer_declined` falls due at pay_by, the later of the close and pay_by, after session 1’s 72 h', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      status: 'cancelled',
+      cancellationReason: 'offer_declined',
+      programme: { state: 'closed', closedAt: new Date('2026-10-03T18:00:00Z') },
+    });
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'assessment',
+        amount: 35_000,
+        dueAt: PAY_BY.toISOString(),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+    expect(plan(input, new Date('2026-10-05T11:59:59Z'))).toMatchObject([{ due: false }]);
+  });
+
+  it('on `offer_lapsed` falls due at the close when it comes after pay_by (an item approved later)', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      status: 'cancelled',
+      cancellationReason: 'offer_lapsed',
+      programme: { state: 'closed', closedAt: new Date('2026-10-07T08:00:00Z') },
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'assessment', amount: 35_000, dueAt: '2026-10-07T08:00:00.000Z', due: true },
+    ]);
+  });
+
+  it('on `assessment_refused` with no offer sent falls due at the close', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      count: 1,
+      status: 'cancelled',
+      cancellationReason: 'assessment_refused',
+      programme: {
+        state: 'closed',
+        total_piasters: piasters(50_000),
+        payByAt: null,
+        closedAt: new Date('2026-10-06T09:00:00Z'),
+      },
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'assessment', amount: 35_000, dueAt: '2026-10-06T09:00:00.000Z', due: true },
+    ]);
+  });
+
+  it('waits for session 1’s 72 h when they end after the close and pay_by', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      count: 1,
+      status: 'cancelled',
+      cancellationReason: 'assessment_refused',
+      programme: {
+        state: 'closed',
+        total_piasters: piasters(50_000),
+        payByAt: null,
+        closedAt: new Date('2026-10-02T09:00:00Z'),
+      },
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'assessment', dueAt: windowAfter(1), due: true },
+    ]);
+    expect(plan(input, new Date(addHours(endOf(1), 71)))).toMatchObject([{ due: false }]);
+  });
+
+  it('waits for an assessment made up: the make-up’s 72 h, not the missed session’s', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      count: 1,
+      status: 'cancelled',
+      cancellationReason: 'assessment_refused',
+      programme: {
+        state: 'closed',
+        total_piasters: piasters(50_000),
+        payByAt: null,
+        closedAt: new Date('2026-10-02T09:00:00Z'),
+      },
+    });
+    const madeUp = {
+      ...input,
+      sessions: [
+        at(1, 'teacher_no_show'),
+        { sequenceNumber: 2, endsAt: endOf(3), outcome: 'done', madeUpSequence: 1 },
+      ],
+    };
+    expect(plan(madeUp)).toMatchObject([{ milestone: 'assessment', dueAt: windowAfter(3) }]);
+  });
+
+  it('is held while a case is open on the enrollment', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      status: 'cancelled',
+      cancellationReason: 'offer_declined',
+      programme: { state: 'closed', closedAt: new Date('2026-10-03T18:00:00Z') },
+      caseOpen: true,
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'assessment', due: false, waitsForCase: true },
+    ]);
+  });
+
+  it('is owed once: a written `assessment` release is not planned again', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT],
+      status: 'cancelled',
+      cancellationReason: 'offer_declined',
+      programme: { state: 'closed', closedAt: new Date('2026-10-03T18:00:00Z') },
+      written: [{ milestone: 'assessment', amount_piasters: piasters(35_000) }],
+    });
+    expect(plan(input)).toEqual([]);
+  });
+
+  it('lists no `assessment` release on any other close (a programme stopped after paying)', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(4)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 12,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+    });
+    expect(milestonesOf(input)).not.toContain('assessment');
+  });
+});
+
+describe('006:T011 `ijazah_half` once the student continued (FR-728, DEC-94: 25 % of the share of the price as paid)', () => {
+  it('in full: 1,750 EGP (25 % × 70 % × 10,000) after the window of the 21st of 41 delivered, not the first order’s 87.50', () => {
+    const input = programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL], delivered: 21 });
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'ijazah_half',
+        amount: 175_000,
+        dueAt: windowAfter(21),
+        due: true,
+        waitsForCase: false,
+      },
+      {
+        milestone: 'ijazah_end',
+        amount: 525_000,
+        dueAt: windowAfter(41),
+        due: false,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('by months: 1,837.50 EGP (25 % × 70 % × (10,000 + the fee 500)), months 1 to 6 paid', () => {
+    const input = programmeFacts({ orders: [ASSESSMENT, ...months(6)], delivered: 21 });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'ijazah_half', amount: 183_750, dueAt: windowAfter(21), due: true },
+      // The end held: the shares paid so far (35,000 + 6 × 70,000) less the half.
+      { milestone: 'ijazah_end', amount: 271_250, due: false },
+    ]);
+  });
+
+  it('is capped at the paid orders’ shares: months 1 and 2 paid give 35,000 + 2 × 70,000 = 175,000', () => {
+    const input = programmeFacts({ orders: [ASSESSMENT, ...months(2)], delivered: 21 });
+    expect(plan(input)).toMatchObject([{ milestone: 'ijazah_half', amount: 175_000 }]);
+  });
+
+  it('is capped at the paid orders’ shares less the releases written: 175,000 − a stop’s 105,000', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(2)],
+      delivered: 21,
+      written: [{ milestone: 'programme_stopped', amount_piasters: piasters(105_000) }],
+    });
+    expect(plan(input)).toMatchObject([{ milestone: 'ijazah_half', amount: 70_000 }]);
+  });
+
+  it('is held at 20 of 41 delivered, the assessment counted', () => {
+    const input = programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL], delivered: 20 });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'ijazah_half', amount: 175_000, dueAt: windowAfter(21), due: false },
+      { milestone: 'ijazah_end', due: false },
+    ]);
+  });
+});
+
+describe('006:T011 `ijazah_end` and `programme_stopped` (U-4; Q-5 (a): − every release written and the half owed)', () => {
+  it('in full: the end is 5,250 EGP after the half 1,750 written', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, REST_IN_FULL],
+      status: 'completed',
+      delivered: 41,
+      written: [{ milestone: 'ijazah_half', amount_piasters: piasters(175_000) }],
+    });
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'ijazah_end',
+        amount: 525_000,
+        dueAt: windowAfter(41),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('by months, all 10 paid: the half 1,837.50 and the end 5,512.50 due together', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(10)],
+      status: 'completed',
+      delivered: 41,
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'ijazah_half', amount: 183_750, due: true },
+      { milestone: 'ijazah_end', amount: 551_250, due: true },
+    ]);
+  });
+
+  it('takes off every release written, a first stop’s included, so a reopened programme never pays it again', () => {
+    // Months 1 to 4 paid, stopped at 12 delivered (315,000 released), reopened, months 5 to 10 paid.
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(10)],
+      status: 'completed',
+      delivered: 41,
+      written: [{ milestone: 'programme_stopped', amount_piasters: piasters(315_000) }],
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'ijazah_half', amount: 183_750 },
+      { milestone: 'ijazah_end', amount: 735_000 - 315_000 - 183_750 },
+    ]);
+  });
+
+  it('takes off the teacher’s share of a refund: a month of 1,000 EGP refunded, 700 EGP off', () => {
+    const [first, ...rest] = months(10);
+    const input = programmeFacts({
+      orders: [
+        ASSESSMENT,
+        { ...(first as ReleaseOrder), refunded_piasters: piasters(100_000) },
+        ...rest,
+      ],
+      status: 'completed',
+      delivered: 41,
+      written: [{ milestone: 'ijazah_half', amount_piasters: piasters(183_750) }],
+    });
+    expect(plan(input)).toMatchObject([{ milestone: 'ijazah_end', amount: 551_250 - 70_000 }]);
+  });
+
+  it('an approved stop releases the paid orders’ shares after the last delivered session’s 72 h', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(4)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 12,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+    });
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'programme_stopped',
+        amount: 315_000,
+        dueAt: windowAfter(12),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('an approved stop after the half takes the half written off: 455,000 − 183,750', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(6)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 23,
+      programme: { state: 'closed', closedAt: new Date('2026-11-02T08:00:00Z') },
+      written: [{ milestone: 'ijazah_half', amount_piasters: piasters(183_750) }],
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'programme_stopped', amount: 271_250, dueAt: windowAfter(23), due: true },
+    ]);
+  });
+
+  it('an approved stop is held while a case is open', () => {
+    const input = programmeFacts({
+      orders: [ASSESSMENT, ...months(4)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 12,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+      caseOpen: true,
+    });
+    expect(plan(input)).toMatchObject([
+      { milestone: 'programme_stopped', due: false, waitsForCase: true },
+    ]);
+  });
+});
+
+describe('006:T011 `package` orders keep today’s rules', () => {
+  it('an ijazah package with a duplicate paid order is still judged on its first order alone (Q-B1-10 (a))', () => {
+    const first = facts({ track: 'ijazah_track', status: 'confirmed', count: 10 });
+    const duplicate = { ...first.order, paymentId: '0199d0a0-0000-7000-8000-000000000699' };
+    const input = {
+      ...first,
+      orders: [first.order, duplicate],
+      sessions: sessionsWith(5),
+    };
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'ijazah_half',
+        amount: 175_000,
+        dueAt: windowAfter(5),
+        due: true,
+        waitsForCase: false,
+      },
+      {
+        milestone: 'ijazah_end',
+        amount: 525_000,
+        dueAt: windowAfter(10),
+        due: false,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('a recitation package with a duplicate paid order releases its first order’s share alone', () => {
+    const first = facts();
+    const duplicate = { ...first.order, paymentId: '0199d0a0-0000-7000-8000-000000000699' };
+    expect(plan({ ...first, orders: [first.order, duplicate] })).toMatchObject([
+      { milestone: 'recitation_end', amount: 700_000 },
+    ]);
   });
 });
 

@@ -2,8 +2,9 @@
 // are computed from, gathered for some enrollments in one read of each owner, and the due sweep that
 // writes them. The rules are `share-release.rules.ts`'s, the amounts `packages/money`'s.
 //
-// THE OWNERS (R-API-6): the orders and the written releases are payments' own; the enrollment's
-// parties, track, status and count are booking's; its sessions' outcomes sessions'
+// THE OWNERS (R-API-6): the orders (006:T011: every paid one, with its kind) and the written
+// releases are payments' own; the enrollment's parties, track, status and count, and (006:T011) its
+// cancellation reason and programme, are booking's (`enrollmentsAmong`); its sessions' outcomes sessions'
 // (`sessionsOfEnrollments`, a disputed one by its frozen outcome); its compensation cases and its
 // open matters moderation's (`compensationCasesAmong`, `enrollmentsWithOpenMatterAmong`). Each read
 // is bounded by the enrollments asked and takes no lock: a release is a record an administrator acts
@@ -14,7 +15,8 @@
 // (`INSERT … ON CONFLICT DO NOTHING`), its failure caught and reported on its own, so one bad row
 // never stops the run. One info line per release written: its ids and its milestone, never an amount
 // a name or a text. Run twice, or by two workers at once, it leaves one row per enrollment and
-// milestone (R-API-14).
+// milestone (R-API-14). A programme's enrollment, met on each page that holds one of its orders, is
+// judged again there and writes nothing more (006:T011).
 import type { EnrollmentSessionRow } from '../sessions/index.js';
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -53,12 +55,16 @@ import {
 
 /** What the releases are computed from, each read on the caller's transaction; faked in a spec. */
 export interface ReleaseReads {
+  /** 006:T011: each enrollment's paid orders with a share, oldest first. */
   shareOrdersOf(
     tx: Transaction,
     enrollmentIds: readonly string[],
-  ): Promise<ReadonlyMap<string, ShareOrderRow>>;
+  ): Promise<ReadonlyMap<string, readonly ShareOrderRow[]>>;
   releasesOf(tx: Transaction, enrollmentIds: readonly string[]): Promise<readonly ReleaseRow[]>;
-  /** Booking's: each enrollment's parties, track, status and count; an unknown one absent. */
+  /**
+   * Booking's: each enrollment's parties, track, status and count, and (006:T011) its cancellation
+   * reason and programme; an unknown one absent.
+   */
   enrollmentsAmong(
     tx: Transaction,
     enrollmentIds: readonly string[],
@@ -82,7 +88,10 @@ export interface ReleaseReads {
   ): Promise<ReadonlyMap<string, string>>;
 }
 
-/** Booking's enrollments through its public entry, in one statement (Q-B1-6 (a)). */
+/**
+ * Booking's enrollments through its public entry, in one read (Q-B1-6 (a)), each with its
+ * cancellation reason and its programme (006:T011, R-512).
+ */
 async function enrollmentsThroughBooking(
   tx: Transaction,
   enrollmentIds: readonly string[],
@@ -100,6 +109,8 @@ async function enrollmentsThroughBooking(
             track: row.snapshotTrack,
             status: row.status,
             sessionCount: row.snapshotSessionCount,
+            cancellationReason: row.cancellationReason,
+            programme: row.programme,
           },
         ] as const,
     ),
@@ -175,7 +186,8 @@ export async function releasesAmong(
     reads.makeupsAmong(tx, ids),
   ]);
   return ids.flatMap((enrollmentId) => {
-    const order = orders.get(enrollmentId);
+    const paid = orders.get(enrollmentId) ?? [];
+    const [order] = paid;
     const enrollment = enrollments.get(enrollmentId);
     if (order === undefined || enrollment === undefined) return [];
     const own = written.filter((row) => row.enrollmentId === enrollmentId);
@@ -185,6 +197,7 @@ export async function releasesAmong(
         facts: {
           enrollment,
           order,
+          orders: paid,
           sessions: releaseSessionsOf(sessions.get(enrollmentId) ?? [], makeups),
           caseReasons: enrollmentCases.map(({ reason }) => reason),
           caseOpen: open.has(enrollmentId),

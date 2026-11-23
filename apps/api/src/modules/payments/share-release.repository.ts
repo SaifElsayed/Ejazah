@@ -22,6 +22,10 @@ const PAID_STATUSES = ['paid', 'refunded'] as const;
 export interface ShareOrderRow {
   readonly paymentId: string;
   readonly enrollmentId: string;
+  /** 006:T011 (R-502): what the order pays for. */
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T011: the order's gross as charged. */
+  readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
   readonly sharePercent: number;
   readonly halfPercent: number | null;
@@ -51,6 +55,8 @@ export interface DueRelease {
 interface SelectedOrder {
   readonly id: string;
   readonly enrollmentId: string;
+  readonly kind: ShareOrderRow['kind'];
+  readonly grossPiasters: bigint;
   readonly teacherSharePiasters: bigint | null;
   readonly teacherShareRatePercent: number | null;
   readonly halfReleaseRatePercent: number | null;
@@ -63,6 +69,8 @@ function shareOrderOf(row: SelectedOrder): ShareOrderRow | null {
   return {
     paymentId: row.id,
     enrollmentId: row.enrollmentId,
+    kind: row.kind,
+    paid_piasters: piasters(Number(row.grossPiasters)),
     share_piasters: piasters(Number(row.teacherSharePiasters)),
     sharePercent: row.teacherShareRatePercent,
     halfPercent: row.halfReleaseRatePercent,
@@ -112,6 +120,8 @@ export async function shareOrdersAfter(
     select: {
       id: true,
       enrollmentId: true,
+      kind: true,
+      grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
       halfReleaseRatePercent: true,
@@ -122,16 +132,17 @@ export async function shareOrdersAfter(
 }
 
 /**
- * Of `enrollmentIds`, each one's order that carries its share: its first paid order with a share, by
- * the time-ordered id (Q-B1-10 (a): the one that confirmed it; a duplicate is refunded through its
- * own case). Over `payments_enrollment_id_idx`, bounded by the enrollments asked.
+ * Of `enrollmentIds`, each one's paid orders with a share, oldest first by the time-ordered id
+ * (006:T011, R-512: a programme's assessment, its rest or its months). A package's share is its
+ * first (Q-B1-10 (a): the one that confirmed it; a duplicate is refunded through its own case).
+ * Over `payments_enrollment_id_idx`, bounded by the enrollments asked and their orders.
  */
 export async function shareOrdersOf(
   tx: Client,
   enrollmentIds: readonly string[],
-): Promise<ReadonlyMap<string, ShareOrderRow>> {
-  const first = new Map<string, ShareOrderRow>();
-  if (enrollmentIds.length === 0) return first;
+): Promise<ReadonlyMap<string, readonly ShareOrderRow[]>> {
+  const byEnrollment = new Map<string, ShareOrderRow[]>();
+  if (enrollmentIds.length === 0) return byEnrollment;
   const rows = await tx.payment.findMany({
     where: {
       enrollmentId: { in: [...enrollmentIds] },
@@ -142,6 +153,8 @@ export async function shareOrdersOf(
     select: {
       id: true,
       enrollmentId: true,
+      kind: true,
+      grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
       halfReleaseRatePercent: true,
@@ -150,9 +163,12 @@ export async function shareOrdersOf(
   });
   for (const row of rows) {
     const order = shareOrderOf(row);
-    if (order !== null && !first.has(order.enrollmentId)) first.set(order.enrollmentId, order);
+    if (order === null) continue;
+    const orders = byEnrollment.get(order.enrollmentId);
+    if (orders === undefined) byEnrollment.set(order.enrollmentId, [order]);
+    else orders.push(order);
   }
-  return first;
+  return byEnrollment;
 }
 
 /** A page of the orders with a refund recorded and a share, after `after` in id order. */
@@ -172,6 +188,8 @@ export async function refundedShareOrdersAfter(
     select: {
       id: true,
       enrollmentId: true,
+      kind: true,
+      grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
       halfReleaseRatePercent: true,
@@ -197,6 +215,8 @@ export async function refundedShareOrdersOf(
     select: {
       id: true,
       enrollmentId: true,
+      kind: true,
+      grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
       halfReleaseRatePercent: true,

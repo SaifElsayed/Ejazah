@@ -55,6 +55,8 @@ const enrollment = (track: ReleaseEnrollment['track'] = 'recitation'): ReleaseEn
   track,
   status: 'cancelled',
   sessionCount: 10,
+  cancellationReason: null,
+  programme: null,
 });
 
 interface Fake {
