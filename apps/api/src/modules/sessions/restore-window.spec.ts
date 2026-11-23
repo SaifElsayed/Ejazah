@@ -177,10 +177,6 @@ describe('closingOf, the one closing rule (Q4 (a), N4)', () => {
     ['an unpaid end', facts('cancelled', 'payment_expired', null)],
     ['a cancellation `admin` with no end case', facts('cancelled', 'admin', null)],
     [
-      'a cancellation `admin` whose end case is a teacher’s',
-      facts('cancelled', 'admin', endCase('teacher_ended')),
-    ],
-    [
       'a termination whose end case is a ban’s',
       facts('terminated_no_show', null, endCase('student_banned')),
     ],
@@ -203,5 +199,43 @@ describe('closingOf, the one closing rule (Q4 (a), N4)', () => {
     ],
   ])('never admits %s', (_name, closing) => {
     expect(closingOf(closing)).toBeUndefined();
+  });
+});
+
+// 003:T125, Q-A1 (a) (the owner, 2026-11-23; DEC-69, FR-CANCEL-10): a direct end «المعلم وقف»
+// (`teacher_ended` beside the cancellation `admin`) is a direct end, not a ban: its own kind,
+// `teacher_stopped`, restorable while its case is open, its slot held through the enrollment's window
+// (7 days here), never the ban's (3). A ban's `teacher_ended` (beside `teacher_suspended`) is
+// unchanged. An approved rewrite of «never admits a cancellation `admin` whose end case is a
+// teacher's». Written before the rule, run red first.
+describe('003:T125 Q-A1 (a): the teacher’s stop by a direct end', () => {
+  it('is admitted as its own kind while its case is open, and kept, not restorable, once it is closed', () => {
+    const open = endCase('teacher_ended');
+    expect(closingOf(facts('cancelled', 'admin', open))).toEqual({
+      kind: 'teacher_stopped',
+      closingCase: open,
+      restorable: true,
+    });
+    const closed = endCase('teacher_ended', 'resolved');
+    expect(closingOf(facts('cancelled', 'admin', closed))).toMatchObject({
+      kind: 'teacher_stopped',
+      restorable: false,
+    });
+  });
+
+  it('holds its slot through the enrollment’s window, never the ban’s', async () => {
+    const closing = closingOf(facts('cancelled', 'admin', endCase('teacher_ended')));
+    expect(closing).toBeDefined();
+    asked.length = 0;
+    expect(await restorableUntil(OPENED, closing?.kind ?? 'teacher_ended', windowDays)).toEqual(
+      new Date('2026-11-17T09:15:30Z'),
+    );
+    expect(asked).toEqual([ENROLLMENT_RESTORE_WINDOW_SETTING]);
+  });
+
+  it('leaves a ban’s or a revocation’s teacher_ended closing as it was, the ban’s window', async () => {
+    const ban = closingOf(facts('cancelled', 'teacher_suspended', endCase('teacher_ended')));
+    expect(ban?.kind).toBe('teacher_ended');
+    expect(windowSettingOf('teacher_ended')).toBe(BAN_RESTORE_WINDOW_SETTING);
   });
 });

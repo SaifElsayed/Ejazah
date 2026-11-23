@@ -1051,6 +1051,21 @@ describe('paused (004:T074, FR-506)', () => {
     expect(item).toMatchObject({ paused: false, last: { sequenceNumber: 3 } });
   });
 
+  // 003:T125, Q-A1 (a): a direct end «المعلم وقف» (`teacher_ended` beside `admin`) is no ban's
+  // closing: held, never paused, as `admin_ended` is. Run red first under mutant A-10.
+  it('answers a direct end «المعلم وقف» held (cancelled admin, teacher_ended open) not paused', async () => {
+    const { store } = storeOf({
+      ended: [banned(E1)],
+      sessions: { [E1]: SESSIONS },
+      names: { [TEACHER]: 'أحمد سالم' },
+      cases: { [E1]: [caseOf(C1, 'teacher_ended')] },
+    });
+    const [item] = (
+      await studentEnrollmentsOf(tx, store, STUDENT, { tab: 'ended' }, CLOCK, WINDOWS)
+    ).items;
+    expect(item).toMatchObject({ paused: false, last: { sequenceNumber: 3 } });
+  });
+
   it('answers a fault’s held closing (cancelled admin, student_fault_confirmed open) not paused: only a ban’s or a revocation’s', async () => {
     const { store } = storeOf({
       ended: [banned(E1)],
