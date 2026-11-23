@@ -44,7 +44,8 @@
 //   months), capped at the paid orders' shares less the releases written (`programmeHalf`), on the
 //   N + 1 count; `ijazah_end` = the paid orders' shares − every release written and the half owed −
 //   the refund's share (5,250 / 5,512.50); `programme_stopped` (an approved stop) the same after the
-//   last delivered session's window. A second stop writes nothing (rule 62; not scheduled).
+//   last consumed session's window (done or a student's no-show; FU-E2 (a)). A second stop writes
+//   nothing (rule 62; not scheduled).
 // The closes above (a dropout, a complaint) are unchanged here: T012 values them per order.
 import type { ShareReleaseMilestone } from '@ijazah/contracts';
 import {
@@ -426,11 +427,12 @@ export function plannedReleases(
       );
     }
     if (programme.continued && reason === 'programme_stopped') {
-      // FR-725, Q-5 (a): the shares paid less every release written and the refund's share.
+      // FR-725, Q-5 (a): the shares paid less every release written and the refund's share, after
+      // the last consumed session's window (done or a student's no-show; FU-E2 (a), the owner).
       owe(
         'programme_stopped',
         shareLeft(programme.paidShares_piasters, [...written.values()], programme.refund_piasters),
-        after(lastToEnd(sequencesOf(DELIVERED)), windowHours),
+        after(lastToEnd(sequencesOf(CONSUMED)), windowHours),
         true,
       );
     }

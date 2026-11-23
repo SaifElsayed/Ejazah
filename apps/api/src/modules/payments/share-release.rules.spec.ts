@@ -974,6 +974,33 @@ describe('006:T011 `ijazah_end` and `programme_stopped` (U-4; Q-5 (a): − every
       { milestone: 'programme_stopped', due: false, waitsForCase: true },
     ]);
   });
+
+  it('an approved stop falls due after the last consumed session’s window: a student no-show after the last done (FU-E2 (a))', () => {
+    const stopped = programmeFacts({
+      orders: [ASSESSMENT, ...months(4)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 12,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+    });
+    // Session 13, the student's no-show, ends after session 12, the last done.
+    const input = {
+      ...stopped,
+      sessions: stopped.sessions.map((one) =>
+        one.sequenceNumber === 13 ? { ...one, outcome: 'student_no_show' } : one,
+      ),
+    };
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'programme_stopped',
+        amount: 315_000,
+        dueAt: windowAfter(13),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+    expect(plan(input, new Date(addHours(endOf(13), 71)))).toMatchObject([{ due: false }]);
+  });
 });
 
 describe('006:T011 `package` orders keep today’s rules', () => {
