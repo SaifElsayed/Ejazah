@@ -215,8 +215,10 @@ import type {
   IjazahRequestsSendOutput,
   ProgrammeActionInput,
   ProgrammeActionOutput,
+  ProgrammeCheckoutOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
+  ProgrammePayInput,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
   SessionsCancellationAnswerInput,
@@ -582,6 +584,8 @@ export interface AppCaller {
     /** 006:T008 (rule d): the student's cancellation and the teacher's refusal request. */
     cancel(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
     request(input: ProgrammeRequestInput): Promise<ProgrammeRequestOutput>;
+    /** 006:T009: the student's first payment, attacked in the same file. */
+    pay(input: ProgrammePayInput): Promise<ProgrammeCheckoutOutput>;
   };
 }
 
@@ -700,6 +704,13 @@ export interface DiscoverySurface {
    * never cached: an offer moves it to `offered`, so no other attack meets the change.
    */
   programmePair(gender: Gender): Promise<ProgrammePair>;
+  /**
+   * 006:T009: a programme of `gender` its teacher offered (40 sessions of 45 minutes at 400 EGP,
+   * 16,000 EGP), its assessment order paid at the world's 500 EGP and processed by the confirm step
+   * (70 %, 25 %), so `programme.pay` can be taken; made on each call, since a payment's order makes
+   * another checkout of the student wait.
+   */
+  offeredProgramme(gender: Gender): Promise<ProgrammePair>;
   /**
    * T031 of specs/004-sessions: a new session of the pair of `gender`, a Teacher-No-Show over ten
    * days before, with its remedy `proposed`: offered an hour ago, its choice window open a week, its
@@ -1282,6 +1293,31 @@ async function build(): Promise<Built> {
     };
   };
 
+  // 006:T009: `offeredProgramme`, each call a new one: offered through the real procedure, then its
+  // assessment order as the confirm step leaves it (paid, its marker set), by SQL (the amount column
+  // is named only in payments, R-MONEY-6).
+  const makeOfferedProgramme = async (gender: Gender): Promise<ProgrammePair> => {
+    const pair = await makeProgramme(gender);
+    await pair.teacher.caller.programme.offer({
+      enrollmentId: pair.enrollmentId,
+      level: 'يحفظ جزء عم',
+      readiness: 'جاهز',
+      expectedLength: 'عشرة أشهر',
+      durationMinutes: 45,
+      sessionCount: 40,
+      idempotencyKey: randomUUID(),
+    });
+    await database.$executeRaw`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at, kind, confirmed_at,
+                            teacher_share_rate_percent, teacher_share_piasters,
+                            half_release_rate_percent)
+      VALUES (${pair.enrollmentId}::uuid, 'fake', ${`world-assessment-${randomUUID()}`},
+              ${WORLD_ASSESSMENT_PRICE}, 'EGP', 'paid'::payment_status, now(), now(),
+              'assessment'::order_kind, now(), 70, 35000, 25)`;
+    return pair;
+  };
+
   const students = new Map<Gender, Student>();
   const pending = new Map<Gender, Promise<{ enrollmentId: string; holdId: string }>>();
   for (const gender of GENDERS) {
@@ -1461,6 +1497,8 @@ async function build(): Promise<Built> {
     },
     freshSessionPair: (gender) => makePair(gender),
     programmePair: (gender) => makeProgramme(gender),
+    // 006:T009.
+    offeredProgramme: (gender) => makeOfferedProgramme(gender),
     sessionPair(gender) {
       const made = pairs.get(gender);
       if (made !== undefined) return made;

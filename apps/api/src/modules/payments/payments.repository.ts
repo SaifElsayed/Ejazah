@@ -15,6 +15,7 @@
 import { type Piasters, piasters, toPlainNumber } from '@ijazah/money';
 
 import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encryption.js';
+import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockRows } from '../../platform/db/row-lock.js';
 
@@ -156,13 +157,12 @@ export async function processedProgrammeOrdersOf(
 
 /**
  * 006:T006 (V-3): the confirm step's per-order marker, written once (`WHERE confirmed_at IS NULL`);
- * the caller holds the order's lock.
+ * the caller holds the order's lock. 006:T009 (PR #156 r2 Follow-up 1): its instant is the
+ * database's clock read here, under the locks (`clock_timestamp()`), never one the caller read
+ * before them, so the walk (`confirmed_at`, id) follows the order the orders were settled in.
  */
-export async function markOrderConfirmed(
-  tx: Pick<Transaction, 'payment'>,
-  paymentId: string,
-  at: Date,
-): Promise<void> {
+export async function markOrderConfirmed(tx: Transaction, paymentId: string): Promise<void> {
+  const at = await clockTimestamp(tx);
   await tx.payment.updateMany({
     where: { id: paymentId, confirmedAt: null },
     data: { confirmedAt: at },

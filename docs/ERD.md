@@ -655,6 +655,7 @@ One row per gateway order. An enrollment may have several (a failed or expired a
 | automatic | boolean, default false | A charge of a saved card, recorded by the sweep (R-509) |
 | decline_kind | enum soft · hard, nullable | `decline_kind`: why an automatic order failed; `soft` is retried, `hard` never (R-509) |
 | confirmed_at | timestamptz, nullable | The confirm step's marker for the order it processed, so a replayed event finds it and does nothing (R-502, V-3) |
+| card_consent_at | timestamptz, nullable | The instant the student ticked «save my card» on a programme order paid by hand (`programme.pay`), its own evidence of the consent before any token exists; copied into `programme_cards.consented_at` when the card is saved (FR-713, R-510; §15 rule 82; 006:T009, changelog row 74) |
 | created_at / updated_at | timestamptz | |
 
 ### `payment_events`
@@ -1223,6 +1224,8 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 81. `programme_requests`: `(decided_by_admin_id IS NULL) = (decided_at IS NULL) AND (status NOT IN ('approved', 'declined') OR decided_at IS NOT NULL)` — check `programme_requests_decided_check`: the deciding administrator and the instant set together, on every approval and decline (rule 54's pattern; R-513; 006:T001; changelog row 72).
 
+82. `payments`: `card_consent_at IS NULL OR (kind IN ('rest_in_full', 'instalment') AND NOT automatic)` — check `payments_card_consent_at_check`: the student's consent to save the card is recorded only on a programme's order paid by hand, never on a package's or an assessment's order nor on an automatic charge, which uses the card already saved (FR-713, R-510; 006:T009, Q-4 (a); changelog row 74).
+
 Rule 10 is the one to appreciate: the guarantee that a person, a lesson, a purchase, a certificate or an administrator's action cannot be destroyed stops being a code-review item and becomes physics.
 
 Rule 10 treats `audit_logs` differently on purpose. Every other table on that list holds something a person might legitimately need removed — an account, a purchase, a lesson, a certificate. An audit log holds the record of what administrators did, and its only reader is someone checking whether an administrator acted properly. There is no operational need to remove a row, so the table gets no removal mechanism at all rather than one guarded by convention.
@@ -1617,3 +1620,9 @@ Amended on 2026-11-22 by T001 of `specs/006-programme/tasks.md` (B-P1), on the o
 | 71 | §5 new table `programmes` (booking), keyed by its enrollment: `state`, `offer_due_at`, `pay_by_at` (the spec's «pay_by»), `level`, `readiness`, `expected_length`, `offered_at`, `month_count`, `payment_plan`, `months_paid`, `next_due_at`, `first_failure_at`, `retries_done`, `paused_at`, `closed_at`; its index on (`state`, `next_due_at`) for the sweep; §15 rules 76 to 78 (R-501, R-505 to R-508, R-510) | the same |
 | 72 | §5 new table `programme_requests` (booking): `enrollment_id`, `teacher_user_id`, `kind`, `reason`, `status`, `decided_by_admin_id`, `decided_at`; its queue index on (`status`, `created_at`) and its foreign keys' plain indexes; §15 rules 79 to 81 (R-513) | the same |
 | 73 | §7 new table `programme_cards` (payments), keyed by its enrollment: `token_encrypted` (bytea, `ColumnCipher`, R-DB-8), `last4`, `brand`, `consented_at`; deleted by the close hook, at the programme's end, by the account's erasure, when the student turns the automatic renewal off and at a teacher's suspension, ban or departure (R-510, DEC-94, DEC-95). `packages/config/module-tables.json` names the three tables: 51 | the same |
+
+Amended on 2026-11-23 by T009 of `specs/006-programme/tasks.md` (B-P2), on the owner's decision of 2026-11-23 on B-P2's conflict check (Q-4 (a): the consent to save the card kept on the order as its own evidence, before any token exists); `specs/006-programme/data-model.md`, research R-510; the numbers reserved by the conflict check (row 74, rule 82). No table is added: 53 tables.
+
+| # | Change | Migration |
+|---|---|---|
+| 74 | §7 `payments.card_consent_at` (timestamptz, nullable; NULL on every existing row), the instant the student ticked «save my card» on a programme order paid by hand, copied into `programme_cards.consented_at` when the card is saved (T013); §15 rule 82 (FR-713, R-510) | `20261123104538_programme_card_consent` (B-P2) |

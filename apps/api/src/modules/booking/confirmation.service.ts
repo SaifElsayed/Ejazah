@@ -12,7 +12,8 @@
 // enrollment's parties and slot never changing. 006:T006 of specs/006-programme (the owner's
 // approval of 2026-11-22; kernel.md, the confirm step's row): the enrollment's programme row, keyed
 // by the enrollment, is locked after the holds and before the enrollments, and its state read under
-// the locks (null for an enrollment that is no programme). What is decided on (the holds, the enrollment's
+// the locks (null for an enrollment that is no programme), and since 006:T009 its `pay_by_at` with
+// it. What is decided on (the holds, the enrollment's
 // state, its confirming order, and, by the caller, the order's status and the compensation cases)
 // is read again under the locks. So what FR-PAYG-19's re-hold and the release then lock again
 // (`reholdEnrollment`, `releaseHolds`) is already held: no hold can be added on the slot or for the
@@ -57,7 +58,7 @@ import {
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
 import { activeHoldsByIds, activeHoldsOf, lockRows } from './holds.repository.js';
-import { type ProgrammeState, programmeStateOf } from './programmes.repository.js';
+import { type ProgrammeState, programmeTermsOf } from './programmes.repository.js';
 import { type OrderStandings, releaseHolds } from './holds.service.js';
 import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
 
@@ -92,6 +93,11 @@ export interface LockedEnrollment extends EnrollmentParties, EnrollmentState {
   readonly cancelledByTermination: boolean;
   /** 006:T006: its programme's state under the programme's lock; null when it is no programme. */
   readonly programmeState: ProgrammeState | null;
+  /**
+   * 006:T009 (the conflict check's settled reading): its programme's `pay_by_at`, read with the
+   * state; the first payment's sessions start after it. Null before the offer or for no programme.
+   */
+  readonly programmePayByAt: Date | null;
 }
 
 /** The enrollment's parties and slot, read with no lock (the notes under T039). */
@@ -145,10 +151,10 @@ export async function lockForConfirmation(
   ]);
   await lockRows(tx, 'enrollments', enrollmentIds);
   await dependencies.orders(tx, enrollmentIds);
-  const [state, confirmingPaymentId, programmeState] = await Promise.all([
+  const [state, confirmingPaymentId, programme] = await Promise.all([
     enrollmentStateOf(tx, parties.id),
     confirmingOrderOf(tx, parties.id),
-    programmeStateOf(tx, parties.id),
+    programmeTermsOf(tx, parties.id),
   ]);
   return {
     ...parties,
@@ -160,7 +166,8 @@ export async function lockForConfirmation(
       state.status === 'cancelled' &&
       state.cancellationReason !== null &&
       TERMINATION_REASONS.has(state.cancellationReason),
-    programmeState,
+    programmeState: programme?.state ?? null,
+    programmePayByAt: programme?.payByAt ?? null,
   };
 }
 

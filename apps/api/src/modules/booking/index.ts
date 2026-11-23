@@ -224,6 +224,7 @@ export {
   orderTargetStore,
   PayableCheckout,
   type PayableOrder,
+  type PayableProgrammeOrderOf,
   placeCheckoutHold,
   previousCheckout,
   type RetryTarget,
@@ -236,6 +237,7 @@ export {
  * student's own enrollment as the server holds it.
  */
 export {
+  activeProgrammeEnrollmentsOf,
   type CheckoutReadsStore,
   checkoutReadsStore,
   type CurrentHold,
@@ -478,3 +480,15 @@ export {
 } from './programme-requests.service.js';
 export { type DeleteProgrammeCard } from './programme-close.service.js';
 export { programmesAdminRouter } from './programmes-admin.router.js';
+
+// 006:T009 of specs/006-programme (FR-710 to FR-713; R-507, R-509; FR-BOOK-12): `programme.pay`'s
+// check, run by payments' checkout before the gateway and again under the record's locks, with
+// payments' read of the orders it touches handed in (booking imports nothing of payments, R-208).
+export {
+  type CheckoutOrdersAmong,
+  checkedProgrammePay,
+  type ProgrammeLog,
+  type ProgrammePayment,
+  type ProgrammePayTarget,
+  recordProgrammePaid,
+} from './programmes.service.js';

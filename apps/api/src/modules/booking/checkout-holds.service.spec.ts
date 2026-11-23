@@ -108,6 +108,9 @@ interface World {
   /** 006:T005: the package as catalog now answers it, and the programme's availability. */
   readonly row?: PackageRow;
   readonly programme?: ProgrammeAvailability;
+  /** 006:T009: the student's active programmes, and payments' payable programme order among them. */
+  readonly programmeEnrollments?: readonly string[];
+  readonly programmeOrder?: { readonly enrollmentId: string; readonly expiresAt: Date } | null;
 }
 
 function setUp(world: World = {}) {
@@ -126,6 +129,10 @@ function setUp(world: World = {}) {
     ],
     teacherPackageOf: async () => world.row ?? row,
     teacherName: async () => (world.name === undefined ? 'الشيخ' : world.name),
+    programmeEnrollmentsOf: async (_tx, studentUserId) => {
+      expect(studentUserId).toBe(STUDENT);
+      return world.programmeEnrollments ?? [];
+    },
   };
   const placed: PlacedHold = {
     holdId: NEW_HOLD,
@@ -158,6 +165,11 @@ function setUp(world: World = {}) {
         heldOrders: async (_tx, enrollmentId) => {
           log.push(['orders', enrollmentId]);
           return world.orders ?? { payable: null, paid: false };
+        },
+        // 006:T009: payments' read of the student's payable programme order.
+        programmeOrders: async (_tx, enrollmentIds, at) => {
+          log.push(['programme orders', [...enrollmentIds], at.toISOString()]);
+          return world.programmeOrder ?? null;
         },
         store,
         place: async () => {
@@ -420,5 +432,44 @@ describe('placeCheckoutHold: the accounts first (005:T016, the follow-up under T
     expect(log.filter(([, table]) => table === 'users')).toEqual([
       ['lock', 'users', [STUDENT, OTHER, TEACHER].sort()],
     ]);
+  });
+});
+
+describe('placeCheckoutHold: a payable programme order refuses a new hold (006:T009, FR-BOOK-12)', () => {
+  const PROGRAMME = id(81);
+  const PROGRAMME_ORDER_EXPIRES = new Date('2026-11-03T08:09:00Z');
+
+  it('refuses PREVIOUS_CHECKOUT as payable after the accounts and the slot, releasing and placing nothing', async () => {
+    const { log, run } = setUp({
+      own: ownHold(),
+      programmeEnrollments: [PROGRAMME],
+      programmeOrder: { enrollmentId: PROGRAMME, expiresAt: PROGRAMME_ORDER_EXPIRES },
+    });
+    const error = await thrown(run());
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).code).toBe('PREVIOUS_CHECKOUT');
+    expect((error as DomainError).details).toEqual([
+      { path: 'enrollmentId', code: PROGRAMME },
+      { path: 'state', code: 'payable' },
+      { path: 'expiresAt', code: PROGRAMME_ORDER_EXPIRES.toISOString() },
+    ]);
+    expect(log).toEqual([
+      ['lock', 'users', [STUDENT, TEACHER]],
+      ['lock', 'availability_slots', [SLOT]],
+      ['programme orders', [PROGRAMME], terms.now.toISOString()],
+    ]);
+  });
+
+  it('places the hold when the student’s programme has no payable order', async () => {
+    const { log, run } = setUp({ programmeEnrollments: [PROGRAMME], programmeOrder: null });
+    await run();
+    expect(log).toContainEqual(['programme orders', [PROGRAMME], terms.now.toISOString()]);
+    expect(log.at(-1)).toEqual(['place']);
+  });
+
+  it('asks payments nothing for a student with no active programme', async () => {
+    const { log, run } = setUp();
+    await run();
+    expect(log.some(([kind]) => kind === 'programme orders')).toBe(false);
   });
 });

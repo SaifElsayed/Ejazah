@@ -22,13 +22,17 @@ import type {
   SlotRow,
 } from '../catalog/index.js';
 import type { AssessmentOutcome } from '../sessions/index.js';
-import type { FrozenOffer, OfferEnrollment } from './programmes.repository.js';
+import type { HeldOrders } from './checkout-holds.service.js';
+import type { HeldRow } from './holds.repository.js';
+import type { FrozenOffer, OfferEnrollment, PayEnrollment } from './programmes.repository.js';
 import {
   bookingTermsOf,
+  checkedProgrammePay,
   createProgrammeServices,
   fitsSlot,
   offerWindowOf,
   type ProgrammeOfferStore,
+  type ProgrammePayStore,
   type ProgrammeServiceDependencies,
   type ProgrammeServices,
   type ProgrammeTimesStore,
@@ -747,5 +751,239 @@ describe('offerWindowOf (006:T008, the seam replaced; R-505, Q-3 (a) amended)', 
     expect(
       offerWindowOf(delivered(MONDAY_END), new Date('2026-11-25T08:00:00Z'), 24),
     ).toStrictEqual({ delivered: true, offerDueAt: new Date('2026-11-26T08:00:00Z') });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T009 (FR-710 to FR-713; R-509; FR-BOOK-12): programme.pay's check, before the gateway and
+// again under the record's locks.
+
+describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => {
+  const PAY_BY = new Date('2026-11-26T10:00:00Z');
+  const BEFORE = new Date('2026-11-25T10:00:00Z');
+  const OWN_HOLD = '0199d0a0-0000-7000-8000-0000000005b1';
+  /** The hold's enrollment: a checkout begun on another teacher's slot. */
+  const HELD_ENROLLMENT = '0199d0a0-0000-7000-8000-0000000005e0';
+  const ORDER_EXPIRES = new Date('2026-11-25T10:05:00Z');
+
+  interface PayWorld {
+    enrollment: PayEnrollment | null;
+    now: Date;
+    hold: HeldRow | null;
+    suspension: string | null;
+    orders: ReadonlyMap<string, HeldOrders>;
+  }
+
+  const offered: PayEnrollment = {
+    id: ENROLLMENT,
+    studentUserId: STUDENT,
+    teacherUserId: TEACHER,
+    status: 'confirmed',
+    state: 'offered',
+    payByAt: PAY_BY,
+    offerSessionCount: 40,
+    total_piasters: piasters(1_000_000),
+    track: 'ijazah_track',
+  };
+
+  function payWorld(change: Partial<PayWorld> = {}) {
+    const world: PayWorld = {
+      enrollment: offered,
+      now: BEFORE,
+      hold: null,
+      suspension: null,
+      orders: new Map(),
+      ...change,
+    };
+    const calls: string[] = [];
+    const lines: [Readonly<Record<string, unknown>>, string][] = [];
+    const store: ProgrammePayStore = {
+      payEnrollmentOf: async (_tx, id) => {
+        calls.push(`read ${id}`);
+        return world.enrollment;
+      },
+      lockRows: async (_tx, table, ids) => {
+        calls.push(`lock ${table} ${ids.join(',')}`);
+      },
+      ownActiveHold: async (_tx, studentUserId) => {
+        expect(studentUserId).toBe(STUDENT);
+        return world.hold;
+      },
+      activeHoldsByIds: async (_tx, ids) =>
+        world.hold !== null && ids.includes(world.hold.id) ? [world.hold] : [],
+      openCaseOf: async (_tx, enrollmentId, reason) => {
+        expect(enrollmentId).toBe(ENROLLMENT);
+        calls.push(`case ${reason}`);
+        return world.suspension === reason ? 'case' : null;
+      },
+      clock: async () => world.now,
+    };
+    const check = () =>
+      checkedProgrammePay(
+        tx,
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT },
+        {
+          orders: async (_tx, enrollmentIds, at) => {
+            calls.push(`orders ${enrollmentIds.join(',')} at ${at.toISOString()}`);
+            return world.orders;
+          },
+          log: { info: (fields, message) => void lines.push([fields, message]) },
+          store,
+        },
+      );
+    return { check, calls, lines };
+  }
+
+  const ownHold = (values: Partial<HeldRow> = {}): HeldRow => ({
+    id: OWN_HOLD,
+    slotId: SLOT,
+    studentUserId: STUDENT,
+    enrollmentId: HELD_ENROLLMENT,
+    expiresAt: ORDER_EXPIRES,
+    ...values,
+  });
+
+  it('answers the offer’s target after the accounts, the programme, the enrollment, then their orders', async () => {
+    const { check, calls } = payWorld();
+    await expect(check()).resolves.toStrictEqual({
+      enrollmentId: ENROLLMENT,
+      studentUserId: STUDENT,
+      teacherUserId: TEACHER,
+      track: 'ijazah_track',
+      payByAt: PAY_BY,
+      offerSessionCount: 40,
+      total_piasters: piasters(1_000_000),
+    });
+    expect(calls).toEqual([
+      `read ${ENROLLMENT}`,
+      `lock users ${[STUDENT, TEACHER].sort().join(',')}`,
+      `lock programmes ${ENROLLMENT}`,
+      `lock enrollments ${ENROLLMENT}`,
+      `read ${ENROLLMENT}`,
+      'case teacher_suspended',
+      'case student_suspended',
+      `orders ${ENROLLMENT} at ${BEFORE.toISOString()}`,
+    ]);
+  });
+
+  it('takes the student’s unexpired own hold after the accounts, and its enrollment with the programme’s', async () => {
+    const { check, calls } = payWorld({ hold: ownHold() });
+    await check();
+    expect(calls.filter((call) => call.startsWith('lock') || call.startsWith('orders'))).toEqual([
+      `lock users ${[STUDENT, TEACHER].sort().join(',')}`,
+      `lock slot_holds ${OWN_HOLD}`,
+      `lock programmes ${ENROLLMENT}`,
+      `lock enrollments ${[ENROLLMENT, HELD_ENROLLMENT].sort().join(',')}`,
+      `orders ${[ENROLLMENT, HELD_ENROLLMENT].sort().join(',')} at ${BEFORE.toISOString()}`,
+    ]);
+  });
+
+  it('leaves an own hold that expired alone, locking none', async () => {
+    const { check, calls } = payWorld({
+      hold: ownHold({ expiresAt: new Date('2026-11-25T09:59:00Z') }),
+    });
+    await check();
+    expect(calls.some((call) => call.startsWith('lock slot_holds'))).toBe(false);
+  });
+
+  it('answers NOT_FOUND to another student and to an enrollment that is no programme, with no lock', async () => {
+    for (const enrollment of [{ ...offered, studentUserId: OTHER_TEACHER }, null]) {
+      const { check, calls } = payWorld({ enrollment });
+      await expect(check()).rejects.toEqual(new DomainError('NOT_FOUND'));
+      expect(calls.some((call) => call.startsWith('lock'))).toBe(false);
+    }
+  });
+
+  it('refuses not_offered before the offer, once paid on, and once the enrollment is no longer confirmed', async () => {
+    for (const enrollment of [
+      { ...offered, state: 'awaiting_offer' as const, payByAt: null },
+      { ...offered, state: 'active' as const },
+      { ...offered, status: 'cancelled' as const },
+    ]) {
+      expect(await causeOf(payWorld({ enrollment }).check())).toBe('not_offered');
+    }
+  });
+
+  it('refuses pay_by_passed after pay_by_at, read on the database’s clock under the locks', async () => {
+    expect(await causeOf(payWorld({ now: new Date('2026-11-26T10:00:00.001Z') }).check())).toBe(
+      'pay_by_passed',
+    );
+  });
+
+  it('accepts the payment at pay_by_at itself', async () => {
+    await expect(payWorld({ now: PAY_BY }).check()).resolves.toMatchObject({ payByAt: PAY_BY });
+  });
+
+  it('refuses party_suspended while a teacher_suspended or a student_suspended case is open', async () => {
+    for (const suspension of ['teacher_suspended', 'student_suspended']) {
+      expect(await causeOf(payWorld({ suspension }).check())).toBe('party_suspended');
+    }
+  });
+
+  it('logs each refusal once, with ids and its reason, and marks it logged', async () => {
+    const { check, lines } = payWorld({ suspension: 'student_suspended' });
+    await check().catch(() => undefined);
+    expect(lines).toEqual([
+      [
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT, reason: 'party_suspended' },
+        'A programme payment was refused',
+      ],
+    ]);
+  });
+
+  it('refuses PREVIOUS_CHECKOUT while the own hold’s order is payable, naming it and its expiry', async () => {
+    const order = { paymentId: 'p', gatewayOrderId: 'g', expiresAt: ORDER_EXPIRES };
+    const { check } = payWorld({
+      hold: ownHold(),
+      orders: new Map([[HELD_ENROLLMENT, { payable: order, paid: false }]]),
+    });
+    await expect(check()).rejects.toEqual(
+      new DomainError('PREVIOUS_CHECKOUT', undefined, {
+        details: [
+          { path: 'enrollmentId', code: HELD_ENROLLMENT },
+          { path: 'state', code: 'payable' },
+          { path: 'expiresAt', code: ORDER_EXPIRES.toISOString() },
+        ],
+      }),
+    );
+  });
+
+  it('refuses PREVIOUS_CHECKOUT as processing while the own hold’s order is paid', async () => {
+    const { check } = payWorld({
+      hold: ownHold(),
+      orders: new Map([[HELD_ENROLLMENT, { payable: null, paid: true }]]),
+    });
+    await expect(check()).rejects.toEqual(
+      new DomainError('PREVIOUS_CHECKOUT', undefined, {
+        details: [
+          { path: 'enrollmentId', code: HELD_ENROLLMENT },
+          { path: 'state', code: 'processing' },
+        ],
+      }),
+    );
+  });
+
+  it('refuses PREVIOUS_CHECKOUT while an order of the programme itself is still payable', async () => {
+    const order = { paymentId: 'p', gatewayOrderId: 'g', expiresAt: ORDER_EXPIRES };
+    const { check } = payWorld({
+      orders: new Map([[ENROLLMENT, { payable: order, paid: true }]]),
+    });
+    await expect(check()).rejects.toEqual(
+      new DomainError('PREVIOUS_CHECKOUT', undefined, {
+        details: [
+          { path: 'enrollmentId', code: ENROLLMENT },
+          { path: 'state', code: 'payable' },
+          { path: 'expiresAt', code: ORDER_EXPIRES.toISOString() },
+        ],
+      }),
+    );
+  });
+
+  it('pays on beside an own hold with no order yet, and beside the programme’s paid assessment', async () => {
+    const { check } = payWorld({
+      hold: ownHold({ enrollmentId: null }),
+      orders: new Map([[ENROLLMENT, { payable: null, paid: true }]]),
+    });
+    await expect(check()).resolves.toMatchObject({ enrollmentId: ENROLLMENT });
   });
 });

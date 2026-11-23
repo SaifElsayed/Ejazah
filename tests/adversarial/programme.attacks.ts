@@ -290,9 +290,137 @@ const requestAttacks = partyAttacks(
   (answer) => expect(answer).toEqual({ requestId: expect.any(String) }),
 );
 
+// ---------------------------------------------------------------------------------------------
+// 006:T009 of specs/006-programme — `programme.pay`'s attacks (FR-710; R-GENDER-2, R-GENDER-4). The
+// student kind, on programmes of each gender their teacher offered (`offeredProgramme`, a new one
+// per call, since a payment's order makes another checkout of its student wait). What every attack
+// holds: a programme the caller is not the student of, the other gender's above all, answers
+// exactly as an enrollment that never existed, and no order is written on it; the own student's
+// payment is answered with its hosted checkout, so no attack passes on a refusal of everything.
+//
+//   directCall            the student pays the own programme (answered); the same student on the
+//                         other gender's programme, and another student of the same gender on this
+//                         one, NOT_FOUND; the programme's own teacher FORBIDDEN.
+//   forgedId              the other gender's enrollment, the parties' user ids and another student's
+//                         programme, sent as the enrollment.
+//   guessedId             random ids and the own enrollment's neighbour, upper-cased too.
+//   tamperedToken         a tampered bearer token: 401 before anything is read.
+//   clientSuppliedGender  a `gender` field naming the other gender is ignored.
+
+const PAY_HOLDS = 'R-GENDER-2, R-GENDER-4, FR-710, FR-410';
+
+type PayInput = Parameters<SessionParty['caller']['programme']['pay']>[0];
+
+function pay(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.pay({
+    enrollmentId,
+    plan: 'monthly',
+    saveCard: false,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as PayInput);
+}
+
+/** The payment on `enrollmentId` answers exactly as one on an enrollment that never existed. */
+function expectPayHidden(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return expectAnswersAsNonexistent(
+    () => pay(party, enrollmentId, extra),
+    () => pay(party, randomUUID(), extra),
+  );
+}
+
+/** The own student's payment: its hosted checkout. */
+async function expectPaid(pair: ProgrammePair, extra: object = {}): Promise<void> {
+  const answer = await pay(pair.student, pair.enrollmentId, extra);
+  expect(answer.checkoutUrl).toMatch(/^https?:\/\//);
+}
+
+/** The requester's offered programme, the other gender's, and another of the requester's gender. */
+async function offeredWorldFor(direction: Direction) {
+  const surface = await discoverySurface();
+  const [own, theirs, neighbour] = await Promise.all([
+    surface.offeredProgramme(direction.requester),
+    surface.offeredProgramme(direction.other),
+    surface.offeredProgramme(direction.requester),
+  ]);
+  return { surface, own, theirs, neighbour };
+}
+
+const payAttacks: ProcedureAttacks = {
+  path: 'programme.pay',
+  holds: PAY_HOLDS,
+  attacks: {
+    directCall: async (direction) => {
+      const { own, theirs, neighbour } = await offeredWorldFor(direction);
+      await expectPayHidden(own.student, theirs.enrollmentId);
+      await expectPayHidden(neighbour.student, own.enrollmentId);
+      const refusal: unknown = await pay(own.teacher, own.enrollmentId).catch(
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(refusal as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'FORBIDDEN',
+      );
+      await expectPaid(own);
+      // The other gender's programme took no order: its own student still pays it.
+      await expectPaid(theirs);
+    },
+    forgedId: async (direction) => {
+      const { own, theirs, neighbour } = await offeredWorldFor(direction);
+      for (const forged of [
+        theirs.enrollmentId,
+        neighbour.enrollmentId,
+        own.student.userId,
+        own.teacher.userId,
+        theirs.student.userId,
+      ]) {
+        await expectPayHidden(own.student, forged);
+      }
+      await expectPaid(own);
+    },
+    guessedId: async (direction) => {
+      const { own } = await offeredWorldFor(direction);
+      for (const guessed of [
+        randomUUID(),
+        randomUUID(),
+        neighbourOf(own.enrollmentId),
+        neighbourOf(own.enrollmentId).toUpperCase(),
+      ]) {
+        await expectPayHidden(own.student, guessed);
+      }
+      await expectPaid(own);
+    },
+    tamperedToken: async (direction) => {
+      const { surface, own, theirs } = await offeredWorldFor(direction);
+      for (const token of tamperedTokens(
+        direction,
+        own.student.accessToken,
+        theirs.student.sessionId,
+      )) {
+        const tampered = await surface.bearing(token);
+        await expectUnauthenticated(() =>
+          tampered.programme.pay({
+            enrollmentId: own.enrollmentId,
+            plan: 'monthly',
+            saveCard: false,
+            idempotencyKey: randomUUID(),
+          }),
+        );
+      }
+      await expectPaid(own);
+    },
+    clientSuppliedGender: async (direction) => {
+      const { own, theirs } = await offeredWorldFor(direction);
+      await expectPayHidden(own.student, theirs.enrollmentId, { gender: direction.other });
+      await expectPaid(own, { gender: direction.other });
+    },
+  },
+};
+
 export const programmeAttacks: readonly ProcedureAttacks[] = [
   offerAttacks,
   // 006:T008.
   cancelAttacks,
   requestAttacks,
+  // 006:T009.
+  payAttacks,
 ];

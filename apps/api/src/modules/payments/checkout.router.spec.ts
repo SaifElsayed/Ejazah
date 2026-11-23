@@ -101,6 +101,8 @@ const checkout: CheckoutServices = {
       lastSession,
     };
   },
+  // 006:T009 (rule d): programme.pay is mounted by booking's router, never reached here.
+  programmePay: async () => Promise.reject(new Error('programme.pay is not reached here')),
   pay: async (...args) => {
     calls.push(['pay', ...args]);
     return { enrollmentId: ENROLLMENT, ...handover };

@@ -28,6 +28,11 @@
 // read through the hold's terms; a programme closed between the placement and the summary refuses
 // `CONFLICT` with its cause. Retry's target names the order's kind, `assessment` for a programme
 // package's enrollment, read through catalog's entry.
+//
+// 006:T009 (FR-BOOK-12 both ways, R-509). A programme order has no hold: while one of the student's
+// is still payable (`created`, before its `expires_at`), a new checkout is refused
+// `PREVIOUS_CHECKOUT` `payable` with its enrollment and expiry, read through payments' answer under
+// the student's account; `programme.pay` refuses the other way (`programmes.service.ts`).
 import type { CheckoutSummary } from '@ijazah/contracts';
 import { toPlainNumber } from '@ijazah/money';
 import type { Occurrence } from '@ijazah/time';
@@ -58,6 +63,7 @@ import {
   lockRows,
 } from './holds.repository.js';
 import type { PaymentOutcomeNotices } from './payment-outcome-notices.port.js';
+import { activeProgrammeSlotsOf } from './programmes.repository.js';
 import {
   type HoldRequest,
   type HoldStudent,
@@ -96,6 +102,17 @@ export interface HeldOrders {
  * it locks the orders after it (T005).
  */
 export type HeldOrdersOf = (tx: Transaction, enrollmentId: string, at: Date) => Promise<HeldOrders>;
+
+/**
+ * 006:T009 (FR-BOOK-12, R-509): payments' answer, among the student's programme enrollments, of a
+ * programme order still payable (`created`, before its `expires_at` at `at`), or null; read with
+ * no lock under the student's account, which every new order of the student takes first.
+ */
+export type PayableProgrammeOrderOf = (
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+  at: Date,
+) => Promise<{ readonly enrollmentId: string; readonly expiresAt: Date } | null>;
 
 /**
  * The student's own unexpired hold has an order the gateway must cancel first (FR-BOOK-12 (b)):
@@ -147,6 +164,8 @@ export interface CheckoutHoldStore {
     requester: RequesterGender,
     teacherUserId: string,
   ): Promise<string | null>;
+  /** 006:T009: the enrollments of the student's active programmes (booking's `programmes`). */
+  programmeEnrollmentsOf(tx: Transaction, studentUserId: string): Promise<readonly string[]>;
 }
 
 /**
@@ -174,6 +193,8 @@ export const checkoutHoldStore: CheckoutHoldStore = {
   activeHoldsOf,
   teacherPackageOf,
   teacherName: checkoutTeacherName,
+  programmeEnrollmentsOf: async (tx, studentUserId) =>
+    (await activeProgrammeSlotsOf(tx, [studentUserId])).map(({ enrollmentId }) => enrollmentId),
 };
 
 /** The hold and what the checkout screen shows (FR-358, FR-386). */
@@ -189,6 +210,8 @@ export interface CheckoutHoldDependencies {
   readonly terms: HoldTerms;
   readonly orders: OrderStandings;
   readonly heldOrders: HeldOrdersOf;
+  /** 006:T009: payments' read of the student's payable programme order (FR-BOOK-12). */
+  readonly programmeOrders: PayableProgrammeOrderOf;
   /** 005:T016: the pushes of the expired holds the placement releases (`placeHold`). */
   readonly notices: PaymentOutcomeNotices;
   readonly store?: CheckoutHoldStore;
@@ -278,6 +301,26 @@ async function releaseOwnHold(
 }
 
 /**
+ * 006:T009 (FR-BOOK-12, R-509): a new checkout is refused while a programme order of the student is
+ * still payable, as `PREVIOUS_CHECKOUT` `payable` with that enrollment and the order's expiry, so the
+ * student continues it. Read after the student's account, which every new order of the student
+ * takes first (`programme.pay`'s check), so the two cannot pass each other.
+ */
+async function refuseOverProgrammeOrder(
+  tx: Transaction,
+  store: CheckoutHoldStore,
+  studentUserId: string,
+  dependencies: CheckoutHoldDependencies,
+): Promise<void> {
+  const programmes = await store.programmeEnrollmentsOf(tx, studentUserId);
+  if (programmes.length === 0) return;
+  const payable = await dependencies.programmeOrders(tx, programmes, dependencies.terms.now);
+  if (payable !== null) {
+    throw previousCheckout(payable.enrollmentId, 'payable', payable.expiresAt);
+  }
+}
+
+/**
  * `checkout.hold` on the caller's transaction (FR-BOOK-12, FR-351 to FR-353): the student's own
  * unexpired hold ended as FR-BOOK-12 says, then T033's placement, then the summary of the package
  * held. Takes both accounts and the slot before the own hold; the placement takes them again
@@ -304,6 +347,7 @@ export async function placeCheckoutHold(
       }),
     );
     await store.lockRows(tx, 'availability_slots', [request.slotId]);
+    await refuseOverProgrammeOrder(tx, store, student.userId, dependencies);
     await releaseOwnHold(tx, store, student.userId, dependencies);
   }
   const placed: PlacedHold = await (dependencies.place ?? placeHold)(tx, student, request, {

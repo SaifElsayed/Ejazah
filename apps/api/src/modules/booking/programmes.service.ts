@@ -48,12 +48,25 @@
 //   `confirmed`); `assessment_not_delivered`; `offer_due_passed` (past `offerWindowOf`'s deadline);
 //   `count_out_of_bounds` (1 to 200, the contract's bound, held here too); `length_exceeds_slot`.
 // - `enrollment` to both parties after the commit, added inside the keyed effect: a replay sends none.
+//
+// THE FIRST PAYMENT (006:T009; FR-710, R-509; FR-BOOK-12). `checkedProgrammePay` is `programme.pay`'s
+// check, run by payments' checkout before the gateway and again on the recording transaction. The
+// programme is read with no lock for its student (anyone else NOT_FOUND); then, in kernel.md's one
+// order, both accounts (the lock a new hold takes first, so the two never pass each other), the
+// student's unexpired own hold, the programme, the enrollments (the programme's and the hold's) and,
+// through payments' `orders`, their orders; the instant is the database's clock. Refused, with one
+// line of ids and a reason: `not_offered` (not `offered`, or the enrollment no longer `confirmed`),
+// `pay_by_passed`, `party_suspended` (a `teacher_suspended` or `student_suspended` case open), and
+// `PREVIOUS_CHECKOUT` while the own hold's order is paid or payable, or an order of the programme
+// itself is payable. The owner's Q-C1 (a): the confirm step records the payment on the programme
+// (`recordProgrammePaid`: `offered` to `active` with its plan, then the months paid).
 import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammeOfferRefusal,
+  ProgrammePayRefusal,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
 } from '@ijazah/contracts';
@@ -70,7 +83,7 @@ import { calendarDaysBefore } from '@ijazah/time/calendar';
 
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { keyShareRows, lockRows } from '../../platform/db/row-lock.js';
+import { keyShareRows, type LockedTable, lockRows } from '../../platform/db/row-lock.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
@@ -88,8 +101,12 @@ import {
   teacherPackageOf,
 } from '../catalog/index.js';
 import { lockAccount, readStanding } from '../identity/index.js';
+import { openCaseOf } from '../moderation/index.js';
 import { type AssessmentOutcome, assessmentOutcome, type HeldTime } from '../sessions/index.js';
+import { ownActiveHold } from './checkout-holds.repository.js';
+import { type HeldOrders, previousCheckout } from './checkout-holds.service.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
+import { activeHoldsByIds, type HeldRow } from './holds.repository.js';
 import {
   type DeleteProgrammeCard,
   endProgramme,
@@ -114,11 +131,15 @@ import {
   insertAwaitingOffer,
   type OfferEnrollment,
   offerEnrollmentOf,
+  type PayEnrollment,
+  payEnrollmentOf,
   type ProgrammeFacts,
   programmeFactsOf,
+  type ProgrammePayment,
   type ProgrammeState,
   writeOffer,
   writeOfferDue,
+  writeProgrammePaid,
 } from './programmes.repository.js';
 import { noOfferStep, offerDueOf, payByPassed, payWindowStep } from './programmes.rules.js';
 import type { SessionsBetween } from './session-overlap.service.js';
@@ -295,6 +316,20 @@ export function withProgrammeTimes(
     return [...own, ...programme];
   };
 }
+
+/**
+ * 006:T009 (the owner's Q-C1 (a)): the programme's payment, recorded by the confirm step under the
+ * programme's lock (`programmes.repository.ts`' `writeProgrammePaid`).
+ */
+export function recordProgrammePaid(
+  tx: Transaction,
+  enrollmentId: string,
+  payment: ProgrammePayment,
+): Promise<void> {
+  return writeProgrammePaid(tx, enrollmentId, payment);
+}
+
+export type { ProgrammePayment };
 
 /** The confirmed assessment's programme, `awaiting_offer`, once (R-504). The caller holds the enrollment. */
 export function startProgramme(tx: Transaction, enrollmentId: string): Promise<void> {
@@ -828,4 +863,157 @@ export function createProgrammeWindows(
         return outcome;
       }),
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T009: the first payment's checks (this file's head, THE FIRST PAYMENT).
+
+/** What `programme.pay` creates its order from, read and checked under the locks (R-509). */
+export interface ProgrammePayTarget {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly track: 'recitation' | 'ijazah_track';
+  /** The offer + `programme_pay_rest_hours`: the order expires no later (R-509). */
+  readonly payByAt: Date;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+  /** The offer's total, N × the session price (R-506). */
+  readonly total_piasters: Piasters;
+}
+
+/**
+ * Payments' answer for the enrollments a first payment touches, on the caller's transaction
+ * holding their locks; it locks their orders after them (T005): each one's last payable order and
+ * whether one is paid.
+ */
+export type CheckoutOrdersAmong = (
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+  at: Date,
+) => Promise<ReadonlyMap<string, HeldOrders>>;
+
+/** What the check reads and locks, over booking's rows and moderation's entry. */
+export interface ProgrammePayStore {
+  payEnrollmentOf(tx: Transaction, enrollmentId: string): Promise<PayEnrollment | null>;
+  lockRows(tx: Transaction, table: LockedTable, ids: readonly string[]): Promise<void>;
+  ownActiveHold(tx: Transaction, studentUserId: string): Promise<HeldRow | null>;
+  activeHoldsByIds(tx: Transaction, ids: readonly string[]): Promise<readonly HeldRow[]>;
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmePayStore: ProgrammePayStore = {
+  payEnrollmentOf,
+  lockRows,
+  ownActiveHold,
+  activeHoldsByIds,
+  openCaseOf,
+  clock: clockTimestamp,
+};
+
+/** The suspensions a first payment waits out (PR #153 r1 Minor 2): a suspension pauses. */
+const PAY_SUSPENSIONS = ['teacher_suspended', 'student_suspended'] as const;
+
+/** `programme.pay`'s own refusals (contracts' `programmePayRefusal`), the check's part. */
+type PayRefusal = Extract<ProgrammePayRefusal, 'not_offered' | 'pay_by_passed' | 'party_suspended'>;
+
+/**
+ * `programme.pay`'s check (this file's head, THE FIRST PAYMENT), run by payments' checkout before
+ * the gateway and again on the record's transaction: the programme read with no lock for its
+ * student (anyone else NOT_FOUND); then, in kernel.md's one order, both accounts, the student's
+ * unexpired own hold, the programme, the enrollments (the programme's and the hold's), and, through
+ * payments' `orders`, their orders; what it decides on read again under them, the instant the
+ * database's clock.
+ */
+export async function checkedProgrammePay(
+  tx: Transaction,
+  {
+    studentUserId,
+    enrollmentId,
+  }: { readonly studentUserId: string; readonly enrollmentId: string },
+  dependencies: {
+    readonly orders: CheckoutOrdersAmong;
+    readonly log: ProgrammeLog;
+    readonly store?: ProgrammePayStore;
+  },
+): Promise<ProgrammePayTarget> {
+  const store = dependencies.store ?? programmePayStore;
+  const refused = (reason: PayRefusal | 'previous_checkout', error: DomainError): DomainError => {
+    dependencies.log.info(
+      { studentUserId, enrollmentId, reason },
+      'A programme payment was refused',
+    );
+    return markRefusalLogged(error);
+  };
+  const cause = (reason: PayRefusal) =>
+    refused(
+      reason,
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: reason }] }),
+    );
+  const seen = await store.payEnrollmentOf(tx, enrollmentId);
+  if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+  await store.lockRows(tx, 'users', [...new Set([studentUserId, seen.teacherUserId])].sort());
+  const at = await store.clock(tx);
+  const heldEnrollment = await ownHeldEnrollment(tx, store, studentUserId, at);
+  const enrollmentIds = [...new Set([enrollmentId, ...heldEnrollment])].sort();
+  await store.lockRows(tx, 'programmes', [enrollmentId]);
+  await store.lockRows(tx, 'enrollments', enrollmentIds);
+  const programme = await store.payEnrollmentOf(tx, enrollmentId);
+  if (programme === null || programme.studentUserId !== studentUserId) {
+    throw new DomainError('NOT_FOUND');
+  }
+  if (programme.state !== 'offered' || programme.status !== 'confirmed' || !programme.payByAt) {
+    throw cause('not_offered');
+  }
+  if (at.getTime() > programme.payByAt.getTime()) throw cause('pay_by_passed');
+  // One query at a time on the one transaction (PR #156 r1 nit: pg's «already executing» warning).
+  for (const reason of PAY_SUSPENSIONS) {
+    if ((await store.openCaseOf(tx, enrollmentId, reason)) !== null) {
+      throw cause('party_suspended');
+    }
+  }
+  const orders = await dependencies.orders(tx, enrollmentIds, at);
+  for (const held of heldEnrollment) {
+    const standing = orders.get(held);
+    if (standing?.paid === true) {
+      throw refused('previous_checkout', previousCheckout(held, 'processing'));
+    }
+    if (standing?.payable) {
+      const { expiresAt } = standing.payable;
+      throw refused('previous_checkout', previousCheckout(held, 'payable', expiresAt));
+    }
+  }
+  const own = orders.get(enrollmentId)?.payable;
+  if (own) {
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'payable', own.expiresAt));
+  }
+  return {
+    enrollmentId,
+    studentUserId,
+    teacherUserId: programme.teacherUserId,
+    track: programme.track,
+    payByAt: programme.payByAt,
+    offerSessionCount: programme.offerSessionCount,
+    total_piasters: programme.total_piasters,
+  };
+}
+
+/**
+ * The enrollment of the student's own hold while it has not expired at `at`, its row locked and
+ * read again (FR-BOOK-12); none for no hold, an expired one, or one with no enrollment yet.
+ */
+async function ownHeldEnrollment(
+  tx: Transaction,
+  store: ProgrammePayStore,
+  studentUserId: string,
+  at: Date,
+): Promise<string[]> {
+  const own = await store.ownActiveHold(tx, studentUserId);
+  if (own === null || own.expiresAt.getTime() <= at.getTime()) return [];
+  await store.lockRows(tx, 'slot_holds', [own.id]);
+  const [held] = await store.activeHoldsByIds(tx, [own.id]);
+  if (held === undefined || held.expiresAt.getTime() <= at.getTime()) return [];
+  return held.enrollmentId === null ? [] : [held.enrollmentId];
 }
