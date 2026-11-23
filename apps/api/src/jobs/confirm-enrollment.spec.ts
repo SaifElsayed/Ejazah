@@ -38,6 +38,8 @@ const TEACHER = '019a4a00-0000-7000-8000-000000000005';
 const SLOT = '019a4a00-0000-7000-8000-000000000006';
 const HOLD = '019a4a00-0000-7000-8000-000000000007';
 const PAID_AT = new Date('2026-11-03T07:59:00Z');
+/** 006:T009: an offer's pay_by_at, the offer + 48 hours, after NOW. */
+const PAY_BY = new Date('2026-11-04T10:00:00Z');
 
 const SETTINGS: Record<string, number> = {
   slot_hold_ttl_minutes: 10,
@@ -101,6 +103,8 @@ function locked(overrides: Partial<LockedEnrollment>): LockedEnrollment {
     cancelledByTermination: false,
     // 006:T006 (rule d): no programme unless the world names one.
     programmeState: null,
+    // 006:T009 (rule d): no programme, no pay_by.
+    programmePayByAt: null,
     ...overrides,
   };
 }
@@ -730,6 +734,8 @@ describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-
     snapshotSessionCount: 11,
     snapshotDurationMinutes: 60,
     programmeState: state,
+    // 006:T009: the offer's 48 hours end on Wednesday 2026-11-04 at 10:00Z.
+    programmePayByAt: PAY_BY,
   });
   /** Month 1's four sessions after the assessment, the last ending 2026-12-03 08:00Z. */
   const monthOne = [
@@ -792,7 +798,9 @@ describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-
     );
   });
 
-  it('generates the rest in full, every session from 2 with its month', async () => {
+  // 006:T009 (the conflict check's settled reading): the first payment's sessions start at the first
+  // weekly occurrence after pay_by_at, with no lead, so none falls inside the 48 hours.
+  it('generates the rest in full, every session from 2 with its month, from after pay_by_at with no lead', async () => {
     const recorded = await run(
       paid({
         kind: 'rest_in_full',
@@ -802,9 +810,42 @@ describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-
     );
     expect(recorded.calls).toEqual([
       ...PREAMBLE,
-      'generate 10 from 2 months 1,1,1,1,2,2,2,2,3,3 after 2026-11-03T08:00:00.000Z lead 24',
+      'generate 10 from 2 months 1,1,1,1,2,2,2,2,3,3 after 2026-11-04T10:00:00.000Z lead 0',
       'mark confirmed',
     ]);
+  });
+
+  it('generates month 1’s four sessions from 2, from after pay_by_at with no lead (006:T009)', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        enrollment: offered('offered'),
+        sessions: [{ sequenceNumber: 1, endsAt: new Date('2026-10-29T08:00:00Z') }],
+      }),
+    );
+    expect(recorded.calls).toEqual([
+      ...PREAMBLE,
+      'generate 4 from 2 months 1,1,1,1 after 2026-11-04T10:00:00.000Z lead 0',
+      'mark confirmed',
+    ]);
+  });
+
+  it('generates month 1 after the assessment’s make-up when it ends after pay_by_at (006:T009)', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        enrollment: offered('offered'),
+        sessions: [
+          { sequenceNumber: 1, endsAt: new Date('2026-10-29T08:00:00Z') },
+          { sequenceNumber: 2, endsAt: new Date('2026-11-05T08:00:00Z') },
+        ],
+      }),
+    );
+    expect(recorded.calls).toContain(
+      'generate 4 from 3 months 1,1,1,1 after 2026-11-05T08:00:00.000Z lead 0',
+    );
   });
 
   it('treats a second paid order for a paid month as duplicate_payment, generating nothing', async () => {

@@ -94,7 +94,7 @@ async function order(
  * 09:00 for 60 minutes: its assessment (session 1, done) and month 1 (sessions 2 to 5, the last
  * ending 2026-10-29) already paid and processed.
  */
-async function activeProgramme() {
+async function activeProgramme(offered?: { readonly payByAt: Date }) {
   const teacherId = await person('female');
   await database.teacherProfile.create({
     data: {
@@ -154,14 +154,24 @@ async function activeProgramme() {
     select: { id: true },
   });
   await database.programme.create({
-    data: {
-      enrollmentId,
-      state: 'active',
-      offeredAt: new Date('2026-10-02T07:00:00Z'),
-      monthCount: 3,
-      paymentPlan: 'monthly',
-      monthsPaid: 1,
-    },
+    data:
+      offered === undefined
+        ? {
+            enrollmentId,
+            state: 'active',
+            offeredAt: new Date('2026-10-02T07:00:00Z'),
+            monthCount: 3,
+            paymentPlan: 'monthly',
+            monthsPaid: 1,
+          }
+        : // 006:T009: offered, awaiting its first payment until pay_by_at; only session 1 is written.
+          {
+            enrollmentId,
+            state: 'offered',
+            offeredAt: new Date('2026-10-02T07:00:00Z'),
+            payByAt: offered.payByAt,
+            monthCount: 3,
+          },
   });
   // Thursdays 2026-10-01 (the assessment) and 10-08 to 10-29 (month 1), 09:00 Cairo (+03:00 until
   // the October change, after 10-29), written whole as the instants they resolve to.
@@ -193,7 +203,7 @@ async function activeProgramme() {
     },
   ];
   await database.session.createMany({
-    data: thursdays.map((thursday, index) => {
+    data: thursdays.slice(0, offered === undefined ? undefined : 1).map((thursday, index) => {
       return {
         enrollmentId,
         teacherUserId: teacherId,
@@ -210,7 +220,7 @@ async function activeProgramme() {
     }),
   });
   await order(enrollmentId, 'assessment', null, true);
-  await order(enrollmentId, 'instalment', 1, true);
+  if (offered === undefined) await order(enrollmentId, 'instalment', 1, true);
   return { enrollmentId };
 }
 
@@ -319,6 +329,19 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     await confirm(await order(enrollmentId, 'instalment', 3, false));
     expect((await sessionsOf(enrollmentId)).slice(5).map(([, , month]) => month)).toEqual([3, 3]);
     expect(await casesOf(enrollmentId)).toEqual([]);
+  });
+
+  // 006:T009 (the conflict check's settled reading): month 1 starts at the first Thursday after
+  // pay_by_at (Friday 2026-11-06 10:00Z), with no lead: 11-12, not 11-05 (NOW + the 24 hours' lead).
+  it('generates month 1 from the first weekly occurrence after pay_by_at, with no lead', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: new Date('2026-11-06T10:00:00Z') });
+    await confirm(await order(enrollmentId, 'instalment', 1, false));
+    expect((await sessionsOf(enrollmentId)).slice(1)).toEqual([
+      [2, '2026-11-12T07:00:00.000Z', 1],
+      [3, '2026-11-19T07:00:00.000Z', 1],
+      [4, '2026-11-26T07:00:00.000Z', 1],
+      [5, '2026-12-03T07:00:00.000Z', 1],
+    ]);
   });
 
   // 006:T009, PR #156 r2 Follow-up 1 (PROBE-R2a): the marker is the database's instant under the

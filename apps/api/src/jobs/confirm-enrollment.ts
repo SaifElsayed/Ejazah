@@ -79,7 +79,9 @@
 //     `party_restricted` case instead of the sessions, and one log line of ids and a reason;
 //   - otherwise generation only: the month's sessions (4, the last month the remainder; the rest in
 //     full all N), numbered from the highest + 1, each with its `programme_month`, from the first weekly
-//     occurrence at least the lead after the payment and after the last session (R-507);
+//     occurrence at least the lead after the payment and after the last session (R-507); 006:T009:
+//     the first payment (the rest in full or month 1) from the first weekly occurrence after the
+//     programme's `pay_by_at` and the last session, with no lead (the conflict check's settled reading);
 //   - a generation the database refuses never cancels the programme: the order stays paid, one
 //     `slot_unavailable` case, one log line `{ enrollmentId, paymentId, reason }`.
 // A month's case and its marker are written in the same transaction, so a replay opens no second.
@@ -465,16 +467,35 @@ class Confirmer {
     const sessions = await steps.sessionsOf(tx, enrollment.id);
     const highest = Math.max(0, ...sessions.map(({ sequenceNumber }) => sequenceNumber));
     const lastEnd = Math.max(0, ...sessions.map(({ endsAt }) => endsAt.getTime()));
-    // The first weekly occurrence at least the lead after the payment and after the last session.
-    const leadEnd = new Date(addHours(at, this.#terms.leadHours)).getTime();
     const [from, leadHours] =
-      lastEnd > leadEnd ? [new Date(lastEnd), 0] : [at, this.#terms.leadHours];
+      awaitedAfter(processed).next === 1
+        ? this.#afterPayBy(enrollment, lastEnd)
+        : this.#afterLead(at, lastEnd);
     await steps.generate(tx, scheduleOf(enrollment, slot), from, leadHours, {
       count: months.length,
       firstSequenceNumber: highest + 1,
       months,
     });
     await done();
+  }
+
+  /**
+   * 006:T009 (the conflict check's settled reading; the hidden-times rule): the first payment, the
+   * rest in full or month 1, starts at the first weekly occurrence after `pay_by_at` (and after the
+   * last session, a make-up of the assessment included), with no lead, so no session falls inside
+   * the 48 hours whose weekly time stayed reserved.
+   */
+  #afterPayBy(enrollment: LockedEnrollment, lastEnd: number): readonly [Date, number] {
+    const payBy = enrollment.programmePayByAt;
+    // The offer writes `pay_by_at` with `offered` (R-505); a first payment is awaited only after it.
+    if (payBy === null) throw new Error(`Programme ${enrollment.id} has no pay_by_at`);
+    return [lastEnd > payBy.getTime() ? new Date(lastEnd) : payBy, 0];
+  }
+
+  /** A later month: the first weekly occurrence the lead after the payment and the last session. */
+  #afterLead(at: Date, lastEnd: number): readonly [Date, number] {
+    const leadEnd = new Date(addHours(at, this.#terms.leadHours)).getTime();
+    return lastEnd > leadEnd ? [new Date(lastEnd), 0] : [at, this.#terms.leadHours];
   }
 
   /** A paid programme order that generated nothing: its case and one log line (ids and a reason). */
