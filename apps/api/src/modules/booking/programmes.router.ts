@@ -16,10 +16,14 @@
 // gender and the request's log for its refusals' lines (`chat.router.ts`' precedent). Keyed (scope
 // `programme.pay`). Another student's enrollment answers NOT_FOUND.
 import {
+  programmeActionInput,
+  programmeActionOutput,
   programmeCheckoutOutput,
   programmeOfferInput,
   programmeOfferOutput,
   programmePayInput,
+  programmeRequestInput,
+  programmeRequestOutput,
 } from '@ijazah/contracts';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
@@ -35,6 +39,20 @@ export const programmesRouter = createAppRouter({
     output: programmeOfferOutput,
   }).mutation(({ ctx, input }) =>
     ctx.services.booking.programme.offer(ctx.caller.userId, input, ctx.live),
+  ),
+  // 006:T008 (FR-706, R-505; contracts/app-surface.md `programme.cancel`): the student kind; the
+  // student's own programme before any payment of the rest, keyed (`programme.cancel`).
+  cancel: studentProcedure({ input: programmeActionInput, output: programmeActionOutput }).mutation(
+    ({ ctx, input }) => ctx.services.booking.programme.cancel(ctx.caller.userId, input, ctx.live),
+  ),
+  // 006:T008 (FR-709, R-513; contracts/app-surface.md `programme.request`): the teacher kind
+  // admitting an approved teacher, as the offer; keyed (`programme.request`). `stop` is T017's.
+  request: teacherProcedure({
+    admits: 'approved',
+    input: programmeRequestInput,
+    output: programmeRequestOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.booking.programme.request(ctx.caller.userId, input, ctx.live),
   ),
 
   pay: studentProcedure({

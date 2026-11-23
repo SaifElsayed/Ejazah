@@ -47,11 +47,23 @@
 // 006:T005 of specs/006-programme (U-1, N-12): `programmeTimesOf` answers the weekly times of the
 // students' active programmes (`programmes.service.ts`), the asking enrollment's own left out, so
 // sessions' make-up proposal, counter options and a postponement's placement never land on them.
+//
+// 006:T008 of specs/006-programme (R-510; B-P2's conflict check, Q-2 (a), the owner, 2026-11-23):
+// THE PROGRAMME BEFORE THE ENROLLMENT. `lockEnrollments` takes the enrollments' programmes' rows
+// (`lockRows(tx, 'programmes', …)`, keyed by `enrollment_id`; none for an enrollment that is no
+// programme), then the enrollments', kernel.md's one order (006:T008's row), so every sessions path
+// that ends an enrollment through this port holds the programme before the enrollment. Each of
+// `terminateNoShow`, `complete` and `cancel` that moved its enrollment then runs booking's close
+// hook (`programme-close.service.ts`) with the move as its reason: the programme `closed`, its open
+// items `withdrawn`, payments' `deleteProgrammeCard` called (a stub until T013), one line. The
+// composition root binds payments' entry and the log (`programmes`); where it binds none yet, no card
+// is deleted (none exists before T013) and no line is written (the follow-up under T013).
 import { type DayOfWeek, firstOccurrenceAfter, type LocalDate } from '@ijazah/time';
 import { z } from 'zod';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { readSlot, type SlotRow, teacherSlotsOf } from '../catalog/index.js';
 import {
@@ -77,6 +89,11 @@ import {
   restoreEnrollment,
 } from './enrollment-side.repository.js';
 import { FIRST_SESSION_LEAD_SETTING, firstSessionLeadHours } from './nearest-slot.service.js';
+import {
+  closeProgrammes,
+  noProgrammeCardYet,
+  type ProgrammeCloseDependencies,
+} from './programme-close.service.js';
 import { programmeTimesOf } from './programmes.service.js';
 import { packageSessionsOn } from './session-overlap.service.js';
 import {
@@ -181,15 +198,21 @@ function occurrencesOf(
   );
 }
 
+/** 006:T008: a close hook that writes no line, where the composition root binds no log yet. */
+const SILENT: Pick<Logger, 'info'> = { info: () => undefined };
+
 /** Sessions' `EnrollmentSide` over booking's rows (T008), bound once by the composition root. */
 export function createEnrollmentSide({
   settings,
   now = () => new Date(),
   store = enrollmentSideStore,
+  programmes = { deleteProgrammeCard: noProgrammeCardYet, log: SILENT },
 }: {
   readonly settings: SettingsReader;
   readonly now?: () => Date;
   readonly store?: EnrollmentSideStore;
+  /** 006:T008 (Q-2 (a)): the close hook's payments' entry and log, bound by the composition root. */
+  readonly programmes?: ProgrammeCloseDependencies;
 }): EnrollmentSide {
   // R-205's buffer, and (T070) the window of a closing's hold, each read only when it is needed.
   const reads: OccupancyReads = {
@@ -206,13 +229,20 @@ export function createEnrollmentSide({
     await store.recordEnrollmentEvents(tx, [outcome(now())]);
     return true;
   };
-  /** A move from `confirmed`, through the store. */
-  const move = (
+  /**
+   * A move from `confirmed`, through the store; 006:T008: once moved, the close hook with the move's
+   * reason (this file's head).
+   */
+  const move = async (
     tx: Transaction,
     id: string,
     target: MoveTarget,
     outcome: (occurredAt: Date) => EnrollmentOutcome,
-  ): Promise<boolean> => recorded(tx, store.moveEnrollment(tx, id, target), outcome);
+  ): Promise<boolean> => {
+    if (!(await recorded(tx, store.moveEnrollment(tx, id, target), outcome))) return false;
+    await closeProgrammes(tx, [id], target.cancellationReason ?? target.status, programmes);
+    return true;
+  };
   /** The restore, through `restoreEnrollment` itself: the gate's one reach of it (this file's head). */
   const restore: EnrollmentSide['restore'] = (tx, id) =>
     recorded(tx, restoreEnrollment(tx, id), (occurredAt) => ({
@@ -222,7 +252,11 @@ export function createEnrollmentSide({
     }));
   return {
     enrollmentFor: (tx, id) => store.enrollmentTermsById(tx, id),
-    lockEnrollments: (tx, ids) => store.lockRows(tx, 'enrollments', ids),
+    // 006:T008 (Q-2 (a)): the programmes before the enrollments (this file's head).
+    lockEnrollments: async (tx, ids) => {
+      await store.lockRows(tx, 'programmes', ids);
+      await store.lockRows(tx, 'enrollments', ids);
+    },
     terminateNoShow: (tx, id) =>
       move(tx, id, { status: 'terminated_no_show', cancellationReason: null }, (occurredAt) => ({
         kind: 'terminated_no_show',

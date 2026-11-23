@@ -275,3 +275,99 @@ export async function writeProgrammePaid(
     data: { monthsPaid: payment.monthsPaid },
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// 006:T008 (FR-706, FR-706a, FR-706b, FR-709; R-505, R-510, R-513; Q-2 (a), Q-3 (a) amended): the
+// windows' reads and writes and the close hook's, each on the caller's transaction, which holds the
+// programme's row lock.
+
+/** A programme as its windows, its cancellation and its decisions read it under its row lock. */
+export interface ProgrammeFacts {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly status: EnrollmentStatus;
+  readonly state: ProgrammeState;
+  readonly offerDueAt: Date | null;
+  readonly payByAt: Date | null;
+}
+
+/** The enrollment's programme, or null for an enrollment that is no programme or is soft-deleted. */
+export async function programmeFactsOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeFacts | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      offerDueAt: true,
+      payByAt: true,
+      enrollment: { select: { studentUserId: true, teacherUserId: true, status: true } },
+    },
+  });
+  return row === null
+    ? null
+    : {
+        enrollmentId,
+        studentUserId: row.enrollment.studentUserId,
+        teacherUserId: row.enrollment.teacherUserId,
+        status: row.enrollment.status,
+        state: row.state,
+        offerDueAt: row.offerDueAt,
+        payByAt: row.payByAt,
+      };
+}
+
+/**
+ * The derived offer's deadline written while the programme awaits its offer (Q-3 (a) amended: the
+ * column holds the last derived value); nothing once it has moved on.
+ */
+export async function writeOfferDue(
+  tx: Client,
+  enrollmentId: string,
+  offerDueAt: Date | null,
+): Promise<void> {
+  await tx.programme.updateMany({
+    where: { enrollmentId, state: 'awaiting_offer' },
+    data: { offerDueAt },
+  });
+}
+
+/** An administrator's extension of a `pay_blocked` item: `pay_by_at` moved, only while `offered`. */
+export async function writePayBy(
+  tx: Client,
+  enrollmentId: string,
+  payByAt: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'offered' },
+    data: { payByAt },
+  });
+  return count === 1;
+}
+
+/**
+ * The close hook's write (R-510): those of `enrollmentIds` whose programme is not yet closed, set
+ * `closed` at `closedAt` (`paused_at` cleared with it, rule 77), in one conditional update; the ids
+ * closed, in id order. An enrollment that is no programme has no row and is not among them.
+ */
+export async function closeProgrammeRows(
+  tx: Client,
+  enrollmentIds: readonly string[],
+  closedAt: Date,
+): Promise<string[]> {
+  if (enrollmentIds.length === 0) return [];
+  const open = await tx.programme.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, state: { not: 'closed' } },
+    orderBy: { enrollmentId: 'asc' },
+    select: { enrollmentId: true },
+  });
+  const ids = open.map(({ enrollmentId }) => enrollmentId);
+  if (ids.length === 0) return [];
+  await tx.programme.updateMany({
+    where: { enrollmentId: { in: ids }, state: { not: 'closed' } },
+    data: { state: 'closed', closedAt, pausedAt: null },
+  });
+  return ids;
+}

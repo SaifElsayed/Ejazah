@@ -37,6 +37,7 @@ const CALLER = '0199d0a0-0000-7000-8000-0000000009f1';
 const OWN = '0199d0a0-0000-7000-8000-0000000009f2';
 const OTHERS = '0199d0a0-0000-7000-8000-0000000009f3';
 const KEY = '0199d0a0-0000-7000-8000-0000000009f4';
+const REQUEST = '0199d0a0-0000-7000-8000-0000000009f5';
 
 const surfaceRouter = createAppRouter({ programme: programmesRouter });
 const callerFor = createAppCallerFactory(surfaceRouter);
@@ -109,6 +110,19 @@ function callerAs(who: UserSession | null) {
         }
         // A field no schema names, as a careless service might add it: stripped.
         return { ...ANSWER, teacherUserId: CALLER } as never;
+      },
+      // 006:T008: the cancellation and the request, each recorded; another's enrollment NOT_FOUND.
+      cancel: async (...args: unknown[]) => {
+        calls.push(['cancel', ...args]);
+        const [, input] = args as [string, { enrollmentId: string }];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        return { ok: true, studentUserId: CALLER } as never;
+      },
+      request: async (...args: unknown[]) => {
+        calls.push(['request', ...args]);
+        const [, input] = args as [string, { enrollmentId: string }];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        return { requestId: REQUEST, teacherUserId: CALLER } as never;
       },
     },
   } as unknown as BookingServices;
@@ -234,6 +248,111 @@ describe("'programme.offer' (006:T007, FR-705)", () => {
       expect(calls).toEqual([]);
     },
   );
+});
+
+// 006:T008 (FR-706, FR-709; contracts/app-surface.md `programme.cancel`, `programme.request`): the
+// student's cancellation (the student kind) and the teacher's refusal request (the teacher kind
+// admitting an approved teacher), each handed the session's own account, the validated input and
+// the request's after-commit list; another's enrollment NOT_FOUND with no field.
+const ACTION = { enrollmentId: OWN, idempotencyKey: KEY };
+const REQUESTED = {
+  enrollmentId: OWN,
+  // SRS DEC-112: `stop` alone (T017's).
+  kind: 'stop' as const,
+  reason: 'غير مستعد',
+  idempotencyKey: KEY,
+};
+
+describe("'programme.cancel' callers (006:T008)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.cancel'", async () => {
+    const anonymous = callerAs(null);
+    await expect(anonymous.caller.programme.cancel(ACTION)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const teacher = callerAs(sessionOf('approved'));
+    await expect(teacher.caller.programme.cancel(ACTION)).rejects.toEqual(refused('FORBIDDEN'));
+    expect([...anonymous.calls, ...teacher.calls]).toEqual([]);
+  });
+
+  it("hands the service the student's own account, the validated input and the after-commit list: 'programme.cancel'", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await expect(
+      caller.programme.cancel({ ...ACTION, studentUserId: OTHERS } as never),
+    ).resolves.toStrictEqual({ ok: true });
+    const [name, account, input, live] = calls[0] ?? [];
+    expect([name, account, input]).toEqual(['cancel', CALLER, ACTION]);
+    expect(live).toHaveProperty('afterCommit');
+  });
+
+  it("sends another student's enrollment NOT_FOUND with no field: 'programme.cancel'", async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.programme
+      .cancel({ ...ACTION, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Not found.',
+    });
+  });
+});
+
+describe("'programme.request' callers (006:T008)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED, a student and an applicant FORBIDDEN before the service: 'programme.request'", async () => {
+    const anonymous = callerAs(null);
+    await expect(anonymous.caller.programme.request(REQUESTED)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of ['student', 'applicant'] as const) {
+      const { caller, calls } = callerAs(sessionOf(who));
+      await expect(caller.programme.request(REQUESTED), who).rejects.toEqual(refused('FORBIDDEN'));
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it("refuses a suspended or a banned teacher ACCOUNT_RESTRICTED before the service: 'programme.request'", async () => {
+    for (const who of ['suspended teacher', 'banned teacher'] as const) {
+      const { caller, calls } = callerAs(sessionOf(who));
+      await expect(caller.programme.request(REQUESTED), who).rejects.toEqual(
+        refused('ACCOUNT_RESTRICTED'),
+      );
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it("hands the service the teacher's own account, the validated input and the after-commit list: 'programme.request'", async () => {
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    await expect(
+      caller.programme.request({ ...REQUESTED, teacherUserId: OTHERS } as never),
+    ).resolves.toStrictEqual({ requestId: REQUEST });
+    const [name, account, input, live] = calls[0] ?? [];
+    expect([name, account, input]).toEqual(['request', CALLER, REQUESTED]);
+    expect(live).toHaveProperty('afterCommit');
+  });
+
+  // 006:T008 (SRS DEC-112): no refusal request in the teacher's app; the input takes `stop` only.
+  it("refuses the refusal kind VALIDATION_FAILED before the service: 'programme.request'", async () => {
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    const thrown: unknown = await caller.programme
+      .request({ ...REQUESTED, kind: 'refusal' } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a blank or over-long reason VALIDATION_FAILED before the service: 'programme.request'", async () => {
+    for (const reason of ['   ', 'x'.repeat(501)]) {
+      const { caller, calls } = callerAs(sessionOf('approved'));
+      const thrown: unknown = await caller.programme
+        .request({ ...REQUESTED, reason })
+        .catch((error: unknown) => error);
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+      expect(calls).toEqual([]);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------------------------

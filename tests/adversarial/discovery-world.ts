@@ -213,10 +213,14 @@ import type {
   IjazahRequestsPreviewOutput,
   IjazahRequestsSendInput,
   IjazahRequestsSendOutput,
+  ProgrammeActionInput,
+  ProgrammeActionOutput,
   ProgrammeCheckoutOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammePayInput,
+  ProgrammeRequestInput,
+  ProgrammeRequestOutput,
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
@@ -577,6 +581,9 @@ export interface AppCaller {
   /** 006:T007: the teacher's offer, attacked in `programme.attacks.ts`. */
   readonly programme: {
     offer(input: ProgrammeOfferInput): Promise<ProgrammeOfferOutput>;
+    /** 006:T008 (rule d): the student's cancellation and the teacher's refusal request. */
+    cancel(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
+    request(input: ProgrammeRequestInput): Promise<ProgrammeRequestOutput>;
     /** 006:T009: the student's first payment, attacked in the same file. */
     pay(input: ProgrammePayInput): Promise<ProgrammeCheckoutOutput>;
   };

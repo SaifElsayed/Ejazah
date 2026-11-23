@@ -52,6 +52,8 @@ const HOLD_ON_B = id(61);
 const STUDENT_HOLD = id(62);
 const NOW = new Date('2026-11-03T08:00:00Z');
 const orders: OrderStandings = async () => new Map();
+/** 006:T008: payments' `deleteProgrammeCard` as the root hands it (a stub until T013). */
+const CARD = async (): Promise<void> => undefined;
 
 interface Released {
   readonly holdIds: readonly string[];
@@ -166,6 +168,12 @@ function world(
       journal.push(`close-case:${caseId}:${JSON.stringify(closing)}`);
       return NOW;
     },
+    // 006:T008 (Q-2 (a)): booking's close hook, journaled with the card entry it was handed.
+    closeProgrammes: async (_tx, enrollmentIds, cause, dependencies) => {
+      journal.push(`close-programmes:${enrollmentIds.join(',')}:${cause}`);
+      expect(dependencies.deleteProgrammeCard).toBe(CARD);
+      return [...enrollmentIds];
+    },
     release: async (_tx, holdIds, reason, dependencies: ReleaseDependencies) => {
       journal.push(`release:${holdIds.join(',')}:${reason}`);
       released.push({ holdIds, reason, at: dependencies.at, orders: dependencies.orders });
@@ -182,7 +190,13 @@ function world(
       warned.push(args);
     },
   } as unknown as TerminationDependencies['log'];
-  const subscriber = terminationSubscriber({ orders, now: () => NOW, store, log });
+  const subscriber = terminationSubscriber({
+    orders,
+    now: () => NOW,
+    store,
+    log,
+    deleteProgrammeCard: CARD,
+  });
   return {
     journal,
     released,
@@ -271,6 +285,8 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
       `holds-of:${TEACHER}`,
       `lock slot_holds:${HOLD_ON_A},${HOLD_ON_B}`,
       `hold-enrollments:${HOLD_ON_A},${HOLD_ON_B}`,
+      // 006:T008 (rule d): the programmes before the enrollments.
+      `lock programmes:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
       `lock enrollments:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
       `confirmed-of:${TEACHER}`,
       `cancel-remaining:${E1},${E2}`,
@@ -280,6 +296,7 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
       `case-of:${E2}:case-of-${E2}`,
       `cancel-confirmed:${E1},${E2}:account_deleted`,
       `events:${E1}:cancelled,${E2}:cancelled`,
+      `close-programmes:${E1},${E2}:account_deleted`,
       `release:${HOLD_ON_A},${HOLD_ON_B}:account_deleted`,
     ]);
   });
@@ -299,11 +316,14 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
     expect(journal.some((entry) => entry.startsWith('case:'))).toBe(false);
     expect(journal).toEqual(
       expect.arrayContaining([
+        // 006:T008 (rule d): the programmes before the enrollments.
+        `lock programmes:${E1},${E2}`,
         `lock enrollments:${E1},${E2}`,
         `case-of:${E1}:null`,
         `case-of:${E2}:null`,
         `cancel-confirmed:${E1},${E2}:account_deleted`,
         `events:${E1}:cancelled,${E2}:cancelled`,
+        `close-programmes:${E1},${E2}:account_deleted`,
       ]),
     );
     expect(journal.some((entry) => entry.startsWith('lock slot_holds:'))).toBe(false);
@@ -354,6 +374,8 @@ describe("a teacher's end cancels the teacher's confirmed enrollments (T006, FR-
         `holds-of:${TEACHER}`,
         `lock slot_holds:${HOLD_ON_A},${HOLD_ON_B}`,
         `hold-enrollments:${HOLD_ON_A},${HOLD_ON_B}`,
+        // 006:T008 (rule d): the programmes before the enrollments.
+        `lock programmes:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
         `lock enrollments:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
         `confirmed-of:${TEACHER}`,
         `cancel-remaining:${E1},${E2}`,
@@ -363,6 +385,7 @@ describe("a teacher's end cancels the teacher's confirmed enrollments (T006, FR-
         `case-of:${E2}:case-of-${E2}`,
         `cancel-confirmed:${E1},${E2}:teacher_suspended`,
         `events:${E1}:cancelled,${E2}:cancelled`,
+        `close-programmes:${E1},${E2}:teacher_suspended`,
         `release:${HOLD_ON_A},${HOLD_ON_B}:teacher_suspended`,
       ]);
     },
@@ -429,6 +452,8 @@ describe("a teacher's suspension pauses the teacher's confirmed enrollments (T07
       `holds-of:${TEACHER}`,
       `lock slot_holds:${HOLD_ON_A},${HOLD_ON_B}`,
       `hold-enrollments:${HOLD_ON_A},${HOLD_ON_B}`,
+      // 006:T008 (rule d): the programmes before the enrollments.
+      `lock programmes:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
       `lock enrollments:${[E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`].sort().join(',')}`,
       `confirmed-of:${TEACHER}`,
       `cancel-remaining:${E1},${E2}:lockOnly`,
@@ -492,6 +517,8 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
       await subscriber(tx, TEACHER, cause, { adminId: ADMIN });
       expect(journal.slice(journal.indexOf(`events:${E1}:cancelled,${E2}:cancelled`))).toEqual([
         `events:${E1}:cancelled,${E2}:cancelled`,
+        // 006:T008 (rule d): the close hook before the paused cases' closing, `disputes` last.
+        `close-programmes:${E1},${E2}:teacher_suspended`,
         `paused-case-of:${E1}`,
         closedBy(PAUSED_1, `case-of-${E1}`),
         `paused-case-of:${E2}`,
@@ -513,6 +540,8 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
       `case-of:${E1}:case-of-${E1}`,
       `cancel-confirmed:${E1}:admin`,
       `events:${E1}:cancelled`,
+      // 006:T008 (rule d): the close hook before the paused case's closing, `disputes` last.
+      `close-programmes:${E1}:admin`,
       `paused-case-of:${E1}`,
       closedBy(PAUSED_1, `case-of-${E1}`),
     ]);
@@ -607,6 +636,8 @@ describe("a student's suspension and ban reach their confirmed enrollments (T005
       `holds-of:${STUDENT}`,
       `lock slot_holds:${STUDENT_HOLD}`,
       `hold-enrollments:${STUDENT_HOLD}`,
+      // 006:T008 (rule d): the programmes before the enrollments.
+      `lock programmes:${[E1, E2, `enrollment-of-${STUDENT_HOLD}`].sort().join(',')}`,
       `lock enrollments:${[E1, E2, `enrollment-of-${STUDENT_HOLD}`].sort().join(',')}`,
       `confirmed-of:${STUDENT}`,
       `cancel-remaining:${E1},${E2}:lockOnly`,
@@ -635,6 +666,7 @@ describe("a student's suspension and ban reach their confirmed enrollments (T005
       `case-of:${E2}:case-of-${E2}`,
       `cancel-confirmed:${E1},${E2}:admin`,
       `events:${E1}:cancelled,${E2}:cancelled`,
+      `close-programmes:${E1},${E2}:admin`,
       `release:${STUDENT_HOLD}:admin`,
     ]);
     expect(journal.some((entry) => entry.startsWith('freeze:'))).toBe(false);
@@ -856,5 +888,53 @@ describe('an account’s end tells the other party of each enrollment it decided
     // T071 (rule d): a ban, which still cancels; a suspension pauses now.
     await subscriber(tx, TEACHER, 'banned');
     expect(journal).toContain(`cancel-confirmed:${E1}:teacher_suspended`);
+  });
+});
+
+// 006:T008 of specs/006-programme (R-510; B-P2's conflict check, Q-2 (a); kernel.md, 006:T008's
+// row): the programmes' rows are taken after the holds and before the enrollments, every end that
+// cancels runs booking's close hook on the enrollments it cancelled, after their events and before a
+// paused case's closing (`disputes` last), with payments' card entry the root handed in; a
+// suspension, which keeps its enrollments `confirmed`, closes nothing.
+describe('an account’s end closes its programmes, the programme’s row before the enrollment’s (006:T008, Q-2 (a))', () => {
+  const two = () =>
+    world([
+      { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: TEACHER },
+      { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
+    ]);
+  const enrollments = [E1, E2, `enrollment-of-${HOLD_ON_A}`, `enrollment-of-${HOLD_ON_B}`]
+    .sort()
+    .join(',');
+
+  it('takes the programmes’ rows after the holds and before the enrollments', async () => {
+    const { journal, subscriber } = two();
+    await subscriber(tx, TEACHER, 'banned', { adminId: ADMIN });
+    const programmes = journal.indexOf(`lock programmes:${enrollments}`);
+    expect(programmes).toBeGreaterThan(
+      journal.indexOf(`lock slot_holds:${HOLD_ON_A},${HOLD_ON_B}`),
+    );
+    expect(journal[programmes + 1]).toBe(`lock enrollments:${enrollments}`);
+  });
+
+  it.each([
+    ['banned', 'teacher_suspended'],
+    ['approval_revoked', 'teacher_suspended'],
+    ['account_deleted', 'account_deleted'],
+  ] as const)(
+    '%s: the programmes cancelled closed through the close hook, after their events',
+    async (cause, reason) => {
+      const { journal, subscriber } = two();
+      await subscriber(tx, TEACHER, cause, { adminId: ADMIN });
+      const events = journal.indexOf(`events:${E1}:cancelled,${E2}:cancelled`);
+      expect(journal[events + 1]).toBe(`close-programmes:${E1},${E2}:${reason}`);
+      expect(journal.filter((entry) => entry.startsWith('close-programmes:'))).toHaveLength(1);
+    },
+  );
+
+  it('a suspension keeps its programmes open: their rows locked, nothing closed', async () => {
+    const { journal, subscriber } = two();
+    await subscriber(tx, TEACHER, 'suspended', { adminId: ADMIN });
+    expect(journal).toContain(`lock programmes:${enrollments}`);
+    expect(journal.some((entry) => entry.startsWith('close-programmes:'))).toBe(false);
   });
 });

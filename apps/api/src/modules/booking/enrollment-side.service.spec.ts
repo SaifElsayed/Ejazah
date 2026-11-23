@@ -35,6 +35,8 @@ interface Recorded {
   readonly releases: { id: string; days: number }[];
   /** 006:T005: the programmes' weekly times asked for. */
   readonly programmeTimes: unknown[];
+  /** 006:T008 (Q-2 (a)): the close hook's writes and payments' card stub, in order. */
+  readonly closes: string[];
 }
 
 interface WorldOptions {
@@ -61,6 +63,7 @@ function world(options: WorldOptions) {
     slotReads: [],
     releases: [],
     programmeTimes: [],
+    closes: [],
   };
   const terms: EnrollmentTerms = {
     id: id(1),
@@ -139,7 +142,29 @@ function world(options: WorldOptions) {
       return schema.parse(values[key]);
     },
   };
-  const side = createEnrollmentSide({ settings, now: () => AT, store });
+  // 006:T008 (Q-2 (a)): the close hook over a recording store and card stub.
+  const side = createEnrollmentSide({
+    settings,
+    now: () => AT,
+    store,
+    programmes: {
+      deleteProgrammeCard: async (_tx, closed) => {
+        recorded.closes.push(`card ${closed}`);
+      },
+      log: { info: (fields) => recorded.closes.push(`line ${JSON.stringify(fields)}`) },
+      clock: async () => AT,
+      store: {
+        closeProgrammeRows: async (_tx, ids) => {
+          recorded.closes.push(`close ${ids.join(',')}`);
+          return [...ids];
+        },
+        withdrawOpenRequests: async (_tx, ids) => {
+          recorded.closes.push(`withdraw ${ids.join(',')}`);
+          return 0;
+        },
+      },
+    },
+  });
   return { side, recorded, terms };
 }
 
@@ -163,10 +188,13 @@ describe('EnrollmentSide.enrollmentFor and lockEnrollments (T008)', () => {
     expect(await side.enrollmentFor(tx, id(9))).toBeNull();
   });
 
-  it("locks the enrollments' rows through the kernel's lock, and nothing else", async () => {
+  it("locks the programmes' rows, then the enrollments', through the kernel's lock, and nothing else (006:T008, Q-2 (a))", async () => {
     const { side, recorded } = world({});
     await side.lockEnrollments(tx, [id(3), id(1)]);
-    expect(recorded.locks).toEqual([{ table: 'enrollments', ids: [id(3), id(1)] }]);
+    expect(recorded.locks).toEqual([
+      { table: 'programmes', ids: [id(3), id(1)] },
+      { table: 'enrollments', ids: [id(3), id(1)] },
+    ]);
     expect(recorded.moves).toEqual([]);
   });
 });
@@ -178,12 +206,14 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
       call: (side: ReturnType<typeof world>['side']) => side.terminateNoShow(tx, id(1)),
       target: { status: 'terminated_no_show', cancellationReason: null },
       event: { kind: 'terminated_no_show', enrollmentId: id(1), occurredAt: AT },
+      cause: 'terminated_no_show',
     },
     {
       name: 'complete: confirmed → completed (T015, FR-449)',
       call: (side: ReturnType<typeof world>['side']) => side.complete(tx, id(1)),
       target: { status: 'completed', cancellationReason: null },
       event: { kind: 'completed', enrollmentId: id(1), occurredAt: AT },
+      cause: 'completed',
     },
     {
       name: "cancel 'admin': confirmed → cancelled admin (T036, R-313)",
@@ -195,6 +225,7 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
         cancellationReason: 'admin',
         occurredAt: AT,
       },
+      cause: 'admin',
     },
     {
       name: "cancel 'admin' with the party reason: confirmed → cancelled admin, admin_end_reason written (T082)",
@@ -211,10 +242,11 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
         cancellationReason: 'admin',
         occurredAt: AT,
       },
+      cause: 'admin',
     },
   ] as const;
 
-  for (const { name, call, target, event } of cases) {
+  for (const { name, call, target, event, cause } of cases) {
     it(`${name}: moved, one row, true`, async () => {
       const { side, recorded } = world({ moves: true });
       expect(await call(side)).toBe(true);
@@ -223,11 +255,24 @@ describe("EnrollmentSide's moves, each with its row, only from its state (T008, 
       expect(recorded.locks).toEqual([]);
     });
 
+    // 006:T008 (Q-2 (a)): the close hook after the move, the card stub's call asserted.
+    it(`${name}: moved, then the programme closed through the close hook, its card deleted`, async () => {
+      const { side, recorded } = world({ moves: true });
+      await call(side);
+      expect(recorded.closes).toEqual([
+        `close ${id(1)}`,
+        `withdraw ${id(1)}`,
+        `card ${id(1)}`,
+        `line ${JSON.stringify({ enrollmentId: id(1), reason: cause })}`,
+      ]);
+    });
+
     it(`${name}: from another state, nothing written, false`, async () => {
       const { side, recorded } = world({ moves: false });
       expect(await call(side)).toBe(false);
       expect(recorded.moves).toHaveLength(1);
       expect(recorded.events).toEqual([]);
+      expect(recorded.closes).toEqual([]);
     });
   }
 });

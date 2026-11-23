@@ -20,6 +20,8 @@ import { genderFlagsAdminRouter } from '../modules/admin/index.js';
 import { settingsAdminRouter } from '../modules/admin/index.js';
 // T070 of specs/004-sessions: booking's `enrollments` namespace.
 import { enrollmentsAdminRouter } from '../modules/booking/index.js';
+// 006:T008 of specs/006-programme (Q-7 (a)): booking's `programmes` namespace.
+import { programmesAdminRouter } from '../modules/booking/index.js';
 // T007 of specs/005-certification: certification's `ijazahRequests`; T010 and T032 its `ijazahs`.
 import { ijazahRequestsAdminRouter, ijazahsAdminRouter } from '../modules/certification/index.js';
 // 005:T011 (B47): moderation's administrators' `reports`.
@@ -66,6 +68,8 @@ export const adminRouter = createAdminRouter({
   settings: settingsAdminRouter,
   // 003:T105: the releases of the teachers' shares, their detail and the mark «تم الصرف».
   payouts: payoutsAdminRouter,
+  // 006:T008 of specs/006-programme (Q-7 (a)): an administrator's decision on a programme's item.
+  programmes: programmesAdminRouter,
 });
 
 /** The administrator surface's type, for apps/admin only. */

@@ -59,6 +59,7 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "programmeCancelRefusal": ["closed", "rest_paid"],
       "programmeOfferRefusal": [
         "assessment_not_delivered",
         "count_out_of_bounds",
@@ -2366,6 +2367,29 @@
         },
         "kind": "mutation",
         "output": { "$": { "type": "unknown" } }
+      },
+      "programmes.decide": {
+        "input": {
+          "$": { "type": "object" },
+          "$.decision": {
+            "required": true,
+            "type": "string",
+            "values": ["approve", "decline", "extend"]
+          },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.note": { "type": "string" },
+          "$.reason": { "type": "string" },
+          "$.requestId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "declined", "extended", "open", "withdrawn"]
+          }
+        }
       },
       "reports.chat": {
         "input": {
@@ -4701,6 +4725,19 @@
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
+      "programme.cancel": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.ok": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
       "programme.offer": {
         "caller": "teacher",
         "input": {
@@ -4734,6 +4771,21 @@
         "output": {
           "$": { "type": "object" },
           "$.checkoutUrl": { "required": true, "type": "string" }
+        }
+      },
+      "programme.request": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.kind": { "required": true, "type": "string", "values": ["stop"] },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.requestId": { "required": true, "type": "string" }
         }
       },
       "reports.create": {
