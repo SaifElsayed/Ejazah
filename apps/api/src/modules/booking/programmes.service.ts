@@ -467,10 +467,10 @@ export function createProgrammeServices(
     offer: (teacherUserId, input, live) => offers.offer(teacherUserId, input, live),
     cancel: (studentUserId, input, live) =>
       cancelProgramme(studentUserId, input, live, dependencies),
-    request: (teacherUserId, { idempotencyKey, ...input }, live) =>
+    request: (teacherUserId, { idempotencyKey, ...input }) =>
       dependencies.idempotency.run(
         { scope: 'programme.request', key: idempotencyKey, actorId: teacherUserId, input },
-        (tx) => requestProgramme(tx, teacherUserId, input, live, requestDependencies),
+        (tx) => requestProgramme(tx, teacherUserId, input, requestDependencies),
       ),
   };
 }

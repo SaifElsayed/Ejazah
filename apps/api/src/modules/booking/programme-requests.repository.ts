@@ -19,6 +19,11 @@ export interface ProgrammeRequestRow {
   readonly teacherUserId: string;
   readonly kind: ProgrammeRequestKind;
   readonly status: ProgrammeRequestStatus;
+  /**
+   * The teacher's reason on a `stop`; 006:T008 (SRS DEC-112) the administrator's recorded reason on
+   * a decided `no_offer` item; null otherwise. Read back for T018's queue and programme.
+   */
+  readonly reason: string | null;
 }
 
 /** The item `requestId`, or null for an unknown id. */
@@ -28,7 +33,14 @@ export async function requestById(
 ): Promise<ProgrammeRequestRow | null> {
   return tx.programmeRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, enrollmentId: true, teacherUserId: true, kind: true, status: true },
+    select: {
+      id: true,
+      enrollmentId: true,
+      teacherUserId: true,
+      kind: true,
+      status: true,
+      reason: true,
+    },
   });
 }
 
@@ -108,11 +120,18 @@ export async function decideRequest(
     readonly status: 'approved' | 'declined' | 'extended';
     readonly adminId: string;
     readonly at: Date;
+    /** 006:T008 (SRS DEC-112): a `no_offer` decision's reason, written to the item's `reason`. */
+    readonly reason?: string;
   },
 ): Promise<boolean> {
   const { count } = await tx.programmeRequest.updateMany({
     where: { id: requestId, status: 'open' },
-    data: { status: decision.status, decidedByAdminId: decision.adminId, decidedAt: decision.at },
+    data: {
+      status: decision.status,
+      decidedByAdminId: decision.adminId,
+      decidedAt: decision.at,
+      ...(decision.reason === undefined ? {} : { reason: decision.reason }),
+    },
   });
   return count === 1;
 }

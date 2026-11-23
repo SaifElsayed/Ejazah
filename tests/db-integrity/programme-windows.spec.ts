@@ -9,7 +9,8 @@
 // - past `pay_by_at`: «unverified in live mode: no lapse, one item», «the same in test mode lapses»,
 //   «verified while the item is open: no lapse», «the student's cancellation withdraws the item»,
 //   the decision's approval (`offer_lapsed`) and extension;
-// - the teacher's refusal request and its approval (`assessment_refused`), with its refusals;
+// - (SRS DEC-112) no refusal request: `programme.request` takes `stop` only; a `no_offer` decision
+//   carries the administrator's reason, and approving one waits for session 1's pending make-up;
 // - the close hook on every close: the programme `closed`, its open items `withdrawn`, payments'
 //   card entry called (a stub until T013);
 // - two races: an administrator's decision against the sweep's step (both under the programme's row
@@ -319,7 +320,7 @@ async function admin(): Promise<string> {
   return id;
 }
 
-async function openItemOf(enrollmentId: string, kind: 'no_offer' | 'pay_blocked' | 'refusal') {
+async function openItemOf(enrollmentId: string, kind: 'no_offer' | 'pay_blocked') {
   const item = await database.programmeRequest.findFirstOrThrow({
     where: { enrollmentId, kind, status: 'open' },
     select: { id: true },
@@ -327,14 +328,31 @@ async function openItemOf(enrollmentId: string, kind: 'no_offer' | 'pay_blocked'
   return item.id;
 }
 
-function decide(adminId: string, requestId: string, decision: 'approve' | 'decline' | 'extend') {
+function decide(
+  adminId: string,
+  requestId: string,
+  decision: 'approve' | 'decline' | 'extend',
+  reason?: string,
+) {
   return database.$transaction((tx) =>
     decisions.decide(tx as Transaction, adminId, {
       requestId,
       decision,
+      ...(reason === undefined ? {} : { reason }),
       idempotencyKey: randomUUID(),
     }),
   );
+}
+
+/** 006:T008 (SRS DEC-112): what the teacher sent support, as an administrator records it. */
+const SUPPORT_REASON = 'أبلغ المعلم الدعم أن الطالب غير مستعد';
+
+async function reasonOf(requestId: string): Promise<string | null> {
+  const { reason } = await database.programmeRequest.findUniqueOrThrow({
+    where: { id: requestId },
+    select: { reason: true },
+  });
+  return reason;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -393,8 +411,11 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     const { enrollmentId } = await awaitingOffer('done', 25);
     await windowsIn('test').step(enrollmentId);
     const adminId = await admin();
-    const answer = await decide(adminId, await openItemOf(enrollmentId, 'no_offer'), 'approve');
+    const requestId = await openItemOf(enrollmentId, 'no_offer');
+    const answer = await decide(adminId, requestId, 'approve', SUPPORT_REASON);
     expect(answer.answer).toStrictEqual({ status: 'approved' });
+    // SRS DEC-112: the reason is written on the item.
+    expect(await reasonOf(requestId)).toBe(SUPPORT_REASON);
     const { programme, enrollment, items, cancelled } = await rowsOf(enrollmentId);
     expect(enrollment).toStrictEqual({
       status: 'cancelled',
@@ -418,9 +439,10 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     expect(declined).toBe('decision_not_allowed');
     expect(programmesDecideRefusal.options).toContain(declined);
     const before = await dbNow();
-    expect((await decide(adminId, requestId, 'extend')).answer).toStrictEqual({
+    expect((await decide(adminId, requestId, 'extend', SUPPORT_REASON)).answer).toStrictEqual({
       status: 'extended',
     });
+    expect(await reasonOf(requestId)).toBe(SUPPORT_REASON);
     const { programme, items } = await rowsOf(enrollmentId);
     expect(items).toMatchObject([
       { kind: 'no_offer', status: 'extended', decidedByAdminId: adminId },
@@ -432,6 +454,41 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     expect(await causeOf(services.offer(teacherId, offerOf(enrollmentId), noSignal))).toMatch(
       /^answered/,
     );
+  });
+
+  it('refuses a no_offer decision without a reason reason_required, approve or extend, writing nothing (SRS DEC-112)', async () => {
+    const { enrollmentId } = await awaitingOffer('done', 25);
+    await windowsIn('test').step(enrollmentId);
+    const adminId = await admin();
+    const requestId = await openItemOf(enrollmentId, 'no_offer');
+    const before = await rowsOf(enrollmentId);
+    for (const decision of ['approve', 'extend'] as const) {
+      const cause = await causeOf(decide(adminId, requestId, decision));
+      expect(cause).toBe('reason_required');
+      expect(programmesDecideRefusal.options).toContain(cause);
+    }
+    expect(await rowsOf(enrollmentId)).toStrictEqual(before);
+    expect(await reasonOf(requestId)).toBeNull();
+  });
+
+  it('refuses approving a no_offer item while session 1’s make-up is pending makeup_pending; nothing moves (Q-B5 (a))', async () => {
+    const world = await awaitingOffer('done', 25);
+    await windowsIn('test').step(world.enrollmentId);
+    const requestId = await openItemOf(world.enrollmentId, 'no_offer');
+    // Re-resolved a teacher's no-show, its make-up booked for tomorrow.
+    await database.session.update({
+      where: { id: world.sessionId },
+      data: { status: 'teacher_no_show' },
+    });
+    await makeupOf(world, 'scheduled', -24);
+    const adminId = await admin();
+    const before = await rowsOf(world.enrollmentId);
+    const cause = await causeOf(decide(adminId, requestId, 'approve', SUPPORT_REASON));
+    expect(cause).toBe('makeup_pending');
+    expect(programmesDecideRefusal.options).toContain(cause);
+    expect(await rowsOf(world.enrollmentId)).toStrictEqual(before);
+    expect(before.enrollment.status).toBe('confirmed');
+    expect(await reasonOf(requestId)).toBeNull();
   });
 });
 
@@ -560,71 +617,20 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
   });
 });
 
-describe('the teacher’s refusal request (006:T008, FR-709, R-513)', () => {
-  it('opens a refusal item after the delivered assessment; approved, assessment_refused', async () => {
+// SRS DEC-112: the teacher's app has no refusal request; the refusal is the `no_offer` path above.
+describe('programme.request takes stop only (006:T008, SRS DEC-112; T017 builds it)', () => {
+  it('refuses a stop not_paused on a programme that is not paused, writing nothing', async () => {
     const { teacherId, enrollmentId } = await awaitingOffer('done', 1);
-    const { requestId } = await services.request(
-      teacherId,
-      { enrollmentId, kind: 'refusal', reason: 'غير مستعد', idempotencyKey: randomUUID() },
-      noSignal,
-    );
     expect(
       await causeOf(
         services.request(
           teacherId,
-          { enrollmentId, kind: 'refusal', reason: 'غير مستعد', idempotencyKey: randomUUID() },
+          { enrollmentId, kind: 'stop', reason: 'x', idempotencyKey: randomUUID() },
           noSignal,
         ),
       ),
-    ).toBe('request_open');
-    const adminId = await admin();
-    expect((await decide(adminId, requestId, 'approve')).answer).toStrictEqual({
-      status: 'approved',
-    });
-    const { programme, enrollment } = await rowsOf(enrollmentId);
-    expect(enrollment).toStrictEqual({
-      status: 'cancelled',
-      cancellationReason: 'assessment_refused',
-    });
-    expect(programme.state).toBe('closed');
-  });
-
-  it('refuses assessment_not_delivered before the delivery and offer_sent once an offer is sent', async () => {
-    const undelivered = await awaitingOffer('teacher_no_show', 1);
-    expect(
-      await causeOf(
-        services.request(
-          undelivered.teacherId,
-          {
-            enrollmentId: undelivered.enrollmentId,
-            kind: 'refusal',
-            reason: 'x',
-            idempotencyKey: randomUUID(),
-          },
-          noSignal,
-        ),
-      ),
-    ).toBe('assessment_not_delivered');
-    const sent = await offered(-60);
-    expect(
-      await causeOf(
-        services.request(
-          sent.teacherId,
-          {
-            enrollmentId: sent.enrollmentId,
-            kind: 'refusal',
-            reason: 'x',
-            idempotencyKey: randomUUID(),
-          },
-          noSignal,
-        ),
-      ),
-    ).toBe('offer_sent');
-    expect(
-      await database.programmeRequest.count({
-        where: { enrollmentId: { in: [undelivered.enrollmentId, sent.enrollmentId] } },
-      }),
-    ).toBe(0);
+    ).toBe('not_paused');
+    expect(await database.programmeRequest.count({ where: { enrollmentId } })).toBe(0);
   });
 });
 

@@ -127,6 +127,11 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'payout_release.unmarked': 'admin.money.audit.payoutReleaseUnmarked',
   // 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): what a compensation case shows, audited on the case.
   'payments.case_amount_viewed': 'admin.money.audit.caseAmountViewed',
+  // 006:T008 (SRS DEC-112; the owner's labels as proposed): `programmes.decide`'s three entries, on
+  // the enrollment. `.declined` has no writer while the refusal request is gone (a stop's is T017's).
+  'programme_request.approved': 'admin.audit.actions.programmeRequestApproved',
+  'programme_request.declined': 'admin.audit.actions.programmeRequestDeclined',
+  'programme_request.extended': 'admin.audit.actions.programmeRequestExtended',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

@@ -132,6 +132,25 @@ describe('programmes.decide (006:T008, R-API-12)', () => {
     expect(written).toEqual([]);
   });
 
+  // 006:T008 (SRS DEC-112): the reason a `no_offer` decision records, 1 to 500 characters.
+  it('refuses a blank or over-long reason VALIDATION_FAILED, reaching nothing', async () => {
+    for (const reason of ['   ', 'ب'.repeat(501)]) {
+      const { as, reached } = surface(decided('extended'));
+      expect(
+        (await shapeOf(as(VERIFIED).programmes.decide({ ...ASKED, decision: 'extend', reason })))
+          .code,
+      ).toBe('VALIDATION_FAILED');
+      expect(reached).toEqual([]);
+    }
+  });
+
+  it('hands the reason on with the input', async () => {
+    const { as, reached } = surface(decided('extended'));
+    const asked = { ...ASKED, decision: 'extend' as const, reason: 'أبلغ المعلم الدعم' };
+    await as(VERIFIED).programmes.decide(asked);
+    expect(reached).toEqual([[SPEC_ADMIN, asked]]);
+  });
+
   it('refuses a request id that is not one VALIDATION_FAILED, reaching nothing', async () => {
     const { as, reached } = surface(decided('approved'));
     expect(

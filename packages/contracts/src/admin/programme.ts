@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { paymentStatus } from '../checkout.js';
 import { idempotencyKey } from '../idempotency-key.js';
 import {
+  PROGRAMME_TEXT_MAX_LENGTH,
   programmeOffer,
   programmePlan,
   programmeRequestKind,
@@ -105,10 +106,10 @@ export const programmesGetOutput = z.object({
 
 /**
  * An administrator's decision on an item (R-513, I-2 (a), FR-706b): approving a stop closes the
- * programme `programme_stopped`; approving a refusal cancels `assessment_refused`; a `no_offer`
- * item is approved (a refusal) or extended by `programme_offer_hours`; a `pay_blocked` item is
- * approved (the lapse, `offer_lapsed`) or extended by `programme_pay_rest_hours`; neither of the
- * sweep's items takes `decline`.
+ * programme `programme_stopped`; a `no_offer` item is approved (the refusal, `assessment_refused`)
+ * or extended by `programme_offer_hours`; a `pay_blocked` item is approved (the lapse,
+ * `offer_lapsed`) or extended by `programme_pay_rest_hours`; neither of the sweep's items takes
+ * `decline`. 006:T008 (SRS DEC-112): no refusal request exists any more.
  */
 export const programmesDecision = z.enum(['approve', 'decline', 'extend']);
 
@@ -116,6 +117,11 @@ export const programmesDecideInput = z.object({
   requestId: z.uuid(),
   decision: programmesDecision,
   note: adminReason.optional(),
+  /**
+   * 006:T008 (SRS DEC-112): on a `no_offer` item, required on approve and extend: the
+   * administrator's record of what the teacher sent support, kept on the item (1–500).
+   */
+  reason: z.string().trim().min(1).max(PROGRAMME_TEXT_MAX_LENGTH).optional(),
   idempotencyKey,
 });
 
@@ -124,15 +130,19 @@ export const programmesDecideOutput = z.object({ status: programmeRequestStatus 
 /**
  * 006:T008 (R-513, FR-706b; B-P2 lane b, Q-B1 (a)): `programmes.decide`'s refusals: `not_open` once
  * the item is decided, withdrawn or gone; `decision_not_allowed` for a decision its kind does not take
- * (a decline on `no_offer` or `pay_blocked`, an extension on `refusal`); `not_offered` on a
- * `pay_blocked` item once the programme is no longer `offered`; `offer_sent` approving a refusal or a
- * `no_offer` item once an offer was sent.
+ * (a decline on `no_offer` or `pay_blocked`); `not_offered` on a `pay_blocked` item once the
+ * programme is no longer `offered`; `offer_sent` approving a `no_offer` item once an offer was sent.
+ * 006:T008 (SRS DEC-112): `reason_required`, a `no_offer` decision without the administrator's
+ * reason; `makeup_pending`, approving a `no_offer` item while session 1's make-up is pending (Q-B5
+ * (a)).
  */
 export const programmesDecideRefusal = z.enum([
   'not_open',
   'decision_not_allowed',
   'not_offered',
   'offer_sent',
+  'reason_required',
+  'makeup_pending',
 ]);
 
 /** `programmes.reopen`: a `programme_stopped` programme, back to `paused` (R-513, FR-725). */

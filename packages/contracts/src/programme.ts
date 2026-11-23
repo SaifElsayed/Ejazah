@@ -176,10 +176,14 @@ export const programmeRenewRefusal = z.enum([
   'closed',
 ]);
 
-/** `programme.request`: the teacher's stop or refusal, for an administrator to decide (R-513). */
+/**
+ * `programme.request`: the teacher's stop, for an administrator to decide (R-513). 006:T008 (SRS
+ * DEC-112): no refusal request in the teacher's app; a teacher who refuses tells support, and the
+ * refusal is an administrator's approval of the `no_offer` item. The kind stays a field, `stop` alone.
+ */
 export const programmeRequestInput = z.object({
   enrollmentId: z.uuid(),
-  kind: z.enum(['stop', 'refusal']),
+  kind: z.enum(['stop']),
   reason: programmeText,
   idempotencyKey,
 });
@@ -188,14 +192,18 @@ export const programmeRequestOutput = z.object({ requestId: z.uuid() });
 
 /**
  * `programme.request`'s refusals: a stop before `programme_stop_request_days` of pause
- * (`too_early`) or while not paused; a refusal once the offer is sent or before the assessment's
- * delivery; either while one of its kind is open (FR-709, FR-723).
+ * (`too_early`) or while not paused, or while one is open (FR-723). 006:T008 (SRS DEC-112): no
+ * refusal request any more, so nothing answers `assessment_not_delivered` or `offer_sent`; the two
+ * members stay, unused, because the snapshot gate refuses a published enum member's removal (R-API-9:
+ * deprecate, then remove) until the owner decides (B-P2 lane b, Q-B6).
  */
 export const programmeRequestRefusal = z.enum([
   'not_paused',
   'too_early',
   'request_open',
+  /** Unused since SRS DEC-112 (Q-B6). */
   'assessment_not_delivered',
+  /** Unused since SRS DEC-112 (Q-B6). */
   'offer_sent',
 ]);
 

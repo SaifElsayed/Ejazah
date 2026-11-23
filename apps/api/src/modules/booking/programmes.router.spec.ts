@@ -257,7 +257,8 @@ describe("'programme.offer' (006:T007, FR-705)", () => {
 const ACTION = { enrollmentId: OWN, idempotencyKey: KEY };
 const REQUESTED = {
   enrollmentId: OWN,
-  kind: 'refusal' as const,
+  // SRS DEC-112: `stop` alone (T017's).
+  kind: 'stop' as const,
   reason: 'غير مستعد',
   idempotencyKey: KEY,
 };
@@ -326,6 +327,18 @@ describe("'programme.request' callers (006:T008)", () => {
     const [name, account, input, live] = calls[0] ?? [];
     expect([name, account, input]).toEqual(['request', CALLER, REQUESTED]);
     expect(live).toHaveProperty('afterCommit');
+  });
+
+  // 006:T008 (SRS DEC-112): no refusal request in the teacher's app; the input takes `stop` only.
+  it("refuses the refusal kind VALIDATION_FAILED before the service: 'programme.request'", async () => {
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    const thrown: unknown = await caller.programme
+      .request({ ...REQUESTED, kind: 'refusal' } as never)
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toEqual([]);
   });
 
   it("refuses a blank or over-long reason VALIDATION_FAILED before the service: 'programme.request'", async () => {
