@@ -55,10 +55,12 @@
 // T029 books the counter (`sessions.remedy.answerCounter`). A booking the database refuses (an
 // exclusion it names, `sessions_teacher_no_overlap` or `sessions_student_no_overlap`), or T029 refuses
 // on a week another package keeps the counter's slot (`slot_taken`, which lasts: the owner's decision
-// (b) under T032, FR-MAKEUP-4), answers T029's `MAKEUP_REFUSED` and, in a second transaction under the
-// same locks, releases the counter as a decline does: its columns cleared, `proposed`, one
-// `counter_booking_refused` row (never `counter_withdrawn`), and one warn line
-// `{ sessionId, enrollmentId, constraint }` (the exclusion's name, or `slot_taken`) and nothing else;
+// (b) under T032, FR-MAKEUP-4) or (006:T010, Q-D1 (a) on that precedent) on the student's
+// programme time (`programme_time`, which recurs on every week), answers T029's `MAKEUP_REFUSED`
+// and, in a second transaction under the same locks, releases the counter as a decline does: its
+// columns cleared, `proposed`, one `counter_booking_refused` row (never `counter_withdrawn`), and
+// one warn line `{ sessionId, enrollmentId, constraint }` (the exclusion's name, `slot_taken` or
+// `programme_time`) and nothing else;
 // so the sweep never reads it as unanswered. A reserved time or a second deadlock refuses with the
 // counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
 // the counter released, `proposed`, one `counter_declined` row. After either release, once the
@@ -83,9 +85,11 @@
 //     pending, by its status) has its proposal booked (H5) through `runRetryingDeadlockOnce` as
 //     `advance-remedies` (Q4 (a)), one info line `{ remedyId, sessionId, enrollmentId, action }`
 //     after the commit. Under the booking's locks it reads the open holds of both parties
-//     (`heldTimesOf`) over the proposal, an overlap a refusal; T029 reads the reservations again and
-//     the database its exclusions. Each refusal is one warn line `{ remedyId, sessionId, constraint }`
-//     and nothing more: the constraint the database named, or `hold` or `reservation`. A second
+//     (`heldTimesOf`) and (006:T010 of specs/006-programme, PR #156 r1 Follow-up 1) the weekly times
+//     of the student's other active programmes (`programmeTimesOf`, this enrollment left out) over
+//     the proposal, an overlap a refusal; T029 reads the reservations again and the database its
+//     exclusions. Each refusal is one warn line `{ remedyId, sessionId, constraint }` and nothing
+//     more: the constraint the database named, or `hold`, `programme_time` or `reservation`. A second
 //     deadlock is no refusal: the next run tries again. Retried while the proposal starts at least L
 //     after the run's instant (`bookingRetriedUntil`, the remedy's own L); once it would start within
 //     L, handed to a `makeup_refused` case (T030, `kind` left `makeup`), one info line and one
@@ -822,10 +826,18 @@ export function createRemedyServices({
     } catch (error: unknown) {
       const refused = refusalOf(error);
       // A lasting refusal releases the counter: the database's exclusion, or a week another
-      // package keeps (`slot_taken`, the owner's decision (b) under T032). A reserved time or a
-      // second deadlock may pass, and leaves it pending (Q4 (a)).
-      if (refused?.cause !== 'overlap' && refused?.cause !== 'slot_taken') throw error;
-      const constraint = refused.cause === 'overlap' ? refused.constraint : 'slot_taken';
+      // package keeps (`slot_taken`, the owner's decision (b) under T032), or (006:T010, Q-D1 (a)
+      // on that precedent) the student's programme time, which recurs on every week
+      // (`programme_time`). A reserved time or a second deadlock may pass, and leaves it pending
+      // (Q4 (a)).
+      if (
+        refused?.cause !== 'overlap' &&
+        refused?.cause !== 'slot_taken' &&
+        refused?.cause !== 'programme_time'
+      ) {
+        throw error;
+      }
+      const constraint = refused.cause === 'overlap' ? refused.constraint : refused.cause;
       const release = await transactions.run((tx) =>
         released(tx, sessionId, userId, log, 'own_and_counter', 'counter_booking_refused'),
       );
@@ -1011,7 +1023,7 @@ export interface RemedyWindowsDependencies {
   readonly transactions: Transactions;
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken'
+    'enrollmentFor' | 'lockEnrollments' | 'heldTimesOf' | 'slotWeekTaken' | 'programmeTimesOf'
   >;
   /** The automatic actions' info lines and the refused retries' warn lines (Q11 (a)). */
   readonly log: WindowsLog;
@@ -1027,12 +1039,21 @@ export interface RemedyWindowsDependencies {
 /** What one choice-window end decided inside its transaction. */
 type ChoiceEnd =
   | { readonly outcome: 'not_due' }
-  | { readonly outcome: 'refused'; readonly constraint: 'hold' }
+  | { readonly outcome: 'refused'; readonly constraint: 'hold' | 'programme_time' }
   | { readonly outcome: 'booked'; readonly enrollmentId: string }
   | {
       readonly outcome: 'handed_off';
       readonly handed: Awaited<ReturnType<RemedyCase['handOff']>>;
     };
+
+/**
+ * What a refused booking's warn line names: the database's constraint, (006:T010) a programme's
+ * weekly time, or a reservation.
+ */
+function refusedConstraint(refused: MakeupRefusal): string {
+  if (refused.cause === 'overlap') return refused.constraint;
+  return refused.cause === 'programme_time' ? 'programme_time' : 'reservation';
+}
 
 export function createRemedyWindows({
   transactions,
@@ -1110,7 +1131,7 @@ export function createRemedyWindows({
           {
             remedyId,
             sessionId: ids.sessionId,
-            constraint: refused.cause === 'overlap' ? refused.constraint : 'reservation',
+            constraint: refusedConstraint(refused),
           },
           'A make-up booking was refused',
         );
@@ -1153,12 +1174,17 @@ export function createRemedyWindows({
               const handed = await cases.handOff(tx, { remedyId, reason: 'makeup_refused' });
               return { outcome: 'handed_off', handed };
             }
-            const held = await enrollments.heldTimesOf(
-              tx,
-              [remedy.studentUserId, remedy.teacherUserId],
-              { from: proposal.startsAt, to: proposal.endsAt },
-            );
+            const window = { from: proposal.startsAt, to: proposal.endsAt };
+            const [held, programme] = await Promise.all([
+              enrollments.heldTimesOf(tx, [remedy.studentUserId, remedy.teacherUserId], window),
+              // 006:T010 (PR #156 r1 Follow-up 1): the student's other active programmes' weekly
+              // times, as T005's searches read them, this enrollment's own left out.
+              enrollments.programmeTimesOf(tx, [remedy.studentUserId], window, remedy.enrollmentId),
+            ]);
             if (overlapsAny(proposal, held)) return { outcome: 'refused', constraint: 'hold' };
+            if (overlapsAny(proposal, programme)) {
+              return { outcome: 'refused', constraint: 'programme_time' };
+            }
             await booking.bookOn(tx, { remedyId, booking: 'proposal', operation: SWEEP });
             return { outcome: 'booked', enrollmentId: remedy.enrollmentId };
           },
@@ -1171,7 +1197,7 @@ export function createRemedyWindows({
           {
             remedyId,
             sessionId,
-            constraint: refused.cause === 'overlap' ? refused.constraint : 'reservation',
+            constraint: refusedConstraint(refused),
           },
           'A make-up booking was refused',
         );

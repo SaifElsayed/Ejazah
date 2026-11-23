@@ -458,6 +458,64 @@ describe('a procedure of certificates, reports or genderFlags is registered and 
   });
 });
 
+/**
+ * 006:T007 (PR #153 r1 Major 2; the owner's settled reading of B-P2's conflict check, 2026-11-23):
+ * `programme` is read whatever the caller kind, as `sessions`, `chat` and `live` are, and is never
+ * exempt, but it is no session router, so FR-496's three kinds are not asked of it. One unregistered
+ * procedure of each caller kind a programme's two parties call (#142 r1, Major 1).
+ */
+const programmeTeacherQuery = () =>
+  teacherProcedure({ admits: 'approved', input: emptyInput, output: subjectsListOutput }).query(
+    () => [],
+  );
+const programmeNamespaces: Readonly<Record<string, ReturnType<typeof createAppRouter>>> = {
+  student: createAppRouter({ programme: createAppRouter({ any: anyQuery() }) }),
+  teacher: createAppRouter({ programme: createAppRouter({ any: programmeTeacherQuery() }) }),
+};
+
+describe('a procedure of programme is registered and never exempt, whatever its caller kind (006:T007)', () => {
+  it.each(Object.keys(programmeNamespaces))(
+    'reads a %s-kind procedure under programme and fails it while it is not registered',
+    (kind) => {
+      const surface = programmeNamespaces[kind];
+      expect(surface).toBeDefined();
+      expect(studentFacingProcedures(surface!)).toEqual(['programme.any']);
+      expect(coverageFailures(studentFacingProcedures(surface!), [], [])).toEqual([
+        expect.stringMatching(/^programme\.any: .*never exempt.*FR-705/),
+      ]);
+    },
+  );
+
+  it.each(Object.keys(programmeNamespaces))(
+    'fails a %s-kind procedure under programme that is exempt with a reason',
+    (kind) => {
+      const surface = programmeNamespaces[kind];
+      expect(surface).toBeDefined();
+      expect(
+        coverageFailures(
+          studentFacingProcedures(surface!),
+          [],
+          [{ path: 'programme.any', reason: 'names no one' }],
+        ),
+      ).toEqual([expect.stringMatching(/^programme\.any: .*never exempt.*FR-705/)]);
+    },
+  );
+
+  it('passes a programme procedure once it is registered', () => {
+    expect(coverageFailures(['programme.any'], ['programme.any'], [])).toEqual([]);
+  });
+
+  it('asks none of FR-496’s three kinds of a programme registration', () => {
+    expect(sessionKindFailures([registrationWithout('programme.any', 'replayedToken')])).toEqual(
+      [],
+    );
+  });
+
+  it('attacks programme among the never-exempt routers', () => {
+    expect(ATTACKED_ROUTERS).toContain('programme');
+  });
+});
+
 /** The three kinds FR-496 names beyond FR-410's five, as T052's note writes them. */
 const FR_496_KINDS = ['otherSessionToken', 'replayedToken', 'afterGenderCorrection'] as const;
 

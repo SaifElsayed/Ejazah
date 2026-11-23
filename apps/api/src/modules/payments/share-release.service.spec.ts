@@ -16,6 +16,8 @@ import type { ReleaseEnrollment } from './share-release.rules.js';
 import {
   createShareReleaseSweep,
   type ReleaseReads,
+  releaseReads,
+  releaseSessionsOf,
   releasesAmong,
 } from './share-release.service.js';
 
@@ -46,6 +48,7 @@ interface World {
   readonly rows: ReleaseRow[];
   readonly lines: unknown[][];
   readonly errors: unknown[][];
+  readonly warns: unknown[][];
   readonly failOn?: string;
 }
 
@@ -58,6 +61,9 @@ function world(count: number, failOn?: number): World {
     orders.push({
       paymentId: id(200 + n),
       enrollmentId,
+      kind: 'package',
+      instalmentMonth: null,
+      paid_piasters: piasters(1_000_000),
       share_piasters: piasters(700_000),
       sharePercent: 70,
       halfPercent: null,
@@ -70,6 +76,8 @@ function world(count: number, failOn?: number): World {
       track: 'recitation',
       status: 'completed',
       sessionCount: 10,
+      cancellationReason: null,
+      programme: null,
     });
   }
   return {
@@ -78,14 +86,27 @@ function world(count: number, failOn?: number): World {
     rows: [],
     lines: [],
     errors: [],
+    warns: [],
     ...(failOn === undefined ? {} : { failOn: id(100 + failOn) }),
   };
 }
 
+/** The orders of `ids`, each enrollment's in id order, as payments' `shareOrdersOf` answers them. */
+function ordersByEnrollment(
+  orders: readonly ShareOrderRow[],
+  ids: readonly string[],
+): ReadonlyMap<string, readonly ShareOrderRow[]> {
+  const byEnrollment = new Map<string, ShareOrderRow[]>();
+  for (const order of orders.toSorted((a, b) => a.paymentId.localeCompare(b.paymentId))) {
+    if (!ids.includes(order.enrollmentId)) continue;
+    byEnrollment.set(order.enrollmentId, [...(byEnrollment.get(order.enrollmentId) ?? []), order]);
+  }
+  return byEnrollment;
+}
+
 function sweepOver(w: World, pageSize = 2) {
   const reads: ReleaseReads = {
-    shareOrdersOf: async (_tx, ids) =>
-      new Map(w.orders.filter((o) => ids.includes(o.enrollmentId)).map((o) => [o.enrollmentId, o])),
+    shareOrdersOf: async (_tx, ids) => ordersByEnrollment(w.orders, ids),
     releasesOf: async (_tx, ids) => w.rows.filter((row) => ids.includes(row.enrollmentId)),
     enrollmentsAmong: async (_tx, ids) =>
       new Map([...w.enrollments].filter(([enrollmentId]) => ids.includes(enrollmentId))),
@@ -114,6 +135,7 @@ function sweepOver(w: World, pageSize = 2) {
     log: {
       info: (...line: unknown[]) => void w.lines.push(line),
       error: (...line: unknown[]) => void w.errors.push(line),
+      warn: (...line: unknown[]) => void w.warns.push(line),
     },
     pageSize,
     report: () => undefined,
@@ -209,7 +231,7 @@ describe('a make-up valued as the session it makes up (Q-B1-4 (a))', () => {
       endsAt: new Date('2026-10-01T10:00:00Z'),
     })) as unknown as EnrollmentSessionRow[];
     const reads: ReleaseReads = {
-      shareOrdersOf: async () => new Map(w.orders.map((o) => [o.enrollmentId, o])),
+      shareOrdersOf: async () => ordersByEnrollment(w.orders, [enrollmentId]),
       releasesOf: async () => [],
       enrollmentsAmong: async () => w.enrollments,
       sessionsAmong: async () => new Map([[enrollmentId, rows]]),
@@ -234,6 +256,218 @@ describe('a make-up valued as the session it makes up (Q-B1-4 (a))', () => {
       [3, undefined],
       [11, 3],
       [12, 3],
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T011 (R-512, FR-703, FR-706b, FR-728): a programme's facts. The worked example: an offer of
+// 10,000 EGP, the fee 500 EGP, the share 70 %, the half 25 %.
+
+const assessmentOf = (enrollmentId: string, paymentId: string): ShareOrderRow => ({
+  paymentId,
+  enrollmentId,
+  kind: 'assessment',
+  instalmentMonth: null,
+  paid_piasters: piasters(50_000),
+  share_piasters: piasters(35_000),
+  sharePercent: 70,
+  halfPercent: 25,
+  refunded_piasters: piasters(0),
+});
+
+const programmeWorld = (): World => {
+  const enrollmentId = id(101);
+  return {
+    orders: [
+      assessmentOf(enrollmentId, id(201)),
+      {
+        ...assessmentOf(enrollmentId, id(202)),
+        kind: 'rest_in_full',
+        paid_piasters: piasters(950_000),
+        share_piasters: piasters(665_000),
+      },
+    ],
+    enrollments: new Map([
+      [
+        enrollmentId,
+        {
+          enrollmentId,
+          teacherUserId: TEACHER,
+          studentUserId: id(301),
+          track: 'ijazah_track',
+          status: 'completed',
+          sessionCount: 10,
+          cancellationReason: null,
+          programme: {
+            state: 'closed',
+            total_piasters: piasters(1_000_000),
+            payByAt: new Date('2026-09-28T10:00:00Z'),
+            closedAt: new Date('2026-10-10T10:00:00Z'),
+            payBlockedOpen: false,
+          },
+        },
+      ],
+    ]),
+    rows: [],
+    lines: [],
+    errors: [],
+    warns: [],
+  };
+};
+
+describe('006:T011 a programme’s facts (R-512)', () => {
+  it('hands the rules every paid order with its kind, oldest first, the first as `order`', async () => {
+    const w = programmeWorld();
+    const enrollmentId = id(101);
+    const reads: ReleaseReads = {
+      shareOrdersOf: async (_tx, ids) => ordersByEnrollment(w.orders, ids),
+      releasesOf: async () => [],
+      enrollmentsAmong: async () => w.enrollments,
+      sessionsAmong: async () => new Map([[enrollmentId, sessionsOf(enrollmentId)]]),
+      casesAmong: async () => new Map([[enrollmentId, []]]),
+      openMattersAmong: async () => new Set(),
+      makeupsAmong: async () => new Map(),
+    };
+    const [one] = await releasesAmong({} as Transaction, [enrollmentId], reads);
+
+    expect(one?.facts.order.paymentId).toBe(id(201));
+    expect(one?.facts.orders.map(({ paymentId, kind }) => [paymentId, kind])).toEqual([
+      [id(201), 'assessment'],
+      [id(202), 'rest_in_full'],
+    ]);
+    expect(one?.facts.enrollment.programme?.total_piasters).toBe(1_000_000);
+  });
+
+  it('reads the cancellation reason and the programme through booking’s entry, a `pay_blocked` item open among them', async () => {
+    const enrollmentId = id(101);
+    const asked: unknown[] = [];
+    const tx = {
+      enrollment: {
+        findMany: async (query: unknown) => {
+          asked.push(query);
+          return [
+            {
+              id: enrollmentId,
+              studentUserId: id(301),
+              teacherUserId: TEACHER,
+              status: 'cancelled',
+              cancellationReason: 'offer_lapsed',
+              snapshotSubjectId: id(400),
+              snapshotTrack: 'ijazah_track',
+              snapshotSessionCount: 41,
+              snapshotDurationMinutes: 45,
+              snapshotPricePiasters: 1_000_000n,
+              programme: {
+                state: 'closed',
+                payByAt: new Date('2026-10-05T12:00:00Z'),
+                closedAt: new Date('2026-10-07T08:00:00Z'),
+              },
+              programmeRequests: [{ id: id(700) }],
+            },
+          ];
+        },
+      },
+    } as unknown as Transaction;
+
+    const enrollments = await releaseReads.enrollmentsAmong(tx, [enrollmentId]);
+
+    expect(enrollments.get(enrollmentId)).toEqual({
+      enrollmentId,
+      teacherUserId: TEACHER,
+      studentUserId: id(301),
+      track: 'ijazah_track',
+      status: 'cancelled',
+      sessionCount: 41,
+      cancellationReason: 'offer_lapsed',
+      programme: {
+        state: 'closed',
+        total_piasters: 1_000_000,
+        payByAt: new Date('2026-10-05T12:00:00Z'),
+        closedAt: new Date('2026-10-07T08:00:00Z'),
+        payBlockedOpen: true,
+      },
+    });
+    expect(asked).toHaveLength(1);
+  });
+
+  it('writes the half (1,750 EGP) and the end (5,250 EGP) once across pages, and once when run twice (R-API-14)', async () => {
+    const { once, twice } = await runOnceAndTwice({
+      world: programmeWorld,
+      run: async (w) => {
+        await sweepOver(w, 1).run();
+      },
+      observe: (w) =>
+        w.rows.map(({ enrollmentId, milestone, amount_piasters }) => [
+          enrollmentId,
+          milestone,
+          amount_piasters,
+        ]),
+    });
+    expect(twice).toEqual(once);
+    expect(once).toEqual([
+      [id(101), 'ijazah_half', 175_000],
+      [id(101), 'ijazah_end', 525_000],
+    ]);
+  });
+});
+
+describe('006:T011 FU-E3 a programme enrollment with no programme row', () => {
+  const withoutRow = (): World => {
+    const w = programmeWorld();
+    const [[enrollmentId, enrollment]] = [...w.enrollments] as [[string, ReleaseEnrollment]];
+    w.enrollments.set(enrollmentId, { ...enrollment, programme: null });
+    return w;
+  };
+
+  it('writes one warn line of the enrollment id and a reason in a run, though two pages hold its orders, and no half', async () => {
+    const w = withoutRow();
+    await sweepOver(w, 1).run();
+
+    expect(w.warns).toEqual([
+      [
+        { enrollmentId: id(101), reason: 'programme_row_missing' },
+        'A programme enrollment has no programme row: no half is owed',
+      ],
+    ]);
+    expect(w.rows.map(({ milestone, amount_piasters }) => [milestone, amount_piasters])).toEqual([
+      ['ijazah_end', 700_000],
+    ]);
+  });
+
+  it('writes no warn line for a programme with its row, nor for a package', async () => {
+    const programme = programmeWorld();
+    const packages = world(2);
+    await sweepOver(programme, 1).run();
+    await sweepOver(packages, 1).run();
+
+    expect([...programme.warns, ...packages.warns]).toEqual([]);
+  });
+});
+
+describe('006:T012 the sessions as the release rules read them', () => {
+  it('carry each offer session’s programme month, a make-up valued by its original', () => {
+    const rows = [
+      { id: id(601), sequenceNumber: 1, status: 'done' },
+      { id: id(602), sequenceNumber: 2, status: 'done', programmeMonth: 1 },
+      { id: id(603), sequenceNumber: 3, status: 'done' },
+    ].map((row) => ({
+      ...row,
+      endsAt: new Date('2026-10-01T10:00:00Z'),
+    })) as unknown as EnrollmentSessionRow[];
+
+    expect(
+      releaseSessionsOf(rows, new Map([[id(603), id(602)]])).map(
+        ({ sequenceNumber, programmeMonth, madeUpSequence }) => [
+          sequenceNumber,
+          programmeMonth,
+          madeUpSequence,
+        ],
+      ),
+    ).toEqual([
+      [1, undefined, undefined],
+      [2, 1, undefined],
+      [3, undefined, 2],
     ]);
   });
 });

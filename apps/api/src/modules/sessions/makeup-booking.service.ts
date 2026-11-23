@@ -27,7 +27,12 @@
 // enrollment left out; the owner's rule of 2026-11-10 and decision (a) on the follow-up under T031
 // and T029): `MAKEUP_REFUSED`, cause `slot_taken`, which T032's `answerCounter` releases as it
 // releases an exclusion's refusal (the owner's decision (b) under T032). The proposal's week was read
-// so at its offer (T028).
+// so at its offer (T028). Then (006:T010 of specs/006-programme; PR #156 r1 Follow-up 1; the owner's
+// rule of 2026-11-05) the proposal or the counter is refused, before any write, over the weekly time
+// of another active programme of the student (`EnrollmentSide.programmeTimesOf`, the remedy's own
+// enrollment left out), as T005's searches leave it out: a make-up placed before that programme
+// existed would otherwise take a week a later month's generation needs. `MAKEUP_REFUSED`, cause
+// `programme_time`, the remedy left open.
 //
 // THE DEADLOCK (L5; research R-321). `reresolve-session-instants`' deferred overlap check can
 // deadlock against this insert at its commit. `run` opens the booking's transaction through T002's
@@ -128,6 +133,8 @@ export type MakeupRefusal =
   | { readonly cause: 'overlap'; readonly constraint: ExclusionConstraint }
   | { readonly cause: 'reserved' }
   | { readonly cause: 'slot_taken' }
+  // 006:T010: the weekly time of another active programme of the student.
+  | { readonly cause: 'programme_time' }
   | { readonly cause: 'deadlock' };
 
 /** The `cause` a `MAKEUP_REFUSED` carries; never sent to a client (the error filter sends the code). */
@@ -220,7 +227,8 @@ export interface MakeupBooking {
 }
 
 /** Why a booking was refused, as its one log line names it. */
-type RefusalReason = 'not_found' | 'not_open' | 'reserved' | 'slot_taken' | 'overlap';
+type RefusalReason =
+  'not_found' | 'not_open' | 'reserved' | 'slot_taken' | 'programme_time' | 'overlap';
 
 interface RefusalIds {
   readonly remedyId: string;
@@ -262,7 +270,10 @@ export function createMakeupBooking({
   store = makeupBookingStore,
 }: {
   readonly transactions: Transactions;
-  readonly enrollments: Pick<EnrollmentSide, 'enrollmentFor' | 'lockEnrollments' | 'slotWeekTaken'>;
+  readonly enrollments: Pick<
+    EnrollmentSide,
+    'enrollmentFor' | 'lockEnrollments' | 'slotWeekTaken' | 'programmeTimesOf'
+  >;
   /** The refusals' lines (info) and T002's deadlock lines (warn). */
   readonly log: Pick<Logger, 'info' | 'warn'>;
   /** The database's clock on the call's transaction (Q8). */
@@ -370,6 +381,19 @@ export function createMakeupBooking({
       (await enrollments.slotWeekTaken(tx, remedy.counter.slotId, time.localDate, enrollmentId))
     ) {
       throw refusal(ids, 'MAKEUP_REFUSED', 'slot_taken', { cause: 'slot_taken' });
+    }
+    // 006:T010 (PR #156 r1 Follow-up 1): never onto the weekly time of another active programme of
+    // the student, which a make-up placed before that programme existed may meet.
+    const programme = await enrollments.programmeTimesOf(
+      tx,
+      [studentUserId],
+      { from: time.startsAt, to: time.endsAt },
+      enrollmentId,
+    );
+    if (
+      programme.some(({ startsAt, endsAt }) => time.startsAt < endsAt && startsAt < time.endsAt)
+    ) {
+      throw refusal(ids, 'MAKEUP_REFUSED', 'programme_time', { cause: 'programme_time' });
     }
 
     const at = await clock(tx);

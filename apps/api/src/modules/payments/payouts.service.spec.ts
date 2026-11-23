@@ -99,6 +99,9 @@ const fixtures: readonly Fixture[] = [
 const order = (f: Fixture): ShareOrderRow => ({
   paymentId: `${f.enrollmentId.slice(0, -3)}9${f.enrollmentId.slice(-2)}`,
   enrollmentId: f.enrollmentId,
+  kind: 'package',
+  instalmentMonth: null,
+  paid_piasters: piasters(1_000_000),
   share_piasters: piasters(700_000),
   sharePercent: 70,
   halfPercent: null,
@@ -148,7 +151,7 @@ function store(overrides: Partial<PayoutsStore> = {}): {
     );
   const base: PayoutsStore = {
     reads: {
-      shareOrdersOf: async (_tx, ids) => byIds(ids, order),
+      shareOrdersOf: async (_tx, ids) => byIds(ids, (f) => [order(f)]),
       releasesOf: async (_tx, ids) => written.filter((row) => ids.includes(row.enrollmentId)),
       enrollmentsAmong: async (_tx, ids) =>
         byIds(ids, (f) => ({
@@ -158,6 +161,8 @@ function store(overrides: Partial<PayoutsStore> = {}): {
           track: 'recitation' as const,
           status: f.status,
           sessionCount: 10,
+          cancellationReason: null,
+          programme: null,
         })),
       sessionsAmong: async (_tx, ids) => byIds(ids, (f) => sessions(f.done)),
       casesAmong: async (_tx, ids) => byIds(ids, (f) => [...(f.cases ?? [])]),

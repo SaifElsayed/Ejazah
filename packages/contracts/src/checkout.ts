@@ -160,8 +160,25 @@ export const checkoutCurrentHold = z.object({
     .optional(),
 });
 
-/** `checkout.current`'s answer; an empty object when the student holds nothing. */
-export const checkoutCurrentOutput = z.object({ hold: checkoutCurrentHold.optional() });
+/**
+ * 006:T009 (the owner's Q-C2 (a); R-509, FR-BOOK-12): the student's programme order still payable
+ * (`programme.pay`'s, which has no hold), so `CheckoutPrevious` shows it and `checkout.continue` with
+ * its enrollment hands its page back. Not a hold: it shows the payable order only. Additive.
+ */
+export const checkoutCurrentProgrammeOrder = z.object({
+  enrollmentId: z.uuid(),
+  expiresAt: z.iso.datetime(),
+  canContinue: z.boolean(),
+});
+
+/**
+ * `checkout.current`'s answer; an empty object when the student holds nothing and has no payable
+ * programme order.
+ */
+export const checkoutCurrentOutput = z.object({
+  hold: checkoutCurrentHold.optional(),
+  programmeOrder: checkoutCurrentProgrammeOrder.optional(),
+});
 
 export const checkoutContinueInput = z.object({ enrollmentId: z.uuid() });
 

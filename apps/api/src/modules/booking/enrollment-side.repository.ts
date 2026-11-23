@@ -25,7 +25,8 @@ type Client = Pick<Transaction, 'enrollment' | 'enrollmentEvent'>;
 
 /**
  * The enrollment's snapshot, slot, status and two parties (the note under T064, B34); null when
- * there is none.
+ * there is none. 006:T010 (R-501 V-1; Q-8 (a)): and its `programmes` row's state, month count,
+ * months paid and plan, in the same read, absent when it is no programme, for the completion gate.
  */
 export async function enrollmentTermsById(tx: Client, id: string): Promise<EnrollmentTerms | null> {
   const row = await tx.enrollment.findUnique({
@@ -40,6 +41,9 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
       snapshotSessionCount: true,
       studentUserId: true,
       teacherUserId: true,
+      programme: {
+        select: { state: true, monthCount: true, monthsPaid: true, paymentPlan: true },
+      },
     },
   });
   if (row === null) return null;
@@ -53,6 +57,7 @@ export async function enrollmentTermsById(tx: Client, id: string): Promise<Enrol
     sessionCount: row.snapshotSessionCount,
     studentUserId: row.studentUserId,
     teacherUserId: row.teacherUserId,
+    ...(row.programme === null ? {} : { programme: row.programme }),
   };
 }
 

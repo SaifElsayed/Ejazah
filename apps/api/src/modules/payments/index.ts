@@ -20,6 +20,8 @@ import type {
   CheckoutRetryInput,
   CheckoutStatusInput,
   CheckoutStatusOutput,
+  ProgrammeCheckoutOutput,
+  ProgrammePayInput,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
 // 003:T110: the case's amount, the monitor's third read.
@@ -34,7 +36,11 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { Logger } from '../../platform/logging/logger.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
 import type { NodeHandler } from '../../platform/web/route.js';
-import { type PaymentOutcomeNotices, recordOrderFailed } from '../booking/index.js';
+import {
+  type PaymentOutcomeNotices,
+  type ProgrammeLog,
+  recordOrderFailed,
+} from '../booking/index.js';
 import {
   lockPayoutHolder,
   markPayoutRejected,
@@ -178,6 +184,15 @@ export interface CheckoutServices {
   current(student: CheckoutStudent): Promise<CheckoutCurrentOutput>;
   continue(student: CheckoutStudent, input: CheckoutContinueInput): Promise<CheckoutHandover>;
   status(student: CheckoutStudent, input: CheckoutStatusInput): Promise<CheckoutStatusOutput>;
+  /**
+   * 006:T009 (FR-710 to FR-713, R-509): `programme.pay`, the first payment of a programme's rest,
+   * mounted by booking's `programmesRouter`; `log` takes its refusals' lines.
+   */
+  programmePay(
+    student: CheckoutStudent,
+    input: ProgrammePayInput,
+    log: ProgrammeLog,
+  ): Promise<ProgrammeCheckoutOutput>;
 }
 
 export { checkoutRouter } from './checkout.router.js';
@@ -226,6 +241,7 @@ export function createCheckoutServices({
     current: (student) => service.current(student),
     continue: (student, input) => service.continue(student, input),
     status: (student, input) => service.status(student, input),
+    programmePay: (student, input, log) => service.programmePay(student, input, log),
   };
 }
 
@@ -329,3 +345,25 @@ export { caseOrdersOf } from './case-amount.repository.js';
 // order's transaction (`recordCancelled`) is reached alone by
 // `tests/db-integrity/payment-notices-race.spec.ts` (R-API-3).
 export { checkoutStepsOver } from './checkout.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 006:T007 (FR-705; R-506, R-507; analyze K-5): an offer's amounts from `packages/money`, which
+// `main.ts` hands to booking's programme services (booking imports nothing of payments, R-208).
+export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme-amounts.js';
+
+// ---------------------------------------------------------------------------------------------
+// 006:T008 (FR-706b, FR-716; SRS DEC-101; R-510; B-P2's conflict check, Q-2 (a)): «unverified in
+// live mode», the one entry T008's `pay_blocked` window, T016 and T018 read, over the payment mode the
+// composition root hands in; and `deleteProgrammeCard`, which booking's close hook calls on every
+// close, a stub until T013 (booking imports nothing of payments, R-208: the root hands both in).
+export { createProgrammePayee, type PaymentMode, type ProgrammePayee } from './programme-payee.js';
+export { deleteProgrammeCard } from './programme-cards.js';
+
+// 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so
+// `tests/db-integrity/programme-months.spec.ts`' races reach them through the entry (R-API-3), as
+// `checkoutStepsOver` is above.
+export {
+  checkoutOrdersAmong,
+  heldOrdersOf,
+  payableProgrammeOrderAmong,
+} from './checkout.repository.js';

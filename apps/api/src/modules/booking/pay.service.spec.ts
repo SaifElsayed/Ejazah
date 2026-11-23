@@ -83,11 +83,15 @@ interface World {
   readonly visible?: boolean;
   readonly bookable?: boolean;
   readonly studentActive?: boolean;
+  /** 006:T009 (Q-C5 (a)): the student's payable programme order; none by default. */
+  readonly programmeOrder?: { readonly enrollmentId: string; readonly expiresAt: Date };
 }
 
 function setUp(world: World = {}) {
   const log: unknown[][] = [];
   const written: NewEnrollment[] = [];
+  /** 006:T009 (Q-C5 (a)): each read of the student's payable programme order, and its instant. */
+  const asked: string[] = [];
   const current = world.pkg === undefined ? pkg : world.pkg;
   const store: PayStore = {
     lockRows: async (_tx, table, ids) => void log.push(['lock', table, [...ids]]),
@@ -106,8 +110,12 @@ function setUp(world: World = {}) {
       log.push(['link', hold.id, enrollmentId]);
       return world.linked ?? true;
     },
+    programmeOrderOf: async (_tx, studentUserId, at) => {
+      asked.push(`${studentUserId} at ${at.toISOString()} after ${String(log.length)} locks`);
+      return world.programmeOrder ?? null;
+    },
   };
-  return { log, written, store };
+  return { log, written, store, asked };
 }
 
 const target: PayTarget = {
@@ -470,5 +478,47 @@ describe('a programme package’s assessment (006:T005; FR-701, FR-702, R-504)',
     expect(error.code).toBe('CONFLICT');
     expect(written).toEqual([]);
     expect(log.some(([kind]) => kind === 'link')).toBe(false);
+  });
+});
+
+// 006:T009 (the owner's Q-C5 (a), SRS DEC-112; FR-BOOK-12 with a bare hold): Pay on the student's
+// own hold is refused PREVIOUS_CHECKOUT while a programme order of the student is still payable, as
+// a payable checkout refuses programme.pay: before the gateway, and again under the student's
+// account, the lock programme.pay and a new hold take first.
+describe('checkout.pay while a programme order is payable (006:T009, Q-C5 (a))', () => {
+  const PROGRAMME = id(81);
+  const ORDER_EXPIRES = new Date('2026-11-03T08:07:00Z');
+  const programmeOrder = { enrollmentId: PROGRAMME, expiresAt: ORDER_EXPIRES };
+  const payable = [
+    { path: 'enrollmentId', code: PROGRAMME },
+    { path: 'state', code: 'payable' },
+    { path: 'expiresAt', code: ORDER_EXPIRES.toISOString() },
+  ];
+
+  it('refuses PREVIOUS_CHECKOUT before the gateway on a bare own hold, naming the order and its expiry', async () => {
+    const { store, asked } = setUp({ programmeOrder });
+    const error = await refusal(
+      payTargetOf(tx, { studentUserId: STUDENT, holdId: HOLD, at: NOW }, seen, store),
+    );
+    expect([error.code, error.details]).toEqual(['PREVIOUS_CHECKOUT', payable]);
+    expect(asked).toEqual([`${STUDENT} at ${NOW.toISOString()} after 0 locks`]);
+  });
+
+  it('refuses it again under the student’s account, before the slot, writing nothing', async () => {
+    const { store, log, written, asked } = setUp({ programmeOrder });
+    const error = await refusal(enrol(store));
+    expect([error.code, error.details]).toEqual(['PREVIOUS_CHECKOUT', payable]);
+    expect(log).toEqual([['lock', 'users', [STUDENT, TEACHER]]]);
+    expect(asked).toEqual([`${STUDENT} at ${NOW.toISOString()} after 1 locks`]);
+    expect(written).toEqual([]);
+  });
+
+  it('pays on when no programme order of the student is payable', async () => {
+    const { store, written } = setUp();
+    await expect(
+      payTargetOf(tx, { studentUserId: STUDENT, holdId: HOLD, at: NOW }, seen, store),
+    ).resolves.toMatchObject({ kind: 'package' });
+    await enrol(store);
+    expect(written).toHaveLength(1);
   });
 });

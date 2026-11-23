@@ -28,7 +28,9 @@
 // so none moves to `refunded` before this transaction commits.
 //
 // WHAT IS REFUSED (R-322's steps, in order), each `RESTORE_REFUSED` with `details.cause`, writing
-// nothing: (1) the closing, by T070's one closing rule (`restore-window.ts`'s `closingOf`; T073, Q4
+// nothing: first (006:T010 of specs/006-programme, G-1, R-513) a programme's enrollment (a
+// `programmes` row in its terms) `programme_enrollment`, whatever closed it, a stopped programme
+// being reopened by `programmes.reopen` instead; (1) the closing, by T070's one closing rule (`restore-window.ts`'s `closingOf`; T073, Q4
 // (a)) over the enrollment's status, its last cancellation's reason and its latest end case, the
 // cases read through moderation's entry — `terminated_no_show` with `absence_termination`,
 // `cancelled` `admin` with `student_fault_confirmed` or (T073, DEC-66) a ban's `student_banned`, or
@@ -43,7 +45,9 @@
 // session that is not a make-up and its `snapshot_slot_timezone`, `slot_changed` (a length change
 // alone is not); then each week the restore would fill, the slot taken by another student's hold or
 // enrollment `slot_taken`, an occurrence overlapping a session, an open hold or a reservation of
-// either party `time_taken`, and the database's exclusion refusing the insert `time_taken`. A
+// either party, or (006:T010, PR #156 r1 Follow-up 1) the weekly time of another active programme of
+// the student (`EnrollmentSide.programmeTimesOf`, this enrollment left out), `time_taken`, and the
+// database's exclusion refusing the insert `time_taken`. A
 // nonexistent enrollment answers `NOT_FOUND`, as every administrator read of an id does.
 // A make-up the closing's case held for which T028's offer finds no free week answers `CONFLICT`
 // `no_free_week` (the note under T061, on B39 Q5 (a)'s precedent): the whole transaction rolled
@@ -231,7 +235,13 @@ export const restoreStore: RestoreStore = {
 export interface RestoreDependencies {
   readonly enrollments: Pick<
     EnrollmentSide,
-    'enrollmentFor' | 'lockEnrollments' | 'eventsOf' | 'restore' | 'slotWeekTaken' | 'heldTimesOf'
+    | 'enrollmentFor'
+    | 'lockEnrollments'
+    | 'eventsOf'
+    | 'restore'
+    | 'slotWeekTaken'
+    | 'heldTimesOf'
+    | 'programmeTimesOf'
   >;
   /** The kernel's idempotency, keyed on the call's transaction (`runOn`). */
   readonly idempotency: Pick<IdempotencyService<Transaction>, 'runOn'>;
@@ -287,7 +297,9 @@ type RestoreCause =
   | 'slot_taken'
   | 'time_taken'
   // 005:T014 of B47 (FR-617; research R-409): step 3, the two declared genders differ.
-  | 'gender_mismatch';
+  | 'gender_mismatch'
+  // 006:T010 (G-1; R-513): a programme's enrollment, never restored (`programmes.reopen` is its path).
+  | 'programme_enrollment';
 
 interface RefusalIds {
   readonly adminId: string;
@@ -468,12 +480,14 @@ export function createRestore({
     const window = { from: new Date(first.scheduledStartAt), to: new Date(last.scheduledEndAt) };
     const people = [terms.studentUserId, terms.teacherUserId];
     const parties = { studentUserId: terms.studentUserId, teacherUserId: terms.teacherUserId };
-    const [own, held, reserved] = await Promise.all([
+    const [own, held, reserved, programme] = await Promise.all([
       store.sessionsBetween(tx, parties, window),
       enrollments.heldTimesOf(tx, people, window),
       store.reservedTimesOf(tx, people, window, enrollments),
+      // 006:T010 (PR #156 r1 Follow-up 1): the student's other active programmes' weekly times.
+      enrollments.programmeTimesOf(tx, [terms.studentUserId], window, terms.id),
     ]);
-    const taken = [...own, ...held, ...reserved];
+    const taken = [...own, ...held, ...reserved, ...programme];
     for (const week of planned) {
       const time = {
         startsAt: new Date(week.scheduledStartAt),
@@ -504,6 +518,8 @@ export function createRestore({
 
     const terms = await enrollments.enrollmentFor(tx, enrollmentId);
     if (terms === null) throw notFound(log, ids);
+    // 006:T010 (G-1): a programme's enrollment is never restored, before every step and any write.
+    if (terms.programme !== undefined) throw refused(log, ids, 'programme_enrollment');
     // Read under the enrollment's and the sessions' locks, which every case closing and every
     // cancellation take first (this file's head, «THE LOCKS»).
     const [sessions, events, cases, cancellations] = await Promise.all([

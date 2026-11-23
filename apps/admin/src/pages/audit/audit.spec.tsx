@@ -788,3 +788,22 @@ describe("a reason kept in the credential's history (R1a, T174, Q-A1-3)", () => 
     ).toBeNull();
   });
 });
+
+// 006:T008 (SRS DEC-112; the owner approved the three labels as proposed): `programmes.decide`'s
+// entries, on the enrollment (`enrollment`), so no new target type. `.declined` has no writer while
+// the refusal request is gone (a stop's decline is T017's); its label is written all the same.
+const T008_PROGRAMME_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['programme_request.approved', 'اعتماد طلب في برنامج الإجازة', 'Programme request approved'],
+  ['programme_request.declined', 'رفض طلب في برنامج الإجازة', 'Programme request declined'],
+  ['programme_request.extended', 'تمديد مهلة في برنامج الإجازة', 'Programme deadline extended'],
+];
+
+describe('006:T008: the programme decisions by name', () => {
+  it.each(T008_PROGRAMME_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});

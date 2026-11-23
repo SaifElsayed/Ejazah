@@ -191,6 +191,8 @@ No open question remains.
   > money-lane review. Not scheduled apart from T006.
   > **B-P1's conflict check (2026-11-22).** The close hook's lock order stays with the 11/30 money review; T006's
   > `kernel.md` row states the confirm step's own order only.
+  > **B-P2 (the owner, 2026-11-23, «موافق على الكل (أ)», Q-2 (a)).** The close hook's lock order is settled in T008
+  > (the programme before the enrollment on every cancel path), with its race spec; the 11/30 money review checks it.
   > **Done (B-P1, 2026-11-22).** The per-order `confirmed_at`; the expected kinds skip the cover and case gates; a month
   > paid during an open suspension case opens `party_restricted` (PR #153 r1 Minor 2's precedent); the no-hold path from
   > max+1 with `programme_month`; a second paid month → `duplicate_payment`; a refused generation opens a case and cancels
@@ -202,7 +204,7 @@ No open question remains.
 
 ## Phase 2: The offer, the first payment and the money (B-P2)
 
-- [ ] T007 [US2] The offer (FR-705; R-506), `programme.offer`, in `modules/booking/programmes.service.ts`,
+- [x] T007 [US2] The offer (FR-705; R-506), `programme.offer`, in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`:
   - **The harness first (PR #153 r1 Major 2):** `tests/adversarial/procedure-harness.ts` adds `programme` to the routers
     reached whatever the caller kind (beside `SESSION_ROUTERS`, `:268`) and to the never-exempt `ATTACKED_ROUTERS`
@@ -215,7 +217,21 @@ No open question remains.
     `count_out_of_bounds`, `teacher_not_active`.
   - The amounts from `packages/money` through payments' entry (K-5).
   - A live `enrollment` signal after commit; adversarial registration.
-- [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a)):
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** `programme` is a list of its own beside
+  > `SESSION_ROUTERS`, read by the reach and spread into `ATTACKED_ROUTERS`, not inside `SESSION_ROUTERS` (whose FR-496
+  > kinds do not apply). «Under the package's lock» is the teacher's `users` row, the lock every price writer takes
+  > (kernel.md, the `006:T002` row), then `programmes`, then `enrollments`. The amounts come from a payments function
+  > exported from `payments/index.ts` (K-5).
+  > **PR #156 r2 Minor 2 (carried, Q-6 (a)).** The offer's snapshot price is written from
+  > `booking/programmes.repository.ts`, so `tests/pipeline/admin-writes-no-money.spec.ts`'s `allowedBecause` names it
+  > with `006:T007`; in the same change it names `price30Piasters`, `price45Piasters` and `price60Piasters` for
+  > `catalog/packages.repository.ts` with `006:T004`, the scanner reads those keys inline or follows a same-file
+  > function's returned object, and the listing pins `insertPackage` and `changePackage` again; red first on M-G7 (a
+  > price written from an admin file through a helper's return).
+  > **Done (B-P2, 2026-11-23).** The harness reach (`PROGRAMME_ROUTERS`); `programme.offer` under users → programmes →
+  > enrollments, the snapshot frozen, six refusals; the amounts from `packages/money` (K-5); one `programme_offered`
+  > event; the money guard follows a same-file helper (Minor 2); attacks in both gender directions.
+- [x] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a)):
   - `offer_due_at` = the delivered assessment's end + 24 h (set when session 1 is `done`; a make-up moves it); `pay_by` = the offer + 48 h;
   - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (`programme_offer_hours` more, counted from the decision);
   - `programme.cancel` (`offer_declined`);
@@ -243,6 +259,24 @@ No open question remains.
     T013's payments entry; until T013, a stub whose call the specs assert), freeing the weekly time at once
     (`slot-occupancy.repository.ts`).
   - Live signals; adversarial registrations.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»; Q-3 amended, «موافق على التعديل»).**
+  > - Q-2 (a): the close hook is built here and wired into every cancel path that can close a programme today (the
+  >   termination subscriber's `cancelConfirmed`; booking's `cancel`, `terminateNoShow` and `complete`), each taking
+  >   the programme's row before the enrollment's (kernel.md's order), with a kernel.md row and a DB race spec of a
+  >   termination against `programmes.decide`; T013 replaces only the card stub. This closes the follow-up under T006.
+  > - Q-3 (a), amended: while the programme is `awaiting_offer`, booking derives `offer_due_at` from session 1's
+  >   current outcome chain on every read (in `programme.offer` and in the window function T015 runs) and writes the
+  >   derived value: session 1's, or its delivered make-up's, scheduled end + `programme_offer_hours`. It is never set
+  >   once at the first read; the column holds the last derived value, because session 1's outcome can change after it
+  >   settles (`reresolution.repository.ts:90`, `admin-outcome.repository.ts:33`, `dispute-raise.repository.ts:33`).
+  >   Example: done Mon 18:00 → due Tue 18:00; re-resolved Tue as a teacher's no-show, the make-up delivered Thu 18:00
+  >   → due Fri 18:00. Red first on that case: a re-resolution to a make-up moves the deadline, and no `no_offer` item
+  >   opens at the old one. No sessions writer changes.
+  > - Q-7 (a): `programmes.decide` lives in `modules/booking/programmes-admin.router.ts`, mounted as `programmes` in
+  >   `admin.router.ts`'s `006:` block.
+  > - «Unverified in live mode» reads `payoutRecipient` (`checkout.service.ts:243`, called at `:561` on `34744575`)
+  >   and the payment mode handed to payments by `main.ts`'s `006:` block. «Once per deadline» = no item of the kind
+  >   created at or after the current deadline.
   > **Not scheduled, a rare case (PR #155's review, round 1, the reviewer's question; the owner, 2026-11-22, «موافق على التلاتة»).** FR-706b reads the
   > payout account when the 48 hours end. An account unverified for most of them and verified shortly before the end
   > leaves the student little time, and the offer lapses as FR-706 says (fee 200 EGP: the teacher's 140 released). Left
@@ -251,7 +285,47 @@ No open question remains.
   > reaches support and books a new assessment, and an Administrator may open a manual compensation case for the fee
   > (SRS FR-ADMIN-20 (c)). The wider rule (an item whenever payment was
   > closed at any time inside the 48 hours) needs a recorded instant of the closing; recorded for later.
-- [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
+  > **Not scheduled, a rare case (B-P2 lane b, 2026-11-23; the review session).** An offer accepted while a `no_offer`
+  > item is open, after session 1's outcome chain moved the deadline later (a re-resolution or a dispute's outcome),
+  > leaves that item open in the queue. The administrator's side is guarded: `programmes.decide` approving it is refused
+  > `offer_sent`, so nothing is ended; the item closes with the programme (the close hook withdraws it).
+  > **The owner, 2026-11-23, «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله
+  > ده» (SRS DEC-112).** The bullet «`programme.request` `refusal` and `programmes.decide` approving it» above no longer
+  > holds: the teacher's app has no refusal request.
+  > - `programme.request` takes `stop` only (T017's): the `refusal` kind leaves its input
+  >   (`packages/contracts/src/programme.ts:182`), its refusals `assessment_not_delivered` and `offer_sent` (`:198-199`),
+  >   the service branch, its attacks and its specs; the snapshot regenerated. The `programme_request_kind` value
+  >   `refusal` stays in the database, unused (no migration; data-model.md, ERD changelog row 75).
+  > - The refusal is the `no_offer` path built here: the teacher tells support and sends no offer; at `offer_due_at` the
+  >   item opens; `programmes.decide`'s approve is the refusal (`assessment_refused`, the fee kept, the weekly time freed
+  >   at once through the close hook, the assessment's share per DEC-94). `programmes.decide` loses its `refusal` branch.
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** `programmes.decide` on a `no_offer` item (approve or extend) requires `reason` (1–500), the
+  > administrator's record of what the teacher sent to support, written to `programme_requests.reason` in the decision's
+  > transaction (nullable, `prisma/schema/booking.prisma:214`; rule 80's check,
+  > `prisma/migrations/20261122110318_ijazah_programme/migration.sql:258-260`, lets it through; no migration). Not
+  > `note` (`adminReason`, 1–1000, `packages/contracts/src/admin/admins.ts:10`). Without it the decision is refused
+  > with a cause of `programmesDecideRefusal`, writes nothing and logs ids and the cause, never the text. «Required» is
+  > the service's rule, not a database check. Red first: «a `no_offer` decision without a reason is refused», «the
+  > reason is written on the item».
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B5 (a)).** `programmes.decide` refuses approving a
+  > `no_offer` item while session 1's make-up is pending; the cause joins `programmesDecideRefusal`, red first.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; the three audit labels, as proposed).** Written to
+  > `apps/admin/src/pages/audit/actions.ts` and both catalogues (`apps/admin/src/i18n/ar.json`, `en.json`):
+  > `programme_request.approved` «اعتماد طلب في برنامج الإجازة» / "Programme request approved";
+  > `programme_request.declined` «رفض طلب في برنامج الإجازة» / "Programme request declined";
+  > `programme_request.extended` «تمديد مهلة في برنامج الإجازة» / "Programme deadline extended".
+  > **Done (B-P2, 2026-11-23).** `offer_due_at` from session 1's outcome chain on every read; the windows as pure
+  > functions and `createProgrammeWindows` for T015; «unverified in live mode»; the close hook, the programme before the
+  > enrollment on every cancel path (race spec against `programmes.decide`); `programme.cancel`; `programme.request` `stop`
+  > only (DEC-112); `programmes.decide` with `reason_required` and `makeup_pending`; the three labels.
+  > **PR #158 r1 Follow-up 1 (a) (the owner, 2026-11-23, «صلح ومتابعة أ»; FR-BOOK-15, «after the assessment»).**
+  > `programme.cancel` is refused `assessment_not_settled` (a new cause of `programmeCancelRefusal`, additive, the
+  > snapshot regenerated) until session 1's outcome chain (sessions' `assessmentOutcome`) is consumed, `done` or
+  > `student_no_show`: still to come, waiting for its make-up, or ended with no assessment held. Nothing is written;
+  > one line of ids and the cause. Red first in `tests/db-integrity/programme-windows.spec.ts` («still to come»,
+  > «waits for its make-up», «ended with no assessment held»), then under M-F1.
+- [x] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
   `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
   `checkout.repository.ts`:
   - no hold; expiry = min(`slot_hold_ttl_minutes`, `pay_by`); FR-BOOK-12's one checkout per student;
@@ -262,7 +336,38 @@ No open question remains.
     (no lead), with `programme_month`;
   - `saveCard` records the consent.
   - Adversarial registration.
-- [ ] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
+  > **PR #156 r2 Follow-up 1 (carried, Q-6 (a); first, before any `instalment` order).** `payments.confirmed_at` is the
+  > worker's clock read before the locks (`jobs/confirm-enrollment.ts:581`, handed on at `:427-428`), so the walk
+  > (`confirmed_at`, `id`) can differ from the order the months were settled in (PROBE-R2a: month 3 opened
+  > `duplicate_payment`). `markOrderConfirmed` (`payments/payments.repository.ts:161-170`) takes the instant from the
+  > database under the locks (`clockTimestamp`, `clock_timestamp()`), red first on PROBE-R2a.
+  > **PR #156 r2 Minor 1 (carried, Q-6 (a)).** The marker's two allowances (`tests/pipeline/confirmation-path.spec.ts`,
+  > `admin-writes-no-money.spec.ts`) also require the written delegate to be `payment`, red first on M-G11 (an
+  > enrollment's `confirmedAt` inside `markOrderConfirmed`).
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** Month 1 and the rest start from the
+  > first weekly occurrence after `pay_by_at` with no lead, in the confirm step (`jobs/confirm-enrollment.ts`,
+  > booking's `lockForConfirmation` carrying `pay_by_at`). FR-BOOK-12 holds both ways: a payable programme order
+  > refuses a new hold and a payable checkout refuses `programme.pay`; `checkout.current` and `continue` show it
+  > (R-509). Q-4 (a): `saveCard` is recorded as `payments.card_consent_at` on the order, one migration (ERD row 74,
+  > rule 82), copied into `programme_cards.consented_at` by T013.
+  > **B-P2 lane c (the owner, 2026-11-23, «موافق على الاتنين (أ)», Q-C1 (a)).** No task wrote the programme on a
+  > payment (data-model.md's `offered` → `active`, `payment_plan`, `months_paid`). The confirm step's path with no
+  > hold, under the programme's lock, records every awaited payment through one booking entry
+  > (`recordProgrammePaid`): `offered` → `active` with its plan, and `months_paid` = `month_count` in full, else the
+  > month paid; a duplicate records nothing. Red first on «a second first payment is not taken as a fresh one» and
+  > «the state after one payment». T016 keeps clearing `paused_at`. **Q-C2 (a):** `checkout.current` answers an
+  > optional `programmeOrder: { enrollmentId, expiresAt, canContinue }` (`packages/contracts/src/checkout.ts`,
+  > additive, the snapshot regenerated): not a hold, only the student's payable programme order; `continue` with its
+  > enrollment hands its page back.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-C5 (a)).** FR-BOOK-12 with a bare hold: `checkout.pay`
+  > refuses `PREVIOUS_CHECKOUT` while a programme order of the student is payable, as a payable checkout refuses
+  > `programme.pay` (`modules/booking/programmes.service.ts:673-680`; the error built at `checkout-holds.service.ts:139`),
+  > red first.
+  > **Done (B-P2, 2026-11-23).** FU1 (the marker's instant from the database) and Minor 1 first; `programme.pay` in full
+  > or month 1, no hold, expiry min(TTL, `pay_by`), rates copied; `card_consent_at` (migration `20261123104538`);
+  > sessions from after `pay_by_at`; `active` with its plan and `months_paid` (Q-C1); `checkout.current.programmeOrder`
+  > (Q-C2); FR-BOOK-12 every way (Q-C5).
+- [x] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
   - `modules/sessions/completion.service.ts`: a programme completes only when fully paid and not `awaiting_offer`,
     `offered` or `paused`. Red first on «a paid month settled, the next unpaid, 72 h passed».
   - `share-release.rules.ts` `halfReached` over the N+1 snapshot count, the assessment counted (DEC-94: 41 → 21),
@@ -274,7 +379,13 @@ No open question remains.
   > is then booked onto its weekly time, and a later month's generation meets the session exclusion: the whole month is
   > refused (`slot_unavailable` case, the order paid). Each reads `EnrollmentSide.programmeTimesOf` as T005's searches
   > do, red first on «a make-up booked onto the student's programme time», with T010's restore refusal.
-- [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** The note above is in T010's scope; its
+  > first line is at `remedy.service.ts:1156-1161` on `34744575`. The gate reads the programme through
+  > `EnrollmentSide.enrollmentFor`'s terms (the port and booking's `enrollmentTermsById`, Q-8 (a)).
+  > **Done (B-P2, 2026-11-23).** The gate (fully paid, not `awaiting_offer`/`offered`/`paused`); `halfReached` pinned
+  > over N+1; restore refuses `programme_enrollment`; the three make-up writers read `programmeTimesOf`; a counter refused
+  > `programme_time` released at once (Q-D1); the race spec against a payment (Q-D2), the gate waiting on the programme row.
+- [x] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
   > **Follow-up (B-P1's lane e, 2026-11-22).** Today `share-release.rules.ts` would list `ijazah_half` at session 1 for
   > an assessment-only enrollment (count 1, half reached). The rules branch on the `assessment` kind (FR-703, R-512)
@@ -286,7 +397,22 @@ No open question remains.
     capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
   - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
   - `package` orders keep today's rules.
-- [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** `ijazah_half` is owed only once the
+  > student continued (a `rest_in_full` or month 1 paid; R-512's two branches). Q-5 (a): `ijazah_end` and
+  > `programme_stopped` subtract every release written and the half owed, as today's `share-release.rules.ts` does, so
+  > a reopened programme's end never pays a first stop's release again. Worked: 10,000 offer, fee 500, 70 %, 25 %: the
+  > half 1,750 in full, 1,837.50 by months; the end 5,250 and 5,512.50 with no refund; today's base gives 87.50.
+  > **Not scheduled, should not happen (B-P2 lane e, 2026-11-23; the review session).** A programme enrollment with no programme row gives no half and logs one warn line; T005 writes both rows in one transaction.
+  > **The owner, 2026-11-23, «موافق» (FU-E2 (a), B-P2 lane e).** programme_stopped falls due after the window of the last consumed session (done or student_no_show), not the last done one.
+  > **Done (B-P2, 2026-11-23).** Every paid order with its kind in the facts; `assessment` only when not continued and
+  > never while a `pay_blocked` item is open; the half on the price as paid, capped; the end and the stop subtract every
+  > release written (Q-5); the stop after the last consumed session (FU-E2); a missing programme row warned (FU-E3, Q-E4).
+  > **PR #158 r1 Follow-up 1 (a) (the owner, 2026-11-23, «صلح ومتابعة أ»).** Where the assessment was never held
+  > (session 1's chain consumed by neither `done` nor `student_no_show`, e.g. an approved `no_offer` item after the
+  > teacher's no-show whose remedy lapsed), no `assessment` release is owed to the teacher (`assessmentHeld`, over the
+  > release facts' sessions; no new read); the fee is left to the administrator's compensation case. Fee 500 EGP: the
+  > teacher's 350 not owed. Red first in `share-release.rules.spec.ts`, then under M-F2.
+- [x] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
     full = (total − fee) ÷ N), red first: today it is the first order ÷ the count;
@@ -304,6 +430,13 @@ No open question remains.
   - a restore after a suspension on a programme is deferred (restore refused, T010).
 
   > **Amended 2026-11-21 (SRS DEC-96; `specs/003-booking/tasks.md` T125; the owner's decision on the full-codebase review, Q2).** A direct end of an unsuspended programme at the Student's choice is in the set: `admin_ended` releases the share of the sessions consumed, each valued by its own order, what was already released taken off, and the case shows the untaken value; nothing is executed until an Administrator resolves the case. Example: 10,000 EGP paid in full, 10 sessions, share 7,000, 6 delivered with the half (1,750) released → the teacher 4,200 in all (2,450 more), the student 4,000, the platform 1,800. T125 builds it with this task's set.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** The student-chosen direct end of the
+  > amendment above is T125's (R1b, after B-P2), built on this task's set; B-P2 adds `admin_ended` only where it covered
+  > an open `teacher_suspended` case.
+  > **Not scheduled, a rare case (B-P2 lane e, 2026-11-23; the review session).** A rest paid in full whose sessions were never generated (`slot_unavailable`, T006) has no sessions to value, so a complaint close refunds nothing for that order; the refused generation's compensation case (T006) already covers the paid order, so nothing is counted twice.
+  > **Done (B-P2, 2026-11-23).** Each session valued by its own order (`programmePlaces`, `sumByOrder`) in the case
+  > amounts and in `student_complaint_close`'s release (Q-T12-1); the dropout set with `admin_ended` only over an open
+  > suspension (`ended_meanwhile`); `deleteProgrammeCard` at a teacher's suspension (T008's stub until T013).
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
@@ -322,6 +455,16 @@ No open question remains.
   - **Erasure:** the card deleted by `identity/deletion.service.ts`, `identity/consequences.ts`,
     `jobs/erase-kept-data.ts`, with `main.ts`'s wiring by the integration.
   - **Specs:** no card detail in any log, audit entry or response (SC-707).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's close hook calls payments' `deleteProgrammeCard` (a stub)
+  > where `main.ts` builds it: the termination subscriber, `EnrollmentSide` and `programmes.decide`. Two builders
+  > outside lane b's files take booking's `noProgrammeCardYet` default (no card exists before T013, and the stub
+  > deletes none): `worker.ts:231`'s `createEnrollmentSide` (its closes also write no line, no log bound) and
+  > `createBookingServices` (`booking-slots.service.ts`) for `programme.cancel`. T013 binds payments' entry and the
+  > log in both when the card becomes real.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B2 (a)).** T013 binds payments' `deleteProgrammeCard` and the
+  > log into booking's close hook where it is built: in `worker.ts`'s `createEnrollmentSide` (`apps/api/src/worker.ts:231`)
+  > and in `createBookingServices` (`apps/api/src/main.ts:398`), replacing T008's stub. A close the worker runs then
+  > writes its log line as the API's does (ids and a reason only), red first.
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
@@ -353,6 +496,12 @@ No open question remains.
   > and «an automatic order that expires with no answer counts as a soft decline». The asking interval, the count
   > before the item and the item's kind are B-P3's conflict check. Paymob's inquiry: research.md R-509. Each step red
   > first.
+  > **Follow-up (PR #158 r1 Follow-up 4, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3).** A
+  > duplicate paid programme order counts in the shares until its refund is recorded: `share-release.rules.ts:395`
+  > sums every paid order, while a package reads its first order only (Q-B1-10 (a)). Month 1 paid twice (1,000 EGP
+  > each): shares 350 + 700 + 700. Once the duplicate's refund is recorded it nets out (700 − 700); if its case is
+  > closed with no refund recorded, the stop or the end pays 700 too much. With this task's duplicate handling, red
+  > first.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -369,6 +518,27 @@ No open question remains.
   - registered by the integration.
   > **The owner, 2026-11-22, Q-2 (SRS DEC-110).** The retry step asks the gateway first (T014's note);
   > `chargeSavedCard` is never called for a month whose earlier automatic order is unanswered.
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The pause step writes the
+  > `programme_paused` enrollment event (`enrollment_event_kind`, data-model.md:48), one row on the pause's
+  > transaction, red first, as T007's offer writes `programme_offered` (FU-A1 (a)).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's step (`createProgrammeWindows`, booking's entry) is what
+  > this sweep runs per programme; `worker.ts` binds it with payments' `createProgrammePayee({ paymentMode:
+  > config.PAYMENT_MODE, cipher })` (no T008 path in `main.ts` reads the mode) and `deleteProgrammeCard`. Its live
+  > signal goes on the transaction's bound publisher, none in the worker until T015 binds one. An order of
+  > `programme.pay` still `created` at `pay_by_at` (A-1) is not read by T008's lapse: T015's «pending» decides it.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B3 (a)).** T015 binds payments'
+  > `createProgrammePayee({ paymentMode, cipher })` («unverified in live mode», T008's entry) in `worker.ts` for the
+  > sweep's `pay_by` step; T016 and T018 bind it in `main.ts`.
+  > **Follow-up (PR #158 r1 Follow-up 2, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3; rare).** A
+  > programme completes with its paid sessions never generated: `completion.service.ts:178-181` counts `in_full`
+  > as fully paid, so if the rest's generation was refused (`slot_unavailable`, T006) only session 1 exists, and
+  > 72 h after it the enrollment moves to `completed` and the close hook closes the programme. 9,500 EGP paid, 0 of
+  > 40 sessions written; `ijazah_end` (350 + 6,650 − refunds) is held only while the case is open. The gate also
+  > waits for that case (or for the N + 1 rows), red first.
+  > **Follow-up (PR #158 r1 Follow-up 3, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3).** A first
+  > payment confirmed late generates from `pay_by_at`, which may be in the past (`jobs/confirm-enrollment.ts:509-514`,
+  > `from = pay_by_at`, lead 0): a paid event processed after the first weekly occurrence past `pay_by_at` writes a
+  > session already begun. With this task's «pending at `pay_by`» rule: floor at the confirm instant, red first.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -392,9 +562,12 @@ No open question remains.
   > **v1.1 (PR #153's review, round 4, follow-up 1; the owner, 2026-11-21, «بعد الإطلاق v1.1»; SRS DEC-101).** A push
   > telling the student that payment has opened once the teacher's payout account is verified. Not built in the first
   > release: the screen shows «pay now» (T019). `PLAN.md`, «The first update (v1.1)».
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The paid month that clears `paused_at`
+  > writes the `programme_resumed` enrollment event, one row on its transaction, red first, as T007's offer writes
+  > `programme_offered` (FU-A1 (a)).
 - [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
-  `modules/booking/enrollments-admin.router.ts` (the admin decisions):
+  `modules/booking/programmes-admin.router.ts` (the admin decisions):
   - `programme.request` `stop` (refused before 7 days);
   - `programmes.decide` approving it → `programme_stopped` through the close hook, the time free at once, T011's
     release;
@@ -407,8 +580,16 @@ No open question remains.
   > subtracts every written release (`share-release.rules.ts:251-254`). With a first stop releasing 2,800, a reopen and
   > 1,000 more paid, an end built to the letter would release the 2,800 again and a second stop nothing for the new
   > month's 700. The fix: «− every release written», and a release per stop. Rare; not scheduled.
+  > *(B-P2, the owner, 2026-11-23, Q-5 (a).)* The first half is closed by T011 (the end subtracts every release
+  > written); «a release per stop» stays not scheduled.
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** `programmes.reopen` writes the
+  > `programme_reopened` enrollment event, one row on the reopen's transaction, red first, as T007's offer writes
+  > `programme_offered` (FU-A1 (a)).
+  > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's `programme.request` answers `stop` with `not_paused` while
+  > the programme is not `paused` and throws on a paused one (no path pauses before T015); `programmes.decide`
+  > refuses any decision on a `stop` item `decision_not_allowed`. T017 replaces both.
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
-  `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/enrollments-admin.router.ts`, and
+  `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19),
     `payeePending` (in live mode, the teacher's payout account not verified; false in test mode, a spec for each mode;
@@ -418,6 +599,25 @@ No open question remains.
     verified now) and `programmes.get`
     (admin);
   - the monitor's `kind`, `instalmentMonth`, `automatic`, `declineKind` (`payments-monitor.*`).
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** The queue offers no `refusal` filter (the value at `packages/contracts/src/admin/programme.ts:31` is
+  > kept, unused, as the next note says; R-API-9; PR #158 r1 nit): no new refusal item can exist (T008's note). `programmes.queue` and the admin `programmes.get` (the
+  > programme's history) read a `no_offer` item's `reason`, the administrator's record written by `programmes.decide`
+  > (T008), beside the item; `programmeRequestItem.reason`'s comment (`:48-49`) says so.
+  > **B-P2 (2026-11-23; R-API-9, the review session's Q-B6 (a)).** The `refusal` value is not removed from
+  > `programmesQueueFilter` (`packages/contracts/src/admin/programme.ts`): R-API-9 keeps a published enum value
+  > (additive only; deprecate, then remove after a minimum client version), and `contract:snapshot --check` refuses the
+  > removal. It stays, marked unused since SRS DEC-112, and the queue never offers it, as `programmeRequestRefusal`'s
+  > `assessment_not_delivered` and `offer_sent` stay unused since T008.
+  > **The owner, 2026-11-23, «موافق» (B-P2 lane e's FU-E1 (a)).** On the payouts screen («تحويلات المعلمين»), every
+  > programme release lists the paid orders it draws from, with the amount from each, before the switch is turned on
+  > (B-P4). Today `payouts.service.ts` `releaseLinesOf` shows `order.paymentId`, which for a programme is the
+  > assessment's order for every release (T011 keeps `ReleaseFacts.order` as the first paid order and adds `orders`).
+  > Built here, with the reads (`modules/payments/payouts.*`, the admin payouts page). Example: offer 10,000 EGP by
+  > months, fee 500: `ijazah_half` 1,837.50 lists the assessment (350) and the months it draws from (700 each, capped).
+  > **The owner, 2026-11-23, «ايوة الادمن ساعتها بقا بتقرر اننا نديها للطالب بطريقة ما» (PR #158 r1 Q-R1 (b)).**
+  > `programmes.queue` and the admin `programmes.get` carry, on a `no_offer` item, whether the assessment was held
+  > (session 1's outcome chain, T008's read), so T021 can show «the assessment was not held; the fee is unreleased».
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
@@ -444,6 +644,11 @@ No open question remains.
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
     is true, a line that the offer is with the administration because the payout account was not verified, FR-706b).
+  > **The owner, 2026-11-23, «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله
+  > ده»; «طلب الايقاف يفضل زرار بس بيظهر بعد ال 7 ايام» (SRS DEC-112).** No refusal request and no refusal button: a
+  > teacher who wants to refuse contacts support from settings, and the app does not explain this (no line, no hint).
+  > The stop request stays a button, shown only from `paused_at` + 7 days (`programme_stop_request_days`, §3.14); the
+  > server's `too_early` stays the guard (FR-723).
 - [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
@@ -451,6 +656,16 @@ No open question remains.
   - the monitor's columns;
   - the `programme_enabled` setting's label explaining what flipping it does;
   - `admin.programme` i18n.
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** The queue has no `refusal` filter (T018's note). Beside a `no_offer` item the panel shows why the offer
+  > was not made, i.e. what the teacher sent to support, as recorded; deciding the item (approve, the refusal; or
+  > extend) asks for that reason (1–500, mandatory, T008's note), and the dialog explains itself: approve closes the
+  > programme as refused, the fee kept, the weekly time freed; extend gives the teacher 24 hours more from now.
+  > **The owner, 2026-11-23, «ايوة الادمن ساعتها بقا بتقرر اننا نديها للطالب بطريقة ما» (PR #158 r1 Q-R1 (b)).** Deciding a
+  > `no_offer` item whose assessment was never held (session 1's chain ended with no `done` or `student_no_show`; no
+  > `assessment` release is owed, T011's note), the panel shows «the assessment was not held; the fee is unreleased» and
+  > offers opening a compensation case for the student (FR-ADMIN-20 (c)); no case opens by itself. Example: fee 500 EGP,
+  > the teacher absent and the remedy lapsed: the 500 goes back to the student by the Administrator's decision.
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.

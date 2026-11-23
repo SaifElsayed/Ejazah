@@ -74,7 +74,10 @@ import {
   createVerificationAdminServices,
   openRequestOf,
 } from '../../apps/api/src/modules/verification/index.js';
-import { orderStandingsOf } from '../../apps/api/src/modules/payments/index.js';
+import {
+  orderStandingsOf,
+  payableProgrammeOrderAmong,
+} from '../../apps/api/src/modules/payments/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
 import {
@@ -298,7 +301,8 @@ async function pay(on: Offer, studentId: string, holdId: string): Promise<string
     sessionDurationMinutes: 60,
     track: on.track,
   };
-  const store = payStoreOver();
+  // 006:T009 (rule d): Pay's store takes payments' read of a payable programme order (Q-C5 (a)).
+  const store = payStoreOver(payableProgrammeOrderAmong);
   const target = await database.$transaction((tx) =>
     payTargetOf(tx, { studentUserId: studentId, holdId, at: NOW }, quoted, store),
   );

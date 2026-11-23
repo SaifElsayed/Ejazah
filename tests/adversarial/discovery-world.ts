@@ -119,6 +119,7 @@ import {
   createPaymentWebhookRoute,
   orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
+  programmeOfferAmountsOf,
 } from '../../apps/api/src/modules/payments/index.js';
 // 005:T011 (Q-X1): reports, over the `Pairings` bodies, bound as `main.ts` will bind them.
 import { createUserReports, reportsRouter } from '../../apps/api/src/modules/moderation/index.js';
@@ -212,6 +213,14 @@ import type {
   IjazahRequestsPreviewOutput,
   IjazahRequestsSendInput,
   IjazahRequestsSendOutput,
+  ProgrammeActionInput,
+  ProgrammeActionOutput,
+  ProgrammeCheckoutOutput,
+  ProgrammeOfferInput,
+  ProgrammeOfferOutput,
+  ProgrammePayInput,
+  ProgrammeRequestInput,
+  ProgrammeRequestOutput,
   SessionsCancellationAnswerInput,
   SessionsCancellationAnswerOutput,
   SessionsCancellationRequestInput,
@@ -427,6 +436,9 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
   slot_release_buffer_weeks: 0,
+  // 006:T007: the offer's 24 hours after the delivered assessment, and the rest's 48 after the offer.
+  programme_offer_hours: 24,
+  programme_pay_rest_hours: 48,
   // 003:T104 (ADR 0025 D1): the teacher's share setting, read when an order is created.
   teacher_share_percent: 70,
   // 004:T070: a closed enrollment's slot is held through its kind's window (the seed's values, T069).
@@ -566,6 +578,15 @@ export interface AppCaller {
     /** T038: a signed link to a message's document, attacked in `chat.attacks.ts`. */
     attachmentLink(input: ChatAttachmentLinkInput): Promise<ChatAttachmentLinkOutput>;
   };
+  /** 006:T007: the teacher's offer, attacked in `programme.attacks.ts`. */
+  readonly programme: {
+    offer(input: ProgrammeOfferInput): Promise<ProgrammeOfferOutput>;
+    /** 006:T008 (rule d): the student's cancellation and the teacher's refusal request. */
+    cancel(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
+    request(input: ProgrammeRequestInput): Promise<ProgrammeRequestOutput>;
+    /** 006:T009: the student's first payment, attacked in the same file. */
+    pay(input: ProgrammePayInput): Promise<ProgrammeCheckoutOutput>;
+  };
 }
 
 /** The video stand-in the surface's sessions services use, with what it was asked to make recorded. */
@@ -596,6 +617,18 @@ export interface SessionPair {
     readonly past: string;
     readonly ended: string;
   };
+  readonly student: SessionParty;
+  readonly teacher: SessionParty;
+}
+
+/**
+ * 006:T007: a programme awaiting its offer: a lone visible teacher's programme package booked as its
+ * assessment by a student of the same gender, the enrollment confirmed, session 1 `done` an hour
+ * ago, and its `programmes` row `awaiting_offer`; both parties signed in, the teacher's
+ * application approved (the teacher kind's `admits: 'approved'`).
+ */
+export interface ProgrammePair {
+  readonly enrollmentId: string;
   readonly student: SessionParty;
   readonly teacher: SessionParty;
 }
@@ -666,6 +699,18 @@ export interface DiscoverySurface {
    * writes on it (a postponement moves its `later` session), so no other attack meets the change.
    */
   freshSessionPair(gender: Gender): Promise<SessionPair>;
+  /**
+   * 006:T007: a programme of `gender` awaiting its offer (`ProgrammePair`), made on each call and
+   * never cached: an offer moves it to `offered`, so no other attack meets the change.
+   */
+  programmePair(gender: Gender): Promise<ProgrammePair>;
+  /**
+   * 006:T009: a programme of `gender` its teacher offered (40 sessions of 45 minutes at 400 EGP,
+   * 16,000 EGP), its assessment order paid at the world's 500 EGP and processed by the confirm step
+   * (70 %, 25 %), so `programme.pay` can be taken; made on each call, since a payment's order makes
+   * another checkout of the student wait.
+   */
+  offeredProgramme(gender: Gender): Promise<ProgrammePair>;
   /**
    * T031 of specs/004-sessions: a new session of the pair of `gender`, a Teacher-No-Show over ten
    * days before, with its remedy `proposed`: offered an hour ago, its choice window open a week, its
@@ -984,6 +1029,10 @@ async function build(): Promise<Built> {
       database,
       settings,
       ijazahRequests: { of: (tx, enrollmentIds) => certification.of(tx, enrollmentIds) },
+      // 006:T007: `programme.offer`, keyed, its amounts payments', as `main.ts` binds it.
+      idempotency,
+      log,
+      programmeAmounts: programmeOfferAmountsOf,
     }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({
@@ -1175,6 +1224,100 @@ async function build(): Promise<Built> {
     };
   };
 
+  // 006:T007: `ProgrammePair`, each call a new one.
+  const makeProgramme = async (gender: Gender): Promise<ProgrammePair> => {
+    const { userId: studentId, email: studentEmail } = await seeder.student(
+      gender,
+      `${prefix} طالب برنامج`,
+    );
+    const subject = await seeder.subject();
+    const teacher = await seeder.teacher({
+      gender,
+      state: 'plainName',
+      shared: subject,
+      admin,
+      sharedRiwaya: `رواية ${randomUUID()}`,
+    });
+    const { email: teacherEmail } = await database.user.update({
+      where: { id: teacher.id },
+      data: { passwordHash: await hashPassword(PASSWORD) },
+      select: { email: true },
+    });
+    if (teacherEmail === null) throw new Error('a world teacher without an address');
+    await database.teacherProfile.update({
+      where: { userId: teacher.id },
+      data: { applicationStatus: 'approved' },
+      select: { id: true },
+    });
+    const now = new Date();
+    const { id: enrollmentId } = await database.enrollment.create({
+      data: {
+        studentUserId: studentId,
+        teacherUserId: teacher.id,
+        packageId: teacher.programmePackageId,
+        slotId: teacher.slotId,
+        snapshotPricePiasters: BigInt(WORLD_ASSESSMENT_PRICE),
+        snapshotSessionCount: 1,
+        snapshotDurationMinutes: 30,
+        snapshotSubjectId: subject.id,
+        snapshotSlotTimezone: 'Africa/Cairo',
+        snapshotTrack: 'ijazah_track',
+        status: 'confirmed',
+        confirmedAt: now,
+        purchasedAt: now,
+        quotedFirstSessionLocalDate: new Date('2026-12-03T00:00:00Z'),
+      },
+      select: { id: true },
+    });
+    await database.programme.create({ data: { enrollmentId, state: 'awaiting_offer' } });
+    // Session 1, the assessment, `done`: it ended an hour ago, so the offer's 24 hours are open.
+    const startsAt = new Date(addMinutes(now, -90));
+    await database.session.create({
+      data: {
+        enrollmentId,
+        teacherUserId: teacher.id,
+        studentUserId: studentId,
+        sequenceNumber: 1,
+        scheduledDateLocal: new Date('2026-12-03T00:00:00Z'),
+        scheduledStartTimeLocal: SLOT_START,
+        timezone: 'Africa/Cairo',
+        scheduledStartAt: startsAt,
+        scheduledEndAt: new Date(addMinutes(startsAt, 30)),
+        status: 'done',
+      },
+    });
+    return {
+      enrollmentId,
+      student: await signedIn(studentId, studentEmail),
+      teacher: await signedIn(teacher.id, teacherEmail),
+    };
+  };
+
+  // 006:T009: `offeredProgramme`, each call a new one: offered through the real procedure, then its
+  // assessment order as the confirm step leaves it (paid, its marker set), by SQL (the amount column
+  // is named only in payments, R-MONEY-6).
+  const makeOfferedProgramme = async (gender: Gender): Promise<ProgrammePair> => {
+    const pair = await makeProgramme(gender);
+    await pair.teacher.caller.programme.offer({
+      enrollmentId: pair.enrollmentId,
+      level: 'يحفظ جزء عم',
+      readiness: 'جاهز',
+      expectedLength: 'عشرة أشهر',
+      durationMinutes: 45,
+      sessionCount: 40,
+      idempotencyKey: randomUUID(),
+    });
+    await database.$executeRaw`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at, kind, confirmed_at,
+                            teacher_share_rate_percent, teacher_share_piasters,
+                            half_release_rate_percent)
+      VALUES (${pair.enrollmentId}::uuid, 'fake', ${`world-assessment-${randomUUID()}`},
+              ${WORLD_ASSESSMENT_PRICE}, 'EGP', 'paid'::payment_status, now(), now(),
+              'assessment'::order_kind, now(), 70, 35000, 25)`;
+    return pair;
+  };
+
   const students = new Map<Gender, Student>();
   const pending = new Map<Gender, Promise<{ enrollmentId: string; holdId: string }>>();
   for (const gender of GENDERS) {
@@ -1353,6 +1496,9 @@ async function build(): Promise<Built> {
       await database.$transaction((tx) => standing.suspend(tx, admin, teacherId));
     },
     freshSessionPair: (gender) => makePair(gender),
+    programmePair: (gender) => makeProgramme(gender),
+    // 006:T009.
+    offeredProgramme: (gender) => makeOfferedProgramme(gender),
     sessionPair(gender) {
       const made = pairs.get(gender);
       if (made !== undefined) return made;

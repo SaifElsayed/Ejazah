@@ -287,6 +287,44 @@ export function sumOf(amounts_piasters: readonly Piasters[]): Piasters {
 }
 
 /**
+ * 006:T007 (R-507; SRS DEC-93): a month of an ijazah programme holds 4 of the offer's sessions, the
+ * last month the remainder. A definition of the programme, not an operational number (analyze
+ * K-2, settled), so it is written here and never read from settings.
+ */
+export const SESSIONS_PER_PROGRAMME_MONTH = 4;
+
+/** An offer's amounts (006:T007, R-506): its total, the price of one of its sessions, its months. */
+export interface ProgrammeOfferAmounts {
+  readonly total_piasters: Piasters;
+  readonly sessionPrice_piasters: Piasters;
+  readonly monthCount: number;
+}
+
+/**
+ * An offer's amounts (006:T007; FR-705, R-506, R-507; K-5): `sessionCount` times the package's price
+ * for the offer's length, exact in `bigint` (40 × 25,000 is 1,000,000), that price, and ⌈the count
+ * ÷ 4⌉ months (40 is 10, 42 is 11, 3 is 1). A count below one or not whole is refused, as
+ * `perSession` refuses it: the offer's count is 1 to 200 by its contract, so such a count is a
+ * programming error, not an offer.
+ */
+export function programmeOfferAmounts(
+  sessionPrice_piasters: Piasters,
+  sessionCount: number,
+): ProgrammeOfferAmounts {
+  if (!Number.isSafeInteger(sessionCount) || sessionCount < 1) {
+    throw new RangeError(
+      `programmeOfferAmounts: the session count must be a whole number of at least one — received ${String(sessionCount)}`,
+    );
+  }
+  const total = BigInt(sessionPrice_piasters) * BigInt(sessionCount);
+  return {
+    total_piasters: piasters(Number(total)),
+    sessionPrice_piasters,
+    monthCount: Math.ceil(sessionCount / SESSIONS_PER_PROGRAMME_MONTH),
+  };
+}
+
+/**
  * The value of the sessions not taken (003:T110, ADR 0025 D4, SRS DEC-85, DEC-86: what a closed
  * enrollment refunds): `sessionValues(total_piasters, sessionCount)` less the sessions named by
  * `takenSequences` (1 the first), each named once; a number outside 1 to the count takes nothing.

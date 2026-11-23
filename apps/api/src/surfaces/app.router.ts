@@ -22,6 +22,8 @@ import {
   teacherStudentsRouter,
   teacherTodayProcedure,
 } from '../modules/booking/index.js';
+// 006:T007 of specs/006-programme: booking's `programme` (`programme.offer`).
+import { programmesRouter } from '../modules/booking/index.js';
 // T003 of specs/005-certification: catalog's `teacher.signature`.
 import {
   packagesRouter,
@@ -97,6 +99,8 @@ export const appRouter = createAppRouter({
   reports: reportsRouter,
   // 005:T013 (B47): a user's flag of the declared gender of someone they are paired with or shown.
   genderFlags: genderFlagsRouter,
+  // 006:T007 of specs/006-programme (FR-705): the ijazah programme's `programme`, its offer.
+  programme: programmesRouter,
 });
 
 /** The user surface's type, the only one the mobile application may see. */

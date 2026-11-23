@@ -99,6 +99,25 @@
 // deletion's own for a deletion. Sent once the action commits, nothing on a rollback; the person
 // whose account ended is told by their own `account` event. A transaction no action bound adds
 // nothing. No read is added and no lock taken for it.
+//
+// A PROGRAMME'S CLOSE (006:T008 of specs/006-programme; R-510; B-P2's conflict check, Q-2 (a), the
+// owner, 2026-11-23; kernel.md, 006:T008's row). The enrollments' programmes' rows are taken after
+// the holds and before the enrollments (`lockRows(tx, 'programmes', …)`, keyed by `enrollment_id`;
+// none for an enrollment that is no programme), the one order's `programmes` before `enrollments`,
+// so an end and an administrator's `programmes.decide` (the programme, then the enrollment) wait on
+// one another and never deadlock. Every end that cancels then runs booking's close hook
+// (`programme-close.service.ts`) on the enrollments it cancelled, after their events and before a
+// paused case's closing (`disputes` last): the programme `closed`, its open items `withdrawn` (a
+// `pay_blocked` item among them: a ban, a departure or a deletion ends it, FR-706b), payments'
+// `deleteProgrammeCard`, handed in by `main.ts` (a stub until T013), one line each. A suspension
+// keeps its enrollments `confirmed`, so it closes no programme.
+//
+// A TEACHER'S SUSPENSION AND THE SAVED CARD (006:T012 of specs/006-programme; DEC-94, FR-729). The
+// programme's saved card is deleted at once at a teacher's suspension, ban or departure. A ban or a
+// departure closes the programme, so the close hook deletes it; a suspension closes nothing, so it
+// calls payments' `deleteProgrammeCard` itself, after the remedies are frozen, for each enrollment it
+// paused that carries a programme (booking's `programmeStateOf`, on the programme's row already held
+// above), one info line each, ids and the reason only. A student's suspension deletes none.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
 import { publisherOn } from '../../platform/live/live-publisher.js';
@@ -123,6 +142,14 @@ import {
   recordEnrollmentEvents,
 } from './enrollment-events.repository.js';
 import { type ActiveHoldScope, activeHoldIds } from './holds.repository.js';
+import {
+  closeProgrammes,
+  type DeleteProgrammeCard,
+  noProgrammeCardYet,
+  type ProgrammeCloseCause,
+  type ProgrammeCloseDependencies,
+} from './programme-close.service.js';
+import { type ProgrammeState, programmeStateOf } from './programmes.repository.js';
 import {
   type OrderStandings,
   type ReleaseDependencies,
@@ -194,6 +221,15 @@ export interface TerminationStore extends PausedCaseStore {
   ): Promise<void>;
   /** Booking's one writer of `enrollment_events` rows. */
   recordEvents(tx: Transaction, outcomes: readonly EnrollmentOutcome[]): Promise<void>;
+  /** 006:T008 (Q-2 (a)): booking's close hook, on the programmes' rows already held. */
+  closeProgrammes(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+    cause: ProgrammeCloseCause,
+    dependencies: ProgrammeCloseDependencies,
+  ): Promise<readonly string[]>;
+  /** 006:T012: the enrollment's programme's state, null for an enrollment that is no programme. */
+  programmeStateOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeState | null>;
 }
 
 /** The store over catalog's entry and booking's holds. */
@@ -213,6 +249,8 @@ export const terminationStore: TerminationStore = {
   freezeOpenRemedies: (tx, enrollmentIds, now) => freezeOpenRemedies(tx, enrollmentIds, now),
   cancelConfirmed,
   recordEvents: recordEnrollmentEvents,
+  closeProgrammes,
+  programmeStateOf,
   // T071: through sessions' entry, over moderation's.
   ...pausedCaseStore,
 };
@@ -228,6 +266,11 @@ export interface TerminationDependencies {
   /** The clock; the system clock unless a spec sets one. */
   readonly now?: () => Date;
   readonly store?: TerminationStore;
+  /**
+   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard`, which `main.ts` hands in for the close hook
+   * (a stub until T013); none deleted where it binds none (no card exists before T013).
+   */
+  readonly deleteProgrammeCard?: DeleteProgrammeCard;
 }
 
 /** The reason the holds on an ended teacher's slots are released with (FR-PAYG-6). */
@@ -252,7 +295,9 @@ export function terminationSubscriber({
   log,
   now = () => new Date(),
   store = terminationStore,
+  deleteProgrammeCard = noProgrammeCardYet,
 }: TerminationDependencies): AccountConsequence {
+  const programmes: ProgrammeCloseDependencies = { deleteProgrammeCard, log };
   return async (tx, userId, cause, actor) => {
     // Read with no lock: the account is held, and every path that confirms an enrollment of it
     // locks the account first, so the set cannot grow before the enrollments are locked below.
@@ -277,6 +322,7 @@ export function terminationSubscriber({
             store,
             adminId: actor?.adminId,
             log,
+            programmes,
           })
         : NOTHING_DECIDED;
     // At most one of the two is non-empty (ADR 0016), so the holds are locked in one statement.
@@ -355,6 +401,29 @@ function endOf(cause: TerminationCause, role: Role): End | null {
   return null;
 }
 
+/**
+ * 006:T012 (DEC-94, FR-729; this file's head): a teacher's suspension deletes the saved card of each
+ * enrollment it paused that carries a programme, on the transaction (one transaction holds them, so
+ * one by one); one info line each, ids and the reason only.
+ */
+async function deleteSuspendedCards(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+  {
+    store,
+    programmes,
+  }: { readonly store: TerminationStore; readonly programmes: ProgrammeCloseDependencies },
+): Promise<void> {
+  for (const enrollmentId of enrollmentIds) {
+    if ((await store.programmeStateOf(tx, enrollmentId)) === null) continue;
+    await programmes.deleteProgrammeCard(tx, enrollmentId);
+    programmes.log.info(
+      { enrollmentId, reason: 'teacher_suspended' },
+      'A programme’s saved card was deleted at its teacher’s suspension',
+    );
+  }
+}
+
 /** What one account's end decided on its confirmed enrollments, the log line's counts. */
 interface Decided {
   readonly enrollments: number;
@@ -395,6 +464,7 @@ async function endConfirmed(
     store,
     adminId,
     log,
+    programmes,
   }: {
     readonly ending: readonly ConfirmedEnrollment[];
     readonly holdIds: readonly string[];
@@ -403,16 +473,17 @@ async function endConfirmed(
     /** T071: the administrator who ended the account; undefined for a person's own deletion. */
     readonly adminId: string | undefined;
     readonly log: Pick<Logger, 'info' | 'warn'>;
+    /** 006:T008: the close hook's payments' entry and log. */
+    readonly programmes: ProgrammeCloseDependencies;
   },
 ): Promise<Decided> {
   const holds = sortedUnique(holdIds);
   if (holds.length > 0) await store.lockRows(tx, 'slot_holds', holds);
   const holdsEnrollments = await (holds.length > 0 ? store.holdEnrollmentIds(tx, holds) : []);
-  await store.lockRows(
-    tx,
-    'enrollments',
-    sortedUnique([...holdsEnrollments, ...ending.map(({ id }) => id)]),
-  );
+  const enrollmentIds = sortedUnique([...holdsEnrollments, ...ending.map(({ id }) => id)]);
+  // 006:T008 (Q-2 (a)): the programmes before the enrollments (this file's head).
+  await store.lockRows(tx, 'programmes', enrollmentIds);
+  await store.lockRows(tx, 'enrollments', enrollmentIds);
   const locked = new Set(ending.map(({ id }) => id));
   const still = (await store.confirmedEnrollmentsOf(tx, userId)).filter(({ id }) => locked.has(id));
   const [first] = still;
@@ -429,6 +500,9 @@ async function endConfirmed(
     keeps ? { remedies: 'lockOnly' } : {},
   );
   const frozen = keeps ? await store.freezeOpenRemedies(tx, ids, at) : NOTHING_FROZEN;
+  if (keeps && end.caseReason === 'teacher_suspended') {
+    await deleteSuspendedCards(tx, ids, { store, programmes });
+  }
   if (end.cancellation !== null) {
     const cancellationReason = end.cancellation;
     await store.cancelConfirmed(tx, ids, cancellationReason);
@@ -441,6 +515,8 @@ async function endConfirmed(
         occurredAt: at,
       })),
     );
+    // 006:T008 (Q-2 (a)): the close hook, on the programmes' rows held above.
+    await store.closeProgrammes(tx, ids, cancellationReason, programmes);
     await closePausedCases(tx, { userId, cause, ids, ended, adminId, store, log });
   }
   tellOtherParties(tx, userId, still);

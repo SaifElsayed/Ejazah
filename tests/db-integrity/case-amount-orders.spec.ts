@@ -58,16 +58,44 @@ describe('a case’s orders (003:T110)', () => {
     expect(await caseOrdersOf(database, w.enrollmentId)).toEqual([
       {
         paymentId: paid,
+        kind: 'package',
+        instalmentMonth: null,
         paid_piasters: 100_000,
         share_piasters: 70_000,
         refunded_piasters: 10_000,
       },
       {
         paymentId: refunded,
+        kind: 'package',
+        instalmentMonth: null,
         paid_piasters: 100_000,
         share_piasters: 70_000,
         refunded_piasters: 100_000,
       },
+    ]);
+  });
+
+  it('carry each order’s kind and an instalment’s month (006:T012, R-512)', async () => {
+    const w = await world();
+    const assessment = await order(w.enrollmentId, 'paid');
+    await withShare(assessment, 0);
+    const month = await order(w.enrollmentId, 'paid');
+    await withShare(month, 0);
+    await database.$executeRaw`
+      UPDATE payments SET kind = 'assessment'::order_kind WHERE id = ${assessment}::uuid`;
+    await database.$executeRaw`
+      UPDATE payments SET kind = 'instalment'::order_kind, instalment_month = 2
+      WHERE id = ${month}::uuid`;
+
+    expect(
+      (await caseOrdersOf(database, w.enrollmentId)).map(({ paymentId, kind, instalmentMonth }) => [
+        paymentId,
+        kind,
+        instalmentMonth,
+      ]),
+    ).toEqual([
+      [assessment, 'assessment', null],
+      [month, 'instalment', 2],
     ]);
   });
 });

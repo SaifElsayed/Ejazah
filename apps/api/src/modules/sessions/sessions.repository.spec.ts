@@ -8,7 +8,8 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { TIME_FREEING_STATUSES } from './sessions.repository.js';
+import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { sessionsOfEnrollments, TIME_FREEING_STATUSES } from './sessions.repository.js';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../../prisma/migrations');
 
@@ -39,4 +40,47 @@ describe('the statuses that free a session’s time (ERD §15 rule 19)', () => {
       expect(TIME_FREEING_STATUSES).toContain('postponed');
     },
   );
+});
+
+// 006:T012 (R-507, R-512) — an enrollment's sessions as payments' case amounts read them, over a
+// recording stand-in of the client: each offer session with its programme month, every other
+// without one.
+describe('sessionsOfEnrollments: the programme month (006:T012)', () => {
+  const ENROLLMENT = '0199d0a0-0000-7000-8000-000000000101';
+  const row = (sequenceNumber: number, programmeMonth: number | null) => ({
+    id: `0199d0a0-0000-7000-8000-0000000002${String(sequenceNumber).padStart(2, '0')}`,
+    enrollmentId: ENROLLMENT,
+    sequenceNumber,
+    scheduledDateLocal: new Date('2026-10-01T00:00:00Z'),
+    scheduledStartTimeLocal: new Date('1970-01-01T09:00:00Z'),
+    timezone: 'Africa/Cairo',
+    scheduledStartAt: new Date('2026-10-01T06:00:00Z'),
+    scheduledEndAt: new Date('2026-10-01T07:00:00Z'),
+    status: 'done',
+    outcomeUnderDispute: null,
+    programmeMonth,
+  });
+
+  it('answers an offer session’s month and none for the assessment, reading it in the one statement', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      session: {
+        findMany: async (query: unknown) => {
+          calls.push(query);
+          return [row(1, null), row(2, 1)];
+        },
+      },
+    } as unknown as Pick<Transaction, 'session'>;
+
+    const sessions = (await sessionsOfEnrollments(client, [ENROLLMENT])).get(ENROLLMENT) ?? [];
+
+    expect(sessions.map((one) => [one.sequenceNumber, one.programmeMonth])).toEqual([
+      [1, undefined],
+      [2, 1],
+    ]);
+    expect('programmeMonth' in (sessions[0] ?? {})).toBe(false);
+    expect(calls).toEqual([
+      expect.objectContaining({ select: expect.objectContaining({ programmeMonth: true }) }),
+    ]);
+  });
 });

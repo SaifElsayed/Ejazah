@@ -194,6 +194,11 @@ first weekly occurrence after the 48 hours; the month's 4 sessions exist; the ca
    unverified when the 48 hours end, an Administrator item instead (FR-706b).
 5. **Given** an assessment, **When** the teacher does not want to continue with the student, **Then** they cannot
    refuse alone: they send an administrator a reason, and the administrator decides.
+   > *(Amended 2026-11-23, SRS DEC-112, the owner: «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم
+   > من الاعدادات ومش هنوضحله ده».)* The teacher's app has no refusal request: the teacher tells support, reached from
+   > the settings, and sends no offer; the app does not explain this. At `offer_due_at` the `no_offer` item opens, and
+   > the administrator's approval is the refusal (`assessment_refused`, the fee kept, the weekly time freed), with the
+   > reason the administrator records from what the teacher sent to support (FR-709, FR-727).
 
 ---
 
@@ -284,6 +289,9 @@ Administrators see paused packages and stop requests, oldest first, with how lat
 reason, and decide each. They see a teacher's request to refuse a student after the assessment. They can reopen a closed
 package.
 
+> *(Amended 2026-11-23, SRS DEC-112.)* There is no teacher's request to refuse: administrators see the `no_offer` item
+> instead, and beside it the reason they record when deciding it (FR-709, FR-727).
+
 **Why this priority**: FR-BOOK-19 and the owner's admin-control rule; no student flow depends on it.
 
 **Independent Test**: Create two paused packages and a stop request; the list is ordered oldest first; approving closes,
@@ -338,6 +346,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   continue (the offer declined or unpaid within the 48 hours, or an approved refusal), at the close, or at the end of the 48 hours where an offer was sent, whichever is later, once
   its session's dispute window (72 h) has passed with no case open. When the student continues, the assessment is the
   package's first session and its share is held with the package (DEC-94).
+  > *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* The share is listed
+  > only where the assessment was held: session 1, or its make-up, settled `done` or `student_no_show`. Where it was
+  > never held (an approved refusal after the teacher's no-show whose remedy lapsed), nothing is released to the
+  > teacher; the fee is left to the administrator's compensation case (fee 500 EGP: the teacher's 350 not owed).
 - **FR-704**: The assessment's fee MUST be one platform-wide amount and its session length one length, both §3.14
   settings an Administrator sets (the length 30 minutes by default; the fee with no default). An ijazah-track package
   MUST NOT be published while the fee is unset. The teacher's ijazah-track package MUST set a price per session for
@@ -377,6 +389,19 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   refusal request with a mandatory reason, and the administrator decides; an approved refusal ends the programme before
   any offer, freeing the time. The assessment fee is kept, and its teacher share is released at the decision, once
   session 1's 72 hours have passed with no case open (DEC-93, DEC-94).
+  > *(Amended 2026-11-23, SRS DEC-112, the owner: «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من
+  > الاعدادات ومش هنوضحله ده».)* The teacher MUST NOT have a refusal request in the app: `programme.request` takes
+  > `stop` only (FR-723). A teacher who does not want to continue tells support, reached from the settings, and sends no
+  > offer; the app does not explain this. The refusal is the `no_offer` item (FR-706a): at `offer_due_at` it opens, and
+  > the administrator's approval is the refusal (`assessment_refused`, the fee kept, the weekly time freed at once, the
+  > share as above). Deciding a `no_offer` item MUST carry the reason the teacher sent to support, as the administrator
+  > records it (1–500, written on the item; a decision without it is refused) (FR-727). The `programme_request_kind`
+  > value `refusal` stays in the database, unused (no migration).
+  > *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* «The share as above»
+  > holds only where the assessment was held (FR-703's note): an approved refusal after a session 1 never held (the
+  > teacher's no-show, its remedy lapsed) releases nothing to the teacher. The student's cancellation (FR-706) comes
+  > only after the assessment: `programme.cancel` is refused `assessment_not_settled` until session 1, or its
+  > make-up, is `done` or `student_no_show` (FR-BOOK-15, «after the assessment»).
 
 **Paying: in full or monthly, prepaid**
 
@@ -439,6 +464,9 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   the package at the same weekly time, moving the final session and the slot's release (FR-BOOK-17, FR-BOOK-10).
 - **FR-723**: For 7 days (§3.14) after a pause begins the teacher MUST NOT be able to ask
   to stop; after them the teacher MAY raise one open request per package, with a mandatory reason (FR-BOOK-18).
+  > *(Amended 2026-11-23, SRS DEC-112, the owner: «طلب الايقاف يفضل زرار بس بيظهر بعد ال 7 ايام».)* The stop request
+  > MUST be a button in the teacher's app, shown only from `paused_at` + 7 days (§3.14); the server's `too_early` stays
+  > the guard against an earlier request.
 - **FR-724**: A renewal while a stop request is open MUST withdraw it automatically, with one log line administrators
   can see; the teacher MAY raise a new one if the student is late again (FR-BOOK-18).
 - **FR-725**: An administrator's approval MUST close the package and free all of its slots at once; the saved card is
@@ -454,6 +482,11 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   (FR-706a, FR-706b) oldest first, with how late
   the student is and the teacher's reason, MUST decide each (audited), and MUST be able to reopen a closed package, which
   returns paused, awaiting a payment by hand (FR-BOOK-19).
+  > *(Amended 2026-11-23, SRS DEC-112, the owner: «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم
+  > بعته يعني».)* There are no refusal requests to see (FR-709). Beside a `no_offer` item administrators MUST see why the
+  > offer was not made, i.e. what the teacher sent to support. There is no support channel in the app, so the
+  > administrator records it: `programmes.decide` on a `no_offer` item MUST carry a reason (1–500), written to the
+  > item's `reason`, and a decision without it is refused; the queue and the programme's history show it.
 
 **Money**
 
@@ -497,6 +530,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **Stop request**: package, teacher, reason, raised, decided (administrator, time, approved or declined), or withdrawn
   by a renewal.
 - **Refusal request**: after the assessment, teacher, reason, decision.
+  > *(Amended 2026-11-23, SRS DEC-112.)* None is raised: the refusal is a decided `no_offer` item, its reason the
+  > administrator's record of what the teacher sent to support (FR-709); the kind's `refusal` value stays unused.
 
 ## Success Criteria _(mandatory)_
 
@@ -524,7 +559,8 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   port, and the closed test renews by hand.
 - The teacher's share held and released later rests on the owner's assumption of 2026-11-15 (ADR 0025 D8).
 - A package has one weekly time (FR-BOOK-4), so one session a week.
-- A refusal request approved after the assessment keeps the fee (the owner's answer, DEC-93).
+- A refusal request approved after the assessment keeps the fee (the owner's answer, DEC-93). *(2026-11-23, SRS
+  DEC-112: the refusal is the approved `no_offer` item; the fee is kept the same way.)*
 - The assessment fee has no default; an ijazah-track package cannot be published until an Administrator sets it
   (the owner did not give the amount).
 - A postponed or made-up session belongs to the month of its original session and is paid (G-6).

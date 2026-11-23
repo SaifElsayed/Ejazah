@@ -75,13 +75,16 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
     const order = {
       paymentId: w.enrollmentId,
       enrollmentId: w.enrollmentId,
+      kind: 'package' as const,
+      instalmentMonth: null,
+      paid_piasters: piasters(100_000),
       share_piasters: piasters(70_000),
       sharePercent: 70,
       halfPercent: null,
       refunded_piasters: piasters(0),
     };
     const reads: ReleaseReads = {
-      shareOrdersOf: async () => new Map([[w.enrollmentId, order]]),
+      shareOrdersOf: async () => new Map([[w.enrollmentId, [order]]]),
       releasesOf: async () => [],
       enrollmentsAmong: async () =>
         new Map([
@@ -94,6 +97,8 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
               track: 'recitation' as const,
               status: 'completed' as const,
               sessionCount: 4,
+              cancellationReason: null,
+              programme: null,
             },
           ],
         ]),
@@ -106,7 +111,7 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
     const sweep = createShareReleaseSweep({
       transactions: transactionsOver(database),
       settings: { read: async (_key, schema) => schema.parse(72) },
-      log: { info: () => undefined, error: () => undefined },
+      log: { info: () => undefined, error: () => undefined, warn: () => undefined },
       pageSize: 10,
       report: (error) => void reported.push(error),
       clock: async () => NOW,

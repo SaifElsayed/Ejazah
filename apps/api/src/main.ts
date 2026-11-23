@@ -184,7 +184,14 @@ const cipher = createColumnCipher(config);
 // awaiting payment (T041, R-219), over payments' order standing (R-208).
 const consequences = new identity.AccountConsequences();
 consequences.subscribe(verification.documentErasureConsequence());
-consequences.subscribe(booking.terminationSubscriber({ orders: payments.orderStandingsOf, log }));
+consequences.subscribe(
+  booking.terminationSubscriber({
+    orders: payments.orderStandingsOf,
+    log,
+    // 006:T008 (Q-2 (a)): the close hook's card entry, payments' stub until T013.
+    deleteProgrammeCard: payments.deleteProgrammeCard,
+  }),
+);
 // T174 of specs/002-identity (R1a; SRS DEC-97, FR-AUTH-14; the note under T174, (5)): catalog's
 // consequence, so no module reaches another's tables. The deletion of a teacher never approved blanks
 // their credentials' holder name, riwaya, tariq and review reason, deletes their chains and erases
@@ -251,7 +258,12 @@ consequences.subscribe(ijazahRequests.deletionConsequence());
 // Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
-const enrollmentSide = booking.createEnrollmentSide({ settings });
+// 006:T008 (Q-2 (a)): the close hook's card entry (payments' stub until T013) and log, for the
+// programme closed by `terminateNoShow`, `complete` and `cancel`.
+const enrollmentSide = booking.createEnrollmentSide({
+  settings,
+  programmes: { deleteProgrammeCard: payments.deleteProgrammeCard, log },
+});
 // T003 of specs/005-certification: the teacher's signature, one service for `POST /uploads/signature`
 // and `teacher.signature.get` (R-411).
 const teacherSignatures = catalog.createTeacherSignatureService({
@@ -399,6 +411,10 @@ const services = {
     database,
     settings,
     ijazahRequests: { of: (tx, enrollmentIds) => ijazahRequests.of(tx, enrollmentIds) },
+    // 006:T007 (FR-705, K-5; Q-A1 (a)): `programme.offer`, keyed, its amounts payments'.
+    idempotency,
+    log,
+    programmeAmounts: payments.programmeOfferAmountsOf,
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two
@@ -620,6 +636,14 @@ const adminServices = {
   reports: { ...userReports, ...reportChat },
   // 003:T105: `payouts.*`, the service above.
   payouts: payouts.admin,
+  // 006:T008 (Q-7 (a)): `programmes.decide`, keyed on the kind's transaction; the close hook's card
+  // entry is payments' stub until T013.
+  programmes: booking.createProgrammeDecisions({
+    idempotency,
+    settings,
+    deleteProgrammeCard: payments.deleteProgrammeCard,
+    log,
+  }),
 };
 
 const application = await createApplication({

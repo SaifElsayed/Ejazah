@@ -30,8 +30,9 @@ export const SHARE_RELEASE_PAGE_SIZE = 200;
 export interface ReleaseTeacherSharesDependencies {
   readonly database: Database;
   readonly settings: SettingsReader;
-  /** The sweep's lines: one info per release written, one error per enrollment failed. */
-  readonly log: Pick<Logger, 'info' | 'error'>;
+  /** The sweep's lines: one info per release written, one error per enrollment failed, one warn per programme
+   * enrollment with no programme row (006:T011 FU-E3; Q-E4 (a)). */
+  readonly log: Pick<Logger, 'info' | 'error' | 'warn'>;
   /** Error tracking; `reportError` unless a spec sets one. */
   readonly report?: (error: Error) => void;
 }

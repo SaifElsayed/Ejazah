@@ -79,10 +79,16 @@
 //     `party_restricted` case instead of the sessions, and one log line of ids and a reason;
 //   - otherwise generation only: the month's sessions (4, the last month the remainder; the rest in
 //     full all N), numbered from the highest + 1, each with its `programme_month`, from the first weekly
-//     occurrence at least the lead after the payment and after the last session (R-507);
+//     occurrence at least the lead after the payment and after the last session (R-507); 006:T009:
+//     the first payment (the rest in full or month 1) from the first weekly occurrence after the
+//     programme's `pay_by_at` and the last session, with no lead (the conflict check's settled reading);
 //   - a generation the database refuses never cancels the programme: the order stays paid, one
 //     `slot_unavailable` case, one log line `{ enrollmentId, paymentId, reason }`.
 // A month's case and its marker are written in the same transaction, so a replay opens no second.
+// 006:T009 (the owner's Q-C1 (a), 2026-11-23): an awaited month or rest is recorded on the programme
+// through booking's `recordProgrammePaid`, under the programme's lock, whatever follows (its
+// sessions, or the case a suspension or a refusal opens): `offered` to `active` with its plan, and
+// `months_paid` (`month_count` in full, else the month). A duplicate records nothing.
 import { z } from 'zod';
 
 import { addHours } from '@ijazah/time';
@@ -99,6 +105,7 @@ import type {
   HoldTerms,
   LockedEnrollment,
   PaymentOutcomeNotices,
+  ProgrammePayment,
   Refusal,
 } from '../modules/booking/index.js';
 import { readSlot } from '../modules/catalog/index.js';
@@ -152,8 +159,20 @@ export interface ConfirmationSteps {
   orderTermsOf(tx: Transaction, paymentId: string): Promise<OrderTerms>;
   /** 006:T005: the confirmed assessment's programme, `awaiting_offer` (booking's entry). */
   startProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
-  /** 006:T006: the per-order marker (payments' entry), under the order's lock. */
-  markConfirmed(tx: Transaction, paymentId: string, at: Date): Promise<void>;
+  /**
+   * 006:T006: the per-order marker (payments' entry), under the order's lock; 006:T009 (PR #156 r2
+   * Follow-up 1): at the database's clock read there, so no instant of the job's is handed in.
+   */
+  markConfirmed(tx: Transaction, paymentId: string): Promise<void>;
+  /**
+   * 006:T009 (the owner's Q-C1 (a)): the programme's payment, through booking's entry, under the
+   * programme's lock: `offered` to `active` with its plan, and the months paid.
+   */
+  recordProgrammePaid(
+    tx: Transaction,
+    enrollmentId: string,
+    payment: ProgrammePayment,
+  ): Promise<void>;
   /** 006:T006: the months and the rest already processed (payments' entry). */
   programmeOrdersOf(
     tx: Transaction,
@@ -277,6 +296,7 @@ export function confirmationStepsOf(notices: PaymentOutcomeNotices): Confirmatio
     orderTermsOf,
     startProgramme: booking.startProgramme,
     markConfirmed: markOrderConfirmed,
+    recordProgrammePaid: booking.recordProgrammePaid,
     programmeOrdersOf: processedProgrammeOrdersOf,
     openCaseOf,
     sessionsOf: enrollmentSessionsOf,
@@ -378,7 +398,7 @@ class Confirmer {
       return;
     }
     await this.#hold(tx, enrollment, paymentId, terms, attempt, { cases, order });
-    if (terms.kind === 'assessment') await steps.markConfirmed(tx, paymentId, this.#terms.now);
+    if (terms.kind === 'assessment') await steps.markConfirmed(tx, paymentId);
   }
 
   /** The hold path (R-215's decision): a `package` order as before, an `assessment` alike. */
@@ -425,7 +445,7 @@ class Confirmer {
   ): Promise<void> {
     const steps = this.#steps;
     const at = this.#terms.now;
-    const done = () => steps.markConfirmed(tx, paymentId, at);
+    const done = () => steps.markConfirmed(tx, paymentId);
     const processed = await steps.programmeOrdersOf(tx, enrollment.id);
     const months = monthsToGenerate(terms, enrollment.snapshotSessionCount - 1, processed);
     const awaited =
@@ -435,6 +455,12 @@ class Confirmer {
       await done();
       return;
     }
+    // 006:T009 (the owner's Q-C1 (a)): the awaited payment is recorded on the programme whatever
+    // follows (its sessions, or the case a suspension or a refusal opens): the month is paid.
+    await steps.recordProgrammePaid(tx, enrollment.id, {
+      plan: terms.kind === 'rest_in_full' ? 'in_full' : 'monthly',
+      monthsPaid: Math.max(...months),
+    });
     // One query at a time on the one transaction (PR #156 r1 nit: pg's «already executing» warning).
     let suspended = false;
     for (const reason of SUSPENSION_REASONS) {
@@ -462,16 +488,35 @@ class Confirmer {
     const sessions = await steps.sessionsOf(tx, enrollment.id);
     const highest = Math.max(0, ...sessions.map(({ sequenceNumber }) => sequenceNumber));
     const lastEnd = Math.max(0, ...sessions.map(({ endsAt }) => endsAt.getTime()));
-    // The first weekly occurrence at least the lead after the payment and after the last session.
-    const leadEnd = new Date(addHours(at, this.#terms.leadHours)).getTime();
     const [from, leadHours] =
-      lastEnd > leadEnd ? [new Date(lastEnd), 0] : [at, this.#terms.leadHours];
+      awaitedAfter(processed).next === 1
+        ? this.#afterPayBy(enrollment, lastEnd)
+        : this.#afterLead(at, lastEnd);
     await steps.generate(tx, scheduleOf(enrollment, slot), from, leadHours, {
       count: months.length,
       firstSequenceNumber: highest + 1,
       months,
     });
     await done();
+  }
+
+  /**
+   * 006:T009 (the conflict check's settled reading; the hidden-times rule): the first payment, the
+   * rest in full or month 1, starts at the first weekly occurrence after `pay_by_at` (and after the
+   * last session, a make-up of the assessment included), with no lead, so no session falls inside
+   * the 48 hours whose weekly time stayed reserved.
+   */
+  #afterPayBy(enrollment: LockedEnrollment, lastEnd: number): readonly [Date, number] {
+    const payBy = enrollment.programmePayByAt;
+    // The offer writes `pay_by_at` with `offered` (R-505); a first payment is awaited only after it.
+    if (payBy === null) throw new Error(`Programme ${enrollment.id} has no pay_by_at`);
+    return [lastEnd > payBy.getTime() ? new Date(lastEnd) : payBy, 0];
+  }
+
+  /** A later month: the first weekly occurrence the lead after the payment and the last session. */
+  #afterLead(at: Date, lastEnd: number): readonly [Date, number] {
+    const leadEnd = new Date(addHours(at, this.#terms.leadHours)).getTime();
+    return lastEnd > leadEnd ? [new Date(lastEnd), 0] : [at, this.#terms.leadHours];
   }
 
   /** A paid programme order that generated nothing: its case and one log line (ids and a reason). */

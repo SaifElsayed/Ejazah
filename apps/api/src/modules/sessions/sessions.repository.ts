@@ -129,6 +129,8 @@ export interface EnrollmentSessionRow {
   readonly status: SessionStatus;
   /** The outcome frozen beside a `disputed` status once written (T014, R-308); absent otherwise. */
   readonly outcomeUnderDispute?: SessionStatus;
+  /** 006:T012 (R-507, R-512): an offer session's programme month; absent on every other. */
+  readonly programmeMonth?: number;
 }
 
 interface SelectedSession {
@@ -141,6 +143,8 @@ interface SelectedSession {
   readonly scheduledEndAt: Date;
   readonly status: SessionStatus;
   readonly outcomeUnderDispute: SessionStatus | null;
+  /** 006:T012: read by `sessionsOfEnrollments` only (payments' case amounts). */
+  readonly programmeMonth?: number | null;
 }
 
 function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
@@ -154,6 +158,9 @@ function sessionRowOf(row: SelectedSession): EnrollmentSessionRow {
     endsAt: row.scheduledEndAt,
     status: row.status,
     ...(row.outcomeUnderDispute === null ? {} : { outcomeUnderDispute: row.outcomeUnderDispute }),
+    ...(row.programmeMonth === undefined || row.programmeMonth === null
+      ? {}
+      : { programmeMonth: row.programmeMonth }),
   };
 }
 
@@ -211,6 +218,7 @@ export async function sessionsOfEnrollments(
       scheduledEndAt: true,
       status: true,
       outcomeUnderDispute: true,
+      programmeMonth: true,
     },
   });
   for (const row of rows) {

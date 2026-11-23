@@ -114,6 +114,9 @@ Settled by the review session on recorded precedents:
     - It is set when session 1 is settled `done` or `student_no_show` (consumed: the student missed it, the fee kept).
       A teacher's no-show, a both-no-show, a cancellation by agreement or a postponement is made up (DEC-84, DEC-86),
       and the window follows the make-up's delivery (analyze U-2).
+    - Booking derives it from session 1's current outcome chain on every read while the programme is
+      `awaiting_offer` and writes the derived value, so a re-resolution or a dispute's outcome moves it (B-P2, Q-3 (a)
+      amended, 2026-11-23; T008's note).
     - Any other end of session 1 with no make-up pending (a remedy that lapses, a dispute unresolved past 24 h after
       its scheduled end) opens the `no_offer` Administrator item at its scheduled end + 24 h, so the weekly time is
       never reserved for ever (analyze N-2).
@@ -123,6 +126,10 @@ Settled by the review session on recorded precedents:
     - a refusal (as R-513: the fee kept, the assessment's share released);
     - or an extension, giving the teacher `programme_offer_hours` more: the item is closed `extended`, and a new item may
       open at the new deadline (analyze N-10). A `no_offer` item has no «decline».
+    - Since 2026-11-23 (SRS DEC-112, the owner: «لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله ده») this approval is
+      the only refusal: the teacher's app has no refusal request, and a teacher who does not want to continue tells
+      support and sends no offer. Either decision carries the reason the teacher sent to support, as the
+      Administrator records it (1–500, written to the item's `reason`; refused without it; R-513).
   - **The 48 hours (the owner: «ال 48 ساعة دي بتبدأ من وقت عرض الباقة»):** `pay_by` = the offer's time + 48 h
     (§3.14). The first regular session is the first weekly occurrence after `pay_by`, with no booking lead (analyze
     U-5; FR-BOOK-15's «first weekly occurrence after»).
@@ -275,7 +282,9 @@ Settled by the review session on recorded precedents:
   `last4` and the brand may be returned, to the student only.
 - **One close hook** (analyze G-5, N-6): booking's cancel path, for every closing reason (today's and the programme's),
   sets `programmes.state = closed` and `closed_at` on its own table, then calls payments' entry `deleteProgrammeCard`
-  only to delete the card row (R-API-6: each module writes its own tables).
+  only to delete the card row (R-API-6: each module writes its own tables). Built in T008 and wired into every cancel
+  path that can close a programme, the programme's row locked before the enrollment's; until T013 the card call is a
+  stub (B-P2, Q-2 (a), 2026-11-23).
 - **Erasure:** the card row is deleted by the account's erasure (`identity/deletion.service.ts`,
   `identity/consequences.ts`, `jobs/erase-kept-data.ts`; `main.ts` wiring is the integration's; analyze G-10).
 - «Change card» = a manual payment of a due month with consent ticked; its `card_saved` replaces the row.
@@ -293,6 +302,10 @@ order (ADR 0025 D6, FR-702).
   `assessment`, the assessment order's share (350 of 500). It falls due once the programme has
   closed, its 48 hours have ended where an offer was sent (DEC-94: «once the 48 h have ended»), and session 1's
   dispute window has passed with no case open.
+  - *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* Only where the
+    assessment was held (session 1 or its make-up `done` or `student_no_show`); where it was never held, no
+    `assessment` release, the fee left to the administrator's compensation case. `programme.cancel` is refused
+    `assessment_not_settled` until it was held.
 - **The student continues:** no `assessment` milestone.
   - **`ijazah_half`:**
     - Base: 25 % × `teacherShare(the programme's price as paid, rate)`, where the price is the offer's total in full
@@ -302,10 +315,10 @@ order (ADR 0025 D6, FR-702).
       snapshot count.
     - Today the base is the first paid order's share (`share-release.rules.ts:246`; `shareOrdersOf`, repository
       `:129-156`). For a programme that order is the assessment, so the change is red first.
-  - **`ijazah_end`:** the shares of all the programme's paid orders − the half released or owed − the refund share
-    (analyze U-4).
-  - **`programme_stopped`** (a new milestone, an approved stop): the shares of the paid orders − the half released or
-    owed − the refund share, after the last delivered session's window, no case open.
+  - **`ijazah_end`:** the shares of all the programme's paid orders − every release written and the half owed − the
+    refund share (analyze U-4; B-P2, Q-5 (a), 2026-11-23).
+  - **`programme_stopped`** (a new milestone, an approved stop): the shares of the paid orders − every release written
+    and the half owed − the refund share, after the last delivered session's window, no case open.
 - **The closes' amounts per session** (analyze G-3): DEC-86 and DEC-91's refunds and `student_complaint_close`'s
   release value a session by **its own order**: the assessment = the fee; a month's session = the month's order ÷ its
   sessions; in full = (total − fee) ÷ N. Today they take the first order ÷ the count (`case-amount.rules.ts:121,137-168`;
@@ -321,6 +334,18 @@ order (ADR 0025 D6, FR-702).
   - **`stop`:** refused before `paused_at` + 7 days. A renewal withdraws an open one in the payment's transaction, with
     one log line.
   - **`refusal`:** from the assessment's delivery until an offer is sent. Approval cancels `assessment_refused`.
+    - **Amended 2026-11-23 (SRS DEC-112, the owner: «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم
+      من الاعدادات ومش هنوضحله ده»).** No `refusal` request is raised: `programme.request` takes `stop` only, its
+      `refusal` input, refusals (`assessment_not_delivered`, `offer_sent`), service branch, attacks and specs removed.
+      The refusal is the approved `no_offer` item (R-505), which cancels `assessment_refused`. The enum keeps its
+      `refusal` value, unused, with no migration.
+    - **The `no_offer` item's reason** (the owner: «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم
+      بعته يعني»): there is no support channel in the app, so `programmes.decide` on a `no_offer` item requires the
+      reason (1–500) the Administrator records from what the teacher sent to support, written to the item's `reason`
+      (nullable; rule 80's check, `20261122110318_ijazah_programme/migration.sql:258-260`, requires it only on `stop`
+      and `refusal`, so no migration). «Required» is the service's rule, red first, not a database check. The queue
+      and `programmes.get` read it.
+    - **`stop`'s button** shows only from `paused_at` + 7 days (FR-723); `too_early` stays the server's guard.
   - The administrator's decisions are audited.
   - **An approved stop:** the enrollment `cancelled` `programme_stopped`, the weekly time free at once, the close hook
     (R-510), R-512's release.
