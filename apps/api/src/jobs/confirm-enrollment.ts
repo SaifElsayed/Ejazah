@@ -152,8 +152,11 @@ export interface ConfirmationSteps {
   orderTermsOf(tx: Transaction, paymentId: string): Promise<OrderTerms>;
   /** 006:T005: the confirmed assessment's programme, `awaiting_offer` (booking's entry). */
   startProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
-  /** 006:T006: the per-order marker (payments' entry), under the order's lock. */
-  markConfirmed(tx: Transaction, paymentId: string, at: Date): Promise<void>;
+  /**
+   * 006:T006: the per-order marker (payments' entry), under the order's lock; 006:T009 (PR #156 r2
+   * Follow-up 1): at the database's clock read there, so no instant of the job's is handed in.
+   */
+  markConfirmed(tx: Transaction, paymentId: string): Promise<void>;
   /** 006:T006: the months and the rest already processed (payments' entry). */
   programmeOrdersOf(
     tx: Transaction,
@@ -378,7 +381,7 @@ class Confirmer {
       return;
     }
     await this.#hold(tx, enrollment, paymentId, terms, attempt, { cases, order });
-    if (terms.kind === 'assessment') await steps.markConfirmed(tx, paymentId, this.#terms.now);
+    if (terms.kind === 'assessment') await steps.markConfirmed(tx, paymentId);
   }
 
   /** The hold path (R-215's decision): a `package` order as before, an `assessment` alike. */
@@ -425,7 +428,7 @@ class Confirmer {
   ): Promise<void> {
     const steps = this.#steps;
     const at = this.#terms.now;
-    const done = () => steps.markConfirmed(tx, paymentId, at);
+    const done = () => steps.markConfirmed(tx, paymentId);
     const processed = await steps.programmeOrdersOf(tx, enrollment.id);
     const months = monthsToGenerate(terms, enrollment.snapshotSessionCount - 1, processed);
     const awaited =

@@ -144,8 +144,9 @@ function harness(world: World) {
       };
     },
     // 006:T006: the per-order marker, the processed programme orders, a suspension, the sessions.
-    markConfirmed: async (_tx, paymentId, at) => {
-      expect([paymentId, at]).toEqual([PAYMENT, NOW]);
+    // 006:T009, PR #156 r2 Follow-up 1: no instant of the job's; the marker reads the database's.
+    markConfirmed: async (...args: unknown[]) => {
+      expect(args.slice(1)).toEqual([PAYMENT]);
       calls.push('mark confirmed');
     },
     programmeOrdersOf: async (_tx, enrollmentId) => {

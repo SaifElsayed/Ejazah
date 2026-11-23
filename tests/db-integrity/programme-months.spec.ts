@@ -59,10 +59,13 @@ afterAll(async () => {
 
 const { person, paidEvent, casesOf } = confirmationWorld(() => database);
 
-const confirm = (paymentId: string) =>
-  confirmEnrollment({ database, settings, notices: writer, clock: () => NOW }).handle({
+const confirm = (paymentId: string, clock: Date = NOW) =>
+  confirmEnrollment({ database, settings, notices: writer, clock: () => clock }).handle({
     paymentId,
   });
+
+/** When the world's processed orders were processed: their marker. */
+const PROCESSED_AT = new Date('2026-10-20T07:00:00Z');
 
 /**
  * A paid order of the enrollment, by SQL (the amount column is named only in payments,
@@ -79,7 +82,7 @@ async function order(
                           status, expires_at, updated_at, kind, instalment_month, confirmed_at)
     VALUES (${enrollmentId}::uuid, 'fake', ${`probe-order-${randomUUID()}`}, 140000, 'EGP',
             'paid'::payment_status, ${LATER}, now(), ${kind}::order_kind, ${month}::smallint,
-            ${processed ? new Date('2026-10-20T07:00:00Z') : null}::timestamptz)
+            ${processed ? PROCESSED_AT : null}::timestamptz)
     RETURNING id::text AS id`;
   if (row === undefined) throw new Error('no order written');
   await paidEvent(row.id);
@@ -316,6 +319,19 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     await confirm(await order(enrollmentId, 'instalment', 3, false));
     expect((await sessionsOf(enrollmentId)).slice(5).map(([, , month]) => month)).toEqual([3, 3]);
     expect(await casesOf(enrollmentId)).toEqual([]);
+  });
+
+  // 006:T009, PR #156 r2 Follow-up 1 (PROBE-R2a): the marker is the database's instant under the
+  // locks, never the clock a job read before them, so the walk follows the order of settlement.
+  it('walks month 2 after month 1 when month 2’s job read its clock before month 1’s marker, then month 3 generates', async () => {
+    const { enrollmentId } = await activeProgramme();
+    // 1 ms before PROCESSED_AT, month 1's marker.
+    const before = new Date('2026-10-20T06:59:59.999Z');
+    await confirm(await order(enrollmentId, 'instalment', 2, false), before);
+    expect((await sessionsOf(enrollmentId)).slice(5)).toEqual(MONTH_TWO);
+    await confirm(await order(enrollmentId, 'instalment', 3, false));
+    expect((await casesOf(enrollmentId)).map(({ reason }) => reason)).toEqual([]);
+    expect((await sessionsOf(enrollmentId)).slice(9).map(([, , month]) => month)).toEqual([3, 3]);
   });
 
   it('waits on the programme’s row, locked after the holds and before the enrollment', async () => {
