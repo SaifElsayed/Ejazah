@@ -16,6 +16,10 @@
 //     run twice at once on one teacher, staged as `account-locks.spec.ts` stages a race: A decides and
 //     stays open, B is seen waiting on the lock A holds (`pg_stat_activity`), A commits, B reads the
 //     moved application and is refused `CONFLICT`; one row is written, not two.
+//   - R1b (002:T186; the note under T186): an ever-approved teacher's call notes survive a
+//     reapplication (identity's `open`), and a new call first writes them as one `call_replaced`
+//     row (2,000 characters whole, rule 67 as amended), then replaces them; an applicant never
+//     approved keeps none and writes none; two calls at once keep each replaced note once.
 //
 // The parents are committed (a person, a profile, an administrator), as the other probes leave
 // theirs; the probes of the entry and the checks run on one transaction they roll back, the
@@ -28,6 +32,7 @@ import {
   AccountConsequences,
   applicationHistoryOf,
   recordApplicationHistory,
+  setApplication,
   StandingService,
   standingStoreOver,
 } from '../../apps/api/src/modules/identity/index.js';
@@ -330,9 +335,13 @@ async function seenWaiting(pid: number): Promise<void> {
   throw new Error(`backend ${String(pid)} never waited on a lock`);
 }
 
-/** A runs `decide` and stays open; B runs it too and is seen waiting; A commits. How B ended. */
+/**
+ * A runs `decide` and stays open; B runs `second` (`decide` unless named, R1b 002:T186) and is seen
+ * waiting; A commits. How B ended.
+ */
 async function twiceAtOnce(
   decide: (tx: Transaction) => Promise<unknown>,
+  second: (tx: Transaction) => Promise<unknown> = decide,
 ): Promise<{ readonly code: string } | { readonly value: unknown }> {
   let release = (): void => undefined;
   const released = new Promise<void>((resolve) => {
@@ -357,7 +366,7 @@ async function twiceAtOnce(
     .$transaction(async (tx) => {
       const [row] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
       pidOfB(row?.pid ?? 0);
-      return decide(tx);
+      return second(tx);
     }, OPTIONS)
     .then(
       (value: unknown) => ({ value }),
@@ -469,4 +478,159 @@ describe('a race per insert path: one decision wins, one row', () => {
       expect(await historyRows(userId)).toEqual([row]);
     },
   );
+});
+
+// R1b (002:T186; SRS DEC-97; the note under T186, (1) to (3)): a teacher once approved (`approved_at`
+// set, kept by the revocation) keeps the call's notes through a reapplication; a call recorded on the
+// new application first writes them to the history as one `call_replaced` row, then replaces them.
+describe("R1b: an ever-approved teacher's call notes are kept (T186)", () => {
+  const EARLIER = 'تحقّقت من الهوية والإجازة في المكالمة';
+  const LATER = 'مكالمة الطلب الجديد: أجاب عن الأسئلة';
+
+  /** The call's notes on the profile now. */
+  async function notesOf(userId: string): Promise<string | null> {
+    const { rows } = await db.query<{ verification_call_notes: string | null }>(
+      'SELECT verification_call_notes FROM teacher_profiles WHERE user_id = $1',
+      [userId],
+    );
+    return rows[0]?.verification_call_notes ?? null;
+  }
+
+  /** The `call_replaced` rows of the teacher's history, oldest first, with who and when. */
+  async function replacedRows(
+    userId: string,
+  ): Promise<{ note: string | null; admin_id: string; created_at: Date }[]> {
+    const { rows } = await db.query<{ note: string | null; admin_id: string; created_at: Date }>(
+      `SELECT h.note, h.admin_id, h.created_at FROM teacher_application_history h
+         JOIN teacher_profiles p ON p.id = h.teacher_profile_id
+        WHERE p.user_id = $1 AND h.action = 'call_replaced' ORDER BY h.created_at, h.id`,
+      [userId],
+    );
+    return rows;
+  }
+
+  /** A committed teacher once approved whose call's notes are `notes`, revoked: `rejected`. */
+  async function revokedTeacher(notes: string): Promise<string> {
+    const { userId, adminId } = await decidable('approved');
+    await db.query('UPDATE teacher_profiles SET verification_call_notes = $2 WHERE user_id = $1', [
+      userId,
+      notes,
+    ]);
+    await database.$transaction((tx) =>
+      standing.revokeApproval(tx, adminId, userId, 'شكوى موثّقة'),
+    );
+    return userId;
+  }
+
+  /**
+   * A committed applicant never approved whose call's notes are `notes`, in `status`; the ids.
+   */
+  async function neverApproved(
+    status: 'in_review' | 'rejected',
+    notes: string,
+  ): Promise<{ readonly userId: string; readonly adminId: string }> {
+    const ids = await decidable('in_review');
+    await db.query(
+      `UPDATE teacher_profiles SET verification_call_notes = $2, application_status = $3,
+              verification_status = $4
+        WHERE user_id = $1`,
+      [ids.userId, notes, status, status === 'rejected' ? 'rejected' : 'pending'],
+    );
+    return ids;
+  }
+
+  /** A committed teacher once approved, reapplied, whose open application holds `notes`; the ids. */
+  async function everApprovedInReview(
+    notes: string,
+  ): Promise<{ readonly userId: string; readonly adminId: string }> {
+    const ids = await decidable('approved');
+    await db.query(
+      `UPDATE teacher_profiles SET verification_call_notes = $2, application_status = 'in_review',
+              verification_status = 'pending'
+        WHERE user_id = $1`,
+      [ids.userId, notes],
+    );
+    return ids;
+  }
+
+  /** Identity's `open` from `rejected`, committed, as a reapplication writes it; whether it wrote. */
+  async function reapply(userId: string): Promise<boolean> {
+    const identityDocumentId = await insertRow(db, 'verification_documents', {
+      user_id: userId,
+      document_type: 'national_id',
+      storage_key_encrypted: Buffer.from('probe'),
+    });
+    return database.$transaction((tx) =>
+      setApplication(tx, userId, {
+        kind: 'open',
+        from: 'rejected',
+        qualificationSummary: 'إجازة في حفص',
+        identityDocumentId,
+        identityDocumentType: 'national_id',
+        submittedAt: new Date('2026-11-23T09:00:00Z'),
+      }),
+    );
+  }
+
+  const recordCall = (userId: string, adminId: string, notes: string) => (tx: Transaction) =>
+    review.applications.recordCall(tx, adminId, {
+      teacherUserId: userId,
+      completedOn: '2026-11-20',
+      timeZone: 'Africa/Cairo',
+      outcome: 'suitable',
+      notes,
+    });
+
+  it('an ever-approved teacher, revoked, reapplies: the notes stay as written', async () => {
+    const userId = await revokedTeacher(EARLIER);
+    expect(await reapply(userId)).toBe(true);
+    expect(await notesOf(userId)).toBe(EARLIER);
+  });
+
+  it('then a new call: one call_replaced row holds the earlier notes, by the recorder, now; the column the new ones', async () => {
+    const userId = await revokedTeacher(EARLIER);
+    await reapply(userId);
+    const recorder = await makeAdmin(db);
+    const before = new Date();
+    await database.$transaction(recordCall(userId, recorder, LATER));
+    const after = new Date();
+    const rows = await replacedRows(userId);
+    expect(rows.map(({ note, admin_id }) => ({ note, admin_id }))).toEqual([
+      { note: EARLIER, admin_id: recorder },
+    ]);
+    const at = rows[0]?.created_at.getTime() ?? 0;
+    expect(at).toBeGreaterThanOrEqual(before.getTime());
+    expect(at).toBeLessThanOrEqual(after.getTime());
+    expect(await notesOf(userId)).toBe(LATER);
+  });
+
+  it('keeps a 2,000-character earlier note whole (rule 67 on call_replaced)', async () => {
+    const long = 'ن'.repeat(2000);
+    const { userId, adminId } = await everApprovedInReview(long);
+    await database.$transaction(recordCall(userId, adminId, LATER));
+    expect((await replacedRows(userId)).map(({ note }) => note)).toEqual([long]);
+  });
+
+  it('a never-approved applicant reapplies: the notes are cleared, as today', async () => {
+    const { userId } = await neverApproved('rejected', EARLIER);
+    expect(await reapply(userId)).toBe(true);
+    expect(await notesOf(userId)).toBeNull();
+  });
+
+  it("a never-approved applicant's new call writes no history row", async () => {
+    const { userId, adminId } = await neverApproved('in_review', EARLIER);
+    await database.$transaction(recordCall(userId, adminId, LATER));
+    expect(await replacedRows(userId)).toEqual([]);
+    expect(await notesOf(userId)).toBe(LATER);
+  });
+
+  it('two calls at once: the second waits on the application, and the history holds each replaced note once', async () => {
+    const { userId, adminId } = await everApprovedInReview(EARLIER);
+    const third = 'المكالمة الثالثة';
+    expect(
+      await twiceAtOnce(recordCall(userId, adminId, LATER), recordCall(userId, adminId, third)),
+    ).toEqual({ value: expect.anything() });
+    expect((await replacedRows(userId)).map(({ note }) => note)).toEqual([EARLIER, LATER]);
+    expect(await notesOf(userId)).toBe(third);
+  });
 });

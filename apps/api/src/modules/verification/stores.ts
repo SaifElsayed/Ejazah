@@ -27,6 +27,7 @@ import {
   lockApplication,
   readApplicant,
   readApplication,
+  readCallNotes,
   readStanding,
   recordApplicationCall,
   recordApplicationHistory,
@@ -172,6 +173,8 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
             }),
       };
     },
+    // R1b (002:T186): the notes a new call replaces, through identity's entry.
+    callNotesOf: readCallNotes,
     recordCall: recordApplicationCall,
     decide: decideApplication,
     grantSubjects,
