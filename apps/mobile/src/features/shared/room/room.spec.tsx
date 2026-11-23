@@ -1216,6 +1216,8 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
   const firstCall = (called: { readonly mock: { readonly invocationCallOrder: number[] } }) =>
     called.mock.invocationCallOrder[0] ?? Infinity;
   const connects = () => rooms.reduce((sum, made) => sum + made.connect.mock.calls.length, 0);
+  /** DEC-107: words that would name the encryption to the participant. */
+  const NAMES_ENCRYPTION = /تشفير|مشفّ?ر|encrypt/i;
 
   it('sets the session’s key in shared-key mode and awaits it before connecting, the room encrypting with it', async () => {
     const keySet = deferred<boolean>();
@@ -1245,7 +1247,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     );
   });
 
-  it('turns encryption on before connecting and before the microphone is published, and says it is on', async () => {
+  it('turns encryption on before connecting and before the microphone is published, and names it nowhere (DEC-107)', async () => {
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(waiting(direction))).toBeTruthy();
       const made = room();
@@ -1254,17 +1256,18 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
       expect(firstCall(made.setE2EEEnabled)).toBeLessThan(
         firstCall(made.localParticipant.setMicrophoneEnabled),
       );
-      expect(screen.getByText(said(direction, 'session.room.encryption.on'))).toBeTruthy();
+      expect(screen.queryAllByText(NAMES_ENCRYPTION)).toEqual([]);
     });
   });
 
-  it('does not join when the key cannot be set: says why in Arabic and English and tells the server once', async () => {
+  it('does not join when the key cannot be set: says it could not connect, in Arabic and English, and tells the server once', async () => {
     everyKeyProvider((made) => made.setSharedKey.mockRejectedValue(new Error('no frame cryptor')));
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(
-        await screen.findByText(said(direction, 'session.room.encryption.failed')),
+        await screen.findByText(said(direction, 'session.room.connectFailed')),
       ).toBeTruthy();
       expect(screen.queryByText(waiting(direction))).toBeNull();
+      expect(screen.queryAllByText(NAMES_ENCRYPTION)).toEqual([]);
     });
     expect(connects()).toBe(0);
     expect(keyProviders.length).toBeGreaterThan(0);
@@ -1279,7 +1282,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
       throw new TypeError('WebRTCModule.frameCryptorFactoryCreateKeyProvider is not a function');
     });
     await renderIn('ltr', ui());
-    expect(await screen.findByText(said('ltr', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(await screen.findByText(said('ltr', 'session.room.connectFailed'))).toBeTruthy();
     await advance(10 * 60_000);
     expect(rooms).toHaveLength(0);
     expect(join()).toHaveBeenCalledTimes(1);
@@ -1290,7 +1293,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
   it('does not connect when encryption cannot be turned on: says why and tells the server once', async () => {
     everyRoom((made) => made.setE2EEEnabled.mockRejectedValue(new Error('e2ee not configured')));
     await renderIn('rtl', ui());
-    expect(await screen.findByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(await screen.findByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     await advance(10 * 60_000);
     expect(connects()).toBe(0);
     expect(room().localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled();
@@ -1301,7 +1304,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     expect(reported()).toHaveBeenCalledWith({ sessionId: SESSION_ID });
     await screen.unmount();
     await renderIn('ltr', ui());
-    expect(await screen.findByText(said('ltr', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(await screen.findByText(said('ltr', 'session.room.connectFailed'))).toBeTruthy();
   });
 
   it('leaves the room when the SDK raises an encryption error for this side, and tells the server once', async () => {
@@ -1311,7 +1314,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     await act(async () => {
       made.emit(RoomEvent.EncryptionError, new Error('encryption failed'), made.localParticipant);
     });
-    expect(screen.getByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     expect(made.disconnect).toHaveBeenCalledTimes(1);
     expect(made.listenerCount()).toBe(0);
     expect(watchers.size).toBe(0);
@@ -1328,7 +1331,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     await act(async () => {
       report('me', 'cryptor-microphone', 'encryptionFailed');
     });
-    expect(screen.getByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     expect(made.disconnect).toHaveBeenCalledTimes(1);
     await advance(10 * 60_000);
     expect(join()).toHaveBeenCalledTimes(1);
@@ -1339,9 +1342,9 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     reported().mockRejectedValue(apiError('RATE_LIMITED'));
     everyKeyProvider((made) => made.setSharedKey.mockRejectedValue(new Error('no frame cryptor')));
     await renderIn('rtl', ui());
-    expect(await screen.findByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(await screen.findByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     await advance(60_000);
-    expect(screen.getByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     expect(screen.queryByText(said('rtl', 'common.state.actionError'))).toBeNull();
     expect(screen.queryByText(said('rtl', 'common.state.rateLimited'))).toBeNull();
     expect(screen.queryByRole('button', { name: said('rtl', 'common.action.retry') })).toBeNull();
@@ -1372,7 +1375,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     expect(shared.setSubscribed).toHaveBeenCalledWith(false);
     expect(screen.queryByTestId('video:teacher-1:camera')).toBeNull();
     expect(screen.queryByTestId('video:teacher-1:screen_share')).toBeNull();
-    expect(screen.getByText(said('rtl', 'session.room.encryption.unencrypted'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
   });
 
   it('plays an encrypted counterparty track and says nothing of it', async () => {
@@ -1392,7 +1395,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     expect(camera.setSubscribed).not.toHaveBeenCalled();
     expect(microphone.setSubscribed).not.toHaveBeenCalled();
     expect(screen.getByTestId('video:teacher-1:camera')).toBeTruthy();
-    expect(screen.queryByText(said('rtl', 'session.room.encryption.unencrypted'))).toBeNull();
+    expect(screen.queryByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeNull();
   });
 
   it('says in words that the counterparty’s frames cannot be decrypted, never a black picture', async () => {
@@ -1413,21 +1416,21 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
       report('teacher-1', 'cryptor-camera', 'decryptionFailed');
     });
     expect(screen.queryByTestId('video:teacher-1:camera')).toBeNull();
-    expect(screen.getByText(said('rtl', 'session.room.encryption.undecryptable'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
     await act(async () => {
       report('teacher-1', 'cryptor-camera', 'ok');
     });
     expect(screen.getByTestId('video:teacher-1:camera')).toBeTruthy();
-    expect(screen.queryByText(said('rtl', 'session.room.encryption.undecryptable'))).toBeNull();
+    expect(screen.queryByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeNull();
     await act(async () => {
       report('teacher-1', 'cryptor-microphone', 'missingKey');
     });
-    expect(screen.getByText(said('rtl', 'session.room.encryption.undecryptable'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
     // This side's own cryptor saying all is well changes nothing of the counterparty's.
     await act(async () => {
       report('me', 'cryptor-own', 'ok');
     });
-    expect(screen.getByText(said('rtl', 'session.room.encryption.undecryptable'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
   });
 
   it('drops the key and the cryptors’ watch when the room ends, and sets the grant’s key again in a room made again', async () => {
@@ -1461,7 +1464,7 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     nextKeyProvider((made) => made.setSharedKey.mockRejectedValueOnce(new Error('no key')));
     await lose();
     await advance(2_000);
-    expect(screen.getByText(said('rtl', 'session.room.encryption.failed'))).toBeTruthy();
+    expect(screen.getByText(said('rtl', 'session.room.connectFailed'))).toBeTruthy();
     await screen.unmount();
     await advance(0);
     const text = (value: unknown): string => {

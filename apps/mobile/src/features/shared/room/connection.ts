@@ -36,10 +36,11 @@
 // manager, and `setE2EEEnabled(true)` runs before `connect`, so nothing is published unencrypted
 // (livekit-client 2.23.0 `Room.ts:539-556`, `LocalParticipant.ts:493-507`). A key that cannot be
 // set, encryption that cannot be turned on, or this side's encryption failing in the room leaves
-// it: the screen says why, `sessions.encryptionFailed` is told once and its own failure changes
-// nothing, and no try follows. A counterparty track that is not encrypted is unsubscribed (audio
-// plays natively once subscribed) and said so; frames that cannot be decrypted are said in words,
-// not drawn black. The key is in memory only and dropped with the room.
+// it: the screen says the session could not connect, `sessions.encryptionFailed` is told once and
+// its own failure changes nothing, and no try follows. A counterparty track that is not encrypted
+// is unsubscribed (audio plays natively once subscribed); it, and frames that cannot be decrypted,
+// are said to be unavailable, not drawn black. The screen never names the encryption (DEC-107).
+// The key is in memory only and dropped with the room.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
@@ -96,9 +97,7 @@ export interface RoomView {
   readonly startingShare: boolean;
   /** A share is stopping: no new one is offered until the stop has settled. */
   readonly stoppingShare: boolean;
-  /** 004:T084: the SDK reports this side's media encrypted. */
-  readonly encrypted: boolean;
-  /** A counterparty track came unencrypted: it is not played. */
+  /** 004:T084: a counterparty track came unencrypted: it is not played. */
   readonly counterpartyUnencrypted: boolean;
   /** A counterparty frame cryptor cannot decrypt: none of their video is drawn. */
   readonly counterpartyUndecryptable: boolean;
@@ -228,7 +227,6 @@ export class RoomConnection {
       shareWarningOpen: this.shareWarningOpen,
       startingShare: this.startingShare,
       stoppingShare: this.stoppingShare,
-      encrypted: room?.isE2EEEnabled ?? false,
       counterpartyUnencrypted: MEDIA_SOURCES.some(
         (source) => remote?.getTrackPublication(source)?.isEncrypted === false,
       ),
@@ -431,7 +429,10 @@ export class RoomConnection {
     return this.closed || this.room !== room ? undefined : room;
   }
 
-  /** NFR-SEC-13: no room unencrypted; the screen says why and the server hears it once (DEC-105). */
+  /**
+   * NFR-SEC-13: no room unencrypted; the screen says the session could not connect (DEC-107) and
+   * the server hears it once (DEC-105).
+   */
   private cannotEncrypt(): void {
     if (this.closed) return;
     this.set({ kind: 'encryptionFailed' });
@@ -534,7 +535,6 @@ export class RoomConnection {
       .on(RoomEvent.TrackUnmuted, changed)
       .on(RoomEvent.LocalTrackPublished, changed)
       .on(RoomEvent.LocalTrackUnpublished, changed)
-      .on(RoomEvent.ParticipantEncryptionStatusChanged, changed)
       .on(RoomEvent.EncryptionError, (_error, participant) => {
         if (participant === undefined || participant.isLocal) this.encryptionBroke(room);
       });
