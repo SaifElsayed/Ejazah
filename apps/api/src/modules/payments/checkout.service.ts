@@ -328,7 +328,7 @@ export function checkoutStepsOver(
   notices: PaymentOutcomeNotices,
   now: () => Date = () => new Date(),
 ): CheckoutSteps {
-  const pay = payStoreOver();
+  const pay = payStoreOver(payableProgrammeOrderAmong);
   return {
     currentHold: (tx, student, rule) => currentHoldOf(tx, student, rule),
     enrollmentStatus: (tx, studentUserId, enrollmentId) =>
