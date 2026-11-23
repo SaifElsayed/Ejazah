@@ -46,7 +46,8 @@
 //   the refund's share (5,250 / 5,512.50); `programme_stopped` (an approved stop) the same after the
 //   last consumed session's window (done or a student's no-show; FU-E2 (a)). A second stop writes
 //   nothing (rule 62; not scheduled).
-// The closes above (a dropout, a complaint) are unchanged here: T012 values them per order.
+// 006:T012: a programme's close on a complaint against the student releases each session's share by
+// its own order (`programmePlaces`, `sumByOrder`); a dropout releases nothing more (DEC-85).
 import type { ShareReleaseMilestone } from '@ijazah/contracts';
 import {
   lowest,
@@ -67,6 +68,8 @@ export interface ReleaseSession {
   readonly outcome: string | undefined;
   /** A make-up's: the sequence number of the original session it makes up, through any chain. */
   readonly madeUpSequence?: number;
+  /** 006:T012 (R-507, R-512): an offer session's programme month; absent on every other. */
+  readonly programmeMonth?: number;
 }
 
 /** A paid order and its share (ERD §7). */
@@ -74,6 +77,8 @@ export interface ReleaseOrder {
   readonly paymentId: string;
   /** 006:T011 (R-502): what the order pays for; `package` on every order before the programme. */
   readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T012: an `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
   /** 006:T011: the order's gross as charged (an `assessment` order's is the fee). */
   readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
@@ -211,6 +216,88 @@ export function complaintCloseAmount(
 /** Q-B1-4 (a): the sequence number a session is valued by, a make-up's original's. */
 export function valuedSequence(session: ReleaseSession): number {
   return session.madeUpSequence ?? session.sequenceNumber;
+}
+
+/** 006:T012 (R-502): an order as a programme's sessions are valued by it. */
+export interface PlacedOrder {
+  readonly kind: ReleaseOrder['kind'];
+  /** An `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
+}
+
+/** 006:T012: the order a programme's session is valued by, that order's sessions, and its place. */
+export interface SessionPlace<O extends PlacedOrder> {
+  readonly order: O;
+  readonly count: number;
+  readonly position: number;
+}
+
+/**
+ * 006:T012 (R-512 «the closes' amounts per session», analyze G-3): each of a programme's sessions, by
+ * its sequence number, with the order that paid it and its place among that order's sessions. Session
+ * 1 is the assessment's (1 of 1: the fee). In full, the k-th offer session is the rest's (k of N:
+ * (total − fee) ÷ N). By months, the k-th session of month m is that month's order's (k of the month's
+ * sessions). Offer sessions are those with a programme month, make-ups aside: a make-up is valued by
+ * the session it makes up (`valuedSequence`). A session of a month not paid has none. A second paid
+ * order of a month or of the rest goes to its own case (Q-B1-10 (a)): the first by id is the one.
+ */
+export function programmePlaces<O extends PlacedOrder>(
+  orders: readonly O[],
+  sessions: readonly ReleaseSession[],
+): ReadonlyMap<number, SessionPlace<O>> {
+  const places = new Map<number, SessionPlace<O>>();
+  const assessment = orders.find(({ kind }) => kind === 'assessment');
+  if (assessment !== undefined) places.set(1, { order: assessment, count: 1, position: 1 });
+  const offer = sessions
+    .filter((one) => one.madeUpSequence === undefined && one.programmeMonth !== undefined)
+    .toSorted((a, b) => a.sequenceNumber - b.sequenceNumber);
+  const place = (order: O, members: readonly ReleaseSession[]): void => {
+    members.forEach((one, index) => {
+      places.set(one.sequenceNumber, { order, count: members.length, position: index + 1 });
+    });
+  };
+  const rest = orders.find(({ kind }) => kind === 'rest_in_full');
+  if (rest !== undefined) {
+    place(rest, offer);
+    return places;
+  }
+  const months = new Map<number, ReleaseSession[]>();
+  for (const one of offer) {
+    if (one.programmeMonth === undefined) continue;
+    months.set(one.programmeMonth, [...(months.get(one.programmeMonth) ?? []), one]);
+  }
+  for (const [month, members] of months) {
+    const paid = orders.find(
+      ({ kind, instalmentMonth }) => kind === 'instalment' && instalmentMonth === month,
+    );
+    if (paid !== undefined) place(paid, members);
+  }
+  return places;
+}
+
+/**
+ * 006:T012: over each order a programme's sessions are placed in, `each` of the order, its sessions'
+ * count and the places among them of the sessions `named` by valued sequence, summed (an order none
+ * of them names still counts, as a refund of what was not taken needs).
+ */
+export function sumByOrder<O extends PlacedOrder>(
+  places: ReadonlyMap<number, SessionPlace<O>>,
+  named: readonly number[],
+  each: (order: O, count: number, positions: readonly number[]) => Piasters,
+): Piasters {
+  const counts = new Map([...places.values()].map(({ order, count }) => [order, count] as const));
+  return sumOf(
+    [...counts].map(([order, count]) =>
+      each(
+        order,
+        count,
+        named.flatMap((sequence) => {
+          const place = places.get(sequence);
+          return place?.order === order ? [place.position] : [];
+        }),
+      ),
+    ),
+  );
 }
 
 /** The teacher's share of the order's refunded total, «عليه» (Q-6 as revised: T104's rounding up). */
@@ -452,16 +539,18 @@ export function plannedReleases(
     }
     if (release === 'student_complaint_close') {
       const counted = sequencesOf(CONSUMED);
+      const taken = counted.map(valuedSequence);
+      // 006:T012 (R-512, G-3): a programme's sessions each by their own order; a package's by its
+      // first order ÷ the count.
+      const share_piasters =
+        programme === undefined
+          ? shareOfSessions(order.share_piasters, enrollment.sessionCount, taken)
+          : sumByOrder(programmePlaces(facts.orders, sessions), taken, (paid, count, positions) =>
+              shareOfSessions(paid.share_piasters, count, positions),
+            );
       owe(
         'student_complaint_close',
-        complaintCloseAmount(
-          shareOfSessions(
-            order.share_piasters,
-            enrollment.sessionCount,
-            counted.map(valuedSequence),
-          ),
-          [...written.values()],
-        ),
+        complaintCloseAmount(share_piasters, [...written.values()]),
         after(lastToEnd(counted), windowHours),
         true,
       );

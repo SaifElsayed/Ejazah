@@ -11,7 +11,8 @@ import type { CaseOrder } from './case-amount.rules.js';
 const PAID_STATUSES = ['paid', 'refunded'] as const;
 
 /**
- * The enrollment's paid orders with a share, oldest first by their time-ordered id; an order from
+ * The enrollment's paid orders with a share, oldest first by their time-ordered id, each with its
+ * kind and an instalment's month (006:T012, R-512); an order from
  * before the commission (no share, rule 52's pair) is left out, as the releases leave it out.
  */
 export async function caseOrdersOf(
@@ -25,18 +26,28 @@ export async function caseOrdersOf(
       teacherSharePiasters: { not: null },
     },
     orderBy: { id: 'asc' },
-    select: { id: true, grossPiasters: true, teacherSharePiasters: true, refundedPiasters: true },
+    select: {
+      id: true,
+      kind: true,
+      instalmentMonth: true,
+      grossPiasters: true,
+      teacherSharePiasters: true,
+      refundedPiasters: true,
+    },
   });
-  return rows.flatMap(({ id, grossPiasters, teacherSharePiasters, refundedPiasters }) =>
-    teacherSharePiasters === null
-      ? []
-      : [
-          {
-            paymentId: id,
-            paid_piasters: piasters(Number(grossPiasters)),
-            share_piasters: piasters(Number(teacherSharePiasters)),
-            refunded_piasters: piasters(Number(refundedPiasters)),
-          },
-        ],
+  return rows.flatMap(
+    ({ id, kind, instalmentMonth, grossPiasters, teacherSharePiasters, refundedPiasters }) =>
+      teacherSharePiasters === null
+        ? []
+        : [
+            {
+              paymentId: id,
+              kind,
+              instalmentMonth,
+              paid_piasters: piasters(Number(grossPiasters)),
+              share_piasters: piasters(Number(teacherSharePiasters)),
+              refunded_piasters: piasters(Number(refundedPiasters)),
+            },
+          ],
   );
 }

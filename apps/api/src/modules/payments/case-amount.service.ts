@@ -4,20 +4,43 @@
 //
 // THE OWNERS (R-API-6): the case's kind, enrollment and reason are moderation's (`caseRecordOf`); the
 // enrollment's track and count booking's; its sessions' outcomes sessions' (a disputed one by its
-// frozen outcome, a make-up by its original, `releaseSessionsOf`); the orders and the releases
-// payments' own. A case whose reason gives no amount reads nothing more; the rest are read at once.
-// Each read is bounded by one enrollment and takes no lock: the amount is a figure.
+// frozen outcome, a make-up by its original, `releaseSessionsOf`; 006:T012: an offer session's
+// programme month); the orders (006:T012: with their kinds and months) and the releases payments'
+// own. A case whose reason gives no amount reads nothing more; the rest are read at once. Each read
+// is bounded by one enrollment and takes no lock: the amount is a figure.
+//
+// 006:T012 (FR-729; the B-P2 conflict check): an `admin_ended` case is read on, as it gives an amount
+// on a programme where it covered the open `teacher_suspended` case (`closePausedCaseOnEnd`). That
+// suspension case is closed `ended_meanwhile` by the end (a reinstatement's note is `reinstated`), and
+// an enrollment ends once, so the end that closed it is this case: moderation's cases of the
+// enrollment, then each `teacher_suspended` one's record (bounded by the enrollment's cases).
 import type { PaymentsCaseAmountOutput } from '@ijazah/contracts/admin';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { type CaseRecord, caseRecordOf } from '../moderation/index.js';
+import {
+  type CaseRecord,
+  caseRecordOf,
+  compensationCasesAmong,
+  type EnrollmentCase,
+} from '../moderation/index.js';
 import type { EnrollmentSessionRow } from '../sessions/index.js';
 import { caseOrdersOf } from './case-amount.repository.js';
 import { caseAmountOf, type CaseOrder } from './case-amount.rules.js';
 import { type ReleaseRow, releasesOf } from './share-release.repository.js';
-import { closingCauseOf, type ReleaseEnrollment } from './share-release.rules.js';
+import {
+  closingCauseOf,
+  type ReleaseEnrollment,
+  type ReleaseSession,
+} from './share-release.rules.js';
 import { releaseReads, releaseSessionsOf } from './share-release.service.js';
+
+/** 006:T012: the end that reads whether it covered a teacher's suspension. */
+const SUSPENSION_COVERING_END = 'admin_ended';
+/** 006:T012: sessions' `PAUSED_CASE_REASON` (`teacher-suspension.service.ts`). */
+const PAUSED_CASE_REASON = 'teacher_suspended';
+/** 006:T012: sessions' `ENDED_MEANWHILE_NOTE`, the note an end closes a paused case with. */
+const ENDED_MEANWHILE_NOTE = 'ended_meanwhile';
 
 /** What the amount is computed from, each read on the caller's transaction; faked in a spec. */
 export interface CaseAmountReads {
@@ -40,6 +63,11 @@ export interface CaseAmountReads {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, string>>;
+  /** 006:T012: moderation's, each enrollment's compensation cases, newest first. */
+  casesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly EnrollmentCase[]>>;
 }
 
 /** The reads over payments' own queries and the owners' entries, the releases' own where shared. */
@@ -50,7 +78,36 @@ export const caseAmountReads: CaseAmountReads = {
   enrollmentsAmong: releaseReads.enrollmentsAmong,
   sessionsAmong: releaseReads.sessionsAmong,
   makeupsAmong: releaseReads.makeupsAmong,
+  casesAmong: compensationCasesAmong,
 };
+
+/** 006:T012: the enrollment's sessions as the rules read them, each offer session with its month. */
+function sessionsWithMonths(
+  rows: readonly EnrollmentSessionRow[],
+  makeups: ReadonlyMap<string, string>,
+): ReleaseSession[] {
+  const monthOf = new Map(
+    rows.map(({ sequenceNumber, programmeMonth }) => [sequenceNumber, programmeMonth]),
+  );
+  return releaseSessionsOf(rows, makeups).map((one) => {
+    const programmeMonth = monthOf.get(one.sequenceNumber);
+    return programmeMonth === undefined ? one : { ...one, programmeMonth };
+  });
+}
+
+/** 006:T012: whether the end closed the enrollment's `teacher_suspended` case (this file's head). */
+async function coveredSuspension(
+  tx: Transaction,
+  enrollmentId: string,
+  reads: CaseAmountReads,
+): Promise<boolean> {
+  const cases = (await reads.casesAmong(tx, [enrollmentId])).get(enrollmentId) ?? [];
+  const suspensions = cases.filter(({ reason }) => reason === PAUSED_CASE_REASON);
+  const records = await Promise.all(
+    suspensions.map(({ caseId }) => reads.caseRecordOf(tx, caseId)),
+  );
+  return records.some((one) => one?.resolutionNotes === ENDED_MEANWHILE_NOTE);
+}
 
 /** The amount case `caseId` shows, none for a reason outside the map; NOT_FOUND for no case. */
 export async function caseAmount(
@@ -60,14 +117,17 @@ export async function caseAmount(
 ): Promise<PaymentsCaseAmountOutput> {
   const found = await reads.caseRecordOf(tx, caseId);
   if (found === null) throw new DomainError('NOT_FOUND');
-  if (found.kind !== 'compensation_case' || closingCauseOf(found.reason) === undefined) return {};
+  const coveringEnd = found.reason === SUSPENSION_COVERING_END;
+  if (found.kind !== 'compensation_case') return {};
+  if (closingCauseOf(found.reason) === undefined && !coveringEnd) return {};
   const ids = [found.enrollmentId];
-  const [orders, releases, enrollments, sessions, makeups] = await Promise.all([
+  const [orders, releases, enrollments, sessions, makeups, covers] = await Promise.all([
     reads.caseOrdersOf(tx, found.enrollmentId),
     reads.releasesOf(tx, ids),
     reads.enrollmentsAmong(tx, ids),
     reads.sessionsAmong(tx, ids),
     reads.makeupsAmong(tx, ids),
+    coveringEnd ? coveredSuspension(tx, found.enrollmentId, reads) : Promise.resolve(false),
   ]);
   const enrollment = enrollments.get(found.enrollmentId);
   if (enrollment === undefined) return {};
@@ -77,7 +137,8 @@ export async function caseAmount(
     track: enrollment.track,
     sessionCount: enrollment.sessionCount,
     orders,
-    sessions: releaseSessionsOf(sessions.get(found.enrollmentId) ?? [], makeups),
+    sessions: sessionsWithMonths(sessions.get(found.enrollmentId) ?? [], makeups),
+    coversSuspension: covers,
     releases: releases.map(({ milestone, amount_piasters, markedAt }) => ({
       milestone,
       amount_piasters,

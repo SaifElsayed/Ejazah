@@ -239,6 +239,7 @@ async function sweep(enrollmentId: string, paymentId: string) {
               paymentId,
               enrollmentId,
               kind: 'assessment' as const,
+              instalmentMonth: null,
               paid_piasters: piasters(50_000),
               share_piasters: piasters(35_000),
               sharePercent: 70,

@@ -17,6 +17,7 @@ import {
   createShareReleaseSweep,
   type ReleaseReads,
   releaseReads,
+  releaseSessionsOf,
   releasesAmong,
 } from './share-release.service.js';
 
@@ -61,6 +62,7 @@ function world(count: number, failOn?: number): World {
       paymentId: id(200 + n),
       enrollmentId,
       kind: 'package',
+      instalmentMonth: null,
       paid_piasters: piasters(1_000_000),
       share_piasters: piasters(700_000),
       sharePercent: 70,
@@ -266,6 +268,7 @@ const assessmentOf = (enrollmentId: string, paymentId: string): ShareOrderRow =>
   paymentId,
   enrollmentId,
   kind: 'assessment',
+  instalmentMonth: null,
   paid_piasters: piasters(50_000),
   share_piasters: piasters(35_000),
   sharePercent: 70,
@@ -439,5 +442,32 @@ describe('006:T011 FU-E3 a programme enrollment with no programme row', () => {
     await sweepOver(packages, 1).run();
 
     expect([...programme.warns, ...packages.warns]).toEqual([]);
+  });
+});
+
+describe('006:T012 the sessions as the release rules read them', () => {
+  it('carry each offer session’s programme month, a make-up valued by its original', () => {
+    const rows = [
+      { id: id(601), sequenceNumber: 1, status: 'done' },
+      { id: id(602), sequenceNumber: 2, status: 'done', programmeMonth: 1 },
+      { id: id(603), sequenceNumber: 3, status: 'done' },
+    ].map((row) => ({
+      ...row,
+      endsAt: new Date('2026-10-01T10:00:00Z'),
+    })) as unknown as EnrollmentSessionRow[];
+
+    expect(
+      releaseSessionsOf(rows, new Map([[id(603), id(602)]])).map(
+        ({ sequenceNumber, programmeMonth, madeUpSequence }) => [
+          sequenceNumber,
+          programmeMonth,
+          madeUpSequence,
+        ],
+      ),
+    ).toEqual([
+      [1, undefined, undefined],
+      [2, 1, undefined],
+      [3, undefined, 2],
+    ]);
   });
 });

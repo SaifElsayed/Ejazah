@@ -25,19 +25,35 @@
 //   (T105's map). What is not refunded stays where the gateway holds it (Q-7a (a)).
 // A delivered make-up takes the value of the session it makes up (Q-B1-4 (a)). Beside each amount,
 // the refunds already recorded on its orders (Q-C1 (a)), nothing taken off it.
+//
+// 006:T012 (FR-729, FR-730; R-512; analyze G-3, G-4; DEC-85, DEC-94). A PROGRAMME (its orders hold an
+// `assessment`) values each session by its own order (`programmePlaces`): the assessment the fee, in
+// full (total − fee) ÷ N, by months the month ÷ its sessions; an offer of 10,000 EGP with a 500 fee
+// gives 500, 237.50 and 250 EGP. Its refunds and releases sum the orders' own; the refunds already
+// recorded are every order's. Its dropout set is `teacher_ended`, `absence_termination` and an
+// `admin_ended` that covered its open `teacher_suspended` case (`coversSuspension`), each the whole of
+// every order (DEC-85); a direct end of an unsuspended programme is T125's (R1b), and an open
+// suspension case is a pause and shows none. A package keeps the rules above on its first order.
 import { dropoutParts, type Piasters, shareOfSessions, sumOf, untakenValue } from '@ijazah/money';
 
 import {
   closingCauseOf,
   complaintCloseAmount,
   CONSUMED,
+  programmePlaces,
   type ReleaseSession,
+  type SessionPlace,
+  sumByOrder,
   valuedSequence,
 } from './share-release.rules.js';
 
 /** One paid order of the enrollment with a teacher's share, in id order (ERD §7). */
 export interface CaseOrder {
   readonly paymentId: string;
+  /** 006:T012 (R-502): what the order pays for; `package` on every order before the programme. */
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T012: an `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
   readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
   /** The order's refunded total (T102). */
@@ -61,6 +77,11 @@ export interface CaseAmountFacts {
   readonly orders: readonly CaseOrder[];
   readonly sessions: readonly ReleaseSession[];
   readonly releases: readonly CaseRelease[];
+  /**
+   * 006:T012: an `admin_ended` case covered the enrollment's open `teacher_suspended` case (an
+   * administrator's end of a suspended programme, `closePausedCaseOnEnd`).
+   */
+  readonly coversSuspension: boolean;
 }
 
 export type CaseAmount =
@@ -114,34 +135,90 @@ function refundedOf(orders: readonly CaseOrder[]): Piasters {
   return sumOf(orders.map(({ refunded_piasters }) => refunded_piasters));
 }
 
+/** 006:T012: the end that is in a programme's dropout set only where it covered a suspension. */
+const SUSPENSION_COVERING_END = 'admin_ended';
+
+/** How a case values sessions named by their valued sequence numbers. */
+interface SessionValues {
+  /** What was paid for the sessions not named: the refund of what was not taken. */
+  untaken(named: readonly number[]): Piasters;
+  /** What was paid for the named sessions (FR-337's split). */
+  paid(named: readonly number[]): Piasters;
+  /** The teacher's share of the named sessions. */
+  share(named: readonly number[]): Piasters;
+  /** The refunds already recorded on the orders valued (Q-C1 (a)). */
+  readonly refunded_piasters: Piasters;
+}
+
+/** A package: every session valued by its first order ÷ the count (T110). */
+function packageValues(order: CaseOrder, sessionCount: number): SessionValues {
+  return {
+    untaken: (named) => untakenValue(order.paid_piasters, sessionCount, named),
+    paid: (named) => shareOfSessions(order.paid_piasters, sessionCount, named),
+    share: (named) => shareOfSessions(order.share_piasters, sessionCount, named),
+    refunded_piasters: refundedOf([order]),
+  };
+}
+
+/** 006:T012 (R-512, G-3): a programme: each session valued by its own order (`programmePlaces`). */
+function programmeValues(
+  orders: readonly CaseOrder[],
+  places: ReadonlyMap<number, SessionPlace<CaseOrder>>,
+): SessionValues {
+  const summed =
+    (each: (order: CaseOrder, count: number, positions: readonly number[]) => Piasters) =>
+    (named: readonly number[]): Piasters =>
+      sumByOrder(places, named, each);
+  return {
+    untaken: summed((order, count, positions) =>
+      untakenValue(order.paid_piasters, count, positions),
+    ),
+    paid: summed((order, count, positions) =>
+      shareOfSessions(order.paid_piasters, count, positions),
+    ),
+    share: summed((order, count, positions) =>
+      shareOfSessions(order.share_piasters, count, positions),
+    ),
+    refunded_piasters: refundedOf(orders),
+  };
+}
+
 /** The amount the case's cause gives, or none. */
 export function caseAmountOf(facts: CaseAmountFacts): CaseAmount | undefined {
   if (facts.kind !== 'compensation_case') return undefined;
   const cause = closingCauseOf(facts.reason);
   const [order] = facts.orders;
-  if (cause === undefined || order === undefined) return undefined;
+  if (order === undefined) return undefined;
   const { sessionCount, sessions, releases } = facts;
+  const programme = facts.orders.some(({ kind }) => kind === 'assessment');
+  // 006:T012 (FR-729): an administrator's end of a suspended programme is a dropout (DEC-85).
+  const coveredSuspension =
+    programme && facts.reason === SUSPENSION_COVERING_END && facts.coversSuspension;
 
-  if (cause === 'teacher_dropout' && facts.track === 'ijazah_track') {
+  if ((cause === 'teacher_dropout' || coveredSuspension) && facts.track === 'ijazah_track') {
     const parts = dropoutParts(
       facts.orders,
       releases.filter(({ marked }) => marked).map(({ amount_piasters }) => amount_piasters),
     );
     return { cause: 'ijazah_dropout', ...parts, refunded_piasters: refundedOf(facts.orders) };
   }
+  if (cause === undefined) return undefined;
 
+  const values = programme
+    ? programmeValues(facts.orders, programmePlaces(facts.orders, sessions))
+    : packageValues(order, sessionCount);
   const consumed = sequencesIn(sessions, CONSUMED);
   if (cause === 'teacher_dropout') {
     return {
       cause: 'recitation_dropout',
-      refund_piasters: untakenValue(order.paid_piasters, sessionCount, consumed),
-      release_piasters: shareOfSessions(order.share_piasters, sessionCount, consumed),
-      refunded_piasters: refundedOf([order]),
+      refund_piasters: values.untaken(consumed),
+      release_piasters: values.share(consumed),
+      refunded_piasters: values.refunded_piasters,
     };
   }
 
   const release_piasters = complaintCloseAmount(
-    shareOfSessions(order.share_piasters, sessionCount, consumed),
+    values.share(consumed),
     releases
       .filter(({ milestone }) => milestone !== 'student_complaint_close')
       .map(({ amount_piasters }) => amount_piasters),
@@ -153,18 +230,18 @@ export function caseAmountOf(facts: CaseAmountFacts): CaseAmount | undefined {
     const owed = sequencesIn(sessions, OWED_BEFORE_CLOSE).filter((one) => !taken.has(one));
     return {
       cause: 'student_fault_close',
-      // The value of the named sessions of the order, as a share of sessions is valued (FR-337's split).
-      owed_piasters: shareOfSessions(order.paid_piasters, sessionCount, owed),
-      decision_piasters: untakenValue(order.paid_piasters, sessionCount, [...consumed, ...owed]),
+      // The value of the named sessions, as a share of sessions is valued (FR-337's split).
+      owed_piasters: values.paid(owed),
+      decision_piasters: values.untaken([...consumed, ...owed]),
       release_piasters,
-      refunded_piasters: refundedOf([order]),
+      refunded_piasters: values.refunded_piasters,
     };
   }
 
   return {
     cause: 'student_complaint_close',
-    refund_piasters: untakenValue(order.paid_piasters, sessionCount, consumed),
+    refund_piasters: values.untaken(consumed),
     release_piasters,
-    refunded_piasters: refundedOf([order]),
+    refunded_piasters: values.refunded_piasters,
   };
 }

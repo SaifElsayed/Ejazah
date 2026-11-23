@@ -405,6 +405,7 @@ No open question remains.
   > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** The student-chosen direct end of the
   > amendment above is T125's (R1b, after B-P2), built on this task's set; B-P2 adds `admin_ended` only where it covered
   > an open `teacher_suspended` case.
+  > **Not scheduled, a rare case (B-P2 lane e, 2026-11-23; the review session).** A rest paid in full whose sessions were never generated (`slot_unavailable`, T006) has no sessions to value, so a complaint close refunds nothing for that order; the refused generation's compensation case (T006) already covers the paid order, so nothing is counted twice.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 

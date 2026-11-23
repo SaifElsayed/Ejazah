@@ -53,6 +53,7 @@ function facts(
   const order = rest.order ?? {
     paymentId: PAYMENT,
     kind: 'package' as const,
+    instalmentMonth: null,
     paid_piasters: piasters(1_000_000),
     share_piasters: piasters(700_000),
     sharePercent: 70,
@@ -572,6 +573,7 @@ const programmeOrder = (
 ): ReleaseOrder => ({
   paymentId: `0199d0a0-0000-7000-8000-0000000006${String(n).padStart(2, '0')}`,
   kind,
+  instalmentMonth: kind === 'instalment' ? n - 1 : null,
   paid_piasters: piasters(gross),
   share_piasters: piasters(share),
   sharePercent: 70,
@@ -1035,6 +1037,87 @@ describe('006:T011 `package` orders keep today’s rules', () => {
     const duplicate = { ...first.order, paymentId: '0199d0a0-0000-7000-8000-000000000699' };
     expect(plan({ ...first, orders: [first.order, duplicate] })).toMatchObject([
       { milestone: 'recitation_end', amount: 700_000 },
+    ]);
+  });
+});
+
+describe('006:T012 a programme’s close on a complaint against the student releases each session by its own order (R-512, G-3)', () => {
+  /**
+   * Session 1 the assessment, then sessions 2 to `last` with their months (`months[k]` for session
+   * k + 2); the first `taken` delivered, the rest cancelled at the close.
+   */
+  const closedSessions = (
+    last: number,
+    taken: number,
+    months: readonly number[],
+  ): ReleaseSession[] =>
+    Array.from({ length: last }, (_, index) => {
+      const month = index === 0 ? undefined : months[index - 1];
+      return {
+        ...at(index + 1, index < taken ? 'done' : 'cancelled_by_admin'),
+        ...(month === undefined ? {} : { programmeMonth: month }),
+      };
+    });
+  const closedOn = (
+    orders: readonly ReleaseOrder[],
+    sessions: readonly ReleaseSession[],
+  ): ReleaseFacts => {
+    const [first = ASSESSMENT] = orders;
+    return {
+      enrollment: {
+        enrollmentId: ENROLLMENT,
+        teacherUserId: TEACHER,
+        studentUserId: STUDENT,
+        track: 'ijazah_track',
+        status: 'cancelled',
+        sessionCount: sessions.length,
+        cancellationReason: 'admin',
+        programme: {
+          state: 'closed',
+          total_piasters: piasters(1_000_000),
+          payByAt: PAY_BY,
+          closedAt: new Date('2026-11-01T08:00:00Z'),
+          payBlockedOpen: false,
+        },
+      },
+      order: first,
+      orders,
+      sessions,
+      caseReasons: ['student_complaint_ended'],
+      caseOpen: false,
+      written: [],
+    };
+  };
+  /** Months of 4: offer session k in month ⌈k ÷ 4⌉. */
+  const inMonthsOf4 = (count: number): number[] =>
+    Array.from({ length: count }, (_, index) => Math.floor(index / 4) + 1);
+
+  it('in full, the assessment and 5 sessions taken: 350 + 5 × 166.25 = 1,181.25 EGP, not the first order’s 51.22', () => {
+    expect(
+      plan(closedOn([ASSESSMENT, REST_IN_FULL], closedSessions(41, 6, inMonthsOf4(40)))),
+    ).toEqual([
+      {
+        milestone: 'student_complaint_close',
+        amount: 118_125,
+        dueAt: windowAfter(6),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('a second paid order for month 1 shifts no later month (FR-718): month 2, the last of 2 sessions, is valued by its own order', () => {
+    // An offer of 6 sessions: month 1 four (1,000 EGP, share 700), month 2 two (500 EGP, share 350).
+    const month1 = programmeOrder(2, 'instalment', 100_000, 70_000);
+    const duplicate = { ...month1, paymentId: '0199d0a0-0000-7000-8000-000000000698' };
+    const month2 = programmeOrder(3, 'instalment', 50_000, 35_000);
+    expect(
+      plan(
+        closedOn([ASSESSMENT, month1, duplicate, month2], closedSessions(7, 6, [1, 1, 1, 1, 2, 2])),
+      ),
+    ).toMatchObject([
+      // 350 + 4 × 175 + 1 × 175 EGP: month 2's session is 350 ÷ 2, not the duplicate's 700 ÷ 2.
+      { milestone: 'student_complaint_close', amount: 35_000 + 70_000 + 17_500 },
     ]);
   });
 });

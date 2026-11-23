@@ -18,10 +18,12 @@ const row = (
   kind: string,
   gross: bigint,
   share: bigint | null,
+  instalmentMonth: number | null = null,
 ) => ({
   id: paymentId,
   enrollmentId,
   kind,
+  instalmentMonth,
   grossPiasters: gross,
   teacherSharePiasters: share,
   teacherShareRatePercent: share === null ? null : 70,
@@ -47,8 +49,8 @@ describe('shareOrdersOf (006:T011: every paid order with a share, with its kind)
     const { client } = clientOf([
       row(id(201), PROGRAMME, 'assessment', 50_000n, 35_000n),
       row(id(202), PACKAGE, 'package', 1_000_000n, 700_000n),
-      row(id(203), PROGRAMME, 'instalment', 100_000n, 70_000n),
-      row(id(204), PROGRAMME, 'instalment', 100_000n, 70_000n),
+      row(id(203), PROGRAMME, 'instalment', 100_000n, 70_000n, 1),
+      row(id(204), PROGRAMME, 'instalment', 100_000n, 70_000n, 2),
     ]);
 
     const orders = await shareOrdersOf(client, [PROGRAMME, PACKAGE]);
@@ -99,6 +101,27 @@ describe('shareOrdersOf (006:T011: every paid order with a share, with its kind)
         orderBy: { id: 'asc' },
         select: expect.objectContaining({ kind: true, grossPiasters: true }),
       }),
+    ]);
+  });
+});
+
+describe('shareOrdersOf (006:T012: an instalment’s month)', () => {
+  it('answers each order’s month, none but on an instalment, and reads it in the one statement', async () => {
+    const { client, calls } = clientOf([
+      row(id(201), PROGRAMME, 'assessment', 50_000n, 35_000n),
+      row(id(203), PROGRAMME, 'instalment', 100_000n, 70_000n, 1),
+      row(id(204), PROGRAMME, 'instalment', 100_000n, 70_000n, 2),
+    ]);
+
+    const orders = await shareOrdersOf(client, [PROGRAMME]);
+
+    expect(orders.get(PROGRAMME)?.map(({ instalmentMonth }) => instalmentMonth)).toEqual([
+      null,
+      1,
+      2,
+    ]);
+    expect(calls).toEqual([
+      expect.objectContaining({ select: expect.objectContaining({ instalmentMonth: true }) }),
     ]);
   });
 });

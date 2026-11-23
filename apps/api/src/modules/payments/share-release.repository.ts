@@ -24,6 +24,8 @@ export interface ShareOrderRow {
   readonly enrollmentId: string;
   /** 006:T011 (R-502): what the order pays for. */
   readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T012: an `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
   /** 006:T011: the order's gross as charged. */
   readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
@@ -56,6 +58,7 @@ interface SelectedOrder {
   readonly id: string;
   readonly enrollmentId: string;
   readonly kind: ShareOrderRow['kind'];
+  readonly instalmentMonth: number | null;
   readonly grossPiasters: bigint;
   readonly teacherSharePiasters: bigint | null;
   readonly teacherShareRatePercent: number | null;
@@ -70,6 +73,7 @@ function shareOrderOf(row: SelectedOrder): ShareOrderRow | null {
     paymentId: row.id,
     enrollmentId: row.enrollmentId,
     kind: row.kind,
+    instalmentMonth: row.instalmentMonth,
     paid_piasters: piasters(Number(row.grossPiasters)),
     share_piasters: piasters(Number(row.teacherSharePiasters)),
     sharePercent: row.teacherShareRatePercent,
@@ -121,6 +125,7 @@ export async function shareOrdersAfter(
       id: true,
       enrollmentId: true,
       kind: true,
+      instalmentMonth: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -154,6 +159,7 @@ export async function shareOrdersOf(
       id: true,
       enrollmentId: true,
       kind: true,
+      instalmentMonth: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -189,6 +195,7 @@ export async function refundedShareOrdersAfter(
       id: true,
       enrollmentId: true,
       kind: true,
+      instalmentMonth: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -216,6 +223,7 @@ export async function refundedShareOrdersOf(
       id: true,
       enrollmentId: true,
       kind: true,
+      instalmentMonth: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,

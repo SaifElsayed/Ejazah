@@ -69,6 +69,9 @@ interface Released {
 function world(
   confirmed: readonly ConfirmedEnrollment[] = [],
   paused: Readonly<Record<string, string>> = {},
+  // 006:T012: the enrollments that carry a programme, and the card entry handed in.
+  programmes: readonly string[] = [],
+  card: (tx: Transaction, enrollmentId: string) => Promise<void> = CARD,
 ) {
   const journal: string[] = [];
   const released: Released[] = [];
@@ -168,10 +171,15 @@ function world(
       journal.push(`close-case:${caseId}:${JSON.stringify(closing)}`);
       return NOW;
     },
+    // 006:T012: booking's programme of an enrollment (`programmeStateOf`), journaled.
+    programmeStateOf: async (_tx, enrollmentId) => {
+      journal.push(`programme-of:${enrollmentId}`);
+      return programmes.includes(enrollmentId) ? 'active' : null;
+    },
     // 006:T008 (Q-2 (a)): booking's close hook, journaled with the card entry it was handed.
     closeProgrammes: async (_tx, enrollmentIds, cause, dependencies) => {
       journal.push(`close-programmes:${enrollmentIds.join(',')}:${cause}`);
-      expect(dependencies.deleteProgrammeCard).toBe(CARD);
+      expect(dependencies.deleteProgrammeCard).toBe(card);
       return [...enrollmentIds];
     },
     release: async (_tx, holdIds, reason, dependencies: ReleaseDependencies) => {
@@ -195,7 +203,7 @@ function world(
     now: () => NOW,
     store,
     log,
-    deleteProgrammeCard: CARD,
+    deleteProgrammeCard: card,
   });
   return {
     journal,
@@ -462,6 +470,9 @@ describe("a teacher's suspension pauses the teacher's confirmed enrollments (T07
       `case:${E2}:teacher_suspended`,
       `case-of:${E2}:case-of-${E2}`,
       `freeze:${E1},${E2}`,
+      // 006:T012: the programmes among them read, each one's card deleted (none here).
+      `programme-of:${E1}`,
+      `programme-of:${E2}`,
       `release:${HOLD_ON_A},${HOLD_ON_B}:teacher_suspended`,
     ]);
   });
@@ -568,27 +579,30 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
   it.each([
     ['P4 a teacher’s own deletion', TEACHER, `case-of-${E1}`],
     ['P5 a student’s own deletion', STUDENT, null],
-  ] as const)('%s leaves it open with one warn line of ids (no administrator acted)', async (_path, userId, endCase) => {
-    const { journal, warned, subscriber, holdsOfStudents } = world(
-      [{ id: E1, studentUserId: STUDENT, teacherUserId: TEACHER }],
-      { [E1]: PAUSED_1 },
-    );
-    holdsOfStudents.clear();
-    await subscriber(tx, userId, 'account_deleted');
-    expect(journal.some((entry) => entry.startsWith('close-case:'))).toBe(false);
-    expect(warned).toEqual([
-      [
-        {
-          userId,
-          cause: 'account_deleted',
-          enrollmentId: E1,
-          caseId: PAUSED_1,
-          coveredByCaseId: endCase,
-        },
-        'A paused enrollment ended with no administrator: its teacher_suspended case is left open',
-      ],
-    ]);
-  });
+  ] as const)(
+    '%s leaves it open with one warn line of ids (no administrator acted)',
+    async (_path, userId, endCase) => {
+      const { journal, warned, subscriber, holdsOfStudents } = world(
+        [{ id: E1, studentUserId: STUDENT, teacherUserId: TEACHER }],
+        { [E1]: PAUSED_1 },
+      );
+      holdsOfStudents.clear();
+      await subscriber(tx, userId, 'account_deleted');
+      expect(journal.some((entry) => entry.startsWith('close-case:'))).toBe(false);
+      expect(warned).toEqual([
+        [
+          {
+            userId,
+            cause: 'account_deleted',
+            enrollmentId: E1,
+            caseId: PAUSED_1,
+            coveredByCaseId: endCase,
+          },
+          'A paused enrollment ended with no administrator: its teacher_suspended case is left open',
+        ],
+      ]);
+    },
+  );
 
   it('a student’s suspension of a paused enrollment ends nothing and closes nothing: a second case opens', async () => {
     const { journal, subscriber, holdsOfStudents } = world(
@@ -598,9 +612,9 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
     holdsOfStudents.clear();
     await subscriber(tx, STUDENT, 'suspended', { adminId: ADMIN });
     expect(journal).toContain(`case:${E1}:student_suspended`);
-    expect(journal.some((entry) => /^(close-case|cancel-confirmed|paused-case-of)/.test(entry))).toBe(
-      false,
-    );
+    expect(
+      journal.some((entry) => /^(close-case|cancel-confirmed|paused-case-of)/.test(entry)),
+    ).toBe(false);
   });
 
   it('an ended enrollment with no open teacher_suspended case closes nothing', async () => {
@@ -936,5 +950,54 @@ describe('an account’s end closes its programmes, the programme’s row before
     await subscriber(tx, TEACHER, 'suspended', { adminId: ADMIN });
     expect(journal).toContain(`lock programmes:${enrollments}`);
     expect(journal.some((entry) => entry.startsWith('close-programmes:'))).toBe(false);
+  });
+});
+
+describe('a teacher’s suspension deletes its programmes’ saved cards at once (006:T012, DEC-94)', () => {
+  const recorded = () => {
+    const deleted: string[] = [];
+    const card = async (_tx: Transaction, enrollmentId: string): Promise<void> => {
+      deleted.push(enrollmentId);
+    };
+    return { deleted, card };
+  };
+  const confirmed = [
+    { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: TEACHER },
+    { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
+  ];
+
+  it('calls payments’ deleteProgrammeCard for each programme it pauses, after the remedies are frozen, and logs it', async () => {
+    const { deleted, card } = recorded();
+    const { journal, logged, subscriber } = world(confirmed, {}, [E1], card);
+    await subscriber(tx, TEACHER, 'suspended', { adminId: ADMIN });
+
+    expect(deleted).toEqual([E1]);
+    const freeze = journal.indexOf(`freeze:${E1},${E2}`);
+    expect(journal.slice(freeze + 1, freeze + 3)).toEqual([
+      `programme-of:${E1}`,
+      `programme-of:${E2}`,
+    ]);
+    expect(logged).toContainEqual([
+      { enrollmentId: E1, reason: 'teacher_suspended' },
+      'A programme’s saved card was deleted at its teacher’s suspension',
+    ]);
+  });
+
+  it('a ban deletes it through the close hook alone, once', async () => {
+    const { deleted, card } = recorded();
+    const { journal, subscriber } = world(confirmed, {}, [E1], card);
+    await subscriber(tx, TEACHER, 'banned', { adminId: ADMIN });
+
+    expect(deleted).toEqual([]);
+    expect(journal).toContain(`close-programmes:${E1},${E2}:teacher_suspended`);
+  });
+
+  it('a student’s suspension deletes none: the card is the teacher’s case (DEC-94)', async () => {
+    const { deleted, card } = recorded();
+    const { journal, subscriber } = world(confirmed, {}, [E1], card);
+    await subscriber(tx, STUDENT, 'suspended', { adminId: ADMIN });
+
+    expect(deleted).toEqual([]);
+    expect(journal.some((entry) => entry.startsWith('programme-of:'))).toBe(false);
   });
 });

@@ -76,6 +76,7 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
       paymentId: w.enrollmentId,
       enrollmentId: w.enrollmentId,
       kind: 'package' as const,
+      instalmentMonth: null,
       paid_piasters: piasters(100_000),
       share_piasters: piasters(70_000),
       sharePercent: 70,

@@ -74,6 +74,7 @@ describe('two release sweeps at once (003:T105, rule 62)', () => {
       paymentId: w.enrollmentId,
       enrollmentId: w.enrollmentId,
       kind: 'package' as const,
+      instalmentMonth: null,
       paid_piasters: piasters(100_000),
       share_piasters: piasters(70_000),
       sharePercent: 70,
