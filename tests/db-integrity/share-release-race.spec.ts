@@ -73,13 +73,15 @@ describe('two release sweeps at once (003:T105, rule 62)', () => {
     const order = {
       paymentId: w.enrollmentId,
       enrollmentId: w.enrollmentId,
+      kind: 'package' as const,
+      paid_piasters: piasters(100_000),
       share_piasters: piasters(70_000),
       sharePercent: 70,
       halfPercent: null,
       refunded_piasters: piasters(0),
     };
     const reads: ReleaseReads = {
-      shareOrdersOf: async () => new Map([[w.enrollmentId, order]]),
+      shareOrdersOf: async () => new Map([[w.enrollmentId, [order]]]),
       releasesOf: async () => [],
       enrollmentsAmong: async () =>
         new Map([
@@ -92,6 +94,8 @@ describe('two release sweeps at once (003:T105, rule 62)', () => {
               track: 'recitation' as const,
               status: 'completed' as const,
               sessionCount: 4,
+              cancellationReason: null,
+              programme: null,
             },
           ],
         ]),

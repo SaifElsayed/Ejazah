@@ -2,8 +2,8 @@
 // which releases of a teacher's share an enrollment owes, and when each falls due. Pure: no clock is
 // read and no table, the caller hands in the facts and `now`; the amounts are `packages/money`'s
 // (R-MONEY-5). The sweep writes each one due and not yet written; the reads show the rest as held,
-// with when it would fall due. One order of the enrollment carries the share (Q-B1-10 (a): its first
-// paid order with a share).
+// with when it would fall due. One order of a package carries the share (Q-B1-10 (a): its first
+// paid order with a share); a programme's share is every paid order's (006:T011, below).
 //
 // THE MILESTONES (brief-lane-b1.md §4, with the owner's answers of 2026-11-18 to Q-B1-1 to Q-B1-11,
 // all (a), «موافق على كله»; each answer behind one function below):
@@ -31,8 +31,31 @@
 // A disputed session counts by its frozen outcome, as sessions' `progress.ts` counts it; one not yet
 // written counts as nothing. «No case open» is moderation's open matter (a dispute, a case or a
 // complaint). A release whose amount is nothing is not owed.
+//
+// THE PROGRAMME (006:T011; FR-703, FR-706b, FR-725, FR-728; R-512; DEC-94; the owner's Q-5 (a) of
+// 2026-11-23). An enrollment whose paid orders hold an `assessment` is a programme
+// (`programmeSharesOf`); every other keeps the rules above, on its first order. The worked example:
+// an offer of 10,000 EGP, the fee 500 EGP, 70 %, 25 %.
+// - Not continued (no `rest_in_full` or month paid): nothing is listed while the student decides.
+//   `assessment` on a close `offer_declined`, `offer_lapsed` or `assessment_refused`: the assessment
+//   order's share (350 of 500), due at the latest of the close, `pay_by` where an offer was sent,
+//   and session 1's dispute window (`assessmentDueAt`); never due while a `pay_blocked` item is open.
+// - Continued: `ijazah_half` = 25 % × the share of the price as paid (1,750 in full, 1,837.50 by
+//   months), capped at the paid orders' shares less the releases written (`programmeHalf`), on the
+//   N + 1 count; `ijazah_end` = the paid orders' shares − every release written and the half owed −
+//   the refund's share (5,250 / 5,512.50); `programme_stopped` (an approved stop) the same after the
+//   last delivered session's window. A second stop writes nothing (rule 62; not scheduled).
+// The closes above (a dropout, a complaint) are unchanged here: T012 values them per order.
 import type { ShareReleaseMilestone } from '@ijazah/contracts';
-import { type Piasters, piasters, shareLeft, shareOfSessions, teacherShare } from '@ijazah/money';
+import {
+  lowest,
+  type Piasters,
+  piasters,
+  shareLeft,
+  shareOfSessions,
+  sumOf,
+  teacherShare,
+} from '@ijazah/money';
 import { addHours } from '@ijazah/time';
 
 /** A session as the rules read it: its number, its end, and its outcome (a disputed one's frozen). */
@@ -45,9 +68,13 @@ export interface ReleaseSession {
   readonly madeUpSequence?: number;
 }
 
-/** The order that carries the enrollment's share (ERD §7). */
+/** A paid order and its share (ERD §7). */
 export interface ReleaseOrder {
   readonly paymentId: string;
+  /** 006:T011 (R-502): what the order pays for; `package` on every order before the programme. */
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T011: the order's gross as charged (an `assessment` order's is the fee). */
+  readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
   /** The teacher's share rate kept on the order (T104). */
   readonly sharePercent: number;
@@ -66,6 +93,23 @@ export interface ReleaseEnrollment {
   readonly status:
     'pending_payment' | 'confirmed' | 'completed' | 'terminated_no_show' | 'cancelled';
   readonly sessionCount: number;
+  /** 006:T011: why a `cancelled` enrollment was cancelled; null otherwise (ADR 0010 D7). */
+  readonly cancellationReason: string | null;
+  /** 006:T011: the programme an assessment's enrollment carries; null on any other (R-512). */
+  readonly programme: ReleaseProgramme | null;
+}
+
+/** 006:T011 (R-512; FR-703, FR-706b): the programme as booking answers it. */
+export interface ReleaseProgramme {
+  readonly state: 'awaiting_offer' | 'offered' | 'active' | 'paused' | 'closed';
+  /** The snapshot's price: the offer's total (N × the session price, R-506) once offered. */
+  readonly total_piasters: Piasters;
+  /** `pay_by_at`: set exactly where an offer was sent (R-505). */
+  readonly payByAt: Date | null;
+  /** `closed_at`: the close hook's instant (R-510). */
+  readonly closedAt: Date | null;
+  /** Whether a `pay_blocked` item is open (FR-706b). */
+  readonly payBlockedOpen: boolean;
 }
 
 /** A release already written for the enrollment. */
@@ -76,7 +120,10 @@ export interface WrittenRelease {
 
 export interface ReleaseFacts {
   readonly enrollment: ReleaseEnrollment;
+  /** The order that carries a package's share: its first paid order (Q-B1-10 (a)). */
   readonly order: ReleaseOrder;
+  /** 006:T011: every paid order with a share, oldest first, `order` among them. */
+  readonly orders: readonly ReleaseOrder[];
   readonly sessions: readonly ReleaseSession[];
   /** The reasons of the enrollment's compensation cases, newest first. */
   readonly caseReasons: readonly string[];
@@ -192,6 +239,91 @@ function lastToEnd(sessions: readonly ReleaseSession[]): ReleaseSession | undefi
   );
 }
 
+/** 006:T011 (R-512, DEC-94): the closes where the student did not continue past the assessment. */
+const NOT_CONTINUED: ReadonlySet<string> = new Set([
+  'offer_declined',
+  'offer_lapsed',
+  'assessment_refused',
+]);
+
+/** 006:T011: the orders that show the student continued: the rest in full, or a month paid. */
+const CONTINUED_KINDS: ReadonlySet<ReleaseOrder['kind']> = new Set(['rest_in_full', 'instalment']);
+
+/** 006:T011 (R-512): a programme's shares as its releases read them. */
+export interface ProgrammeShares {
+  readonly assessment: ReleaseOrder;
+  /**
+   * The student continued: the rest in full or a month paid. Months are paid in order (T009), so
+   * any paid month means month 1 was.
+   */
+  readonly continued: boolean;
+  /** 25 % × the share of the price as paid (FR-728), before the cap. */
+  readonly halfBase_piasters: Piasters;
+  /** The shares of every paid order, the assessment's included. */
+  readonly paidShares_piasters: Piasters;
+  /** The teacher's share of every order's refunded total (U-4). */
+  readonly refund_piasters: Piasters;
+}
+
+/**
+ * 006:T011 (R-512, DEC-94, FR-728): the shares of an enrollment whose orders hold an `assessment`;
+ * undefined for a package, whose rules stay today's. The price as paid is the offer's total in full
+ * (the fee inside it) or the total and the fee by months: 10,000 or 10,500 EGP, so at 70 % and
+ * 25 % the half's base is 1,750 or 1,837.50 EGP.
+ */
+export function programmeSharesOf(facts: ReleaseFacts): ProgrammeShares | undefined {
+  const assessment = facts.orders.find(({ kind }) => kind === 'assessment');
+  if (assessment === undefined) return undefined;
+  // Booking writes the programme with its assessment's enrollment (T005); with none read, no half
+  // is made up from another figure.
+  const total_piasters = facts.enrollment.programme?.total_piasters ?? piasters(0);
+  const inFull = facts.orders.some(({ kind }) => kind === 'rest_in_full');
+  const price_piasters = inFull
+    ? total_piasters
+    : sumOf([total_piasters, assessment.paid_piasters]);
+  return {
+    assessment,
+    continued: facts.orders.some(({ kind }) => CONTINUED_KINDS.has(kind)),
+    halfBase_piasters: teacherShare(
+      teacherShare(price_piasters, assessment.sharePercent),
+      assessment.halfPercent ?? 0,
+    ),
+    paidShares_piasters: sumOf(facts.orders.map(({ share_piasters }) => share_piasters)),
+    refund_piasters: sumOf(facts.orders.map(refundShareOf)),
+  };
+}
+
+/**
+ * 006:T011 (FR-728): the half, capped at the paid orders' shares less the releases written
+ * (`released_piasters`): months 1 and 2 paid hold 35,000 + 2 × 70,000 piasters, below 183,750.
+ */
+export function programmeHalf(
+  shares: ProgrammeShares,
+  released_piasters: readonly Piasters[],
+): Piasters {
+  return lowest([
+    shares.halfBase_piasters,
+    shareLeft(shares.paidShares_piasters, released_piasters, piasters(0)),
+  ]);
+}
+
+/**
+ * 006:T011 (DEC-94, FR-703): when the assessment's share falls due where the student did not
+ * continue: the latest of the close, `pay_by` where an offer was sent, and session 1's dispute
+ * window (a made-up assessment's by its make-up). Undefined while the close is not recorded.
+ */
+export function assessmentDueAt(facts: ReleaseFacts, windowHours: number): Date | undefined {
+  const closedAt = facts.enrollment.programme?.closedAt ?? null;
+  const assessed = lastToEnd(facts.sessions.filter((one) => valuedSequence(one) === 1));
+  if (closedAt === null || assessed === undefined) return undefined;
+  const instants = [
+    closedAt.getTime(),
+    facts.enrollment.programme?.payByAt?.getTime() ?? 0,
+    new Date(addHours(assessed.endsAt, windowHours)).getTime(),
+  ];
+  return new Date(Math.max(...instants));
+}
+
 /** The releases `facts` owe and have not written, at `now`, with a dispute window of `windowHours`. */
 export function plannedReleases(
   facts: ReleaseFacts,
@@ -234,7 +366,9 @@ export function plannedReleases(
     );
   }
 
-  if (live && enrollment.track === 'ijazah_track') {
+  // 006:T011: a programme's half and end only once the student continued (R-512).
+  const programme = programmeSharesOf(facts);
+  if (live && enrollment.track === 'ijazah_track' && (programme?.continued ?? true)) {
     const delivered = sequencesOf(DELIVERED).toSorted(
       (a, b) => a.endsAt.getTime() - b.endsAt.getTime(),
     );
@@ -243,7 +377,10 @@ export function plannedReleases(
     const halfSession = reached
       ? delivered[needed - 1]
       : sessions.find(({ sequenceNumber }) => sequenceNumber === needed);
-    const half_piasters = teacherShare(order.share_piasters, order.halfPercent ?? 0);
+    const half_piasters =
+      programme === undefined
+        ? teacherShare(order.share_piasters, order.halfPercent ?? 0)
+        : programmeHalf(programme, [...written.values()]);
     // Completed short of the half: no half is owed, and the end owes the whole rest.
     if (!(completed && !reached)) {
       owe('ijazah_half', half_piasters, after(halfSession, halfWindowHours(windowHours)), reached);
@@ -256,10 +393,34 @@ export function plannedReleases(
     ];
     owe(
       'ijazah_end',
-      shareLeft(order.share_piasters, before, takenOffAtEnd(order)),
+      programme === undefined
+        ? shareLeft(order.share_piasters, before, takenOffAtEnd(order))
+        : shareLeft(programme.paidShares_piasters, before, programme.refund_piasters),
       after(last, windowHours),
       completed,
     );
+  }
+
+  if (closed && programme !== undefined) {
+    const reason = enrollment.cancellationReason;
+    if (!programme.continued && reason !== null && NOT_CONTINUED.has(reason)) {
+      // DEC-94, FR-706b: the assessment's share, never due while a `pay_blocked` item is open.
+      owe(
+        'assessment',
+        programme.assessment.share_piasters,
+        assessmentDueAt(facts, windowHours),
+        enrollment.programme?.payBlockedOpen !== true,
+      );
+    }
+    if (programme.continued && reason === 'programme_stopped') {
+      // FR-725, Q-5 (a): the shares paid less every release written and the refund's share.
+      owe(
+        'programme_stopped',
+        shareLeft(programme.paidShares_piasters, [...written.values()], programme.refund_piasters),
+        after(lastToEnd(sequencesOf(DELIVERED)), windowHours),
+        true,
+      );
+    }
   }
 
   if (closed) {

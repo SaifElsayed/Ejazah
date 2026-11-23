@@ -41,6 +41,7 @@ function row(id: string, overrides: Partial<OrderEnrollmentRow> = {}): OrderEnro
     snapshotTrack: 'ijazah_track',
     snapshotSessionCount: 4,
     snapshotDurationMinutes: 45,
+    programme: null,
     ...overrides,
   };
 }

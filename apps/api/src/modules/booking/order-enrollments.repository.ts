@@ -3,10 +3,12 @@
 // nothing (FR-401; T005's rule 1 binds the paths that decide). A soft-deleted enrollment is left out
 // by the client's extension (T148), as from every ordinary read.
 //
-// Both reads are bounded: `enrollmentsAmong` by the ids of one page of orders, `outcomesOf` by one
+// Both reads are bounded: `enrollmentsAmong` by the ids of one page of orders (006:T011: their
+// programmes and open `pay_blocked` items with them), `outcomesOf` by one
 // enrollment, whose outcomes are a confirmation, its failed orders, its cancellations, restores and
 // its end (§14's plain index on `enrollment_events.enrollment_id`).
-import type { EnrollmentStatus, PackageTrack } from '@ijazah/contracts';
+import type { EnrollmentStatus, PackageTrack, ProgrammeState } from '@ijazah/contracts';
+import { type Piasters, piasters } from '@ijazah/money';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type {
@@ -25,6 +27,21 @@ export interface OrderEnrollmentRow {
   readonly snapshotTrack: PackageTrack;
   readonly snapshotSessionCount: number;
   readonly snapshotDurationMinutes: number;
+  /** 006:T011: the programme an assessment's enrollment carries; null on any other. */
+  readonly programme: OrderEnrollmentProgramme | null;
+}
+
+/**
+ * 006:T011 (R-512, FR-706b): a programme as payments' releases of the teacher's share read it: its
+ * state, the snapshot's price (the offer's total once offered, R-506), `pay_by_at`, `closed_at`,
+ * and whether a `pay_blocked` item is open.
+ */
+export interface OrderEnrollmentProgramme {
+  readonly state: ProgrammeState;
+  readonly total_piasters: Piasters;
+  readonly payByAt: Date | null;
+  readonly closedAt: Date | null;
+  readonly payBlockedOpen: boolean;
 }
 
 /** One `enrollment_events` row as the monitor's timeline reads it. */
@@ -36,13 +53,17 @@ export interface OutcomeRow {
   readonly occurredAt: Date;
 }
 
-/** The enrollments of `ids`, in one statement over the primary key; an id with no row is absent. */
-export function enrollmentsAmong(
+/**
+ * The enrollments of `ids`, over the primary key; an id with no row is absent. 006:T011: with each
+ * one's programme (its primary key) and an open `pay_blocked` item (the partial unique index on
+ * `(enrollment_id, kind)` where open, rule 79), each relation read once for all the ids.
+ */
+export async function enrollmentsAmong(
   tx: Pick<Transaction, 'enrollment'>,
   ids: readonly string[],
 ): Promise<OrderEnrollmentRow[]> {
-  if (ids.length === 0) return Promise.resolve([]);
-  return tx.enrollment.findMany({
+  if (ids.length === 0) return [];
+  const rows = await tx.enrollment.findMany({
     where: { id: { in: [...ids] } },
     select: {
       id: true,
@@ -54,8 +75,28 @@ export function enrollmentsAmong(
       snapshotTrack: true,
       snapshotSessionCount: true,
       snapshotDurationMinutes: true,
+      // 006:T011: the programme's terms for payments' releases (R-512, FR-706b).
+      snapshotPricePiasters: true,
+      programme: { select: { state: true, payByAt: true, closedAt: true } },
+      programmeRequests: {
+        where: { kind: 'pay_blocked', status: 'open' },
+        select: { id: true },
+      },
     },
   });
+  return rows.map(({ snapshotPricePiasters, programme, programmeRequests, ...row }) => ({
+    ...row,
+    programme:
+      programme === null
+        ? null
+        : {
+            state: programme.state,
+            total_piasters: piasters(Number(snapshotPricePiasters)),
+            payByAt: programme.payByAt,
+            closedAt: programme.closedAt,
+            payBlockedOpen: programmeRequests.length > 0,
+          },
+  }));
 }
 
 /**
