@@ -482,6 +482,7 @@ const LINE = 'T052’s line (the owner’s decision of 2026-11-06, G1)';
 const SEARCH = 'T052’s line, the three name searches (the owner’s decision of 2026-11-06, G4)';
 const FOLLOW_UP = 'T052’s follow-up (B42c’s conflict check, Q-R16 (a))';
 const PHASE_FOUR = '005:T025’s note (B49, Q-X1 (a)): T001’s six keys';
+const R1B = '004:T084’s note (R1b; the owner’s Q-C1-1 (a), SRS DEC-106)';
 
 /**
  * Every limit T052's line and its follow-up name, per surface: the user kinds' `rateLimit` and the
@@ -499,6 +500,7 @@ export const DECLARED_LIMITS: {
     { path: 'reports.create', key: 'rate_limit_user_report', source: PHASE_FOUR },
     { path: 'genderFlags.raise', key: 'rate_limit_gender_flag', source: PHASE_FOUR },
     { path: 'teacher.ijazahRequests.send', key: 'rate_limit_ijazah_request', source: PHASE_FOUR },
+    { path: 'sessions.encryptionFailed', key: 'rate_limit_encryption_failure', source: R1B },
   ],
   admin: [
     { path: 'disputes.revise', key: 'rate_limit_dispute_revision', source: LINE },
