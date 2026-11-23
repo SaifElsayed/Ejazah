@@ -193,8 +193,8 @@ One row per decision on a teacher's application (approve, reject, a request for 
 |---|---|---|
 | id | uuid | PK |
 | teacher_profile_id | FK → teacher_profiles | Indexed with `created_at`. The profile, not the user: every writer already holds the profile FOR UPDATE |
-| action | enum approve · reject · request_info · ban · revoke | `teacher_application_history_action` |
-| note | text, nullable | The reviewer's note; required except on `approve`, not blank, at most 1,000 characters (§15 rule 67) |
+| action | enum approve · reject · request_info · ban · revoke · call_replaced | `teacher_application_history_action` (`call_replaced`: T186, changelog row 79) |
+| note | text, nullable | The reviewer's note, or on `call_replaced` the earlier call notes; required except on `approve`, not blank, at most 1,000 characters (2,000 on `call_replaced`) (§15 rule 67) |
 | admin_id | FK → admin_users | Indexed |
 | created_at | timestamptz | When it was decided |
 
@@ -1196,7 +1196,7 @@ Rules that must hold even if application code is buggy — so they live in the s
 
 66. `sessions`: `(status = 'postponed') = (postponement_id IS NOT NULL)` — check `sessions_postponement_check`: a session is `postponed` exactly when a postponement moved it, so no postponed session lacks its request and no other status names one (SRS FR-POSTPONE-1, DEC-90; T112; changelog row 59).
 
-67. `teacher_application_history`: `(action = 'approve' OR note IS NOT NULL) AND (note IS NULL OR (length(btrim(note)) > 0 AND char_length(note) <= 1000))` — check `teacher_application_history_note_check`: a note on every decision but an approval, never blank and at most 1,000 characters, as `adminReason` (SRS DEC-97; T174; changelog row 62).
+67. `teacher_application_history`: `(action = 'approve' OR note IS NOT NULL) AND (note IS NULL OR (length(btrim(note)) > 0 AND char_length(note) <= CASE WHEN action = 'call_replaced' THEN 2000 ELSE 1000 END))` — check `teacher_application_history_note_check`: a note on every row but an approval, never blank, at most 1,000 characters on a decision, as `adminReason`, and 2,000 on a `call_replaced` row, the call's own bound (SRS DEC-97; T174; changelog row 62; amended by T186, row 79).
 
 68. `teacher_credential_history`: the same note rule — check `teacher_credential_history_note_check`; and `(before IS NOT NULL) = (action = 'correct') AND (after IS NOT NULL) = (action IN ('approve', 'correct'))` — check `teacher_credential_history_transcription_check`: the transcription before only on a correction, after on an approval and a correction (SRS DEC-97; T174; changelog row 63).
 
@@ -1646,3 +1646,9 @@ Amended on 2026-11-23 by R1b (`specs/003-booking/tasks.md` T125, T127; `specs/00
 | 76 | §7 `teacher_share_releases.refund_taken_off_piasters` (bigint, default 0; 0 on every existing row), the teacher's share of the refunds an end release took off when written; §15 rule 83 (SRS DEC-98, T127) | `20261123174326_r1b_release_refund_and_encryption_events` (R1b) |
 | 77 | Enum `share_release_milestone` gains `direct_end`, at its end, committed before use: the release of an administrator's direct end on the student's stop, a student's deletion by an administrator and a gender correction (SRS DEC-104, T125) | the same |
 | 78 | §5 `session_event_kind` gains `encryption_failed`, at its end, committed before use; `session_events.party` (enum `role`, nullable; NULL on every existing row), the side whose phone could not encrypt; §15 rule 84 (SRS DEC-105, T084) | the same |
+
+Amended on 2026-11-23 by T186 of `specs/002-identity/tasks.md` (R1b), on the owner's answer of 2026-11-23 to T186's question («سؤال T186 (أ)», typed in R1b's review session; SRS DEC-97). No table is added: 53 tables.
+
+| # | Change | Migration |
+|---|---|---|
+| 79 | §2 enum `teacher_application_history_action` gains `call_replaced`, at its end, committed before use: an ever-approved teacher's earlier verification call notes, written to the history when a new call is recorded on a later application, kept with no end date; §15 rule 67's bound is 2,000 characters on that row (the call's notes, `applicationsRecordCallInput`) | `20261123180222_r1b_application_history_call_replaced` (R1b) |

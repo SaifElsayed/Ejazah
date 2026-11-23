@@ -291,7 +291,7 @@ model TeacherApplicationHistory {
   id               String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
   teacherProfileId String                          @map("teacher_profile_id") @db.Uuid
   action           TeacherApplicationHistoryAction
-  // Required except on approve; not blank, at most 1,000 characters (rule 67).
+  // Required except on approve; not blank, at most 1,000 characters, 2,000 on `call_replaced` (rule 67).
   note             String?
   adminId          String                          @map("admin_id") @db.Uuid
   createdAt        DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)

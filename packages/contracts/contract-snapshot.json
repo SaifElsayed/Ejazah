@@ -328,7 +328,14 @@
         "student_complaint_close",
         "teacher_dropout"
       ],
-      "TeacherApplicationHistoryAction": ["approve", "ban", "reject", "request_info", "revoke"],
+      "TeacherApplicationHistoryAction": [
+        "approve",
+        "ban",
+        "call_replaced",
+        "reject",
+        "request_info",
+        "revoke"
+      ],
       "TeacherApplicationStatus": ["approved", "banned", "in_review", "needs_document", "rejected"],
       "TeacherCredentialHistoryAction": ["approve", "correct", "reject", "request_document"],
       "TeacherCredentialStatus": ["approved", "needs_document", "pending", "rejected"],

@@ -114,6 +114,9 @@ enum TeacherApplicationHistoryAction {
   request_info
   ban
   revoke
+  // 002:T186 (SRS DEC-97; ERD changelog row 79): an ever-approved teacher's earlier call notes, kept
+  // when a new call is recorded on a later application.
+  call_replaced
 
   @@map("teacher_application_history_action")
 }
