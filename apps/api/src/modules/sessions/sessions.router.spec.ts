@@ -1266,8 +1266,9 @@ describe("'sessions.cancellation': the request's live list (T066)", () => {
 
 // 004:T084 (SRS DEC-105; the note under T084, (3), Q-5 (a)): `sessions.encryptionFailed`, a mutation of
 // the participant kind handing the service the caller's own account and the session id only (the side
-// that failed is the server's reading of the caller, never the input), answering nothing. No limit of
-// its own yet (the open question in R1b's lane C1 report): the signed-in default counts it.
+// that failed is the server's reading of the caller, never the input), answering nothing. Its own
+// limit, `rate_limit_encryption_failure` (5 per 60 s, the caller as subject; SRS DEC-106, Q-C1-1 (a)),
+// so a refused call reaches no service and writes nothing, and the first refusal per window is logged.
 describe("'sessions.encryptionFailed' (T084)", () => {
   const report = (caller: Caller, input: Record<string, unknown>) =>
     caller.sessions.encryptionFailed(input as never);
@@ -1317,22 +1318,31 @@ describe("'sessions.encryptionFailed' (T084)", () => {
     expect(calls).toEqual([]);
   });
 
-  it("is a mutation of the participant kind: 'sessions.encryptionFailed'", () => {
-    expect(metaOf('sessions.encryptionFailed')).toEqual({ surface: 'app', caller: 'participant' });
+  it("is a mutation of the participant kind declaring rate_limit_encryption_failure: 'sessions.encryptionFailed'", () => {
+    expect(metaOf('sessions.encryptionFailed')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+      rateLimit: 'rate_limit_encryption_failure',
+    });
     expect(typeOf('sessions.encryptionFailed')).toBe('mutation');
   });
 
-  it("refuses a call past the signed-in default RATE_LIMITED before the service, nothing reached: 'sessions.encryptionFailed'", async () => {
+  // SRS DEC-106: the sixth report in a minute is refused before the service, so nothing is written;
+  // the first refusal of the window writes one line, a later one none.
+  it("refuses the sixth report in a minute RATE_LIMITED before the service, logging the first refusal once: 'sessions.encryptionFailed'", async () => {
     const read: string[] = [];
+    const warned: Record<string, unknown>[] = [];
+    let count = 5;
     const rateLimiter = new RateLimiter({
       settings: {
         read: async (key, schema) => {
           read.push(key);
-          return schema.parse({ limit: 1, window_seconds: 60 });
+          return schema.parse({ limit: 5, window_seconds: 60 });
         },
       },
-      counter: { hit: async () => 2 },
+      counter: { hit: async () => (count += 1) },
       subjectKey: Buffer.alloc(32, 7),
+      log: { warn: (fields: Record<string, unknown>) => void warned.push(fields) } as never,
     });
     const services: AppServices = {
       settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
@@ -1359,12 +1369,15 @@ describe("'sessions.encryptionFailed' (T084)", () => {
         services,
       }),
     );
-    const thrown: unknown = await report(caller, { sessionId: SESSION }).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
-    expect(read).toEqual([SIGNED_IN_DEFAULT_RATE_LIMIT]);
+    for (const _call of ['sixth', 'seventh']) {
+      const thrown: unknown = await report(caller, { sessionId: SESSION }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
+    }
+    expect(read).toEqual(['rate_limit_encryption_failure', 'rate_limit_encryption_failure']);
+    expect(warned).toEqual([{ procedure: 'sessions.encryptionFailed', userId: CALLER }]);
     expect(calls).toEqual([]);
   });
 });

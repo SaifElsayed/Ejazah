@@ -1328,6 +1328,14 @@
           },
           "$.revisions[].revisedAt": { "required": true, "type": "string" },
           "$.telemetry": { "required": true, "type": "object" },
+          "$.telemetry.encryptionFailures": { "type": "array" },
+          "$.telemetry.encryptionFailures[]": { "type": "object" },
+          "$.telemetry.encryptionFailures[].occurredAt": { "required": true, "type": "string" },
+          "$.telemetry.encryptionFailures[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
           "$.telemetry.events": { "required": true, "type": "array" },
           "$.telemetry.events[]": { "type": "object" },
           "$.telemetry.events[].connectionRef": { "type": "string" },
@@ -2969,6 +2977,14 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.encryptionFailures": { "type": "array" },
+          "$.encryptionFailures[]": { "type": "object" },
+          "$.encryptionFailures[].occurredAt": { "required": true, "type": "string" },
+          "$.encryptionFailures[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
           "$.events": { "required": true, "type": "array" },
           "$.events[]": { "type": "object" },
           "$.events[].connectionRef": { "type": "string" },

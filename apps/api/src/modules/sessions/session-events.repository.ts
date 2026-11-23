@@ -57,3 +57,25 @@ export async function recordSessionEvents(
   if (events.length === 0) return;
   await tx.sessionEvent.createMany({ data: events.map((event) => ({ ...event })) });
 }
+
+/** T084: one session's phone that could not encrypt, its side and when (rule 84 sets `party`). */
+export interface EncryptionFailureRow {
+  readonly party: 'student' | 'teacher';
+  readonly occurredAt: Date;
+}
+
+/**
+ * T084 (SRS DEC-105; Q-C1-2 (a)): the session's `encryption_failed` rows, oldest first, with no lock,
+ * for a dispute's evidence. The session's index finds them; the report's limit (DEC-106) bounds them.
+ */
+export async function encryptionFailuresOf(
+  tx: Pick<Transaction, 'sessionEvent'>,
+  sessionId: string,
+): Promise<readonly EncryptionFailureRow[]> {
+  const rows = await tx.sessionEvent.findMany({
+    where: { sessionId, kind: 'encryption_failed' },
+    orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+    select: { party: true, occurredAt: true },
+  });
+  return rows.flatMap(({ party, occurredAt }) => (party === null ? [] : [{ party, occurredAt }]));
+}

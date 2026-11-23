@@ -96,6 +96,8 @@ describe('createTelemetryReader (FR-477, FR-SESS-9)', () => {
             },
           ];
         },
+        // 004:T084: no encryption failure on this session.
+        encryptionFailuresOf: async () => [],
       },
     });
     expect(await reader.of(tx, SESSION_ROW)).toEqual({
@@ -144,6 +146,7 @@ describe('createTelemetryReader (FR-477, FR-SESS-9)', () => {
           endsAt: '2026-11-01T06:45:00.000Z',
         },
       ],
+      encryptionFailures: [],
     });
     expect(read).toEqual([
       `events ${SESSION}`,
@@ -154,12 +157,43 @@ describe('createTelemetryReader (FR-477, FR-SESS-9)', () => {
   it('answers the recorded figure even where the intervals measure otherwise, and no join for no event', async () => {
     const reader = createTelemetryReader({
       settings,
-      store: { attendanceEventsOf: async () => [], outagesOver: async () => [] },
+      store: {
+        attendanceEventsOf: async () => [],
+        outagesOver: async () => [],
+        encryptionFailuresOf: async () => [],
+      },
     });
     const answer = await reader.of(tx, { ...SESSION_ROW, simultaneousSeconds: 77 });
     expect(answer.simultaneousSeconds).toBe(77);
     expect(answer.intervals).toEqual({ student: [], teacher: [], together: [] });
     expect(answer.joined).toEqual({ student: false, teacher: false });
     expect(answer.events).toEqual([]);
+  });
+
+  // 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a)): the session's encryption failures, read for this
+  // session only, each with its side and its time, beside the connection record.
+  it('lists the session’s encryption failures with their side and time (T084)', async () => {
+    const asked: string[] = [];
+    const reader = createTelemetryReader({
+      settings,
+      store: {
+        attendanceEventsOf: async () => [],
+        outagesOver: async () => [],
+        encryptionFailuresOf: async (_tx, sessionId) => {
+          asked.push(sessionId);
+          return [
+            { party: 'teacher', occurredAt: new Date('2026-11-01T06:01:00Z') },
+            { party: 'student', occurredAt: new Date('2026-11-01T06:02:00Z') },
+          ];
+        },
+      },
+    });
+    const answer = await reader.of(tx, SESSION_ROW);
+
+    expect(asked).toEqual([SESSION]);
+    expect(answer.encryptionFailures).toEqual([
+      { party: 'teacher', occurredAt: '2026-11-01T06:01:00.000Z' },
+      { party: 'student', occurredAt: '2026-11-01T06:02:00.000Z' },
+    ]);
   });
 });

@@ -433,6 +433,12 @@ export const telemetryOutage = z.object({
   endsAt: z.iso.datetime(),
 });
 
+/** 004:T084: a participant's phone that could not encrypt the session, its side and when. */
+export const telemetryEncryptionFailure = z.object({
+  party: z.enum(['student', 'teacher']),
+  occurredAt: z.iso.datetime(),
+});
+
 /**
  * A session's connection record (admin-surface.md, `Telemetry`; FR-SESS-9): its schedule, every
  * recorded join and leave and the room's end, oldest first, each party's connected intervals and
@@ -458,6 +464,11 @@ export const telemetry = z.object({
   simultaneousSeconds: z.int().nonnegative(),
   joined: z.object({ student: z.boolean(), teacher: z.boolean() }),
   outages: z.array(telemetryOutage),
+  /**
+   * 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a)): the session's `encryption_failed` rows, oldest
+   * first, each the side whose phone could not encrypt and when. Additive (R-API-9).
+   */
+  encryptionFailures: z.array(telemetryEncryptionFailure).optional(),
 });
 
 export const sessionsReviewGetOutput = telemetry;

@@ -1561,6 +1561,11 @@
         "open": "مفتوحة"
       },
       "telemetry": {
+        "encryptionFailed": {
+          "student": "على جهاز الطالب · {time}",
+          "teacher": "على جهاز المعلم · {time}"
+        },
+        "encryptionTitle": "تعذّر التشفير",
         "eventsNone": "لم يُسجَّل دخول ولا خروج.",
         "joined": "الدخول",
         "outage": "{from} – {to}",
@@ -2712,6 +2717,7 @@
         "rate_limit_enrollment_end": "إنهاء الاشتراكات",
         "rate_limit_enrollment_restore": "استعادات الاشتراك",
         "rate_limit_failed_one_time_code": "رموز التحقق الخاطئة قبل إيقاف إرسال الرموز",
+        "rate_limit_encryption_failure": "بلاغات تعذّر تشفير الحصة",
         "rate_limit_gender_decision": "قرارات الجنس",
         "rate_limit_gender_flag": "بلاغات الجنس",
         "rate_limit_ijazah_decision": "قرارات الإجازة",

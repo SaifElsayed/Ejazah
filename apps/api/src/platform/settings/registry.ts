@@ -853,6 +853,12 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'Failed one-time codes before issuing stops (per e-mail address and purpose, per window)',
     { limit: 10, window_seconds: 86400 },
   ),
+  // 004:T084 (R1b; SRS DEC-106, §3.14): `sessions.encryptionFailed`, the user as subject; each report
+  // writes a `session_events` row that is never deleted.
+  rate_limit_encryption_failure: rateLimit(
+    'Encryption failure report rate limit (per User, per window)',
+    { limit: 5, window_seconds: 60 },
+  ),
 };
 
 /** Whether `key` is a setting the registry names (and so one the panel may change). */
