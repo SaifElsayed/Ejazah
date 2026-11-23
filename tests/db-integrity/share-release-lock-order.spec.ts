@@ -110,7 +110,7 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
     const sweep = createShareReleaseSweep({
       transactions: transactionsOver(database),
       settings: { read: async (_key, schema) => schema.parse(72) },
-      log: { info: () => undefined, error: () => undefined },
+      log: { info: () => undefined, error: () => undefined, warn: () => undefined },
       pageSize: 10,
       report: (error) => void reported.push(error),
       clock: async () => NOW,

@@ -114,6 +114,7 @@ describe('two release sweeps at once (003:T105, rule 62)', () => {
         log: {
           info: (...line: unknown[]) => void lines.push(line),
           error: () => undefined,
+          warn: () => undefined,
         },
         pageSize: 10,
         report: (error) => void reported.push(error),

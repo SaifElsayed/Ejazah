@@ -230,10 +230,10 @@ export interface ShareReleaseSweepDependencies {
   readonly transactions: Transactions;
   readonly settings: SettingsReader;
   /**
-   * 006:T011 FU-E3: `warn` for a programme's enrollment read with no programme row, where the
-   * logger has one (the worker's has; the job's type names `info` and `error` only).
+   * 006:T011 FU-E3: `warn` for a programme's enrollment read with no programme row (Q-E4 (a), the owner, 2026-11-23:
+   * the job's type names it, so the line is never lost).
    */
-  readonly log: Pick<Logger, 'info' | 'error'> & Partial<Pick<Logger, 'warn'>>;
+  readonly log: Pick<Logger, 'info' | 'error' | 'warn'>;
   /** How many orders each page reads (the job's). */
   readonly pageSize: number;
   readonly report?: (error: Error) => void;
@@ -312,7 +312,7 @@ export function createShareReleaseSweep({
         for (const enrollmentId of rowless) {
           if (warned.has(enrollmentId)) continue;
           warned.add(enrollmentId);
-          log.warn?.(
+          log.warn(
             { enrollmentId, reason: 'programme_row_missing' },
             'A programme enrollment has no programme row: no half is owed',
           );
