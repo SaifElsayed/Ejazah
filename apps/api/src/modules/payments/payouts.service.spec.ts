@@ -118,6 +118,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-13T10:00:00Z'),
     markedAt: new Date('2026-11-02T09:00:00Z'),
+    refundTakenOff_piasters: piasters(0),
   },
   {
     id: id(502),
@@ -127,6 +128,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-13T10:00:00Z'),
     markedAt: null,
+    refundTakenOff_piasters: piasters(0),
   },
   {
     id: id(505),
@@ -136,6 +138,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-05T10:00:00Z'),
     markedAt: null,
+    refundTakenOff_piasters: piasters(0),
   },
 ];
 
@@ -545,5 +548,96 @@ describe('the month and the mask', () => {
 
   it('shows the reference’s last four characters only', () => {
     expect(maskedReference('rcp_00001234')).toBe('••••1234');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T127 (SRS DEC-98; Q-4 (a)): once an enrollment's end release is written, a refund recorded
+// afterwards is the platform's: the teacher's «عليك» and `takenOff` show only the share the release
+// took off (`refund_taken_off_piasters`), the administrator's page shows the rest marked as the
+// platform's. A refund before the release, and a closing release, as today. E2: «due 7,000».
+describe('003:T127 a refund after the end release (DEC-98)', () => {
+  const E2 = id(102);
+  const e2 = fixtures[1] as Fixture;
+  /** E2's order refunded `refunded` piasters, its end release keeping `takenOff`. */
+  const after = (
+    refunded: number,
+    takenOff: number,
+    milestone: ReleaseRow['milestone'] = 'recitation_end',
+  ) => {
+    const rows = written.map((row) =>
+      row.enrollmentId === E2
+        ? { ...row, milestone, refundTakenOff_piasters: piasters(takenOff) }
+        : row,
+    );
+    const refundedOrder = { ...order(e2), refunded_piasters: piasters(refunded) };
+    const base = store().store;
+    return payouts({
+      reads: {
+        ...base.reads,
+        releasesOf: async (_tx, ids) => rows.filter((row) => ids.includes(row.enrollmentId)),
+      },
+      releasesAfter: async (_tx, from, take) =>
+        rows.filter((row) => from === undefined || row.id > from).slice(0, take),
+      refundedOrdersOf: async (_tx, ids) => (ids.includes(E2) ? [refundedOrder] : []),
+      refundedOrdersAfter: async (_tx, from, take) =>
+        [refundedOrder].filter((one) => from === undefined || one.paymentId > from).slice(0, take),
+    }).service;
+  };
+
+  it('«due 7,000», then 1,000 EGP refunded: the row stays 7,000 and the teacher sees no «عليك 700»', async () => {
+    const dues = await after(100_000, 0).teacherDues(tx, T1);
+
+    expect(dues.deductions).toEqual([]);
+    expect(dues.releases).toContainEqual(
+      expect.objectContaining({ part: 'recitation_end', amount_piasters: 700_000, state: 'due' }),
+    );
+  });
+
+  it('the administrator sees the 700 EGP marked the platform’s, none of it taken off the teacher', async () => {
+    const service = after(100_000, 0);
+    const detail = await service.get(tx, ADMIN, T1);
+
+    expect(detail.deductions).toEqual([
+      {
+        paymentId: order(e2).paymentId,
+        enrollmentId: E2,
+        student: { userId: id(202), displayName: 'name-202' },
+        refunded_piasters: 100_000,
+        share_piasters: 70_000,
+        platformShare_piasters: 70_000,
+      },
+    ]);
+    expect(detail.figures.takenOff_piasters).toBe(0);
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(0);
+  });
+
+  it('a refund before the release, taken off by it, stays the teacher’s as today', async () => {
+    const service = after(100_000, 70_000);
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    const detail = await service.get(tx, ADMIN, T1);
+    expect(detail.deductions[0]).not.toHaveProperty('platformShare_piasters');
+    expect(detail.figures.takenOff_piasters).toBe(70_000);
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(70_000);
+  });
+
+  it('a refund partly after the release: 700 EGP the teacher’s, 700 EGP the platform’s', async () => {
+    const service = after(200_000, 70_000);
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    expect((await service.get(tx, ADMIN, T1)).deductions[0]).toMatchObject({
+      share_piasters: 140_000,
+      platformShare_piasters: 70_000,
+    });
+  });
+
+  it('a closing release keeps today’s reading: the whole share the teacher’s (T120’s open case)', async () => {
+    const service = after(100_000, 0, 'teacher_dropout');
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    expect((await service.get(tx, ADMIN, T1)).deductions[0]).not.toHaveProperty(
+      'platformShare_piasters',
+    );
   });
 });

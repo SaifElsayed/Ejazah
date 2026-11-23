@@ -298,7 +298,7 @@ export interface ShareReleaseSweepDependencies {
 }
 
 function dueOf(one: EnrollmentReleases, planned: readonly PlannedRelease[]): DueRelease[] {
-  return planned.flatMap(({ milestone, amount_piasters, dueAt, due }) =>
+  return planned.flatMap(({ milestone, amount_piasters, dueAt, due, refundTakenOff_piasters }) =>
     due && dueAt !== undefined
       ? [
           {
@@ -307,6 +307,8 @@ function dueOf(one: EnrollmentReleases, planned: readonly PlannedRelease[]): Due
             milestone,
             amount_piasters,
             dueAt,
+            // 003:T127: the refund share an end release took off, written with it (rule 83).
+            refundTakenOff_piasters,
           },
         ]
       : [],

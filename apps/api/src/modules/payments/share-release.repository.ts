@@ -43,6 +43,8 @@ export interface ReleaseRow {
   readonly amount_piasters: Piasters;
   readonly dueAt: Date;
   readonly markedAt: Date | null;
+  /** 003:T127 (ERD §15 rule 83): the refund share an end release took off; 0 on every other. */
+  readonly refundTakenOff_piasters: Piasters;
 }
 
 /** A release to write once it falls due. */
@@ -52,6 +54,8 @@ export interface DueRelease {
   readonly milestone: ShareReleaseMilestone;
   readonly amount_piasters: Piasters;
   readonly dueAt: Date;
+  /** 003:T127: written with the row (rule 83 refuses it on a milestone that is no end). */
+  readonly refundTakenOff_piasters: Piasters;
 }
 
 interface SelectedOrder {
@@ -90,6 +94,7 @@ interface SelectedRelease {
   readonly amountPiasters: bigint;
   readonly dueAt: Date;
   readonly markedAt: Date | null;
+  readonly refundTakenOffPiasters: bigint;
 }
 
 function releaseOf(row: SelectedRelease): ReleaseRow {
@@ -101,6 +106,7 @@ function releaseOf(row: SelectedRelease): ReleaseRow {
     amount_piasters: piasters(Number(row.amountPiasters)),
     dueAt: row.dueAt,
     markedAt: row.markedAt,
+    refundTakenOff_piasters: piasters(Number(row.refundTakenOffPiasters)),
   };
 }
 
@@ -251,6 +257,7 @@ export async function releasesOf(
       amountPiasters: true,
       dueAt: true,
       markedAt: true,
+      refundTakenOffPiasters: true,
     },
   });
   return rows.map(releaseOf);
@@ -274,6 +281,7 @@ export async function releasesAfter(
       amountPiasters: true,
       dueAt: true,
       markedAt: true,
+      refundTakenOffPiasters: true,
     },
   });
   return rows.map(releaseOf);
@@ -296,13 +304,23 @@ export async function insertDueReleases(
   const teachers = [...new Set(releases.map(({ teacherUserId }) => teacherUserId))].toSorted();
   await keyShareRows(tx, 'users', teachers);
   const rows = await tx.teacherShareRelease.createManyAndReturn({
-    data: releases.map(({ enrollmentId, teacherUserId, milestone, amount_piasters, dueAt }) => ({
-      enrollmentId,
-      teacherUserId,
-      milestone,
-      amountPiasters: BigInt(toPlainNumber(amount_piasters)),
-      dueAt,
-    })),
+    data: releases.map(
+      ({
+        enrollmentId,
+        teacherUserId,
+        milestone,
+        amount_piasters,
+        dueAt,
+        refundTakenOff_piasters,
+      }) => ({
+        enrollmentId,
+        teacherUserId,
+        milestone,
+        amountPiasters: BigInt(toPlainNumber(amount_piasters)),
+        dueAt,
+        refundTakenOffPiasters: BigInt(toPlainNumber(refundTakenOff_piasters)),
+      }),
+    ),
     skipDuplicates: true,
     select: {
       id: true,
@@ -312,6 +330,7 @@ export async function insertDueReleases(
       amountPiasters: true,
       dueAt: true,
       markedAt: true,
+      refundTakenOffPiasters: true,
     },
   });
   return rows.map(releaseOf);
@@ -329,6 +348,7 @@ export async function releaseById(tx: Client, releaseId: string): Promise<Releas
       amountPiasters: true,
       dueAt: true,
       markedAt: true,
+      refundTakenOffPiasters: true,
     },
   });
   return row === null ? null : releaseOf(row);

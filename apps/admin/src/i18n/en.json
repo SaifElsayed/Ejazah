@@ -1984,6 +1984,7 @@
           "releasesLede": "The teacher's share of each package or part of one, with its state.",
           "releasesTitle": "Owed",
           "share": "The teacher's share of it: {amount}",
+          "platformShare": "Of it, {amount} is the platform's: refunded after the teacher's share was released, so not taken off them",
           "student": "Student: {name}"
         },
         "empty": {

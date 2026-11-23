@@ -553,3 +553,24 @@ describe('003:T125 the covered-suspension fact', () => {
     expect(among.map(({ facts }) => facts.coversSuspension)).toEqual([false, false]);
   });
 });
+
+// 003:T127 (SRS DEC-98; ERD §15 rule 83): the sweep hands the insert the refund share an end release
+// took off, written with its row. Written before the field, run red first.
+describe('003:T127 the refund share written with an end release', () => {
+  it('writes 1,000 EGP refunded as 630,000 released and 70,000 taken off', async () => {
+    const w = world(1);
+    w.orders.splice(0, 1, {
+      ...(w.orders[0] as ShareOrderRow),
+      refunded_piasters: piasters(100_000),
+    });
+    await sweepOver(w).run();
+
+    expect(
+      w.rows.map(({ milestone, amount_piasters, refundTakenOff_piasters }) => [
+        milestone,
+        amount_piasters,
+        refundTakenOff_piasters,
+      ]),
+    ).toEqual([['recitation_end', 630_000, 70_000]]);
+  });
+});

@@ -2279,6 +2279,7 @@
           "$.deductions[].case.reason": { "required": true, "type": "string" },
           "$.deductions[].enrollmentId": { "required": true, "type": "string" },
           "$.deductions[].paymentId": { "required": true, "type": "string" },
+          "$.deductions[].platformShare_piasters": { "type": "integer" },
           "$.deductions[].refunded_piasters": { "required": true, "type": "integer" },
           "$.deductions[].share_piasters": { "required": true, "type": "integer" },
           "$.deductions[].student": { "required": true, "type": "object" },

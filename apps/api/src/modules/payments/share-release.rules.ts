@@ -160,6 +160,11 @@ export interface PlannedRelease {
   readonly due: boolean;
   /** An open case keeps it from falling due now. */
   readonly waitsForCase: boolean;
+  /**
+   * 003:T127 (ERD §15 rule 83): the teacher's share of the refunds an end release takes off, kept on
+   * its row; nothing on every other release.
+   */
+  readonly refundTakenOff_piasters: Piasters;
 }
 
 /** The release a closing's case gives (Q-5 (a); 003:T125's `direct_end`). */
@@ -476,6 +481,7 @@ export function plannedReleases(
     amount_piasters: Piasters,
     dueAt: Date | undefined,
     ready: boolean,
+    refundTakenOff_piasters: Piasters = piasters(0),
   ): void => {
     if (written.has(milestone) || amount_piasters === 0) return;
     const due = ready && !caseOpen && dueAt !== undefined && dueAt.getTime() <= now.getTime();
@@ -485,6 +491,7 @@ export function plannedReleases(
       ...(dueAt === undefined ? {} : { dueAt }),
       due,
       waitsForCase: caseOpen,
+      refundTakenOff_piasters,
     });
   };
   const sequencesOf = (kept: ReadonlySet<string>): ReleaseSession[] =>
@@ -500,6 +507,7 @@ export function plannedReleases(
       shareLeft(order.share_piasters, [], takenOffAtEnd(order)),
       after(last, windowHours),
       completed,
+      takenOffAtEnd(order),
     );
   }
 
@@ -528,13 +536,16 @@ export function plannedReleases(
       ...written.values(),
       ...(halfOwed === undefined ? [] : [halfOwed.amount_piasters]),
     ];
+    const endTakenOff_piasters =
+      programme === undefined ? takenOffAtEnd(order) : programme.refund_piasters;
     owe(
       'ijazah_end',
       programme === undefined
-        ? shareLeft(order.share_piasters, before, takenOffAtEnd(order))
-        : shareLeft(programme.paidShares_piasters, before, programme.refund_piasters),
+        ? shareLeft(order.share_piasters, before, endTakenOff_piasters)
+        : shareLeft(programme.paidShares_piasters, before, endTakenOff_piasters),
       after(last, windowHours),
       completed,
+      endTakenOff_piasters,
     );
   }
 
@@ -559,6 +570,7 @@ export function plannedReleases(
         shareLeft(programme.paidShares_piasters, [...written.values()], programme.refund_piasters),
         after(lastToEnd(sequencesOf(CONSUMED)), windowHours),
         true,
+        programme.refund_piasters,
       );
     }
   }
@@ -604,4 +616,44 @@ export function plannedReleases(
     }
   }
   return plan;
+}
+
+/** 003:T127 (ERD §15 rule 83): the releases that take an enrollment's refunds off when written. */
+export const END_RELEASES: ReadonlySet<ShareReleaseMilestone> = new Set([
+  'recitation_end',
+  'ijazah_end',
+  'programme_stopped',
+]);
+
+/** 003:T127: one refunded order's teacher's share, split between the teacher and the platform. */
+export interface RefundPart {
+  /** What «عليك» shows: the share the end release took off, or all of it before one is written. */
+  readonly teacher_piasters: Piasters;
+  /** A refund recorded after the end release: the platform's alone (DEC-98). */
+  readonly platform_piasters: Piasters;
+}
+
+/**
+ * 003:T127 (SRS DEC-98; Q-4 (a)): the enrollment's refunded orders, in id order, each one's share of
+ * its refund (`refundShareOf`) split. With no end release written (`takenOff` undefined), every share
+ * is the teacher's, as today; once written, the share it took off is the teacher's, given to the
+ * orders in id order, and the rest the platform's. «Due 7,000», then 1,000 EGP refunded: 0 and 700.
+ */
+export function refundPartsOf(
+  orders: readonly Pick<ReleaseOrder, 'refunded_piasters' | 'sharePercent'>[],
+  takenOff_piasters: Piasters | undefined,
+): readonly RefundPart[] {
+  let left_piasters = takenOff_piasters;
+  return orders.map((order) => {
+    const share_piasters = teacherShare(order.refunded_piasters, order.sharePercent);
+    if (left_piasters === undefined) {
+      return { teacher_piasters: share_piasters, platform_piasters: piasters(0) };
+    }
+    const teacher_piasters = lowest([share_piasters, left_piasters]);
+    left_piasters = shareLeft(left_piasters, [teacher_piasters], piasters(0));
+    return {
+      teacher_piasters,
+      platform_piasters: shareLeft(share_piasters, [teacher_piasters], piasters(0)),
+    };
+  });
 }

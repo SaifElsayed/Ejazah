@@ -171,6 +171,8 @@ describe('payments.caseAmount’s service', () => {
       amount_piasters: EGP(1_750),
       dueAt: new Date('2026-10-10T10:00:00Z'),
       markedAt,
+      // 003:T127 (rule d): a release row carries the refund share an end release took off.
+      refundTakenOff_piasters: EGP(0),
     });
     const { reads } = fake({
       track: 'ijazah_track',
