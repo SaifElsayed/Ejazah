@@ -850,12 +850,8 @@
         "message": "You joined this session from another device.",
         "action": "Join from this device"
       },
-      "encryption": {
-        "on": "Audio and video encrypted end to end",
-        "failed": "This phone could not turn encryption on, so you did not join. A session opens only encrypted end to end.",
-        "unencrypted": "The other participant is sending without encryption, so their audio and video are not played.",
-        "undecryptable": "The other participant's audio and video could not be decrypted."
-      }
+      "connectFailed": "This device could not connect to the session.",
+      "counterpartyUnavailable": "The other side's audio and video are unavailable right now."
     }
   },
   "status": {
