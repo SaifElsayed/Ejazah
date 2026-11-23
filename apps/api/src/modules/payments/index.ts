@@ -351,6 +351,14 @@ export { checkoutStepsOver } from './checkout.service.js';
 // `main.ts` hands to booking's programme services (booking imports nothing of payments, R-208).
 export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme-amounts.js';
 
+// ---------------------------------------------------------------------------------------------
+// 006:T008 (FR-706b, FR-716; SRS DEC-101; R-510; B-P2's conflict check, Q-2 (a)): «unverified in
+// live mode», the one entry T008's `pay_blocked` window, T016 and T018 read, over the payment mode the
+// composition root hands in; and `deleteProgrammeCard`, which booking's close hook calls on every
+// close, a stub until T013 (booking imports nothing of payments, R-208: the root hands both in).
+export { createProgrammePayee, type PaymentMode, type ProgrammePayee } from './programme-payee.js';
+export { deleteProgrammeCard } from './programme-cards.js';
+
 // 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so
 // `tests/db-integrity/programme-months.spec.ts`' races reach them through the entry (R-API-3), as
 // `checkoutStepsOver` is above.

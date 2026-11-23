@@ -87,9 +87,10 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
   - the three prices with the average per length;
   - the offer;
   - «late since»;
-  - the stop and refusal requests.
+  - the stop request, its button shown after the 7 days (no refusal request: a refusal goes through support, SRS
+    DEC-112).
 - **Panel:**
-  - the queue (paused, stop, refusal, no offer, pay blocked) oldest first;
+  - the queue (paused, stop, no offer with its reason, pay blocked) oldest first;
   - decide, extend, reopen;
   - the monitor's kinds;
   - the eight settings, the switch's label explaining it.

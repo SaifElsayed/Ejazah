@@ -1079,3 +1079,41 @@ describe('the open points, each behind one function (Q-B1-1 to Q-B1-5)', () => {
     expect(toPlainNumber(complaintCloseAmount(piasters(100_000), released))).toBe(0);
   });
 });
+
+// 006:T010 of specs/006-programme (FR-728; research R-501, R-512's trigger; SRS DEC-94): the half
+// is counted over the enrollment's N+1 snapshot count, the assessment its session 1 (40 + 1 = 41,
+// the half at 21), never over the session rows that exist: a programme's months are generated one
+// paid month at a time. A pin of today's rule.
+describe('the ijazah half over the N+1 snapshot count (006:T010, DEC-94: 41 → 21)', () => {
+  it('reaches the half at 21 of 41, not at 20', () => {
+    expect([halfReached(20, 41), halfReached(21, 41)]).toEqual([false, true]);
+  });
+
+  it('counts the snapshot’s 41, not the 21 rows of the months generated so far: 11 delivered hold the half, estimated at the 21st', () => {
+    const sessions = sessionsWith(11, 21);
+    expect(
+      plan(facts({ track: 'ijazah_track', status: 'confirmed', count: 41, sessions })),
+    ).toMatchObject([
+      { milestone: 'ijazah_half', due: false, dueAt: windowAfter(21) },
+      { milestone: 'ijazah_end' },
+    ]);
+  });
+
+  it('falls due at the 21st of 41 delivered, after its window, and not at the 20th', () => {
+    const at20 = facts({
+      track: 'ijazah_track',
+      status: 'confirmed',
+      count: 41,
+      sessions: sessionsWith(20, 25),
+    });
+    const at21 = { ...at20, sessions: sessionsWith(21, 25) };
+    expect(plan(at20)).toMatchObject([
+      { milestone: 'ijazah_half', due: false },
+      { milestone: 'ijazah_end' },
+    ]);
+    expect(plan(at21)).toMatchObject([
+      { milestone: 'ijazah_half', due: true, dueAt: windowAfter(21) },
+      { milestone: 'ijazah_end' },
+    ]);
+  });
+});

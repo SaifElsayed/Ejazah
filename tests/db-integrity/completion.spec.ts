@@ -20,7 +20,11 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createEnrollmentSide, slotInUse } from '../../apps/api/src/modules/booking/index.js';
+import {
+  createEnrollmentSide,
+  recordProgrammePaid,
+  slotInUse,
+} from '../../apps/api/src/modules/booking/index.js';
 import { createCompletion } from '../../apps/api/src/modules/sessions/index.js';
 import {
   closeDatabase,
@@ -28,6 +32,7 @@ import {
   openDatabase,
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
+import { lockRows } from '../../apps/api/src/platform/db/row-lock.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader.js';
 import { addHours, resolveLocalDateTime } from '../../packages/time/src/index.js';
@@ -385,5 +390,82 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
         absences.map(() => ({ status: 'teacher_no_show', remedy: { status: 'awaiting_choice' } })),
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T010 of specs/006-programme (FR-712; research R-501 V-1; Q-D2, approved by the review session
+// under rule d): the gate reads the programme with no lock under the enrollment's lock, since every
+// writer of the row takes `programmes` before `enrollments` (kernel.md, 006:T006). A payment's
+// `recordProgrammePaid` against `completeIfDue`: while the last month's payment is not committed the
+// gate reads the month unpaid and holds completion; once it commits, completion follows. No lock is
+// added and no kernel row.
+
+/** A committed `active` programme on the enrollment, paid by months: `monthsPaid` of 2. */
+async function activeProgrammeOn(enrollmentId: string, monthsPaid: number): Promise<void> {
+  await db.query(
+    `INSERT INTO programmes (enrollment_id, state, offered_at, month_count, payment_plan,
+                             months_paid, updated_at)
+     VALUES ($1, 'active', '2026-09-10T09:00:00Z', 2, 'monthly', $2, now())`,
+    [enrollmentId, monthsPaid],
+  );
+}
+
+/** The last month's payment as the confirm step records it, held open until `gate` opens. */
+function paymentHeldOpen(enrollmentId: string, gate: Promise<void>, enrollmentLockFirst: boolean) {
+  let held: () => void = () => undefined;
+  const holding = new Promise<void>((resolve) => {
+    held = resolve;
+  });
+  const done = database.$transaction(
+    async (tx) => {
+      await lockRows(tx, 'programmes', [enrollmentId]);
+      await recordProgrammePaid(tx, enrollmentId, { plan: 'monthly', monthsPaid: 2 });
+      if (enrollmentLockFirst) await enrollments.lockEnrollments(tx, [enrollmentId]);
+      held();
+      await gate;
+      if (!enrollmentLockFirst) await enrollments.lockEnrollments(tx, [enrollmentId]);
+    },
+    { timeout: 30_000 },
+  );
+  return { holding, done };
+}
+
+describe("completeIfDue against the programme's payment (006:T010, FR-712, R-501 V-1)", () => {
+  it('red first: a payment of the last month not yet committed leaves the month unpaid to the gate, which holds completion; once it commits, completion follows', async () => {
+    const enrollment = await delivered(await makeOffer(db));
+    await activeProgrammeOn(enrollment, 1);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const payment = paymentHeldOpen(enrollment, gate, false);
+    await payment.holding;
+    // The payment holds the programme's row, not yet the enrollment's: the gate runs at once.
+    await check(enrollment, false);
+    release();
+    await payment.done;
+    await check(enrollment, true);
+  });
+
+  it("a payment holding the programme's and the enrollment's rows makes the gate wait, which then reads the month paid and completes", async () => {
+    const enrollment = await delivered(await makeOffer(db));
+    await activeProgrammeOn(enrollment, 1);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const payment = paymentHeldOpen(enrollment, gate, true);
+    await payment.holding;
+    let finished = false;
+    const checked = check(enrollment, true).then(() => {
+      finished = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const whileHeld = finished;
+    release();
+    await payment.done;
+    await checked;
+    expect([whileHeld, finished]).toEqual([false, true]);
   });
 });

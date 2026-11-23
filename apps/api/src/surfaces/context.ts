@@ -213,6 +213,8 @@ import type { LiveRegistry } from '../platform/live/live-registry.js';
 import { type Logger, requestLogger } from '../platform/logging/logger.js';
 import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
+// 006:T008 of specs/006-programme (Q-7 (a)): booking's `programmes.decide`.
+import type { ProgrammeDecisions } from '../modules/booking/index.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 // T037 of specs/004-sessions.
 import type { ChatServices } from '../modules/chat/index.js';
@@ -1045,6 +1047,11 @@ export interface AdminSurfaceServices {
       readonly replayed: boolean;
     }>;
   };
+  /**
+   * 006:T008 of specs/006-programme (Q-7 (a); contracts/admin-surface.md `programmes.decide`): an
+   * administrator's decision on a programme's item, booking's, keyed on the kind's transaction.
+   */
+  readonly programmes: ProgrammeDecisions;
 }
 
 /**

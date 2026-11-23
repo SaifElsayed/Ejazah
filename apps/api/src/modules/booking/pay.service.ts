@@ -40,6 +40,12 @@
 // what the student saw, `CONFLICT` with its cause while the programme is closed. Under the locks
 // the same is read again through the enrolment's reader, and the enrollment's snapshot is the
 // assessment's: count 1, the assessment's length, the fee.
+//
+// 006:T009 (the owner's Q-C5 (a), SRS DEC-112; FR-BOOK-12 every way). While a programme order of the
+// student is still payable (`programme.pay`'s, which has no hold), Pay on the student's own hold is
+// refused `PREVIOUS_CHECKOUT` `payable` with that enrollment and the order's expiry: before the
+// gateway, and again under the student's account (the accounts' lock, first in `enrollOnHold`),
+// the lock `programme.pay`'s check and a new hold take first, so the two cannot both pass.
 import type { PackageTrack } from '@ijazah/contracts';
 import type { Piasters } from '@ijazah/money';
 import { type DayOfWeek, firstOccurrenceAfter } from '@ijazah/time';
@@ -55,6 +61,7 @@ import {
   type SlotRow,
   teacherPackageOf,
 } from '../catalog/index.js';
+import { type PayableProgrammeOrderOf, previousCheckout } from './checkout-holds.service.js';
 import { lockRows } from './holds.repository.js';
 import { holdsStore } from './holds.service.js';
 import {
@@ -72,6 +79,7 @@ import {
   type PayHoldRow,
   studentHold,
 } from './pay.repository.js';
+import { activeProgrammeSlotsOf } from './programmes.repository.js';
 
 /** What the student saw on the checkout's summary when they pressed Pay. */
 export interface QuotedSummary {
@@ -163,11 +171,33 @@ export interface PayStore {
     enrollmentId: string,
     at: Date,
   ): Promise<boolean>;
+  /**
+   * 006:T009 (Q-C5 (a)): the student's programme order still payable at `at`, or null: booking's
+   * active programmes of the student, then payments' answer among them (no lock).
+   */
+  programmeOrderOf(
+    tx: Transaction,
+    studentUserId: string,
+    at: Date,
+  ): Promise<{ readonly enrollmentId: string; readonly expiresAt: Date } | null>;
 }
 
-/** Pay's store over booking's rows and catalog's and identity's entries. */
-export function payStoreOver(): PayStore {
+/**
+ * Pay's store over booking's rows and catalog's and identity's entries; 006:T009 (Q-C5 (a)):
+ * `programmeOrders`, payments' read of a payable programme order, handed in by the caller
+ * (booking imports nothing of payments, R-208).
+ */
+export function payStoreOver(programmeOrders: PayableProgrammeOrderOf): PayStore {
   return {
+    programmeOrderOf: async (tx, studentUserId, at) => {
+      const programmes = await activeProgrammeSlotsOf(tx, [studentUserId]);
+      if (programmes.length === 0) return null;
+      return programmeOrders(
+        tx,
+        programmes.map(({ enrollmentId }) => enrollmentId),
+        at,
+      );
+    },
     lockRows,
     studentHold,
     packageTeacher: async (tx, packageId) =>
@@ -209,6 +239,23 @@ function heldTermsOf(hold: PayHoldRow, slot: SlotRow): HeldTerms {
   return { sessionCount: hold.sessionCount, slotLengthMinutes: slot.durationMinutes };
 }
 
+/**
+ * 006:T009 (the owner's Q-C5 (a), SRS DEC-112; FR-BOOK-12): Pay is refused `PREVIOUS_CHECKOUT`
+ * `payable`, with that enrollment and the order's expiry, while a programme order of the student is
+ * still payable, as a payable checkout refuses `programme.pay`.
+ */
+async function refuseOverProgrammeOrder(
+  tx: Transaction,
+  store: PayStore,
+  studentUserId: string,
+  at: Date,
+): Promise<void> {
+  const payable = await store.programmeOrderOf(tx, studentUserId, at);
+  if (payable !== null) {
+    throw previousCheckout(payable.enrollmentId, 'payable', payable.expiresAt);
+  }
+}
+
 /** Whether the hold is still open to Pay at `at`: active, unexpired, not yet linked. */
 function openToPay(hold: PayHoldRow, at: Date): boolean {
   return (
@@ -228,6 +275,8 @@ export async function payTargetOf(
   const hold = await store.studentHold(tx, request.holdId, request.studentUserId);
   if (hold === null) throw new DomainError('NOT_FOUND');
   if (!openToPay(hold, request.at)) throw new DomainError('HOLD_EXPIRED');
+  // 006:T009 (Q-C5 (a)): before the gateway, so no order is created for a refused Pay.
+  await refuseOverProgrammeOrder(tx, store, request.studentUserId, request.at);
   const { packageId } = hold;
   const teacherUserId = await store.packageTeacher(tx, packageId);
   const [pkg, slot] = await Promise.all([
@@ -306,6 +355,8 @@ export async function enrollOnHold(
   const { student, at } = enrolment;
   const { hold, teacherUserId, packageId } = target;
   await store.lockRows(tx, 'users', [...new Set([student.userId, teacherUserId])].sort());
+  // 006:T009 (Q-C5 (a)): read again under the student's account, which `programme.pay` takes first.
+  await refuseOverProgrammeOrder(tx, store, student.userId, at);
   await store.lockRows(tx, 'availability_slots', [hold.slotId]);
   await store.lockRows(tx, 'slot_holds', [hold.id]);
   if (!(await store.visible(tx, student.gender, teacherUserId, 'discover'))) {

@@ -25,6 +25,18 @@ export { partiesSessionsBetween, type SessionTime } from './sessions.repository.
 export { type EnrollmentSessionRow, enrollmentSessionsOf } from './sessions.repository.js';
 
 /**
+ * 006:T008 of specs/006-programme (FR-706a; R-505; Q-3 (a) amended, Q-8 (a)): where a programme's
+ * session 1, the assessment, stands through its make-ups, read with no lock; booking derives the
+ * offer's deadline from it on every read while the programme awaits its offer.
+ */
+export {
+  type AssessmentOutcome,
+  assessmentOutcomeOf,
+  type ChainSession,
+} from './assessment-outcome.js';
+export { assessmentOutcome } from './assessment-outcome.repository.js';
+
+/**
  * T034 (R-209, FR-368, FR-369): an enrollment's sessions, written on the confirmation's
  * transaction by the confirm job (T039), which holds the locks `generation.service.ts` names.
  */

@@ -38,6 +38,7 @@ import {
   payTargetOf,
   type QuotedSummary,
 } from '../../apps/api/src/modules/booking/index.js';
+import { payableProgrammeOrderAmong } from '../../apps/api/src/modules/payments/index.js';
 import { revokeSubjects } from '../../apps/api/src/modules/catalog/index.js';
 import {
   AccountConsequences,
@@ -307,7 +308,8 @@ async function payWorld(): Promise<PayWorld> {
   return { teacherId, studentId, holdId, quoted, recipientRef };
 }
 
-const store = payStoreOver();
+// 006:T009 (rule d): Pay's store takes payments' read of a payable programme order (Q-C5 (a)).
+const store = payStoreOver(payableProgrammeOrderAmong);
 
 /** Pay's checks before the gateway, run before the race as `checkout.pay` runs them. */
 function targetOf(world: PayWorld): Promise<PayTarget> {

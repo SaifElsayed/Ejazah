@@ -113,7 +113,12 @@ const unreached = (name: string) => () => Promise.reject(new Error(`${name} is n
 const booking: BookingServices = {
   slots: unreached('booking.slots'),
   // 006:T007 (rule d): the programme's services, which no case here reaches.
-  programme: { offer: unreached('programme.offer') },
+  // 006:T008 (rule d): `programme.cancel` and `programme.request` too.
+  programme: {
+    offer: unreached('programme.offer'),
+    cancel: unreached('programme.cancel'),
+    request: unreached('programme.request'),
+  },
   enrollments: async (...args) => {
     calls.push(['enrollments', ...args]);
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).

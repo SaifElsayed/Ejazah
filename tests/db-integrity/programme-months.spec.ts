@@ -21,6 +21,9 @@ import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { runOnceAndTwice } from '../../apps/api/src/jobs/double-run';
 import {
   checkedProgrammePay,
+  enrollOnHold,
+  payStoreOver,
+  payTargetOf,
   placeCheckoutHold,
   readHoldTerms,
 } from '../../apps/api/src/modules/booking/index';
@@ -42,6 +45,7 @@ import {
 } from '../../apps/api/src/platform/db/prisma.repository';
 import { lockRows } from '../../apps/api/src/platform/db/row-lock';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures';
+import { piasters } from '../../packages/money/src/index';
 import {
   CAIRO,
   confirmationWorld,
@@ -607,4 +611,117 @@ describe('programme.pay against another checkout of the student (006:T009, FR-BO
     });
     expect(await database.slotHold.count({ where: { studentUserId, releasedAt: null } })).toBe(0);
   });
+
+  // 006:T009 (the owner's Q-C5 (a), SRS DEC-112): Pay on a bare own hold against a first payment.
+  it('checkout.pay on a bare own hold waits on the first payment’s account, then is refused PREVIOUS_CHECKOUT, writing nothing', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: FAR_PAY_BY });
+    const studentUserId = await studentOfProgramme(enrollmentId);
+    const student = { userId: studentUserId, gender: 'female' as RequesterGender };
+    const { packageId, slotId } = await otherTeachersPackage();
+    const terms = await readHoldTerms(settings, new Date());
+    const placed = await database.$transaction((tx) =>
+      placeCheckoutHold(
+        tx,
+        student,
+        { packageId, slotId },
+        {
+          terms,
+          orders: orderStandingsOf,
+          heldOrders: heldOrdersOf,
+          programmeOrders: payableProgrammeOrderAmong,
+          notices: writer,
+        },
+      ),
+    );
+    const store = payStoreOver(payableProgrammeOrderAmong);
+    const quoted = {
+      price_piasters: piasters(100_000),
+      sessionCount: 4,
+      sessionDurationMinutes: 60,
+      track: 'recitation' as const,
+    };
+    // Pay's check before the gateway passes: no programme order yet.
+    const target = await database.$transaction((tx) =>
+      payTargetOf(tx, { studentUserId, holdId: placed.holdId, at: terms.now }, quoted, store),
+    );
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = payHeldOpen(enrollmentId, studentUserId, gate);
+    await first.holding;
+    const pay = await waitsUntil(
+      () =>
+        database.$transaction((tx) =>
+          enrollOnHold(
+            tx,
+            target,
+            {
+              student,
+              enrollmentId: randomUUID(),
+              at: terms.now,
+              leadHours: terms.leadHours,
+              quoted,
+            },
+            store,
+          ),
+        ),
+      release,
+    );
+    await first.done;
+    expect(pay.waited).toBe(true);
+    expect((pay.outcome as DomainError).code).toBe('PREVIOUS_CHECKOUT');
+    expect((pay.outcome as DomainError).details?.slice(0, 2)).toEqual([
+      { path: 'enrollmentId', code: enrollmentId },
+      { path: 'state', code: 'payable' },
+    ]);
+    expect(
+      await database.slotHold.findUniqueOrThrow({
+        where: { id: placed.holdId },
+        select: { enrollmentId: true },
+      }),
+    ).toEqual({ enrollmentId: null });
+  });
 });
+
+/** Another teacher's recitation package of 4 sessions on Sunday 09:00, the student's other checkout. */
+async function otherTeachersPackage(): Promise<{ packageId: string; slotId: string }> {
+  const other = await person('female');
+  await database.teacherProfile.create({
+    data: {
+      userId: other,
+      bio: 'Probe',
+      qualificationSummary: 'Probe',
+      verificationStatus: 'approved',
+      applicationStatus: 'approved',
+      payoutVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+    },
+  });
+  const { id: subjectId } = await database.subject.create({
+    data: { nameAr: 'مادة', nameEn: 'Subject', isActive: true },
+    select: { id: true },
+  });
+  const { id: packageId } = await database.package.create({
+    data: {
+      teacherUserId: other,
+      subjectId,
+      sessionCount: 4,
+      sessionDurationMinutes: 60,
+      pricePiasters: 100_000n,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const { id: slotId } = await database.availabilitySlot.create({
+    data: {
+      teacherUserId: other,
+      dayOfWeek: 0,
+      startTimeLocal: THURSDAY_0900,
+      durationMinutes: 60,
+      timezone: CAIRO,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  return { packageId, slotId };
+}
