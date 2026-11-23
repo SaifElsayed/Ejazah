@@ -74,7 +74,10 @@ export class ApplicationRepository {
    * Opens the application `in_review` from the state it names; the earlier decision, note, call
    * record and approved screen belong to the earlier application and are cleared (each decision's
    * note stays in the application's history, R1a 002:T174; the call's day and outcome in its audit
-   * entry), so a reapproval shows `ApplicationApproved` again. Whether it wrote.
+   * entry), so a reapproval shows `ApplicationApproved` again. The call's notes of a teacher once
+   * approved (`approved_at` set) are left as written (R1b 002:T186, SRS DEC-97): the database
+   * decides which, by the two writes' `approved_at` conditions, as `eraseAccount` does. Whether it
+   * wrote.
    */
   async open(userId: string, application: OpenedApplication): Promise<boolean> {
     const data = {
@@ -87,17 +90,30 @@ export class ApplicationRepository {
       applicationDecidedByAdminId: null,
       verificationCallCompletedOn: null,
       verificationCallOutcome: null,
-      verificationCallNotes: null,
       approvedShownAt: null,
       identityDocumentId: application.identityDocumentId,
       identityDocumentType: application.identityDocumentType,
     };
-    const { count } = await this.#tx.teacherProfile.updateMany({
-      // A banned teacher never reapplies (T142): `teachers.ban` after a revocation leaves the
-      // application `rejected` and writes only `verification_status`.
-      where: { userId, applicationStatus: application.from, verificationStatus: { not: 'banned' } },
-      data,
+    // A banned teacher never reapplies (T142): `teachers.ban` after a revocation leaves the
+    // application `rejected` and writes only `verification_status`.
+    const from = {
+      userId,
+      applicationStatus: application.from,
+      verificationStatus: { not: 'banned' as const },
+    };
+    const { count: neverApproved } = await this.#tx.teacherProfile.updateMany({
+      where: { ...from, approvedAt: null },
+      data: { ...data, verificationCallNotes: null },
     });
+    const count =
+      neverApproved === 1
+        ? 1
+        : (
+            await this.#tx.teacherProfile.updateMany({
+              where: { ...from, approvedAt: { not: null } },
+              data,
+            })
+          ).count;
     if (count === 1 || application.from !== null) return count === 1;
     // No profile yet: the first application writes it; one written meanwhile refuses this one.
     if ((await this.#tx.teacherProfile.count({ where: { userId } })) > 0) return false;
@@ -233,9 +249,30 @@ export interface CallRecord {
   readonly notes: string;
 }
 
+/** The call's notes on the profile, and whether its teacher was ever approved (`approved_at` set). */
+export interface CallNotes {
+  readonly everApproved: boolean;
+  readonly notes: string | null;
+}
+
+/**
+ * R1b (002:T186; SRS DEC-97): the call's notes a new record would replace, and whether the teacher
+ * was ever approved, read on the caller's transaction under the application's lock it holds
+ * (`lockApplication`); null for a person with no profile.
+ */
+export async function readCallNotes(tx: Client, userId: string): Promise<CallNotes | null> {
+  const profile = await tx.teacherProfile.findUnique({
+    where: { userId },
+    select: { approvedAt: true, verificationCallNotes: true },
+  });
+  if (profile === null) return null;
+  return { everApproved: profile.approvedAt !== null, notes: profile.verificationCallNotes };
+}
+
 /**
  * Records the call on an open application (`in_review` or `needs_document`); a later record replaces
- * it. Whether it wrote (T068).
+ * it (an ever-approved teacher's earlier notes are first kept in the application's history by the
+ * caller, R1b 002:T186). Whether it wrote (T068).
  */
 export async function recordApplicationCall(
   tx: Client,

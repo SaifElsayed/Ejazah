@@ -755,4 +755,44 @@ describe('the decision history (R1a, T174)', () => {
     const detail = within(await select(rowA.displayName));
     expect(await detail.findByText(ar('admin.applications.detail.history.empty'))).toBeTruthy();
   });
+
+  // R1b (002:T186; SRS DEC-97): an ever-approved teacher's earlier call notes, kept as a
+  // `call_replaced` row when a new call replaced them: «ملاحظات مكالمة سابقة» / «Earlier call notes».
+  it("draws an earlier call's notes in words, with the notes, who and when", async () => {
+    const REPLACED = '2026-11-20T10:00:00.000Z';
+    const notes = 'تحقّقت من الهوية والإجازة في المكالمة';
+    await inBothLocales(
+      () => {
+        const api = fakeApi();
+        api.applications.get.query.mockResolvedValue(
+          detailOf(rowA, {
+            history: [{ action: 'call_replaced', note: notes, adminName: 'أ. سعاد', at: REPLACED }],
+          }),
+        );
+        return open(api);
+      },
+      async (t, locale) => {
+        const detail = within(await select(rowA.displayName));
+        const section = (
+          await detail.findByRole('heading', { name: t('admin.applications.detail.history.title') })
+        ).closest('section') as HTMLElement;
+        const [item] = within(section).getAllByRole('listitem');
+        const row = within(item as HTMLElement);
+        expect(row.getByRole('term').textContent).toBe(
+          t('admin.applications.detail.history.actions.callReplaced'),
+        );
+        expect(row.getByText(notes)).toBeTruthy();
+        const zone = panelTimeZone();
+        expect(
+          row.getByText(
+            t('admin.applications.detail.history.meta', {
+              date: dayMonthYear(REPLACED, locale, zone),
+              time: timeOfDay(REPLACED, locale, zone),
+              admin: 'أ. سعاد',
+            }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
 });

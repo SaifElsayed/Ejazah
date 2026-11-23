@@ -13,6 +13,7 @@ import type {
   ApplicationDecision,
   ApplicationHistoryEntry,
   ApplicationHistoryRow,
+  CallNotes,
   CallRecord,
   CredentialClosure,
   CredentialOfApplicant,
@@ -32,6 +33,8 @@ export const TX = {} as Transaction;
 type Status = CredentialOfApplicant['status'];
 
 interface Held extends ApplicantDetail {
+  /** R1b (002:T186): `approved_at`, set by an approval and never cleared. */
+  approvedAt: Date | null;
   approvedBy: string | null;
   decidedBy: string | null;
   decidedAt: Date | null;
@@ -46,7 +49,7 @@ export class MemoryReviewStore implements ApplicationReviewStore {
   readonly reviews = new Map<string, Omit<CredentialClosure, 'credentialIds'>>();
   /**
    * Each lock and each read of an applicant, in order: `lock-account:<id>` (the account's row),
-   * `lock:<id>` (the application's, T126), `read:<id>`.
+   * `lock:<id>` (the application's, T126), `read:<id>`, and `call-notes:<id>` (R1b, 002:T186).
    */
   readonly journal: string[] = [];
   /** R1a (002:T174): each row the review wrote to the application's history, in order. */
@@ -61,6 +64,8 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       dateOfBirth?: Date;
       submittedAt?: Date;
       callRecorded?: boolean;
+      /** R1b (002:T186): a teacher once approved, as a reapplication after a revocation leaves one. */
+      approvedAt?: Date;
       accountStatus?: ApplicantDetail['accountStatus'];
       credentials?: readonly { subject: typeof HAFS; status: Status }[];
     } = {},
@@ -84,6 +89,7 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       callOutcome: values.callRecorded === true ? 'suitable' : null,
       callNotes: values.callRecorded === true ? 'تحقّقت من الهوية' : null,
       note: null,
+      approvedAt: values.approvedAt ?? null,
       approvedBy: null,
       decidedBy: null,
       decidedAt: null,
@@ -183,6 +189,14 @@ export class MemoryReviewStore implements ApplicationReviewStore {
     return this.#requests.get(userId) ?? null;
   }
 
+  /** R1b (002:T186): the call's notes and whether the teacher was ever approved, as identity reads them. */
+  async callNotesOf(_tx: Transaction, userId: string): Promise<CallNotes | null> {
+    this.journal.push(`call-notes:${userId}`);
+    const applicant = this.#applicants.get(userId);
+    if (applicant === undefined) return null;
+    return { everApproved: applicant.approvedAt !== null, notes: applicant.callNotes };
+  }
+
   async recordCall(_tx: Transaction, userId: string, call: CallRecord): Promise<boolean> {
     const applicant = this.#applicants.get(userId);
     if (applicant === undefined) return false;
@@ -215,7 +229,9 @@ export class MemoryReviewStore implements ApplicationReviewStore {
       note: decision.note,
       decidedBy: decision.adminId,
       decidedAt: decision.at,
-      ...(decision.kind === 'approve' ? { approvedBy: decision.adminId } : {}),
+      ...(decision.kind === 'approve'
+        ? { approvedBy: decision.adminId, approvedAt: decision.at }
+        : {}),
     });
     return true;
   }
