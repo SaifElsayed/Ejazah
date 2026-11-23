@@ -54,6 +54,8 @@ export class MemoryReviewStore implements ApplicationReviewStore {
   readonly journal: string[] = [];
   /** R1a (002:T174): each row the review wrote to the application's history, in order. */
   readonly history: ApplicationHistoryEntry[] = [];
+  /** R1b round 2 (002:T186): the id `recordHistory` answered for each row, in the same order. */
+  readonly historyIds: string[] = [];
 
   /** An application in `status`, sent with a credential per subject in `credentials`; its user id. */
   plant(
@@ -250,8 +252,11 @@ export class MemoryReviewStore implements ApplicationReviewStore {
     return moved;
   }
 
-  async recordHistory(_tx: Transaction, entry: ApplicationHistoryEntry): Promise<void> {
+  async recordHistory(_tx: Transaction, entry: ApplicationHistoryEntry): Promise<string> {
+    const id = randomUUID();
     this.history.push(entry);
+    this.historyIds.push(id);
+    return id;
   }
 
   /** The applicant's rows as identity reads them: oldest first, each with its administrator's name. */

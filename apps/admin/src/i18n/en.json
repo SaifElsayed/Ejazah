@@ -304,6 +304,7 @@
         "completedOn": "Call date",
         "documentId": "Document",
         "enrollmentId": "Enrollment",
+        "historyId": "Application history row",
         "holderName": "Holder name",
         "isActive": "Account enabled",
         "milestone": "Part",

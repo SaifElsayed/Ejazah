@@ -53,6 +53,8 @@ const FIELD_TEXT: Readonly<Record<string, MessageKey>> = {
   enrollmentId: 'admin.audit.fields.enrollmentId',
   milestone: 'admin.audit.fields.milestone',
   amount_piasters: 'admin.audit.fields.amount',
+  // 002:T186: the application history row a recorded call wrote (`call_replaced`).
+  historyId: 'admin.audit.fields.historyId',
 };
 
 /** The standings the panel already names, by field. */

@@ -304,6 +304,7 @@
         "completedOn": "يوم المكالمة",
         "documentId": "الوثيقة",
         "enrollmentId": "الاشتراك",
+        "historyId": "سطر في سجل الطلب",
         "holderName": "اسم صاحب الإجازة",
         "isActive": "الحساب مفعّل",
         "milestone": "الجزء",

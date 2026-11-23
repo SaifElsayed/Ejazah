@@ -633,4 +633,26 @@ describe("R1b: an ever-approved teacher's call notes are kept (T186)", () => {
     expect((await replacedRows(userId)).map(({ note }) => note)).toEqual([EARLIER, LATER]);
     expect(await notesOf(userId)).toBe(third);
   });
+
+  // Round 2 (the owner's «موافق» of 2026-11-23): the audit entry's `after` names the written row by
+  // its id; a record that writes none answers none.
+  it("the record answers the call_replaced row's id for its audit entry, and none when it writes none", async () => {
+    const kept = await everApprovedInReview(EARLIER);
+    const { after } = await database.$transaction(recordCall(kept.userId, kept.adminId, LATER));
+    const { rows } = await db.query<{ id: string }>(
+      `SELECT h.id FROM teacher_application_history h
+         JOIN teacher_profiles p ON p.id = h.teacher_profile_id
+        WHERE p.user_id = $1 AND h.action = 'call_replaced'`,
+      [kept.userId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(after).toStrictEqual({
+      completedOn: '2026-11-20',
+      outcome: 'suitable',
+      historyId: rows[0]?.id,
+    });
+    const never = await neverApproved('in_review', EARLIER);
+    const none = await database.$transaction(recordCall(never.userId, never.adminId, LATER));
+    expect(none.after).toStrictEqual({ completedOn: '2026-11-20', outcome: 'suitable' });
+  });
 });
