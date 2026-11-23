@@ -533,6 +533,9 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
         remedyOf: async () => null,
         slotOf: async () => null,
         postponementsOf: async () => new Map(),
+        // 004:T084: nothing is recorded here.
+        lockEnrollment: async () => undefined,
+        recordEvents: async () => undefined,
       },
       idempotency: { run: () => Promise.reject(new Error('nothing is keyed here')) },
     });

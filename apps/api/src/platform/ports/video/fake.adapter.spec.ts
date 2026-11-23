@@ -38,9 +38,11 @@ const STUDENT = '01928c3e-7a10-7000-8000-0000000000a1';
 const TEACHER = '01928c3e-7a10-7000-8000-0000000000b1';
 const TIMEOUTS = { emptyTimeoutSeconds: 300, departureTimeoutSeconds: 20 } as const;
 const UNTIL = { validUntil: new Date('2026-10-08T17:45:00.000Z') } as const;
+// T084: a stand-in secret of the right length, never a real one (R-SEC-1).
+const MEDIA_KEY_SECRET = Buffer.alloc(32, 5);
 
 function video(): FakeVideoAdapter {
-  return new FakeVideoAdapter({ webhookSecret: SECRET });
+  return new FakeVideoAdapter({ webhookSecret: SECRET, mediaKeySecret: MEDIA_KEY_SECRET });
 }
 
 describe('the video port (T118, contracts/ports.md)', () => {
@@ -61,6 +63,7 @@ describe('the video port (T118, contracts/ports.md)', () => {
     expectTypeOf<JoinToken['sessionId']>().toEqualTypeOf<string>();
     expectTypeOf<JoinToken['participantUserId']>().toEqualTypeOf<string>();
     expectTypeOf<JoinToken['serverUrl']>().toEqualTypeOf<string>();
+    expectTypeOf<JoinToken['mediaKey']>().toEqualTypeOf<string>();
     // @ts-expect-error -- T118: a token without its participant is not a join token (R-GENDER-7)
     const unbound: JoinToken = { sessionId: SESSION, credential: 'x', serverUrl: 'wss://x' };
     // @ts-expect-error -- T118: a token is minted by `bindJoinToken`, never written as a literal
@@ -97,17 +100,20 @@ describe('the video port (T118, contracts/ports.md)', () => {
     expectTypeOf<IgnoredEvent>().toEqualTypeOf<{ readonly kind: 'ignored' }>();
   });
 
-  it('refuses to bind a token to an empty session, participant, credential or address', () => {
+  it('refuses to bind a token to an empty session, participant, credential, address or media key', () => {
     const at = 'wss://video.example.invalid';
-    expect(() => bindJoinToken('', STUDENT, 'credential', at)).toThrow(RangeError);
-    expect(() => bindJoinToken(SESSION, '', 'credential', at)).toThrow(RangeError);
-    expect(() => bindJoinToken(SESSION, STUDENT, '', at)).toThrow(RangeError);
-    expect(() => bindJoinToken(SESSION, STUDENT, 'credential', '')).toThrow(RangeError);
-    expect(bindJoinToken(SESSION, STUDENT, 'credential', at)).toEqual({
+    expect(() => bindJoinToken('', STUDENT, 'credential', at, 'key')).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, '', 'credential', at, 'key')).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, STUDENT, '', at, 'key')).toThrow(RangeError);
+    expect(() => bindJoinToken(SESSION, STUDENT, 'credential', '', 'key')).toThrow(RangeError);
+    // T084: a token without the session's media key would join unencrypted (NFR-SEC-13).
+    expect(() => bindJoinToken(SESSION, STUDENT, 'credential', at, '')).toThrow(RangeError);
+    expect(bindJoinToken(SESSION, STUDENT, 'credential', at, 'key')).toEqual({
       sessionId: SESSION,
       participantUserId: STUDENT,
       credential: 'credential',
       serverUrl: at,
+      mediaKey: 'key',
     });
   });
 });
@@ -299,7 +305,10 @@ describe('the video stand-in: participant events (T118, R-SESS-1, FR-074)', () =
     const mis = rooms.participantEvent(SESSION, STUDENT, 'joined', { signature: 'invalid' });
     const { rawBody, headers } = rooms.participantEvent(SESSION, STUDENT, 'joined');
     const altered = Buffer.from(rawBody.toString('utf8').replace(STUDENT, TEACHER));
-    const elsewhere = new FakeVideoAdapter({ webhookSecret: 'another-secret' });
+    const elsewhere = new FakeVideoAdapter({
+      webhookSecret: 'another-secret',
+      mediaKeySecret: MEDIA_KEY_SECRET,
+    });
 
     await expect(rooms.verifyAndParseParticipantEvent(mis.rawBody, mis.headers)).rejects.toThrow(
       EventSignatureError,

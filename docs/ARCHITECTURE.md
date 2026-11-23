@@ -131,7 +131,7 @@ export interface PaymentPort {
 
 export interface VideoPort {
   createRoom(sessionId: string): Promise<string>; // the provider's room reference
-  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken>; // Phase 3 adds { validUntil }, the scheduled end
+  createSessionToken(sessionId: string, participantUserId: string): Promise<JoinToken>; // Phase 3 adds { validUntil }, the scheduled end; JoinToken carries the session's media key, HMAC-SHA-256 of the session id under the platform's own VIDEO_MEDIA_KEY_SECRET, never sent to the provider (004:T084, SRS DEC-102)
   verifyAndParseParticipantEvent(
     rawBody: Buffer,
     headers: Readonly<Record<string, string | undefined>>,

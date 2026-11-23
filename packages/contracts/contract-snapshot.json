@@ -4890,6 +4890,15 @@
           "$.status": { "required": true, "type": "string", "values": ["open"] }
         }
       },
+      "sessions.encryptionFailed": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "sessions.get": {
         "caller": "participant",
         "input": {
@@ -5003,6 +5012,7 @@
         "kind": "mutation",
         "output": {
           "$": { "type": "object" },
+          "$.mediaKey": { "required": true, "type": "string" },
           "$.serverUrl": { "required": true, "type": "string" },
           "$.sessionId": { "required": true, "type": "string" },
           "$.token": { "required": true, "type": "string" },

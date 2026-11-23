@@ -13,6 +13,8 @@ import { idempotentProcedures, isIdempotentProcedure } from './idempotent-proced
 import {
   remedyView,
   sessionParty,
+  sessionsEncryptionFailedInput,
+  sessionsEncryptionFailedOutput,
   sessionsGetInput,
   sessionsGetOutput,
   sessionsJoinInput,
@@ -302,16 +304,66 @@ describe('sessions.join', () => {
     });
   });
 
-  it('answers the session, the provider’s address, the token and the scheduled end', () => {
-    const joined = {
-      sessionId: ids.session,
-      serverUrl: 'wss://example.livekit.cloud',
-      token: 'opaque',
-      validUntil: '2026-11-08T15:45:00.000Z',
-    };
+  // 004:T084 (SRS DEC-102, NFR-SEC-13): the session's media key, 32 bytes in base64, beside the
+  // token, additively (R-API-9). A stand-in value of the right shape, never a real key.
+  const joined = {
+    sessionId: ids.session,
+    serverUrl: 'wss://example.livekit.cloud',
+    token: 'opaque',
+    validUntil: '2026-11-08T15:45:00.000Z',
+    mediaKey: Buffer.alloc(32, 7).toString('base64'),
+  };
+
+  it('answers the session, the provider’s address, the token, the scheduled end and the media key (T084)', () => {
     expect(sessionsJoinOutput.parse({ ...joined, participantUserId: ids.enrollment })).toEqual(
       joined,
     );
     expect(sessionsJoinOutput.safeParse({ ...joined, token: '' }).success).toBe(false);
+  });
+
+  it('is not keyed, so no stored idempotency response holds the media key (T084)', () => {
+    expect(isIdempotentProcedure('sessions.join')).toBe(false);
+    expect(idempotentProcedures).not.toContain('sessions.join');
+  });
+
+  it('refuses an answer without the media key (T084)', () => {
+    const { mediaKey: _absent, ...withoutKey } = joined;
+    expect(sessionsJoinOutput.safeParse(withoutKey).success).toBe(false);
+  });
+
+  it('refuses a media key that is not 32 bytes of base64 (T084)', () => {
+    for (const mediaKey of [
+      '',
+      'not base64 at all!',
+      Buffer.alloc(16, 7).toString('base64'),
+      Buffer.alloc(33, 7).toString('base64'),
+    ]) {
+      expect(sessionsJoinOutput.safeParse({ ...joined, mediaKey }).success, mediaKey).toBe(false);
+    }
+  });
+});
+
+// 004:T084 (SRS DEC-105; the note under T084, Q-5 (a)): a participant's phone that could not set
+// the session's media key or turn its encryption on says so. The caller names the session and
+// nothing else: which side failed is the server's reading of the caller (R-GENDER-4), never a field.
+describe('sessions.encryptionFailed (T084)', () => {
+  it('takes the session id and nothing of who asks or which side failed', () => {
+    expect(
+      sessionsEncryptionFailedInput.parse({
+        sessionId: ids.session,
+        party: 'teacher',
+        role: 'student',
+      }),
+    ).toEqual({ sessionId: ids.session });
+  });
+
+  it('refuses an input without a session id or with one that is not a uuid', () => {
+    expect(sessionsEncryptionFailedInput.safeParse({}).success).toBe(false);
+    expect(sessionsEncryptionFailedInput.safeParse({ sessionId: 'session-1' }).success).toBe(false);
+  });
+
+  it('answers nothing', () => {
+    expect(sessionsEncryptionFailedOutput.safeParse(undefined).success).toBe(true);
+    expect(sessionsEncryptionFailedOutput.safeParse({ recorded: true }).success).toBe(false);
   });
 });

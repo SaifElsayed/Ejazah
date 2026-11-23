@@ -16,6 +16,10 @@
 // of the same kind, keyed by the kernel's idempotency as `sessions.cancellation.request` is, with no
 // limit of its own (the signed-in default counts it); one service call with the caller's own account
 // and the request's after-commit list (`ctx.live`).
+//
+// 004:T084 (SRS DEC-105; the note under T084, (3), Q-5 (a)): `sessions.encryptionFailed`, a mutation of
+// the same kind, one service call with the caller's own account and the session id, answering nothing;
+// for now with no limit of its own (the signed-in default counts it; R1b lane C1's open question).
 import {
   sessionsCancellationAnswerInput,
   sessionsCancellationAnswerOutput,
@@ -25,6 +29,8 @@ import {
   sessionsComplaintRaiseOutput,
   sessionsDisputeRaiseInput,
   sessionsDisputeRaiseOutput,
+  sessionsEncryptionFailedInput,
+  sessionsEncryptionFailedOutput,
   sessionsGetInput,
   sessionsGetOutput,
   sessionsPostponeInput,
@@ -163,4 +169,12 @@ export const sessionsRouter = createAppRouter({
 
   // T060.
   complaint: complaintRouter,
+
+  // 004:T084.
+  encryptionFailed: participantProcedure({
+    input: sessionsEncryptionFailedInput,
+    output: sessionsEncryptionFailedOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.sessions.encryptionFailed({ userId: ctx.caller.userId }, input, ctx.log),
+  ),
 });

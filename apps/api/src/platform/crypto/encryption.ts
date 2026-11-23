@@ -42,6 +42,7 @@
 //   ijazah:onboarding-token:v1          modules/identity (Phase 1, T043)         signs onboarding tokens (R-102)
 //   ijazah:admin-invite:v1              modules/admin (Phase 1, T066)            signs invite links (FR-174)
 //   ijazah:banned-identifier:v1         modules/identity (Phase 1, T097)         keys a banned person's identifier hashes (FR-155)
+//   ijazah:video-media-key:v1           platform/ports/video/index.ts            keys the session media keys in development and test (004:T084)
 // Only the column key protects a stored value that a rotation can carry over: the columns are
 // re-encrypted (T155). The banned-identifier key makes stored hashes that cannot be: an HMAC is not
 // recomputed without the address it was made from, so a rotation leaves every `banned_identifiers`
@@ -62,6 +63,8 @@ export const HKDF_LABELS = [
   'ijazah:onboarding-token:v1',
   'ijazah:admin-invite:v1',
   'ijazah:banned-identifier:v1',
+  // 004:T084 (SRS DEC-102): VIDEO_MEDIA_KEY_SECRET's stand-in, in development and test only.
+  'ijazah:video-media-key:v1',
 ] as const;
 
 /** A registered label: the only kind `deriveSubkey` takes, so an unlisted label does not compile. */

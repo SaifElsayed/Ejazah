@@ -8,9 +8,16 @@
 // No lock (contracts/kernel.md's general rule): a row references its enrollment, its session and,
 // for some kinds, a case and a slot; the caller holds the enrollment's lock, and the session's where
 // it changed it, taken in the one order before it decided on the event. A row references no account.
+//
+// 004:T084 (SRS DEC-105; ERD changelog row 78, §15 rule 84): an `encryption_failed` row names the
+// side whose phone could not encrypt, `party`, set on that kind only (the database's check).
+// `lockEventsEnrollment` is the enrollment's lock such a writer takes first (kernel.md's general
+// rule: a path inserting a `session_events` row always takes the enrollment), for a path that
+// changes no enrollment and no session and so holds no other lock on them.
 import type { Prisma } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
+import { lockRows } from '../../platform/db/row-lock.js';
 
 /** `session_event_kind` (data-model.md §2.4's twenty-five kinds). */
 export type SessionEventKind = Prisma.SessionEventCreateManyInput['kind'];
@@ -32,7 +39,14 @@ export interface SessionEventRecord {
   readonly outcomeBefore?: RecordedOutcome;
   readonly outcomeAfter?: RecordedOutcome;
   readonly previousStartAt?: Date;
+  /** T084: on `encryption_failed` only, the side whose phone could not encrypt (rule 84). */
+  readonly party?: 'student' | 'teacher';
   readonly occurredAt: Date;
+}
+
+/** T084: the enrollment an event is recorded on, `FOR UPDATE`, before the event's insert. */
+export async function lockEventsEnrollment(tx: Transaction, enrollmentId: string): Promise<void> {
+  await lockRows(tx, 'enrollments', [enrollmentId]);
 }
 
 /** Writes one row per event, in one statement on the caller's transaction; none for none. */
