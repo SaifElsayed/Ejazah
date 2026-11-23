@@ -1,6 +1,7 @@
 // T019 of specs/004-sessions: the room screen's connection (`connection.ts`), made when the screen
 // opens and closed when it goes away, drawn again on every change. B40a, T019's follow-up (b): the
 // session's scheduled end, once the screen has read it, bounds the tries after `JOIN_NOT_OPEN`.
+// 004:T084 (DEC-105): a phone that could not encrypt tells `sessions.encryptionFailed`.
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '../../../i18n';
@@ -35,6 +36,7 @@ export function useRoom(sessionId: string, scheduledEnd?: string): RoomControls 
     const made = new RoomConnection(
       () => client.api.sessions.join.mutate({ sessionId }),
       () => setVersion((version) => version + 1),
+      () => client.api.sessions.encryptionFailed.mutate({ sessionId }),
       () => end.current,
     );
     setConnection(made);
