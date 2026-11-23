@@ -27,10 +27,20 @@ import { transactionsOver } from '../../apps/api/src/platform/db/transaction.rep
 import { piasters } from '../../packages/money/src/index.js';
 import { addDays } from '../../packages/time/src/index.js';
 import { confirmationWorld } from './confirmation-world.js';
+import {
+  attempt,
+  connectAsApplication,
+  type Db,
+  inRollback,
+  makeEnrollment,
+  SQLSTATE,
+} from './harness';
 
 let database: Database;
+let db: Db;
 
-beforeAll(() => {
+beforeAll(async () => {
+  db = await connectAsApplication();
   database = openDatabase(specDatabaseUrl('DATABASE_URL'), {
     poolMax: 2,
     statementTimeoutMs: 30_000,
@@ -39,6 +49,7 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
+  await db.end();
   await closeDatabase(database);
 });
 
@@ -155,5 +166,33 @@ describe('the refund share an end release took off (003:T127, rule 83)', () => {
     expect(rows).toEqual([
       { milestone: 'teacher_dropout', amountPiasters: 35_000n, refundTakenOffPiasters: 0n },
     ]);
+  });
+});
+
+// ERD §15 rule 83 (003:T127, R1b; PR #159 r1 Minor 1): never a negative share, and only the three end
+// releases take refunds off.
+describe('rule 83: the refund share taken off', () => {
+  const insert = (
+    probe: Db,
+    on: { enrollmentId: string; teacherId: string },
+    milestone: string,
+    refundTakenOff: number,
+  ) =>
+    attempt(
+      probe,
+      `INSERT INTO teacher_share_releases
+         (enrollment_id, teacher_user_id, milestone, amount_piasters, due_at, refund_taken_off_piasters)
+       VALUES ($1, $2, $3::share_release_milestone, 100000, now(), $4)`,
+      [on.enrollmentId, on.teacherId, milestone, refundTakenOff],
+    );
+
+  it('refuses a negative share on an end release, and a share on direct_end', async () => {
+    await inRollback(db, async (probe) => {
+      const on = await makeEnrollment(probe);
+      expect(await insert(probe, on, 'recitation_end', -1)).toBe(SQLSTATE.checkViolation);
+      expect(await insert(probe, on, 'direct_end', 1)).toBe(SQLSTATE.checkViolation);
+      expect(await insert(probe, on, 'recitation_end', 1)).toBeNull();
+      expect(await insert(probe, on, 'direct_end', 0)).toBeNull();
+    });
   });
 });

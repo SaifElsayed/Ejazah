@@ -211,6 +211,19 @@ describe('rule 67: the note', () => {
     });
   });
 
+  // 002:T186 (R1b; rule 67 as amended, ERD changelog row 79; PR #159 r1 Minor 1): a call_replaced
+  // row keeps up to 2,000 characters, never more, and always has its note.
+  it('refuses a call_replaced note over 2,000 characters, and a call_replaced row with none', async () => {
+    const w = await world();
+    await inRollback(db, async (probe) => {
+      expect(await insert(probe, w, 'call_replaced', 'ن'.repeat(2001))).toBe(
+        SQLSTATE.checkViolation,
+      );
+      expect(await insert(probe, w, 'call_replaced', null)).toBe(SQLSTATE.checkViolation);
+      expect(await insert(probe, w, 'call_replaced', 'ن'.repeat(2000))).toBeNull();
+    });
+  });
+
   it('writes an approval with no note, and a note of exactly 1,000 characters', async () => {
     const w = await world();
     await inRollback(db, async (probe) => {

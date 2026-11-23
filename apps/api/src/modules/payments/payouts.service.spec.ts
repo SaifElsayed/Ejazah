@@ -650,6 +650,41 @@ describe('003:T127 a refund after the end release (DEC-98)', () => {
     });
   });
 
+  // PR #159 r1 Minor 2: the list reads the refunded orders a page at a time (page size 1 here), so
+  // the share the end release took off is given once across the pages, not on each (mutant S9).
+  it('the list gives the end release’s taken-off share once across pages: 350 EGP, not 700', async () => {
+    const rows = written.map((row) =>
+      row.enrollmentId === E2
+        ? {
+            ...row,
+            milestone: 'recitation_end' as const,
+            refundTakenOff_piasters: piasters(35_000),
+          }
+        : row,
+    );
+    const first = { ...order(e2), refunded_piasters: piasters(50_000) };
+    const second = {
+      ...order(e2),
+      paymentId: `${first.paymentId.slice(0, -1)}x`,
+      refunded_piasters: piasters(50_000),
+    };
+    const refunded = [first, second];
+    const base = store().store;
+    const service = payouts({
+      reads: {
+        ...base.reads,
+        releasesOf: async (_tx, ids) => rows.filter((row) => ids.includes(row.enrollmentId)),
+      },
+      releasesAfter: async (_tx, from, take) =>
+        rows.filter((row) => from === undefined || row.id > from).slice(0, take),
+      refundedOrdersOf: async (_tx, ids) => (ids.includes(E2) ? refunded : []),
+      refundedOrdersAfter: async (_tx, from, take) =>
+        refunded.filter((one) => from === undefined || one.paymentId > from).slice(0, take),
+    }).service;
+
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(35_000);
+  });
+
   it('a closing release keeps today’s reading: the whole share the teacher’s (T120’s open case)', async () => {
     const service = after(100_000, 0, 'teacher_dropout');
 

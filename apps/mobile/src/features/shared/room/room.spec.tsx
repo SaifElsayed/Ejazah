@@ -1378,6 +1378,23 @@ describe('RoomScreen: the session’s media encrypted end to end (004:T084, NFR-
     expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
   });
 
+  // PR #159 r1 Minor 3: the screen's own guard, the second line of defence. A publication the
+  // unsubscribe did not take (it stays subscribed, not encrypted) is still never drawn (mutant P8).
+  it('draws no counterparty video that is not encrypted even while it stays subscribed', async () => {
+    await renderIn('rtl', ui());
+    await screen.findByText(waiting('rtl'));
+    const camera = new FakeRemotePublication(Track.Source.Camera, false);
+    camera.setSubscribed.mockImplementation(() => undefined);
+    await act(async () => {
+      room().join('teacher-1', { [Track.Source.Camera]: camera });
+      const remote = room().remoteParticipants.get('teacher-1');
+      room().emit(RoomEvent.TrackSubscribed, camera.track, camera, remote);
+    });
+    expect(camera.isSubscribed).toBe(true);
+    expect(screen.queryByTestId('video:teacher-1:camera')).toBeNull();
+    expect(screen.getByText(said('rtl', 'session.room.counterpartyUnavailable'))).toBeTruthy();
+  });
+
   it('plays an encrypted counterparty track and says nothing of it', async () => {
     await renderIn('rtl', ui());
     await screen.findByText(waiting('rtl'));

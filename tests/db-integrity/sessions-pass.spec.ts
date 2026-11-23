@@ -506,6 +506,20 @@ describe('ERD §15 rule 43: a session event says one thing per kind and is never
     'encryption_failed',
   ] as const;
 
+  // 004:T084 (R1b; ERD §15 rule 84; PR #159 r1 Minor 1): the side that could not encrypt, on that
+  // kind and on no other.
+  it('refuses a party on another kind, and an encryption failure with none', async () => {
+    await inRollback(db, async () => {
+      const on = await world();
+      expect(await tryInsert('session_events', { ...valid(on, 'settled'), party: 'teacher' })).toBe(
+        SQLSTATE.checkViolation,
+      );
+      expect(
+        await tryInsert('session_events', { ...valid(on, 'encryption_failed'), party: null }),
+      ).toBe(SQLSTATE.checkViolation);
+    });
+  });
+
   it('holds the twenty-seven kinds, in data-model.md §2.4’s order', async () => {
     const { rows } = await db.query<{ label: string }>(
       `SELECT unnest(enum_range(NULL::session_event_kind))::text AS label`,
