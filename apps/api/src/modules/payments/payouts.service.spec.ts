@@ -100,6 +100,7 @@ const order = (f: Fixture): ShareOrderRow => ({
   paymentId: `${f.enrollmentId.slice(0, -3)}9${f.enrollmentId.slice(-2)}`,
   enrollmentId: f.enrollmentId,
   kind: 'package',
+  instalmentMonth: null,
   paid_piasters: piasters(1_000_000),
   share_piasters: piasters(700_000),
   sharePercent: 70,

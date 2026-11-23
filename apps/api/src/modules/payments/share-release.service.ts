@@ -155,6 +155,8 @@ export function releaseSessionsOf(
       endsAt: row.endsAt,
       outcome: row.status === 'disputed' ? row.outcomeUnderDispute : row.status,
       ...(origin === undefined ? {} : { madeUpSequence: origin.sequenceNumber }),
+      // 006:T012: an offer session's month, for its value by its own order (R-512).
+      ...(row.programmeMonth === undefined ? {} : { programmeMonth: row.programmeMonth }),
     };
   });
 }

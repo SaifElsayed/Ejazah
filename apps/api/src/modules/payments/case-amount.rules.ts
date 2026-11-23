@@ -43,6 +43,7 @@ import {
   programmePlaces,
   type ReleaseSession,
   type SessionPlace,
+  sumByOrder,
   valuedSequence,
 } from './share-release.rules.js';
 
@@ -164,16 +165,10 @@ function programmeValues(
   orders: readonly CaseOrder[],
   places: ReadonlyMap<number, SessionPlace<CaseOrder>>,
 ): SessionValues {
-  const counts = new Map([...places.values()].map(({ order, count }) => [order, count] as const));
-  const positionsIn = (order: CaseOrder, named: readonly number[]): number[] =>
-    named.flatMap((sequence) => {
-      const place = places.get(sequence);
-      return place?.order === order ? [place.position] : [];
-    });
   const summed =
     (each: (order: CaseOrder, count: number, positions: readonly number[]) => Piasters) =>
     (named: readonly number[]): Piasters =>
-      sumOf([...counts].map(([order, count]) => each(order, count, positionsIn(order, named))));
+      sumByOrder(places, named, each);
   return {
     untaken: summed((order, count, positions) =>
       untakenValue(order.paid_piasters, count, positions),

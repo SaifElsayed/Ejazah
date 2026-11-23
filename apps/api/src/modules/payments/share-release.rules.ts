@@ -46,7 +46,8 @@
 //   the refund's share (5,250 / 5,512.50); `programme_stopped` (an approved stop) the same after the
 //   last consumed session's window (done or a student's no-show; FU-E2 (a)). A second stop writes
 //   nothing (rule 62; not scheduled).
-// The closes above (a dropout, a complaint) are unchanged here: T012 values them per order.
+// 006:T012: a programme's close on a complaint against the student releases each session's share by
+// its own order (`programmePlaces`, `sumByOrder`); a dropout releases nothing more (DEC-85).
 import type { ShareReleaseMilestone } from '@ijazah/contracts';
 import {
   lowest,
@@ -76,6 +77,8 @@ export interface ReleaseOrder {
   readonly paymentId: string;
   /** 006:T011 (R-502): what the order pays for; `package` on every order before the programme. */
   readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T012: an `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
   /** 006:T011: the order's gross as charged (an `assessment` order's is the fee). */
   readonly paid_piasters: Piasters;
   readonly share_piasters: Piasters;
@@ -270,6 +273,31 @@ export function programmePlaces<O extends PlacedOrder>(
     if (paid !== undefined) place(paid, members);
   }
   return places;
+}
+
+/**
+ * 006:T012: over each order a programme's sessions are placed in, `each` of the order, its sessions'
+ * count and the places among them of the sessions `named` by valued sequence, summed (an order none
+ * of them names still counts, as a refund of what was not taken needs).
+ */
+export function sumByOrder<O extends PlacedOrder>(
+  places: ReadonlyMap<number, SessionPlace<O>>,
+  named: readonly number[],
+  each: (order: O, count: number, positions: readonly number[]) => Piasters,
+): Piasters {
+  const counts = new Map([...places.values()].map(({ order, count }) => [order, count] as const));
+  return sumOf(
+    [...counts].map(([order, count]) =>
+      each(
+        order,
+        count,
+        named.flatMap((sequence) => {
+          const place = places.get(sequence);
+          return place?.order === order ? [place.position] : [];
+        }),
+      ),
+    ),
+  );
 }
 
 /** The teacher's share of the order's refunded total, «عليه» (Q-6 as revised: T104's rounding up). */
@@ -511,16 +539,18 @@ export function plannedReleases(
     }
     if (release === 'student_complaint_close') {
       const counted = sequencesOf(CONSUMED);
+      const taken = counted.map(valuedSequence);
+      // 006:T012 (R-512, G-3): a programme's sessions each by their own order; a package's by its
+      // first order ÷ the count.
+      const share_piasters =
+        programme === undefined
+          ? shareOfSessions(order.share_piasters, enrollment.sessionCount, taken)
+          : sumByOrder(programmePlaces(facts.orders, sessions), taken, (paid, count, positions) =>
+              shareOfSessions(paid.share_piasters, count, positions),
+            );
       owe(
         'student_complaint_close',
-        complaintCloseAmount(
-          shareOfSessions(
-            order.share_piasters,
-            enrollment.sessionCount,
-            counted.map(valuedSequence),
-          ),
-          [...written.values()],
-        ),
+        complaintCloseAmount(share_piasters, [...written.values()]),
         after(lastToEnd(counted), windowHours),
         true,
       );
