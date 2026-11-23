@@ -467,9 +467,9 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
     settings: {
       read: async (key: string) => hours[key],
     } as unknown as ProgrammeServiceDependencies['settings'],
-    amounts: (price, count) => {
-      priced.push([toPlainNumber(price), count]);
-      return programmeOfferAmounts(price, count);
+    amounts: (price_piasters, count) => {
+      priced.push([toPlainNumber(price_piasters), count]);
+      return programmeOfferAmounts(price_piasters, count);
     },
     log: { info: (fields, message) => lines.push([fields, message]) },
     clock: async () => world.now,
