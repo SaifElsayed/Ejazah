@@ -615,6 +615,9 @@ No open question remains.
   > assessment's order for every release (T011 keeps `ReleaseFacts.order` as the first paid order and adds `orders`).
   > Built here, with the reads (`modules/payments/payouts.*`, the admin payouts page). Example: offer 10,000 EGP by
   > months, fee 500: `ijazah_half` 1,837.50 lists the assessment (350) and the months it draws from (700 each, capped).
+  > **The owner, 2026-11-23, «ايوة الادمن ساعتها بقا بتقرر اننا نديها للطالب بطريقة ما» (PR #158 r1 Q-R1 (b)).**
+  > `programmes.queue` and the admin `programmes.get` carry, on a `no_offer` item, whether the assessment was held
+  > (session 1's outcome chain, T008's read), so T021 can show «the assessment was not held; the fee is unreleased».
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
@@ -658,6 +661,11 @@ No open question remains.
   > was not made, i.e. what the teacher sent to support, as recorded; deciding the item (approve, the refusal; or
   > extend) asks for that reason (1–500, mandatory, T008's note), and the dialog explains itself: approve closes the
   > programme as refused, the fee kept, the weekly time freed; extend gives the teacher 24 hours more from now.
+  > **The owner, 2026-11-23, «ايوة الادمن ساعتها بقا بتقرر اننا نديها للطالب بطريقة ما» (PR #158 r1 Q-R1 (b)).** Deciding a
+  > `no_offer` item whose assessment was never held (session 1's chain ended with no `done` or `student_no_show`; no
+  > `assessment` release is owed, T011's note), the panel shows «the assessment was not held; the fee is unreleased» and
+  > offers opening a compensation case for the student (FR-ADMIN-20 (c)); no case opens by itself. Example: fee 500 EGP,
+  > the teacher absent and the remedy lapsed: the 500 goes back to the student by the Administrator's decision.
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
