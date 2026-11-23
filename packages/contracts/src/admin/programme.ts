@@ -29,6 +29,7 @@ export const programmesQueueCursor = z.uuid();
 export const programmesQueueFilter = z.enum([
   'paused',
   'stop',
+  /** Unused since SRS DEC-112: no refusal item is raised; kept, not removed (R-API-9, Q-B6). */
   'refusal',
   'no_offer',
   'pay_blocked',

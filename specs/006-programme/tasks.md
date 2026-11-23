@@ -496,6 +496,12 @@ No open question remains.
   > and «an automatic order that expires with no answer counts as a soft decline». The asking interval, the count
   > before the item and the item's kind are B-P3's conflict check. Paymob's inquiry: research.md R-509. Each step red
   > first.
+  > **Follow-up (PR #158 r1 Follow-up 4, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3).** A
+  > duplicate paid programme order counts in the shares until its refund is recorded: `share-release.rules.ts:395`
+  > sums every paid order, while a package reads its first order only (Q-B1-10 (a)). Month 1 paid twice (1,000 EGP
+  > each): shares 350 + 700 + 700. Once the duplicate's refund is recorded it nets out (700 − 700); if its case is
+  > closed with no refund recorded, the stop or the end pays 700 too much. With this task's duplicate handling, red
+  > first.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -523,6 +529,16 @@ No open question remains.
   > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B3 (a)).** T015 binds payments'
   > `createProgrammePayee({ paymentMode, cipher })` («unverified in live mode», T008's entry) in `worker.ts` for the
   > sweep's `pay_by` step; T016 and T018 bind it in `main.ts`.
+  > **Follow-up (PR #158 r1 Follow-up 2, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3; rare).** A
+  > programme completes with its paid sessions never generated: `completion.service.ts:178-181` counts `in_full`
+  > as fully paid, so if the rest's generation was refused (`slot_unavailable`, T006) only session 1 exists, and
+  > 72 h after it the enrollment moves to `completed` and the close hook closes the programme. 9,500 EGP paid, 0 of
+  > 40 sessions written; `ijazah_end` (350 + 6,650 − refunds) is held only while the case is open. The gate also
+  > waits for that case (or for the N + 1 rows), red first.
+  > **Follow-up (PR #158 r1 Follow-up 3, 2026-11-23; the owner, «صلح ومتابعة أ»: a tasks.md line in B-P3).** A first
+  > payment confirmed late generates from `pay_by_at`, which may be in the past (`jobs/confirm-enrollment.ts:509-514`,
+  > `from = pay_by_at`, lead 0): a paid event processed after the first weekly occurrence past `pay_by_at` writes a
+  > session already begun. With this task's «pending at `pay_by`» rule: floor at the confirm instant, red first.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -584,8 +600,8 @@ No open question remains.
     (admin);
   - the monitor's `kind`, `instalmentMonth`, `automatic`, `declineKind` (`payments-monitor.*`).
   > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
-  > DEC-112).** The queue has no `refusal` filter (`packages/contracts/src/admin/programme.ts:31` removed, the snapshot
-  > regenerated): no new refusal item can exist (T008's note). `programmes.queue` and the admin `programmes.get` (the
+  > DEC-112).** The queue offers no `refusal` filter (the value at `packages/contracts/src/admin/programme.ts:31` is
+  > kept, unused, as the next note says; R-API-9; PR #158 r1 nit): no new refusal item can exist (T008's note). `programmes.queue` and the admin `programmes.get` (the
   > programme's history) read a `no_offer` item's `reason`, the administrator's record written by `programmes.decide`
   > (T008), beside the item; `programmeRequestItem.reason`'s comment (`:48-49`) says so.
   > **B-P2 (2026-11-23; R-API-9, the review session's Q-B6 (a)).** The `refusal` value is not removed from
