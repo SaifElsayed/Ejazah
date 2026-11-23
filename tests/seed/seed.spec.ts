@@ -180,6 +180,8 @@ const SETTINGS: Record<string, unknown> = {
   identity_document_retention_days: 90,
   // 002:T173 (SRS DEC-100, §3.14): failed one-time codes before issuing stops, per address and purpose.
   rate_limit_failed_one_time_code: { limit: 10, window_seconds: 86400 },
+  // 004:T084 (SRS DEC-106, §3.14): a participant's reports that their phone could not encrypt.
+  rate_limit_encryption_failure: { limit: 5, window_seconds: 60 },
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -391,6 +393,7 @@ describe('the seed (T074)', () => {
     // re-enqueue settings, merged from develop: 89 + 2 + 2; 003:T112 (rule d): + the postponement's two;
     // 002:T172 (SRS DEC-103): + the two limits per client address; 002:T173: + the failed codes' cap;
     // R1a (002:T176): + identity_document_retention_days; 006:T002: + the programme's eight (95 + 4 + 8).
-    expect(counts).toEqual([{ subjects: '5', settings: '107', admins: '1' }]);
+    // 004:T084 (R1b, DEC-106): + rate_limit_encryption_failure (107 + 1).
+    expect(counts).toEqual([{ subjects: '5', settings: '108', admins: '1' }]);
   });
 });

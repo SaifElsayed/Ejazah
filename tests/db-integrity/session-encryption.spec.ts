@@ -9,7 +9,9 @@
 //     side and the database's instant, nothing else; a non-party is answered NOT_FOUND, no row;
 //   - its locks (contracts/kernel.md, rule 2 and the general rule): it waits on an account held by a
 //     gender correction and reads the corrected record (NOT_FOUND, no row); it waits on the enrollment
-//     held elsewhere at its own `FOR UPDATE`, never at the insert's foreign-key check.
+//     held elsewhere at its own `FOR UPDATE`, never at the insert's foreign-key check;
+//   - round 2 (the owner's Q-C1-2 (a)): `disputes.get`'s evidence lists the disputed session's
+//     failures with their side and time, and none of another session's.
 //
 // The rows are committed, each probe writing parents of its own, since the services open their own
 // transactions. Every connection is the application role, as `session-join.spec.ts` stages a wait.
@@ -21,7 +23,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createEnrollmentSide } from '../../apps/api/src/modules/booking/index.js';
 import {
+  createDisputeQueue,
   createSessionsServices,
+  createTelemetryReader,
   type SessionsServices,
   sessionsStore,
 } from '../../apps/api/src/modules/sessions/index.js';
@@ -43,6 +47,7 @@ import {
   type Db,
   enrollmentValues,
   insertRow,
+  makeAdmin,
   makeOffer,
   makeUser,
 } from './harness';
@@ -57,6 +62,10 @@ const SEEDED: Record<string, unknown> = {
   early_join_lead_minutes: 15,
   video_empty_timeout_seconds: 300,
   video_departure_timeout_seconds: 20,
+  // Round 2 (Q-C1-2 (a)): the attendance rules the dispute's telemetry reads.
+  join_window_minutes: 15,
+  minimum_connection_seconds: 300,
+  attendance_threshold_pct: 80,
 };
 const settings: SettingsReader = { read: async (key, schema) => schema.parse(SEEDED[key]) };
 const log = createLogger({ level: 'fatal' });
@@ -317,5 +326,60 @@ describe('sessions.encryptionFailed’s locks (contracts/kernel.md, rule 2 and t
 
     expect(waitingOn).toMatch(/FROM enrollments WHERE id = ANY\(.*\) ORDER BY id FOR UPDATE/);
     expect((await eventsOf(world.sessionId)).map(({ party }) => party)).toEqual(['student']);
+  });
+});
+
+// Round 2 (the owner's Q-C1-2 (a), 2026-11-23; SRS DEC-105): a dispute's evidence lists its session's
+// encryption failures, through `disputes.get` with the real telemetry reader; the ruling's revisions
+// are `ruling-revision.spec.ts`' and a stub here.
+describe('disputes.get: the session’s encryption failures (T084, Q-C1-2 (a))', () => {
+  const queue = () =>
+    createDisputeQueue({
+      telemetry: createTelemetryReader({ settings }),
+      revisions: { revisionView: async () => ({ revisable: false, revisions: [] }) },
+      settings,
+      log: { info: () => undefined },
+    });
+
+  /** The session disputed by its student, as the evaluation and the raise leave it. */
+  async function disputedOn(world: Awaited<ReturnType<typeof sessionWorld>>, sessionId: string) {
+    await db.query(
+      `UPDATE sessions SET status = 'disputed', outcome_under_dispute = 'teacher_no_show',
+              evaluated_at = now(), updated_at = now()
+        WHERE id = $1`,
+      [sessionId],
+    );
+    return insertRow(db, 'disputes', {
+      enrollment_id: world.enrollmentId,
+      session_id: sessionId,
+      kind: 'session_dispute',
+      raised_by_user_id: world.studentId,
+      reason: 'لم يحضر المعلم',
+      status: 'open',
+    });
+  }
+
+  it('lists the disputed session’s failure with its side, and none on another session’s dispute', async () => {
+    const world = await sessionWorld();
+    await services.encryptionFailed(
+      { userId: world.teacherId },
+      { sessionId: world.sessionId },
+      log,
+    );
+    const [failure] = await eventsOf(world.sessionId);
+    const withFailure = await disputedOn(world, world.sessionId);
+    const without = await disputedOn(world, world.nextSessionId);
+    const admin = await makeAdmin(db);
+
+    const answer = await database.$transaction((tx) =>
+      queue().get(tx, admin, { disputeId: withFailure }),
+    );
+    expect(answer.telemetry.encryptionFailures).toEqual([
+      { party: 'teacher', occurredAt: (failure?.occurred_at as Date).toISOString() },
+    ]);
+    const other = await database.$transaction((tx) =>
+      queue().get(tx, admin, { disputeId: without }),
+    );
+    expect(other.telemetry.encryptionFailures).toEqual([]);
   });
 });

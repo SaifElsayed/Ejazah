@@ -16,6 +16,7 @@ import {
   restoreRefusalCause,
   sessionsEndEnrollmentInput,
   sessionsEndEnrollmentOutput,
+  telemetry,
   timelineEvent,
   timelineEventKind,
 } from './sessions.js';
@@ -209,5 +210,45 @@ describe('003:T112: the end on a complaint against the student', () => {
     for (const cause of ['student_banned', 'teacher_ended', '']) {
       expect(sessionsEndEnrollmentInput.safeParse({ ...asked, cause }).success, cause).toBe(false);
     }
+  });
+});
+
+// 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a), 2026-11-23): a dispute's evidence lists the session's
+// encryption failures, each with its side and its time, beside the telemetry; additive (R-API-9).
+describe('004:T084: the encryption failures in the session’s record', () => {
+  const record = {
+    sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
+    schedule: {
+      localDate: '2026-11-23',
+      startTimeLocal: '09:00',
+      timezone: 'Africa/Cairo',
+      startsAt: '2026-11-23T07:00:00.000Z',
+      endsAt: '2026-11-23T08:00:00.000Z',
+    },
+    status: 'scheduled',
+    events: [],
+    intervals: { student: [], teacher: [], together: [] },
+    simultaneousSeconds: 0,
+    joined: { student: false, teacher: false },
+    outages: [],
+  };
+
+  it('carries each failure’s side and time', () => {
+    const encryptionFailures = [
+      { party: 'teacher', occurredAt: '2026-11-23T07:01:00.000Z' },
+      { party: 'student', occurredAt: '2026-11-23T07:02:00.000Z' },
+    ];
+    expect(telemetry.parse({ ...record, encryptionFailures }).encryptionFailures).toEqual(
+      encryptionFailures,
+    );
+  });
+
+  it('refuses a side that is neither party', () => {
+    expect(
+      telemetry.safeParse({
+        ...record,
+        encryptionFailures: [{ party: 'room', occurredAt: '2026-11-23T07:01:00.000Z' }],
+      }).success,
+    ).toBe(false);
   });
 });

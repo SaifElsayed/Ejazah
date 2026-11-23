@@ -260,6 +260,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // T173 of specs/002-identity (SRS DEC-100, §3.14; the note under T173): after 10 failed codes for
   // one e-mail address and purpose, no code is issued for them until the 24-hour window ends.
   ['rate_limit_failed_one_time_code', { limit: 10, window_seconds: 86400 }],
+  // 004:T084 (R1b; SRS DEC-106, §3.14): a participant's reports that their phone could not encrypt a
+  // session, `sessions.encryptionFailed`, the user as subject; each writes a record never deleted.
+  ['rate_limit_encryption_failure', { limit: 5, window_seconds: 60 }],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

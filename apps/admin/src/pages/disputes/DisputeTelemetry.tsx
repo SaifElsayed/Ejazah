@@ -1,7 +1,8 @@
 // T049 (FR-475, FR-SESS-9; T033's `Telemetry`): the session's attendance record on the dispute's
 // page, every time in the session's own zone (named once): the schedule, the session's status, the
 // accumulated simultaneous time the evaluation decided on, who joined, every recorded join and leave
-// and the room's end, oldest first, and the provider outages recorded over it.
+// and the room's end, oldest first, and the provider outages recorded over it. 004:T084: and the
+// phones that could not encrypt the session, each its side and time (SRS DEC-105; Q-C1-2 (a)).
 import type { Telemetry } from '@ijazah/contracts/admin';
 
 import { KeyValue } from '../../design/components';
@@ -23,6 +24,12 @@ function eventWords(event: TelemetryEvent): MessageKey {
     ? 'admin.disputes.detail.events.studentJoined'
     : 'admin.disputes.telemetry.studentLeft';
 }
+
+/** 004:T084: the words of one encryption failure, by the side whose phone it was. */
+const ENCRYPTION_FAILED: Readonly<Record<'student' | 'teacher', MessageKey>> = {
+  student: 'admin.disputes.telemetry.encryptionFailed.student',
+  teacher: 'admin.disputes.telemetry.encryptionFailed.teacher',
+};
 
 /** Seconds as minutes and seconds, «38:10». */
 function minutesAndSeconds(seconds: number): string {
@@ -98,6 +105,19 @@ export function DisputeTelemetry({ telemetry }: { readonly telemetry: Telemetry 
             </li>
           ))}
         </ul>
+      )}
+      {/* 004:T084 (SRS DEC-105; Q-C1-2 (a)): the phones that could not encrypt the session. */}
+      {(telemetry.encryptionFailures ?? []).length === 0 ? null : (
+        <>
+          <h3 className="group-label">{t('admin.disputes.telemetry.encryptionTitle')}</h3>
+          <ul className="stack gap-2">
+            {(telemetry.encryptionFailures ?? []).map((failure) => (
+              <li key={`${failure.occurredAt}-${failure.party}`} className="text-callout">
+                {t(ENCRYPTION_FAILED[failure.party], { time: at(failure.occurredAt) })}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {telemetry.outages.length === 0 ? null : (
         <>

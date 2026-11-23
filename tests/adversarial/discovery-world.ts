@@ -434,6 +434,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
   // 004:T060: `sessions.complaint.raise` declares its own limit (FR-452).
   rate_limit_absence_complaint: { limit: 5, window_seconds: 3600 },
+  // 004:T084 (DEC-106): `sessions.encryptionFailed` declares its own limit.
+  rate_limit_encryption_failure: { limit: 5, window_seconds: 60 },
   slot_hold_ttl_minutes: 10,
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
