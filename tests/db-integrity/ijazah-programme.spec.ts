@@ -162,10 +162,13 @@ const ENUMS: readonly (readonly [name: string, labels: readonly string[]])[] = [
   ['programme_request_status', ['open', 'approved', 'declined', 'withdrawn', 'extended']],
 ];
 
-/** The labels each existing enum ends with (each added at its end, ERD changelog row 65). */
-const ADDED: readonly (readonly [name: string, labels: readonly string[]])[] = [
+/**
+ * The labels each existing enum gained (each added at its end, ERD changelog row 65), then the labels a
+ * later batch appended after them (R1b's `direct_end`, ERD changelog row 77).
+ */
+const ADDED: readonly (readonly [name: string, labels: readonly string[], later?: readonly string[]])[] = [
   ['cancellation_reason', ['offer_declined', 'offer_lapsed', 'assessment_refused', 'programme_stopped']],
-  ['share_release_milestone', ['assessment', 'programme_stopped']],
+  ['share_release_milestone', ['assessment', 'programme_stopped'], ['direct_end']],
   [
     'enrollment_event_kind',
     ['programme_offered', 'programme_paused', 'programme_resumed', 'programme_reopened'],
@@ -187,8 +190,9 @@ describe('the migration on ijazah_integrity_b: the catalogue (006:T001)', () => 
     expect(await labelsOf(name)).toEqual(labels);
   });
 
-  it.each(ADDED)('adds the members of %s at its end', async (name, labels) => {
-    expect((await labelsOf(name)).slice(-labels.length)).toEqual(labels);
+  it.each(ADDED)('adds the members of %s at its end', async (name, labels, later = []) => {
+    const tail = [...labels, ...later];
+    expect((await labelsOf(name)).slice(-tail.length)).toEqual(tail);
   });
 
   it.each(CHECKS)('holds the check on %s named %s', async (table, name) => {

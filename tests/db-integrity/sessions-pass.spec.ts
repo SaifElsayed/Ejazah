@@ -466,6 +466,9 @@ describe('ERD §15 rule 43: a session event says one thing per kind and is never
         return { ...base, session_id: null, case_id: on.caseId };
       case 'instants_reresolved':
         return { ...base, previous_start_at: '2026-10-04T06:00:00Z' };
+      // 004:T084 (R1b, ERD rule 84): the side that could not encrypt.
+      case 'encryption_failed':
+        return { ...base, party: 'student' };
       default:
         return base;
     }
@@ -499,9 +502,11 @@ describe('ERD §15 rule 43: a session event says one thing per kind and is never
     'counter_booking_refused',
     // 003:T112 (B-M3, SRS DEC-90): a party's postponement, appended by ADD VALUE.
     'postponed',
+    // 004:T084 (R1b, SRS DEC-105; ERD changelog row 78): a phone that could not encrypt, appended.
+    'encryption_failed',
   ] as const;
 
-  it('holds the twenty-six kinds, in data-model.md §2.4’s order', async () => {
+  it('holds the twenty-seven kinds, in data-model.md §2.4’s order', async () => {
     const { rows } = await db.query<{ label: string }>(
       `SELECT unnest(enum_range(NULL::session_event_kind))::text AS label`,
     );
@@ -689,6 +694,7 @@ describe('ERD §15 rule 43: a session event says one thing per kind and is never
       'session_events_case_check',
       'session_events_counter_check',
       'session_events_outcome_check',
+      'session_events_party_check',
       'session_events_previous_start_check',
       'session_events_session_check',
     ]);
