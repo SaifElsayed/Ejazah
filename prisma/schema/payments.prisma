@@ -66,6 +66,10 @@ model Payment {
   // 006:T001 (R-502, V-3): the confirm step's marker for the order it processed, so a replayed
   // event finds it and does nothing.
   confirmedAt             DateTime?      @map("confirmed_at") @db.Timestamptz(6)
+  // 006:T009 (FR-713, R-510; Q-4 (a)): the instant the student ticked «save my card» on a programme
+  // order paid by hand; NULL on every other order (ERD section 15 rule 82, in the migration). T013
+  // copies it into `programme_cards.consented_at`.
+  cardConsentAt           DateTime?      @map("card_consent_at") @db.Timestamptz(6)
   createdAt               DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
