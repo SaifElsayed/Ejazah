@@ -77,8 +77,11 @@ import {
 import {
   bookingTermsOf,
   closedProgramme,
+  createProgrammeServices,
   fitsSlot,
   type ProgrammeReader,
+  type ProgrammeServiceDependencies,
+  type ProgrammeServices,
   withProgrammeTimes,
 } from './programmes.service.js';
 import {
@@ -255,6 +258,8 @@ export async function bookingSlotsOf(
  */
 export interface BookingServices extends EnrollmentListServices {
   slots(student: BookingStudent, input: BookingSlotsInput): Promise<BookingSlotsOutput>;
+  /** 006:T007 (FR-705; Q-A1 (a)): the `programme` namespace's services, `programme.offer`. */
+  readonly programme: ProgrammeServices;
 }
 
 /**
@@ -266,6 +271,9 @@ export function createBookingServices({
   database,
   settings,
   ijazahRequests,
+  idempotency,
+  log,
+  programmeAmounts,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
@@ -276,6 +284,14 @@ export function createBookingServices({
    * bound by `main.ts`.
    */
   readonly ijazahRequests: EnrollmentIjazahRequests;
+  /**
+   * 006:T007 (Q-A1 (a)): the programme's offer is keyed through the kernel's idempotency, logs its
+   * lines of ids, and takes its amounts from payments' `programmeOfferAmountsOf`, which `main.ts`
+   * hands in (booking imports nothing of payments, R-208).
+   */
+  readonly idempotency: ProgrammeServiceDependencies['idempotency'];
+  readonly log: ProgrammeServiceDependencies['log'];
+  readonly programmeAmounts: ProgrammeServiceDependencies['amounts'];
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
@@ -295,5 +311,6 @@ export function createBookingServices({
         bookingSlotsOf(tx, store, student, input, clock, () => programmeAvailabilityOf(settings)),
       );
     },
+    programme: createProgrammeServices({ idempotency, settings, amounts: programmeAmounts, log }),
   };
 }

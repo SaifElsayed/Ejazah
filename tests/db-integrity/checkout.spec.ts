@@ -743,6 +743,12 @@ describe('checkout.current: the first and last session if confirmed now (FR-386,
       now: () => at,
       // 005:T006 (rule d): the enrollment reads' port, which the sheet never reaches.
       ijazahRequests: { of: async () => new Map() },
+      // 006:T007 (rule d): the programme's offer, which no case here reaches.
+      idempotency: { run: () => Promise.reject(new Error('programme.offer is not reached here')) },
+      log: { info: () => undefined },
+      programmeAmounts: () => {
+        throw new Error('programme.offer is not reached here');
+      },
     });
     const { slots } = await booking.slots(studentOf(student), { packageId: on.packageId });
     const sheet = slots.find(({ slotId }) => slotId === on.slotId);

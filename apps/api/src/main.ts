@@ -399,6 +399,10 @@ const services = {
     database,
     settings,
     ijazahRequests: { of: (tx, enrollmentIds) => ijazahRequests.of(tx, enrollmentIds) },
+    // 006:T007 (FR-705, K-5; Q-A1 (a)): `programme.offer`, keyed, its amounts payments'.
+    idempotency,
+    log,
+    programmeAmounts: payments.programmeOfferAmountsOf,
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two

@@ -34,10 +34,11 @@
 //   package's lock», kernel.md's 006:T002 row), so a price edit waits for the offer or the offer
 //   reads the edited price; then the programme's row; then the enrollment's. The standing, the
 //   state, session 1, the weekly time and the price are read under them.
-// - One transaction, the keyed effect's: the offer, `pay_by_at` (the offer + `programme_pay_rest_hours`,
-//   data-model.md «set at the offer») and ⌈N ÷ 4⌉ months on the programme, moved to `offered`, and
-//   the enrollment's snapshot (N + 1, the length, the total). Frozen after: `writeOffer` moves only
-//   `awaiting_offer`, and no other path writes them.
+// - One transaction, the keyed effect's: the offer, `pay_by_at` (the offer +
+//   `programme_pay_rest_hours`, data-model.md «set at the offer») and ⌈N ÷ 4⌉ months on the
+//   programme, moved to `offered`; the enrollment's snapshot (N + 1, the length, the total); and
+//   (the owner's FU-A1 (a), 2026-11-23) one `programme_offered` enrollment event at the offer's
+//   instant. Frozen after: `writeOffer` moves only `awaiting_offer`, and no other path writes them.
 // - The amounts (K-5): the total N × the package's price for the length, and the months, are
 //   `packages/money`'s through payments' entry, which `main.ts` hands in (booking imports nothing
 //   of payments, R-208). Booking computes no amount.
@@ -87,6 +88,7 @@ import {
   enrollmentSessionsOf,
   type HeldTime,
 } from '../sessions/index.js';
+import { recordEnrollmentEvents } from './enrollment-events.repository.js';
 import {
   type ActiveProgrammeSlot,
   activeProgrammeSlotsOf,
@@ -321,6 +323,8 @@ export interface ProgrammeOfferStore {
   readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
   packageOf(tx: Transaction, teacherUserId: string, packageId: string): Promise<PackageRow | null>;
   writeOffer(tx: Transaction, enrollmentId: string, offer: FrozenOffer): Promise<boolean>;
+  /** FU-A1 (a): the offer's `programme_offered` row, on the offer's transaction. */
+  recordOffered(tx: Transaction, enrollmentId: string, occurredAt: Date): Promise<void>;
 }
 
 export const programmeOfferStore: ProgrammeOfferStore = {
@@ -333,6 +337,8 @@ export const programmeOfferStore: ProgrammeOfferStore = {
   readSlot,
   packageOf: teacherPackageOf,
   writeOffer,
+  recordOffered: (tx, enrollmentId, occurredAt) =>
+    recordEnrollmentEvents(tx, [{ kind: 'programme_offered', enrollmentId, occurredAt }]),
 };
 
 /** The lines the offer writes: ids and a reason. */
@@ -476,6 +482,7 @@ class ProgrammeOffers {
       },
     });
     if (!moved) throw this.#refused(ids, 'not_awaiting_offer');
+    await store.recordOffered(tx, enrollment.id, now);
     this.#dependencies.log.info({ ...ids, reason: 'offered' }, 'A programme offer was sent');
     return {
       answer: {

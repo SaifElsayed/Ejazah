@@ -188,7 +188,12 @@ async function rowsOf(enrollmentId: string) {
       snapshotPricePiasters: true,
     },
   });
-  return { programme, enrollment };
+  // FU-A1 (a): the offer's `programme_offered` rows, each at its instant.
+  const offeredEvents = await database.enrollmentEvent.findMany({
+    where: { enrollmentId, kind: 'programme_offered' },
+    select: { occurredAt: true },
+  });
+  return { programme, enrollment, offeredEvents };
 }
 
 /** The refusal's cause, or the answer's text when it was not refused. */
@@ -211,7 +216,8 @@ describe('programme.offer over the real tables (006:T007, FR-705, R-506)', () =>
         monthCount: 10,
       },
     );
-    const { programme, enrollment } = await rowsOf(enrollmentId);
+    const { programme, enrollment, offeredEvents } = await rowsOf(enrollmentId);
+    expect(offeredEvents).toStrictEqual([{ occurredAt: programme.offeredAt }]);
     expect(programme).toMatchObject({
       state: 'offered',
       level: 'يحفظ جزء عم',
@@ -246,6 +252,7 @@ describe('programme.offer over the real tables (006:T007, FR-705, R-506)', () =>
     );
     expect(await rowsOf(enrollmentId)).toStrictEqual(before);
     expect(before.programme.state).toBe('awaiting_offer');
+    expect(before.offeredEvents).toEqual([]);
   });
 
   it('refuses assessment_not_delivered while session 1 is scheduled', async () => {
@@ -262,7 +269,8 @@ describe('programme.offer over the real tables (006:T007, FR-705, R-506)', () =>
       causeOf(services.offer(teacherId, { ...offerOf(enrollmentId), sessionCount: 20 }, noSignal)),
     ]);
     expect(causes.filter((cause) => cause === 'not_awaiting_offer')).toHaveLength(1);
-    const { programme, enrollment } = await rowsOf(enrollmentId);
+    const { programme, enrollment, offeredEvents } = await rowsOf(enrollmentId);
+    expect(offeredEvents).toHaveLength(1);
     const won = causes.findIndex((cause) => cause.startsWith('answered'));
     expect(programme.monthCount).toBe(won === 0 ? 10 : 5);
     expect(enrollment.snapshotSessionCount).toBe(won === 0 ? 41 : 21);

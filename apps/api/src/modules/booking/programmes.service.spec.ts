@@ -405,6 +405,7 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
   };
   const calls: string[] = [];
   const written: FrozenOffer[] = [];
+  const events: [string, Date][] = [];
   const keyed: unknown[] = [];
   const signals: [readonly string[], unknown][] = [];
   const lines: [Readonly<Record<string, unknown>>, string][] = [];
@@ -452,6 +453,10 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
       written.push(offer);
       return world.moved;
     },
+    recordOffered: async (_tx, id, occurredAt) => {
+      calls.push(`event ${id}`);
+      events.push([id, occurredAt]);
+    },
   };
   const hours: Readonly<Record<string, number>> = {
     programme_offer_hours: 24,
@@ -480,7 +485,7 @@ function offerWorld(change: Partial<OfferWorld> = {}) {
   } as unknown as Parameters<ProgrammeServices['offer']>[2];
   const offer = (teacherUserId: string = TEACHER, input: ProgrammeOfferInput = OFFER_INPUT) =>
     services.offer(teacherUserId, input, live);
-  return { world, offer, calls, written, keyed, signals, lines, priced };
+  return { world, offer, calls, written, events, keyed, signals, lines, priced };
 }
 
 /** The refusal's cause; a failure when the call was not refused `CONFLICT` with one. */
@@ -532,7 +537,14 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
       `slot ${SLOT}`,
       `package ${TEACHER} ${PACKAGE}`,
       `write ${ENROLLMENT}`,
+      `event ${ENROLLMENT}`,
     ]);
+  });
+
+  it('records one programme_offered event at the offer’s instant, on the offer’s transaction (FU-A1 (a))', async () => {
+    const { offer, events } = offerWorld();
+    await offer();
+    expect(events).toStrictEqual([[ENROLLMENT, TUESDAY_MORNING]]);
   });
 
   it('is keyed on programme.offer by the teacher, and signals both parties after the commit', async () => {
@@ -682,9 +694,10 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
   });
 
   it('writes nothing, signals no one and logs one line of ids and the reason on a refusal', async () => {
-    const { offer, written, signals, lines } = offerWorld({ slotMinutes: 30 });
+    const { offer, written, events, signals, lines } = offerWorld({ slotMinutes: 30 });
     expect(await causeOf(offer())).toBe('length_exceeds_slot');
     expect(written).toEqual([]);
+    expect(events).toEqual([]);
     expect(signals).toEqual([]);
     expect(lines).toEqual([
       [
@@ -695,9 +708,10 @@ describe('programme.offer (006:T007, FR-705, R-506)', () => {
   });
 
   it('refuses not_awaiting_offer when the programme did not move from awaiting_offer', async () => {
-    const { offer, signals } = offerWorld({ moved: false });
+    const { offer, signals, events } = offerWorld({ moved: false });
     expect(await causeOf(offer())).toBe('not_awaiting_offer');
     expect(signals).toEqual([]);
+    expect(events).toEqual([]);
   });
 });
 
