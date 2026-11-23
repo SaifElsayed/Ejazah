@@ -11,8 +11,11 @@ import {
   activeProgrammeSlotsOf,
   insertAwaitingOffer,
   offerEnrollmentOf,
+  payEnrollmentOf,
   programmeStateOf,
+  programmeTermsOf,
   writeOffer,
+  writeProgrammePaid,
 } from './programmes.repository.js';
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000006d2';
@@ -236,5 +239,112 @@ describe('the offer and the snapshot, written once (006:T007, R-506)', () => {
     const { client, calls } = writer(0);
     await expect(writeOffer(client, ENROLLMENT, OFFER)).resolves.toBe(false);
     expect(calls.map(([model]) => model)).toEqual(['programme']);
+  });
+});
+
+// 006:T009 (FR-710, R-507, R-509): what programme.pay and the confirm step read of the programme.
+describe('the programme as programme.pay reads it (006:T009)', () => {
+  it('reads the programme’s state and pay_by_at with its live enrollment’s parties, status and snapshot', async () => {
+    const calls: unknown[] = [];
+    const payBy = new Date('2026-11-26T10:00:00Z');
+    const answers: unknown[] = [
+      {
+        state: 'offered',
+        payByAt: payBy,
+        enrollment: {
+          id: ENROLLMENT,
+          studentUserId: STUDENT,
+          teacherUserId: TEACHER,
+          status: 'confirmed',
+          snapshotSessionCount: 41,
+          snapshotPricePiasters: 1_000_000n,
+          snapshotTrack: 'ijazah_track',
+        },
+      },
+      null,
+    ];
+    const client = {
+      programme: {
+        findFirst: async (query: unknown) => {
+          calls.push(query);
+          return answers.shift() ?? null;
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await expect(payEnrollmentOf(client, ENROLLMENT)).resolves.toStrictEqual({
+      id: ENROLLMENT,
+      studentUserId: STUDENT,
+      teacherUserId: TEACHER,
+      status: 'confirmed',
+      state: 'offered',
+      payByAt: payBy,
+      offerSessionCount: 40,
+      total_piasters: piasters(1_000_000),
+      track: 'ijazah_track',
+    });
+    await expect(payEnrollmentOf(client, ENROLLMENT)).resolves.toBeNull();
+    expect(calls[0]).toEqual({
+      where: { enrollmentId: ENROLLMENT, enrollment: { deletedAt: null } },
+      select: {
+        state: true,
+        payByAt: true,
+        enrollment: {
+          select: {
+            id: true,
+            studentUserId: true,
+            teacherUserId: true,
+            status: true,
+            snapshotSessionCount: true,
+            snapshotPricePiasters: true,
+            snapshotTrack: true,
+          },
+        },
+      },
+    });
+  });
+
+  it('reads the programme’s state and pay_by_at under its lock for the confirm step, none for no programme', async () => {
+    const calls: unknown[] = [];
+    const payBy = new Date('2026-11-26T10:00:00Z');
+    const answers = [{ state: 'offered', payByAt: payBy }, null];
+    const client = {
+      programme: {
+        findUnique: async (query: unknown) => {
+          calls.push(query);
+          return answers.shift() ?? null;
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await expect(programmeTermsOf(client, ENROLLMENT)).resolves.toStrictEqual({
+      state: 'offered',
+      payByAt: payBy,
+    });
+    await expect(programmeTermsOf(client, ENROLLMENT)).resolves.toBeNull();
+    expect(calls[0]).toEqual({
+      where: { enrollmentId: ENROLLMENT },
+      select: { state: true, payByAt: true },
+    });
+  });
+});
+
+describe('the programme’s payment, written by the confirm step (006:T009, Q-C1 (a))', () => {
+  it('moves an offered programme to active with its plan, then writes the months paid', async () => {
+    const calls: unknown[] = [];
+    const client = {
+      programme: {
+        updateMany: async (query: unknown) => {
+          calls.push(query);
+          return { count: 1 };
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await writeProgrammePaid(client, ENROLLMENT, { plan: 'in_full', monthsPaid: 10 });
+    expect(calls).toEqual([
+      {
+        where: { enrollmentId: ENROLLMENT, state: 'offered' },
+        data: { state: 'active', paymentPlan: 'in_full' },
+      },
+      { where: { enrollmentId: ENROLLMENT }, data: { monthsPaid: 10 } },
+    ]);
   });
 });

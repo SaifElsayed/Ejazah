@@ -7,9 +7,26 @@
 // (`idempotencyKey`, scope `programme.offer`). Another teacher's enrollment answers NOT_FOUND, as an
 // unknown id (R-GENDER-2's shape). No limit of its own: the general limit covers it (NFR-SEC-12;
 // the owner, 2026-11-23, FU-A2). Mounted under `programme` by `app.router.ts` (its `006:` block).
-import { programmeOfferInput, programmeOfferOutput } from '@ijazah/contracts';
+//
+// 006:T009 (FR-710 to FR-713; R-509; contracts/app-surface.md `programme.pay`): `programme.pay`, the
+// student kind (an anonymous caller UNAUTHENTICATED, a teacher FORBIDDEN, a suspended or banned
+// student ACCOUNT_RESTRICTED before the service), counted under `rate_limit_payment_initiation` by
+// the caller's own id as `checkout.pay` is (FR-357: it creates a gateway order); one call of
+// payments' checkout, which owns the orders and the gateway (R-208), with the session's account and
+// gender and the request's log for its refusals' lines (`chat.router.ts`' precedent). Keyed (scope
+// `programme.pay`). Another student's enrollment answers NOT_FOUND.
+import {
+  programmeCheckoutOutput,
+  programmeOfferInput,
+  programmeOfferOutput,
+  programmePayInput,
+} from '@ijazah/contracts';
 
-import { createAppRouter, teacherProcedure } from '../../surfaces/procedures.js';
+import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
+import { createAppRouter, studentProcedure, teacherProcedure } from '../../surfaces/procedures.js';
+
+// The caller the student kind authenticated, never a value computed here (T062).
+const initiation = { key: defaultRateLimits.paymentInitiation, subject: 'caller' } as const;
 
 export const programmesRouter = createAppRouter({
   offer: teacherProcedure({
@@ -18,5 +35,17 @@ export const programmesRouter = createAppRouter({
     output: programmeOfferOutput,
   }).mutation(({ ctx, input }) =>
     ctx.services.booking.programme.offer(ctx.caller.userId, input, ctx.live),
+  ),
+
+  pay: studentProcedure({
+    input: programmePayInput,
+    output: programmeCheckoutOutput,
+    rateLimit: initiation,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.checkout.programmePay(
+      { userId: ctx.caller.userId, gender: ctx.caller.gender },
+      input,
+      ctx.log,
+    ),
   ),
 });

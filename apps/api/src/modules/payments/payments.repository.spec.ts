@@ -85,19 +85,26 @@ describe('the programme orders the confirm step processed, and its marker (006:T
     ]);
   });
 
-  it('writes the marker once, only on an order that has none', async () => {
+  // 006:T009, PR #156 r2 Follow-up 1: the instant is the database's clock on the marker's own
+  // transaction, read under the locks the caller holds, never one the caller read before them.
+  it('writes the marker once, only on an order that has none, at the database’s clock under the locks', async () => {
     const calls: unknown[] = [];
+    const at = new Date('2026-11-03T08:00:00.123Z');
     const client = {
+      $queryRaw: async (...query: unknown[]) => {
+        calls.push(`clock ${(query[0] as readonly string[]).join('?')}`);
+        return [{ at }];
+      },
       payment: {
         updateMany: async (query: unknown) => {
           calls.push(query);
           return { count: 1 };
         },
       },
-    } as unknown as Pick<Transaction, 'payment'>;
-    const at = new Date('2026-11-03T08:00:00Z');
-    await markOrderConfirmed(client, PAYMENT, at);
+    } as unknown as Transaction;
+    await markOrderConfirmed(client, PAYMENT);
     expect(calls).toEqual([
+      'clock SELECT clock_timestamp() AS at',
       { where: { id: PAYMENT, confirmedAt: null }, data: { confirmedAt: at } },
     ]);
   });

@@ -43,7 +43,20 @@
 // (`ORDER_NOT_PAYABLE` otherwise, nothing decrypted). `status` answers `NOT_FOUND` unless the
 // enrollment is the student's, and its last order with the gateway's reference; `confirmed` comes
 // only from the row (R-HONEST-1). The address is never logged: the logger's list redacts
-// `checkoutUrl` (T037).
+// `checkoutUrl` (T037). 006:T009 (the owner's Q-C2 (a), R-509): `current` also answers the
+// student's programme order still payable (`programmeOrder`), which has no hold; `continue` with its
+// enrollment hands its page back as for any order.
+//
+// THE FIRST PAYMENT (`programme.pay`, 006:T009; FR-710 to FR-713, R-507, R-509, R-511). Keyed as Pay
+// is, with no hold. Booking's `checkedProgrammePay` runs before the gateway and again in the
+// recording transaction (the student's account, the own hold, the programme, the enrollments, then
+// their orders): NOT_FOUND for another student, `not_offered`, `pay_by_passed`, `party_suspended`,
+// and FR-BOOK-12's `PREVIOUS_CHECKOUT` while another checkout of the student, or an order of the
+// programme itself, is still payable. The amount is `packages/money`'s (`firstPaymentOf`): in full
+// the offer's total less the assessment's fee as paid (`rest_not_positive` when nothing is left),
+// by months month 1 (4 × the session price, the whole offer below 4 sessions). The rate and the 25 %
+// are copied from the assessment order (R-511); the order expires at the checkout's TTL or at
+// `pay_by_at`, whichever is first; a ticked «save my card» is kept as `card_consent_at` (Q-4 (a)).
 //
 // A CANCELLATION THE GATEWAY FAILS is reported (T111) and never hides the answer it followed: the
 // order it left is the one FR-375's `duplicate_payment` case covers if it is ever paid.
@@ -69,14 +82,27 @@ import type {
   CheckoutRetryInput,
   CheckoutStatusInput,
   CheckoutStatusOutput,
+  ProgrammeCheckoutOutput,
+  ProgrammePayInput,
 } from '@ijazah/contracts';
 import { teacherSharePercent } from '@ijazah/contracts';
-import { piasters, teacherShare } from '@ijazah/money';
+import {
+  type Piasters,
+  perSession,
+  piasters,
+  programmeOfferAmounts,
+  SESSIONS_PER_PROGRAMME_MONTH,
+  shareLeft,
+  teacherShare,
+  toPlainNumber,
+} from '@ijazah/money';
+import { addMinutes } from '@ijazah/time';
 
 import type { ColumnCipher } from '../../platform/crypto/encryption.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { drawRowId } from '../../platform/db/row-id.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import { reportError } from '../../platform/errors/reporting.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
@@ -86,6 +112,11 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import {
   type CheckoutEnrollmentRow,
   type CheckoutHold,
+  type CheckoutOrdersAmong,
+  activeProgrammeEnrollmentsOf,
+  checkedProgrammePay,
+  type ProgrammeLog,
+  type ProgrammePayTarget,
   checkoutTeacherName,
   closedProgramme,
   type CurrentHold,
@@ -103,6 +134,7 @@ import {
   lockOrderTarget,
   type OrderStandings,
   PayableCheckout,
+  type PayableProgrammeOrderOf,
   payByOf,
   placeCheckoutHold,
   previousCheckout,
@@ -118,15 +150,39 @@ import {
 import { payoutRecipientOf } from '../identity/index.js';
 import {
   type AddressedOrder,
+  type AssessmentOrder,
+  assessmentOrderOf,
+  checkoutOrdersAmong,
   heldOrdersOf,
   insertOrder,
   lastOrderOf,
   type NewOrder,
   orderById,
+  payableProgrammeOrderAmong,
   type PaymentGateway,
 } from './checkout.repository.js';
 import { orderStandingsOf } from './order-standing.repository.js';
 import { lockOrder, PaymentsRepository } from './payments.repository.js';
+
+/**
+ * 006:T009 (FR-711, DEC-93; K-5): the first payment's amount, `packages/money`'s. In full: the
+ * offer's total less the assessment's fee as paid, null when nothing is left (`rest_not_positive`,
+ * U-6). By months: month 1, 4 × the session price, or the whole offer when it has fewer than 4
+ * sessions (the remainder rule). 10,000 EGP over 40 sessions with a 500 fee: 9,500, or 1,000.
+ */
+function firstPaymentOf(
+  plan: ProgrammePayInput['plan'],
+  target: Pick<ProgrammePayTarget, 'offerSessionCount' | 'total_piasters'>,
+  fee_piasters: Piasters,
+): Piasters | null {
+  if (plan === 'in_full') {
+    const rest_piasters = shareLeft(target.total_piasters, [], fee_piasters);
+    return toPlainNumber(rest_piasters) === 0 ? null : rest_piasters;
+  }
+  const sessionPrice_piasters = perSession(target.total_piasters, target.offerSessionCount);
+  const sessions = Math.min(SESSIONS_PER_PROGRAMME_MONTH, target.offerSessionCount);
+  return programmeOfferAmounts(sessionPrice_piasters, sessions).total_piasters;
+}
 
 /** The column the hosted checkout's address is encrypted under, bound to the order's id (R-DB-8). */
 export const CHECKOUT_URL_COLUMN = 'payments.checkout_url_encrypted';
@@ -156,7 +212,7 @@ export interface CheckoutStudent {
 
 /** A keyed request of the checkout (`packages/contracts`' `idempotent-procedures.ts`). */
 interface KeyedRequest {
-  readonly scope: 'checkout.hold' | 'checkout.pay' | 'checkout.retry';
+  readonly scope: 'checkout.hold' | 'checkout.pay' | 'checkout.retry' | 'programme.pay';
   readonly key: string;
   readonly actorId: string;
   readonly input: { readonly [key: string]: string | number };
@@ -196,6 +252,8 @@ export interface CheckoutSteps {
       readonly terms: HoldTerms;
       readonly orders: OrderStandings;
       readonly heldOrders: HeldOrdersOf;
+      /** 006:T009: the student's payable programme order, which refuses a new hold (FR-BOOK-12). */
+      readonly programmeOrders: PayableProgrammeOrderOf;
     },
   ): Promise<CheckoutHold>;
   retryTarget(tx: Transaction, studentUserId: string, enrollmentId: string): Promise<RetryTarget>;
@@ -241,6 +299,23 @@ export interface CheckoutSteps {
   enrollOnHold(tx: Transaction, target: PayTarget, enrolment: Enrolment): Promise<void>;
   /** 003:T101: the teacher's verified payout recipient; null when none (identity's `payoutRecipientOf`). */
   payoutRecipient(teacherUserId: string): Promise<string | null>;
+  /** 006:T009: `programme.pay`'s check, before the gateway and under the record's locks (booking). */
+  programmePayTarget(
+    tx: Transaction,
+    request: { readonly studentUserId: string; readonly enrollmentId: string },
+    dependencies: { readonly orders: CheckoutOrdersAmong; readonly log: ProgrammeLog },
+  ): Promise<ProgrammePayTarget>;
+  /**
+   * 006:T009 (Q-C2 (a)): the student's programme order still payable at `at`, or null: booking's
+   * active programmes of the student, then payments' read among them; no lock.
+   */
+  programmeOrderOf(
+    tx: Transaction,
+    studentUserId: string,
+    at: Date,
+  ): Promise<{ readonly enrollmentId: string; readonly expiresAt: Date } | null>;
+  /** 006:T009 (R-511): the programme's assessment order, its gross and rates (payments' own read). */
+  assessmentOrderOf(tx: Transaction, enrollmentId: string): Promise<AssessmentOrder>;
 }
 
 /**
@@ -283,6 +358,10 @@ export function checkoutStepsOver(
     lastOrderOf,
     drawRowId: () => drawRowId(database),
     payoutRecipient: (teacherUserId) => payoutRecipientOf(database, cipher, teacherUserId),
+    programmePayTarget: checkedProgrammePay,
+    programmeOrderOf: async (tx, studentUserId, at) =>
+      payableProgrammeOrderAmong(tx, await activeProgrammeEnrollmentsOf(tx, studentUserId), at),
+    assessmentOrderOf,
   };
 }
 
@@ -342,9 +421,19 @@ interface OrderToCreate {
   readonly track: 'recitation' | 'ijazah_track';
   /**
    * 006:T005 (R-502, R-511, FR-701): `assessment` for a programme package's assessment, its gross
-   * the fee and its rate and 25 % read as a package's; `package` otherwise.
+   * the fee and its rate and 25 % read as a package's; `package` otherwise. 006:T009:
+   * `rest_in_full` or `instalment` for `programme.pay`.
    */
-  readonly kind: 'package' | 'assessment';
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  /** 006:T009: the instalment's month (month 1 for `programme.pay`). */
+  readonly instalmentMonth?: number;
+  /** 006:T009 (Q-4 (a)): the instant the student ticked to save the card, when ticked. */
+  readonly cardConsentAt?: Date;
+  /**
+   * 006:T009 (R-511, ADR 0025 D6): the rate and the 25 % copied from the programme's assessment
+   * order, in place of the settings' values read now.
+   */
+  readonly rates?: Pick<AssessmentOrder, 'teacherShareRatePercent' | 'halfReleaseRatePercent'>;
   readonly latestExpiry: Date;
   /** Locks and checks what the order is recorded on, in the recording transaction. */
   readonly lockTarget: (tx: Transaction) => Promise<void>;
@@ -396,7 +485,12 @@ export class CheckoutService {
               tx,
               student,
               { packageId, slotId },
-              { terms, orders: orderStandingsOf, heldOrders: heldOrdersOf },
+              {
+                terms,
+                orders: orderStandingsOf,
+                heldOrders: heldOrdersOf,
+                programmeOrders: payableProgrammeOrderAmong,
+              },
             );
             placed.name = held.summary.teacher.displayName;
             return storedHoldOf(held, terms);
@@ -545,17 +639,10 @@ export class CheckoutService {
   ): Promise<CheckoutHandover & { readonly stored: StoredOrder }> {
     // T104: the rate read now, before the gateway, so a setting outside 0 to 100 creates no order;
     // the share is the gross at that rate, rounded up (`packages/money`), and both stay on the order.
-    const teacherShareRatePercent = await this.#settings.read(
-      TEACHER_SHARE_SETTING,
-      teacherSharePercent,
-    );
+    // 006:T009 (R-511): a programme's later order copies both from its assessment order instead.
+    const { teacherShareRatePercent, halfReleaseRatePercent } =
+      order.rates ?? (await this.#ratesNow(order.track));
     const teacherShare_piasters = teacherShare(order.gross_piasters, teacherShareRatePercent);
-    // 003:T105 (Q-4 (a)): the ijazah half's percent, read now on an `ijazah_track` order only and
-    // kept on it, so a running package keeps the percent it started with (ADR 0025 D6).
-    const halfReleaseRatePercent =
-      order.track === 'ijazah_track'
-        ? await this.#settings.read(IJAZAH_HALF_RELEASE_SETTING, ijazahHalfReleasePercent)
-        : null;
     // T101 (Q-B2 (a)): the share split to the teacher's verified recipient, read before the gateway.
     // With none, no split is asked for: test mode creates the order, live mode's gateway refuses it.
     const recipientRef = await this.#steps.payoutRecipient(order.teacherUserId);
@@ -592,6 +679,10 @@ export class CheckoutService {
           teacherShare_piasters,
           halfReleaseRatePercent,
           kind: order.kind,
+          ...(order.instalmentMonth === undefined
+            ? {}
+            : { instalmentMonth: order.instalmentMonth }),
+          ...(order.cardConsentAt === undefined ? {} : { cardConsentAt: order.cardConsentAt }),
         });
         const outcome: StoredOrder = {
           ...alsoStored,
@@ -616,11 +707,24 @@ export class CheckoutService {
     const now = this.#now();
     const terms = await readHoldTerms(this.#settings, now);
     return this.#steps.transaction(async (tx) => {
+      // 006:T009 (Q-C2 (a), R-509): the student's payable programme order, which has no hold.
+      const programme = await this.#steps.programmeOrderOf(tx, student.userId, now);
+      const programmeOrder =
+        programme === null
+          ? {}
+          : {
+              programmeOrder: {
+                enrollmentId: programme.enrollmentId,
+                expiresAt: programme.expiresAt.toISOString(),
+                canContinue: programme.expiresAt.getTime() > now.getTime(),
+              },
+            };
       const hold = await this.#steps.currentHold(tx, student, terms);
-      if (hold === null) return {};
+      if (hold === null) return programmeOrder;
       const order =
         hold.enrollmentId === null ? null : await this.#steps.lastOrderOf(tx, hold.enrollmentId);
       return {
+        ...programmeOrder,
         hold: {
           holdId: hold.holdId,
           expiresAt: hold.expiresAt.toISOString(),
@@ -712,6 +816,89 @@ export class CheckoutService {
       throw previousCheckout(payable.enrollmentId, 'payable', payable.order.expiresAt);
     }
     await this.#steps.recordCancelled(payable.enrollmentId, payable.order.paymentId);
+  }
+
+  /** The rate and the ijazah half's percent the settings hold now (T104, 003:T105). */
+  async #ratesNow(
+    track: OrderToCreate['track'],
+  ): Promise<Pick<AssessmentOrder, 'teacherShareRatePercent' | 'halfReleaseRatePercent'>> {
+    const teacherShareRatePercent = await this.#settings.read(
+      TEACHER_SHARE_SETTING,
+      teacherSharePercent,
+    );
+    // 003:T105 (Q-4 (a)): the ijazah half's percent, read now on an `ijazah_track` order only and
+    // kept on it, so a running package keeps the percent it started with (ADR 0025 D6).
+    const halfReleaseRatePercent =
+      track === 'ijazah_track'
+        ? await this.#settings.read(IJAZAH_HALF_RELEASE_SETTING, ijazahHalfReleasePercent)
+        : null;
+    return { teacherShareRatePercent, halfReleaseRatePercent };
+  }
+
+  /**
+   * `programme.pay` (006:T009; FR-710 to FR-713, R-509, R-511; this file's head, THE FIRST
+   * PAYMENT): the rest in full or month 1, keyed as `checkout.pay` is, with no hold.
+   */
+  async programmePay(
+    student: CheckoutStudent,
+    input: ProgrammePayInput,
+    log: ProgrammeLog,
+  ): Promise<ProgrammeCheckoutOutput> {
+    const { enrollmentId, plan, saveCard } = input;
+    const request = {
+      scope: 'programme.pay' as const,
+      key: input.idempotencyKey,
+      actorId: student.userId,
+      input: { enrollmentId, plan, saveCard: saveCard ? 1 : 0 },
+    };
+    const stored = await this.#idempotency.completed<StoredOrder>(request);
+    if (stored !== undefined) {
+      return { checkoutUrl: (await this.#handoverAgain(stored.paymentId)).checkoutUrl };
+    }
+    const now = this.#now();
+    const { ttlMinutes } = await readHoldTerms(this.#settings, now);
+    const check = (tx: Transaction) =>
+      this.#steps.programmePayTarget(
+        tx,
+        { studentUserId: student.userId, enrollmentId },
+        { orders: checkoutOrdersAmong, log },
+      );
+    const { target, assessment } = await this.#steps.transaction(async (tx) => {
+      const checked = await check(tx);
+      return { target: checked, assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId) };
+    });
+    const gross_piasters = firstPaymentOf(plan, target, assessment.gross_piasters);
+    if (gross_piasters === null) {
+      log.info(
+        { studentUserId: student.userId, enrollmentId, reason: 'rest_not_positive' },
+        'A programme payment was refused',
+      );
+      throw markRefusalLogged(
+        new DomainError('CONFLICT', undefined, {
+          details: [{ path: 'cause', code: 'rest_not_positive' }],
+        }),
+      );
+    }
+    // No hold (R-509): the checkout's TTL, cut at the 48 hours' end.
+    const ttlEnd = new Date(addMinutes(now, ttlMinutes));
+    const { checkoutUrl } = await this.#createAndRecord(request, {
+      enrollmentId,
+      teacherUserId: target.teacherUserId,
+      gross_piasters,
+      track: target.track,
+      kind: plan === 'in_full' ? 'rest_in_full' : 'instalment',
+      ...(plan === 'in_full' ? {} : { instalmentMonth: 1 }),
+      ...(saveCard ? { cardConsentAt: now } : {}),
+      rates: {
+        teacherShareRatePercent: assessment.teacherShareRatePercent,
+        halfReleaseRatePercent: assessment.halfReleaseRatePercent,
+      },
+      latestExpiry: ttlEnd.getTime() < target.payByAt.getTime() ? ttlEnd : target.payByAt,
+      lockTarget: async (tx) => {
+        await check(tx);
+      },
+    });
+    return { checkoutUrl };
   }
 
   async #cancelQuietly(gatewayOrderId: string): Promise<void> {

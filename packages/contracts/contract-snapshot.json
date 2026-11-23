@@ -3979,7 +3979,11 @@
             "required": true,
             "type": "string",
             "values": ["ijazah_track", "recitation"]
-          }
+          },
+          "$.programmeOrder": { "type": "object" },
+          "$.programmeOrder.canContinue": { "required": true, "type": "boolean" },
+          "$.programmeOrder.enrollmentId": { "required": true, "type": "string" },
+          "$.programmeOrder.expiresAt": { "required": true, "type": "string" }
         }
       },
       "checkout.hold": {
@@ -4715,6 +4719,21 @@
           "$.monthCount": { "required": true, "type": "integer" },
           "$.sessionPrice_piasters": { "required": true, "type": "integer" },
           "$.total_piasters": { "required": true, "type": "integer" }
+        }
+      },
+      "programme.pay": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.plan": { "required": true, "type": "string", "values": ["in_full", "monthly"] },
+          "$.saveCard": { "required": true, "type": "boolean" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" }
         }
       },
       "reports.create": {

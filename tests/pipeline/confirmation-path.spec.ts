@@ -96,6 +96,12 @@ export interface Site {
   readonly within: string | null;
   /** The column a write's key names; null for raw SQL, whose column is not told apart, and a reach. */
   readonly column: 'status' | 'confirmed_at' | null;
+  /**
+   * 006:T009 (PR #156 r2 Minor 1): the Prisma delegate a key is written through, when the key sits
+   * directly in the `data` of a call `<client>.<delegate>.<method>(…)`; null otherwise (raw SQL, a
+   * reach, a nested write through a relation, an object built aside).
+   */
+  readonly delegate: string | null;
   readonly what: string;
 }
 
@@ -111,7 +117,8 @@ export function allowed(site: Site): boolean {
         // 006:T006 (R-502, V-3): an order's marker, never an enrollment's (this file's head).
         (site.path === PAYMENTS_REPOSITORY &&
           site.within === 'markOrderConfirmed' &&
-          site.column === 'confirmed_at')
+          site.column === 'confirmed_at' &&
+          site.delegate === 'payment')
       );
     case 'markConfirmed':
       return site.path === SERVICE && site.within === 'confirmEnrollment';
@@ -265,6 +272,33 @@ function withinOf(node: ts.Node): string | null {
 }
 
 /**
+ * 006:T009 (PR #156 r2 Minor 1): the delegate a written key goes through, read only where the key
+ * sits directly in the `data` of the call's first argument, `<client>.<delegate>.<method>({ data })`;
+ * null anywhere else, so a nested write through a relation never borrows its outer call's delegate.
+ */
+function delegateOf(key: ts.Node): string | null {
+  // A file's top level has no parent, whatever the declared type says.
+  const data: ts.Node | undefined = key.parent.parent;
+  const argument: ts.Node | undefined = data?.parent;
+  const call: ts.Node | undefined = argument?.parent;
+  if (
+    data === undefined ||
+    argument === undefined ||
+    call === undefined ||
+    !ts.isPropertyAssignment(data) ||
+    keyOf(data.name) !== 'data' ||
+    !ts.isObjectLiteralExpression(argument) ||
+    !ts.isCallExpression(call) ||
+    call.arguments[0] !== argument ||
+    !ts.isPropertyAccessExpression(call.expression)
+  ) {
+    return null;
+  }
+  const delegate = bare(call.expression.expression);
+  return ts.isPropertyAccessExpression(delegate) ? delegate.name.text : null;
+}
+
+/**
  * The SQL write sites of one text (a string, a template, or a migration's code), each with its
  * offset: an `UPDATE` of `enrollments` whose `SET` names a column of the two, or an `INSERT INTO`
  * it that names one anywhere (its column list, or an `ON CONFLICT … DO UPDATE`).
@@ -299,6 +333,7 @@ function migrationSites(file: PathFile): Site[] {
     line: code.slice(0, offset).split('\n').length,
     within: null,
     column: null,
+    delegate: null,
     what: `SQL: ${statement}`,
   }));
 }
@@ -320,6 +355,7 @@ function sourceSites(file: PathFile): Site[] {
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
       within: withinOf(node),
       column,
+      delegate: column === null ? null : delegateOf(node),
       what,
     });
 
@@ -729,6 +765,25 @@ describe('the gate refuses every write of a confirmed enrollment outside markCon
         'export function createEnrollmentSide() {',
         "  const restore = (tx, id) => tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed' } });",
         '  return { restore };',
+        '}',
+      ),
+    ],
+    [
+      // 006:T009, PR #156 r2 Minor 1 (M-G11): the order's marker allowed on the `payment` delegate only.
+      'an enrollment’s confirmedAt written inside markOrderConfirmed',
+      at(
+        PAYMENTS_REPOSITORY,
+        'export async function markOrderConfirmed(tx, paymentId) {',
+        '  await tx.enrollment.updateMany({ where: { id: paymentId, confirmedAt: null }, data: { confirmedAt: new Date() } });',
+        '}',
+      ),
+    ],
+    [
+      'an enrollment’s confirmedAt reached through the order’s relation inside markOrderConfirmed',
+      at(
+        PAYMENTS_REPOSITORY,
+        'export async function markOrderConfirmed(tx, paymentId) {',
+        '  await tx.payment.update({ where: { id: paymentId }, data: { enrollment: { update: { confirmedAt: new Date() } } } });',
         '}',
       ),
     ],
