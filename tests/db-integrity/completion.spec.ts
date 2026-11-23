@@ -395,11 +395,13 @@ describe('completeIfDue over the real tables (T015, FR-449, R-309)', () => {
 
 // ---------------------------------------------------------------------------------------------
 // 006:T010 of specs/006-programme (FR-712; research R-501 V-1; Q-D2, approved by the review session
-// under rule d): the gate reads the programme with no lock under the enrollment's lock, since every
-// writer of the row takes `programmes` before `enrollments` (kernel.md, 006:T006). A payment's
+// under rule d): the gate reads the programme with no lock of its own; its caller's `lockEnrollments`
+// takes the programme's row before the enrollment's (kernel.md, 006:T008), and every writer of the row
+// takes `programmes` before `enrollments` (006:T006). The integration (2026-11-23) moved the first
+// case to that order: a payment holding only the programme's row now makes the gate wait. A payment's
 // `recordProgrammePaid` against `completeIfDue`: while the last month's payment is not committed the
-// gate reads the month unpaid and holds completion; once it commits, completion follows. No lock is
-// added and no kernel row.
+// gate waits on the programme's row, never reading the month unpaid; once it commits, completion
+// follows. No lock is added here and no kernel row.
 
 /** A committed `active` programme on the enrollment, paid by months: `monthsPaid` of 2. */
 async function activeProgrammeOn(enrollmentId: string, monthsPaid: number): Promise<void> {
@@ -432,7 +434,7 @@ function paymentHeldOpen(enrollmentId: string, gate: Promise<void>, enrollmentLo
 }
 
 describe("completeIfDue against the programme's payment (006:T010, FR-712, R-501 V-1)", () => {
-  it('red first: a payment of the last month not yet committed leaves the month unpaid to the gate, which holds completion; once it commits, completion follows', async () => {
+  it("a payment holding only the programme's row makes the gate wait (lockEnrollments takes the programme first, 006:T008), which then reads the month paid and completes", async () => {
     const enrollment = await delivered(await makeOffer(db));
     await activeProgrammeOn(enrollment, 1);
     let release: () => void = () => undefined;
@@ -441,11 +443,19 @@ describe("completeIfDue against the programme's payment (006:T010, FR-712, R-501
     });
     const payment = paymentHeldOpen(enrollment, gate, false);
     await payment.holding;
-    // The payment holds the programme's row, not yet the enrollment's: the gate runs at once.
-    await check(enrollment, false);
+    // The payment holds the programme's row only. Since 006:T008, `lockEnrollments` takes the
+    // programme's row before the enrollment's, so the gate waits for the payment's commit and never
+    // reads the month unpaid.
+    let finished = false;
+    const checked = check(enrollment, true).then(() => {
+      finished = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const whileHeld = finished;
     release();
     await payment.done;
-    await check(enrollment, true);
+    await checked;
+    expect([whileHeld, finished]).toEqual([false, true]);
   });
 
   it("a payment holding the programme's and the enrollment's rows makes the gate wait, which then reads the month paid and completes", async () => {
