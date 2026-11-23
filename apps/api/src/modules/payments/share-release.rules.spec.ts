@@ -781,6 +781,47 @@ describe('006:T011 the `assessment` release when the student does not continue (
     expect(plan(madeUp)).toMatchObject([{ milestone: 'assessment', dueAt: windowAfter(3) }]);
   });
 
+  // PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ»: no `assessment` share where no assessment
+  // was held (session 1's chain consumed by neither `done` nor `student_no_show`); the 500 EGP fee is
+  // left to the administrator's compensation case, the teacher's 350 not owed.
+  const refusedClose = (sessions: ReleaseFacts['sessions']): ReleaseFacts => ({
+    ...programmeFacts({
+      orders: [ASSESSMENT],
+      count: 1,
+      status: 'cancelled',
+      cancellationReason: 'assessment_refused',
+      programme: {
+        state: 'closed',
+        total_piasters: piasters(50_000),
+        payByAt: null,
+        closedAt: new Date('2026-10-06T09:00:00Z'),
+      },
+    }),
+    sessions,
+  });
+
+  it('lists no `assessment` release where session 1 was a teacher’s no-show whose remedy lapsed (no assessment held)', () => {
+    expect(plan(refusedClose([at(1, 'teacher_no_show')]))).toEqual([]);
+  });
+
+  it('lists no `assessment` release where session 1 ended with no make-up (an administrator’s cancellation)', () => {
+    expect(plan(refusedClose([at(1, 'cancelled_by_admin')]))).toEqual([]);
+  });
+
+  it('lists no `assessment` release where session 1’s make-up was itself not held', () => {
+    const sessions = [
+      at(1, 'teacher_no_show'),
+      { sequenceNumber: 2, endsAt: endOf(3), outcome: 'both_no_show', madeUpSequence: 1 },
+    ];
+    expect(plan(refusedClose(sessions))).toEqual([]);
+  });
+
+  it('owes the `assessment` release where the student missed session 1 (`student_no_show`, consumed)', () => {
+    expect(plan(refusedClose([at(1, 'student_no_show')]))).toMatchObject([
+      { milestone: 'assessment', amount: 35_000, due: true },
+    ]);
+  });
+
   it('is held while a case is open on the enrollment', () => {
     const input = programmeFacts({
       orders: [ASSESSMENT],

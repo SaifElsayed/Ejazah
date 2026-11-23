@@ -640,7 +640,11 @@ function isActiveTeacher(standing: Awaited<ReturnType<typeof readStanding>>): bo
 // event, and the close hook, which withdraws an open item (a `pay_blocked` one among them, FR-706b)
 // and calls payments' card entry. The fee is kept (DEC-94). Refused `CONFLICT` with the cause, nothing
 // written, one line: `rest_paid` once the rest is paid (`active`, `paused`), `closed` once closed or
-// the enrollment no longer `confirmed`. `enrollment` to both parties after the commit.
+// the enrollment no longer `confirmed`, and (PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ»;
+// FR-BOOK-15, «after the assessment») `assessment_not_settled` until session 1's outcome chain
+// (sessions' `assessmentOutcome`, read as the windows' step reads it) is consumed, `done` or
+// `student_no_show`: still to come, waiting for a make-up, or ended with no assessment held.
+// `enrollment` to both parties after the commit.
 //
 // THE WINDOWS' STEP (R-508's step 1, for T015's `advance-programmes`). One programme in a transaction
 // of its own, under its row lock: the teacher's `users` row key-shared first (an item's insert
@@ -657,17 +661,19 @@ function isActiveTeacher(standing: Awaited<ReturnType<typeof readStanding>>): bo
 // Double run (R-API-14): the second run reads the item open, or the programme closed, and does
 // nothing.
 
-/** What the cancellation reads, over booking's rows. */
+/** What the cancellation reads, over booking's rows and sessions' entry. */
 export interface ProgrammeCancelStore {
   programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
   lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
   lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
 }
 
 export const programmeCancelStore: ProgrammeCancelStore = {
   programmeFactsOf,
   lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
   lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  assessmentOutcome,
 };
 
 /** The states the student may cancel in: before any payment of the rest. */
@@ -699,6 +705,9 @@ export function cancelProgramme(
       if (facts === null) throw new DomainError('NOT_FOUND');
       if (facts.status !== 'confirmed' || facts.state === 'closed') throw refused('closed');
       if (!CANCELLABLE.has(facts.state)) throw refused('rest_paid');
+      if ((await store.assessmentOutcome(tx, facts.enrollmentId)).kind !== 'delivered') {
+        throw refused('assessment_not_settled');
+      }
       const ended = await endProgramme(tx, facts.enrollmentId, 'offer_declined', {
         deleteProgrammeCard: dependencies.deleteProgrammeCard ?? noProgrammeCardYet,
         log: dependencies.log,

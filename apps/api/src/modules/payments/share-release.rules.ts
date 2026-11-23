@@ -37,7 +37,10 @@
 // (`programmeSharesOf`); every other keeps the rules above, on its first order. The worked example:
 // an offer of 10,000 EGP, the fee 500 EGP, 70 %, 25 %.
 // - Not continued (no `rest_in_full` or month paid): nothing is listed while the student decides.
-//   `assessment` on a close `offer_declined`, `offer_lapsed` or `assessment_refused`: the assessment
+//   `assessment` on a close `offer_declined`, `offer_lapsed` or `assessment_refused`, where the
+//   assessment was held (`assessmentHeld`: session 1's chain consumed, `done` or `student_no_show`;
+//   PR #158 r1 Follow-up 1 (a), the owner: where it was not, nothing, the fee the administrator's
+//   compensation case's): the assessment
 //   order's share (350 of 500), due at the latest of the close, `pay_by` where an offer was sent,
 //   and session 1's dispute window (`assessmentDueAt`); never due while a `pay_blocked` item is open.
 // - Continued: `ijazah_half` = 25 % × the share of the price as paid (1,750 in full, 1,837.50 by
@@ -425,6 +428,17 @@ export function assessmentDueAt(facts: ReleaseFacts, windowHours: number): Date 
   return new Date(Math.max(...instants));
 }
 
+/**
+ * PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ»: whether the assessment was held, i.e.
+ * session 1, or a make-up of it, consumed (`done` or `student_no_show`, a disputed one by its frozen
+ * outcome). Where it was not, no `assessment` share is owed; the fee is the administrator's.
+ */
+export function assessmentHeld(sessions: readonly ReleaseSession[]): boolean {
+  return sessions.some(
+    (one) => valuedSequence(one) === 1 && one.outcome !== undefined && CONSUMED.has(one.outcome),
+  );
+}
+
 /** The releases `facts` owe and have not written, at `now`, with a dispute window of `windowHours`. */
 export function plannedReleases(
   facts: ReleaseFacts,
@@ -504,7 +518,9 @@ export function plannedReleases(
 
   if (closed && programme !== undefined) {
     const reason = enrollment.cancellationReason;
-    if (!programme.continued && reason !== null && NOT_CONTINUED.has(reason)) {
+    // PR #158 r1 Follow-up 1 (a): owed only where the assessment was held.
+    const owed = !programme.continued && reason !== null && NOT_CONTINUED.has(reason);
+    if (owed && assessmentHeld(sessions)) {
       // DEC-94, FR-706b: the assessment's share, never due while a `pay_blocked` item is open.
       owe(
         'assessment',

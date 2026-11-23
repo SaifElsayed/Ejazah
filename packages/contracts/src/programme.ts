@@ -210,9 +210,11 @@ export const programmeRequestRefusal = z.enum([
 /**
  * 006:T008 (FR-706; B-P2 lane b, Q-B1 (a)): `programme.cancel`'s refusals: `rest_paid` once the rest
  * is paid (`active`, `paused`), `closed` once the programme is closed or its enrollment no longer
- * `confirmed`.
+ * `confirmed`. PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ» (FR-BOOK-15, «after the
+ * assessment»): `assessment_not_settled` until session 1's outcome chain is consumed (`done` or
+ * `student_no_show`). Additive.
  */
-export const programmeCancelRefusal = z.enum(['rest_paid', 'closed']);
+export const programmeCancelRefusal = z.enum(['rest_paid', 'closed', 'assessment_not_settled']);
 
 /** `programme.autoRenewOff` and `programme.cancel`: the student's, on the enrollment. */
 export const programmeActionInput = z.object({

@@ -302,6 +302,10 @@ order (ADR 0025 D6, FR-702).
   `assessment`, the assessment order's share (350 of 500). It falls due once the programme has
   closed, its 48 hours have ended where an offer was sent (DEC-94: «once the 48 h have ended»), and session 1's
   dispute window has passed with no case open.
+  - *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* Only where the
+    assessment was held (session 1 or its make-up `done` or `student_no_show`); where it was never held, no
+    `assessment` release, the fee left to the administrator's compensation case. `programme.cancel` is refused
+    `assessment_not_settled` until it was held.
 - **The student continues:** no `assessment` milestone.
   - **`ijazah_half`:**
     - Base: 25 % × `teacherShare(the programme's price as paid, rate)`, where the price is the offer's total in full

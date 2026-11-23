@@ -346,6 +346,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   continue (the offer declined or unpaid within the 48 hours, or an approved refusal), at the close, or at the end of the 48 hours where an offer was sent, whichever is later, once
   its session's dispute window (72 h) has passed with no case open. When the student continues, the assessment is the
   package's first session and its share is held with the package (DEC-94).
+  > *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* The share is listed
+  > only where the assessment was held: session 1, or its make-up, settled `done` or `student_no_show`. Where it was
+  > never held (an approved refusal after the teacher's no-show whose remedy lapsed), nothing is released to the
+  > teacher; the fee is left to the administrator's compensation case (fee 500 EGP: the teacher's 350 not owed).
 - **FR-704**: The assessment's fee MUST be one platform-wide amount and its session length one length, both §3.14
   settings an Administrator sets (the length 30 minutes by default; the fee with no default). An ijazah-track package
   MUST NOT be published while the fee is unset. The teacher's ijazah-track package MUST set a price per session for
@@ -393,6 +397,11 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   > share as above). Deciding a `no_offer` item MUST carry the reason the teacher sent to support, as the administrator
   > records it (1–500, written on the item; a decision without it is refused) (FR-727). The `programme_request_kind`
   > value `refusal` stays in the database, unused (no migration).
+  > *(Note 2026-11-23, PR #158's review, round 1, Follow-up 1 (a), the owner: «صلح ومتابعة أ».)* «The share as above»
+  > holds only where the assessment was held (FR-703's note): an approved refusal after a session 1 never held (the
+  > teacher's no-show, its remedy lapsed) releases nothing to the teacher. The student's cancellation (FR-706) comes
+  > only after the assessment: `programme.cancel` is refused `assessment_not_settled` until session 1, or its
+  > make-up, is `done` or `student_no_show` (FR-BOOK-15, «after the assessment»).
 
 **Paying: in full or monthly, prepaid**
 

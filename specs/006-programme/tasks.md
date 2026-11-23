@@ -319,6 +319,12 @@ No open question remains.
   > functions and `createProgrammeWindows` for T015; «unverified in live mode»; the close hook, the programme before the
   > enrollment on every cancel path (race spec against `programmes.decide`); `programme.cancel`; `programme.request` `stop`
   > only (DEC-112); `programmes.decide` with `reason_required` and `makeup_pending`; the three labels.
+  > **PR #158 r1 Follow-up 1 (a) (the owner, 2026-11-23, «صلح ومتابعة أ»; FR-BOOK-15, «after the assessment»).**
+  > `programme.cancel` is refused `assessment_not_settled` (a new cause of `programmeCancelRefusal`, additive, the
+  > snapshot regenerated) until session 1's outcome chain (sessions' `assessmentOutcome`) is consumed, `done` or
+  > `student_no_show`: still to come, waiting for its make-up, or ended with no assessment held. Nothing is written;
+  > one line of ids and the cause. Red first in `tests/db-integrity/programme-windows.spec.ts` («still to come»,
+  > «waits for its make-up», «ended with no assessment held»), then under M-F1.
 - [x] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
   `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
   `checkout.repository.ts`:
@@ -401,6 +407,11 @@ No open question remains.
   > **Done (B-P2, 2026-11-23).** Every paid order with its kind in the facts; `assessment` only when not continued and
   > never while a `pay_blocked` item is open; the half on the price as paid, capped; the end and the stop subtract every
   > release written (Q-5); the stop after the last consumed session (FU-E2); a missing programme row warned (FU-E3, Q-E4).
+  > **PR #158 r1 Follow-up 1 (a) (the owner, 2026-11-23, «صلح ومتابعة أ»).** Where the assessment was never held
+  > (session 1's chain consumed by neither `done` nor `student_no_show`, e.g. an approved `no_offer` item after the
+  > teacher's no-show whose remedy lapsed), no `assessment` release is owed to the teacher (`assessmentHeld`, over the
+  > release facts' sessions; no new read); the fee is left to the administrator's compensation case. Fee 500 EGP: the
+  > teacher's 350 not owed. Red first in `share-release.rules.spec.ts`, then under M-F2.
 - [x] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in

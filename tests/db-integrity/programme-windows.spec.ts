@@ -133,7 +133,8 @@ async function dbNow(): Promise<Date> {
  * `endedHoursAgo` hours before the run; the teacher's payout account verified or not.
  */
 async function awaitingOffer(
-  status: 'done' | 'teacher_no_show' | 'cancelled_by_admin' = 'done',
+  status:
+    'done' | 'student_no_show' | 'scheduled' | 'teacher_no_show' | 'cancelled_by_admin' = 'done',
   endedHoursAgo = 1,
   { payoutVerified = false }: { readonly payoutVerified?: boolean } = {},
 ) {
@@ -783,5 +784,50 @@ describe('an account’s termination against the decision: the programme before 
     expect(programme.state).toBe('closed');
     expect(items).toMatchObject([{ kind: 'pay_blocked', status: 'withdrawn' }]);
     expect(cardsDeleted).toContain(enrollmentId);
+  });
+});
+
+// PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ» (FR-BOOK-15: the student cancels «after the
+// assessment»): `programme.cancel` is refused `assessment_not_settled` until session 1's outcome chain
+// is consumed (`done` or `student_no_show`), writing nothing. Observed red against the code before
+// the change, then under M-F1 (the gate dropped), restored and `cmp`-checked.
+describe('programme.cancel only after the assessment (PR #158 r1 Follow-up 1 (a))', () => {
+  async function refusedBefore(
+    status: 'scheduled' | 'teacher_no_show' | 'cancelled_by_admin',
+    endedHoursAgo: number,
+  ) {
+    const { studentId, enrollmentId } = await awaitingOffer(status, endedHoursAgo);
+    const cause = await causeOf(
+      services.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    );
+    expect(cause).toBe('assessment_not_settled');
+    expect(programmeCancelRefusal.options).toContain(cause);
+    const { programme, enrollment, cancelled } = await rowsOf(enrollmentId);
+    expect(enrollment).toStrictEqual({ status: 'confirmed', cancellationReason: null });
+    expect(programme.state).toBe('awaiting_offer');
+    expect(cancelled).toBe(0);
+  }
+
+  it('refuses while session 1 is still to come', async () => {
+    await refusedBefore('scheduled', -24);
+  });
+
+  it('refuses while session 1 waits for its make-up (a teacher’s no-show)', async () => {
+    await refusedBefore('teacher_no_show', 25);
+  });
+
+  it('refuses where session 1 ended with no assessment held (an administrator’s cancellation)', async () => {
+    await refusedBefore('cancelled_by_admin', 25);
+  });
+
+  it('cancels once the student missed session 1 (student_no_show, the assessment consumed)', async () => {
+    const { studentId, enrollmentId } = await awaitingOffer('student_no_show', 3);
+    await expect(
+      services.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    ).resolves.toStrictEqual({ ok: true });
+    expect((await rowsOf(enrollmentId)).enrollment).toStrictEqual({
+      status: 'cancelled',
+      cancellationReason: 'offer_declined',
+    });
   });
 });
