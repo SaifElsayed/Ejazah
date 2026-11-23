@@ -307,6 +307,15 @@ No open question remains.
   > refuses a new hold and a payable checkout refuses `programme.pay`; `checkout.current` and `continue` show it
   > (R-509). Q-4 (a): `saveCard` is recorded as `payments.card_consent_at` on the order, one migration (ERD row 74,
   > rule 82), copied into `programme_cards.consented_at` by T013.
+  > **B-P2 lane c (the owner, 2026-11-23, «موافق على الاتنين (أ)», Q-C1 (a)).** No task wrote the programme on a
+  > payment (data-model.md's `offered` → `active`, `payment_plan`, `months_paid`). The confirm step's path with no
+  > hold, under the programme's lock, records every awaited payment through one booking entry
+  > (`recordProgrammePaid`): `offered` → `active` with its plan, and `months_paid` = `month_count` in full, else the
+  > month paid; a duplicate records nothing. Red first on «a second first payment is not taken as a fresh one» and
+  > «the state after one payment». T016 keeps clearing `paused_at`. **Q-C2 (a):** `checkout.current` answers an
+  > optional `programmeOrder: { enrollmentId, expiresAt, canContinue }` (`packages/contracts/src/checkout.ts`,
+  > additive, the snapshot regenerated): not a hold, only the student's payable programme order; `continue` with its
+  > enrollment hands its page back.
 - [ ] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
   - `modules/sessions/completion.service.ts`: a programme completes only when fully paid and not `awaiting_offer`,
     `offered` or `paused`. Red first on «a paid month settled, the next unpaid, 72 h passed».
