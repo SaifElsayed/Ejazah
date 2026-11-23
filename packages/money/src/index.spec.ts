@@ -13,7 +13,9 @@ import {
   piasters,
   piastersOfPoundsText,
   poundsText,
+  programmeOfferAmounts,
   RefundPastGrossError,
+  SESSIONS_PER_PROGRAMME_MONTH,
   refundedTotal,
   sessionValues,
   shareLeft,
@@ -533,6 +535,37 @@ describe('poundsText (006:T002, Q-B1)', () => {
     for (const amount of [0, 5, 15_050, 120_000, 99_999_999]) {
       expect(piastersOfPoundsText(poundsText(piasters(amount)))).toBe(amount);
     }
+  });
+});
+
+describe('programmeOfferAmounts (006:T007, R-506, R-507)', () => {
+  it('multiplies the count by the price for the length (DEC-94: 40 × 250 EGP is 10,000)', () => {
+    const amounts = programmeOfferAmounts(piasters(25_000), 40);
+    expect(toPlainNumber(amounts.total_piasters)).toBe(1_000_000);
+    expect(toPlainNumber(amounts.sessionPrice_piasters)).toBe(25_000);
+  });
+
+  it('counts a month of four sessions, the last month the remainder', () => {
+    expect(programmeOfferAmounts(piasters(25_000), 40).monthCount).toBe(10);
+    expect(programmeOfferAmounts(piasters(25_000), 42).monthCount).toBe(11);
+    expect(programmeOfferAmounts(piasters(25_000), 3).monthCount).toBe(1);
+    expect(programmeOfferAmounts(piasters(25_000), 1).monthCount).toBe(1);
+    expect(programmeOfferAmounts(piasters(25_000), 200).monthCount).toBe(50);
+    expect(SESSIONS_PER_PROGRAMME_MONTH).toBe(4);
+  });
+
+  it('answers one session’s price for a count of one, and is exact at 200 sessions', () => {
+    expect(toPlainNumber(programmeOfferAmounts(piasters(30_001), 1).total_piasters)).toBe(30_001);
+    expect(toPlainNumber(programmeOfferAmounts(piasters(99_999_999), 200).total_piasters)).toBe(
+      19_999_999_800,
+    );
+  });
+
+  it('refuses a count below one or not whole, and a total past the safe range', () => {
+    for (const count of [0, -1, 1.5, Number.NaN]) {
+      expect(() => programmeOfferAmounts(piasters(100), count)).toThrow(RangeError);
+    }
+    expect(() => programmeOfferAmounts(piasters(Number.MAX_SAFE_INTEGER), 2)).toThrow(MoneyError);
   });
 });
 

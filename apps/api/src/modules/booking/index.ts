@@ -434,3 +434,14 @@ export {
   programmeTimesOf,
   startProgramme,
 } from './programmes.service.js';
+
+// 006:T007 of specs/006-programme (FR-705; R-505, R-506; K-5): the `programme` namespace's services
+// (`programme.offer`), built over the kernel's idempotency, the settings and payments'
+// `programmeOfferAmountsOf`, handed in by the caller (booking imports nothing of payments, R-208).
+// `offerWindowOf` is the offer's deadline from session 1's outcome, T008's seam.
+export {
+  createProgrammeServices,
+  offerWindowOf,
+  type ProgrammeServiceDependencies,
+  type ProgrammeServices,
+} from './programmes.service.js';

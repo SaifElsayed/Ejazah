@@ -7,7 +7,11 @@
 // programme is closed. An active programme's weekly time is answered as its occurrences overlapping a
 // window, each resolved on its own date by `packages/time` in the enrollment's zone, so every booking
 // path can read it as occupied. Over fakes; the query is `programmes.repository.spec.ts`'s.
-import { piasters } from '@ijazah/money';
+//
+// 006:T007: the offer (its own section below).
+import type { ProgrammeOfferInput } from '@ijazah/contracts';
+import { piasters, programmeOfferAmounts, toPlainNumber } from '@ijazah/money';
+import { addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -18,9 +22,16 @@ import type {
   ProgrammeAvailability,
   SlotRow,
 } from '../catalog/index.js';
+import type { EnrollmentSessionRow } from '../sessions/index.js';
+import type { FrozenOffer, OfferEnrollment } from './programmes.repository.js';
 import {
   bookingTermsOf,
+  createProgrammeServices,
   fitsSlot,
+  offerWindowOf,
+  type ProgrammeOfferStore,
+  type ProgrammeServiceDependencies,
+  type ProgrammeServices,
   type ProgrammeTimesStore,
   programmeTimesOf,
   purchaseTermsOf,
@@ -305,5 +316,402 @@ describe('the programme row (R-504)', () => {
     expect(calls).toEqual([
       { data: [{ enrollmentId: ENROLLMENT, state: 'awaiting_offer' }], skipDuplicates: true },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T007 (FR-705, FR-706a; R-505, R-506, R-507; K-5) — the offer. Over a recording store: the
+// locks in kernel.md's order (the teacher's account, the programme, the enrollment), the offer and
+// the snapshot written once on the keyed effect's transaction, the amounts from the function payments
+// hands in, each refusal `CONFLICT` with its cause, nothing written and one line logged, and the
+// live signal to both parties. The rows against Postgres are `tests/db-integrity/programme-offer.spec.ts`'.
+
+/** The DEC-94 example: the 45-minute price 250 EGP, 40 sessions, 10,000 EGP in 10 months. */
+const OFFER_PRICES = {
+  m30_piasters: piasters(20_000),
+  m45_piasters: piasters(25_000),
+  m60_piasters: piasters(30_000),
+};
+const OFFER_PACKAGE: PackageRow = { ...programmeRow, prices: OFFER_PRICES };
+const OTHER_TEACHER = '0199d0a0-0000-7000-8000-0000000005d9';
+const KEY = '0199d0a0-0000-7000-8000-0000000005aa';
+
+/** Session 1 done, Monday 18:00 Cairo (16:00Z): the offer is due Tuesday 16:00Z (24 h). */
+const MONDAY_END = new Date('2026-11-23T16:00:00Z');
+const TUESDAY_MORNING = new Date('2026-11-24T10:00:00Z');
+
+function sessionRow(
+  sequenceNumber: number,
+  endsAt: Date,
+  status: EnrollmentSessionRow['status'],
+): EnrollmentSessionRow {
+  return {
+    id: `0199d0a0-0000-7000-8000-0000000007${String(sequenceNumber).padStart(2, '0')}`,
+    sequenceNumber,
+    localDate: '2026-11-23' as EnrollmentSessionRow['localDate'],
+    startTimeLocal: '17:30' as EnrollmentSessionRow['startTimeLocal'],
+    timezone: CAIRO,
+    startsAt: new Date(addMinutes(endsAt, -30)),
+    endsAt,
+    status,
+  };
+}
+
+const OFFER_INPUT: ProgrammeOfferInput = {
+  enrollmentId: ENROLLMENT,
+  level: 'يحفظ جزء عم',
+  readiness: 'جاهز',
+  expectedLength: 'عشرة أشهر',
+  durationMinutes: 45,
+  sessionCount: 40,
+  idempotencyKey: KEY,
+};
+
+type Standing = Awaited<ReturnType<ProgrammeOfferStore['readStanding']>>;
+
+interface OfferWorld {
+  enrollment: OfferEnrollment | null;
+  standing: Standing;
+  sessions: EnrollmentSessionRow[];
+  slotMinutes: number;
+  pkg: PackageRow | null;
+  now: Date;
+  moved: boolean;
+}
+
+const ACTIVE_TEACHER: Standing = {
+  accountStatus: 'active',
+  teacher: { verificationStatus: 'approved', applicationStatus: 'approved' },
+};
+
+function offerWorld(change: Partial<OfferWorld> = {}) {
+  const world: OfferWorld = {
+    enrollment: {
+      id: ENROLLMENT,
+      studentUserId: STUDENT,
+      teacherUserId: TEACHER,
+      packageId: PACKAGE,
+      slotId: SLOT,
+      status: 'confirmed',
+      state: 'awaiting_offer',
+    },
+    standing: ACTIVE_TEACHER,
+    sessions: [sessionRow(1, MONDAY_END, 'done')],
+    slotMinutes: 60,
+    pkg: OFFER_PACKAGE,
+    now: TUESDAY_MORNING,
+    moved: true,
+    ...change,
+  };
+  const calls: string[] = [];
+  const written: FrozenOffer[] = [];
+  const keyed: unknown[] = [];
+  const signals: [readonly string[], unknown][] = [];
+  const lines: [Readonly<Record<string, unknown>>, string][] = [];
+  const priced: [number, number][] = [];
+  const store: ProgrammeOfferStore = {
+    offerEnrollmentOf: async (_tx, id) => {
+      calls.push(`read ${id}`);
+      return world.enrollment;
+    },
+    lockAccount: async (_tx, id) => {
+      calls.push(`lock users ${id}`);
+    },
+    readStanding: async (_tx, id) => {
+      calls.push(`standing ${id}`);
+      return world.standing;
+    },
+    lockProgramme: async (_tx, id) => {
+      calls.push(`lock programmes ${id}`);
+    },
+    lockEnrollment: async (_tx, id) => {
+      calls.push(`lock enrollments ${id}`);
+    },
+    sessionsOf: async (_tx, id) => {
+      calls.push(`sessions ${id}`);
+      return world.sessions;
+    },
+    readSlot: async (_tx, id) => {
+      calls.push(`slot ${id}`);
+      return {
+        id,
+        dayOfWeek: 1,
+        startTimeLocal: '17:30',
+        durationMinutes: world.slotMinutes,
+        timezone: CAIRO,
+        isActive: true,
+        createdAt: new Date('2026-11-01T00:00:00Z'),
+      } as unknown as SlotRow;
+    },
+    packageOf: async (_tx, teacherUserId, packageId) => {
+      calls.push(`package ${teacherUserId} ${packageId}`);
+      return world.pkg;
+    },
+    writeOffer: async (_tx, id, offer) => {
+      calls.push(`write ${id}`);
+      written.push(offer);
+      return world.moved;
+    },
+  };
+  const hours: Readonly<Record<string, number>> = {
+    programme_offer_hours: 24,
+    programme_pay_rest_hours: 48,
+  };
+  const services = createProgrammeServices({
+    idempotency: {
+      run: async (request, effect) => {
+        keyed.push(request);
+        return effect(tx);
+      },
+    } as ProgrammeServiceDependencies['idempotency'],
+    settings: {
+      read: async (key: string) => hours[key],
+    } as unknown as ProgrammeServiceDependencies['settings'],
+    amounts: (price, count) => {
+      priced.push([toPlainNumber(price), count]);
+      return programmeOfferAmounts(price, count);
+    },
+    log: { info: (fields, message) => lines.push([fields, message]) },
+    clock: async () => world.now,
+    store,
+  });
+  const live = {
+    afterCommit: (to: readonly string[], event: unknown) => signals.push([to, event]),
+  } as unknown as Parameters<ProgrammeServices['offer']>[2];
+  const offer = (teacherUserId: string = TEACHER, input: ProgrammeOfferInput = OFFER_INPUT) =>
+    services.offer(teacherUserId, input, live);
+  return { world, offer, calls, written, keyed, signals, lines, priced };
+}
+
+/** The refusal's cause; a failure when the call was not refused `CONFLICT` with one. */
+async function causeOf(call: Promise<unknown>): Promise<string> {
+  const error: unknown = await call.then(
+    () => new Error('answered instead of refused'),
+    (thrown: unknown) => thrown,
+  );
+  expect(error).toBeInstanceOf(DomainError);
+  expect((error as DomainError).code).toBe('CONFLICT');
+  const [detail] = (error as DomainError).details ?? [];
+  expect(detail?.path).toBe('cause');
+  return String(detail?.code);
+}
+
+describe('programme.offer (006:T007, FR-705, R-506)', () => {
+  it('freezes the offer and the snapshot (N + 1, the length, N × its price) and answers the amounts', async () => {
+    const { offer, written, priced } = offerWorld();
+    await expect(offer()).resolves.toStrictEqual({
+      total_piasters: 1_000_000,
+      sessionPrice_piasters: 25_000,
+      monthCount: 10,
+    });
+    expect(priced).toEqual([[25_000, 40]]);
+    expect(written).toStrictEqual([
+      {
+        level: 'يحفظ جزء عم',
+        readiness: 'جاهز',
+        expectedLength: 'عشرة أشهر',
+        offeredAt: TUESDAY_MORNING,
+        payByAt: new Date('2026-11-26T10:00:00Z'),
+        monthCount: 10,
+        snapshot: { sessionCount: 41, durationMinutes: 45, price_piasters: 1_000_000 },
+      },
+    ]);
+  });
+
+  it('takes the teacher’s account, the programme, then the enrollment, before it reads the price or writes', async () => {
+    const { offer, calls } = offerWorld();
+    await offer();
+    expect(calls).toEqual([
+      `read ${ENROLLMENT}`,
+      `lock users ${TEACHER}`,
+      `standing ${TEACHER}`,
+      `lock programmes ${ENROLLMENT}`,
+      `lock enrollments ${ENROLLMENT}`,
+      `read ${ENROLLMENT}`,
+      `sessions ${ENROLLMENT}`,
+      `slot ${SLOT}`,
+      `package ${TEACHER} ${PACKAGE}`,
+      `write ${ENROLLMENT}`,
+    ]);
+  });
+
+  it('is keyed on programme.offer by the teacher, and signals both parties after the commit', async () => {
+    const { offer, keyed, signals, lines } = offerWorld();
+    await offer();
+    const { idempotencyKey, ...rest } = OFFER_INPUT;
+    expect(keyed).toEqual([
+      { scope: 'programme.offer', key: idempotencyKey, actorId: TEACHER, input: rest },
+    ]);
+    expect(signals).toEqual([
+      [[TEACHER, STUDENT], { type: 'enrollment', enrollmentId: ENROLLMENT }],
+    ]);
+    expect(lines).toEqual([
+      [
+        { teacherUserId: TEACHER, enrollmentId: ENROLLMENT, reason: 'offered' },
+        'A programme offer was sent',
+      ],
+    ]);
+  });
+
+  it('prices each length the reserved weekly time holds (60 → 30, 45 or 60)', async () => {
+    for (const [durationMinutes, total] of [
+      [30, 800_000],
+      [60, 1_200_000],
+    ] as const) {
+      const { offer } = offerWorld();
+      await expect(offer(TEACHER, { ...OFFER_INPUT, durationMinutes })).resolves.toMatchObject({
+        total_piasters: total,
+      });
+    }
+  });
+
+  it('answers NOT_FOUND to anyone but the enrollment’s teacher, an unknown id included, with no lock', async () => {
+    for (const [caller, unknown] of [
+      [OTHER_TEACHER, false],
+      [STUDENT, false],
+      [TEACHER, true],
+    ] as const) {
+      const { offer, calls, written } = offerWorld(unknown ? { enrollment: null } : {});
+      await expect(offer(caller)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(calls).toEqual([`read ${ENROLLMENT}`]);
+      expect(written).toEqual([]);
+    }
+  });
+
+  it('refuses teacher_not_active when the account is not active or not approved, read under its lock', async () => {
+    for (const standing of [
+      { ...ACTIVE_TEACHER, accountStatus: 'suspended' },
+      {
+        accountStatus: 'active',
+        teacher: { verificationStatus: 'revoked', applicationStatus: 'rejected' },
+      },
+      null,
+    ] as Standing[]) {
+      const { offer, calls } = offerWorld({ standing });
+      expect(await causeOf(offer())).toBe('teacher_not_active');
+      expect(calls.slice(0, 3)).toEqual([
+        `read ${ENROLLMENT}`,
+        `lock users ${TEACHER}`,
+        `standing ${TEACHER}`,
+      ]);
+    }
+  });
+
+  it('refuses not_awaiting_offer past awaiting_offer, or once the enrollment is no longer confirmed', async () => {
+    const base = offerWorld().world.enrollment!;
+    for (const enrollment of [
+      { ...base, state: 'offered' },
+      { ...base, state: 'closed' },
+      { ...base, status: 'cancelled' },
+    ] as OfferEnrollment[]) {
+      const { offer } = offerWorld({ enrollment });
+      expect(await causeOf(offer())).toBe('not_awaiting_offer');
+    }
+  });
+
+  it('refuses assessment_not_delivered before session 1 or its make-up is settled done or student_no_show', async () => {
+    for (const sessions of [
+      [sessionRow(1, MONDAY_END, 'scheduled')],
+      [sessionRow(1, MONDAY_END, 'teacher_no_show')],
+      [sessionRow(1, MONDAY_END, 'disputed')],
+      [sessionRow(1, MONDAY_END, 'teacher_no_show'), sessionRow(2, TUESDAY_MORNING, 'scheduled')],
+      [],
+    ]) {
+      const { offer } = offerWorld({ sessions });
+      expect(await causeOf(offer())).toBe('assessment_not_delivered');
+    }
+  });
+
+  it('accepts the offer after a student_no_show, the fee kept and the window open', async () => {
+    const { offer } = offerWorld({ sessions: [sessionRow(1, MONDAY_END, 'student_no_show')] });
+    await expect(offer()).resolves.toMatchObject({ monthCount: 10 });
+  });
+
+  it('refuses offer_due_passed after the delivered end + programme_offer_hours', async () => {
+    const { offer } = offerWorld({ now: new Date('2026-11-24T16:00:01Z') });
+    expect(await causeOf(offer())).toBe('offer_due_passed');
+  });
+
+  it('accepts the offer at the deadline itself', async () => {
+    const { offer } = offerWorld({ now: new Date('2026-11-24T16:00:00Z') });
+    await expect(offer()).resolves.toMatchObject({ monthCount: 10 });
+  });
+
+  it('follows the make-up: re-resolved a teacher’s no-show, the make-up delivered Thursday 18:00, the offer is due Friday (Q-3 (a) amended)', async () => {
+    const sessions = [
+      sessionRow(1, MONDAY_END, 'teacher_no_show'),
+      sessionRow(2, new Date('2026-11-26T16:00:00Z'), 'done'),
+    ];
+    const late = offerWorld({ sessions, now: new Date('2026-11-27T15:59:00Z') });
+    await expect(late.offer()).resolves.toMatchObject({ monthCount: 10 });
+    const past = offerWorld({ sessions, now: new Date('2026-11-27T16:00:01Z') });
+    expect(await causeOf(past.offer())).toBe('offer_due_passed');
+  });
+
+  it('refuses count_out_of_bounds outside 1 to 200', async () => {
+    for (const sessionCount of [0, 201]) {
+      const { offer, written } = offerWorld();
+      expect(await causeOf(offer(TEACHER, { ...OFFER_INPUT, sessionCount }))).toBe(
+        'count_out_of_bounds',
+      );
+      expect(written).toEqual([]);
+    }
+  });
+
+  it('accepts a count of 1 and of 200', async () => {
+    for (const [sessionCount, monthCount] of [
+      [1, 1],
+      [200, 50],
+    ] as const) {
+      const { offer } = offerWorld();
+      await expect(offer(TEACHER, { ...OFFER_INPUT, sessionCount })).resolves.toMatchObject({
+        monthCount,
+      });
+    }
+  });
+
+  it('refuses length_exceeds_slot for a length longer than the reserved weekly time (45 → 30 or 45)', async () => {
+    const refused = offerWorld({ slotMinutes: 45 });
+    expect(await causeOf(refused.offer(TEACHER, { ...OFFER_INPUT, durationMinutes: 60 }))).toBe(
+      'length_exceeds_slot',
+    );
+    const fits = offerWorld({ slotMinutes: 45 });
+    await expect(
+      fits.offer(TEACHER, { ...OFFER_INPUT, durationMinutes: 45 }),
+    ).resolves.toMatchObject({ monthCount: 10 });
+  });
+
+  it('writes nothing, signals no one and logs one line of ids and the reason on a refusal', async () => {
+    const { offer, written, signals, lines } = offerWorld({ slotMinutes: 30 });
+    expect(await causeOf(offer())).toBe('length_exceeds_slot');
+    expect(written).toEqual([]);
+    expect(signals).toEqual([]);
+    expect(lines).toEqual([
+      [
+        { teacherUserId: TEACHER, enrollmentId: ENROLLMENT, reason: 'length_exceeds_slot' },
+        'A programme offer was refused',
+      ],
+    ]);
+  });
+
+  it('refuses not_awaiting_offer when the programme did not move from awaiting_offer', async () => {
+    const { offer, signals } = offerWorld({ moved: false });
+    expect(await causeOf(offer())).toBe('not_awaiting_offer');
+    expect(signals).toEqual([]);
+  });
+});
+
+describe('offerWindowOf (006:T007, T008’s seam; R-505)', () => {
+  it('opens at the latest delivered end and closes programme_offer_hours later', () => {
+    expect(offerWindowOf([sessionRow(1, MONDAY_END, 'done')], 24)).toStrictEqual({
+      delivered: true,
+      offerDueAt: new Date('2026-11-24T16:00:00Z'),
+    });
+  });
+
+  it('has no window while neither session 1 nor a make-up is settled done or student_no_show', () => {
+    expect(offerWindowOf([sessionRow(1, MONDAY_END, 'both_no_show')], 24)).toStrictEqual({
+      delivered: false,
+    });
   });
 });
