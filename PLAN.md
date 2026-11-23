@@ -63,7 +63,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 |---|---|---|---|
 | 11/21–11/22 | B-P1 | The tasks commit of PR #154's and #153's follow-ups; R1a starts | |
 | 11/23–11/24 | B-P2 | R1a ends 11/23; R1b starts 11/24, cut after B-P2 merges (both write `share-release.rules.ts`) | The owner: the gateway's contract request |
-| 11/25–11/26 | B-P3 | R1b ends 11/25, with the room's end-to-end encryption (`specs/004-sessions/tasks.md` T084) and its run on both phones, and `specs/002-identity/tasks.md` T186; R2 starts, cut after R1b merges (both write the server's configuration files) | Counsel's answer, 11/26 |
+| 11/25–11/26 | B-P3 | R1b ends 11/25, with the room's end-to-end encryption (`specs/004-sessions/tasks.md` T084; its run on both phones on the phones day, the tasks' last day, amended 2026-11-23) and `specs/002-identity/tasks.md` T186; R2 starts, cut after R1b merges (both write the server's configuration files) | Counsel's answer, 11/26 |
 | 11/27–11/29 | B-P4, on today's design: the programme is merged | R2 ends 11/27; R3, the code, 11/28–11/29 | |
 | 11/30–12/1 | The programme's own money review, and its fixes | The before-launch tasks, batch 1 | The design week, days 1 and 2; the owner: the logo, the testers |
 | 12/2–12/3 | `specs/003-booking/tasks.md` T128, once the contract is signed | The before-launch tasks, batch 2 | The design week, days 3 and 4; the store's listing and declarations, the privacy policy and the terms hosted, with the Terms' text (T151, T117) |
@@ -76,7 +76,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 - B-P1 is cut after this calendar's pull request (#155) merges. R1a and B-P1 run on the same days and share the migration order, the ERD's numbering, the seed's counts and the settings registry: the two tracks' rule holds (`specs/006-programme/tasks.md`, «Batches»).
 - Not placed: the closes `specs/004-sessions/tasks.md` T054, T055, T056 and `specs/005-certification/tasks.md` T026, T033; `specs/001-foundations/tasks.md` T130; `specs/002-identity/tasks.md` T123; `specs/003-booking/tasks.md` T059, and T118 (Phase 6's load pass).
 - Placed 2026-11-22 (the owner), the three items of `specs/004-sessions/tasks.md`, «Not scheduled», with before-launch words: (8) by T084 in R1b, whether the data may leave Egypt staying with counsel; (12) in `specs/002-identity/tasks.md` T182, R3; (13) as T085 in batch 2.
-- Added 2026-11-22 (the owner, «تدخل»; SRS DEC-102): `specs/004-sessions/tasks.md` T084, a session's media encrypted end to end, in R1b (four tasks in its two days, and the owner's two phones on 11/25). No date moves; the design week's work on the room (11/30–12/4) builds on it. R2 is cut after R1b merges, since both write the server's configuration files, and its deploy sets the new media secret.
+- Added 2026-11-22 (the owner, «تدخل»; SRS DEC-102): `specs/004-sessions/tasks.md` T084, a session's media encrypted end to end, in R1b (four tasks in its two days; the owner's two phones on the phones day, the tasks' last day, where every deferred device run is done together: amended 2026-11-23, the owner's «موافق»). No date moves; the design week's work on the room (11/30–12/4) builds on it. R2 is cut after R1b merges, since both write the server's configuration files, and its deploy sets the new media secret.
 - What it rests on: the design week is five days, talk and code together, beside two batches; the gateway's contract is signed by 12/2, so T128 merges by 12/3; R2 has, before 11/25, the owner's domain, e-mail provider (`specs/002-identity/tasks.md` T177) and object-storage account (T179).
 
 **The owner's own steps.**
@@ -89,7 +89,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 | Decided 2026-11-16 | The sheikh's view on returning after a close (SRS OPEN-12): no return; a new subscription and a new assessment (SRS DEC-83) |
 | 11/24 | Submit the gateway's contract request |
 | 11/24 | For R2 (added 2026-11-21): the domain, the e-mail provider (`specs/002-identity/tasks.md` T177) and the object-storage account (T179) |
-| 11/25 | Both Android phones for the run of the room's encryption (`specs/004-sessions/tasks.md` T084); the new media secret made for the hosted server, its second copy in the password manager (added 2026-11-22) |
+| 11/25 | ~~Both Android phones for the run of the room's encryption~~ (moved 2026-11-23 to the phones day, the tasks' last day, its date set by the owner later; `specs/004-sessions/tasks.md` T084); the new media secret made for the hosted server, its second copy in the password manager (added 2026-11-22) |
 | 11/26 | The lawyer's answer on the server's region (PDPL), and the video's routing (`specs/004-sessions/tasks.md`, Not scheduled, item 8) |
 | Done 2026-11-15 | The server bought, 4 GB (Phase 6's estimates below) |
 | 11/30 | The logo as a 1024×1024 PNG |
