@@ -283,11 +283,21 @@ const PHASE_FOUR_ROUTERS = [
   'genderFlags',
 ] as const satisfies readonly (keyof typeof PHASE_FOUR_NEVER_EXEMPT)[];
 
+/**
+ * 006:T007 (PR #153 r1 Major 2; FR-705; the owner's settled reading of B-P2's conflict check,
+ * 2026-11-23): the programme's router, a list beside `SESSION_ROUTERS` and not inside it. Its
+ * procedures act on an enrollment between a student and a teacher, the teacher's offer included,
+ * so each is read whatever its caller kind; FR-496's three kinds, a session token's, are not asked
+ * of it (`sessionKindFailures` reads `SESSION_ROUTERS` alone).
+ */
+const PROGRAMME_ROUTERS = ['programme'] as const;
+
 /** The routers none of whose procedures can be exempt. */
 export const ATTACKED_ROUTERS = [
   ...SLOT_ROUTERS,
   ...SESSION_ROUTERS,
   ...PHASE_FOUR_ROUTERS,
+  ...PROGRAMME_ROUTERS,
 ] as const;
 
 /** A student-facing procedure outside the attacked routers that names no teacher, and why. */
@@ -321,19 +331,20 @@ function callerOf(procedure: unknown): unknown {
   return metaField(procedure, 'caller');
 }
 
-function isSessionRouterPath(path: string): boolean {
-  return (SESSION_ROUTERS as readonly string[]).includes(path.split('.')[0] ?? '');
+/** Whether `path` is under one of `routers`. */
+function isUnder(routers: readonly string[], path: string): boolean {
+  return routers.includes(path.split('.')[0] ?? '');
 }
 
 /**
- * The paths of the procedures a student can reach, and every procedure of `sessions`, `chat` and
- * `live` whatever its caller kind, sorted. FR-496 protects both directions, so a teacher-kind
- * procedure there must be registered too (#142 r1, Major 1).
+ * The paths of the procedures a student can reach, and every procedure of `sessions`, `chat`,
+ * `live` and (006:T007) `programme` whatever its caller kind, sorted. FR-496 and FR-705 protect
+ * both directions, so a teacher-kind procedure there must be registered too (#142 r1, Major 1).
  */
 export function studentFacingProcedures(router: RouterLike): string[] {
   return Object.entries(router._def.procedures)
     .filter(([path, procedure]) => {
-      if (isSessionRouterPath(path)) return true;
+      if (isUnder(SESSION_ROUTERS, path) || isUnder(PROGRAMME_ROUTERS, path)) return true;
       const caller = callerOf(procedure);
       return typeof caller !== 'string' || !NOT_STUDENT_FACING.has(caller);
     })
@@ -350,6 +361,9 @@ function attackedRouterOf(path: string): string | undefined {
 function neverExemptBecause(router: string): string {
   if (Object.hasOwn(PHASE_FOUR_NEVER_EXEMPT, router)) {
     return PHASE_FOUR_NEVER_EXEMPT[router as keyof typeof PHASE_FOUR_NEVER_EXEMPT];
+  }
+  if (isUnder(PROGRAMME_ROUTERS, router)) {
+    return `acts on a programme between a student and a teacher, the teacher's offer included, so it registers its attacks and is never exempt whatever its caller kind (FR-705, FR-410, 006:T007)`;
   }
   return (SESSION_ROUTERS as readonly string[]).includes(router)
     ? `issues a token or reads a session, its chat or its counterparty, so it registers its attacks and is never exempt (FR-496, FR-410, T052)`

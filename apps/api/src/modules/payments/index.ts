@@ -329,3 +329,8 @@ export { caseOrdersOf } from './case-amount.repository.js';
 // order's transaction (`recordCancelled`) is reached alone by
 // `tests/db-integrity/payment-notices-race.spec.ts` (R-API-3).
 export { checkoutStepsOver } from './checkout.service.js';
+
+// ---------------------------------------------------------------------------------------------
+// 006:T007 (FR-705; R-506, R-507; analyze K-5): an offer's amounts from `packages/money`, which
+// `main.ts` hands to booking's programme services (booking imports nothing of payments, R-208).
+export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme-amounts.js';

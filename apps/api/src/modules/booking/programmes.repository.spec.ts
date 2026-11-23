@@ -2,14 +2,17 @@
 // weekly times (the four active states, a soft-deleted enrollment left out, one enrollment left out
 // when asked) and the confirmed assessment's row written once. Over a recording stand-in of the
 // client; the rows against Postgres are `tests/db-integrity/programme-confirmation.spec.ts`' and
-// `tests/adversarial/programme-assessment.spec.ts`'.
+// `tests/adversarial/programme-assessment.spec.ts`'. 006:T007: the offer's read and its write.
+import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import {
   activeProgrammeSlotsOf,
   insertAwaitingOffer,
+  offerEnrollmentOf,
   programmeStateOf,
+  writeOffer,
 } from './programmes.repository.js';
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000006d2';
@@ -105,5 +108,133 @@ describe('the programme’s state under its lock (006:T006; R-502)', () => {
     await expect(programmeStateOf(client, ENROLLMENT)).resolves.toBe('active');
     await expect(programmeStateOf(client, ENROLLMENT)).resolves.toBeNull();
     expect(calls[0]).toEqual({ where: { enrollmentId: ENROLLMENT }, select: { state: true } });
+  });
+});
+
+// 006:T007 (R-506): the offer's reads and its one write.
+const TEACHER = '0199d0a0-0000-7000-8000-0000000006d1';
+const PACKAGE = '0199d0a0-0000-7000-8000-0000000006c1';
+
+describe('the programme as the offer reads it (006:T007)', () => {
+  it('reads the programme’s state with its live enrollment, a soft-deleted one left out', async () => {
+    const calls: unknown[] = [];
+    const answers: unknown[] = [
+      {
+        state: 'awaiting_offer',
+        enrollment: {
+          id: ENROLLMENT,
+          studentUserId: STUDENT,
+          teacherUserId: TEACHER,
+          packageId: PACKAGE,
+          slotId: SLOT,
+          status: 'confirmed',
+        },
+      },
+      null,
+    ];
+    const client = {
+      programme: {
+        findFirst: async (query: unknown) => {
+          calls.push(query);
+          return answers.shift() ?? null;
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme'>;
+    await expect(offerEnrollmentOf(client, ENROLLMENT)).resolves.toStrictEqual({
+      id: ENROLLMENT,
+      studentUserId: STUDENT,
+      teacherUserId: TEACHER,
+      packageId: PACKAGE,
+      slotId: SLOT,
+      status: 'confirmed',
+      state: 'awaiting_offer',
+    });
+    await expect(offerEnrollmentOf(client, ENROLLMENT)).resolves.toBeNull();
+    expect(calls[0]).toEqual({
+      where: { enrollmentId: ENROLLMENT, enrollment: { deletedAt: null } },
+      select: {
+        state: true,
+        enrollment: {
+          select: {
+            id: true,
+            studentUserId: true,
+            teacherUserId: true,
+            packageId: true,
+            slotId: true,
+            status: true,
+          },
+        },
+      },
+    });
+  });
+});
+
+describe('the offer and the snapshot, written once (006:T007, R-506)', () => {
+  const OFFER = {
+    level: 'level',
+    readiness: 'readiness',
+    expectedLength: 'ten months',
+    offeredAt: new Date('2026-11-24T10:00:00Z'),
+    payByAt: new Date('2026-11-26T10:00:00Z'),
+    monthCount: 10,
+    snapshot: { sessionCount: 41, durationMinutes: 45, price_piasters: piasters(1_000_000) },
+  };
+
+  function writer(moved: number) {
+    const calls: [string, unknown][] = [];
+    const client = {
+      programme: {
+        updateMany: async (query: unknown) => {
+          calls.push(['programme', query]);
+          return { count: moved };
+        },
+      },
+      enrollment: {
+        updateMany: async (query: unknown) => {
+          calls.push(['enrollment', query]);
+          return { count: 1 };
+        },
+      },
+    } as unknown as Pick<Transaction, 'programme' | 'enrollment'>;
+    return { client, calls };
+  }
+
+  it('moves the programme from awaiting_offer to offered with the offer, then freezes the snapshot', async () => {
+    const { client, calls } = writer(1);
+    await expect(writeOffer(client, ENROLLMENT, OFFER)).resolves.toBe(true);
+    expect(calls).toEqual([
+      [
+        'programme',
+        {
+          where: { enrollmentId: ENROLLMENT, state: 'awaiting_offer' },
+          data: {
+            state: 'offered',
+            level: 'level',
+            readiness: 'readiness',
+            expectedLength: 'ten months',
+            offeredAt: OFFER.offeredAt,
+            payByAt: OFFER.payByAt,
+            monthCount: 10,
+          },
+        },
+      ],
+      [
+        'enrollment',
+        {
+          where: { id: ENROLLMENT },
+          data: {
+            snapshotSessionCount: 41,
+            snapshotDurationMinutes: 45,
+            snapshotPricePiasters: 1_000_000n,
+          },
+        },
+      ],
+    ]);
+  });
+
+  it('writes no snapshot when the programme was not awaiting an offer', async () => {
+    const { client, calls } = writer(0);
+    await expect(writeOffer(client, ENROLLMENT, OFFER)).resolves.toBe(false);
+    expect(calls.map(([model]) => model)).toEqual(['programme']);
   });
 });

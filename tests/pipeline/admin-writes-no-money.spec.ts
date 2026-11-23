@@ -14,7 +14,10 @@
 //                `booking/pay.repository.ts`) and a teacher's package (`pricePiasters`,
 //                `catalog/packages.repository.ts`). A later writer outside `modules/payments`
 //                (track 2's) is added to `allowedBecause` by name, with its task, in that
-//                track's own batch.
+//                track's own batch: a programme package's three prices (`price30Piasters`,
+//                `price45Piasters`, `price60Piasters`, the package's file, 006:T004) and the offer's
+//                frozen total (`snapshotPricePiasters`, `booking/programmes.repository.ts`, 006:T007),
+//                both named by PR #156 r2 Minor 2.
 //
 // THE DATABASE PROOFS (this spec proves the code's shape, not a run): an administrator's
 // `sessions.cancel` over the real tables, its compensation case opened with no amount
@@ -34,7 +37,9 @@
 //       `update`) is read key by key: `confirmedAt` or `confirmed_at` is a confirmation write; a key
 //       whose last word is `piasters` an amount write. Read through a spread, a conditional, an
 //       array of rows (`createMany`), an object built aside in the same file (`{ data }`), and a
-//       nested write through a relation (`payments: { create: … }` is a `Payment` write).
+//       nested write through a relation (`payments: { create: … }` is a `Payment` write), and (PR
+//       #156 r2 Minor 2) a call of a function of the same file, read as the objects it returns. A
+//       write is named by the function holding its Prisma call, wherever its key is spelled.
 //       `where`, `select`, `include` and `orderBy` are reads and never judged.
 //   (2) Raw SQL in a string or template (`$executeRaw`, `$executeRawUnsafe`, `Prisma.sql`): an
 //       `INSERT INTO` or `UPDATE` of `payments` or `payment_events`; of `enrollments` naming
@@ -46,7 +51,7 @@
 //
 // NOT SEEN. Data handed in from another function (`data: input` where `input` is a parameter), or a
 // spread of one (`...rest`): the owning repositories take their rows so, and the typecheck holds
-// their shape. A Prisma delegate held under another name (`const orders = tx.payment`). SQL built by
+// their shape. A function of another file, or one a parameter names. A Prisma delegate held under another name (`const orders = tx.payment`). SQL built by
 // concatenating strings. A reach of an owning writer from an administrator action (the
 // confirmation's is T042's gate; a package's price is changed by its teacher's procedure only).
 import { readdirSync, readFileSync } from 'node:fs';
@@ -84,6 +89,14 @@ const PAY = 'apps/api/src/modules/booking/pay.repository.ts';
 const PACKAGES = 'apps/api/src/modules/catalog/packages.repository.ts';
 /** 006:T006: payments' repository, where an order's own marker is written. */
 const PAYMENTS_REPOSITORY = `${PAYMENTS}payments.repository.ts`;
+/** 006:T007: booking's programmes repository, where the offer freezes the enrollment's snapshot. */
+const PROGRAMMES_REPOSITORY = 'apps/api/src/modules/booking/programmes.repository.ts';
+/** 006:T004: a programme package's three prices, one per session length (data-model.md). */
+const PROGRAMME_PRICE_KEYS: ReadonlySet<string> = new Set([
+  'price30Piasters',
+  'price45Piasters',
+  'price60Piasters',
+]);
 
 /** The writes SC-413 allows, each by name, with its reason; every other write is refused. */
 export function allowedBecause(write: Write): string | null {
@@ -105,6 +118,16 @@ export function allowedBecause(write: Write): string | null {
   }
   if (write.path === PACKAGES && write.kind === 'amount' && write.name === 'pricePiasters') {
     return "a teacher's package price, packages.price_piasters (prisma/schema/catalog.prisma:50), written by the package's own repository (the note under T053, Q4 (a) with C1)";
+  }
+  if (write.path === PACKAGES && write.kind === 'amount' && PROGRAMME_PRICE_KEYS.has(write.name)) {
+    return "006:T004 (R-503, DEC-93): a programme package's three prices, packages.price_30/45/60_piasters, written by the package's own repository (PR #156 r2 Minor 2, carried into 006:T007)";
+  }
+  if (
+    write.path === PROGRAMMES_REPOSITORY &&
+    write.kind === 'amount' &&
+    write.name === 'snapshotPricePiasters'
+  ) {
+    return "006:T007 (FR-705, R-506): the offer's total frozen on the enrollment's snapshot, enrollments.snapshot_price_piasters, written once with the offer by booking's programmes repository from payments' amounts (K-5; PR #156 r2 Minor 2)";
   }
   return null;
 }
@@ -245,30 +268,67 @@ function sourceWrites(file: PathFile): Write[] {
     file.path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const writes: Write[] = [];
-  const write = (kind: Kind, node: ts.Node, name: string) =>
+  // `site` is the write's own call: the function holding it names the write (`within`), so a key
+  // reached through a helper or an object built aside is named where it is written (PR #156 r2
+  // Minor 2); the line is the key's.
+  const write = (kind: Kind, node: ts.Node, name: string, site: ts.Node = node) =>
     writes.push({
       kind,
       path: file.path,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-      within: withinOf(node),
+      within: withinOf(site),
       name,
     });
 
-  // Objects built aside: every variable of the file given an object literal, by its name.
+  // Objects built aside: every variable of the file given an object literal, by its name; and
+  // (PR #156 r2 Minor 2) every function of the file, declared or given to a variable, by its name.
   const aside = new Map<string, ts.Expression>();
+  const helpers = new Map<string, ts.FunctionLikeDeclaration>();
   const collect = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       aside.set(node.name.text, node.initializer);
+      const initializer = bare(node.initializer);
+      if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+        helpers.set(node.name.text, initializer);
+      }
+    }
+    if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
+      helpers.set(node.name.text, node);
     }
     ts.forEachChild(node, collect);
   };
   collect(source);
+
+  /** What a function of the file returns: its expression body, or each of its own `return`s. */
+  const returnsOf = (helper: ts.FunctionLikeDeclaration): ts.Expression[] => {
+    const body = helper.body;
+    if (body === undefined) return [];
+    if (!ts.isBlock(body)) return [body as ts.Expression];
+    const returned: ts.Expression[] = [];
+    const walk = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node)) return;
+      if (ts.isReturnStatement(node) && node.expression !== undefined) {
+        returned.push(node.expression);
+      }
+      ts.forEachChild(node, walk);
+    };
+    ts.forEachChild(body, walk);
+    return returned;
+  };
 
   /** An expression as the object, array or branches it stands for; a parameter is not seen. */
   const values = (expression: ts.Expression, seen = new Set<string>()): ts.Expression[] => {
     const value = bare(expression);
     if (ts.isConditionalExpression(value)) {
       return [...values(value.whenTrue, seen), ...values(value.whenFalse, seen)];
+    }
+    // PR #156 r2 Minor 2: a same-file function's call stands for the objects it returns.
+    if (ts.isCallExpression(value) && ts.isIdentifier(value.expression)) {
+      const name = value.expression.text;
+      const helper = helpers.get(name);
+      if (helper === undefined || seen.has(`${name}()`)) return [];
+      const inner = new Set([...seen, `${name}()`]);
+      return returnsOf(helper).flatMap((returned) => values(returned, inner));
     }
     if (ts.isArrayLiteralExpression(value)) {
       return value.elements.flatMap((element) =>
@@ -321,12 +381,12 @@ function sourceWrites(file: PathFile): Write[] {
     });
 
   /** Judges one write's data, key by key, through spreads and nested writes. */
-  const judgeData = (data: ts.Expression): void => {
+  const judgeData = (data: ts.Expression, site: ts.Node): void => {
     for (const object of values(data)) {
       if (!ts.isObjectLiteralExpression(object)) continue;
       for (const property of object.properties) {
         if (ts.isSpreadAssignment(property)) {
-          judgeData(property.expression);
+          judgeData(property.expression, site);
           continue;
         }
         if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
@@ -334,8 +394,8 @@ function sourceWrites(file: PathFile): Write[] {
         }
         const key = keyOf(property.name);
         if (key === null) continue;
-        if (CONFIRMED_AT_KEYS.has(key)) write('confirmedAt', property, key);
-        if (isAmountKey(key)) write('amount', property, key);
+        if (CONFIRMED_AT_KEYS.has(key)) write('confirmedAt', property, key, site);
+        if (isAmountKey(key)) write('amount', property, key, site);
         if (!ts.isPropertyAssignment(property)) continue;
         for (const relation of values(property.initializer)) {
           if (!ts.isObjectLiteralExpression(relation)) continue;
@@ -344,8 +404,8 @@ function sourceWrites(file: PathFile): Write[] {
             if (name === null || !NESTED_WRITES.has(name) || !ts.isPropertyAssignment(operation)) {
               continue;
             }
-            if (PAYMENT_RELATIONS.has(key)) write('payment', operation, `${key}.${name}`);
-            for (const nested of nestedData(name, operation.initializer)) judgeData(nested);
+            if (PAYMENT_RELATIONS.has(key)) write('payment', operation, `${key}.${name}`, site);
+            for (const nested of nestedData(name, operation.initializer)) judgeData(nested, site);
           }
         }
       }
@@ -373,7 +433,7 @@ function sourceWrites(file: PathFile): Write[] {
           if (!ts.isObjectLiteralExpression(object)) continue;
           for (const key of method === 'upsert' ? ['create', 'update'] : ['data']) {
             const data = member(object, key);
-            if (data !== undefined) judgeData(data);
+            if (data !== undefined) judgeData(data, node);
           }
         }
       }
@@ -449,6 +509,92 @@ describe('SC-413: a payment, an amount or a confirmation written off its owning 
 });
 
 // ---------------------------------------------------------------------------------------------
+// PR #156 r2 Minor 2 (carried into 006:T007, Q-6 (a)): a key reached through a same-file function's
+// returned object is read as if written inline, and attributed to the function holding the write.
+
+/** M-G7: a price written from an administrator's file through a helper's return. */
+const PRICE_THROUGH_A_HELPER: PathFile = {
+  path: 'apps/api/src/modules/admin/settings.service.ts',
+  text: `
+function pricesOf(price) {
+  if (price === null) return {};
+  return { price30Piasters: price };
+}
+const pricesAside = (price) => ({ price45Piasters: price });
+export async function sneak(tx, id, price) {
+  await tx.package.updateMany({ where: { id }, data: pricesOf(price) });
+  await tx.package.update({ where: { id }, data: { isActive: true, ...pricesAside(price) } });
+}
+`,
+};
+
+/** The package's own file writing the three programme prices through a helper (006:T004). */
+const PRICES_IN_THE_OWNER: PathFile = {
+  path: PACKAGES,
+  text: `
+function priceColumnsOf(prices) {
+  return { price30Piasters: prices.a, price45Piasters: prices.b, price60Piasters: prices.c };
+}
+export async function changePackage(tx, id, prices) {
+  await tx.package.updateMany({ where: { id }, data: { ...(prices ? priceColumnsOf(prices) : {}) } });
+}
+`,
+};
+
+/** The offer's snapshot from booking's programmes file (006:T007), and the same key elsewhere. */
+const OFFER_SNAPSHOT = (where: string): PathFile => ({
+  path: where,
+  text: `
+export async function writeOffer(tx, id, offer) {
+  await tx.enrollment.updateMany({ where: { id }, data: { snapshotPricePiasters: offer.total } });
+}
+`,
+});
+
+describe('SC-413 reads a write through a same-file helper (PR #156 r2 Minor 2, 006:T007)', () => {
+  it('refuses a price written from an administrator’s file through a helper’s return (M-G7)', () => {
+    expect(
+      findViolations([PRICE_THROUGH_A_HELPER]).map(
+        ({ kind, within, name }) => `${kind} ${within ?? '-'} ${name}`,
+      ),
+    ).toEqual(['amount sneak price30Piasters', 'amount sneak price45Piasters']);
+  });
+
+  it('allows the package’s own file its three prices through a helper, named at the write', () => {
+    const writes = findWrites([PRICES_IN_THE_OWNER]);
+    expect(writes.map(({ within, name }) => `${within ?? '-'} ${name}`)).toEqual([
+      'changePackage price30Piasters',
+      'changePackage price45Piasters',
+      'changePackage price60Piasters',
+    ]);
+    for (const write of writes) expect(allowedBecause(write)).toContain('006:T004');
+  });
+
+  it('refuses the three prices from any other file of catalog', () => {
+    const elsewhere = {
+      ...PRICES_IN_THE_OWNER,
+      path: 'apps/api/src/modules/catalog/packages.service.ts',
+    };
+    expect(findViolations([elsewhere]).map(({ name }) => name)).toEqual([
+      'price30Piasters',
+      'price45Piasters',
+      'price60Piasters',
+    ]);
+  });
+
+  it('allows the offer’s snapshot price from booking’s programmes file alone', () => {
+    const [own] = findWrites([OFFER_SNAPSHOT(PROGRAMMES_REPOSITORY)]);
+    expect(own).toBeDefined();
+    expect(allowedBecause(own!)).toContain('006:T007');
+    expect(
+      findViolations([OFFER_SNAPSHOT('apps/api/src/modules/booking/programmes.service.ts')]).map(
+        ({ name }) => name,
+      ),
+    ).toEqual(['snapshotPricePiasters']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 // The repository as it is.
 
 const SKIPPED_FOLDERS = new Set(['node_modules', 'dist', 'build', 'coverage']);
@@ -502,10 +648,21 @@ describe('the repository’s writes of payments, amounts and the confirmation (S
       [
         `confirmedAt ${CONFIRMATION} markConfirmed confirmedAt`,
         `amount ${PAY} insertEnrollment snapshotPricePiasters`,
-        // 006:T004 (rule d): the old-style insert's terms are now built by a helper (NOT SEEN, this
-        // file's head); the programme's NULL terms are an object built aside in the same file.
-        `amount ${PACKAGES} NO_FIXED_TERMS pricePiasters`,
+        // 006:T004, pinned again by PR #156 r2 Minor 2 (006:T007): the insert's and the change's
+        // terms reached through the file's helpers, each named at the write. `pricePiasters` twice
+        // in each: today's price, and the programme's NULL terms (`NO_FIXED_TERMS`).
+        `amount ${PACKAGES} insertPackage pricePiasters`,
+        `amount ${PACKAGES} insertPackage pricePiasters`,
+        `amount ${PACKAGES} insertPackage price30Piasters`,
+        `amount ${PACKAGES} insertPackage price45Piasters`,
+        `amount ${PACKAGES} insertPackage price60Piasters`,
         `amount ${PACKAGES} changePackage pricePiasters`,
+        `amount ${PACKAGES} changePackage pricePiasters`,
+        `amount ${PACKAGES} changePackage price30Piasters`,
+        `amount ${PACKAGES} changePackage price45Piasters`,
+        `amount ${PACKAGES} changePackage price60Piasters`,
+        // 006:T007: the offer's frozen total.
+        `amount ${PROGRAMMES_REPOSITORY} writeOffer snapshotPricePiasters`,
       ].sort(),
     );
     const kindsInPayments = new Set(

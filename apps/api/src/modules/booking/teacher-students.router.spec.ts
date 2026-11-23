@@ -133,6 +133,8 @@ const unreached = (name: string) => () => Promise.reject(new Error(`${name} is n
 
 const booking: BookingServices = {
   slots: unreached('booking.slots'),
+  // 006:T007 (rule d): the programme's services, which no case here reaches.
+  programme: { offer: unreached('programme.offer') },
   enrollments: unreached('enrollments.list'),
   enrollment: unreached('enrollments.get'),
   students: async (...args) => {

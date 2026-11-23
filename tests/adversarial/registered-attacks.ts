@@ -22,6 +22,8 @@ import { discoveryAttacks } from './discovery.attacks.js';
 import { enrollmentsAttacks } from './enrollments.attacks.js';
 import { liveAttacks } from './live.attacks.js';
 import type { Registration } from './procedure-harness.js';
+// 006:T007 of specs/006-programme: `programme.offer`.
+import { programmeAttacks } from './programme.attacks.js';
 // T060: `sessions.complaint.raise`.
 import {
   sessionComplaintAttacks,
@@ -59,4 +61,6 @@ export const registeredAttacks: readonly Registration[] = [
   ...reportsAttacks,
   // 005:T013 (B47), registered with the integration's mount of `genderFlags`.
   ...genderFlagsAttacks,
+  // 006:T007 of specs/006-programme, registered with its mount of `programme`.
+  ...programmeAttacks,
 ];

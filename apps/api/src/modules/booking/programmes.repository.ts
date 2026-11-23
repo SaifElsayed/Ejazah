@@ -4,6 +4,9 @@
 //
 // Bounded: a student's active programmes are few (one per programme enrollment of theirs), read by
 // the enrollments' `student_user_id` index and the programmes' primary key.
+import type { EnrollmentStatus } from '@ijazah/contracts';
+import { type Piasters, toPlainNumber } from '@ijazah/money';
+
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
 type Client = Pick<Transaction, 'programme'>;
@@ -76,4 +79,95 @@ export async function programmeStateOf(
 ): Promise<ProgrammeState | null> {
   const row = await tx.programme.findUnique({ where: { enrollmentId }, select: { state: true } });
   return row?.state ?? null;
+}
+
+/**
+ * 006:T007 (FR-705, R-506): the programme and its enrollment as the offer decides on them: the two
+ * parties, the package and the weekly time, the enrollment's status and the programme's state.
+ * Null for an enrollment that is no programme or is soft-deleted. The offer reads it once to find
+ * the teacher, then again under the programme's and the enrollment's locks.
+ */
+export interface OfferEnrollment {
+  readonly id: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly packageId: string;
+  readonly slotId: string;
+  readonly status: EnrollmentStatus;
+  readonly state: ProgrammeState;
+}
+
+export async function offerEnrollmentOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<OfferEnrollment | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      enrollment: {
+        select: {
+          id: true,
+          studentUserId: true,
+          teacherUserId: true,
+          packageId: true,
+          slotId: true,
+          status: true,
+        },
+      },
+    },
+  });
+  return row === null ? null : { ...row.enrollment, state: row.state };
+}
+
+/** The offer as it is frozen (R-506): the teacher's words, the programme's times, the snapshot. */
+export interface FrozenOffer {
+  readonly level: string;
+  readonly readiness: string;
+  readonly expectedLength: string;
+  readonly offeredAt: Date;
+  /** The offer + `programme_pay_rest_hours` (R-505; data-model.md: set at the offer). */
+  readonly payByAt: Date;
+  readonly monthCount: number;
+  /** The enrollment's snapshot: the offer's count + the assessment, its length, its total. */
+  readonly snapshot: {
+    readonly sessionCount: number;
+    readonly durationMinutes: number;
+    readonly price_piasters: Piasters;
+  };
+}
+
+/**
+ * 006:T007 (R-506): the offer and the enrollment's snapshot, on the offer's transaction: the
+ * programme `offered` with the offer's words and times, only from `awaiting_offer`, then the
+ * enrollment's count, length and total. Whether the programme moved; nothing is written when it did
+ * not. The caller holds the teacher's account, the programme and the enrollment, in that order.
+ */
+export async function writeOffer(
+  tx: Pick<Transaction, 'programme' | 'enrollment'>,
+  enrollmentId: string,
+  offer: FrozenOffer,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'awaiting_offer' },
+    data: {
+      state: 'offered',
+      level: offer.level,
+      readiness: offer.readiness,
+      expectedLength: offer.expectedLength,
+      offeredAt: offer.offeredAt,
+      payByAt: offer.payByAt,
+      monthCount: offer.monthCount,
+    },
+  });
+  if (count !== 1) return false;
+  await tx.enrollment.updateMany({
+    where: { id: enrollmentId },
+    data: {
+      snapshotSessionCount: offer.snapshot.sessionCount,
+      snapshotDurationMinutes: offer.snapshot.durationMinutes,
+      snapshotPricePiasters: BigInt(toPlainNumber(offer.snapshot.price_piasters)),
+    },
+  });
+  return true;
 }

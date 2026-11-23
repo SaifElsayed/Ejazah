@@ -425,6 +425,9 @@ No open question remains.
   - registered by the integration.
   > **The owner, 2026-11-22, Q-2 (SRS DEC-110).** The retry step asks the gateway first (T014's note);
   > `chargeSavedCard` is never called for a month whose earlier automatic order is unanswered.
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The pause step writes the
+  > `programme_paused` enrollment event (`enrollment_event_kind`, data-model.md:48), one row on the pause's
+  > transaction, red first, as T007's offer writes `programme_offered` (FU-A1 (a)).
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -448,6 +451,9 @@ No open question remains.
   > **v1.1 (PR #153's review, round 4, follow-up 1; the owner, 2026-11-21, «بعد الإطلاق v1.1»; SRS DEC-101).** A push
   > telling the student that payment has opened once the teacher's payout account is verified. Not built in the first
   > release: the screen shows «pay now» (T019). `PLAN.md`, «The first update (v1.1)».
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The paid month that clears `paused_at`
+  > writes the `programme_resumed` enrollment event, one row on its transaction, red first, as T007's offer writes
+  > `programme_offered` (FU-A1 (a)).
 - [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
   `modules/booking/programmes-admin.router.ts` (the admin decisions):
@@ -465,6 +471,9 @@ No open question remains.
   > month's 700. The fix: «− every release written», and a release per stop. Rare; not scheduled.
   > *(B-P2, the owner, 2026-11-23, Q-5 (a).)* The first half is closed by T011 (the end subtracts every release
   > written); «a release per stop» stays not scheduled.
+  > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** `programmes.reopen` writes the
+  > `programme_reopened` enrollment event, one row on the reopen's transaction, red first, as T007's offer writes
+  > `programme_offered` (FU-A1 (a)).
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:

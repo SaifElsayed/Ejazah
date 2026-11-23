@@ -4697,6 +4697,26 @@
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
+      "programme.offer": {
+        "caller": "teacher",
+        "input": {
+          "$": { "type": "object" },
+          "$.durationMinutes": { "required": true, "type": "number", "values": ["30", "45", "60"] },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.expectedLength": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.level": { "required": true, "type": "string" },
+          "$.readiness": { "required": true, "type": "string" },
+          "$.sessionCount": { "required": true, "type": "integer" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.monthCount": { "required": true, "type": "integer" },
+          "$.sessionPrice_piasters": { "required": true, "type": "integer" },
+          "$.total_piasters": { "required": true, "type": "integer" }
+        }
+      },
       "reports.create": {
         "caller": "user",
         "input": {

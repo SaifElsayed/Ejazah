@@ -508,6 +508,12 @@ describe('both parties’ reads (FR-513)', () => {
       settings,
       // 005:T006 (rule d): the enrollment reads' ijazah request, none held.
       ijazahRequests: { of: async () => new Map() },
+      // 006:T007 (rule d): the programme's offer, which no case here reaches.
+      idempotency: { run: () => Promise.reject(new Error('programme.offer is not reached here')) },
+      log: { info: () => undefined },
+      programmeAmounts: () => {
+        throw new Error('programme.offer is not reached here');
+      },
     });
     const asStudent = await lists.enrollment(made.studentId, { enrollmentId: made.enrollmentId });
     const asTeacher = await lists.student(made.teacherId, { enrollmentId: made.enrollmentId });
