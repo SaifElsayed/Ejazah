@@ -26,9 +26,14 @@ Additive only (R-API-9).
 | `programme.offer` | teacher | `{ enrollmentId, level, readiness, expectedLength, durationMinutes, sessionCount, idempotencyKey }` | `{ total_piasters, sessionPrice_piasters, monthCount }` | refusals: `assessment_not_delivered`, `not_awaiting_offer`, `offer_due_passed` (unless an administrator extended it), `length_exceeds_slot`, `count_out_of_bounds` (1–200), `teacher_not_active` |
 | `programme.pay` | student | `{ enrollmentId, plan: 'in_full' \| 'monthly', saveCard: boolean, idempotencyKey }` | `{ checkoutUrl }` | the first payment, within `payBy`; no hold; the order expires at min(`slot_hold_ttl_minutes`, `payBy`); FR-BOOK-12's one checkout per student applies; `saveCard` records consent; refusals: `not_offered`, `pay_by_passed`, `party_suspended`, `payee_unverified` (CONFLICT, before the gateway, in live mode only), `rest_not_positive` (in full with total ≤ fee) |
 | `programme.renew` | student | `{ enrollmentId, saveCard: boolean, idempotencyKey }` | `{ checkoutUrl }` | the next month by hand: «renew now» (no saved card, from `programme_renew_early_days`), «pay now» and «change card» (after a failed or unanswered charge); refusals: `party_suspended`, `payee_unverified` (CONFLICT, before the gateway, in live mode only; no «pay now» while `payeePending`, shown again once it is false), `not_due_yet`, `charge_pending` (an automatic order of the month `created` and unexpired), `nothing_due`, `closed` |
-| `programme.request` | teacher | `{ enrollmentId, kind: 'stop' \| 'refusal', reason, idempotencyKey }` | `{ requestId }` | stop: `not_paused`, `too_early` (before 7 days), `request_open`; refusal: `assessment_not_delivered`, `offer_sent`, `request_open` |
+| `programme.request` | teacher | `{ enrollmentId, kind: 'stop', reason, idempotencyKey }` | `{ requestId }` | stop: `not_paused`, `too_early` (before 7 days; the app shows the button only from `paused_at` + 7 days, `too_early` its guard), `request_open`; no `refusal` kind (SRS DEC-112, below) |
 | `programme.autoRenewOff` | student | `{ enrollmentId, idempotencyKey }` | `{ ok }` | at any time: deletes the saved card; later months by hand under the same rules; a charge already `created` stays (the review session's reading of DEC-95); under the programme's row lock, the due step's lock |
 | `programme.cancel` | student | `{ enrollmentId, idempotencyKey }` | `{ ok }` | before any payment of the rest: cancels `offer_declined`, the fee kept |
+
+> *(2026-11-23, SRS DEC-112, the owner: «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من الاعدادات
+> ومش هنوضحله ده».)* `programme.request` takes `stop` only: the `refusal` kind, its refusals (`assessment_not_delivered`,
+> `offer_sent`), its service branch, attacks and specs are removed (T008). A teacher who wants to refuse tells support
+> and sends no offer; the refusal is the administrator's approval of the `no_offer` item (admin-surface.md).
 
 The live channel: an `enrollment` signal to both parties after commit on every programme change (offer, payment,
 pause, request, decision, close, reopen); no new member.
