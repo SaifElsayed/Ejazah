@@ -5,7 +5,11 @@
 // teacher, `payout_release.marked` naming the marked release's teacher (`user`); a replayed mark
 // writes none. The output schema strips what it does not name. What the reads answer and what the
 // mark refuses are `payouts.service.spec.ts`'s; the mark once under a race is
-// `tests/db-integrity/payout-mark-race.spec.ts`'s.
+// `tests/db-integrity/payout-mark-race.spec.ts`'s. 003:T126 (SRS DEC-96's last clause; Q15 (a)): the
+// mark's and the unmark's entries carry the release the service answered as `after`, its id,
+// enrollment, part and amount, the target staying the teacher; three releases of one teacher, 7,000,
+// 1,750 and 2,800 EGP, each entry naming its own.
+import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
 import type { AuditRecord } from '../../platform/audit/audit-writer.js';
@@ -33,6 +37,28 @@ type PayoutsCaller = ReturnType<typeof callerFor>;
 const ADMIN = '0199d0a0-0000-7000-8000-00000000ad01';
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000a1';
 const RELEASE = '0199d0a0-0000-7000-8000-0000000000b1';
+/** 003:T126: three releases of TEACHER's, as the service answers each (ids and an amount). */
+const RELEASES = {
+  [RELEASE]: {
+    releaseId: RELEASE,
+    enrollmentId: '0199d0a0-0000-7000-8000-0000000000c1',
+    milestone: 'recitation_end',
+    amount_piasters: piasters(700_000),
+  },
+  '0199d0a0-0000-7000-8000-0000000000b2': {
+    releaseId: '0199d0a0-0000-7000-8000-0000000000b2',
+    enrollmentId: '0199d0a0-0000-7000-8000-0000000000c2',
+    milestone: 'ijazah_half',
+    amount_piasters: piasters(175_000),
+  },
+  '0199d0a0-0000-7000-8000-0000000000b3': {
+    releaseId: '0199d0a0-0000-7000-8000-0000000000b3',
+    enrollmentId: '0199d0a0-0000-7000-8000-0000000000c3',
+    milestone: 'direct_end',
+    amount_piasters: piasters(280_000),
+  },
+} as const;
+const releaseOf = (releaseId: string) => RELEASES[releaseId as keyof typeof RELEASES];
 const KEY = 'mark-key-0000000001';
 const REASON = 'marked by mistake: the transfer did not go through';
 const TX = { stand: 'in' };
@@ -74,11 +100,11 @@ function surfaceOver(replayed = false): Surface {
     },
     mark: async (tx, adminId, input) => {
       reached.push(['mark', tx, adminId, input]);
-      return { teacherUserId: TEACHER, replayed };
+      return { teacherUserId: TEACHER, release: releaseOf(input.releaseId), replayed };
     },
     unmark: async (tx, adminId, input) => {
       reached.push(['unmark', tx, adminId, input]);
-      return { teacherUserId: TEACHER, replayed };
+      return { teacherUserId: TEACHER, release: releaseOf(input.releaseId), replayed };
     },
   };
   const services = new Proxy(unusedAdminServices, {
@@ -183,7 +209,7 @@ describe('payouts.get', () => {
 });
 
 describe('payouts.mark («تم الصرف»)', () => {
-  it('marks on the call’s transaction with the session’s administrator, audited on the teacher', async () => {
+  it('marks on the call’s transaction with the session’s administrator, audited on the teacher with the release', async () => {
     const surface = surfaceOver();
     await surface.verified().payouts.mark({ releaseId: RELEASE, idempotencyKey: KEY });
 
@@ -191,7 +217,13 @@ describe('payouts.mark («تم الصرف»)', () => {
       ['mark', TX, ADMIN, { releaseId: RELEASE, idempotencyKey: KEY }],
     ]);
     expect(surface.written).toEqual([
-      { adminId: ADMIN, action: 'payout_release.marked', targetType: 'user', targetId: TEACHER },
+      {
+        adminId: ADMIN,
+        action: 'payout_release.marked',
+        targetType: 'user',
+        targetId: TEACHER,
+        after: RELEASES[RELEASE],
+      },
     ]);
   });
 
@@ -212,7 +244,7 @@ describe('payouts.mark («تم الصرف»)', () => {
 });
 
 describe('payouts.unmark: a mark made in error undone (DEC-89)', () => {
-  it('unmarks on the call’s transaction, audited on the teacher with its reason', async () => {
+  it('unmarks on the call’s transaction, audited on the teacher with its reason and the release', async () => {
     const surface = surfaceOver();
     await surface
       .verified()
@@ -228,6 +260,7 @@ describe('payouts.unmark: a mark made in error undone (DEC-89)', () => {
         targetType: 'user',
         targetId: TEACHER,
         reason: REASON,
+        after: RELEASES[RELEASE],
       },
     ]);
   });
@@ -253,6 +286,37 @@ describe('payouts.unmark: a mark made in error undone (DEC-89)', () => {
       ).toBe('VALIDATION_FAILED');
     }
     expect(surface.reached).toEqual([]);
+  });
+});
+
+describe('003:T126: three releases of one teacher told apart by their entries', () => {
+  it('each mark’s and each unmark’s entry names its own release and amount: 7,000, 1,750 and 2,800 EGP', async () => {
+    const surface = surfaceOver();
+    const ids = Object.keys(RELEASES);
+    for (const releaseId of ids) {
+      await surface.verified().payouts.mark({ releaseId, idempotencyKey: KEY });
+    }
+    for (const releaseId of ids) {
+      await surface.verified().payouts.unmark({ releaseId, reason: REASON, idempotencyKey: KEY });
+    }
+
+    expect(surface.written).toEqual([
+      ...ids.map((releaseId) => ({
+        adminId: ADMIN,
+        action: 'payout_release.marked',
+        targetType: 'user',
+        targetId: TEACHER,
+        after: releaseOf(releaseId),
+      })),
+      ...ids.map((releaseId) => ({
+        adminId: ADMIN,
+        action: 'payout_release.unmarked',
+        targetType: 'user',
+        targetId: TEACHER,
+        reason: REASON,
+        after: releaseOf(releaseId),
+      })),
+    ]);
   });
 });
 
@@ -282,7 +346,7 @@ describe('payouts.mark’s own limit (rate_limit_payout_mark, 10 per 60 s per ad
     const payouts: Pick<AdminSurfaceServices['payouts'], 'mark'> = {
       mark: async (_tx, adminId) => {
         reached.push(adminId);
-        return { teacherUserId: TEACHER, replayed: false };
+        return { teacherUserId: TEACHER, release: RELEASES[RELEASE], replayed: false };
       },
     };
     const context = () =>
@@ -342,7 +406,7 @@ describe('payouts.unmark’s limit, the same rate_limit_payout_mark', () => {
     const payouts: Pick<AdminSurfaceServices['payouts'], 'unmark'> = {
       unmark: async (_tx, adminId) => {
         reached.push(adminId);
-        return { teacherUserId: TEACHER, replayed: false };
+        return { teacherUserId: TEACHER, release: RELEASES[RELEASE], replayed: false };
       },
     };
     const context = () =>
