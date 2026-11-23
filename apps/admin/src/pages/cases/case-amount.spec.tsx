@@ -248,3 +248,41 @@ describe('a close on the student’s ban or confirmed fault (003:T124, DEC-91)',
     ).toBeTruthy();
   });
 });
+
+// 003:T125 (SRS DEC-104, DEC-96; Q-3 (a)): an end by the administration (the student's stop, a
+// student's deletion by an administrator, a gender correction) draws its own cause, «أنهت الإدارة
+// الباقة», with the refund of what was not taken and the teacher's release; a student's deletion is
+// a case of its own reason, `account_deleted`, in words. Written before the words, run red first.
+describe('an end by the administration (003:T125, DEC-104)', () => {
+  const DIRECT = {
+    cause: 'direct_end',
+    refund_piasters: EGP(6_000),
+    release_piasters: EGP(2_800),
+    refunded_piasters: EGP(0),
+  };
+
+  it('draws a student’s deletion’s case: its reason, the cause, 6,000 refunded and 2,800 released', async () => {
+    const api = fakeApi({ amount: DIRECT }, 'account_deleted');
+    await inBothLocales(
+      () => open(api),
+      async (t, locale) => {
+        const section = await screen.findByRole('region', {
+          name: t('admin.money.caseAmount.title'),
+        });
+        const pounds = (value: number) => formatPounds(piasters(value), locale);
+        expect(within(section).getByText(t('admin.money.caseAmount.cause.directEnd'))).toBeTruthy();
+        expectPart(section, t('admin.money.caseAmount.refund'), pounds(EGP(6_000)));
+        expectPart(section, t('admin.money.caseAmount.release'), pounds(EGP(2_800)));
+        expect(screen.getAllByText(t('admin.cases.reason.accountDeleted')).length).toBeGreaterThan(
+          0,
+        );
+      },
+    );
+  });
+
+  it('names the end in Arabic «أنهت الإدارة الباقة», never a complaint', () => {
+    const words = translate('ar', 'admin.money.caseAmount.cause.directEnd');
+    expect(words).toContain('أنهت الإدارة الباقة');
+    expect(words).not.toContain('شكوى');
+  });
+});

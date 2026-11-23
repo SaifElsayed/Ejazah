@@ -160,6 +160,14 @@ function TeacherPayoutsPanel({ detail }: { readonly detail: PayoutsDetail }) {
           })}
         </strong>
       </span>
+      {/* 003:T127 (SRS DEC-98): a refund after the end release, the platform's, not the teacher's. */}
+      {deduction.platformShare_piasters === undefined ? null : (
+        <span className="text-caption tone-muted">
+          {t('admin.money.payouts.detail.platformShare', {
+            amount: pounds(piasters(deduction.platformShare_piasters)),
+          })}
+        </span>
+      )}
       {deduction.case === undefined ? (
         <span className="text-caption tone-muted">{t('admin.money.payouts.detail.noCase')}</span>
       ) : (

@@ -273,7 +273,9 @@ describe('the refunds already recorded (Q-C1 (a))', () => {
 });
 
 describe('no amount', () => {
-  it.each(['admin_ended', 'admin_cancellation', 'gender_correction', 'makeup_refused'])(
+  // 003:T125 (SRS DEC-104; an approved rewrite): `admin_ended` and `gender_correction` now show the
+  // end by the administration (`direct_end`, below); any other reason outside the map still none.
+  it.each(['admin_cancellation', 'makeup_refused', 'refund_choice'])(
     'for a reason outside the map: %s',
     (reason) => {
       expect(caseAmountOf(facts({ reason }))).toBeUndefined();
@@ -481,8 +483,14 @@ describe('006:T012 the dropout set for a programme (FR-729; DEC-85: every order 
     expect(ended(reason)).toEqual(everything);
   });
 
-  it('an administrator’s direct end of an unsuspended programme is not in the set (T125’s)', () => {
-    expect(ended('admin_ended', false)).toBeUndefined();
+  // 003:T125 (SRS DEC-104; an approved rewrite): the student’s stop, each session by its own order.
+  it('an administrator’s direct end of an unsuspended programme is the student’s stop: refund 35 × 237.50 EGP, release 350 + 5 × 166.25 EGP', () => {
+    expect(ended('admin_ended', false)).toEqual({
+      cause: 'direct_end',
+      refund_piasters: piasters(831_250),
+      release_piasters: piasters(118_125),
+      refunded_piasters: piasters(0),
+    });
   });
 
   it('a suspension shows no refund: its open `teacher_suspended` case is a pause', () => {
@@ -490,10 +498,76 @@ describe('006:T012 the dropout set for a programme (FR-729; DEC-85: every order 
     expect(ended('teacher_suspended', true)).toBeUndefined();
   });
 
-  it('a package’s administrator end covering a suspension stays outside B-P2’s set (T125’s)', () => {
-    expect(caseAmountOf(facts({ reason: 'admin_ended', coversSuspension: true }))).toBeUndefined();
+  // 003:T125 (rule d): outside B-P2’s set, a package’s end covering a suspension is the student’s stop.
+  it('a package’s administrator end covering a suspension stays outside B-P2’s set: the end by the administration (T125)', () => {
+    expect(caseAmountOf(facts({ reason: 'admin_ended', coversSuspension: true }))).toMatchObject({
+      cause: 'direct_end',
+    });
     expect(
       caseAmountOf(facts({ track: 'ijazah_track', reason: 'admin_ended', coversSuspension: true })),
-    ).toBeUndefined();
+    ).toMatchObject({ cause: 'direct_end' });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T125 (SRS DEC-104, DEC-96; Q-1 (a) to Q-3 (a)): the case of an end by the administration, the
+// student’s stop (`admin_ended`), a student’s deletion by an administrator (`account_deleted`) and a
+// gender correction (`gender_correction`), shows `direct_end`: the refund of the sessions not taken
+// and the teacher’s release of those consumed less what was already released, on both tracks.
+// Written before the rule, run red first.
+describe('003:T125 an end by the administration (DEC-104)', () => {
+  it.each(['admin_ended', 'account_deleted', 'gender_correction'])(
+    'recitation, 10,000 EGP, 4 of 10 delivered, %s: the student 6,000 EGP, the teacher 2,800 EGP',
+    (reason) => {
+      expect(
+        caseAmountOf(facts({ reason, sessions: tenWith('done', 'done', 'done', 'done') })),
+      ).toEqual({
+        cause: 'direct_end',
+        refund_piasters: EGP(6_000),
+        release_piasters: EGP(2_800),
+        refunded_piasters: EGP(0),
+      });
+    },
+  );
+
+  it('ijazah, 6 of 10 delivered, the half (1,750) released: the student 4,000 EGP, the teacher 2,450 EGP more', () => {
+    expect(
+      caseAmountOf(
+        facts({
+          reason: 'account_deleted',
+          track: 'ijazah_track',
+          sessions: tenWith(...Array.from({ length: 6 }, () => 'done')),
+          releases: [
+            HALF_MARKED,
+            { milestone: 'direct_end', amount_piasters: EGP(2_450), marked: false },
+          ],
+        }),
+      ),
+    ).toEqual({
+      cause: 'direct_end',
+      refund_piasters: EGP(4_000),
+      release_piasters: EGP(2_450),
+      refunded_piasters: EGP(0),
+    });
+  });
+
+  it('the teacher’s stop from the end (`teacher_ended`) on the ijazah track shows the whole amount paid (DEC-85)', () => {
+    expect(
+      caseAmountOf(
+        facts({
+          reason: 'teacher_ended',
+          track: 'ijazah_track',
+          sessions: tenWith(...Array.from({ length: 6 }, () => 'done')),
+          releases: [HALF_MARKED],
+        }),
+      ),
+    ).toEqual({
+      cause: 'ijazah_dropout',
+      total_piasters: EGP(10_000),
+      held_piasters: EGP(5_250),
+      platformPart_piasters: EGP(3_000),
+      released_piasters: EGP(1_750),
+      refunded_piasters: EGP(0),
+    });
   });
 });

@@ -26,7 +26,11 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { CaseQueueQuery, CaseRecord, SuspensionCase } from '../moderation/index.js';
 import type { CoveredSessionRow } from './case-covers.repository.js';
 import { type CaseQueueStore, createCaseQueue } from './case-queue.service.js';
-import type { EnrollmentPageFilter, EnrollmentPageItem, EnrollmentSide } from './enrollment-side.port.js';
+import type {
+  EnrollmentPageFilter,
+  EnrollmentPageItem,
+  EnrollmentSide,
+} from './enrollment-side.port.js';
 
 const tx = {} as Transaction;
 const ADMIN = '0199d0a0-0000-7000-8000-0000000000a1';
@@ -61,7 +65,13 @@ function record(overrides: Partial<CaseRecord> = {}): CaseRecord {
 }
 
 function covered(n: number, overrides: Partial<CoveredSessionRow> = {}): CoveredSessionRow {
-  return { sessionId: id(n), sequenceNumber: n, status: 'cancelled_by_admin', remedy: null, ...overrides };
+  return {
+    sessionId: id(n),
+    sequenceNumber: n,
+    status: 'cancelled_by_admin',
+    remedy: null,
+    ...overrides,
+  };
 }
 
 interface World {
@@ -119,7 +129,12 @@ function queueOver(world: World) {
       reads.push(['counts', ids]);
       return world.counts ?? new Map();
     },
-    namesOf: async () => world.names ?? new Map([[STUDENT, 'طالب'], [TEACHER, 'معلم']]),
+    namesOf: async () =>
+      world.names ??
+      new Map([
+        [STUDENT, 'طالب'],
+        [TEACHER, 'معلم'],
+      ]),
     sessionsOfCaseRemedies: async (_tx, caseId) => {
       reads.push(['remedies', caseId]);
       return world.ofRemedies ?? [];
@@ -404,6 +419,20 @@ describe('cases.get (FR-478; R-312, R-313)', () => {
     });
     const answer = await queue.get(tx, ADMIN, { caseId: CASE });
     expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(6), id(107)]);
+    expect(reads).toContainEqual(['linked', CASE]);
+  });
+
+  // 003:T125 (SRS DEC-96; FR-484 as amended): a student's deletion by an administrator opens its own
+  // end's case, `account_deleted`, which covers what a suspension linked to it cancelled. Run red first.
+  it('the case a student’s deletion opened (`account_deleted`) is an end’s: it covers a linked suspension’s sessions', async () => {
+    const linked = id(513);
+    const { queue, reads } = queueOver({
+      records: { [CASE]: record({ reason: 'account_deleted' }) },
+      suspensions: [{ caseId: linked, status: 'resolved' }],
+      cancelledBy: { [linked]: [covered(3)] },
+    });
+    const answer = await queue.get(tx, ADMIN, { caseId: CASE });
+    expect(answer.covers.map(({ sessionId }) => sessionId)).toEqual([id(3)]);
     expect(reads).toContainEqual(['linked', CASE]);
   });
 

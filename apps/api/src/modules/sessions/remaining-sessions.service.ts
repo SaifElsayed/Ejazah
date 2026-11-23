@@ -9,7 +9,8 @@
 // - Every open remedy (`awaiting_choice`, `proposed`, `counter_proposed`, `frozen`) is handed to that
 //   case (`refund_case`), one `remedy_handed_to_case` row each, so the rows ADR 0023 says remain and
 //   FR-NOTIF-1's `makeup_handed_to_case` reads exist on every path (I1); where the caller opens no
-//   case (a student's deletion) it lapses instead, nothing owed, one `remedy_lapsed` row each (C2).
+//   case it lapses instead, nothing owed, one `remedy_lapsed` row each (C2); since 003:T125 a
+//   student's deletion opens its `account_deleted` case, so its remedies are handed too (FR-484).
 //   A remedy already handed to a case keeps it.
 //
 // THE LOCKS (contracts/kernel.md, an account's end and the general rule). The caller holds the
@@ -71,7 +72,7 @@ const remainingSessionsStore: RemainingSessionsStore = {
 
 /**
  * The case the caller opened or joined for an enrollment, asked once per enrollment after the
- * sessions' and the remedies' locks; null where the end opens none (a student's deletion).
+ * sessions' and the remedies' locks; null where the end opens none.
  */
 export type CaseOf = (enrollmentId: string) => Promise<string | null>;
 

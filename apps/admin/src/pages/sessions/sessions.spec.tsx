@@ -1263,9 +1263,10 @@ describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held 
   });
 
   it('names a `teacher_ended` case as a ban, a revocation or a deletion, never a suspension', () => {
+    // 003:T125 (rule d): the direct end's «المعلم وقف» opens this case too.
     expect(both(CASE_REASON.teacher_ended)).toEqual({
-      ar: 'حظر المعلم أو سحب اعتماده أو حذف حسابه',
-      en: 'The teacher banned, their approval revoked or their account deleted',
+      ar: 'حظر المعلم أو سحب اعتماده أو حذف حسابه أو توقفه',
+      en: 'The teacher banned, their approval revoked, their account deleted or they stopped',
     });
   });
 

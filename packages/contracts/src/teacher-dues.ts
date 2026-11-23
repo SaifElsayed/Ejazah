@@ -5,7 +5,8 @@
 // ijazah half; the ijazah rest; a close's release), each with its amount and its state: `held`, with
 // when it would fall due; `due`, awaiting the administrator; or `paid`, with its date. Two totals on
 // top, held and paid. `deductions` is «عليه»: his own share of each refund recorded on his orders
-// (the refund × the order's rate, rounded up, Q-6 as revised). No order line and no student's name
+// (the refund × the order's rate, rounded up, Q-6 as revised); 003:T127 (SRS DEC-98): once an
+// enrollment's end release is written, only the share it took off, a later refund being the platform's. No order line and no student's name
 // crosses here: no order, enrollment or student id either. Money crosses as `_piasters` integers
 // (R-MONEY-1).
 import { z } from 'zod';

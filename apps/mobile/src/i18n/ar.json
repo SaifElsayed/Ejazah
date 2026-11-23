@@ -473,7 +473,8 @@
         "teacherSuspended": "إيقاف حسابك",
         "adminEnded": "إنهاء الباقة من الإدارة",
         "genderCorrection": "تصحيح بيانات الحساب",
-        "studentComplaintEnded": "إنهاء الباقة بشكوى ضد الطالب"
+        "studentComplaintEnded": "إنهاء الباقة بشكوى ضد الطالب",
+        "accountDeleted": "حذف حساب الطالب بطلبه"
       },
       "empty": {
         "title": "لا مستحقات بعد",

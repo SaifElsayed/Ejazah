@@ -322,6 +322,8 @@ const CAUSE: Readonly<Record<CaseAmount['cause'], MessageKey>> = {
   student_complaint_close: 'admin.money.caseAmount.cause.studentComplaintClose',
   // 003:T124 (SRS DEC-91, FR-ADMIN-5; ADR 0018 D5): a close on the student's ban or confirmed fault.
   student_fault_close: 'admin.money.caseAmount.cause.studentFaultClose',
+  // 003:T125 (SRS DEC-104; Q-3 (a)): an end by the administration, «أنهت الإدارة الباقة».
+  direct_end: 'admin.money.caseAmount.cause.directEnd',
 };
 
 /** One part of the amount: its words and its value, written in pounds. */
@@ -356,6 +358,7 @@ function partsOf(amount: CaseAmount, pounds: (value: number) => string): readonl
       ];
     case 'recitation_dropout':
     case 'student_complaint_close':
+    case 'direct_end':
       return [
         { label: 'admin.money.caseAmount.refund', value: pounds(amount.refund_piasters) },
         { label: 'admin.money.caseAmount.release', value: pounds(amount.release_piasters) },

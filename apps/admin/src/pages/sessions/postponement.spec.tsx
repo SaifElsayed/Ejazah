@@ -226,9 +226,76 @@ describe('the end’s cause (003:T112, FR-POSTPONE-6, Q-4 (a))', () => {
         ).toHaveProperty('checked', true);
         expect(slotGroup().queryAllByRole('radio')).toHaveLength(1);
         expect(dialog.getByText(t('admin.sessions.endCause.slotReleased'))).toBeTruthy();
-        fireEvent.click(dialog.getByRole('radio', { name: t('admin.sessions.endCause.adminEnded') }));
+        fireEvent.click(
+          dialog.getByRole('radio', { name: t('admin.sessions.endCause.adminEnded') }),
+        );
         expect(slotGroup().getByRole('radio', { name: hold })).toHaveProperty('checked', true);
         expect(dialog.queryByText(t('admin.sessions.endCause.slotReleased'))).toBeNull();
+      },
+    );
+  });
+});
+
+// 003:T125 (SRS DEC-104; Q-1 (a)): the end names who stopped. The dialog asks «الطالب قرر يوقف» (the
+// default, sent as before, with no cause), «المعلم وقف» (sent as `cause: 'teacher_ended'`, the slot
+// as chosen) or the complaint against the student, each saying what it does; a student's deletion's
+// case (`account_deleted`) is named on the monitor. Written before the words, run red first.
+describe('who stopped (003:T125, DEC-104)', () => {
+  it('asks «الطالب قرر يوقف», chosen, «المعلم وقف» and the complaint, in both languages', async () => {
+    expect(ar('admin.sessions.endCause.adminEnded')).toBe('الطالب قرر يوقف');
+    expect(ar('admin.sessions.endCause.teacherEnded')).toBe('المعلم وقف');
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        const panel = await panelOf(t);
+        fireEvent.click(panel.getByRole('button', { name: t('admin.sessions.detail.end') }));
+        const dialog = within(
+          await screen.findByRole('dialog', { name: t('admin.sessions.end.title') }),
+        );
+        const group = within(
+          dialog.getByRole('group', { name: t('admin.sessions.endCause.legend') }),
+        );
+        expect(group.getAllByRole('radio')).toHaveLength(3);
+        expect(
+          group.getByRole('radio', { name: t('admin.sessions.endCause.adminEnded') }),
+        ).toHaveProperty('checked', true);
+        expect(
+          group.getByRole('radio', { name: t('admin.sessions.endCause.teacherEnded') }),
+        ).toHaveProperty('checked', false);
+        expect(dialog.getByText(t('admin.sessions.endCause.adminEndedEffect'))).toBeTruthy();
+      },
+    );
+  });
+
+  it('sends the teacher’s stop as its cause, the slot as chosen, once it says what that stop does', async () => {
+    const { api, dialog } = await endDialog();
+    fireEvent.click(
+      dialog.getByRole('radio', { name: ar('admin.sessions.endCause.teacherEnded') }),
+    );
+    expect(dialog.getByText(ar('admin.sessions.endCause.teacherEndedEffect'))).toBeTruthy();
+    expect(dialog.queryByText(ar('admin.sessions.endCause.adminEndedEffect'))).toBeNull();
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.sessions.end.confirm') }));
+    await waitFor(() => expect(api.sessions.endEnrollment.mutate).toHaveBeenCalledTimes(1));
+    expect(api.sessions.endEnrollment.mutate).toHaveBeenCalledWith({
+      enrollmentId: E1,
+      partyReason: 'بلاغ المعلم عن الطالب',
+      slot: 'hold',
+      cause: 'teacher_ended',
+      idempotencyKey: expect.stringMatching(/^[\w-]{16,128}$/u),
+    });
+  });
+
+  it('names a student’s deletion’s case on the monitor, in both languages', async () => {
+    const api = fakeApi();
+    api.sessions.monitor.get.query.mockResolvedValue({
+      ...detail,
+      cases: [{ caseId: C1, reason: 'account_deleted', status: 'open' }],
+    });
+    await inBothLocales(
+      () => open(api),
+      async (t) => {
+        const panel = await panelOf(t);
+        expect(panel.getByText(t('admin.sessions.caseReason.accountDeleted'))).toBeTruthy();
       },
     );
   });

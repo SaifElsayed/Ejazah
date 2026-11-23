@@ -113,6 +113,7 @@ function sweepOver(w: World, pageSize = 2) {
     sessionsAmong: async (_tx, ids) => new Map(ids.map((one) => [one, sessionsOf(one)])),
     casesAmong: async (_tx, ids) => new Map(ids.map((one) => [one, []])),
     openMattersAmong: async () => new Set(),
+    caseRecordOf: async () => null,
     makeupsAmong: async () => new Map(),
   };
   const insert = async (_tx: Transaction, releases: readonly DueRelease[]) => {
@@ -237,6 +238,7 @@ describe('a make-up valued as the session it makes up (Q-B1-4 (a))', () => {
       sessionsAmong: async () => new Map([[enrollmentId, rows]]),
       casesAmong: async () => new Map([[enrollmentId, []]]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       // 11 makes up 3, and 12 makes up 11.
       makeupsAmong: async () =>
         new Map([
@@ -327,6 +329,7 @@ describe('006:T011 a programme’s facts (R-512)', () => {
       sessionsAmong: async () => new Map([[enrollmentId, sessionsOf(enrollmentId)]]),
       casesAmong: async () => new Map([[enrollmentId, []]]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       makeupsAmong: async () => new Map(),
     };
     const [one] = await releasesAmong({} as Transaction, [enrollmentId], reads);
@@ -469,5 +472,105 @@ describe('006:T012 the sessions as the release rules read them', () => {
       [2, 1, undefined],
       [3, undefined, 2],
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T125 (006:T012 as amended; SRS DEC-104): the release reads the covered-suspension fact the case
+// reads: an `admin_ended` end that closed the enrollment's `teacher_suspended` case `ended_meanwhile`.
+// Moderation's record is read only for an enrollment with an `admin_ended` case, and only for its
+// `teacher_suspended` cases. Written before the fact, run red first.
+describe('003:T125 the covered-suspension fact', () => {
+  const ENDED = id(101);
+  const OTHER = id(102);
+  const SUSPENSION = id(701);
+  const LONE_SUSPENSION = id(702);
+  const caseOf = (caseId: string, reason: string, status: 'open' | 'resolved') => ({
+    caseId,
+    reason,
+    status,
+    createdAt: new Date('2026-10-20T10:00:00Z'),
+  });
+  const coveredOver = async (notes: string) => {
+    const w = programmeWorld();
+    const asked: string[] = [];
+    const reads: ReleaseReads = {
+      shareOrdersOf: async (_tx, ids) => ordersByEnrollment(w.orders, ids),
+      releasesOf: async () => [],
+      enrollmentsAmong: async () =>
+        new Map([
+          ...w.enrollments,
+          [OTHER, { ...(w.enrollments.get(ENDED) as ReleaseEnrollment), enrollmentId: OTHER }],
+        ]),
+      sessionsAmong: async (_tx, ids) => new Map(ids.map((one) => [one, sessionsOf(one)])),
+      casesAmong: async () =>
+        new Map([
+          [
+            ENDED,
+            [
+              caseOf(id(700), 'admin_ended', 'open'),
+              caseOf(SUSPENSION, 'teacher_suspended', 'resolved'),
+            ],
+          ],
+          // No end case: its suspension is never read.
+          [OTHER, [caseOf(LONE_SUSPENSION, 'teacher_suspended', 'resolved')]],
+        ]),
+      openMattersAmong: async () => new Set(),
+      makeupsAmong: async () => new Map(),
+      caseRecordOf: async (_tx, caseId) => {
+        asked.push(caseId);
+        return {
+          caseId,
+          kind: 'compensation_case',
+          enrollmentId: ENDED,
+          reason: 'teacher_suspended',
+          status: 'resolved',
+          resolution: 'compensation_ordered',
+          resolutionNotes: notes,
+          createdAt: new Date('2026-10-10T10:00:00Z'),
+          resolvedAt: new Date('2026-10-20T10:00:00Z'),
+        };
+      },
+    };
+    w.orders.push({ ...(w.orders[0] as ShareOrderRow), paymentId: id(203), enrollmentId: OTHER });
+    const among = await releasesAmong({} as Transaction, [ENDED, OTHER], reads);
+    return { among, asked };
+  };
+
+  it('is true where the end closed the suspension `ended_meanwhile`, reading that case alone', async () => {
+    const { among, asked } = await coveredOver('ended_meanwhile');
+    expect(
+      among.map(({ facts }) => [facts.enrollment.enrollmentId, facts.coversSuspension]),
+    ).toEqual([
+      [ENDED, true],
+      [OTHER, false],
+    ]);
+    expect(asked).toEqual([SUSPENSION]);
+  });
+
+  it('is false where the reinstatement closed it', async () => {
+    const { among } = await coveredOver('reinstated');
+    expect(among.map(({ facts }) => facts.coversSuspension)).toEqual([false, false]);
+  });
+});
+
+// 003:T127 (SRS DEC-98; ERD §15 rule 83): the sweep hands the insert the refund share an end release
+// took off, written with its row. Written before the field, run red first.
+describe('003:T127 the refund share written with an end release', () => {
+  it('writes 1,000 EGP refunded as 630,000 released and 70,000 taken off', async () => {
+    const w = world(1);
+    w.orders.splice(0, 1, {
+      ...(w.orders[0] as ShareOrderRow),
+      refunded_piasters: piasters(100_000),
+    });
+    await sweepOver(w).run();
+
+    expect(
+      w.rows.map(({ milestone, amount_piasters, refundTakenOff_piasters }) => [
+        milestone,
+        amount_piasters,
+        refundTakenOff_piasters,
+      ]),
+    ).toEqual([['recitation_end', 630_000, 70_000]]);
   });
 });

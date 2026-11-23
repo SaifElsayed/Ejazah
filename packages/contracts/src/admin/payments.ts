@@ -303,6 +303,13 @@ export const paymentsCaseAmount = z.discriminatedUnion('cause', [
     release_piasters: casePiasters,
     refunded_piasters: casePiasters,
   }),
+  /**
+   * 003:T125 (SRS DEC-104, DEC-96; Q-3 (a)): an end by the administration, the student's stop
+   * (`admin_ended`), a student's deletion by an administrator (`account_deleted`) or a gender
+   * correction (`gender_correction`): the refund of the sessions not taken, and the teacher's
+   * release of those consumed less what was already released. Added, additively (R-API-9).
+   */
+  z.object({ cause: z.literal('direct_end'), ...sessionsRefund }),
 ]);
 
 /** Absent `amount`: the case's reason is not one that closes with an amount (Q-5 (a)). */

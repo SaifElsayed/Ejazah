@@ -737,9 +737,10 @@ describe('B42a Q-B2 (a): a teacher’s suspension and a teacher’s end, in word
   });
 
   it('names a `teacher_ended` case as a revocation, a ban or a deletion, never a suspension', () => {
+    // 003:T125 (rule d): the direct end's «المعلم وقف» opens this case too.
     expect(words(REASON.teacher_ended)).toEqual({
-      ar: 'سُحب اعتماد المعلم أو حُظر أو حُذف حسابه',
-      en: 'The teacher’s approval was revoked, or they were banned or their account deleted',
+      ar: 'سُحب اعتماد المعلم أو حُظر أو حُذف حسابه أو توقف عن التدريس',
+      en: 'The teacher’s approval was revoked, or they were banned, their account deleted or they stopped teaching',
     });
   });
 });
@@ -755,9 +756,10 @@ describe('T083: an administrator’s direct end, in words', () => {
     expect({
       ar: key === undefined ? undefined : translate('ar', key),
       en: key === undefined ? undefined : translate('en', key),
+      // 003:T125 (rule d): `admin_ended` is the student's stop (DEC-104).
     }).toEqual({
-      ar: 'أنهت الإدارة الاشتراك مباشرة',
-      en: 'The administration ended the enrollment directly',
+      ar: 'أنهت الإدارة الاشتراك مباشرة لأن الطالب قرر يوقف',
+      en: 'The administration ended the enrollment directly, the student having chosen to stop',
     });
   });
 });

@@ -473,7 +473,8 @@
         "teacherSuspended": "Your account was suspended",
         "adminEnded": "Ended by the administration",
         "genderCorrection": "An account details correction",
-        "studentComplaintEnded": "Ended on a complaint against the student"
+        "studentComplaintEnded": "Ended on a complaint against the student",
+        "accountDeleted": "The student’s account deleted at their request"
       },
       "empty": {
         "title": "No dues yet",

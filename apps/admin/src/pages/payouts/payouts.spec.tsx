@@ -627,3 +627,39 @@ describe('«تحويلات المعلمين»: the way in (DEC-89)', () => {
     expect(other.queryByRole('link', { name: ar('admin.money.payouts.userLink') })).toBeNull();
   });
 });
+
+// 003:T127 (SRS DEC-98; Q-4 (a)): a refund recorded after the enrollment's end release is the
+// platform's: «عليه» on the administrator's page still lists it, its share marked as the platform's,
+// never taken off the teacher. «Due 7,000», then 1,000 EGP refunded: 700 EGP the platform's. Written
+// before the mark, run red first.
+describe('003:T127 a refund after the end release (DEC-98)', () => {
+  it('marks the share a refund after the release leaves to the platform, and no other, in both languages', async () => {
+    const api = fakeApi();
+    api.payouts.get.query.mockResolvedValue({
+      ...detail,
+      deductions: [
+        {
+          ...detail.deductions[0],
+          refunded_piasters: 100_000,
+          share_piasters: 70_000,
+          platformShare_piasters: 70_000,
+        },
+        detail.deductions[1],
+      ],
+    });
+    await inBothLocales(
+      () => open(api, `/payouts?teacher=${T1}`),
+      async (t) => {
+        const panel = await detailPanel(t);
+        const owes = within(
+          panel.getByRole('region', { name: t('admin.money.payouts.detail.deductionsTitle') }),
+        );
+        expect(
+          owes.getAllByText(
+            t('admin.money.payouts.detail.platformShare', { amount: amount(t, '700.00') }),
+          ),
+        ).toHaveLength(1);
+      },
+    );
+  });
+});

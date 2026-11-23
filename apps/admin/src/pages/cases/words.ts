@@ -42,6 +42,8 @@ export const REASON: Readonly<Record<Reason, MessageKey>> = {
   gender_correction: 'admin.cases.reason.genderCorrection',
   // 003:T112 (Q-4 (a)): the case of the administrator's end on a complaint against the student.
   student_complaint_ended: 'admin.cases.reason.studentComplaintEnded',
+  // 003:T125 (SRS DEC-96): the case of a student's deletion by an administrator.
+  account_deleted: 'admin.cases.reason.accountDeleted',
 };
 
 /** What a row is: its reason's words, or a complaint by its kind (it has no reason). */

@@ -46,3 +46,23 @@ describe('payments.caseAmount: a close on a student’s ban or confirmed fault (
     expect(stripped.data?.amount).toEqual(FAULT);
   });
 });
+
+// 003:T125 (SRS DEC-104, DEC-96; Q-3 (a)): the case of an end by the administration (the student's
+// stop, a student's deletion by an administrator, a gender correction), `direct_end`: the refund of
+// the sessions not taken and the teacher's release of those consumed, less what was already
+// released. Added additively (R-API-9). Written before the member, run red first.
+describe('payments.caseAmount: an end by the administration (003:T125)', () => {
+  // Ijazah, 10 sessions of 1,000 EGP, 6 delivered, the half (1,750) released: 4,000 / 2,450 more.
+  const DIRECT = {
+    cause: 'direct_end',
+    refund_piasters: 400_000,
+    release_piasters: 245_000,
+    refunded_piasters: 0,
+  };
+
+  it('answers the refund of what was not taken, the release and the refunds recorded', () => {
+    const answered = paymentsCaseAmountOutput.safeParse({ amount: DIRECT });
+    expect(answered.success).toBe(true);
+    expect(answered.data).toEqual({ amount: DIRECT });
+  });
+});
