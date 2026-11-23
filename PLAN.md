@@ -63,7 +63,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 |---|---|---|---|
 | 11/21–11/22 | B-P1 | The tasks commit of PR #154's and #153's follow-ups; R1a starts | |
 | 11/23–11/24 | B-P2 | R1a ends 11/23; R1b starts 11/24, cut after B-P2 merges (both write `share-release.rules.ts`) | The owner: the gateway's contract request |
-| 11/25–11/26 | B-P3 | R1b ends 11/25, with the room's end-to-end encryption (`specs/004-sessions/tasks.md` T084) and its run on both phones; R2 starts | Counsel's answer, 11/26 |
+| 11/25–11/26 | B-P3 | R1b ends 11/25, with the room's end-to-end encryption (`specs/004-sessions/tasks.md` T084) and its run on both phones, and `specs/002-identity/tasks.md` T186; R2 starts, cut after R1b merges (both write the server's configuration files) | Counsel's answer, 11/26 |
 | 11/27–11/29 | B-P4, on today's design: the programme is merged | R2 ends 11/27; R3, the code, 11/28–11/29 | |
 | 11/30–12/1 | The programme's own money review, and its fixes | The before-launch tasks, batch 1 | The design week, days 1 and 2; the owner: the logo, the testers |
 | 12/2–12/3 | `specs/003-booking/tasks.md` T128, once the contract is signed | The before-launch tasks, batch 2 | The design week, days 3 and 4; the store's listing and declarations, the privacy policy and the terms hosted, with the Terms' text (T151, T117) |
