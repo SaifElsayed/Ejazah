@@ -559,6 +559,12 @@ No open question remains.
   > (additive only; deprecate, then remove after a minimum client version), and `contract:snapshot --check` refuses the
   > removal. It stays, marked unused since SRS DEC-112, and the queue never offers it, as `programmeRequestRefusal`'s
   > `assessment_not_delivered` and `offer_sent` stay unused since T008.
+  > **The owner, 2026-11-23, «موافق» (B-P2 lane e's FU-E1 (a)).** On the payouts screen («تحويلات المعلمين»), every
+  > programme release lists the paid orders it draws from, with the amount from each, before the switch is turned on
+  > (B-P4). Today `payouts.service.ts` `releaseLinesOf` shows `order.paymentId`, which for a programme is the
+  > assessment's order for every release (T011 keeps `ReleaseFacts.order` as the first paid order and adds `orders`).
+  > Built here, with the reads (`modules/payments/payouts.*`, the admin payouts page). Example: offer 10,000 EGP by
+  > months, fee 500: `ijazah_half` 1,837.50 lists the assessment (350) and the months it draws from (700 each, capped).
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
