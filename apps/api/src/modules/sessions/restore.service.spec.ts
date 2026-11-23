@@ -165,6 +165,10 @@ let given: {
   takenDates: Set<string>;
   own: { startsAt: Date; endsAt: Date }[];
   held: HeldTime[];
+  /** 006:T010: the weekly times of the student's other active programmes. */
+  programme: HeldTime[];
+  /** 006:T010: what `programmeTimesOf` was asked: the students and the enrollment left out. */
+  programmeAsked: [readonly string[], string][];
   reserved: { remedyId: string; sessionId: string; startsAt: Date; endsAt: Date }[];
   generateFails?: unknown;
   restored: boolean;
@@ -190,6 +194,8 @@ beforeEach(() => {
     takenDates: new Set(),
     own: [],
     held: [],
+    programme: [],
+    programmeAsked: [],
     reserved: [],
     restored: true,
     offered: true,
@@ -259,6 +265,10 @@ function restoreOf(overrides: Partial<RestoreDependencies> = {}) {
       },
       slotWeekTaken: async (_tx, _slot, date) => given.takenDates.has(date),
       heldTimesOf: async () => given.held,
+      programmeTimesOf: async (_tx, students, _window, except) => {
+        given.programmeAsked.push([students, except]);
+        return given.programme;
+      },
     },
     idempotency: {
       runOn: async (_tx, request, effect) => {
@@ -621,6 +631,47 @@ describe('sessions.restore: each cause writes nothing (FR-454, SC-416)', () => {
     if (kind === 'reserved') given.reserved = [{ remedyId: sid(80), sessionId: sid(81), ...time }];
     else given[kind] = [time];
     await expectRefused('time_taken');
+  });
+
+  // 006:T010 (PR #156 r1 Follow-up 1; the owner's rule of 2026-11-05): a recreated session never
+  // lands on the weekly time of another active programme of the student, the restored one left out.
+  it('time_taken: a recreated session overlapping the student’s programme time (006:T010)', async () => {
+    given.programme = [
+      { startsAt: new Date('2026-11-19T07:30:00Z'), endsAt: new Date('2026-11-19T08:30:00Z') },
+    ];
+    await expectRefused('time_taken');
+    expect(given.programmeAsked).toEqual([[[STUDENT], ENROLLMENT]]);
+  });
+
+  // 006:T010 (G-1; R-513; admin-surface.md, `sessions.restore` changed): a programme's enrollment
+  // is never restored (a stopped one is reopened by `programmes.reopen`), refused before any write.
+  it('programme_enrollment: a programme’s enrollment, a closing otherwise restorable (006:T010)', async () => {
+    given.terms = {
+      ...terms(),
+      track: 'ijazah_track',
+      programme: { state: 'active', monthCount: 2, monthsPaid: 1, paymentPlan: 'monthly' },
+    };
+    await expectRefused('programme_enrollment');
+  });
+
+  it('programme_enrollment: restoreClosed refuses it before any write, unmarked, so a lift leaves it ended (006:T010)', async () => {
+    given.terms = {
+      ...terms(),
+      track: 'ijazah_track',
+      programme: { state: 'closed', monthCount: 2, monthsPaid: 1, paymentPlan: 'monthly' },
+    };
+    const thrown: unknown = await restoreOf()
+      .restoreClosed(tx, ADMIN, ENROLLMENT, NOW)
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect((thrown as DomainError).details).toEqual([
+      { path: 'cause', code: 'programme_enrollment' },
+    ]);
+    expect(isRefusedAfterWrite(thrown)).toBe(false);
+    expect(writes()).toEqual([]);
   });
 
   it('time_taken: the database’s exclusion refusing the insert, rolled back with the call', async () => {

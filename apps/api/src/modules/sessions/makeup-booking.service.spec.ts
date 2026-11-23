@@ -87,6 +87,8 @@ interface Options {
   readonly insertThrows?: unknown;
   /** Whether another package keeps the counter's slot on its week (`slotWeekTaken`). */
   readonly slotTaken?: boolean;
+  /** 006:T010: the weekly times of the student's other active programmes (`programmeTimesOf`). */
+  readonly programme?: readonly { startsAt: Date; endsAt: Date }[];
 }
 
 function world({
@@ -95,6 +97,7 @@ function world({
   reserved = [],
   insertThrows,
   slotTaken = false,
+  programme = [],
 }: Options) {
   const journal: string[] = [];
   const logged: { fields: Record<string, unknown>; message: string }[] = [];
@@ -179,6 +182,12 @@ function world({
         journal.push(`slot week ${slotId} ${localDate} ${enrollmentId}`);
         return slotTaken;
       },
+      programmeTimesOf: async (_tx, students, window, except) => {
+        journal.push(
+          `programme ${students.join(',')} ${window.from.toISOString()}..${window.to.toISOString()} ${except}`,
+        );
+        return programme;
+      },
     },
     log: {
       info: (...args: unknown[]) => {
@@ -241,6 +250,8 @@ describe("a make-up's booking (T029, FR-469)", () => {
       expect(journal).toEqual([
         ...locksWith(ENROLLMENT_SLOT),
         `reservations ${TEACHER},${STUDENT} 2026-12-06T07:00:00.000Z..2026-12-06T08:00:00.000Z`,
+        // 006:T010: the student's other active programmes' weekly times, its own left out.
+        `programme ${STUDENT} 2026-12-06T07:00:00.000Z..2026-12-06T08:00:00.000Z ${ENROLLMENT}`,
         'clock',
         'insert',
         `booked ${REMEDY} from awaiting_choice|proposed|counter_proposed`,
@@ -328,6 +339,58 @@ describe("a make-up's booking (T029, FR-469)", () => {
     const { booking, journal } = world({ slotTaken: true });
     await booking.bookOn(tx, PROPOSAL);
     expect(journal.some((entry) => entry.startsWith('slot week'))).toBe(false);
+    expect(journal).toContain('insert');
+  });
+
+  // 006:T010 (PR #156 r1 Follow-up 1; the owner's rule of 2026-11-05): a make-up placed before the
+  // programme existed is never booked onto the weekly time the programme now keeps.
+  it.each([
+    ['proposal', PROPOSAL, remedyIn('proposed'), '2026-12-06T07:30:00Z', '2026-12-06T08:30:00Z'],
+    [
+      'counter',
+      COUNTER_INPUT,
+      remedyIn('counter_proposed'),
+      '2026-12-08T09:00:00Z',
+      '2026-12-08T10:00:00Z',
+    ],
+  ] as const)(
+    "red first: refuses a %s booked onto the student's programme time MAKEUP_REFUSED, cause programme_time, one line, nothing written (006:T010)",
+    async (_kind, input, first, starts, ends) => {
+      const { booking, journal, logged } = world({
+        first,
+        programme: [{ startsAt: new Date(starts), endsAt: new Date(ends) }],
+      });
+      const refused = await refusalOf(booking.bookOn(tx, input));
+      expect(refused.code).toBe('MAKEUP_REFUSED');
+      expect(makeupRefusalOf(refused)).toEqual({ cause: 'programme_time' });
+      expect(journal.some((entry) => entry.startsWith(`programme ${STUDENT} `))).toBe(true);
+      expect(journal).not.toContain('insert');
+      expect(
+        journal.some((entry) => entry.startsWith('booked') || entry.startsWith('events')),
+      ).toBe(false);
+      expect(logged).toEqual([
+        {
+          fields: {
+            remedyId: REMEDY,
+            sessionId: SESSION,
+            enrollmentId: ENROLLMENT,
+            operation: input.operation,
+            errorCode: 'MAKEUP_REFUSED',
+            reason: 'programme_time',
+          },
+          message: 'A make-up booking was refused',
+        },
+      ]);
+    },
+  );
+
+  it('books beside a programme time that does not overlap the make-up (006:T010)', async () => {
+    const { booking, journal } = world({
+      programme: [
+        { startsAt: new Date('2026-12-06T08:00:00Z'), endsAt: new Date('2026-12-06T09:00:00Z') },
+      ],
+    });
+    await booking.bookOn(tx, PROPOSAL);
     expect(journal).toContain('insert');
   });
 
@@ -496,6 +559,7 @@ describe("the booking's transaction (T029, L5: runRetryingDeadlockOnce)", () => 
         enrollmentFor: async () => TERMS,
         lockEnrollments: async () => undefined,
         slotWeekTaken: async () => false,
+        programmeTimesOf: async () => [],
       },
       log: {
         info: () => undefined,
@@ -528,6 +592,7 @@ describe("the booking's transaction (T029, L5: runRetryingDeadlockOnce)", () => 
         enrollmentFor: async () => TERMS,
         lockEnrollments: async () => undefined,
         slotWeekTaken: async () => false,
+        programmeTimesOf: async () => [],
       },
       log: {
         info: (...args: unknown[]) => {

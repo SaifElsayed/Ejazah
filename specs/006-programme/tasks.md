@@ -286,6 +286,32 @@ No open question remains.
   > item is open, after session 1's outcome chain moved the deadline later (a re-resolution or a dispute's outcome),
   > leaves that item open in the queue. The administrator's side is guarded: `programmes.decide` approving it is refused
   > `offer_sent`, so nothing is ended; the item closes with the programme (the close hook withdraws it).
+  > **The owner, 2026-11-23, «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله
+  > ده» (SRS DEC-112).** The bullet «`programme.request` `refusal` and `programmes.decide` approving it» above no longer
+  > holds: the teacher's app has no refusal request.
+  > - `programme.request` takes `stop` only (T017's): the `refusal` kind leaves its input
+  >   (`packages/contracts/src/programme.ts:182`), its refusals `assessment_not_delivered` and `offer_sent` (`:198-199`),
+  >   the service branch, its attacks and its specs; the snapshot regenerated. The `programme_request_kind` value
+  >   `refusal` stays in the database, unused (no migration; data-model.md, ERD changelog row 75).
+  > - The refusal is the `no_offer` path built here: the teacher tells support and sends no offer; at `offer_due_at` the
+  >   item opens; `programmes.decide`'s approve is the refusal (`assessment_refused`, the fee kept, the weekly time freed
+  >   at once through the close hook, the assessment's share per DEC-94). `programmes.decide` loses its `refusal` branch.
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** `programmes.decide` on a `no_offer` item (approve or extend) requires `reason` (1–500), the
+  > administrator's record of what the teacher sent to support, written to `programme_requests.reason` in the decision's
+  > transaction (nullable, `prisma/schema/booking.prisma:214`; rule 80's check,
+  > `prisma/migrations/20261122110318_ijazah_programme/migration.sql:258-260`, lets it through; no migration). Not
+  > `note` (`adminReason`, 1–1000, `packages/contracts/src/admin/admins.ts:10`). Without it the decision is refused
+  > with a cause of `programmesDecideRefusal`, writes nothing and logs ids and the cause, never the text. «Required» is
+  > the service's rule, not a database check. Red first: «a `no_offer` decision without a reason is refused», «the
+  > reason is written on the item».
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B5 (a)).** `programmes.decide` refuses approving a
+  > `no_offer` item while session 1's make-up is pending; the cause joins `programmesDecideRefusal`, red first.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; the three audit labels, as proposed).** Written to
+  > `apps/admin/src/pages/audit/actions.ts` and both catalogues (`apps/admin/src/i18n/ar.json`, `en.json`):
+  > `programme_request.approved` «اعتماد طلب في برنامج الإجازة» / "Programme request approved";
+  > `programme_request.declined` «رفض طلب في برنامج الإجازة» / "Programme request declined";
+  > `programme_request.extended` «تمديد مهلة في برنامج الإجازة» / "Programme deadline extended".
 - [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
   `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
   `checkout.repository.ts`:
@@ -320,6 +346,10 @@ No open question remains.
   > optional `programmeOrder: { enrollmentId, expiresAt, canContinue }` (`packages/contracts/src/checkout.ts`,
   > additive, the snapshot regenerated): not a hold, only the student's payable programme order; `continue` with its
   > enrollment hands its page back.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-C5 (a)).** FR-BOOK-12 with a bare hold: `checkout.pay`
+  > refuses `PREVIOUS_CHECKOUT` while a programme order of the student is payable, as a payable checkout refuses
+  > `programme.pay` (`modules/booking/programmes.service.ts:673-680`; the error built at `checkout-holds.service.ts:139`),
+  > red first.
 - [ ] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
   - `modules/sessions/completion.service.ts`: a programme completes only when fully paid and not `awaiting_offer`,
     `offered` or `paused`. Red first on «a paid month settled, the next unpaid, 72 h passed».
@@ -397,6 +427,10 @@ No open question remains.
   > deletes none): `worker.ts:231`'s `createEnrollmentSide` (its closes also write no line, no log bound) and
   > `createBookingServices` (`booking-slots.service.ts`) for `programme.cancel`. T013 binds payments' entry and the
   > log in both when the card becomes real.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B2 (a)).** T013 binds payments' `deleteProgrammeCard` and the
+  > log into booking's close hook where it is built: in `worker.ts`'s `createEnrollmentSide` (`apps/api/src/worker.ts:231`)
+  > and in `createBookingServices` (`apps/api/src/main.ts:398`), replacing T008's stub. A close the worker runs then
+  > writes its log line as the API's does (ids and a reason only), red first.
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
@@ -452,6 +486,9 @@ No open question remains.
   > config.PAYMENT_MODE, cipher })` (no T008 path in `main.ts` reads the mode) and `deleteProgrammeCard`. Its live
   > signal goes on the transaction's bound publisher, none in the worker until T015 binds one. An order of
   > `programme.pay` still `created` at `pay_by_at` (A-1) is not read by T008's lapse: T015's «pending» decides it.
+  > **The owner, 2026-11-23, «موافق عالكل» (SRS DEC-112; Q-B3 (a)).** T015 binds payments'
+  > `createProgrammePayee({ paymentMode, cipher })` («unverified in live mode», T008's entry) in `worker.ts` for the
+  > sweep's `pay_by` step; T016 and T018 bind it in `main.ts`.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -512,6 +549,11 @@ No open question remains.
     verified now) and `programmes.get`
     (admin);
   - the monitor's `kind`, `instalmentMonth`, `automatic`, `declineKind` (`payments-monitor.*`).
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** The queue has no `refusal` filter (`packages/contracts/src/admin/programme.ts:31` removed, the snapshot
+  > regenerated): no new refusal item can exist (T008's note). `programmes.queue` and the admin `programmes.get` (the
+  > programme's history) read a `no_offer` item's `reason`, the administrator's record written by `programmes.decide`
+  > (T008), beside the item; `programmeRequestItem.reason`'s comment (`:48-49`) says so.
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
@@ -538,6 +580,11 @@ No open question remains.
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
     is true, a line that the offer is with the administration because the payout account was not verified, FR-706b).
+  > **The owner, 2026-11-23, «لا متخليش في زر رفض الطلب في التصميم / لازم بقى يخش يكلم الدعم من الاعدادات ومش هنوضحله
+  > ده»; «طلب الايقاف يفضل زرار بس بيظهر بعد ال 7 ايام» (SRS DEC-112).** No refusal request and no refusal button: a
+  > teacher who wants to refuse contacts support from settings, and the app does not explain this (no line, no hint).
+  > The stop request stays a button, shown only from `paused_at` + 7 days (`programme_stop_request_days`, §3.14); the
+  > server's `too_early` stays the guard (FR-723).
 - [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
@@ -545,6 +592,11 @@ No open question remains.
   - the monitor's columns;
   - the `programme_enabled` setting's label explaining what flipping it does;
   - `admin.programme` i18n.
+  > **The owner, 2026-11-23, «بس خلي جنب مفيش عرض السبب اللي العرض متعملش بسببه او اللي المعلم بعته يعني» (SRS
+  > DEC-112).** The queue has no `refusal` filter (T018's note). Beside a `no_offer` item the panel shows why the offer
+  > was not made, i.e. what the teacher sent to support, as recorded; deciding the item (approve, the refusal; or
+  > extend) asks for that reason (1–500, mandatory, T008's note), and the dialog explains itself: approve closes the
+  > programme as refused, the fee kept, the weekly time freed; extend gives the teacher 24 hours more from now.
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.

@@ -70,6 +70,26 @@ export type EnrollmentEventKind =
   | 'programme_resumed'
   | 'programme_reopened';
 
+/** 006:T010: `programmes.state` (data-model.md, `programme_state`). */
+export type ProgrammeState = 'awaiting_offer' | 'offered' | 'active' | 'paused' | 'closed';
+
+/** 006:T010: `programmes.payment_plan` (data-model.md, `programme_plan`). */
+export type ProgrammePlan = 'in_full' | 'monthly';
+
+/**
+ * 006:T010 of specs/006-programme (FR-712; research R-501, V-1): what the completion gate reads of
+ * an enrollment's `programmes` row, through `enrollmentFor` (B-P2's conflict check, Q-8 (a)).
+ */
+export interface ProgrammeTerms {
+  readonly state: ProgrammeState;
+  /** `month_count`, ⌈N ÷ 4⌉, set at the offer; null before it. */
+  readonly monthCount: number | null;
+  /** `months_paid`, the highest paid month; in full, `month_count`. */
+  readonly monthsPaid: number;
+  /** `payment_plan`, null until the first payment. */
+  readonly paymentPlan: ProgrammePlan | null;
+}
+
 /**
  * What `enrollmentFor` answers: the enrollment's snapshot, its slot, its status (R-301) and its two
  * parties (the note under T064, B34).
@@ -91,6 +111,8 @@ export interface EnrollmentTerms {
   readonly studentUserId: string;
   /** `teacher_user_id`, the enrollment's teacher; it never changes. */
   readonly teacherUserId: string;
+  /** 006:T010: its `programmes` row; absent on an enrollment that is no programme. */
+  readonly programme?: ProgrammeTerms;
 }
 
 /**
