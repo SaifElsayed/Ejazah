@@ -55,10 +55,12 @@
 // T029 books the counter (`sessions.remedy.answerCounter`). A booking the database refuses (an
 // exclusion it names, `sessions_teacher_no_overlap` or `sessions_student_no_overlap`), or T029 refuses
 // on a week another package keeps the counter's slot (`slot_taken`, which lasts: the owner's decision
-// (b) under T032, FR-MAKEUP-4), answers T029's `MAKEUP_REFUSED` and, in a second transaction under the
-// same locks, releases the counter as a decline does: its columns cleared, `proposed`, one
-// `counter_booking_refused` row (never `counter_withdrawn`), and one warn line
-// `{ sessionId, enrollmentId, constraint }` (the exclusion's name, or `slot_taken`) and nothing else;
+// (b) under T032, FR-MAKEUP-4) or (006:T010, Q-D1 (a) on that precedent) on the student's
+// programme time (`programme_time`, which recurs on every week), answers T029's `MAKEUP_REFUSED`
+// and, in a second transaction under the same locks, releases the counter as a decline does: its
+// columns cleared, `proposed`, one `counter_booking_refused` row (never `counter_withdrawn`), and
+// one warn line `{ sessionId, enrollmentId, constraint }` (the exclusion's name, `slot_taken` or
+// `programme_time`) and nothing else;
 // so the sweep never reads it as unanswered. A reserved time or a second deadlock refuses with the
 // counter left pending, the teacher free to answer again before its window closes (Q4 (a)). Decline:
 // the counter released, `proposed`, one `counter_declined` row. After either release, once the
@@ -824,10 +826,18 @@ export function createRemedyServices({
     } catch (error: unknown) {
       const refused = refusalOf(error);
       // A lasting refusal releases the counter: the database's exclusion, or a week another
-      // package keeps (`slot_taken`, the owner's decision (b) under T032). A reserved time or a
-      // second deadlock may pass, and leaves it pending (Q4 (a)).
-      if (refused?.cause !== 'overlap' && refused?.cause !== 'slot_taken') throw error;
-      const constraint = refused.cause === 'overlap' ? refused.constraint : 'slot_taken';
+      // package keeps (`slot_taken`, the owner's decision (b) under T032), or (006:T010, Q-D1 (a)
+      // on that precedent) the student's programme time, which recurs on every week
+      // (`programme_time`). A reserved time or a second deadlock may pass, and leaves it pending
+      // (Q4 (a)).
+      if (
+        refused?.cause !== 'overlap' &&
+        refused?.cause !== 'slot_taken' &&
+        refused?.cause !== 'programme_time'
+      ) {
+        throw error;
+      }
+      const constraint = refused.cause === 'overlap' ? refused.constraint : refused.cause;
       const release = await transactions.run((tx) =>
         released(tx, sessionId, userId, log, 'own_and_counter', 'counter_booking_refused'),
       );
