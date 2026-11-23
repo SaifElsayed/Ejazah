@@ -90,6 +90,9 @@ export const applicationHistoryAction = z.enum([
   'request_info',
   'ban',
   'revoke',
+  // 002:T186 (R1b; SRS DEC-97; ERD changelog row 79): an ever-approved teacher's earlier call notes,
+  // kept when a new call is recorded; added, additively (R-API-9).
+  'call_replaced',
 ]);
 
 /** One decision on the application or one revocation of approval, its note, who and when. */

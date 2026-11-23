@@ -490,7 +490,7 @@
           "$.history[].action": {
             "required": true,
             "type": "string",
-            "values": ["approve", "ban", "reject", "request_info", "revoke"]
+            "values": ["approve", "ban", "call_replaced", "reject", "request_info", "revoke"]
           },
           "$.history[].adminName": { "required": true, "type": "string" },
           "$.history[].at": { "required": true, "type": "string" },

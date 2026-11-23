@@ -21,7 +21,8 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 type Client = Pick<Transaction, 'teacherProfile' | 'teacherApplicationHistory'>;
 
 /** `teacher_application_history_action`. */
-export type ApplicationHistoryAction = 'approve' | 'reject' | 'request_info' | 'ban' | 'revoke';
+export type ApplicationHistoryAction =
+  'approve' | 'reject' | 'request_info' | 'ban' | 'revoke' | 'call_replaced';
 
 /** One decision to record: whose application, what, its note (null only on approve), who and when. */
 export interface ApplicationHistoryEntry {
