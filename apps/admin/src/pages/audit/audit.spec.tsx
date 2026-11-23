@@ -606,6 +606,75 @@ const T105_PAYOUT_ACTIONS: readonly (readonly [string, string, string])[] = [
   ['payout_release.unmarked', 'التراجع عن صرف مستحق لمعلم', "Undo a teacher's release paid mark"],
 ];
 
+// 003:T126 (SRS DEC-96's last clause; the owner's Q15 (a)): a release's mark and unmark carry the
+// release in `after`, its id, enrollment, part and amount in piasters. The entry labels the four
+// fields and shows the amount in pounds (the payouts page's formatter) and the part in the payouts
+// page's words, in both languages: never 700000, never `recitation_end`.
+describe('003:T126: a release’s mark and unmark name the release and its amount', () => {
+  const RELEASE = '0193a6f0-0000-7000-8000-0000000000f1';
+  const ENROLLMENT = '0193a6f0-0000-7000-8000-0000000000d1';
+  const RELEASES = [
+    [
+      'payout_release.marked',
+      'recitation_end',
+      700_000,
+      '7,000.00',
+      'admin.money.payouts.part.recitationEnd',
+    ],
+    [
+      'payout_release.unmarked',
+      'ijazah_half',
+      175_000,
+      '1,750.00',
+      'admin.money.payouts.part.ijazahHalf',
+    ],
+    [
+      'payout_release.unmarked',
+      'direct_end',
+      280_000,
+      '2,800.00',
+      'admin.money.payouts.part.directEnd',
+    ],
+  ] as const;
+
+  it.each(RELEASES)(
+    '%s of a %s release of %d piasters reads its four fields, the amount in pounds and the part in words',
+    async (action, milestone, amount, pounds, part) => {
+      const api = fakeApi();
+      api.audit.get.query.mockResolvedValue({
+        ...suspended,
+        action,
+        after: {
+          releaseId: RELEASE,
+          enrollmentId: ENROLLMENT,
+          milestone,
+          amount_piasters: amount,
+        },
+      });
+      await inBothLocales(
+        () => open(api),
+        async (t) => {
+          const cells = await screen.findAllByText(t('admin.audit.actions.teacherSuspend'));
+          fireEvent.click(cells.map((cell) => cell.closest('tr')).find(Boolean) as HTMLElement);
+          const detail = within(
+            await screen.findByRole('complementary', { name: t('admin.audit.a11y.detail') }),
+          );
+          expect(await detail.findByText(RELEASE)).toBeTruthy();
+          for (const field of ['releaseId', 'enrollmentId', 'milestone', 'amount'] as const) {
+            expect(detail.getByText(t(`admin.audit.fields.${field}`))).toBeTruthy();
+          }
+          expect(detail.getByText(ENROLLMENT)).toBeTruthy();
+          expect(detail.getByText(t('admin.common.amount', { amount: pounds }))).toBeTruthy();
+          expect(detail.getByText(t(part))).toBeTruthy();
+          for (const raw of [String(amount), milestone, 'amount_piasters', 'milestone']) {
+            expect(detail.queryByText(raw)).toBeNull();
+          }
+        },
+      );
+    },
+  );
+});
+
 describe('003:T105: the payouts page’s actions by name', () => {
   it.each(T105_PAYOUT_ACTIONS)(
     '%s reads «%s» and "%s", never the stored code',

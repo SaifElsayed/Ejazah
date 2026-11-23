@@ -273,6 +273,24 @@ export function payoutsStoreOver(cipher: Pick<ColumnCipher, 'decrypt'>): Payouts
   };
 }
 
+/**
+ * 003:T126 (SRS DEC-96's last clause; Q15 (a)): the release a mark or an unmark touched, as its
+ * audit entry's `after` names it: ids and an amount, no personal data. Read before the write, so the
+ * unmark's names the release although it clears the mark's columns; the key's row stores it (JSON).
+ */
+export type MarkedRelease = {
+  readonly releaseId: string;
+  readonly enrollmentId: string;
+  readonly milestone: ShareReleaseMilestone;
+  readonly amount_piasters: Piasters;
+};
+
+/** What a mark or an unmark answers: the teacher and the release, for the audit entry. */
+export type MarkOutcome = {
+  readonly teacherUserId: string;
+  readonly release: MarkedRelease;
+};
+
 /** The teacher's read and the administrator's four procedures. */
 export interface Payouts {
   /** `teacher.dues.get`: the caller's own releases and his share of each refund. */
@@ -281,18 +299,31 @@ export interface Payouts {
   list(tx: Transaction, adminId: string, input: PayoutsListInput): Promise<PayoutsListOutput>;
   /** `payouts.get`. */
   get(tx: Transaction, adminId: string, teacherUserId: string): Promise<PayoutsGetOutput>;
-  /** `payouts.mark`, keyed; the marked release's teacher, for the audit entry. */
+  /** `payouts.mark`, keyed; the marked release and its teacher, for the audit entry. */
   mark(
     tx: Transaction,
     adminId: string,
     input: PayoutsMarkInput,
-  ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
-  /** `payouts.unmark`, keyed; a mark made in error undone; the teacher, for the audit entry. */
+  ): Promise<MarkOutcome & { readonly replayed: boolean }>;
+  /** `payouts.unmark`, keyed; a mark made in error undone; the release and its teacher, as `mark`. */
   unmark(
     tx: Transaction,
     adminId: string,
     input: PayoutsUnmarkInput,
-  ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
+  ): Promise<MarkOutcome & { readonly replayed: boolean }>;
+}
+
+/** The release `row` as a mark's or an unmark's outcome names it. */
+function markOutcomeOf(row: ReleaseRow): MarkOutcome {
+  return {
+    teacherUserId: row.teacherUserId,
+    release: {
+      releaseId: row.id,
+      enrollmentId: row.enrollmentId,
+      milestone: row.milestone,
+      amount_piasters: row.amount_piasters,
+    },
+  };
 }
 
 export interface PayoutsDependencies {
@@ -575,7 +606,7 @@ export function createPayouts({
     },
 
     mark: async (tx, adminId, { releaseId, idempotencyKey }) => {
-      const { outcome, replayed } = await idempotency.runOn<{ teacherUserId: string }>(
+      const { outcome, replayed } = await idempotency.runOn<MarkOutcome>(
         tx,
         { scope: MARK_SCOPE, key: idempotencyKey, actorId: adminId, input: { releaseId } },
         async (on) => {
@@ -595,14 +626,14 @@ export function createPayouts({
             },
             "A release of the teacher's share was marked paid",
           );
-          return { teacherUserId: release.teacherUserId };
+          return markOutcomeOf(release);
         },
       );
-      return { teacherUserId: outcome.teacherUserId, replayed };
+      return { ...outcome, replayed };
     },
 
     unmark: async (tx, adminId, { releaseId, reason, idempotencyKey }) => {
-      const { outcome, replayed } = await idempotency.runOn<{ teacherUserId: string }>(
+      const { outcome, replayed } = await idempotency.runOn<MarkOutcome>(
         tx,
         {
           scope: UNMARK_SCOPE,
@@ -627,10 +658,11 @@ export function createPayouts({
             },
             "A release of the teacher's share was unmarked",
           );
-          return { teacherUserId: release.teacherUserId };
+          // The figures of the read before the write (T126): the unmark clears the mark only.
+          return markOutcomeOf(release);
         },
       );
-      return { teacherUserId: outcome.teacherUserId, replayed };
+      return { ...outcome, replayed };
     },
   };
 }
