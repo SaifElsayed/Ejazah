@@ -67,6 +67,8 @@ export interface ReleaseSession {
   readonly outcome: string | undefined;
   /** A make-up's: the sequence number of the original session it makes up, through any chain. */
   readonly madeUpSequence?: number;
+  /** 006:T012 (R-507, R-512): an offer session's programme month; absent on every other. */
+  readonly programmeMonth?: number;
 }
 
 /** A paid order and its share (ERD §7). */
@@ -211,6 +213,63 @@ export function complaintCloseAmount(
 /** Q-B1-4 (a): the sequence number a session is valued by, a make-up's original's. */
 export function valuedSequence(session: ReleaseSession): number {
   return session.madeUpSequence ?? session.sequenceNumber;
+}
+
+/** 006:T012 (R-502): an order as a programme's sessions are valued by it. */
+export interface PlacedOrder {
+  readonly kind: ReleaseOrder['kind'];
+  /** An `instalment` order's month; null on any other. */
+  readonly instalmentMonth: number | null;
+}
+
+/** 006:T012: the order a programme's session is valued by, that order's sessions, and its place. */
+export interface SessionPlace<O extends PlacedOrder> {
+  readonly order: O;
+  readonly count: number;
+  readonly position: number;
+}
+
+/**
+ * 006:T012 (R-512 «the closes' amounts per session», analyze G-3): each of a programme's sessions, by
+ * its sequence number, with the order that paid it and its place among that order's sessions. Session
+ * 1 is the assessment's (1 of 1: the fee). In full, the k-th offer session is the rest's (k of N:
+ * (total − fee) ÷ N). By months, the k-th session of month m is that month's order's (k of the month's
+ * sessions). Offer sessions are those with a programme month, make-ups aside: a make-up is valued by
+ * the session it makes up (`valuedSequence`). A session of a month not paid has none. A second paid
+ * order of a month or of the rest goes to its own case (Q-B1-10 (a)): the first by id is the one.
+ */
+export function programmePlaces<O extends PlacedOrder>(
+  orders: readonly O[],
+  sessions: readonly ReleaseSession[],
+): ReadonlyMap<number, SessionPlace<O>> {
+  const places = new Map<number, SessionPlace<O>>();
+  const assessment = orders.find(({ kind }) => kind === 'assessment');
+  if (assessment !== undefined) places.set(1, { order: assessment, count: 1, position: 1 });
+  const offer = sessions
+    .filter((one) => one.madeUpSequence === undefined && one.programmeMonth !== undefined)
+    .toSorted((a, b) => a.sequenceNumber - b.sequenceNumber);
+  const place = (order: O, members: readonly ReleaseSession[]): void => {
+    members.forEach((one, index) => {
+      places.set(one.sequenceNumber, { order, count: members.length, position: index + 1 });
+    });
+  };
+  const rest = orders.find(({ kind }) => kind === 'rest_in_full');
+  if (rest !== undefined) {
+    place(rest, offer);
+    return places;
+  }
+  const months = new Map<number, ReleaseSession[]>();
+  for (const one of offer) {
+    if (one.programmeMonth === undefined) continue;
+    months.set(one.programmeMonth, [...(months.get(one.programmeMonth) ?? []), one]);
+  }
+  for (const [month, members] of months) {
+    const paid = orders.find(
+      ({ kind, instalmentMonth }) => kind === 'instalment' && instalmentMonth === month,
+    );
+    if (paid !== undefined) place(paid, members);
+  }
+  return places;
 }
 
 /** The teacher's share of the order's refunded total, «عليه» (Q-6 as revised: T104's rounding up). */

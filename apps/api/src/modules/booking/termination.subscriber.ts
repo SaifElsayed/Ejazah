@@ -110,8 +110,14 @@
 // paused case's closing (`disputes` last): the programme `closed`, its open items `withdrawn` (a
 // `pay_blocked` item among them: a ban, a departure or a deletion ends it, FR-706b), payments'
 // `deleteProgrammeCard`, handed in by `main.ts` (a stub until T013), one line each. A suspension
-// keeps its enrollments `confirmed`, so it closes no programme (T012 deletes the card at a
-// suspension).
+// keeps its enrollments `confirmed`, so it closes no programme.
+//
+// A TEACHER'S SUSPENSION AND THE SAVED CARD (006:T012 of specs/006-programme; DEC-94, FR-729). The
+// programme's saved card is deleted at once at a teacher's suspension, ban or departure. A ban or a
+// departure closes the programme, so the close hook deletes it; a suspension closes nothing, so it
+// calls payments' `deleteProgrammeCard` itself, after the remedies are frozen, for each enrollment it
+// paused that carries a programme (booking's `programmeStateOf`, on the programme's row already held
+// above), one info line each, ids and the reason only. A student's suspension deletes none.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { LockedTable } from '../../platform/db/row-lock.js';
 import { publisherOn } from '../../platform/live/live-publisher.js';
@@ -143,6 +149,7 @@ import {
   type ProgrammeCloseCause,
   type ProgrammeCloseDependencies,
 } from './programme-close.service.js';
+import { type ProgrammeState, programmeStateOf } from './programmes.repository.js';
 import {
   type OrderStandings,
   type ReleaseDependencies,
@@ -221,6 +228,8 @@ export interface TerminationStore extends PausedCaseStore {
     cause: ProgrammeCloseCause,
     dependencies: ProgrammeCloseDependencies,
   ): Promise<readonly string[]>;
+  /** 006:T012: the enrollment's programme's state, null for an enrollment that is no programme. */
+  programmeStateOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeState | null>;
 }
 
 /** The store over catalog's entry and booking's holds. */
@@ -241,6 +250,7 @@ export const terminationStore: TerminationStore = {
   cancelConfirmed,
   recordEvents: recordEnrollmentEvents,
   closeProgrammes,
+  programmeStateOf,
   // T071: through sessions' entry, over moderation's.
   ...pausedCaseStore,
 };
@@ -391,6 +401,29 @@ function endOf(cause: TerminationCause, role: Role): End | null {
   return null;
 }
 
+/**
+ * 006:T012 (DEC-94, FR-729; this file's head): a teacher's suspension deletes the saved card of each
+ * enrollment it paused that carries a programme, on the transaction (one transaction holds them, so
+ * one by one); one info line each, ids and the reason only.
+ */
+async function deleteSuspendedCards(
+  tx: Transaction,
+  enrollmentIds: readonly string[],
+  {
+    store,
+    programmes,
+  }: { readonly store: TerminationStore; readonly programmes: ProgrammeCloseDependencies },
+): Promise<void> {
+  for (const enrollmentId of enrollmentIds) {
+    if ((await store.programmeStateOf(tx, enrollmentId)) === null) continue;
+    await programmes.deleteProgrammeCard(tx, enrollmentId);
+    programmes.log.info(
+      { enrollmentId, reason: 'teacher_suspended' },
+      'A programme’s saved card was deleted at its teacher’s suspension',
+    );
+  }
+}
+
 /** What one account's end decided on its confirmed enrollments, the log line's counts. */
 interface Decided {
   readonly enrollments: number;
@@ -467,6 +500,9 @@ async function endConfirmed(
     keeps ? { remedies: 'lockOnly' } : {},
   );
   const frozen = keeps ? await store.freezeOpenRemedies(tx, ids, at) : NOTHING_FROZEN;
+  if (keeps && end.caseReason === 'teacher_suspended') {
+    await deleteSuspendedCards(tx, ids, { store, programmes });
+  }
   if (end.cancellation !== null) {
     const cancellationReason = end.cancellation;
     await store.cancelConfirmed(tx, ids, cancellationReason);
