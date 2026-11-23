@@ -19,8 +19,9 @@ The ijazah track's programme on top of what track 2 built:
   A failed charge is retried on a soft decline only (days 1, 3, 5, 7).
 - **The pause:** an unpaid month at its first occurrence. A late payment generates the month from the next
   occurrence, so the missed sessions fall at the end by construction.
-- **Requests:** the teacher's stop request after 7 days, and the refusal request after the assessment, both decided
-  by an administrator.
+- **Requests:** the teacher's stop request after 7 days, decided by an administrator. A teacher who refuses after the
+  assessment reaches support; the `no_offer` item's approval is the refusal, with the reason the administrator records
+  (SRS DEC-112, 2026-11-23).
 - **Releases (DEC-94):** the assessment's share on its own only when the student does not continue. Otherwise:
   - 25 % of the share of the programme's whole price (in full: the offer's total; by months: the total and the fee) at half the N+1 sessions;
   - the rest at the end;
@@ -111,7 +112,7 @@ The integration wires `context.ts`, `app.router.ts`, `admin.router.ts`, `main.ts
 | Batch | When (DEC-92) | Tasks (summary) |
 |---|---|---|
 | B-P1 | 11/21–11/22 | Migration, schema, ERD; settings; contracts; the three prices and the catalogue; the assessment's booking and confirmation; order kinds in the confirm step |
-| B-P2 | 11/23–11/24 | The offer; the 48 hours and the refusal request; paying in full or a month (rates copied, generation by month); the completion gate; the releases (the assessment when not continued, the half on the programme's whole price, the end); the case amounts per order |
+| B-P2 | 11/23–11/24 | The offer; the 48 hours and the refusal through the `no_offer` item (DEC-112); paying in full or a month (rates copied, generation by month); the completion gate; the releases (the assessment when not continued, the half on the programme's whole price, the end); the case amounts per order |
 | B-P3 | 11/25–11/26 | Saved cards (port, adapters, encrypted rows, erasure); the automatic charge; `advance-programmes` (due, charge, retry, pause, lapse); manual renewal; the stop request, the close and its release; reopen |
 | B-P4 | 11/27–11/29, on today's design (amended 2026-11-21, `PLAN.md`, «The calendar to the closed test») | Phone (student, teacher), panel pages, adversarial registrations and i18n, the quickstart run and the documents |
 
