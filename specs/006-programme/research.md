@@ -114,6 +114,9 @@ Settled by the review session on recorded precedents:
     - It is set when session 1 is settled `done` or `student_no_show` (consumed: the student missed it, the fee kept).
       A teacher's no-show, a both-no-show, a cancellation by agreement or a postponement is made up (DEC-84, DEC-86),
       and the window follows the make-up's delivery (analyze U-2).
+    - Booking derives it from session 1's current outcome chain on every read while the programme is
+      `awaiting_offer` and writes the derived value, so a re-resolution or a dispute's outcome moves it (B-P2, Q-3 (a)
+      amended, 2026-11-23; T008's note).
     - Any other end of session 1 with no make-up pending (a remedy that lapses, a dispute unresolved past 24 h after
       its scheduled end) opens the `no_offer` Administrator item at its scheduled end + 24 h, so the weekly time is
       never reserved for ever (analyze N-2).
@@ -275,7 +278,9 @@ Settled by the review session on recorded precedents:
   `last4` and the brand may be returned, to the student only.
 - **One close hook** (analyze G-5, N-6): booking's cancel path, for every closing reason (today's and the programme's),
   sets `programmes.state = closed` and `closed_at` on its own table, then calls payments' entry `deleteProgrammeCard`
-  only to delete the card row (R-API-6: each module writes its own tables).
+  only to delete the card row (R-API-6: each module writes its own tables). Built in T008 and wired into every cancel
+  path that can close a programme, the programme's row locked before the enrollment's; until T013 the card call is a
+  stub (B-P2, Q-2 (a), 2026-11-23).
 - **Erasure:** the card row is deleted by the account's erasure (`identity/deletion.service.ts`,
   `identity/consequences.ts`, `jobs/erase-kept-data.ts`; `main.ts` wiring is the integration's; analyze G-10).
 - «Change card» = a manual payment of a due month with consent ticked; its `card_saved` replaces the row.
@@ -302,10 +307,10 @@ order (ADR 0025 D6, FR-702).
       snapshot count.
     - Today the base is the first paid order's share (`share-release.rules.ts:246`; `shareOrdersOf`, repository
       `:129-156`). For a programme that order is the assessment, so the change is red first.
-  - **`ijazah_end`:** the shares of all the programme's paid orders − the half released or owed − the refund share
-    (analyze U-4).
-  - **`programme_stopped`** (a new milestone, an approved stop): the shares of the paid orders − the half released or
-    owed − the refund share, after the last delivered session's window, no case open.
+  - **`ijazah_end`:** the shares of all the programme's paid orders − every release written and the half owed − the
+    refund share (analyze U-4; B-P2, Q-5 (a), 2026-11-23).
+  - **`programme_stopped`** (a new milestone, an approved stop): the shares of the paid orders − every release written
+    and the half owed − the refund share, after the last delivered session's window, no case open.
 - **The closes' amounts per session** (analyze G-3): DEC-86 and DEC-91's refunds and `student_complaint_close`'s
   release value a session by **its own order**: the assessment = the fee; a month's session = the month's order ÷ its
   sessions; in full = (total − fee) ÷ N. Today they take the first order ÷ the count (`case-amount.rules.ts:121,137-168`;

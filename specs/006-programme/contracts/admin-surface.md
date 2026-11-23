@@ -1,4 +1,4 @@
-# Admin surface: the programme (admin router)
+# Admin surface: the programme (admin router, `modules/booking/programmes-admin.router.ts`, mounted as `programmes`)
 
 Additive only. Schemas in `packages/contracts/src/admin/programme.ts`. Each mutation is audited (R-API-12), rate
 limited by the existing administrator limit, and keyed by an `idempotencyKey`. No card detail appears in an output or

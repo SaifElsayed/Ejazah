@@ -4,7 +4,8 @@ One forward migration in B-P1 (`<stamp>_ijazah_programme`, stamped after `202611
 migration merged first), with the new enum values committed first (the `20261108120000_sessions_pass:19-28`
 precedent). Every timestamp is `timestamptz` and ends `_at`. Owners follow `packages/config/module-tables.json`. The
 ERD gains a dated block at its end, rows from 65 and §15 rules from 70 (B-M4's reservation with B50); no version line
-changes.
+changes. One more in B-P2 (`<stamp>_programme_card_consent`, stamped after
+`20261122111346_teacher_decision_histories`; ERD row 74, §15 rule 82; Q-4 (a), 2026-11-23).
 
 ## Changed: `packages` (catalog; R-503)
 
@@ -23,6 +24,8 @@ changes.
 - New: `attempt` smallint NULL (an automatic charge's attempt, 0–4) and `automatic` boolean NOT NULL DEFAULT false.
 - New: `decline_kind` `decline_kind` NULL (`soft` · `hard`), set on a `failed` automatic order.
 - New: `confirmed_at` timestamptz NULL: the confirm step's per-order marker (V-3).
+- New (B-P2, T009): `card_consent_at` timestamptz NULL: the instant `saveCard` was ticked on a programme order;
+  copied into `programme_cards.consented_at` by T013.
 - `gateway_order_id` becomes NULL-able, with a check: NULL only on an `automatic` order in `created` (until the
   gateway answers), `expired` (never answered), or `failed` with `decline_kind = 'hard'` (refused before the gateway,
   `no_payee`; PR #153 r3 Major 1). The unique index keeps non-NULL values unique (analyze N-3).
@@ -51,7 +54,7 @@ changes.
 |---|---|---|
 | `enrollment_id` | uuid PK, FK → `enrollments` | an `ijazah_track` enrollment created by an assessment |
 | `state` | enum `programme_state`: `awaiting_offer` · `offered` · `active` · `paused` · `closed` | |
-| `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); set when session 1 is settled `done` or `student_no_show`, or by the make-up's delivery (R-505, I-2 (a)); an extension adds 24 h |
+| `offer_due_at` | timestamptz NULL | the delivered assessment's end + `programme_offer_hours` (24); derived by booking from session 1's current outcome chain (settled `done` or `student_no_show`, or its make-up's delivery) on every read while `awaiting_offer`, the column holding the last derived value (R-505, I-2 (a); B-P2, Q-3 (a) amended, 2026-11-23); an extension adds 24 h |
 | `pay_by_at` | timestamptz NULL | the spec's «pay_by»: the offer's time + `programme_pay_rest_hours` (48), set at the offer (R-505); named `_at` by ERD §0 (B-P1, Q-A1 (a), 2026-11-22) |
 | `level`, `readiness`, `expected_length` | text NULL (1–500) | set at the offer |
 | `offered_at` | timestamptz NULL | set once; the count (N+1), length and total frozen on the enrollment then |

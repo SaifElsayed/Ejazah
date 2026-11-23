@@ -191,6 +191,8 @@ No open question remains.
   > money-lane review. Not scheduled apart from T006.
   > **B-P1's conflict check (2026-11-22).** The close hook's lock order stays with the 11/30 money review; T006's
   > `kernel.md` row states the confirm step's own order only.
+  > **B-P2 (the owner, 2026-11-23, «موافق على الكل (أ)», Q-2 (a)).** The close hook's lock order is settled in T008
+  > (the programme before the enrollment on every cancel path), with its race spec; the 11/30 money review checks it.
   > **Done (B-P1, 2026-11-22).** The per-order `confirmed_at`; the expected kinds skip the cover and case gates; a month
   > paid during an open suspension case opens `party_restricted` (PR #153 r1 Minor 2's precedent); the no-hold path from
   > max+1 with `programme_month`; a second paid month → `duplicate_payment`; a refused generation opens a case and cancels
@@ -215,6 +217,17 @@ No open question remains.
     `count_out_of_bounds`, `teacher_not_active`.
   - The amounts from `packages/money` through payments' entry (K-5).
   - A live `enrollment` signal after commit; adversarial registration.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** `programme` is a list of its own beside
+  > `SESSION_ROUTERS`, read by the reach and spread into `ATTACKED_ROUTERS`, not inside `SESSION_ROUTERS` (whose FR-496
+  > kinds do not apply). «Under the package's lock» is the teacher's `users` row, the lock every price writer takes
+  > (kernel.md, the `006:T002` row), then `programmes`, then `enrollments`. The amounts come from a payments function
+  > exported from `payments/index.ts` (K-5).
+  > **PR #156 r2 Minor 2 (carried, Q-6 (a)).** The offer's snapshot price is written from
+  > `booking/programmes.repository.ts`, so `tests/pipeline/admin-writes-no-money.spec.ts`'s `allowedBecause` names it
+  > with `006:T007`; in the same change it names `price30Piasters`, `price45Piasters` and `price60Piasters` for
+  > `catalog/packages.repository.ts` with `006:T004`, the scanner reads those keys inline or follows a same-file
+  > function's returned object, and the listing pins `insertPackage` and `changePackage` again; red first on M-G7 (a
+  > price written from an admin file through a helper's return).
 - [ ] T008 [US2] The 48 hours, the cancellation, the refusal and the missing offer (FR-706, FR-707, FR-709; R-505, R-513; I-2 (a)):
   - `offer_due_at` = the delivered assessment's end + 24 h (set when session 1 is `done`; a make-up moves it); `pay_by` = the offer + 48 h;
   - no offer by `offer_due_at` → the `no_offer` Administrator item (never a lapse; the weekly time stays reserved); `programmes.decide` approve (a refusal) or extend (`programme_offer_hours` more, counted from the decision);
@@ -243,6 +256,24 @@ No open question remains.
     T013's payments entry; until T013, a stub whose call the specs assert), freeing the weekly time at once
     (`slot-occupancy.repository.ts`).
   - Live signals; adversarial registrations.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»; Q-3 amended, «موافق على التعديل»).**
+  > - Q-2 (a): the close hook is built here and wired into every cancel path that can close a programme today (the
+  >   termination subscriber's `cancelConfirmed`; booking's `cancel`, `terminateNoShow` and `complete`), each taking
+  >   the programme's row before the enrollment's (kernel.md's order), with a kernel.md row and a DB race spec of a
+  >   termination against `programmes.decide`; T013 replaces only the card stub. This closes the follow-up under T006.
+  > - Q-3 (a), amended: while the programme is `awaiting_offer`, booking derives `offer_due_at` from session 1's
+  >   current outcome chain on every read (in `programme.offer` and in the window function T015 runs) and writes the
+  >   derived value: session 1's, or its delivered make-up's, scheduled end + `programme_offer_hours`. It is never set
+  >   once at the first read; the column holds the last derived value, because session 1's outcome can change after it
+  >   settles (`reresolution.repository.ts:90`, `admin-outcome.repository.ts:33`, `dispute-raise.repository.ts:33`).
+  >   Example: done Mon 18:00 → due Tue 18:00; re-resolved Tue as a teacher's no-show, the make-up delivered Thu 18:00
+  >   → due Fri 18:00. Red first on that case: a re-resolution to a make-up moves the deadline, and no `no_offer` item
+  >   opens at the old one. No sessions writer changes.
+  > - Q-7 (a): `programmes.decide` lives in `modules/booking/programmes-admin.router.ts`, mounted as `programmes` in
+  >   `admin.router.ts`'s `006:` block.
+  > - «Unverified in live mode» reads `payoutRecipient` (`checkout.service.ts:243`, called at `:561` on `34744575`)
+  >   and the payment mode handed to payments by `main.ts`'s `006:` block. «Once per deadline» = no item of the kind
+  >   created at or after the current deadline.
   > **Not scheduled, a rare case (PR #155's review, round 1, the reviewer's question; the owner, 2026-11-22, «موافق على التلاتة»).** FR-706b reads the
   > payout account when the 48 hours end. An account unverified for most of them and verified shortly before the end
   > leaves the student little time, and the offer lapses as FR-706 says (fee 200 EGP: the teacher's 140 released). Left
@@ -262,6 +293,20 @@ No open question remains.
     (no lead), with `programme_month`;
   - `saveCard` records the consent.
   - Adversarial registration.
+  > **PR #156 r2 Follow-up 1 (carried, Q-6 (a); first, before any `instalment` order).** `payments.confirmed_at` is the
+  > worker's clock read before the locks (`jobs/confirm-enrollment.ts:581`, handed on at `:427-428`), so the walk
+  > (`confirmed_at`, `id`) can differ from the order the months were settled in (PROBE-R2a: month 3 opened
+  > `duplicate_payment`). `markOrderConfirmed` (`payments/payments.repository.ts:161-170`) takes the instant from the
+  > database under the locks (`clockTimestamp`, `clock_timestamp()`), red first on PROBE-R2a.
+  > **PR #156 r2 Minor 1 (carried, Q-6 (a)).** The marker's two allowances (`tests/pipeline/confirmation-path.spec.ts`,
+  > `admin-writes-no-money.spec.ts`) also require the written delegate to be `payment`, red first on M-G11 (an
+  > enrollment's `confirmedAt` inside `markOrderConfirmed`).
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** Month 1 and the rest start from the
+  > first weekly occurrence after `pay_by_at` with no lead, in the confirm step (`jobs/confirm-enrollment.ts`,
+  > booking's `lockForConfirmation` carrying `pay_by_at`). FR-BOOK-12 holds both ways: a payable programme order
+  > refuses a new hold and a payable checkout refuses `programme.pay`; `checkout.current` and `continue` show it
+  > (R-509). Q-4 (a): `saveCard` is recorded as `payments.card_consent_at` on the order, one migration (ERD row 74,
+  > rule 82), copied into `programme_cards.consented_at` by T013.
 - [ ] T010 [US4] [US5] The completion gate and the counts (FR-712, FR-728; R-501; V-1):
   - `modules/sessions/completion.service.ts`: a programme completes only when fully paid and not `awaiting_offer`,
     `offered` or `paused`. Red first on «a paid month settled, the next unpaid, 72 h passed».
@@ -274,6 +319,9 @@ No open question remains.
   > is then booked onto its weekly time, and a later month's generation meets the session exclusion: the whole month is
   > refused (`slot_unavailable` case, the order paid). Each reads `EnrollmentSide.programmeTimesOf` as T005's searches
   > do, red first on «a make-up booked onto the student's programme time», with T010's restore refusal.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** The note above is in T010's scope; its
+  > first line is at `remedy.service.ts:1156-1161` on `34744575`. The gate reads the programme through
+  > `EnrollmentSide.enrollmentFor`'s terms (the port and booking's `enrollmentTermsById`, Q-8 (a)).
 - [ ] T011 [US5] The programme's releases (FR-703, FR-725, FR-728; R-512; DEC-94), `share-release.rules.ts`,
   `share-release.repository.ts`, `release-teacher-shares`:
   > **Follow-up (B-P1's lane e, 2026-11-22).** Today `share-release.rules.ts` would list `ijazah_half` at session 1 for
@@ -286,6 +334,11 @@ No open question remains.
     capped at the paid orders' shares − releases (red first: today's base is the first order's share, `:246`);
   - `ijazah_end` and `programme_stopped` = shares − the half released or owed − the refund share (U-4);
   - `package` orders keep today's rules.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** `ijazah_half` is owed only once the
+  > student continued (a `rest_in_full` or month 1 paid; R-512's two branches). Q-5 (a): `ijazah_end` and
+  > `programme_stopped` subtract every release written and the half owed, as today's `share-release.rules.ts` does, so
+  > a reopened programme's end never pays a first stop's release again. Worked: 10,000 offer, fee 500, 70 %, 25 %: the
+  > half 1,750 in full, 1,837.50 by months; the end 5,250 and 5,512.50 with no refund; today's base gives 87.50.
 - [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in
@@ -304,6 +357,9 @@ No open question remains.
   - a restore after a suspension on a programme is deferred (restore refused, T010).
 
   > **Amended 2026-11-21 (SRS DEC-96; `specs/003-booking/tasks.md` T125; the owner's decision on the full-codebase review, Q2).** A direct end of an unsuspended programme at the Student's choice is in the set: `admin_ended` releases the share of the sessions consumed, each valued by its own order, what was already released taken off, and the case shows the untaken value; nothing is executed until an Administrator resolves the case. Example: 10,000 EGP paid in full, 10 sessions, share 7,000, 6 delivered with the half (1,750) released → the teacher 4,200 in all (2,450 more), the student 4,000, the platform 1,800. T125 builds it with this task's set.
+  > **B-P2's conflict check (the owner, 2026-11-23, «موافق على الكل (أ)»).** The student-chosen direct end of the
+  > amendment above is T125's (R1b, after B-P2), built on this task's set; B-P2 adds `admin_ended` only where it covered
+  > an open `teacher_suspended` case.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
@@ -394,7 +450,7 @@ No open question remains.
   > release: the screen shows «pay now» (T019). `PLAN.md`, «The first update (v1.1)».
 - [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
-  `modules/booking/enrollments-admin.router.ts` (the admin decisions):
+  `modules/booking/programmes-admin.router.ts` (the admin decisions):
   - `programme.request` `stop` (refused before 7 days);
   - `programmes.decide` approving it → `programme_stopped` through the close hook, the time free at once, T011's
     release;
@@ -407,8 +463,10 @@ No open question remains.
   > subtracts every written release (`share-release.rules.ts:251-254`). With a first stop releasing 2,800, a reopen and
   > 1,000 more paid, an end built to the letter would release the 2,800 again and a second stop nothing for the new
   > month's 700. The fix: «− every release written», and a release per stop. Rare; not scheduled.
+  > *(B-P2, the owner, 2026-11-23, Q-5 (a).)* The first half is closed by T011 (the end subtracts every release
+  > written); «a release per stop» stays not scheduled.
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
-  `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/enrollments-admin.router.ts`, and
+  `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19),
     `payeePending` (in live mode, the teacher's payout account not verified; false in test mode, a spec for each mode;
