@@ -234,6 +234,8 @@ import type {
   SessionsJoinInput,
   SessionsJoinOutput,
   SessionsPostponeInput,
+  // 004:T084.
+  SessionsEncryptionFailedInput,
   SessionsPostponeOutput,
   SessionsRemedyAcceptInput,
   SessionsRemedyAcceptOutput,
@@ -570,6 +572,8 @@ export interface AppCaller {
     };
     /** 003:T112: a postponement, attacked in `sessions-postpone.attacks.ts`. */
     postpone(input: SessionsPostponeInput): Promise<SessionsPostponeOutput>;
+    /** 004:T084: a phone that could not encrypt, attacked in `sessions-encryption.attacks.ts`. */
+    encryptionFailed(input: SessionsEncryptionFailedInput): Promise<void>;
   };
   /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */
   readonly chat: {

@@ -341,6 +341,11 @@ export const timelineEvent = z.object({
   outcomeBefore: sessionStatus.optional(),
   outcomeAfter: sessionStatus.optional(),
   previousStartAt: z.iso.datetime().optional(),
+  /**
+   * 004:T084 (SRS DEC-105; ERD §15 rule 84): on an `encryption_failed` row only, the side whose
+   * phone could not encrypt. Additive (R-API-9).
+   */
+  party: z.enum(['student', 'teacher']).optional(),
   occurredAt: z.iso.datetime(),
 });
 

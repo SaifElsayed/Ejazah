@@ -190,6 +190,21 @@ describe('003:T112: the end on a complaint against the student', () => {
     expect(timelineEvent.safeParse(row).success).toBe(true);
   });
 
+  // 004:T084 (SRS DEC-105; ERD §15 rule 84): an `encryption_failed` row carries the side whose phone
+  // could not encrypt, which the monitor's timeline shows; additive (R-API-9).
+  it('carries the side that could not encrypt on the timeline (T084)', () => {
+    const row = {
+      source: 'session',
+      kind: 'encryption_failed',
+      sessionId: '0199d0a0-0000-7000-8000-0000000000a1',
+      occurredAt: '2026-11-23T10:00:00.000Z',
+    };
+    for (const party of ['student', 'teacher'] as const) {
+      expect(timelineEvent.parse({ ...row, party })).toEqual({ ...row, party });
+    }
+    expect(timelineEvent.safeParse({ ...row, party: 'admin' }).success).toBe(false);
+  });
+
   it('refuses any other cause', () => {
     for (const cause of ['student_banned', 'teacher_ended', '']) {
       expect(sessionsEndEnrollmentInput.safeParse({ ...asked, cause }).success, cause).toBe(false);

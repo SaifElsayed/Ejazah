@@ -208,6 +208,12 @@ export function panelTime(startsAt: string, t: Translate, locale: Locale, zone: 
   });
 }
 
+/** 004:T084: the side an `encryption_failed` row names. */
+const ENCRYPTION_FAILED_SIDE: Readonly<Record<NonNullable<MonitoredEvent['party']>, MessageKey>> = {
+  student: 'admin.sessions.event.party.student',
+  teacher: 'admin.sessions.event.party.teacher',
+};
+
 /** A timeline row's title, its session's number when it names one, and what it changed. */
 export function eventWords(
   event: MonitoredEvent,
@@ -241,6 +247,8 @@ export function eventWords(
       }),
     };
   }
+  // 004:T084 (SRS DEC-105): the side whose phone could not encrypt the session.
+  if (event.party !== undefined) return { title, detail: t(ENCRYPTION_FAILED_SIDE[event.party]) };
   return { title };
 }
 

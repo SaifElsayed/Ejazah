@@ -2727,6 +2727,7 @@
               "under_threshold"
             ]
           },
+          "$.events[].party": { "type": "string", "values": ["student", "teacher"] },
           "$.events[].previousStartAt": { "type": "string" },
           "$.events[].sessionId": { "type": "string" },
           "$.events[].source": {

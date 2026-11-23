@@ -73,6 +73,8 @@ export const redactedKeys: readonly (readonly string[])[] = [
     ].map((file) => [noun, file]),
   ),
   ['storage', 'key'],
+  // 004:T084 (SRS DEC-102, NFR-SEC-13): a session's media key, which `sessions.join` answers.
+  ['media', 'key'],
   // payout identifier
   ['payout', 'ref'],
   ['payout', 'reference'],

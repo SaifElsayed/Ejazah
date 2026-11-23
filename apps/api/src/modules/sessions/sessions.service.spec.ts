@@ -959,9 +959,7 @@ describe('sessions.encryptionFailed (T084, DEC-105)', () => {
       [STRANGER, SESSION],
       [STUDENT, NOWHERE],
     ] as const) {
-      const refused = await refusalOf(
-        services.encryptionFailed({ userId }, { sessionId }, log),
-      );
+      const refused = await refusalOf(services.encryptionFailed({ userId }, { sessionId }, log));
       expect(refused.code).toBe('NOT_FOUND');
       expect(refused.details).toBeUndefined();
     }
@@ -983,7 +981,9 @@ describe('sessions.encryptionFailed (T084, DEC-105)', () => {
   it('writes one line of ids and a reason code, after the commit', async () => {
     await services.encryptionFailed({ userId: STUDENT }, { sessionId: SESSION }, log);
 
-    expect(lines.map(({ msg, sessionId, userId, reason }) => ({ msg, sessionId, userId, reason }))).toEqual([
+    expect(
+      lines.map(({ msg, sessionId, userId, reason }) => ({ msg, sessionId, userId, reason })),
+    ).toEqual([
       {
         msg: 'A participant could not encrypt the session',
         sessionId: SESSION,

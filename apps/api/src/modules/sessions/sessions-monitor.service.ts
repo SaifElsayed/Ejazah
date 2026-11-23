@@ -47,6 +47,9 @@
 // end's closing holds its slot, for the panel's `{days}`; and `closingCaseReason` admits a direct
 // end's `admin_ended` closing through the one closing rule, so the panel offers its restore.
 //
+// 004:T084 (SRS DEC-105, FR-ADMIN-20 (a)): an `encryption_failed` row reaches the timeline with
+// `party`, the side whose phone could not encrypt.
+//
 // THE LOG (the owner's rule). An enrollment no read returns is refused NOT_FOUND through this file's
 // one `refusal`, one info line of ids and a reason code; a read writes no line.
 import type {
@@ -283,6 +286,8 @@ function timelineOf(
         ...(row.previousStartAt === null
           ? {}
           : { previousStartAt: row.previousStartAt.toISOString() }),
+        // 004:T084 (SRS DEC-105): the side whose phone could not encrypt.
+        ...(row.party === null ? {} : { party: row.party }),
         occurredAt: row.occurredAt.toISOString(),
       },
     })),

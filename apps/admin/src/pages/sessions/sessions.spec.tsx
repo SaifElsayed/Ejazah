@@ -1679,3 +1679,30 @@ describe('T083: the restore of an enrollment an administrator ended (T073; N9)',
     });
   });
 });
+
+// 004:T084 (SRS DEC-105, FR-ADMIN-20 (a)): a phone that could not encrypt the session, on the
+// timeline with the side it was, in both catalogues.
+describe('T084: a phone that could not encrypt, on the timeline with its side', () => {
+  const words = (event: MonitoredEvent, locale: 'ar' | 'en') =>
+    eventWords(
+      event,
+      new Map(),
+      (key, values) => translate(locale, key, values),
+      locale,
+      panelTimeZone(),
+    );
+  const occurredAt = '2026-11-23T10:00:00.000Z';
+
+  it('names the side whose phone could not encrypt, in Arabic and English', () => {
+    for (const [party, ar, en] of [
+      ['student', 'على جهاز الطالب', "On the student's phone"],
+      ['teacher', 'على جهاز المعلم', "On the teacher's phone"],
+    ] as const) {
+      const event = { source: 'session', kind: 'encryption_failed', party, occurredAt } as const;
+      expect({ ar: words(event, 'ar'), en: words(event, 'en') }).toEqual({
+        ar: { title: 'تعذّر تشفير الحصة على جهاز أحد الطرفين', detail: ar },
+        en: { title: "A party's phone could not encrypt the session", detail: en },
+      });
+    }
+  });
+});
