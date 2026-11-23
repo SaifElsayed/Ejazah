@@ -266,6 +266,15 @@ export interface ProgrammeShares {
 }
 
 /**
+ * 006:T011 FU-E3 (the review session, 2026-11-23): a programme's enrollment read with no programme
+ * row. It should not happen (T005 writes both on one transaction); its half is nothing, and the
+ * sweep logs one warn line.
+ */
+export function programmeRowMissing(facts: ReleaseFacts): boolean {
+  return facts.enrollment.programme === null && programmeSharesOf(facts) !== undefined;
+}
+
+/**
  * 006:T011 (R-512, DEC-94, FR-728): the shares of an enrollment whose orders hold an `assessment`;
  * undefined for a package, whose rules stay today's. The price as paid is the offer's total in full
  * (the fee inside it) or the total and the fee by months: 10,000 or 10,500 EGP, so at 70 % and
@@ -274,20 +283,24 @@ export interface ProgrammeShares {
 export function programmeSharesOf(facts: ReleaseFacts): ProgrammeShares | undefined {
   const assessment = facts.orders.find(({ kind }) => kind === 'assessment');
   if (assessment === undefined) return undefined;
-  // Booking writes the programme with its assessment's enrollment (T005); with none read, no half
-  // is made up from another figure.
-  const total_piasters = facts.enrollment.programme?.total_piasters ?? piasters(0);
+  const { programme } = facts.enrollment;
   const inFull = facts.orders.some(({ kind }) => kind === 'rest_in_full');
-  const price_piasters = inFull
-    ? total_piasters
-    : sumOf([total_piasters, assessment.paid_piasters]);
   return {
     assessment,
     continued: facts.orders.some(({ kind }) => CONTINUED_KINDS.has(kind)),
-    halfBase_piasters: teacherShare(
-      teacherShare(price_piasters, assessment.sharePercent),
-      assessment.halfPercent ?? 0,
-    ),
+    // FU-E3: with no programme row read (should not happen, T005), no half from another figure.
+    halfBase_piasters:
+      programme === null
+        ? piasters(0)
+        : teacherShare(
+            teacherShare(
+              inFull
+                ? programme.total_piasters
+                : sumOf([programme.total_piasters, assessment.paid_piasters]),
+              assessment.sharePercent,
+            ),
+            assessment.halfPercent ?? 0,
+          ),
     paidShares_piasters: sumOf(facts.orders.map(({ share_piasters }) => share_piasters)),
     refund_piasters: sumOf(facts.orders.map(refundShareOf)),
   };

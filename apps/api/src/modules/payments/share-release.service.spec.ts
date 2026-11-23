@@ -47,6 +47,7 @@ interface World {
   readonly rows: ReleaseRow[];
   readonly lines: unknown[][];
   readonly errors: unknown[][];
+  readonly warns: unknown[][];
   readonly failOn?: string;
 }
 
@@ -83,6 +84,7 @@ function world(count: number, failOn?: number): World {
     rows: [],
     lines: [],
     errors: [],
+    warns: [],
     ...(failOn === undefined ? {} : { failOn: id(100 + failOn) }),
   };
 }
@@ -131,6 +133,7 @@ function sweepOver(w: World, pageSize = 2) {
     log: {
       info: (...line: unknown[]) => void w.lines.push(line),
       error: (...line: unknown[]) => void w.errors.push(line),
+      warn: (...line: unknown[]) => void w.warns.push(line),
     },
     pageSize,
     report: () => undefined,
@@ -306,6 +309,7 @@ const programmeWorld = (): World => {
     rows: [],
     lines: [],
     errors: [],
+    warns: [],
   };
 };
 
@@ -402,5 +406,38 @@ describe('006:T011 a programme’s facts (R-512)', () => {
       [id(101), 'ijazah_half', 175_000],
       [id(101), 'ijazah_end', 525_000],
     ]);
+  });
+});
+
+describe('006:T011 FU-E3 a programme enrollment with no programme row', () => {
+  const withoutRow = (): World => {
+    const w = programmeWorld();
+    const [[enrollmentId, enrollment]] = [...w.enrollments] as [[string, ReleaseEnrollment]];
+    w.enrollments.set(enrollmentId, { ...enrollment, programme: null });
+    return w;
+  };
+
+  it('writes one warn line of the enrollment id and a reason in a run, though two pages hold its orders, and no half', async () => {
+    const w = withoutRow();
+    await sweepOver(w, 1).run();
+
+    expect(w.warns).toEqual([
+      [
+        { enrollmentId: id(101), reason: 'programme_row_missing' },
+        'A programme enrollment has no programme row: no half is owed',
+      ],
+    ]);
+    expect(w.rows.map(({ milestone, amount_piasters }) => [milestone, amount_piasters])).toEqual([
+      ['ijazah_end', 700_000],
+    ]);
+  });
+
+  it('writes no warn line for a programme with its row, nor for a package', async () => {
+    const programme = programmeWorld();
+    const packages = world(2);
+    await sweepOver(programme, 1).run();
+    await sweepOver(packages, 1).run();
+
+    expect([...programme.warns, ...packages.warns]).toEqual([]);
   });
 });

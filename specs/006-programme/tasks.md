@@ -348,6 +348,7 @@ No open question remains.
   > `programme_stopped` subtract every release written and the half owed, as today's `share-release.rules.ts` does, so
   > a reopened programme's end never pays a first stop's release again. Worked: 10,000 offer, fee 500, 70 %, 25 %: the
   > half 1,750 in full, 1,837.50 by months; the end 5,250 and 5,512.50 with no refund; today's base gives 87.50.
+  > **Not scheduled, should not happen (B-P2 lane e, 2026-11-23; the review session).** A programme enrollment with no programme row gives no half and logs one warn line; T005 writes both rows in one transaction.
 - [ ] T012 [US5] The case amounts on a programme (FR-729, FR-730; R-512; G-3, G-4), `case-amount.rules.ts`
   (+ spec), `share-release.rules.ts:277-291`:
   - each session valued by its own order (the assessment = the fee; a month's session = the month ÷ its sessions; in

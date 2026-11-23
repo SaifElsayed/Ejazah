@@ -12,6 +12,7 @@ import {
   halfWindowHours,
   type PlannedRelease,
   plannedReleases,
+  programmeRowMissing,
   type ReleaseFacts,
   type ReleaseOrder,
   type ReleaseProgramme,
@@ -1008,6 +1009,38 @@ describe('006:T011 `package` orders keep today’s rules', () => {
     expect(plan({ ...first, orders: [first.order, duplicate] })).toMatchObject([
       { milestone: 'recitation_end', amount: 700_000 },
     ]);
+  });
+});
+
+describe('006:T011 FU-E3 a programme enrollment with no programme row (should not happen)', () => {
+  const withoutRow = (input: ReleaseFacts): ReleaseFacts => ({
+    ...input,
+    enrollment: { ...input.enrollment, programme: null },
+  });
+
+  it('gives no half by months either (not 25 % × 70 % × the fee 500 = 87.50), the end holding every paid share', () => {
+    const input = withoutRow(programmeFacts({ orders: [ASSESSMENT, ...months(6)], delivered: 21 }));
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'ijazah_end',
+        amount: 455_000,
+        dueAt: windowAfter(41),
+        due: false,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('gives no half in full either', () => {
+    const input = withoutRow(programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL], delivered: 21 }));
+    expect(milestonesOf(input)).toEqual(['ijazah_end']);
+  });
+
+  it('is told by `programmeRowMissing`: a programme’s orders and no row', () => {
+    const programme = programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL] });
+    expect(programmeRowMissing(withoutRow(programme))).toBe(true);
+    expect(programmeRowMissing(programme)).toBe(false);
+    expect(programmeRowMissing(facts({ track: 'ijazah_track' }))).toBe(false);
   });
 });
 

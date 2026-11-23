@@ -48,6 +48,7 @@ import {
 import {
   type PlannedRelease,
   plannedReleases,
+  programmeRowMissing,
   type ReleaseEnrollment,
   type ReleaseFacts,
   type ReleaseSession,
@@ -228,7 +229,11 @@ export interface ShareReleaseSweep {
 export interface ShareReleaseSweepDependencies {
   readonly transactions: Transactions;
   readonly settings: SettingsReader;
-  readonly log: Pick<Logger, 'info' | 'error'>;
+  /**
+   * 006:T011 FU-E3: `warn` for a programme's enrollment read with no programme row, where the
+   * logger has one (the worker's has; the job's type names `info` and `error` only).
+   */
+  readonly log: Pick<Logger, 'info' | 'error'> & Partial<Pick<Logger, 'warn'>>;
   /** How many orders each page reads (the job's). */
   readonly pageSize: number;
   readonly report?: (error: Error) => void;
@@ -280,9 +285,11 @@ export function createShareReleaseSweep({
       const windowHours = await windowHoursOf(settings);
       const written: string[] = [];
       const failed: string[] = [];
+      // FU-E3: each programme enrollment with no programme row warned once a run, bounded by it.
+      const warned = new Set<string>();
       let after: string | undefined;
       for (;;) {
-        const { page, due } = await transactions.run(async (tx) => {
+        const { page, due, rowless } = await transactions.run(async (tx) => {
           const orders = await ordersAfter(tx, after, pageSize);
           const [now, among] = await Promise.all([
             clock(tx),
@@ -297,8 +304,19 @@ export function createShareReleaseSweep({
             due: among
               .map((one) => dueOf(one, plannedReleases(one.facts, { windowHours, now })))
               .filter((releases) => releases.length > 0),
+            rowless: among
+              .filter(({ facts }) => programmeRowMissing(facts))
+              .map(({ facts }) => facts.enrollment.enrollmentId),
           };
         });
+        for (const enrollmentId of rowless) {
+          if (warned.has(enrollmentId)) continue;
+          warned.add(enrollmentId);
+          log.warn?.(
+            { enrollmentId, reason: 'programme_row_missing' },
+            'A programme enrollment has no programme row: no half is owed',
+          );
+        }
         for (const releases of due) {
           const [first] = releases;
           if (first === undefined) continue;
