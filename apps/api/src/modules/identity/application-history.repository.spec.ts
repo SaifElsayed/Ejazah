@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
-import { eraseOf, listOf, record } from './application-history.repository.js';
+import { eraseOf, listOf, record, recordWithId } from './application-history.repository.js';
 
 const TEACHER = '0199d0a0-0000-7000-8000-0000000000c1';
 const PROFILE = '0199d0a0-0000-7000-8000-0000000000f1';
@@ -59,6 +59,31 @@ describe('record', () => {
         teacherProfileId: PROFILE,
         action: 'request_info',
         note: 'صورة الهوية غير واضحة',
+        adminId: ADMIN,
+        createdAt: AT,
+      },
+      select: { id: true },
+    });
+  });
+
+  // R1b round 2 (002:T186, the owner's «موافق» of 2026-11-23): `recordCall`'s audit entry names the
+  // `call_replaced` row by its id, so `recordWithId` inserts as `record` does and answers the id.
+  it("recordWithId inserts the same row and answers the inserted row's id", async () => {
+    const { client, create } = clientOf({ id: PROFILE, approvedAt: null });
+    expect(
+      await recordWithId(client, {
+        teacherUserId: TEACHER,
+        action: 'call_replaced',
+        note: 'تحقّقت من الهوية',
+        adminId: ADMIN,
+        at: AT,
+      }),
+    ).toBe('row');
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        teacherProfileId: PROFILE,
+        action: 'call_replaced',
+        note: 'تحقّقت من الهوية',
         adminId: ADMIN,
         createdAt: AT,
       },

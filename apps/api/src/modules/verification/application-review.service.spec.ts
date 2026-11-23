@@ -655,7 +655,7 @@ describe("R1b: an ever-approved teacher's earlier call notes (T186)", () => {
     const recordHistory = store.recordHistory.bind(store);
     store.recordHistory = async (tx, entry) => {
       notesWhenWritten.push(store.held(entry.teacherUserId).callNotes);
-      await recordHistory(tx, entry);
+      return recordHistory(tx, entry);
     };
     await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call });
     expect(notesWhenWritten).toEqual([EARLIER]);
@@ -690,6 +690,27 @@ describe("R1b: an ever-approved teacher's earlier call notes (T186)", () => {
     await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call });
     expect(store.history).toEqual([]);
     expect(store.held(userId).callNotes).toBe(call.notes);
+  });
+
+  // Round 2 (the owner's «موافق» of 2026-11-23): the audit entry's `after` names the row by its id,
+  // ids only, and has no such field when no row was written.
+  it("answers the row's id in after, for the audit entry", async () => {
+    const userId = store.plant({ callRecorded: true, approvedAt: APPROVED });
+    const { after } = await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call });
+    expect(after).toStrictEqual({
+      completedOn: call.completedOn,
+      outcome: call.outcome,
+      historyId: store.historyIds[0],
+    });
+  });
+
+  it('answers no history id when no row is written', async () => {
+    const neverApproved = store.plant({ callRecorded: true });
+    const noNotes = store.plant({ approvedAt: APPROVED });
+    for (const userId of [neverApproved, noNotes]) {
+      const { after } = await service.recordCall(TX, ADMIN, { teacherUserId: userId, ...call });
+      expect(after).toStrictEqual({ completedOn: call.completedOn, outcome: call.outcome });
+    }
   });
 
   it("applications.get answers the row with its note, through the contract's output", async () => {

@@ -43,13 +43,21 @@ export interface ApplicationHistoryRow {
 
 /** Inserts the decision's row on the teacher's profile, which the caller holds locked. */
 export async function record(tx: Client, entry: ApplicationHistoryEntry): Promise<void> {
+  await recordWithId(tx, entry);
+}
+
+/**
+ * `record`, answering the row's id (R1b round 2, 002:T186, the owner's «موافق» of 2026-11-23:
+ * `recordCall`'s audit entry names its `call_replaced` row by it).
+ */
+export async function recordWithId(tx: Client, entry: ApplicationHistoryEntry): Promise<string> {
   const profile = await tx.teacherProfile.findUnique({
     where: { userId: entry.teacherUserId },
     select: { id: true },
   });
   // A decision lands only on a profile, so a missing one is a caller's error, never a refusal.
   if (profile === null) throw new Error('application history: no teacher profile to record on');
-  await tx.teacherApplicationHistory.create({
+  const { id } = await tx.teacherApplicationHistory.create({
     data: {
       teacherProfileId: profile.id,
       action: entry.action,
@@ -59,6 +67,7 @@ export async function record(tx: Client, entry: ApplicationHistoryEntry): Promis
     },
     select: { id: true },
   });
+  return id;
 }
 
 /**

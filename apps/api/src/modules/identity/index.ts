@@ -335,6 +335,8 @@ export {
   type ApplicationHistoryRow,
   listOf as applicationHistoryOf,
   record as recordApplicationHistory,
+  // R1b round 2 (002:T186): the same insert answering the row's id, for `recordCall`'s audit entry.
+  recordWithId as recordApplicationHistoryWithId,
 } from './application-history.repository.js';
 
 /**
