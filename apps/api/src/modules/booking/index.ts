@@ -489,6 +489,7 @@ export {
   checkedProgrammePay,
   type ProgrammeLog,
   type ProgrammePayment,
+  type ProgrammePayOrders,
   type ProgrammePayTarget,
   recordProgrammePaid,
 } from './programmes.service.js';

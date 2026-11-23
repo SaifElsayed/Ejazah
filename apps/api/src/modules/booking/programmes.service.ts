@@ -58,7 +58,8 @@
 // line of ids and a reason: `not_offered` (not `offered`, or the enrollment no longer `confirmed`),
 // `pay_by_passed`, `party_suspended` (a `teacher_suspended` or `student_suspended` case open), and
 // `PREVIOUS_CHECKOUT` while the own hold's order is paid or payable, or an order of the programme
-// itself is payable. The owner's Q-C1 (a): the confirm step records the payment on the programme
+// itself is payable, or (PR #158 r1 Major 1) paid and not yet processed by the confirm step
+// (`processing`). The owner's Q-C1 (a): the confirm step records the payment on the programme
 // (`recordProgrammePaid`: `offered` to `active` with its plan, then the months paid).
 import type {
   ProgrammeActionInput,
@@ -881,15 +882,24 @@ export interface ProgrammePayTarget {
 }
 
 /**
+ * One enrollment's orders as a first payment reads them: `HeldOrders`, and (PR #158 r1 Major 1)
+ * whether a programme order (`rest_in_full`, `instalment`) is paid and not yet processed by the
+ * confirm step (`confirmed_at` NULL): the earlier payment «still being processed» (FR-BOOK-12).
+ */
+export interface ProgrammePayOrders extends HeldOrders {
+  readonly programmeProcessing: boolean;
+}
+
+/**
  * Payments' answer for the enrollments a first payment touches, on the caller's transaction
- * holding their locks; it locks their orders after them (T005): each one's last payable order and
- * whether one is paid.
+ * holding their locks; it locks their orders after them (T005): each one's last payable order,
+ * whether one is paid, and whether a programme order is paid and not yet confirmed.
  */
 export type CheckoutOrdersAmong = (
   tx: Transaction,
   enrollmentIds: readonly string[],
   at: Date,
-) => Promise<ReadonlyMap<string, HeldOrders>>;
+) => Promise<ReadonlyMap<string, ProgrammePayOrders>>;
 
 /** What the check reads and locks, over booking's rows and moderation's entry. */
 export interface ProgrammePayStore {
@@ -983,9 +993,15 @@ export async function checkedProgrammePay(
       throw refused('previous_checkout', previousCheckout(held, 'payable', expiresAt));
     }
   }
-  const own = orders.get(enrollmentId)?.payable;
-  if (own) {
-    throw refused('previous_checkout', previousCheckout(enrollmentId, 'payable', own.expiresAt));
+  const own = orders.get(enrollmentId);
+  if (own?.payable) {
+    const { expiresAt } = own.payable;
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'payable', expiresAt));
+  }
+  // PR #158 r1 Major 1: paid at the gateway, the confirm step not run yet (the programme still
+  // `offered`), as the own hold's paid order above.
+  if (own?.programmeProcessing === true) {
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'processing'));
   }
   return {
     enrollmentId,

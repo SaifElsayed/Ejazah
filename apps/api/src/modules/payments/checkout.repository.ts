@@ -18,7 +18,7 @@ import type { $Enums } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockRows } from '../../platform/db/row-lock.js';
-import type { HeldOrders } from '../booking/index.js';
+import type { HeldOrders, ProgrammePayOrders } from '../booking/index.js';
 import type { OrderStatus } from './payments.repository.js';
 
 type Client = Pick<Transaction, 'payment'>;
@@ -211,18 +211,22 @@ export async function assessmentOrderOf(
   };
 }
 
+/** The kinds that pay for a programme's rest (R-502). */
+const PROGRAMME_ORDER_KINDS: ReadonlySet<string> = new Set(['rest_in_full', 'instalment']);
+
 /**
- * Of `enrollmentIds`, each one's orders as a new checkout reads them (`heldOrdersOf`'s answer), the
- * orders locked in one call after the caller's enrollments (T005).
+ * Of `enrollmentIds`, each one's orders as a new checkout reads them (`heldOrdersOf`'s answer), and
+ * (PR #158 r1 Major 1) whether a programme order is paid and not yet processed by the confirm step
+ * (`confirmed_at` NULL); the orders locked in one call after the caller's enrollments (T005).
  */
 export async function checkoutOrdersAmong(
   tx: Transaction,
   enrollmentIds: readonly string[],
   at: Date,
-): Promise<ReadonlyMap<string, HeldOrders>> {
+): Promise<ReadonlyMap<string, ProgrammePayOrders>> {
   const where = { enrollmentId: { in: [...enrollmentIds] } };
   const found = await tx.payment.findMany({ where, orderBy: { id: 'asc' }, select: { id: true } });
-  const answer = new Map<string, HeldOrders>();
+  const answer = new Map<string, ProgrammePayOrders>();
   if (found.length === 0) return answer;
   await lockRows(
     tx,
@@ -232,11 +236,23 @@ export async function checkoutOrdersAmong(
   const orders = await tx.payment.findMany({
     where,
     orderBy: { id: 'asc' },
-    select: { id: true, enrollmentId: true, gatewayOrderId: true, status: true, expiresAt: true },
+    select: {
+      id: true,
+      enrollmentId: true,
+      gatewayOrderId: true,
+      status: true,
+      expiresAt: true,
+      kind: true,
+      confirmedAt: true,
+    },
   });
   // In id order, a UUIDv7's creation order: the last payable order met is the latest.
   for (const order of orders) {
-    const before = answer.get(order.enrollmentId) ?? { payable: null, paid: false };
+    const before = answer.get(order.enrollmentId) ?? {
+      payable: null,
+      paid: false,
+      programmeProcessing: false,
+    };
     const payable = order.status === 'created' && order.expiresAt.getTime() > at.getTime();
     const last = payable ? withGatewayOrderId(order) : null;
     answer.set(order.enrollmentId, {
@@ -245,6 +261,11 @@ export async function checkoutOrdersAmong(
           ? before.payable
           : { paymentId: last.id, gatewayOrderId: last.gatewayOrderId, expiresAt: last.expiresAt },
       paid: before.paid || order.status === 'paid',
+      programmeProcessing:
+        before.programmeProcessing ||
+        (order.status === 'paid' &&
+          order.confirmedAt === null &&
+          PROGRAMME_ORDER_KINDS.has(order.kind)),
     });
   }
   return answer;

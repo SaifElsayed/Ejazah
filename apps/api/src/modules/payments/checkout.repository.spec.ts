@@ -29,6 +29,8 @@ interface Row {
   readonly status: string;
   readonly expiresAt: Date;
   readonly checkoutUrlEncrypted: Uint8Array | null;
+  readonly kind?: string;
+  readonly confirmedAt?: Date | null;
 }
 
 const order = (n: number, overrides: Partial<Row> = {}): Row => ({
@@ -182,12 +184,13 @@ describe('the orders programme.pay reads (006:T009)', () => {
     });
     const answer = await checkoutOrdersAmong(client, [ENROLLMENT, OTHER], AT);
     expect([...answer.entries()]).toEqual([
-      [ENROLLMENT, { payable: null, paid: true }],
+      [ENROLLMENT, { payable: null, paid: true, programmeProcessing: false }],
       [
         OTHER,
         {
           payable: { paymentId: second.id, gatewayOrderId: 'fake_2', expiresAt: second.expiresAt },
           paid: false,
+          programmeProcessing: false,
         },
       ],
     ]);
@@ -197,6 +200,28 @@ describe('the orders programme.pay reads (006:T009)', () => {
       orderBy: { id: 'asc' },
       select: { id: true },
     });
+  });
+
+  // PR #158 r1 Major 1 (PROBE-S1; FR-BOOK-12): a programme order paid at the gateway whose confirm
+  // step has not run yet is still being processed; a processed one, or the paid assessment, is not.
+  it('answers a rest or a month paid and not yet confirmed as processing; a processed one or the assessment not', async () => {
+    const processedAt = new Date('2026-11-22T09:00:00Z');
+    const worlds: [Partial<Row>, boolean][] = [
+      [{ kind: 'rest_in_full', status: 'paid', confirmedAt: null }, true],
+      [{ kind: 'instalment', status: 'paid', confirmedAt: null }, true],
+      [{ kind: 'rest_in_full', status: 'paid', confirmedAt: processedAt }, false],
+      [{ kind: 'assessment', status: 'paid', confirmedAt: null }, false],
+      [{ kind: 'instalment', status: 'created', confirmedAt: null }, false],
+    ];
+    const answers: boolean[] = [];
+    for (const [overrides] of worlds) {
+      const one = order(1, overrides);
+      const { client, calls } = recording({ findMany: [[{ id: one.id }], [one]] });
+      const answer = await checkoutOrdersAmong(client, [ENROLLMENT], AT);
+      answers.push(answer.get(ENROLLMENT)?.programmeProcessing === true);
+      expect(calls[2]?.[1]).toMatchObject({ select: { kind: true, confirmedAt: true } });
+    }
+    expect(answers).toEqual(worlds.map(([, processing]) => processing));
   });
 
   it('locks nothing for enrollments with no order', async () => {

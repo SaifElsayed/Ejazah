@@ -684,6 +684,107 @@ describe('programme.pay against another checkout of the student (006:T009, FR-BO
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// PR #158 r1 Major 1 (PROBE-S1; FR-BOOK-12: a new checkout is refused while an earlier payment
+// «went through or is still being processed»). Between the gateway's signed paid event and the
+// confirm step the programme is still `offered` and its order no longer payable: a second first
+// payment is refused PREVIOUS_CHECKOUT `processing`, as the own hold's paid order is. Observed red:
+// PROBE-S1 against the code before the fix, and the race under M-R1 (the processing check dropped
+// from `checkedProgrammePay`), restored and `cmp`-checked.
+
+/** The order kinds that pay for the programme's rest. */
+const PROGRAMME_KINDS = { kind: { in: ['rest_in_full' as const, 'instalment' as const] } };
+
+function payNow(enrollmentId: string, studentUserId: string) {
+  return database.$transaction((tx) =>
+    checkedProgrammePay(
+      tx,
+      { studentUserId, enrollmentId },
+      { orders: checkoutOrdersAmong, log: { info: () => undefined } },
+    ),
+  );
+}
+
+describe('programme.pay while the first payment is paid and not yet confirmed (PR #158 r1 Major 1)', () => {
+  it('PROBE-S1: the rest paid, not yet confirmed: a second first payment is refused PREVIOUS_CHECKOUT processing', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: FAR_PAY_BY });
+    const studentUserId = await studentOfProgramme(enrollmentId);
+    await order(enrollmentId, 'rest_in_full', null, false);
+    const refused: unknown = await payNow(enrollmentId, studentUserId).catch(
+      (error: unknown) => error,
+    );
+    expect((refused as DomainError).code).toBe('PREVIOUS_CHECKOUT');
+    expect((refused as DomainError).details).toEqual([
+      { path: 'enrollmentId', code: enrollmentId },
+      { path: 'state', code: 'processing' },
+    ]);
+  });
+
+  it('against the confirm job, both waiting on the programme’s row: the pay that takes it first is refused processing; one programme order, the programme active', async () => {
+    const { enrollmentId } = await activeProgramme({ payByAt: FAR_PAY_BY });
+    const studentUserId = await studentOfProgramme(enrollmentId);
+    const paid = await order(enrollmentId, 'rest_in_full', null, false);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held: () => void = () => undefined;
+    const holding = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const holder = database.$transaction(
+      async (tx) => {
+        await lockRows(tx, 'programmes', [enrollmentId]);
+        held();
+        await gate;
+      },
+      { timeout: 30_000 },
+    );
+    await holding;
+    // The pay queues on the programme's row first, writing its order if its check lets it through.
+    const pay = database
+      .$transaction(
+        async (tx) => {
+          await checkedProgrammePay(
+            tx,
+            { studentUserId, enrollmentId },
+            { orders: checkoutOrdersAmong, log: { info: () => undefined } },
+          );
+          await payableMonthOne(tx, enrollmentId);
+        },
+        { timeout: 30_000 },
+      )
+      .then(
+        () => 'a second order written',
+        (error: unknown) => error,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const job = confirm(paid);
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    release();
+    await holder;
+    const [outcome] = await Promise.all([pay, job]);
+    expect((outcome as DomainError).details).toEqual([
+      { path: 'enrollmentId', code: enrollmentId },
+      { path: 'state', code: 'processing' },
+    ]);
+    expect(await database.payment.count({ where: { enrollmentId, ...PROGRAMME_KINDS } })).toBe(1);
+    expect(
+      (
+        await database.programme.findUniqueOrThrow({
+          where: { enrollmentId },
+          select: { state: true },
+        })
+      ).state,
+    ).toBe('active');
+    // Once the step ran, the programme is no longer offered.
+    const after: unknown = await payNow(enrollmentId, studentUserId).catch(
+      (error: unknown) => error,
+    );
+    expect((after as DomainError).details).toEqual([{ path: 'cause', code: 'not_offered' }]);
+  });
+});
+
 /** Another teacher's recitation package of 4 sessions on Sunday 09:00, the student's other checkout. */
 async function otherTeachersPackage(): Promise<{ packageId: string; slotId: string }> {
   const other = await person('female');

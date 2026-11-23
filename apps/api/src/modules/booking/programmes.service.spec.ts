@@ -22,7 +22,6 @@ import type {
   SlotRow,
 } from '../catalog/index.js';
 import type { AssessmentOutcome } from '../sessions/index.js';
-import type { HeldOrders } from './checkout-holds.service.js';
 import type { HeldRow } from './holds.repository.js';
 import type { FrozenOffer, OfferEnrollment, PayEnrollment } from './programmes.repository.js';
 import {
@@ -32,6 +31,7 @@ import {
   fitsSlot,
   offerWindowOf,
   type ProgrammeOfferStore,
+  type ProgrammePayOrders,
   type ProgrammePayStore,
   type ProgrammeServiceDependencies,
   type ProgrammeServices,
@@ -771,7 +771,7 @@ describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => 
     now: Date;
     hold: HeldRow | null;
     suspension: string | null;
-    orders: ReadonlyMap<string, HeldOrders>;
+    orders: ReadonlyMap<string, ProgrammePayOrders>;
   }
 
   const offered: PayEnrollment = {
@@ -935,7 +935,9 @@ describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => 
     const order = { paymentId: 'p', gatewayOrderId: 'g', expiresAt: ORDER_EXPIRES };
     const { check } = payWorld({
       hold: ownHold(),
-      orders: new Map([[HELD_ENROLLMENT, { payable: order, paid: false }]]),
+      orders: new Map([
+        [HELD_ENROLLMENT, { payable: order, paid: false, programmeProcessing: false }],
+      ]),
     });
     await expect(check()).rejects.toEqual(
       new DomainError('PREVIOUS_CHECKOUT', undefined, {
@@ -951,7 +953,9 @@ describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => 
   it('refuses PREVIOUS_CHECKOUT as processing while the own hold’s order is paid', async () => {
     const { check } = payWorld({
       hold: ownHold(),
-      orders: new Map([[HELD_ENROLLMENT, { payable: null, paid: true }]]),
+      orders: new Map([
+        [HELD_ENROLLMENT, { payable: null, paid: true, programmeProcessing: false }],
+      ]),
     });
     await expect(check()).rejects.toEqual(
       new DomainError('PREVIOUS_CHECKOUT', undefined, {
@@ -966,7 +970,7 @@ describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => 
   it('refuses PREVIOUS_CHECKOUT while an order of the programme itself is still payable', async () => {
     const order = { paymentId: 'p', gatewayOrderId: 'g', expiresAt: ORDER_EXPIRES };
     const { check } = payWorld({
-      orders: new Map([[ENROLLMENT, { payable: order, paid: true }]]),
+      orders: new Map([[ENROLLMENT, { payable: order, paid: true, programmeProcessing: false }]]),
     });
     await expect(check()).rejects.toEqual(
       new DomainError('PREVIOUS_CHECKOUT', undefined, {
@@ -979,10 +983,31 @@ describe('programme.pay’s check (006:T009; FR-710, R-509, FR-BOOK-12)', () => 
     );
   });
 
+  // PR #158 r1 Major 1 (PROBE-S1; FR-BOOK-12): paid at the gateway, the confirm step not run yet.
+  it('refuses PREVIOUS_CHECKOUT as processing while an order of the programme itself is paid and not yet confirmed', async () => {
+    const { check, lines } = payWorld({
+      orders: new Map([[ENROLLMENT, { payable: null, paid: true, programmeProcessing: true }]]),
+    });
+    await expect(check()).rejects.toEqual(
+      new DomainError('PREVIOUS_CHECKOUT', undefined, {
+        details: [
+          { path: 'enrollmentId', code: ENROLLMENT },
+          { path: 'state', code: 'processing' },
+        ],
+      }),
+    );
+    expect(lines).toEqual([
+      [
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT, reason: 'previous_checkout' },
+        'A programme payment was refused',
+      ],
+    ]);
+  });
+
   it('pays on beside an own hold with no order yet, and beside the programme’s paid assessment', async () => {
     const { check } = payWorld({
       hold: ownHold({ enrollmentId: null }),
-      orders: new Map([[ENROLLMENT, { payable: null, paid: true }]]),
+      orders: new Map([[ENROLLMENT, { payable: null, paid: true, programmeProcessing: false }]]),
     });
     await expect(check()).resolves.toMatchObject({ enrollmentId: ENROLLMENT });
   });
