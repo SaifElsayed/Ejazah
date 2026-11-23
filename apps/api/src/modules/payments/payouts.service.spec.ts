@@ -53,8 +53,9 @@ interface Fixture {
 
 /**
  * T1: E1 completed (its release written and marked paid on 2026-11-02), E2 completed (its release
- * written, due since 2026-10-13), E3 running (held), E4 cancelled by a gender correction with a
- * refund of 1,000 EGP. T2: E5 completed, its release written and due since 2026-10-05.
+ * written, due since 2026-10-13), E3 running (held), E4 cancelled by an administrator's cancellation
+ * with a refund of 1,000 EGP (003:T125, rule d: was a gender correction, which now releases). T2: E5
+ * completed, its release written and due since 2026-10-05.
  */
 const fixtures: readonly Fixture[] = [
   {
@@ -85,7 +86,7 @@ const fixtures: readonly Fixture[] = [
     status: 'cancelled',
     done: 2,
     refunded: 100_000,
-    cases: [{ caseId: id(404), reason: 'gender_correction', status: 'resolved', createdAt: NOW }],
+    cases: [{ caseId: id(404), reason: 'admin_cancellation', status: 'resolved', createdAt: NOW }],
   },
   {
     enrollmentId: id(105),
@@ -167,6 +168,7 @@ function store(overrides: Partial<PayoutsStore> = {}): {
       sessionsAmong: async (_tx, ids) => byIds(ids, (f) => sessions(f.done)),
       casesAmong: async (_tx, ids) => byIds(ids, (f) => [...(f.cases ?? [])]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       makeupsAmong: async () => new Map(),
     },
     enrollmentIdsOfTeacher: async (_tx, teacherUserId) =>
@@ -258,7 +260,7 @@ describe('teacher.dues.get: «مستحقاتي» (DEC-89)', () => {
           waitsForCase: false,
         },
       ],
-      deductions: [{ share_piasters: 70_000, caseReason: 'gender_correction' }],
+      deductions: [{ share_piasters: 70_000, caseReason: 'admin_cancellation' }],
       disputeWindowHours: 72,
     });
   });
@@ -401,7 +403,7 @@ describe('payouts.get: a teacher’s detail', () => {
         student: { userId: id(204), displayName: 'name-204' },
         refunded_piasters: 100_000,
         share_piasters: 70_000,
-        case: { caseId: id(404), reason: 'gender_correction' },
+        case: { caseId: id(404), reason: 'admin_cancellation' },
       },
     ]);
     expect(detail.figures).toMatchObject({

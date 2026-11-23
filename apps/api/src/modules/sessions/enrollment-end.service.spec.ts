@@ -499,3 +499,19 @@ describe('sessions.endEnrollment on a complaint against the student (003:T112)',
     expect(one.lines[0]).toEqual(expect.objectContaining({ end: 'student_complaint_ended' }));
   });
 });
+
+// 003:T125 (SRS DEC-104; Q-1 (a)): the end names who stopped. `teacher_ended` («المعلم وقف») opens its
+// case under that reason, which T105's release and T110's amounts read as a teacher's stop (DEC-85),
+// never as an end by the administration; the slot as asked. The cause crosses as given (the contract
+// admits it, run red first in `packages/contracts`); this case is held by mutant A-6.
+describe('sessions.endEnrollment on the teacher’s stop (003:T125)', () => {
+  it('opens the teacher_ended case and hands the sessions and remedies to it, the slot held as asked', async () => {
+    const one = world();
+    expect(await one.ask({ cause: 'teacher_ended' })).toEqual({
+      answer: { enrollmentId: ENROLLMENT, caseId: NEW_CASE, slot: 'hold', cancelledSessions: 1 },
+      replayed: false,
+    });
+    expect(one.calls).toContainEqual(['openEndCase', ENROLLMENT, 'teacher_ended']);
+    expect(one.calls.some(([call]) => call === 'releaseHeldSlot')).toBe(false);
+  });
+});

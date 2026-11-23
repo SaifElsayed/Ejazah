@@ -242,6 +242,28 @@ describe('TeacherDues («مستحقاتي»)', () => {
     );
   });
 
+  // 003:T125 (SRS DEC-96): a student's deletion by an administrator opens its own case, so a refund
+  // on it names that reason. Written before the words, run red first.
+  it('names the reason of a refund on a student’s deletion’s case', async () => {
+    get.mockResolvedValue({
+      ...dues,
+      deductions: [{ share_piasters: 42_000, caseReason: 'account_deleted' }],
+    });
+    await inBothDirections(
+      withQueries(() => <TeacherDues />),
+      async (_rendered, direction) => {
+        expect(await screen.findByText(pounds(direction, piasters(42_000)))).toBeTruthy();
+        expect(
+          screen.getByText(
+            said(direction, 'money.dues.reasonLine', {
+              reason: said(direction, 'money.dues.reason.accountDeleted'),
+            }),
+          ),
+        ).toBeTruthy();
+      },
+    );
+  });
+
   it('draws no student’s name and no order, even one the server sent', async () => {
     get.mockResolvedValue({
       ...dues,

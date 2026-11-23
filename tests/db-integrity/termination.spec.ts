@@ -50,6 +50,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { confirmEnrollment } from '../../apps/api/src/jobs/confirm-enrollment';
 import { piasters } from '../../packages/money/src/index';
+import { addHours } from '../../packages/time/src/index';
 import {
   bookingSlotsOf,
   bookingSlotsStore,
@@ -75,8 +76,12 @@ import {
   openRequestOf,
 } from '../../apps/api/src/modules/verification/index.js';
 import {
+  createPaymentsMonitorService,
+  createPayoutServices,
+  createShareReleaseSweep,
   orderStandingsOf,
   payableProgrammeOrderAmong,
+  type ShareReleaseRun,
 } from '../../apps/api/src/modules/payments/index.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import { hashPassword } from '../../apps/api/src/platform/crypto/hashing.js';
@@ -87,6 +92,7 @@ import {
   type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import { transactionsOver } from '../../apps/api/src/platform/db/transaction.repository.js';
 import {
   bindToTransaction,
   RequestLive,
@@ -230,8 +236,11 @@ async function person(passwordHash?: string): Promise<string> {
 /** Thursday 09:00 and 10:00 Cairo, the local starts of an offer's slots. */
 const STARTS = [THURSDAY_0900, new Date('1970-01-01T10:00:00Z')];
 
-/** A teacher bookable by a female student, a four-session package and `slots` Thursday slots. */
-async function offer(slots = 1) {
+/**
+ * A teacher bookable by a female student, a package of `sessions` sessions (four unless 003:T125's
+ * worked example asks ten) and `slots` Thursday slots.
+ */
+async function offer(slots = 1, sessions = 4) {
   const teacherId = await person();
   await database.teacherProfile.create({
     data: {
@@ -251,7 +260,7 @@ async function offer(slots = 1) {
     data: {
       teacherUserId: teacherId,
       subjectId,
-      sessionCount: 4,
+      sessionCount: sessions,
       sessionDurationMinutes: 60,
       pricePiasters: 100_000n,
       isActive: true,
@@ -273,7 +282,7 @@ async function offer(slots = 1) {
     });
     slotIds.push(id);
   }
-  return { teacherId, subjectId, packageId: pkg.id, track: pkg.track, slotIds };
+  return { teacherId, subjectId, packageId: pkg.id, track: pkg.track, slotIds, sessions };
 }
 
 type Offer = Awaited<ReturnType<typeof offer>>;
@@ -284,7 +293,7 @@ async function hold(on: Offer, slotId: string, studentId: string): Promise<strin
     data: {
       slotId,
       packageId: on.packageId,
-      sessionCount: 4,
+      sessionCount: on.sessions,
       studentUserId: studentId,
       expiresAt: LATER,
     },
@@ -297,7 +306,7 @@ async function hold(on: Offer, slotId: string, studentId: string): Promise<strin
 async function pay(on: Offer, studentId: string, holdId: string): Promise<string> {
   const quoted: QuotedSummary = {
     price_piasters: piasters(100_000),
-    sessionCount: 4,
+    sessionCount: on.sessions,
     sessionDurationMinutes: 60,
     track: on.track,
   };
@@ -594,12 +603,16 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     }
   });
 
-  it("a student's: no case, the sessions cancelled naming none, the open remedy lapsed and a chosen refund's case kept open", async () => {
+  // 003:T125 (SRS DEC-96, FR-AUTH-14 and FR-ADMIN-22 as amended, FR-484 as amended; an approved
+  // rewrite): a student's deletion by an administrator opens one `account_deleted` case per enrollment
+  // it ends, which its sessions' rows name and its open remedy is handed to; a chosen refund keeps its
+  // own open case. Run red first.
+  it("a student's: one account_deleted case, the sessions cancelled naming it, the open remedy handed to it and a chosen refund's case kept open", async () => {
     const on = await offer();
     const studentId = await person(await hashPassword(PASSWORD));
     const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
     const [missed, refused] = await sessionStates(enrollmentId);
-    const lapsing = await owed(missed?.id ?? '', 'awaiting_choice');
+    const handing = await owed(missed?.id ?? '', 'awaiting_choice');
     const { caseId: refundCase } = await database.$transaction((tx) =>
       openCompensationCase(tx, enrollmentId, 'refund_choice'),
     );
@@ -611,9 +624,12 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
       status: 'cancelled',
       cancellationReason: 'account_deleted',
     });
-    expect((await casesOf(enrollmentId)).map(({ reason, status }) => [reason, status])).toEqual([
+    const cases = await casesOf(enrollmentId);
+    expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
       ['refund_choice', 'open'],
+      ['account_deleted', 'open'],
     ]);
+    const deletionCase = cases[1]?.id;
     const remaining = (await sessionStates(enrollmentId)).filter(
       ({ status }) => status !== 'teacher_no_show',
     );
@@ -623,12 +639,17 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
       remaining.length,
     );
     for (const event of events.filter(({ kind }) => kind === 'cancelled_by_admin')) {
-      expect(event.caseId).toBeNull();
+      expect(event.caseId).toBe(deletionCase);
     }
-    expect(await remedyOf(lapsing)).toEqual({ status: 'lapsed', caseId: null, decidedAt: NOW });
-    expect(events.filter(({ kind }) => kind === 'remedy_lapsed')).toEqual([
-      { kind: 'remedy_lapsed', sessionId: missed?.id, caseId: null, occurredAt: NOW },
+    expect(await remedyOf(handing)).toEqual({
+      status: 'refund_case',
+      caseId: deletionCase,
+      decidedAt: NOW,
+    });
+    expect(events.filter(({ kind }) => kind === 'remedy_handed_to_case')).toEqual([
+      { kind: 'remedy_handed_to_case', sessionId: missed?.id, caseId: null, occurredAt: NOW },
     ]);
+    expect(events.filter(({ kind }) => kind === 'remedy_lapsed')).toEqual([]);
     expect(await remedyOf(keeping)).toEqual({
       status: 'refund_case',
       caseId: refundCase,
@@ -641,7 +662,7 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     const studentId = await person(await hashPassword(PASSWORD));
     const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
     const [missed, removed] = await sessionStates(enrollmentId);
-    const lapsing = await owed(missed?.id ?? '', 'awaiting_choice');
+    const handing = await owed(missed?.id ?? '', 'awaiting_choice');
     const hidden = await owed(removed?.id ?? '', 'awaiting_choice');
     await database.session.update({
       where: { id: removed?.id ?? '' },
@@ -650,7 +671,8 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
 
     await deleteByAdministrator(studentId);
 
-    expect(await remedyOf(lapsing)).toMatchObject({ status: 'lapsed' });
+    // 003:T125 (rule d): the deletion's `account_deleted` case takes the open remedy.
+    expect(await remedyOf(handing)).toMatchObject({ status: 'refund_case' });
     expect(await remedyOf(hidden)).toEqual({
       status: 'awaiting_choice',
       caseId: null,
@@ -684,6 +706,140 @@ describe('a deletion with confirmed enrollments (T004, FR-AUTH-14, R-313, SC-412
     expect(await casesOf(enrollmentId)).toEqual([]);
     expect(await sessionEventsOf(enrollmentId)).toEqual([]);
     expect(await remedyOf(remedyId)).toMatchObject({ status: 'awaiting_choice', caseId: null });
+  });
+});
+
+// 003:T125 (SRS DEC-96, DEC-104; FR-AUTH-14 and FR-ADMIN-22 as amended): a student's deletion by an
+// administrator opens one `account_deleted` case per enrollment it ends, which shows the student's
+// untaken value and holds the teacher's release (`direct_end`) until an administrator resolves it.
+// The worked example: 10,000 EGP paid in full, 10 sessions, the share 7,000 EGP, 4 delivered: the
+// teacher 2,800 EGP, the student 6,000 EGP. Run red first; the race case under mutant A-2.
+
+/** The dispute window and the page size, as the payouts read them. */
+const releaseSettings: SettingsReader = {
+  read: async (key, schema) =>
+    schema.parse({ dispute_window_hours: 72, admin_list_page_size: 50 }[key]),
+};
+
+/** Long after every session's window: what the sweep's clock says. */
+const AFTER_EVERY_WINDOW = new Date('2027-06-01T00:00:00Z');
+
+/** The worked example's enrollment: 10 sessions, its order 10,000 EGP at 70 %, `taken` delivered. */
+async function enrolledInTen(taken: number) {
+  const on = await offer(1, 10);
+  const studentId = await person(await hashPassword(PASSWORD));
+  const enrollmentId = await confirmed(on, on.slotIds[0] ?? '', studentId);
+  await database.$executeRaw`
+    UPDATE payments SET gross_piasters = 1000000, teacher_share_rate_percent = 70,
+                        teacher_share_piasters = 700000
+    WHERE enrollment_id = ${enrollmentId}::uuid`;
+  const states = await sessionStates(enrollmentId);
+  await database.session.updateMany({
+    where: { id: { in: states.slice(0, taken).map(({ id }) => id) } },
+    data: { status: 'done' },
+  });
+  const { id: paymentId } = await database.payment.findFirstOrThrow({
+    where: { enrollmentId },
+    select: { id: true },
+  });
+  return { on, studentId, enrollmentId, paymentId };
+}
+
+describe("a student's deletion's case (003:T125, DEC-96)", () => {
+  it('leaves one open account_deleted case showing 6,000 EGP, its sessions naming it, the teacher’s 2,800 waiting for it', async () => {
+    const { on, studentId, enrollmentId } = await enrolledInTen(4);
+
+    await deleteByAdministrator(studentId);
+
+    const cases = await casesOf(enrollmentId);
+    expect(cases.map(({ reason, status }) => [reason, status])).toEqual([
+      ['account_deleted', 'open'],
+    ]);
+    const caseId = cases[0]?.id ?? '';
+    const cancelled = (await sessionEventsOf(enrollmentId)).filter(
+      ({ kind }) => kind === 'cancelled_by_admin',
+    );
+    expect(cancelled).toHaveLength(6);
+    for (const event of cancelled) expect(event.caseId).toBe(caseId);
+    expect(
+      await database.$transaction((tx) =>
+        createPaymentsMonitorService({ settings }).caseAmount(tx, caseId),
+      ),
+    ).toEqual({
+      amount: {
+        cause: 'direct_end',
+        refund_piasters: 600_000,
+        release_piasters: 280_000,
+        refunded_piasters: 0,
+      },
+    });
+    const { scheduledEndAt } = await database.session.findFirstOrThrow({
+      where: { enrollmentId, sequenceNumber: 4 },
+      select: { scheduledEndAt: true },
+    });
+    const dues = await createPayoutServices({
+      database,
+      settings: releaseSettings,
+      idempotency: { runOn: () => Promise.reject(new Error('probe: not reached')) },
+      cipher: { decrypt: () => Promise.reject(new Error('probe: not reached')) as never },
+      log: SILENT,
+    }).teacher.get(on.teacherId);
+    expect(dues.releases).toEqual([
+      {
+        part: 'direct_end',
+        amount_piasters: 280_000,
+        state: 'held',
+        fallsDueAt: new Date(addHours(scheduledEndAt, 72)).toISOString(),
+        waitsForCase: true,
+      },
+    ]);
+  });
+
+  it('a deletion and the release sweep at once: the sweep inside the deletion writes nothing, and after it the release waits for the case (the race; mutant A-2)', async () => {
+    const { studentId, enrollmentId, paymentId } = await enrolledInTen(4);
+    const order = {
+      paymentId,
+      enrollmentId,
+      kind: 'package' as const,
+      instalmentMonth: null,
+      paid_piasters: piasters(1_000_000),
+      share_piasters: piasters(700_000),
+      sharePercent: 70,
+      halfPercent: null,
+      refunded_piasters: piasters(0),
+    };
+    // The sweep's page narrowed to this enrollment's order, so it judges no other row.
+    const sweep = () =>
+      createShareReleaseSweep({
+        transactions: transactionsOver(database),
+        settings: releaseSettings,
+        log: { info: () => undefined, error: () => undefined, warn: () => undefined },
+        pageSize: 10,
+        report: () => undefined,
+        clock: async () => AFTER_EVERY_WINDOW,
+        ordersAfter: async (_tx, after) => (after === undefined ? [order] : []),
+      }).run();
+    const runs: ShareReleaseRun[] = [];
+    const beside = new AccountConsequences();
+    beside.subscribe(
+      terminationSubscriber({ orders: orderStandingsOf, now: () => NOW, log: SILENT }),
+    );
+    // Inside the deletion's transaction, its case opened and not yet committed.
+    beside.subscribe(async () => {
+      runs.push(await sweep());
+    });
+
+    await deleteByAdministrator(studentId, deletionOver(beside));
+    runs.push(await sweep());
+
+    expect(runs).toEqual([
+      { written: [], failed: [] },
+      { written: [], failed: [] },
+    ]);
+    expect(await database.teacherShareRelease.count({ where: { enrollmentId } })).toBe(0);
+    expect((await casesOf(enrollmentId)).map(({ reason, status }) => [reason, status])).toEqual([
+      ['account_deleted', 'open'],
+    ]);
   });
 });
 
@@ -1157,7 +1313,8 @@ describe("a teacher's suspension pauses (T071, FR-504, R-313)", () => {
   // T081's note (B42a; the review session's ruling of 2026-11-14 on lane D's report): an
   // administrator's deletion of a party of a paused enrollment (T080's check skipped) closes its open
   // `teacher_suspended` case as a ban does, the deleting administrator its closer through
-  // `AccountConsequence`'s `actor`; a student's deletion has no end case, so nothing covers it.
+  // `AccountConsequence`'s `actor`; 003:T125 (rule d): a student's deletion opens its `account_deleted`
+  // case, which covers it.
   it('an administrator deletes a paused enrollment’s student: its teacher_suspended case closed resolved, compensation_ordered, ended_meanwhile, by the deleting administrator', async () => {
     const { on, one, two } = await teacherWithTwo();
     const adminId = await makeAdmin(watcher);
@@ -1179,11 +1336,16 @@ describe("a teacher's suspension pauses (T071, FR-504, R-313)", () => {
         coveredByCaseId: true,
       },
     });
+    const [deletionCase] = await database.dispute.findMany({
+      where: { enrollmentId: one, reason: 'account_deleted' },
+      select: { id: true, status: true },
+    });
+    expect(deletionCase?.status).toBe('open');
     expect(closed).toMatchObject({
       status: 'resolved',
       resolution: 'compensation_ordered',
       resolutionNotes: 'ended_meanwhile',
-      coveredByCaseId: null,
+      coveredByCaseId: deletionCase?.id,
     });
     const closer = await database.adminUser.findUnique({
       where: { id: closed?.resolvedByAdminId ?? randomUUID() },

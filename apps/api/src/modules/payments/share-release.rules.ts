@@ -26,6 +26,11 @@
 //   `student_banned`; the last counted session's dispute window passed; no case open. The share of
 //   the sessions delivered and of those the student missed (`student_no_show`, consumed)
 //   less what earlier releases gave, never below nothing (`complaintCloseAmount`, Q-B1-5 (a)).
+// - `direct_end` (003:T125; SRS DEC-104, DEC-96; Q-1 (a) to Q-3 (a)): either track; closed with a
+//   case `admin_ended` (the student's stop), `account_deleted` (a student's deletion by an
+//   administrator) or `gender_correction`; the complaint close's arithmetic under its own name, held
+//   while the case is open. A programme's `admin_ended` that covered its suspension
+//   (`coversSuspension`, the fact its case reads) stays a dropout: nothing more (006:T012 as amended).
 // A delivered make-up (numbered past the package's count) takes the value of the session it makes
 // up (`valuedSequence`, Q-B1-4 (a)); its original, never delivered, is not counted twice.
 // A disputed session counts by its frozen outcome, as sessions' `progress.ts` counts it; one not yet
@@ -138,6 +143,11 @@ export interface ReleaseFacts {
   readonly caseReasons: readonly string[];
   /** Whether a dispute, a case or a complaint on the enrollment is open. */
   readonly caseOpen: boolean;
+  /**
+   * 003:T125 (006:T012 as amended): an `admin_ended` case covered the enrollment's open
+   * `teacher_suspended` case, the fact the case's amount reads (`coversSuspension`).
+   */
+  readonly coversSuspension: boolean;
   readonly written: readonly WrittenRelease[];
 }
 
@@ -152,11 +162,14 @@ export interface PlannedRelease {
   readonly waitsForCase: boolean;
 }
 
+/** The release a closing's case gives (Q-5 (a); 003:T125's `direct_end`). */
+export type ClosingCause = 'teacher_dropout' | 'student_complaint_close' | 'direct_end';
+
 /**
  * The closings that release (Q-5 (a)): a closed set of the reasons it covers, so a reason added
- * later (B47's `gender_correction` among those already left out) compiles and releases nothing.
+ * later compiles and releases nothing.
  */
-const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint_close'> = new Map([
+const CLOSE_RELEASES: ReadonlyMap<string, ClosingCause> = new Map([
   ['teacher_ended', 'teacher_dropout'],
   ['absence_termination', 'teacher_dropout'],
   ['student_fault_confirmed', 'student_complaint_close'],
@@ -164,17 +177,26 @@ const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint
   // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the administrator's end on a teacher's complaint
   // against the student is a close on a complaint against the student.
   ['student_complaint_ended', 'student_complaint_close'],
+  // 003:T125 (SRS DEC-104, DEC-96; Q-1 (a), Q-2 (a), Q-3 (a)): an end by the administration, the
+  // student's stop, a student's deletion by an administrator and a gender correction.
+  ['admin_ended', 'direct_end'],
+  ['account_deleted', 'direct_end'],
+  ['gender_correction', 'direct_end'],
 ]);
 
 /**
  * 003:T110: the cause one case reason gives, or none, from the same closed set, so T110's case
  * amount and these releases never disagree (T112 added DEC-86's complaint against the student here).
  */
-export function closingCauseOf(
-  reason: string,
-): 'teacher_dropout' | 'student_complaint_close' | undefined {
+export function closingCauseOf(reason: string): ClosingCause | undefined {
   return CLOSE_RELEASES.get(reason);
 }
+
+/**
+ * 006:T012 (003:T125): the end that is a programme's dropout only where it covered the programme's
+ * `teacher_suspended` case; otherwise the student's stop.
+ */
+export const SUSPENSION_COVERING_END = 'admin_ended';
 
 const DELIVERED: ReadonlySet<string> = new Set(['done']);
 /** The sessions consumed, a Student-No-Show counted too; T110's refund is every other session. */
@@ -308,13 +330,13 @@ export function refundShareOf(order: ReleaseOrder): Piasters {
   return teacherShare(order.refunded_piasters, order.sharePercent);
 }
 
-/** The newest case reason that releases, or none. */
+/** The newest case reason that releases, with its release, or none. */
 function closingRelease(
   reasons: readonly string[],
-): 'teacher_dropout' | 'student_complaint_close' | undefined {
+): { readonly reason: string; readonly release: ClosingCause } | undefined {
   for (const reason of reasons) {
     const release = CLOSE_RELEASES.get(reason);
-    if (release !== undefined) return release;
+    if (release !== undefined) return { reason, release };
   }
   return undefined;
 }
@@ -542,7 +564,14 @@ export function plannedReleases(
   }
 
   if (closed) {
-    const release = closingRelease(caseReasons);
+    const closing = closingRelease(caseReasons);
+    // 003:T125 (006:T012 as amended): a programme's end that covered its suspension stays a
+    // dropout, as its case reads it: nothing more (DEC-85).
+    const coveredDropout =
+      programme !== undefined &&
+      closing?.reason === SUSPENSION_COVERING_END &&
+      facts.coversSuspension;
+    const release = coveredDropout ? 'teacher_dropout' : closing?.release;
     if (release === 'teacher_dropout' && enrollment.track === 'recitation') {
       // 003:T110, Q-C3 (b): a session the student missed is consumed, its share released.
       const taken = sequencesOf(CONSUMED);
@@ -553,7 +582,9 @@ export function plannedReleases(
         true,
       );
     }
-    if (release === 'student_complaint_close') {
+    // 003:T125 (DEC-104): an end by the administration releases as a complaint close does, under
+    // its own name, `direct_end`.
+    if (release === 'student_complaint_close' || release === 'direct_end') {
       const counted = sequencesOf(CONSUMED);
       const taken = counted.map(valuedSequence);
       // 006:T012 (R-512, G-3): a programme's sessions each by their own order; a package's by its
@@ -565,7 +596,7 @@ export function plannedReleases(
               shareOfSessions(paid.share_piasters, count, positions),
             );
       owe(
-        'student_complaint_close',
+        release,
         complaintCloseAmount(share_piasters, [...written.values()]),
         after(lastToEnd(counted), windowHours),
         true,

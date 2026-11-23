@@ -107,6 +107,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   gender_correction: 'admin.sessions.caseReason.genderCorrection',
   // 003:T112 (Q-4 (a)): the case of the administrator's end on a complaint against the student.
   student_complaint_ended: 'admin.sessions.endCause.caseReason',
+  // 003:T125 (SRS DEC-96): the case of a student's deletion by an administrator.
+  account_deleted: 'admin.sessions.caseReason.accountDeleted',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {

@@ -6,7 +6,8 @@
 // releases are payments' own; the enrollment's parties, track, status and count, and (006:T011) its
 // cancellation reason and programme, are booking's (`enrollmentsAmong`); its sessions' outcomes sessions'
 // (`sessionsOfEnrollments`, a disputed one by its frozen outcome); its compensation cases and its
-// open matters moderation's (`compensationCasesAmong`, `enrollmentsWithOpenMatterAmong`). Each read
+// open matters moderation's (`compensationCasesAmong`, `enrollmentsWithOpenMatterAmong`; 003:T125: the
+// records of the suspension cases an `admin_ended` end may have covered, `caseRecordOf`). Each read
 // is bounded by the enrollments asked and takes no lock: a release is a record an administrator acts
 // on by hand, and its once-only write is the database's unique (rule 62), not a lock.
 //
@@ -26,6 +27,8 @@ import type { Logger } from '../../platform/logging/logger.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { enrollmentsAmong } from '../booking/index.js';
 import {
+  type CaseRecord,
+  caseRecordOf,
   compensationCasesAmong,
   type EnrollmentCase,
   enrollmentsWithOpenMatterAmong,
@@ -52,6 +55,7 @@ import {
   type ReleaseEnrollment,
   type ReleaseFacts,
   type ReleaseSession,
+  SUSPENSION_COVERING_END,
 } from './share-release.rules.js';
 
 /** What the releases are computed from, each read on the caller's transaction; faked in a spec. */
@@ -87,6 +91,40 @@ export interface ReleaseReads {
     tx: Transaction,
     enrollmentIds: readonly string[],
   ): Promise<ReadonlyMap<string, string>>;
+  /** 003:T125: moderation's, a case by its id, any kind, or null (the covered suspension). */
+  caseRecordOf(tx: Transaction, caseId: string): Promise<CaseRecord | null>;
+}
+
+/** 006:T012: sessions' `PAUSED_CASE_REASON` (`teacher-suspension.service.ts`). */
+const PAUSED_CASE_REASON = 'teacher_suspended';
+/** 006:T012: sessions' `ENDED_MEANWHILE_NOTE`, the note an end closes a paused case with. */
+const ENDED_MEANWHILE_NOTE = 'ended_meanwhile';
+
+/**
+ * 006:T012, 003:T125 (T012 as amended): of the enrollments whose cases (newest first) hold an
+ * `admin_ended` end, those whose `teacher_suspended` case that end closed `ended_meanwhile` (a
+ * reinstatement's note is `reinstated`; an enrollment ends once, so the end that closed it is this
+ * one). Moderation's record of each such suspension case, at once, bounded by those enrollments'
+ * cases; none read for an enrollment with no such end. The case's amount and the release read it alike.
+ */
+export async function suspensionsCoveredAmong(
+  tx: Transaction,
+  cases: ReadonlyMap<string, readonly EnrollmentCase[]>,
+  recordOf: (tx: Transaction, caseId: string) => Promise<CaseRecord | null>,
+): Promise<ReadonlySet<string>> {
+  const suspensions = [...cases].flatMap(([enrollmentId, own]) =>
+    own.some(({ reason }) => reason === SUSPENSION_COVERING_END)
+      ? own
+          .filter(({ reason }) => reason === PAUSED_CASE_REASON)
+          .map(({ caseId }) => ({ enrollmentId, caseId }))
+      : [],
+  );
+  const records = await Promise.all(suspensions.map(({ caseId }) => recordOf(tx, caseId)));
+  return new Set(
+    suspensions
+      .filter((_, index) => records[index]?.resolutionNotes === ENDED_MEANWHILE_NOTE)
+      .map(({ enrollmentId }) => enrollmentId),
+  );
 }
 
 /**
@@ -127,6 +165,7 @@ export const releaseReads: ReleaseReads = {
   casesAmong: compensationCasesAmong,
   openMattersAmong: enrollmentsWithOpenMatterAmong,
   makeupsAmong: makeupOriginsAmong,
+  caseRecordOf,
 };
 
 /**
@@ -188,6 +227,8 @@ export async function releasesAmong(
     reads.openMattersAmong(tx, ids),
     reads.makeupsAmong(tx, ids),
   ]);
+  // 003:T125: after the cases, which tell which suspension cases to read.
+  const covered = await suspensionsCoveredAmong(tx, cases, reads.caseRecordOf);
   return ids.flatMap((enrollmentId) => {
     const paid = orders.get(enrollmentId) ?? [];
     const [order] = paid;
@@ -204,6 +245,7 @@ export async function releasesAmong(
           sessions: releaseSessionsOf(sessions.get(enrollmentId) ?? [], makeups),
           caseReasons: enrollmentCases.map(({ reason }) => reason),
           caseOpen: open.has(enrollmentId),
+          coversSuspension: covered.has(enrollmentId),
           written: own.map(({ milestone, amount_piasters }) => ({ milestone, amount_piasters })),
         },
         written: own,

@@ -21,8 +21,10 @@
 // handed over through sessions' `cancelRemainingSessions`, each enrollment `cancelled`
 // `account_deleted` with one `enrollment_events` row. A teacher's deletion opens one `teacher_ended`
 // compensation case per enrollment (moderation's `openCompensationCase`), which its sessions' rows
-// name and its open remedies are handed to; a student's opens none, so the rows name none and the
-// open remedies lapse.
+// name and its open remedies are handed to; a student's (003:T125, SRS DEC-96: only an
+// administrator's reaches a confirmed enrollment) opens one `account_deleted` case per enrollment the
+// same way, after the sessions and the remedies, under the enrollment's lock already held, so its
+// remedies are handed to it and the teacher's release waits for it (FR-484 as amended).
 //
 // A STUDENT'S SUSPENSION AND BAN (T005 of specs/004-sessions, `002:T144`; FR-485, FR-486; R-313;
 // plan.md decision 1). The student's confirmed enrollments (an account is a student or a teacher,
@@ -170,7 +172,12 @@ export type { ActiveHoldScope, ConfirmedEnrollment };
 /** The cases an account's end opens on the enrollments it reaches (R-313). */
 export type EndCaseReason = Extract<
   CompensationReason,
-  'teacher_ended' | 'student_suspended' | 'student_banned' | 'teacher_suspended'
+  | 'teacher_ended'
+  | 'student_suspended'
+  | 'student_banned'
+  | 'teacher_suspended'
+  // 003:T125 (SRS DEC-96): a student's deletion by an administrator.
+  | 'account_deleted'
 >;
 
 /**
@@ -385,8 +392,9 @@ interface End {
 /** How `cause` ends the confirmed enrollments of an account in `role`; null where it reaches none. */
 function endOf(cause: TerminationCause, role: Role): End | null {
   if (cause === 'account_deleted') {
+    // 003:T125 (SRS DEC-96, FR-AUTH-14 as amended): a student's deletion opens its own case.
     return {
-      caseReason: role === 'teacher' ? 'teacher_ended' : null,
+      caseReason: role === 'teacher' ? 'teacher_ended' : 'account_deleted',
       cancellation: 'account_deleted',
     };
   }
@@ -430,7 +438,7 @@ interface Decided {
   readonly cancelledSessions: number;
   readonly frozenRemedies: number;
   readonly handedRemedies: number;
-  /** A student's deletion lapses the open remedies, nothing owed (C2). */
+  /** Remedies lapsed, nothing owed, where no case opened (C2; since 003:T125 no end of this file). */
   readonly lapsedRemedies: number;
   readonly cases: number;
 }

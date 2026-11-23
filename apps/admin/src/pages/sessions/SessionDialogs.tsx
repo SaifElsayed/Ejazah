@@ -23,6 +23,9 @@
 //   frees the slot (the T112 note, «releasing the slot»; FR-POSTPONE-6; PR #151's review, round 1,
 //   Major 2 (a)): with it the slot's choice shows «release now» alone, selected, with a line saying
 //   why, and sends `release`; the direct end gives the administrator's choice back.
+// - 003:T125 (SRS DEC-104; Q-1 (a)): the direct end names who stopped: «الطالب قرر يوقف» (the
+//   default, `admin_ended`, sent as before) or «المعلم وقف» (`cause: 'teacher_ended'`, the slot as
+//   chosen), each with a line saying what it does.
 // Once the server answers, the monitor is read again and the dialog closes.
 import type { EnrollmentEndCause, EnrollmentEndSlot } from '@ijazah/contracts/admin';
 import { useMutation } from '@tanstack/react-query';
@@ -374,12 +377,30 @@ export function EndEnrollmentDialog({
           selected={cause === 'admin_ended'}
           onPress={() => setCause('admin_ended')}
         />
+        {/* 003:T125 (SRS DEC-104; Q-1 (a)): who stopped, the teacher's stop sent as its cause. */}
+        <Choice
+          label={t('admin.sessions.endCause.teacherEnded')}
+          selected={cause === 'teacher_ended'}
+          onPress={() => setCause('teacher_ended')}
+        />
         <Choice
           label={t('admin.sessions.endCause.studentComplaintEnded')}
           selected={cause === 'student_complaint_ended'}
           onPress={() => setCause('student_complaint_ended')}
         />
       </ChoiceGroup>
+      {cause === 'student_complaint_ended' ? null : (
+        <p className="row row--top gap-2 text-callout">
+          <Icon name="info" size="sm" />
+          <span>
+            {t(
+              cause === 'teacher_ended'
+                ? 'admin.sessions.endCause.teacherEndedEffect'
+                : 'admin.sessions.endCause.adminEndedEffect',
+            )}
+          </span>
+        </p>
+      )}
       {cause === 'student_complaint_ended' ? (
         <p className="row row--top gap-2 text-callout">
           <Icon name="info" size="sm" />

@@ -3,8 +3,8 @@
 // amounts are `packages/money`'s (R-MONEY-5). An administrator decides the case and executes the
 // amount by hand in the gateway's dashboard (DEC-82); nothing here moves money.
 //
-// THE CAUSES are the releases' own closed set (`closingCauseOf`, Q-5 (a)), so a reason outside it,
-// B47's `gender_correction` and any reason added later included, shows no amount. A complaint or a
+// THE CAUSES are the releases' own closed set (`closingCauseOf`, Q-5 (a)), so a reason outside it, any
+// reason added later included, shows no amount. A complaint or a
 // session dispute shows none whatever its text.
 // - A teacher's dropout on the ijazah track: the whole of every order, in three parts (`dropoutParts`):
 //   the share the gateway still holds, the platform's own part, and the share already released, the
@@ -23,6 +23,11 @@
 //   taken through a make-up) are a refund due, on both closes; the rest not taken is the
 //   administrator's decision in the case; the teacher's release is the complaint close's, unchanged
 //   (T105's map). What is not refunded stays where the gateway holds it (Q-7a (a)).
+// - 003:T125 (SRS DEC-104, DEC-96; Q-1 (a) to Q-3 (a)): an end by the administration (`admin_ended`, the
+//   student's stop; `account_deleted`, a student's deletion by an administrator; `gender_correction`),
+//   its own cause `direct_end`: the complaint close's figures, on both tracks. A programme's
+//   `admin_ended` that covered its suspension stays a dropout (below); `teacher_ended` from the end
+//   is a teacher's dropout.
 // A delivered make-up takes the value of the session it makes up (Q-B1-4 (a)). Beside each amount,
 // the refunds already recorded on its orders (Q-C1 (a)), nothing taken off it.
 //
@@ -32,8 +37,8 @@
 // gives 500, 237.50 and 250 EGP. Its refunds and releases sum the orders' own; the refunds already
 // recorded are every order's. Its dropout set is `teacher_ended`, `absence_termination` and an
 // `admin_ended` that covered its open `teacher_suspended` case (`coversSuspension`), each the whole of
-// every order (DEC-85); a direct end of an unsuspended programme is T125's (R1b), and an open
-// suspension case is a pause and shows none. A package keeps the rules above on its first order.
+// every order (DEC-85); a direct end of an unsuspended programme is the student's stop (T125), and
+// an open suspension case is a pause and shows none. A package keeps the rules above on its first order.
 import { dropoutParts, type Piasters, shareOfSessions, sumOf, untakenValue } from '@ijazah/money';
 
 import {
@@ -41,6 +46,7 @@ import {
   complaintCloseAmount,
   CONSUMED,
   programmePlaces,
+  SUSPENSION_COVERING_END,
   type ReleaseSession,
   type SessionPlace,
   sumByOrder,
@@ -94,7 +100,8 @@ export type CaseAmount =
       readonly refunded_piasters: Piasters;
     }
   | {
-      readonly cause: 'recitation_dropout' | 'student_complaint_close';
+      // 003:T125: `direct_end`, an end by the administration.
+      readonly cause: 'recitation_dropout' | 'student_complaint_close' | 'direct_end';
       readonly refund_piasters: Piasters;
       readonly release_piasters: Piasters;
       readonly refunded_piasters: Piasters;
@@ -134,9 +141,6 @@ function sequencesIn(
 function refundedOf(orders: readonly CaseOrder[]): Piasters {
   return sumOf(orders.map(({ refunded_piasters }) => refunded_piasters));
 }
-
-/** 006:T012: the end that is in a programme's dropout set only where it covered a suspension. */
-const SUSPENSION_COVERING_END = 'admin_ended';
 
 /** How a case values sessions named by their valued sequence numbers. */
 interface SessionValues {
@@ -217,10 +221,12 @@ export function caseAmountOf(facts: CaseAmountFacts): CaseAmount | undefined {
     };
   }
 
+  // 003:T125: a close takes off every release but its own (`student_complaint_close` or `direct_end`).
+  const own = cause === 'direct_end' ? 'direct_end' : 'student_complaint_close';
   const release_piasters = complaintCloseAmount(
     values.share(consumed),
     releases
-      .filter(({ milestone }) => milestone !== 'student_complaint_close')
+      .filter(({ milestone }) => milestone !== own)
       .map(({ amount_piasters }) => amount_piasters),
   );
 
@@ -239,7 +245,9 @@ export function caseAmountOf(facts: CaseAmountFacts): CaseAmount | undefined {
   }
 
   return {
-    cause: 'student_complaint_close',
+    // 003:T125 (DEC-104): an end by the administration shows the complaint close's figures under
+    // its own name.
+    cause: own,
     refund_piasters: values.untaken(consumed),
     release_piasters,
     refunded_piasters: values.refunded_piasters,

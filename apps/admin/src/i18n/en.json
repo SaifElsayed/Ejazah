@@ -494,11 +494,12 @@
         "studentBanned": "The student was banned",
         "studentFaultConfirmed": "A suspended student’s fault confirmed",
         "studentSuspended": "The student was suspended; the case awaits review",
-        "teacherEnded": "The teacher’s approval was revoked, or they were banned or their account deleted",
+        "teacherEnded": "The teacher’s approval was revoked, or they were banned, their account deleted or they stopped teaching",
         "teacherSuspended": "The teacher was suspended; the enrollment is paused until they return",
-        "adminEnded": "The administration ended the enrollment directly",
+        "adminEnded": "The administration ended the enrollment directly, the student having chosen to stop",
         "genderCorrection": "A party’s declared gender was corrected, ending the enrollment",
-        "studentComplaintEnded": "The administration ended the enrollment on a complaint against the student"
+        "studentComplaintEnded": "The administration ended the enrollment on a complaint against the student",
+        "accountDeleted": "The administration deleted the student’s account at their request, ending the enrollment"
       },
       "status": {
         "dismissed": "Dismissed",
@@ -2059,7 +2060,8 @@
           "ijazahDropout": "The teacher’s dropout on the ijazah track: the student gets back all they paid.",
           "recitationDropout": "The teacher’s dropout on recitation: the sessions not taken are refunded to the student, and the teacher is released the share of those taken.",
           "studentComplaintClose": "Closed on a complaint against the student: the sessions after the close are refunded to the student, and the teacher is released the share of the sessions attended and missed up to the close.",
-          "studentFaultClose": "Closed on the student’s ban or confirmed fault: nothing is refunded automatically; the sessions owed to the student before the close are refunded, the teacher is released the share of the sessions attended and missed, and the administration decides the rest not taken."
+          "studentFaultClose": "Closed on the student’s ban or confirmed fault: nothing is refunded automatically; the sessions owed to the student before the close are refunded, the teacher is released the share of the sessions attended and missed, and the administration decides the rest not taken.",
+          "directEnd": "Ended by the administration: the sessions not taken are refunded to the student, and the teacher is released the share of the sessions attended and missed, less what was already released."
         },
         "total": "Refunded to the student in all",
         "held": "The teacher’s share the gateway still holds (refunded through the gateway)",
@@ -3281,7 +3283,7 @@
         "duplicatePayment": "Duplicate payment",
         "absenceTermination": "Enrollment ended for the teacher's absence",
         "adminCancellation": "A session cancelled by the administration",
-        "teacherEnded": "The teacher banned, their approval revoked or their account deleted",
+        "teacherEnded": "The teacher banned, their approval revoked, their account deleted or they stopped",
         "studentSuspended": "The student suspended",
         "studentBanned": "The student banned",
         "studentFaultConfirmed": "A suspended student's fault confirmed",
@@ -3292,7 +3294,8 @@
         "adminOpenedForTeacher": "Opened by the administration for the teacher",
         "teacherSuspended": "The teacher suspended (the enrollment paused)",
         "adminEnded": "The administration ended the enrollment",
-        "genderCorrection": "Correction of a declared gender"
+        "genderCorrection": "Correction of a declared gender",
+        "accountDeleted": "The administration deleted the student’s account at their request"
       },
       "caseStatus": {
         "open": "Open",
@@ -3389,7 +3392,10 @@
       },
       "endCause": {
         "legend": "Why the enrollment ends",
-        "adminEnded": "A direct end",
+        "adminEnded": "The student chose to stop",
+        "teacherEnded": "The teacher stopped",
+        "adminEndedEffect": "Once the administration resolves the case, the student is owed what was not taken, and the teacher is released the share of the sessions taken, less what was already released.",
+        "teacherEndedEffect": "Once the administration resolves the case: on recitation the student is owed what was not taken and the teacher released the share of what was taken; on the ijazah track the teacher is released nothing more and the student is owed everything paid.",
         "studentComplaintEnded": "A complaint against the student",
         "studentComplaintEffect": "On the teacher’s report: the sessions the student missed up to the end stay the student’s absences, the teacher is released their share and that of the sessions attended, and the sessions after the end are refunded to the student.",
         "caseReason": "The administration ended the enrollment on a complaint against the student",

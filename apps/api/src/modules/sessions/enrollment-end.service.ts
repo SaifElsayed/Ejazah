@@ -48,7 +48,9 @@
 // freed»; PR #151's review, round 1, Major 2 (a)): the input's `slot` is ignored, since the contract
 // defaults it to `hold` and an explicit hold cannot be told from the default once parsed. The release
 // is the one above, T070's locks in their order; the answer, the log line and the router's audit entry
-// carry `release`.
+// carry `release`. 003:T125 (SRS DEC-104; Q-1 (a)): `admin_ended` is the student's stop, and
+// `teacher_ended` the teacher's, its case opened under that reason, which T105's release and T110's
+// amounts read as a teacher's stop (DEC-85); the slot as asked.
 //
 // THE LIVE EVENT (T066; FR-427). `enrollment` to both parties, read under the enrollment's lock, added
 // to the administrator kind's after-commit list bound to this transaction (`publisherOn`): sent once

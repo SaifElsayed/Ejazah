@@ -50,6 +50,8 @@ const REASON: Readonly<Record<string, MessageKey>> = {
   gender_correction: 'money.dues.reason.genderCorrection',
   // 003:T112 (Q-4 (a)): an administrator's end on a teacher's complaint against the student.
   student_complaint_ended: 'money.dues.reason.studentComplaintEnded',
+  // 003:T125 (SRS DEC-96): a student's deletion by an administrator's own case.
+  account_deleted: 'money.dues.reason.accountDeleted',
 };
 
 /** The reason's words, or undefined for none or one the phone does not know. */

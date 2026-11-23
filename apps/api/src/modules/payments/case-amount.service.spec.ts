@@ -204,9 +204,24 @@ describe('payments.caseAmount’s service', () => {
   });
 
   it('answers no amount for a reason outside the map, reading nothing more', async () => {
-    const { reads, asked } = fake({ found: record({ reason: 'gender_correction' }) });
+    // 003:T125 (rule d): `gender_correction` now gives an amount; a reason that never does here.
+    const { reads, asked } = fake({ found: record({ reason: 'makeup_refused' }) });
     expect(await caseAmount(TX, CASE, reads)).toEqual({});
     expect(asked).toEqual([['case', TX, CASE]]);
+  });
+
+  // 003:T125 (SRS DEC-104, DEC-96): a student's deletion by an administrator opens its own case,
+  // `account_deleted`, read past the map as an end by the administration. Run red first.
+  it('reads an `account_deleted` case as an end by the administration: 3 taken, refund 7,000 EGP, release 2,100 EGP', async () => {
+    const { reads } = fake({ found: record({ reason: 'account_deleted' }) });
+    expect(await caseAmount(TX, CASE, reads)).toEqual({
+      amount: {
+        cause: 'direct_end',
+        refund_piasters: EGP(7_000),
+        release_piasters: EGP(2_100),
+        refunded_piasters: EGP(0),
+      },
+    });
   });
 
   it('answers no amount for an enrollment no read returns', async () => {
@@ -312,16 +327,20 @@ describe('payments.caseAmount’s service on a programme (006:T012)', () => {
     );
   });
 
-  it('an administrator’s end after the teacher’s reinstatement closed the suspension shows none (T125’s)', async () => {
-    expect(await caseAmount(TX, CASE, suspended('reinstated').reads)).toEqual({});
+  // 003:T125 (SRS DEC-104; an approved rewrite of T012's placeholders): outside the dropout set, the
+  // end is the student's stop.
+  it('an administrator’s end after the teacher’s reinstatement closed the suspension is the student’s stop (T125)', async () => {
+    expect(await caseAmount(TX, CASE, suspended('reinstated').reads)).toMatchObject({
+      amount: { cause: 'direct_end' },
+    });
   });
 
-  it('an administrator’s direct end of a programme never suspended shows none (T125’s)', async () => {
+  it('an administrator’s direct end of a programme never suspended is the student’s stop (T125)', async () => {
     const { reads } = fake({
       found: record({ reason: 'admin_ended' }),
       track: 'ijazah_track',
       orders: [ASSESSMENT, REST_IN_FULL],
     });
-    expect(await caseAmount(TX, CASE, reads)).toEqual({});
+    expect(await caseAmount(TX, CASE, reads)).toMatchObject({ amount: { cause: 'direct_end' } });
   });
 });

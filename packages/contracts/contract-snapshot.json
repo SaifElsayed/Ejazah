@@ -859,6 +859,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",
@@ -991,6 +992,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",
@@ -2034,6 +2036,7 @@
             "required": true,
             "type": "string",
             "values": [
+              "direct_end",
               "ijazah_dropout",
               "recitation_dropout",
               "student_complaint_close",
@@ -2521,7 +2524,10 @@
       "sessions.endEnrollment": {
         "input": {
           "$": { "type": "object" },
-          "$.cause": { "type": "string", "values": ["admin_ended", "student_complaint_ended"] },
+          "$.cause": {
+            "type": "string",
+            "values": ["admin_ended", "student_complaint_ended", "teacher_ended"]
+          },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.internalNote": { "type": "string" },
@@ -2570,6 +2576,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",

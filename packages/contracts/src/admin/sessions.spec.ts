@@ -109,8 +109,9 @@ describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
   it('adds admin_ended to the closed list of case reasons, at its end', () => {
     // 005:T014 (rule d): `gender_correction` follows it, additively (R-API-9); 003:T112 (rule d):
     // `student_complaint_ended` after that.
-    expect(compensationCaseReason.options.at(-3)).toBe('admin_ended');
-    expect(compensationCaseReason.options).toHaveLength(18);
+    // 003:T125 (rule d): `account_deleted` follows them, additively (R-API-9).
+    expect(compensationCaseReason.options.at(-4)).toBe('admin_ended');
+    expect(compensationCaseReason.options).toHaveLength(19);
   });
 
   it('answers enrollmentRestoreWindowDays on the monitor enrollment, a whole positive number', () => {
@@ -142,8 +143,9 @@ describe('the admin_ended case and the monitor (FR-513; Q-O1 (a))', () => {
 // step-3 cause, each added at its enum's end (R-API-9). Written before the enums, run red first.
 describe('005:T014: gender_correction and gender_mismatch', () => {
   it('adds gender_correction to the case reasons, at the end', () => {
-    // 003:T112 (rule d): `student_complaint_ended` follows it, additively (R-API-9).
-    expect(compensationCaseReason.options.at(-2)).toBe('gender_correction');
+    // 003:T112 (rule d): `student_complaint_ended` follows it, additively (R-API-9); 003:T125 (rule
+    // d): `account_deleted` after that.
+    expect(compensationCaseReason.options.at(-3)).toBe('gender_correction');
     expect(compensationCaseReason.parse('gender_correction')).toBe('gender_correction');
   });
 
@@ -162,11 +164,16 @@ describe('005:T014: gender_correction and gender_mismatch', () => {
 // red first.
 describe('003:T112: the end on a complaint against the student', () => {
   it('adds student_complaint_ended to the case reasons, at the end', () => {
-    expect(compensationCaseReason.options.at(-1)).toBe('student_complaint_ended');
+    // 003:T125 (rule d): `account_deleted` follows it, additively (R-API-9).
+    expect(compensationCaseReason.options.at(-2)).toBe('student_complaint_ended');
   });
 
   it('names the end’s two causes: today’s end and a complaint against the student', () => {
-    expect(enrollmentEndCause.options).toEqual(['admin_ended', 'student_complaint_ended']);
+    // 003:T125 (rule d): `teacher_ended` follows them, additively (R-API-9).
+    expect(enrollmentEndCause.options.slice(0, 2)).toEqual([
+      'admin_ended',
+      'student_complaint_ended',
+    ]);
   });
 
   it('takes the complaint’s cause on the end', () => {
@@ -191,8 +198,33 @@ describe('003:T112: the end on a complaint against the student', () => {
   });
 
   it('refuses any other cause', () => {
-    for (const cause of ['student_banned', 'teacher_ended', '']) {
+    for (const cause of ['student_banned', 'account_deleted', '']) {
       expect(sessionsEndEnrollmentInput.safeParse({ ...asked, cause }).success, cause).toBe(false);
     }
+  });
+});
+
+// 003:T125 (SRS DEC-104, DEC-96; Q-1 (a)): the direct end names who stopped, `teacher_ended` added at
+// the causes' end beside today's (the student's stop, still the default) and the complaint's; a
+// student's deletion by an administrator opens its own case, `account_deleted`, added at the
+// reasons' end (R-API-9). Written before the enums, run red first.
+describe('003:T125: who stopped, and the deletion’s case', () => {
+  it('adds teacher_ended to the end’s causes, at the end, the student’s stop still the default', () => {
+    expect(enrollmentEndCause.options).toEqual([
+      'admin_ended',
+      'student_complaint_ended',
+      'teacher_ended',
+    ]);
+    expect(sessionsEndEnrollmentInput.parse({ ...asked, cause: 'teacher_ended' })).toEqual({
+      ...asked,
+      slot: 'hold',
+      cause: 'teacher_ended',
+    });
+    expect(sessionsEndEnrollmentInput.parse(asked).cause).toBe('admin_ended');
+  });
+
+  it('adds account_deleted to the case reasons, at the end', () => {
+    expect(compensationCaseReason.options.at(-1)).toBe('account_deleted');
+    expect(compensationCaseReason.parse('account_deleted')).toBe('account_deleted');
   });
 });
