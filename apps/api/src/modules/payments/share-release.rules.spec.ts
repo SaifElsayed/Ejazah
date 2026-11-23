@@ -12,6 +12,7 @@ import {
   halfWindowHours,
   type PlannedRelease,
   plannedReleases,
+  programmeRowMissing,
   type ReleaseFacts,
   type ReleaseOrder,
   type ReleaseProgramme,
@@ -973,6 +974,33 @@ describe('006:T011 `ijazah_end` and `programme_stopped` (U-4; Q-5 (a): − every
       { milestone: 'programme_stopped', due: false, waitsForCase: true },
     ]);
   });
+
+  it('an approved stop falls due after the last consumed session’s window: a student no-show after the last done (FU-E2 (a))', () => {
+    const stopped = programmeFacts({
+      orders: [ASSESSMENT, ...months(4)],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 12,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+    });
+    // Session 13, the student's no-show, ends after session 12, the last done.
+    const input = {
+      ...stopped,
+      sessions: stopped.sessions.map((one) =>
+        one.sequenceNumber === 13 ? { ...one, outcome: 'student_no_show' } : one,
+      ),
+    };
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'programme_stopped',
+        amount: 315_000,
+        dueAt: windowAfter(13),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+    expect(plan(input, new Date(addHours(endOf(13), 71)))).toMatchObject([{ due: false }]);
+  });
 });
 
 describe('006:T011 `package` orders keep today’s rules', () => {
@@ -1008,6 +1036,38 @@ describe('006:T011 `package` orders keep today’s rules', () => {
     expect(plan({ ...first, orders: [first.order, duplicate] })).toMatchObject([
       { milestone: 'recitation_end', amount: 700_000 },
     ]);
+  });
+});
+
+describe('006:T011 FU-E3 a programme enrollment with no programme row (should not happen)', () => {
+  const withoutRow = (input: ReleaseFacts): ReleaseFacts => ({
+    ...input,
+    enrollment: { ...input.enrollment, programme: null },
+  });
+
+  it('gives no half by months either (not 25 % × 70 % × the fee 500 = 87.50), the end holding every paid share', () => {
+    const input = withoutRow(programmeFacts({ orders: [ASSESSMENT, ...months(6)], delivered: 21 }));
+    expect(plan(input)).toEqual([
+      {
+        milestone: 'ijazah_end',
+        amount: 455_000,
+        dueAt: windowAfter(41),
+        due: false,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('gives no half in full either', () => {
+    const input = withoutRow(programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL], delivered: 21 }));
+    expect(milestonesOf(input)).toEqual(['ijazah_end']);
+  });
+
+  it('is told by `programmeRowMissing`: a programme’s orders and no row', () => {
+    const programme = programmeFacts({ orders: [ASSESSMENT, REST_IN_FULL] });
+    expect(programmeRowMissing(withoutRow(programme))).toBe(true);
+    expect(programmeRowMissing(programme)).toBe(false);
+    expect(programmeRowMissing(facts({ track: 'ijazah_track' }))).toBe(false);
   });
 });
 
