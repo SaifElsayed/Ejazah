@@ -367,8 +367,23 @@ describe('the offer’s deadline follows session 1’s outcome chain (006:T008, 
   });
 
   it('the owner’s example: re-resolved as the teacher’s no-show, no deadline and no item at the old one; the make-up’s delivery sets the new one', async () => {
-    // Done 25 hours ago, then re-resolved a teacher's no-show before its deadline passed.
-    const world = await awaitingOffer('teacher_no_show', 25);
+    // PR #158 r1 Minor 1 (M20): the column holds the last derived value. Done 3 hours ago: the
+    // step writes Tuesday's deadline.
+    const world = await awaitingOffer('done', 3);
+    await expect(windowsIn('test').step(world.enrollmentId)).resolves.toBe('none');
+    expect((await rowsOf(world.enrollmentId)).programme.offerDueAt).toStrictEqual(
+      new Date(addHours(world.endsAt, 24)),
+    );
+    // The next day: done 25 hours ago, re-resolved a teacher's no-show before its deadline passed.
+    const endedAt = new Date(addHours(world.endsAt, -22));
+    await database.session.update({
+      where: { id: world.sessionId },
+      data: {
+        status: 'teacher_no_show',
+        scheduledStartAt: new Date(addMinutes(endedAt, -30)),
+        scheduledEndAt: endedAt,
+      },
+    });
     await expect(windowsIn('test').step(world.enrollmentId)).resolves.toBe('none');
     const waiting = await rowsOf(world.enrollmentId);
     expect(waiting.programme.offerDueAt).toBeNull();
@@ -412,10 +427,16 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     await windowsIn('test').step(enrollmentId);
     const adminId = await admin();
     const requestId = await openItemOf(enrollmentId, 'no_offer');
+    const from = lines.length;
     const answer = await decide(adminId, requestId, 'approve', SUPPORT_REASON);
     expect(answer.answer).toStrictEqual({ status: 'approved' });
     // SRS DEC-112: the reason is written on the item.
     expect(await reasonOf(requestId)).toBe(SUPPORT_REASON);
+    // PR #158 r1 Minor 2 (M26; T008): the decision's line carries ids and the cause, never the text.
+    expect(lines.slice(from)).toContainEqual(
+      expect.objectContaining({ requestId, kind: 'no_offer' }),
+    );
+    expect(JSON.stringify(lines.slice(from))).not.toContain(SUPPORT_REASON);
     const { programme, enrollment, items, cancelled } = await rowsOf(enrollmentId);
     expect(enrollment).toStrictEqual({
       status: 'cancelled',
@@ -439,10 +460,16 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     expect(declined).toBe('decision_not_allowed');
     expect(programmesDecideRefusal.options).toContain(declined);
     const before = await dbNow();
+    const from = lines.length;
     expect((await decide(adminId, requestId, 'extend', SUPPORT_REASON)).answer).toStrictEqual({
       status: 'extended',
     });
     expect(await reasonOf(requestId)).toBe(SUPPORT_REASON);
+    // PR #158 r1 Minor 2 (M26; T008): the decision's line carries ids and the cause, never the text.
+    expect(lines.slice(from)).toContainEqual(
+      expect.objectContaining({ requestId, kind: 'no_offer' }),
+    );
+    expect(JSON.stringify(lines.slice(from))).not.toContain(SUPPORT_REASON);
     const { programme, items } = await rowsOf(enrollmentId);
     expect(items).toMatchObject([
       { kind: 'no_offer', status: 'extended', decidedByAdminId: adminId },

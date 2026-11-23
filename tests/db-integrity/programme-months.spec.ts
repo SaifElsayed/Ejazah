@@ -418,11 +418,15 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     const holding = new Promise<void>((resolve) => {
       held = resolve;
     });
+    // PR #158 r1 Minor 3 (M8): the instant the holder lets go, its last read before the commit.
+    let releasedAt = new Date(0);
     const holder = database.$transaction(
       async (tx) => {
         await lockRows(tx, 'programmes', [enrollmentId]);
         held();
         await gate;
+        const [read] = await tx.$queryRaw<{ at: Date }[]>`SELECT clock_timestamp() AS at`;
+        releasedAt = read?.at ?? releasedAt;
       },
       { timeout: 30_000 },
     );
@@ -437,6 +441,9 @@ describe('a month paid, the path with no hold (006:T006; FR-718, R-502, R-507)',
     await holder;
     await taker;
     expect([whileHeld, finished]).toEqual([false, true]);
+    // The marker is taken under the locks, so at or after the holder released them, never the
+    // waiting transaction's start (`now()`), which is before it.
+    expect((await markerOf(paymentId))!.getTime()).toBeGreaterThanOrEqual(releasedAt.getTime());
   });
 });
 
