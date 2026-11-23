@@ -41,6 +41,7 @@ import type {
 import type {
   ProgrammesDecideInput,
   ProgrammesDecideOutput,
+  ProgrammesDecideRefusal,
   ProgrammesDecision,
 } from '@ijazah/contracts/admin';
 import { addHours } from '@ijazah/time';
@@ -310,7 +311,8 @@ export function createProgrammeDecisions(
     decision: ProgrammesDecision,
   ): Promise<ProgrammesDecideOutput> => {
     const ids = { adminId, requestId: item.id, enrollmentId: item.enrollmentId };
-    const refused = (cause: string) => refusal(log, ids, cause, 'A programme decision was refused');
+    const refused = (cause: ProgrammesDecideRefusal) =>
+      refusal(log, ids, cause, 'A programme decision was refused');
     await store.lockProgramme(tx, item.enrollmentId);
     await store.lockEnrollment(tx, item.enrollmentId);
     const current = await store.requestById(tx, item.id);

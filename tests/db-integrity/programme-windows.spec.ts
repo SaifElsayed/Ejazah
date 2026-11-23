@@ -56,6 +56,9 @@ import { transactionsOver } from '../../apps/api/src/platform/db/transaction.rep
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
+// 006:T008 (Q-B1 (a)): every refusal's cause is one of the contract's.
+import { programmesDecideRefusal } from '../../packages/contracts/src/admin/index.js';
+import { programmeCancelRefusal } from '../../packages/contracts/src/index.js';
 import { addHours, addMinutes, addSeconds } from '../../packages/time/src/index.js';
 import { CAIRO, confirmationWorld, THURSDAY_0900 } from './confirmation-world';
 
@@ -411,7 +414,9 @@ describe('the no_offer item (006:T008, FR-706a, I-2 (a), N-2, N-10)', () => {
     await windowsIn('test').step(enrollmentId);
     const adminId = await admin();
     const requestId = await openItemOf(enrollmentId, 'no_offer');
-    expect(await causeOf(decide(adminId, requestId, 'decline'))).toBe('decision_not_allowed');
+    const declined = await causeOf(decide(adminId, requestId, 'decline'));
+    expect(declined).toBe('decision_not_allowed');
+    expect(programmesDecideRefusal.options).toContain(declined);
     const before = await dbNow();
     expect((await decide(adminId, requestId, 'extend')).answer).toStrictEqual({
       status: 'extended',
@@ -478,6 +483,36 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     expect(items).toMatchObject([{ kind: 'pay_blocked', status: 'open' }]);
   });
 
+  it('refuses a cancellation closed or rest_paid, and a second decision not_open, each a contract cause (Q-B1 (a))', async () => {
+    const { studentId, enrollmentId } = await offered();
+    await windowsIn('live').step(enrollmentId);
+    const adminId = await admin();
+    const requestId = await openItemOf(enrollmentId, 'pay_blocked');
+    await decide(adminId, requestId, 'approve');
+    const again = await causeOf(decide(adminId, requestId, 'extend'));
+    expect(again).toBe('not_open');
+    expect(programmesDecideRefusal.options).toContain(again);
+    const closed = await causeOf(
+      services.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    );
+    expect(closed).toBe('closed');
+    expect(programmeCancelRefusal.options).toContain(closed);
+    const paid = await offered(-60);
+    await database.programme.update({
+      where: { enrollmentId: paid.enrollmentId },
+      data: { state: 'active', paymentPlan: 'in_full', monthsPaid: 10 },
+    });
+    const restPaid = await causeOf(
+      services.cancel(
+        paid.studentId,
+        { enrollmentId: paid.enrollmentId, idempotencyKey: randomUUID() },
+        noSignal,
+      ),
+    );
+    expect(restPaid).toBe('rest_paid');
+    expect(programmeCancelRefusal.options).toContain(restPaid);
+  });
+
   it('the student’s cancellation withdraws the item: offer_declined, the card deleted', async () => {
     const { studentId, enrollmentId } = await offered();
     await windowsIn('live').step(enrollmentId);
@@ -509,7 +544,9 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     await windowsIn('live').step(enrollmentId);
     const adminId = await admin();
     const requestId = await openItemOf(enrollmentId, 'pay_blocked');
-    expect(await causeOf(decide(adminId, requestId, 'decline'))).toBe('decision_not_allowed');
+    const declined = await causeOf(decide(adminId, requestId, 'decline'));
+    expect(declined).toBe('decision_not_allowed');
+    expect(programmesDecideRefusal.options).toContain(declined);
     const before = await dbNow();
     expect((await decide(adminId, requestId, 'extend')).answer).toStrictEqual({
       status: 'extended',

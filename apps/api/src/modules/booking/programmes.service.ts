@@ -63,6 +63,7 @@
 import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
+  ProgrammeCancelRefusal,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammeOfferRefusal,
@@ -667,9 +668,6 @@ export const programmeCancelStore: ProgrammeCancelStore = {
   lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
   lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
 };
-
-/** `programme.cancel`'s refusals (this section's head). */
-export type ProgrammeCancelRefusal = 'rest_paid' | 'closed';
 
 /** The states the student may cancel in: before any payment of the rest. */
 const CANCELLABLE: ReadonlySet<ProgrammeState> = new Set(['awaiting_offer', 'offered']);

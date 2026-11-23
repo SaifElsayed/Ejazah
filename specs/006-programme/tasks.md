@@ -282,6 +282,10 @@ No open question remains.
   > reaches support and books a new assessment, and an Administrator may open a manual compensation case for the fee
   > (SRS FR-ADMIN-20 (c)). The wider rule (an item whenever payment was
   > closed at any time inside the 48 hours) needs a recorded instant of the closing; recorded for later.
+  > **Not scheduled, a rare case (B-P2 lane b, 2026-11-23; the review session).** An offer accepted while a `no_offer`
+  > item is open, after session 1's outcome chain moved the deadline later (a re-resolution or a dispute's outcome),
+  > leaves that item open in the queue. The administrator's side is guarded: `programmes.decide` approving it is refused
+  > `offer_sent`, so nothing is ended; the item closes with the programme (the close hook withdraws it).
 - [ ] T009 [US2] Paying in full or a month (FR-710 to FR-713; R-507, R-511), `programme.pay`, in
   `modules/booking/programmes.service.ts`, `programmes.router.ts`, `modules/payments/checkout.service.ts`,
   `checkout.repository.ts`:

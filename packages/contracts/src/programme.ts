@@ -199,6 +199,13 @@ export const programmeRequestRefusal = z.enum([
   'offer_sent',
 ]);
 
+/**
+ * 006:T008 (FR-706; B-P2 lane b, Q-B1 (a)): `programme.cancel`'s refusals: `rest_paid` once the rest
+ * is paid (`active`, `paused`), `closed` once the programme is closed or its enrollment no longer
+ * `confirmed`.
+ */
+export const programmeCancelRefusal = z.enum(['rest_paid', 'closed']);
+
 /** `programme.autoRenewOff` and `programme.cancel`: the student's, on the enrollment. */
 export const programmeActionInput = z.object({
   enrollmentId: z.uuid(),
@@ -228,5 +235,6 @@ export type ProgrammeRenewRefusal = z.infer<typeof programmeRenewRefusal>;
 export type ProgrammeRequestInput = z.infer<typeof programmeRequestInput>;
 export type ProgrammeRequestOutput = z.infer<typeof programmeRequestOutput>;
 export type ProgrammeRequestRefusal = z.infer<typeof programmeRequestRefusal>;
+export type ProgrammeCancelRefusal = z.infer<typeof programmeCancelRefusal>;
 export type ProgrammeActionInput = z.infer<typeof programmeActionInput>;
 export type ProgrammeActionOutput = z.infer<typeof programmeActionOutput>;

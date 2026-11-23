@@ -59,6 +59,7 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "programmeCancelRefusal": ["closed", "rest_paid"],
       "programmeOfferRefusal": [
         "assessment_not_delivered",
         "count_out_of_bounds",
