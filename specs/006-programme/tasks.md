@@ -554,6 +554,11 @@ No open question remains.
   > regenerated): no new refusal item can exist (T008's note). `programmes.queue` and the admin `programmes.get` (the
   > programme's history) read a `no_offer` item's `reason`, the administrator's record written by `programmes.decide`
   > (T008), beside the item; `programmeRequestItem.reason`'s comment (`:48-49`) says so.
+  > **B-P2 (2026-11-23; R-API-9, the review session's Q-B6 (a)).** The `refusal` value is not removed from
+  > `programmesQueueFilter` (`packages/contracts/src/admin/programme.ts`): R-API-9 keeps a published enum value
+  > (additive only; deprecate, then remove after a minimum client version), and `contract:snapshot --check` refuses the
+  > removal. It stays, marked unused since SRS DEC-112, and the queue never offers it, as `programmeRequestRefusal`'s
+  > `assessment_not_delivered` and `offer_sent` stay unused since T008.
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
