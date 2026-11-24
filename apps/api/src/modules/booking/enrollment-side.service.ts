@@ -55,9 +55,9 @@
 // that ends an enrollment through this port holds the programme before the enrollment. Each of
 // `terminateNoShow`, `complete` and `cancel` that moved its enrollment then runs booking's close
 // hook (`programme-close.service.ts`) with the move as its reason: the programme `closed`, its open
-// items `withdrawn`, payments' `deleteProgrammeCard` called (a stub until T013), one line. The
-// composition root binds payments' entry and the log (`programmes`); where it binds none yet, no card
-// is deleted (none exists before T013) and no line is written (the follow-up under T013).
+// items `withdrawn`, payments' `deleteProgrammeCard` called (T013: the card deleted), one line.
+// Both composition roots bind payments' entry and the log (`programmes`); a caller that binds none
+// (a spec) deletes no card and writes no line.
 import { type DayOfWeek, firstOccurrenceAfter, type LocalDate } from '@ijazah/time';
 import { z } from 'zod';
 

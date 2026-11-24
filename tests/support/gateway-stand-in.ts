@@ -3,9 +3,10 @@
 // produces a gateway event: it holds the stand-in's secret and the listening API's address, builds
 // each event signed as the gateway would (`paid`, `failed`, `expired`, `recipientVerified`,
 // `recipientRejected`; since 003:T102 `refunded`, with an amount or the whole order, and
-// `refundReported`, the original payment's refund flag with no amount), delivers it over HTTP (`deliver`, `deliverTwice`, `deliverInOrder`,
-// `deliverAfter`), forges
-// it (`tamper`), and sets what the stand-in's `cancelCheckout` answers (`onCancel`).
+// `refundReported`, the original payment's refund flag with no amount; since 006:T013 `cardSaved`,
+// the card saved on an order whose checkout asked `saveCard`), delivers it over HTTP (`deliver`,
+// `deliverTwice`, `deliverInOrder`, `deliverAfter`), forges it (`tamper`), and sets what the
+// stand-in's `cancelCheckout` answers (`onCancel`).
 //
 // The building is `apps/api/src/platform/ports/payment/gateway-stand-in.fixtures.ts` (its header
 // says why it lives there); this entry binds it to the payments module's own `PAYMENT_WEBHOOK_PATH`,
@@ -23,6 +24,7 @@ export {
   type Forgery,
   type GatewayStandIn,
   type ReportedAmounts,
+  type SavedCard,
   type StandInEvent,
   UNREPORTED_AMOUNTS,
 } from '../../apps/api/src/platform/ports/payment/gateway-stand-in.fixtures';

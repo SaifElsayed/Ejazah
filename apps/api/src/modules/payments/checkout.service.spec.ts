@@ -220,6 +220,8 @@ function setUp(world: World = {}) {
   const inserted: Parameters<CheckoutSteps['insertOrder']>[1][] = [];
   /** T101: the payee each gateway order was asked with, and whose recipient was read. */
   const payees: (CheckoutPayee | undefined)[] = [];
+  /** 006:T013: the `saveCard` each gateway order was asked with (R-510). */
+  const saveCards: (boolean | undefined)[] = [];
   const recipientsAsked: string[] = [];
   const readers: unknown[] = [];
   const idempotency = fakeIdempotency(log);
@@ -378,8 +380,10 @@ function setUp(world: World = {}) {
       currency: string,
       latestExpiry: Date,
       payee?: CheckoutPayee,
+      saveCard?: boolean,
     ): Promise<Checkout> => {
       payees.push(payee);
+      saveCards.push(saveCard);
       log.push(['gateway create', enrollmentId, gross, currency, latestExpiry.toISOString()]);
       orders += 1;
       return {
@@ -433,6 +437,7 @@ function setUp(world: World = {}) {
     reported,
     inserted,
     payees,
+    saveCards,
     recipientsAsked,
     readers,
     handed,
@@ -1236,6 +1241,15 @@ describe('programme.pay: the first payment of the rest, in full or a month (006:
     const { service, inserted } = setUp();
     await service.programmePay(student, payRest('monthly', true), log);
     expect(inserted[0]).toMatchObject({ cardConsentAt: NOW });
+  });
+
+  it('asks the gateway to save the card only when the consent is ticked (006:T013, R-510, FR-713)', async () => {
+    const ticked = setUp();
+    await ticked.service.programmePay(student, payRest('monthly', true), log);
+    expect(ticked.saveCards).toEqual([true]);
+    const unticked = setUp();
+    await unticked.service.programmePay(student, payRest('monthly'), log);
+    expect(unticked.saveCards).toEqual([undefined]);
   });
 
   it('checks the programme before the gateway and again under the record’s locks, the gateway between', async () => {

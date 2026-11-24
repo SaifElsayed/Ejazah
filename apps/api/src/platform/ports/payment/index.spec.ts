@@ -2,11 +2,12 @@
 // webhook secret (note under T117): `PAYMENT_GATEWAY_WEBHOOK_SECRET` when it is set, otherwise a
 // secret derived from `ENCRYPTION_KEY`, so every process of one deployment verifies what another
 // signed and no credential is needed (SC-005).
+import { createHmac } from 'node:crypto';
 import { piasters } from '@ijazah/money';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakePaymentAdapter } from './fake.adapter.js';
 import { createPaymentPort, standInCheckoutOf, type PaymentConfig } from './index.js';
-import { EventSignatureError, type PaymentPort } from './payment.port.js';
+import { EventSignatureError, MalformedEventError, type PaymentPort } from './payment.port.js';
 import { PaymobPaymentAdapter } from './paymob.adapter.js';
 
 const KEY = Buffer.alloc(32, 7).toString('base64');
@@ -164,6 +165,38 @@ describe('the gateway (T056)', () => {
 
     await expect(live.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER)).rejects.toThrow(/payee/);
     expect(sent).toEqual([]);
+  });
+
+  // 006:T013 (R-510): Paymob's token callback is taken only with the saved-card integration set,
+  // signed as `paymob.adapter.spec.ts` signs it (HMAC-SHA512 over the eight fields, in the query).
+  it('hands Paymob the saved-card integration: a signed token callback is taken only with it (006:T013)', async () => {
+    const obj = {
+      card_subtype: 'MasterCard',
+      created_at: '2026-11-24T10:00:00.123456',
+      email: 'support@ijazah.invalid',
+      id: 3_115_421,
+      masked_pan: 'xxxx-xxxx-xxxx-2346',
+      merchant_id: 302_852,
+      order_id: '217503754',
+      token: 'placeholder-card-token',
+    };
+    const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));
+    const hmac = createHmac('sha512', 'hmac-placeholder')
+      .update(Object.values(obj).map(String).join(''))
+      .digest('hex');
+    const saving = createPaymentPort({
+      ...paymob,
+      PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID: 1_000_003,
+    });
+
+    await expect(saving.verifyAndParseEvent(rawBody, {}, { hmac })).resolves.toMatchObject({
+      type: 'card_saved',
+      gatewayOrderId: '217503754',
+      last4: '2346',
+    });
+    await expect(
+      createPaymentPort(paymob).verifyAndParseEvent(rawBody, {}, { hmac }),
+    ).rejects.toBeInstanceOf(MalformedEventError);
   });
 
   it('hands Paymob the logger: a test-mode payee with no split integration writes one warn line (003:T101)', async () => {

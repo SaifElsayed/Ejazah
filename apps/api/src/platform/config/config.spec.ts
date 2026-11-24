@@ -792,6 +792,22 @@ describe('the gateway (T056)', () => {
     ).toBe(1_000_002);
   });
 
+  // 006:T013 (R-510): the saved-card integration, optional in both modes; unset, Paymob takes no
+  // token callback.
+  it('reads the saved-card integration id as a number, unset by default, refusing one not whole (006:T013)', () => {
+    expect(loadConfig(paymobTest).PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID).toBeUndefined();
+    expect(loadConfig(paymobLive).PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID).toBeUndefined();
+    expect(
+      loadConfig({ ...paymobTest, PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID: '1000003' })
+        .PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID,
+    ).toBe(1_000_003);
+    for (const value of ['card', '0', '1.5']) {
+      expect(
+        refusal({ ...paymobTest, PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID: value }).offendingKeys,
+      ).toEqual(['PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID']);
+    }
+  });
+
   it.each([
     'PAYMENT_GATEWAY_SECRET_KEY',
     'PAYMENT_GATEWAY_PUBLIC_KEY',
@@ -946,6 +962,7 @@ describe('the gateway (T056)', () => {
       'PAYMENT_GATEWAY_PUBLIC_KEY',
       'PAYMENT_GATEWAY_INTEGRATION_ID',
       'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID',
+      'PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID',
     ]) {
       expect(providerKeys).toContain(key);
       expect(platformKeys).not.toContain(key);

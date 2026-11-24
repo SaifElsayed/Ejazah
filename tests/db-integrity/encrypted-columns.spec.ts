@@ -2,9 +2,10 @@
 // repositories of the modules that own their tables (R-API-6), against Postgres as the application
 // role (FR-031, R-DB-8, R-SEC-10).
 //
-// Five of the six: identity's three (the third, `auth_identities.provider_refresh_token_encrypted`,
-// since Phase 1's T013), verification's one and payments' one (`payments.checkout_url_encrypted`,
-// Phase 2's T004, `002:T134`). The sixth, `admin_users.mfa_secret_encrypted`, is
+// Six of the seven: identity's three (the third, `auth_identities.provider_refresh_token_encrypted`,
+// since Phase 1's T013), verification's one and payments' two (`payments.checkout_url_encrypted`,
+// Phase 2's T004, `002:T134`; `programme_cards.token_encrypted`, 006:T013). The seventh,
+// `admin_users.mfa_secret_encrypted`, is
 // not reached from here: R-API-4 lets only the three composition files import the admin module
 // (T143), and this file is not one of them. Its repository, `modules/admin/admin-users.repository.ts`,
 // issues the same two queries on its table.
@@ -158,8 +159,22 @@ async function plant(tx: Transaction): Promise<Map<string, { id: string; value: 
 
   const orderId = randomUUID();
   const checkoutUrl = value('payments.checkout_url_encrypted', orderId);
-  await newOrder(tx, teacher.id, orderId, checkoutUrl);
+  const enrollmentId = await newOrder(tx, teacher.id, orderId, checkoutUrl);
   planted.set('payments.checkout_url_encrypted', { id: orderId, value: checkoutUrl });
+
+  // 006:T013: the programme's saved card, keyed by its enrollment (R-510).
+  const cardToken = value('programme_cards.token_encrypted', enrollmentId);
+  await tx.programmeCard.create({
+    data: {
+      enrollmentId,
+      tokenEncrypted: Uint8Array.from(cardToken),
+      last4: '4242',
+      brand: 'Visa',
+      consentedAt: new Date('2026-11-24T09:00:00Z'),
+    },
+    select: { enrollmentId: true },
+  });
+  planted.set('programme_cards.token_encrypted', { id: enrollmentId, value: cardToken });
   return planted;
 }
 
@@ -173,7 +188,7 @@ async function newOrder(
   teacherId: string,
   orderId: string,
   checkoutUrl: Uint8Array | null,
-): Promise<void> {
+): Promise<string> {
   const student = await newUser(tx);
   const subject = await tx.subject.create({
     data: { nameAr: 'مادة', nameEn: 'Subject', isActive: true },
@@ -224,6 +239,7 @@ async function newOrder(
                           status, expires_at, checkout_url_encrypted, updated_at)
     VALUES (${orderId}::uuid, ${enrollment.id}::uuid, 'fake', ${`probe-order-${orderId}`}, 0,
             'EGP', 'created', '2026-10-04T07:10:00Z', ${url}, now())`;
+  return enrollment.id;
 }
 
 function columnsOver(tx: Transaction) {
@@ -271,7 +287,7 @@ async function firstFrom(column: Column, from: string): Promise<Row | undefined>
 }
 
 describe('the encrypted columns, through their owning modules (T155)', () => {
-  it('are the five columns of ERD §0 that identity, verification and payments own', async () => {
+  it('are the six columns of ERD §0 that identity, verification and payments own', async () => {
     await inClientRollback(async (tx) => {
       expect(columnsOver(tx).map(({ column }) => column)).toEqual([
         'teacher_profiles.payout_account_ref_encrypted',
@@ -279,6 +295,8 @@ describe('the encrypted columns, through their owning modules (T155)', () => {
         'auth_identities.provider_refresh_token_encrypted',
         'verification_documents.storage_key_encrypted',
         'payments.checkout_url_encrypted',
+        // 006:T013 (R-510).
+        'programme_cards.token_encrypted',
       ]);
     });
   });

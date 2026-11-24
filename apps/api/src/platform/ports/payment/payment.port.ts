@@ -89,6 +89,21 @@ export type GatewayEvent =
       readonly refunded_piasters: Piasters | 'whole_order';
     }
   | {
+      /**
+       * 006:T013 (R-510, FR-713, FR-719): the gateway saved the card a programme's order was paid
+       * with, read from the signed fields alone. `token` is card detail: it reaches only
+       * `programme_cards.token_encrypted`, encrypted on the webhook's transaction, and never a log, an
+       * audit entry, a job payload or a response (SC-707); `last4` and `brand` may be shown to the
+       * student. Nothing else of the card (the holder's name, the expiry) is carried.
+       */
+      readonly type: 'card_saved';
+      readonly providerEventId: string;
+      readonly gatewayOrderId: string;
+      readonly token: string;
+      readonly last4: string;
+      readonly brand: string;
+    }
+  | {
       readonly type: 'recipient_verified';
       readonly providerEventId: string;
       readonly recipientRef: string;
@@ -108,6 +123,8 @@ export interface PaymentPort {
   /**
    * An order for `gross_piasters` that expires no later than `latestExpiry`, where the gateway lets it
    * be set (ADR 0010 D4); with `payee`, split to the teacher at checkout where the gateway does (T056).
+   * 006:T013 (R-510, FR-713): `saveCard` true asks the gateway to save the card for the automatic
+   * charge, where the gateway takes the ask; a saved card arrives as a signed `card_saved` event.
    */
   createCheckout(
     enrollmentId: string,
@@ -115,6 +132,7 @@ export interface PaymentPort {
     currency: string,
     latestExpiry: Date,
     payee?: CheckoutPayee,
+    saveCard?: boolean,
   ): Promise<Checkout>;
   /** End an unpaid order before a new checkout (FR-BOOK-12, ADR 0010 D6). Moves no money. */
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome>;
