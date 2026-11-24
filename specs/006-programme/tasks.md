@@ -677,6 +677,34 @@ No open question remains.
   > order fails, on the next minute, not only before the day-1 retry, so the student sees «pay now» or «change card»
   > right away. No retry ever runs without an authenticated kind: an unanswered inquiry means no retry (DEC-110), an
   > answer with no code means `hard`. Red first.
+  > **Done in part (B-P3 lane c, 2026-11-24).**
+  > - The windows' step reads the suspension cases again under its locks, and past `pay_by_at` waits while a programme
+  >   order is payable or paid and not yet processed (payments' `checkoutOrdersAmong`, bound as `orders`);
+  >   `programme.cancel` refuses `payment_processing` then (additive in `programmeCancelRefusal`), once `orders` is bound.
+  > - `programmes.rules.ts`: the due point by `lastToEnd` over the paid month's sessions (Q-3 (a)); the due, retry
+  >   (1, 3, 5, 7 whole days on the instant, soft only, at most 4, only with a card, never while unanswered or with no
+  >   authenticated kind), `charge_unknown` (the 6th unanswered ask, 10 minutes apart, once per order; withdrawn by an
+  >   answer) and pause steps; the cadence; the DST spec of the day-7 retry against the next occurrence.
+  > - `programmes.service.ts` `createProgrammeMonths`: each step its own transaction (the teacher key-shared, the
+  >   programme, the enrollment), the due point written when it moved, payments' `record` on the step's transaction, the
+  >   gateway's call handed back for after the commit, the pause's `programme_paused` row and live signal.
+  > - `jobs/advance-programmes.ts`: the page, the suspension filter, the windows' step, the ask before the steps, the
+  >   call after commit; its double-run spec over a stand-in sweep.
+  > - Q-6 (a) in `completion.service.ts`; FU3 in `confirm-enrollment.ts`; kernel.md's 006:T015 row.
+  > - Specs: `programmes-months.rules.spec.ts`, `programmes-months.service.spec.ts`, `advance-programmes.spec.ts`,
+  >   `tests/db-integrity/advance-programmes.spec.ts`, red first, with named mutants.
+  > **Follow-up (B-P3 lane c, 2026-11-24): waiting for approval (outside lane c's files).** (1) `modules/booking/index.ts`
+  > exports `createProgrammeMonths`, `programmesToSweep` and their types, so the job and the DB specs reach them through
+  > the entry. (2) Payments has no answer of a month's orders: a reader of the month's latest automatic order (status,
+  > expiry, decline kind, attempt), whether a programme order is payable or paid unconfirmed, and whether a card is
+  > saved (a boolean), with its `index.ts` export; `worker.ts` binds the job only once it exists. (3)
+  > `booking-slots.service.ts` and `main.ts` hand `checkoutOrdersAmong` to `programme.cancel`, so its
+  > `payment_processing` runs in the API. (4) The worker has no live channel to the API's streams: the pause's
+  > `enrollment` signal goes on the transaction's publisher, which no worker binds (N-15).
+  > **Follow-up (B-P3 lane c, 2026-11-24): a question.** Whether approving or extending a `charge_unknown` item
+  > (approve: no charge found, the order expired as a soft decline, retries on; extend: keep asking) is T015's or
+  > T021's: T015's text names the item's opening and withdrawal, not its decision. `ALLOWED.charge_unknown = []`
+  > stays as lane b set it.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:

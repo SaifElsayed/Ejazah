@@ -60,6 +60,7 @@ function world({
   at = CLOSES,
   moves = true,
   programme,
+  generationCase = null,
 }: {
   status?: EnrollmentStatus | null;
   sessions?: readonly CompletionSession[];
@@ -71,6 +72,8 @@ function world({
   moves?: boolean;
   /** 006:T010: the enrollment's `programmes` row; none for a package. */
   programme?: ProgrammeTerms;
+  /** 006:T015 (Q-6 (a)): the open case a refused generation opened, or none. */
+  generationCase?: 'slot_unavailable' | 'party_restricted' | null;
 } = {}) {
   const completed: string[] = [];
   const keys: string[] = [];
@@ -93,6 +96,10 @@ function world({
     teacherSuspendedCaseOpen: async (_tx, id) => {
       expect(id).toBe(ENROLLMENT);
       return teacherSuspendedCase;
+    },
+    generationCaseOpen: async (_tx, id) => {
+      expect(id).toBe(ENROLLMENT);
+      return generationCase !== null;
     },
   };
   const completion = createCompletion({
@@ -329,5 +336,36 @@ describe('completeIfDue on a programme (006:T010, FR-712, R-501 V-1)', () => {
     });
     expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
     expect(completed).toEqual([]);
+  });
+
+  // 006:T015 (PR #158 r1 Follow-up 2; B-P3's conflict check, Q-6 (a)): a programme paid in full
+  // whose rest was never generated (the confirm step refused the generation and opened its case) has
+  // only session 1; it waits while that case is open, and completes once the case is resolved.
+  it.each(['slot_unavailable', 'party_restricted'] as const)(
+    'red first: a programme paid in full with an open %s case is not completed (Q-6 (a))',
+    async (generationCase) => {
+      const { completion, completed } = world({
+        sessions: [settled('done', { scheduledEndAt: LAST_END })],
+        programme: programme({ paymentPlan: 'in_full', monthCount: 10, monthsPaid: 10 }),
+        generationCase,
+      });
+      expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(false);
+      expect(completed).toEqual([]);
+    },
+  );
+
+  it('completes the same programme once its case is resolved (Q-6 (a))', async () => {
+    const { completion, completed } = world({
+      sessions: [settled('done', { scheduledEndAt: LAST_END })],
+      programme: programme({ paymentPlan: 'in_full', monthCount: 10, monthsPaid: 10 }),
+    });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+    expect(completed).toEqual([ENROLLMENT]);
+  });
+
+  it('leaves a package alone: the wait is a programme’s only (Q-6 (a))', async () => {
+    const { completion, completed } = world({ generationCase: 'slot_unavailable' });
+    expect(await completion.completeIfDue(tx, ENROLLMENT)).toBe(true);
+    expect(completed).toEqual([ENROLLMENT]);
   });
 });

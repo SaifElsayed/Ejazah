@@ -371,3 +371,195 @@ export async function closeProgrammeRows(
   });
   return ids;
 }
+
+// ---------------------------------------------------------------------------------------------
+// 006:T015 (FR-714, FR-717, FR-721; R-507, R-508; Q-1 (a), Q-3 (a)): the sweep's reads and writes,
+// each on the caller's transaction. The steps' writes are made holding the programme's row lock;
+// the page and the survey read with none.
+
+/** The `advance-programmes` sweep's page row: a programme the sweep may act on, and its state. */
+export interface SweptProgramme {
+  readonly enrollmentId: string;
+  readonly state: ProgrammeState;
+}
+
+/**
+ * The sweep's page (R-508), by enrollment id after `after`, at most `take`: of the confirmed,
+ * undeleted enrollments' programmes, every one `awaiting_offer` (its deadline derived on every
+ * read), every one `offered` past `pay_by_at`, and every monthly one `active` or `paused` with a
+ * month still to pay whose due point is unset or reached at `now` (the database's). Over the
+ * primary key's order and `programmes_state_next_due_at_idx`; bounded by `take`.
+ */
+export async function programmesToSweep(
+  tx: Client,
+  now: Date,
+  after: string | undefined,
+  take: number,
+): Promise<SweptProgramme[]> {
+  return tx.programme.findMany({
+    where: {
+      ...(after === undefined ? {} : { enrollmentId: { gt: after } }),
+      enrollment: { status: 'confirmed', deletedAt: null },
+      OR: [
+        { state: 'awaiting_offer' },
+        { state: 'offered', payByAt: { lte: now } },
+        {
+          state: { in: ['active', 'paused'] },
+          paymentPlan: 'monthly',
+          monthsPaid: { lt: tx.programme.fields.monthCount },
+          OR: [{ nextDueAt: null }, { nextDueAt: { lte: now } }],
+        },
+      ],
+    },
+    orderBy: { enrollmentId: 'asc' },
+    take,
+    select: { enrollmentId: true, state: true },
+  });
+}
+
+/** A paid programme as the sweep's month steps read it (R-508 steps 2 to 4). */
+export interface ProgrammeMonthRow {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly status: EnrollmentStatus;
+  readonly state: ProgrammeState;
+  readonly plan: 'in_full' | 'monthly' | null;
+  readonly monthsPaid: number;
+  readonly monthCount: number | null;
+  /** The column: the last derived due point (Q-3 (a)). */
+  readonly nextDueAt: Date | null;
+  readonly firstFailureAt: Date | null;
+  readonly retriesDone: number;
+  readonly slotId: string;
+  /** `snapshot_slot_timezone`, the zone the weekly time is resolved in. */
+  readonly timezone: string;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+  /** The offer's frozen total (R-506). */
+  readonly offerTotal_piasters: Piasters;
+}
+
+/** The enrollment's programme for the month steps, or null for none or a soft-deleted enrollment. */
+export async function programmeMonthOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeMonthRow | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      paymentPlan: true,
+      monthsPaid: true,
+      monthCount: true,
+      nextDueAt: true,
+      firstFailureAt: true,
+      retriesDone: true,
+      enrollment: {
+        select: {
+          studentUserId: true,
+          teacherUserId: true,
+          status: true,
+          slotId: true,
+          snapshotSlotTimezone: true,
+          snapshotSessionCount: true,
+          snapshotPricePiasters: true,
+        },
+      },
+    },
+  });
+  if (row === null) return null;
+  const { enrollment } = row;
+  return {
+    enrollmentId,
+    studentUserId: enrollment.studentUserId,
+    teacherUserId: enrollment.teacherUserId,
+    status: enrollment.status,
+    state: row.state,
+    plan: row.paymentPlan,
+    monthsPaid: row.monthsPaid,
+    monthCount: row.monthCount,
+    nextDueAt: row.nextDueAt,
+    firstFailureAt: row.firstFailureAt,
+    retriesDone: row.retriesDone,
+    slotId: enrollment.slotId,
+    timezone: enrollment.snapshotSlotTimezone,
+    offerSessionCount: enrollment.snapshotSessionCount - 1,
+    offerTotal_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
+  };
+}
+
+/** Q-3 (a): the derived due point written (the column holds the last derived value). */
+export async function writeNextDue(
+  tx: Client,
+  enrollmentId: string,
+  nextDueAt: Date | null,
+): Promise<void> {
+  await tx.programme.updateMany({
+    where: { enrollmentId, state: { in: ['active', 'paused'] } },
+    data: { nextDueAt },
+  });
+}
+
+/** The month's first failure (R-508 step 3), written once; whether it was. */
+export async function writeFirstFailure(
+  tx: Client,
+  enrollmentId: string,
+  at: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: { in: ['active', 'paused'] }, firstFailureAt: null },
+    data: { firstFailureAt: at },
+  });
+  return count === 1;
+}
+
+/**
+ * The automatic order's attempt recorded on the programme, by one conditional update: attempt 0
+ * (the month's first charge) clears the earlier month's failure and retries; a retry n moves
+ * `retries_done` from n − 1 to n. Whether it moved.
+ */
+export async function writeAttempt(
+  tx: Client,
+  enrollmentId: string,
+  attempt: number,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: {
+      enrollmentId,
+      state: { in: ['active', 'paused'] },
+      ...(attempt === 0 ? {} : { retriesDone: attempt - 1 }),
+    },
+    data: attempt === 0 ? { firstFailureAt: null, retriesDone: 0 } : { retriesDone: attempt },
+  });
+  return count === 1;
+}
+
+/** The pause (R-507, FR-BOOK-17): an `active` programme `paused` since `pausedAt`; whether it moved. */
+export async function writePaused(
+  tx: Client,
+  enrollmentId: string,
+  pausedAt: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'active' },
+    data: { state: 'paused', pausedAt },
+  });
+  return count === 1;
+}
+
+/**
+ * Q-1 (a): the enrollment's open item of `kind` withdrawn by one conditional update (an answer came
+ * to the charge it was opened for); whether one was. `programme_requests` is booking's table.
+ */
+export async function withdrawOpenItem(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  enrollmentId: string,
+  kind: 'charge_unknown',
+): Promise<boolean> {
+  const { count } = await tx.programmeRequest.updateMany({
+    where: { enrollmentId, kind, status: 'open' },
+    data: { status: 'withdrawn' },
+  });
+  return count === 1;
+}

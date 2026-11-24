@@ -861,6 +861,36 @@ describe('confirm-enrollment: a month paid, the path with no hold (006:T006; FR-
     );
   });
 
+  // 006:T015 (PR #158 r1 Follow-up 3, settled by its text): a first payment confirmed after
+  // `pay_by_at` (paid in time, processed late) starts after the confirm instant, with no lead, so no
+  // session is written already begun.
+  it('generates month 1 after the confirm instant when it is processed after pay_by_at (006:T015, FU3)', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 1,
+        enrollment: { ...offered('offered'), programmePayByAt: new Date('2026-11-01T10:00:00Z') },
+        sessions: [{ sequenceNumber: 1, endsAt: new Date('2026-10-29T08:00:00Z') }],
+      }),
+    );
+    expect(recorded.calls.filter((call) => call.startsWith('generate'))).toEqual([
+      'generate 4 from 2 months 1,1,1,1 after 2026-11-03T08:00:00.000Z lead 0',
+    ]);
+  });
+
+  it('generates the rest in full after the confirm instant when it is processed after pay_by_at (006:T015, FU3)', async () => {
+    const recorded = await run(
+      paid({
+        kind: 'rest_in_full',
+        enrollment: { ...offered('offered'), programmePayByAt: new Date('2026-11-01T10:00:00Z') },
+        sessions: [{ sequenceNumber: 1, endsAt: new Date('2026-10-29T08:00:00Z') }],
+      }),
+    );
+    expect(recorded.calls.filter((call) => call.startsWith('generate'))).toEqual([
+      'generate 10 from 2 months 1,1,1,1,2,2,2,2,3,3 after 2026-11-03T08:00:00.000Z lead 0',
+    ]);
+  });
+
   it('treats a second paid order for a paid month as duplicate_payment, generating nothing', async () => {
     const recorded = await run(
       paid({

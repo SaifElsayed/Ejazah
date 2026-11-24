@@ -225,9 +225,16 @@ export const programmeRequestRefusal = z.enum([
  * is paid (`active`, `paused`), `closed` once the programme is closed or its enrollment no longer
  * `confirmed`. PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ» (FR-BOOK-15, «after the
  * assessment»): `assessment_not_settled` until session 1's outcome chain is consumed (`done` or
- * `student_no_show`). Additive.
+ * `student_no_show`). Additive. 006:T015 (PR #158 r2 Follow-up 1; B-P3's conflict check, Q-8 (a)):
+ * `payment_processing` while a programme order of the enrollment is payable or paid and not yet
+ * processed by the confirm step. Additive.
  */
-export const programmeCancelRefusal = z.enum(['rest_paid', 'closed', 'assessment_not_settled']);
+export const programmeCancelRefusal = z.enum([
+  'rest_paid',
+  'closed',
+  'assessment_not_settled',
+  'payment_processing',
+]);
 
 /** `programme.autoRenewOff` and `programme.cancel`: the student's, on the enrollment. */
 export const programmeActionInput = z.object({
