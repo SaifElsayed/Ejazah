@@ -2419,6 +2419,19 @@
           }
         }
       },
+      "programmes.reopen": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.state": { "required": true, "type": "string", "values": ["paused"] }
+        }
+      },
       "reports.chat": {
         "input": {
           "$": { "type": "object" },

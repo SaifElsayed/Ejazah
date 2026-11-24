@@ -42,7 +42,12 @@
 // its one reach, inside `enrollment-side.service`'s `restore`. And (006:T006, PR #156 r1) the
 // `confirmed_at` key inside payments' `markOrderConfirmed`: an order's own marker, `payments.confirmed_at`,
 // that the confirm step processed it (R-502, V-3), never an enrollment's confirmation; the job is its
-// one reach, read below. Everything else is refused.
+// one reach, read below. And (006:T017; R-513; B-P3 lane e's Q-e1 (a), the owner, 2026-11-24) the
+// third writer of the status: the `status` write inside booking's `reopenStoppedEnrollment`, an
+// administrator's reopen of a programme an approved stop closed, `cancelled` `programme_stopped` of
+// an enrollment a payment once confirmed back to `confirmed`, only `status` there through the
+// `enrollment` delegate, never `confirmed_at`; its one reach, the reopen's store in
+// `programme-requests.service.ts`, read below as `markOrderConfirmed`'s is. Everything else is refused.
 // The real tree must show exactly those sites, so a scanner that saw nothing could not pass.
 //
 // NOT SEEN (the reviewer's, R-HONEST-1's second mechanism). A `status` key whose value is a variable
@@ -81,6 +86,9 @@ const SIDE_REPOSITORY = `${BOOKING}/enrollment-side.repository.ts`;
 const SIDE_SERVICE = `${BOOKING}/enrollment-side.service.ts`;
 /** 006:T006: payments' repository, where an order's own marker is written (this file's head). */
 const PAYMENTS_REPOSITORY = 'apps/api/src/modules/payments/payments.repository.ts';
+/** 006:T017: the reopen's writer of the status, and its one reach (this file's head). */
+const REOPEN_WRITER = 'reopenStoppedEnrollment';
+const REOPEN_SERVICE = `${BOOKING}/programme-requests.service.ts`;
 
 /** What a site is: a write of the columns, or a reach of one of the three functions. */
 export type SiteKind = 'write' | 'markConfirmed' | 'restoreEnrollment' | 'confirmEnrollment';
@@ -118,7 +126,12 @@ export function allowed(site: Site): boolean {
         (site.path === PAYMENTS_REPOSITORY &&
           site.within === 'markOrderConfirmed' &&
           site.column === 'confirmed_at' &&
-          site.delegate === 'payment')
+          site.delegate === 'payment') ||
+        // 006:T017 (R-513, Q-e1 (a)): the reopen's status write, never confirmed_at (this file's head).
+        (site.path === SIDE_REPOSITORY &&
+          site.within === REOPEN_WRITER &&
+          site.column === 'status' &&
+          site.delegate === 'enrollment')
       );
     case 'markConfirmed':
       return site.path === SERVICE && site.within === 'confirmEnrollment';
@@ -758,6 +771,43 @@ describe('the gate refuses every write of a confirmed enrollment outside markCon
         '}',
       ),
     ],
+    // 006:T017 (Q-e1 (a)): the reopen's writer holds the status alone, in its own file.
+    [
+      'a confirmedAt written inside reopenStoppedEnrollment',
+      at(
+        SIDE_REPOSITORY,
+        'export async function reopenStoppedEnrollment(tx, id, at) {',
+        "  return tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed', confirmedAt: at } });",
+        '}',
+      ),
+    ],
+    [
+      'raw SQL inside reopenStoppedEnrollment',
+      at(
+        SIDE_REPOSITORY,
+        'export async function reopenStoppedEnrollment(tx, id) {',
+        "  return tx.$executeRaw`UPDATE enrollments SET status = 'confirmed' WHERE id = ${id}::uuid`;",
+        '}',
+      ),
+    ],
+    [
+      'a reopenStoppedEnrollment written outside the side’s repository',
+      at(
+        `${BOOKING}/programme-requests.repository.ts`,
+        'export async function reopenStoppedEnrollment(tx, id) {',
+        "  return tx.enrollment.updateMany({ where: { id }, data: { status: 'confirmed' } });",
+        '}',
+      ),
+    ],
+    [
+      'the reopen writer’s status written through another delegate',
+      at(
+        SIDE_REPOSITORY,
+        'export async function reopenStoppedEnrollment(tx, id) {',
+        "  return tx.user.update({ where: { id }, data: { enrollments: { updateMany: { where: {}, data: { status: 'confirmed' } } } } });",
+        '}',
+      ),
+    ],
     [
       'a third writer inside the side’s restore, not through restoreEnrollment',
       at(
@@ -1247,8 +1297,19 @@ describe('the repository’s confirmation path (R-HONEST-1, FR-366, SC-307)', ()
         `restoreEnrollment ${SIDE_SERVICE} restore`,
         // 006:T006 (PR #156 r1): an order's own marker, payments.confirmed_at.
         `write ${PAYMENTS_REPOSITORY} markOrderConfirmed`,
+        // 006:T017 (Q-e1 (a)): the reopen's status write.
+        `write ${SIDE_REPOSITORY} ${REOPEN_WRITER}`,
       ].sort(),
     );
+  });
+
+  // 006:T017 (Q-e1 (a)): the reopen's writer is reached by the reopen's store alone.
+  it('has one reach of reopenStoppedEnrollment: the reopen’s store', () => {
+    expect(identifierSites(files, REOPEN_WRITER)).toEqual([
+      `${SIDE_REPOSITORY} ${REOPEN_WRITER}`,
+      `${REOPEN_SERVICE} -`,
+      `${REOPEN_SERVICE} programmeReopenStoreOver`,
+    ]);
   });
 
   // 006:T006 (PR #156 r1): the order's marker is reached by the confirm-enrollment job alone,

@@ -6,7 +6,9 @@
 //
 // Bounded: an enrollment's items are few (one open per kind, rule 79; a closed one per deadline at
 // most), read over `programme_requests_enrollment_id_idx`; a decision reads one row by its id.
+// 006:T017: and the programme row the stop and the reopen read and write (this file's end).
 import type { ProgrammeRequestKind, ProgrammeRequestStatus } from '@ijazah/contracts';
+import type { $Enums } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 
@@ -147,4 +149,90 @@ export async function withdrawOpenRequests(
     data: { status: 'withdrawn' },
   });
   return count;
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T017 (FR-723, FR-725, R-513): the stop's read of the pause and the reopen's read and write of
+// the programme, on `programmes`, booking's table, by its primary key; the caller holds the
+// programme's row lock (the reopen's first read, for the locks' ids, takes none).
+
+/** The programme's pause instant (`paused_at`, set ⇔ `paused`, rule 77); null for none. */
+export async function pausedAtOf(
+  tx: Pick<Transaction, 'programme'>,
+  enrollmentId: string,
+): Promise<Date | null> {
+  const row = await tx.programme.findUnique({
+    where: { enrollmentId },
+    select: { pausedAt: true },
+  });
+  return row?.pausedAt ?? null;
+}
+
+/** A programme as the reopen reads it: its enrollment's parties, weekly time and closing. */
+export interface StoppedProgrammeRow {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly slotId: string;
+  readonly status: $Enums.EnrollmentStatus;
+  readonly cancellationReason: $Enums.CancellationReason | null;
+  readonly state: $Enums.ProgrammeState;
+  /** `snapshot_slot_timezone`, the zone the weekly time is resolved in. */
+  readonly timezone: string;
+  /** The highest paid month (`months_paid`). */
+  readonly monthsPaid: number;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+}
+
+/** The enrollment's programme, or null for an enrollment that is no programme or is soft-deleted. */
+export async function stoppedProgrammeOf(
+  tx: Pick<Transaction, 'programme'>,
+  enrollmentId: string,
+): Promise<StoppedProgrammeRow | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      monthsPaid: true,
+      enrollment: {
+        select: {
+          studentUserId: true,
+          teacherUserId: true,
+          slotId: true,
+          status: true,
+          cancellationReason: true,
+          snapshotSlotTimezone: true,
+          snapshotSessionCount: true,
+        },
+      },
+    },
+  });
+  if (row === null) return null;
+  const { snapshotSlotTimezone, snapshotSessionCount, ...enrollment } = row.enrollment;
+  return {
+    enrollmentId,
+    state: row.state,
+    monthsPaid: row.monthsPaid,
+    timezone: snapshotSlotTimezone,
+    offerSessionCount: snapshotSessionCount - 1,
+    ...enrollment,
+  };
+}
+
+/**
+ * The reopen's write (R-513): a `closed` programme `paused` since `pausedAt`, `closed_at` cleared
+ * (rules 76 and 77: `paused_at` set ⇔ `paused`, `closed_at` set ⇔ `closed`), by one conditional
+ * update; whether it moved.
+ */
+export async function reopenProgrammeRow(
+  tx: Pick<Transaction, 'programme'>,
+  enrollmentId: string,
+  pausedAt: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'closed' },
+    data: { state: 'paused', pausedAt, closedAt: null },
+  });
+  return count === 1;
 }

@@ -36,6 +36,11 @@ const decided = (status: 'approved' | 'declined' | 'extended', replayed = false)
   enrollmentId: ENROLLMENT,
 });
 
+/** 006:T017: a service no case of `programmes.decide` reaches. */
+const notReached = async (): Promise<never> => {
+  throw new Error('not reached');
+};
+
 function surface(answer: Answer | Error) {
   const reached: unknown[][] = [];
   const decide: Decide = async (_tx, adminId, input) => {
@@ -43,7 +48,7 @@ function surface(answer: Answer | Error) {
     if (answer instanceof Error) throw answer;
     return answer;
   };
-  const contexts = adminContextsOver({ programmes: { decide } });
+  const contexts = adminContextsOver({ programmes: { decide, reopen: notReached } });
   return {
     reached,
     written: contexts.written,
@@ -155,6 +160,93 @@ describe('programmes.decide (006:T008, R-API-12)', () => {
     const { as, reached } = surface(decided('approved'));
     expect(
       (await shapeOf(as(VERIFIED).programmes.decide({ ...ASKED, requestId: 'request-1' }))).code,
+    ).toBe('VALIDATION_FAILED');
+    expect(reached).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T017 (FR-725, FR-727; R-513; admin-surface.md `programmes.reopen`): the reopen handed the
+// session's administrator and the validated input on the kind's transaction, audited
+// `programme.reopened` on the enrollment with the administrator's reason as written; a replay with
+// no second entry; a refusal with none. What it does is `programme-requests.service.ts`' and
+// `tests/db-integrity/programme-stop.spec.ts`'.
+type Reopen = AdminSurfaceServices['programmes']['reopen'];
+type Reopened = Awaited<ReturnType<Reopen>>;
+
+const REOPEN_REASON = 'سدد الطالب المتأخرات خارج التطبيق';
+const REOPEN = { enrollmentId: ENROLLMENT, reason: REOPEN_REASON, idempotencyKey: KEY };
+const reopened = (replayed = false): Reopened => ({
+  answer: { state: 'paused' },
+  replayed,
+  enrollmentId: ENROLLMENT,
+});
+
+function reopenSurface(answer: Reopened | Error) {
+  const reached: unknown[][] = [];
+  const reopen: Reopen = async (_tx, adminId, input) => {
+    reached.push([adminId, input]);
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  const contexts = adminContextsOver({ programmes: { decide: notReached, reopen } });
+  return {
+    reached,
+    written: contexts.written,
+    as: (session: Parameters<typeof contexts.contextFor>[0]) =>
+      callerFor(contexts.contextFor(session)),
+  };
+}
+
+describe('programmes.reopen (006:T017, R-API-12)', () => {
+  it('refuses an anonymous caller and an unverified second factor, writing nothing', async () => {
+    const { as, written, reached } = reopenSurface(reopened());
+    expect((await shapeOf(as(null).programmes.reopen(REOPEN))).code).toBe('UNAUTHENTICATED');
+    expect(
+      (await shapeOf(as({ ...VERIFIED, mfaVerified: false }).programmes.reopen(REOPEN))).code,
+    ).toBe('MFA_REQUIRED');
+    expect(written).toEqual([]);
+    expect(reached).toEqual([]);
+  });
+
+  it('hands the administrator and the input on, audits programme.reopened on the enrollment with the reason', async () => {
+    const { as, written, reached } = reopenSurface(reopened());
+    expect(await as(VERIFIED).programmes.reopen(REOPEN)).toEqual({ state: 'paused' });
+    expect(reached).toEqual([[SPEC_ADMIN, REOPEN]]);
+    expect(written).toEqual([
+      {
+        adminId: SPEC_ADMIN,
+        action: 'programme.reopened',
+        targetType: 'enrollment',
+        targetId: ENROLLMENT,
+        reason: REOPEN_REASON,
+      },
+    ]);
+  });
+
+  it('answers a replay the first result and records no second entry', async () => {
+    const { as, written } = reopenSurface(reopened(true));
+    expect(await as(VERIFIED).programmes.reopen(REOPEN)).toEqual({ state: 'paused' });
+    expect(written).toEqual([]);
+  });
+
+  it.each([
+    new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: 'slot_taken' }] }),
+    new DomainError('NOT_FOUND'),
+  ])('answers the service’s $code and keeps no entry', async (error) => {
+    const { as, written } = reopenSurface(error);
+    expect((await shapeOf(as(VERIFIED).programmes.reopen(REOPEN))).code).toBe(error.code);
+    expect(written).toEqual([]);
+  });
+
+  it('refuses a missing reason or an enrollment id that is not one VALIDATION_FAILED, reaching nothing', async () => {
+    const { as, reached } = reopenSurface(reopened());
+    expect((await shapeOf(as(VERIFIED).programmes.reopen({ ...REOPEN, reason: '' }))).code).toBe(
+      'VALIDATION_FAILED',
+    );
+    expect(
+      (await shapeOf(as(VERIFIED).programmes.reopen({ ...REOPEN, enrollmentId: 'enrollment-1' })))
+        .code,
     ).toBe('VALIDATION_FAILED');
     expect(reached).toEqual([]);
   });

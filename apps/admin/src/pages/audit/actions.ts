@@ -128,10 +128,13 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // 003:T110 (track 2, B-M2; ADR 0025 D4; Q-C5): what a compensation case shows, audited on the case.
   'payments.case_amount_viewed': 'admin.money.audit.caseAmountViewed',
   // 006:T008 (SRS DEC-112; the owner's labels as proposed): `programmes.decide`'s three entries, on
-  // the enrollment. `.declined` has no writer while the refusal request is gone (a stop's is T017's).
+  // the enrollment. `.declined` is a stop's (006:T017), the refusal request being gone.
   'programme_request.approved': 'admin.audit.actions.programmeRequestApproved',
   'programme_request.declined': 'admin.audit.actions.programmeRequestDeclined',
   'programme_request.extended': 'admin.audit.actions.programmeRequestExtended',
+  // 006:T017 (B-P3 lane e, Q-e5 (a), the owner's labels, 2026-11-24): `programmes.reopen`'s entry,
+  // on the enrollment.
+  'programme.reopened': 'admin.audit.actions.programmeReopened',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

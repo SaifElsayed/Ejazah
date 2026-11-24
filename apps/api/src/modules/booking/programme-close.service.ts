@@ -18,13 +18,16 @@
 // `enrollments` …), so the hook's writes touch rows already held: the programme's update, the items'
 // (`FOR NO KEY UPDATE`, no key column changed), and the card row T013 will delete.
 //
-// THE PROGRAMME'S OWN END (`endProgramme`: `offer_declined`, `offer_lapsed`, `assessment_refused`).
-// The caller holds the programme's row, then the enrollment's. The enrollment moves `confirmed` →
-// `cancelled` with the reason by one conditional update (nothing is written when it did not move);
-// then sessions' hand-off cancels what is left of it (a make-up of session 1 still scheduled, its
-// open remedy lapsed, no case: these closings keep the fee and owe nothing, DEC-94), its one
+// THE PROGRAMME'S OWN END (`endProgramme`: `offer_declined`, `offer_lapsed`, `assessment_refused`,
+// and 006:T017's `programme_stopped`, an administrator's approval of a stop, FR-725). The caller
+// holds the programme's row, then the enrollment's. The enrollment moves `confirmed` → `cancelled`
+// with the reason by one conditional update (nothing is written when it did not move); then
+// sessions' hand-off cancels what is left of it (a make-up of session 1 still scheduled, its open
+// remedy lapsed, no case: these closings keep the fee and owe nothing, DEC-94), its one
 // `enrollment_events` row, and the close hook. The weekly time is offered again at once: none of the
-// three reasons is in the occupancy's held closings (`slot-occupancy.repository.ts`).
+// four reasons is in the occupancy's held closings (`slot-occupancy.repository.ts`). A stop's
+// release is payments' own `programme_stopped` branch (`share-release.rules.ts`, T011), reached by
+// the enrollment's reason; R1b's `CLOSE_RELEASES` is not one of these paths.
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { cancelRemainingSessions } from '../sessions/index.js';
@@ -92,8 +95,9 @@ export async function closeProgrammes(
   return closed;
 }
 
-/** The programme's own closings (R-505, R-513, FR-709). */
-export type ProgrammeEndReason = 'offer_declined' | 'offer_lapsed' | 'assessment_refused';
+/** The programme's own closings (R-505, R-513, FR-709; 006:T017, FR-725: an approved stop). */
+export type ProgrammeEndReason =
+  'offer_declined' | 'offer_lapsed' | 'assessment_refused' | 'programme_stopped';
 
 /** What the programme's own end writes, over the owners' entries. */
 export interface ProgrammeEndStore {
