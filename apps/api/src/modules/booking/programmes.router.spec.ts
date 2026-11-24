@@ -124,6 +124,13 @@ function callerAs(who: UserSession | null) {
         if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
         return { requestId: REQUEST, teacherUserId: CALLER } as never;
       },
+      // 006:T016: the automatic renewal off, recorded; another's enrollment NOT_FOUND.
+      autoRenewOff: async (...args: unknown[]) => {
+        calls.push(['autoRenewOff', ...args]);
+        const [, input] = args as [string, { enrollmentId: string }];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        return { ok: true, studentUserId: CALLER } as never;
+      },
     },
   } as unknown as BookingServices;
   const services: AppServices = {
@@ -436,5 +443,51 @@ describe("'programme.pay' (006:T009, FR-710)", () => {
       'VALIDATION_FAILED',
     );
     expect(calls).toEqual([]);
+  });
+});
+
+// 006:T016 (FR-713a, DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student kind,
+// handed the session's own account, the validated input and the request's after-commit list;
+// another's enrollment NOT_FOUND with no field.
+describe("'programme.autoRenewOff' callers (006:T016)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.autoRenewOff'", async () => {
+    const anonymous = callerAs(null);
+    await expect(anonymous.caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const teacher = callerAs(sessionOf('approved'));
+    await expect(teacher.caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('FORBIDDEN'),
+    );
+    expect([...anonymous.calls, ...teacher.calls]).toEqual([]);
+  });
+
+  it("refuses a suspended student ACCOUNT_RESTRICTED before the service: 'programme.autoRenewOff'", async () => {
+    const { caller, calls } = callerAs(sessionOf('suspended student'));
+    await expect(caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("red first: hands the service the student's own account, the validated input and the after-commit list: 'programme.autoRenewOff'", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await expect(
+      caller.programme.autoRenewOff({ ...ACTION, studentUserId: OTHERS } as never),
+    ).resolves.toStrictEqual({ ok: true });
+    const [name, account, input, live] = calls[0] ?? [];
+    expect([name, account, input]).toEqual(['autoRenewOff', CALLER, ACTION]);
+    expect(live).toHaveProperty('afterCommit');
+  });
+
+  it("red first: sends another student's enrollment NOT_FOUND with no field: 'programme.autoRenewOff'", async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.programme
+      .autoRenewOff({ ...ACTION, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Not found.',
+    });
   });
 });

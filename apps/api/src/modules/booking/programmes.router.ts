@@ -66,4 +66,13 @@ export const programmesRouter = createAppRouter({
       ctx.log,
     ),
   ),
+
+  // 006:T016 (FR-713a, DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student kind,
+  // at any time; keyed (`programme.autoRenewOff`); another student's enrollment NOT_FOUND.
+  autoRenewOff: studentProcedure({
+    input: programmeActionInput,
+    output: programmeActionOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.booking.programme.autoRenewOff(ctx.caller.userId, input, ctx.live),
+  ),
 });

@@ -83,6 +83,8 @@ interface Recorded {
   readonly calls: string[];
   /** 006:T009 (Q-C1 (a)): the programme's payment each attempt wrote, as `<plan> <months paid>`. */
   readonly programmePaid: string[];
+  /** 006:T016: the log each `recordProgrammePaid` was handed (the job's own, for its lines). */
+  readonly paidLogs: unknown[];
   readonly transactions: number;
   /** 005:T016: the work each attempt queued on its own after-commit list, as it was sent. */
   readonly sent: string[];
@@ -115,6 +117,7 @@ function harness(world: World) {
   const calls: string[] = [];
   const sent: string[] = [];
   const programmePaid: string[] = [];
+  const paidLogs: unknown[] = [];
   const logged: [object, string][] = [];
   let transactions = 0;
   let failed = false;
@@ -152,8 +155,9 @@ function harness(world: World) {
     },
     // 006:T006: the per-order marker, the processed programme orders, a suspension, the sessions.
     // 006:T009 (Q-C1 (a)): the programme's payment, through booking's entry.
-    recordProgrammePaid: async (_tx, enrollmentId, payment) => {
+    recordProgrammePaid: async (_tx, enrollmentId, payment, log) => {
       expect(enrollmentId).toBe(ENROLLMENT);
+      paidLogs.push(log);
       programmePaid.push(`${payment.plan} ${String(payment.monthsPaid)}`);
     },
     // 006:T009, PR #156 r2 Follow-up 1: no instant of the job's; the marker reads the database's.
@@ -273,6 +277,7 @@ function harness(world: World) {
     recorded: (): Recorded => ({
       calls: [...calls],
       programmePaid: [...programmePaid],
+      paidLogs: [...paidLogs],
       transactions,
       sent: [...sent],
     }),
@@ -1115,6 +1120,25 @@ describe('confirm-enrollment: the programme’s payment written (006:T009, Q-C1 
       }),
     );
     expect(recorded.programmePaid).toEqual(['monthly 1']);
+  });
+
+  // 006:T016 (FR-724, B-P3’s conflict check): booking's entry resumes a paused programme and
+  // withdraws an open stop with one line, written through the job's own log.
+  it('red first: hands booking’s entry the job’s log for the resume’s and the withdrawal’s lines (006:T016)', async () => {
+    const { job, recorded, logged } = harness(
+      paid({
+        kind: 'instalment',
+        instalmentMonth: 2,
+        enrollment: offeredTen('paused'),
+        processed: [{ kind: 'instalment', instalmentMonth: 1 }],
+        sessions: assessmentOnly,
+      }),
+    );
+    await job.handle({ paymentId: PAYMENT });
+    const [log] = recorded().paidLogs as [{ info?: (fields: object, message: string) => void }?];
+    expect(log?.info).toBeTypeOf('function');
+    log?.info?.({ probe: true }, 'probe');
+    expect(logged).toContainEqual([{ probe: true }, 'probe']);
   });
 
   it('never takes a second first payment as a fresh one: no payment written, a duplicate_payment case', async () => {

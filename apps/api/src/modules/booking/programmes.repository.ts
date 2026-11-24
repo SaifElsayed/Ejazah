@@ -258,22 +258,50 @@ export interface ProgrammePayment {
 
 /**
  * 006:T009 (the owner's Q-C1 (a), 2026-11-23): the programme's payment, on the confirm step's
- * transaction holding the programme's lock: from `offered`, `active` with its plan (a paused
- * programme stays paused: its payment is T016's to resume); then the months paid.
+ * transaction holding the programme's lock: from `offered`, `active` with its plan; 006:T016 (FR-722,
+ * B-P3's conflict check): from `paused`, `active` with `paused_at` cleared (rule 77: one update, so
+ * the two move together), every paid month landing here, an automatic one after a pause included;
+ * then the months paid. Whether the programme was resumed from `paused`.
  */
 export async function writeProgrammePaid(
   tx: Client,
   enrollmentId: string,
   payment: ProgrammePayment,
-): Promise<void> {
+): Promise<boolean> {
   await tx.programme.updateMany({
     where: { enrollmentId, state: 'offered' },
     data: { state: 'active', paymentPlan: payment.plan },
+  });
+  const { count: resumed } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'paused' },
+    data: { state: 'active', pausedAt: null },
   });
   await tx.programme.updateMany({
     where: { enrollmentId },
     data: { monthsPaid: payment.monthsPaid },
   });
+  return resumed === 1;
+}
+
+/**
+ * 006:T016 (FR-724, FR-BOOK-18): the enrollment's open `stop` request withdrawn by one conditional
+ * update, as a paid month withdraws it; its id, or null when none was open. The caller holds the
+ * programme's lock, which every writer of a stop request takes first (kernel.md, 006:T008's row).
+ */
+export async function withdrawOpenStop(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  enrollmentId: string,
+): Promise<string | null> {
+  const open = await tx.programmeRequest.findFirst({
+    where: { enrollmentId, kind: 'stop', status: 'open' },
+    select: { id: true },
+  });
+  if (open === null) return null;
+  const { count } = await tx.programmeRequest.updateMany({
+    where: { id: open.id, status: 'open' },
+    data: { status: 'withdrawn' },
+  });
+  return count === 1 ? open.id : null;
 }
 
 // ---------------------------------------------------------------------------------------------

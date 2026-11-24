@@ -592,6 +592,8 @@ export interface AppCaller {
     request(input: ProgrammeRequestInput): Promise<ProgrammeRequestOutput>;
     /** 006:T009: the student's first payment, attacked in the same file. */
     pay(input: ProgrammePayInput): Promise<ProgrammeCheckoutOutput>;
+    /** 006:T016: the student's automatic renewal off, attacked in the same file. */
+    autoRenewOff(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
   };
 }
 

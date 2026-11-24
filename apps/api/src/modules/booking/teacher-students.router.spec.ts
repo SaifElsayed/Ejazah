@@ -139,6 +139,8 @@ const booking: BookingServices = {
     offer: unreached('programme.offer'),
     cancel: unreached('programme.cancel'),
     request: unreached('programme.request'),
+    // 006:T016 (rule d): `programme.autoRenewOff` too.
+    autoRenewOff: unreached('programme.autoRenewOff'),
   },
   enrollments: unreached('enrollments.list'),
   enrollment: unreached('enrollments.get'),

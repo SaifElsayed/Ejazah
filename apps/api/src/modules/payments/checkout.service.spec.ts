@@ -28,6 +28,7 @@ import {
 import type { ProgrammePayTarget } from '../booking/index.js';
 import type { AssessmentOrder } from './checkout.repository.js';
 import { CHECKOUT_URL_COLUMN, CheckoutService, type CheckoutSteps } from './checkout.service.js';
+import { createProgrammePayee, type PaymentMode } from './programme-payee.js';
 
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const STUDENT = id(10);
@@ -213,6 +214,11 @@ interface World {
   readonly assessmentOrder?: AssessmentOrder;
   /** 006:T009 (Q-C2 (a)): the student's payable programme order; none by default. */
   readonly programmeOrder?: { readonly enrollmentId: string; readonly expiresAt: Date };
+  /**
+   * 006:T016: the payment mode T008's «unverified in live mode» is bound over (its real entry, the
+   * recipient read as `recipient`); none bound by default.
+   */
+  readonly paymentMode?: PaymentMode;
 }
 
 function setUp(world: World = {}) {
@@ -429,6 +435,18 @@ function setUp(world: World = {}) {
     now: () => world.now ?? NOW,
     report: (error) => void reported.push(error),
     steps,
+    ...(world.paymentMode === undefined
+      ? {}
+      : {
+          payee: createProgrammePayee({
+            paymentMode: world.paymentMode,
+            cipher: { decrypt: () => 'never decrypted here' },
+            recipientOf: async (_tx, teacherUserId) => {
+              log.push(['payee read', teacherUserId]);
+              return world.recipient ?? null;
+            },
+          }),
+        }),
   });
   return {
     log,
@@ -1312,6 +1330,52 @@ describe('programme.pay: the first payment of the rest, in full or a month (006:
     });
     expect(steps.filter(([kind]) => kind === 'gateway create').length).toBe(created);
     expect(steps).toContainEqual(['key read', 'programme.pay']);
+  });
+});
+
+describe('programme.pay refuses payee_unverified before the gateway (006:T016; FR-716, FR-720)', () => {
+  const payRest = (plan: 'in_full' | 'monthly') => ({
+    enrollmentId: ENROLLMENT,
+    plan,
+    saveCard: false,
+    idempotencyKey: KEY,
+  });
+  const lines: [object, string][] = [];
+  const log = { info: (fields: object, message: string) => void lines.push([fields, message]) };
+
+  it('red first: live mode, the teacher’s payout account unverified: CONFLICT payee_unverified, no gateway, nothing written, one line', async () => {
+    lines.length = 0;
+    const { service, log: steps, inserted } = setUp({ paymentMode: 'live', recipient: null });
+    const refused = await refusal(service.programmePay(student, payRest('monthly'), log));
+    expect(refused).toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'payee_unverified' }],
+      }),
+    );
+    expect(steps).toContainEqual(['payee read', TEACHER]);
+    expect(steps.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+    expect(lines).toEqual([
+      [
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT, reason: 'payee_unverified' },
+        'A programme payment was refused',
+      ],
+    ]);
+  });
+
+  it('live mode with the account verified: the order is created with its payee', async () => {
+    const { service, payees } = setUp({ paymentMode: 'live', recipient: 'rcp_verified' });
+    await service.programmePay(student, payRest('monthly'), log);
+    expect(payees).toEqual([{ recipientRef: 'rcp_verified', share_piasters: 70_000 }]);
+  });
+
+  it('test mode refuses nothing: the stand-in charges with no payee', async () => {
+    const { service, payees, log: steps } = setUp({ paymentMode: 'test', recipient: null });
+    await expect(service.programmePay(student, payRest('in_full'), log)).resolves.toEqual({
+      checkoutUrl: 'https://pay.example/1',
+    });
+    expect(payees).toEqual([undefined]);
+    expect(steps.some(([kind]) => kind === 'payee read')).toBe(false);
   });
 });
 

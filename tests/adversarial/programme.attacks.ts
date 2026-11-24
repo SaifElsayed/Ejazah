@@ -427,6 +427,28 @@ const payAttacks: ProcedureAttacks = {
   },
 };
 
+// 006:T016 (FR-713a, SRS DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student's, at
+// any time; on the pair's programme awaiting its offer it answers `{ ok: true }` (no card to delete),
+// so the attacks show the own student reaches the service and everyone else meets NOT_FOUND.
+function autoRenewOff(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.autoRenewOff({
+    enrollmentId,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as ActionInput);
+}
+
+const autoRenewOffAttacks = partyAttacks(
+  'programme.autoRenewOff',
+  'R-GENDER-2, R-GENDER-4, FR-713a, FR-410, SRS DEC-95',
+  autoRenewOff,
+  (pair) => pair.student,
+  (pair) => pair.teacher,
+  async (answer) => {
+    expect(await answer).toEqual({ ok: true });
+  },
+);
+
 export const programmeAttacks: readonly ProcedureAttacks[] = [
   offerAttacks,
   // 006:T008.
@@ -434,4 +456,6 @@ export const programmeAttacks: readonly ProcedureAttacks[] = [
   requestAttacks,
   // 006:T009.
   payAttacks,
+  // 006:T016.
+  autoRenewOffAttacks,
 ];

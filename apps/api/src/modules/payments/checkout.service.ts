@@ -163,6 +163,7 @@ import {
 } from './checkout.repository.js';
 import { orderStandingsOf } from './order-standing.repository.js';
 import { lockOrder, PaymentsRepository } from './payments.repository.js';
+import type { ProgrammePayee } from './programme-payee.js';
 
 /**
  * 006:T009 (FR-711, DEC-93; K-5): the first payment's amount, `packages/money`'s. In full: the
@@ -182,6 +183,22 @@ function firstPaymentOf(
   const sessionPrice_piasters = perSession(target.total_piasters, target.offerSessionCount);
   const sessions = Math.min(SESSIONS_PER_PROGRAMME_MONTH, target.offerSessionCount);
   return programmeOfferAmounts(sessionPrice_piasters, sessions).total_piasters;
+}
+
+/**
+ * 006:T016 (FR-733): a programme payment's refusal before the gateway, `CONFLICT` with its cause,
+ * its one line of ids and the reason logged.
+ */
+function programmeRefusal(
+  log: ProgrammeLog,
+  ids: { readonly studentUserId: string; readonly enrollmentId: string },
+  reason: string,
+  message: string,
+): DomainError {
+  log.info({ ...ids, reason }, message);
+  return markRefusalLogged(
+    new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: reason }] }),
+  );
 }
 
 /** The column the hosted checkout's address is encrypted under, bound to the order's id (R-DB-8). */
@@ -376,6 +393,14 @@ export interface CheckoutDependencies {
   readonly now?: () => Date;
   /** The process's error reporting (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /**
+   * 006:T016 (FR-716, FR-720; PR #153 r3 Minor 1, r4 Minor 2): «unverified in live mode», T008's
+   * payments entry (`createProgrammePayee`) over the payment mode the composition root hands in;
+   * `programme.pay` and `programme.renew` refuse `payee_unverified` before the gateway while it
+   * answers true. None bound: nothing is refused here, and a live gateway refuses an order with no
+   * payee itself (`paymob.adapter.ts`).
+   */
+  readonly payee?: Pick<ProgrammePayee, 'unverifiedInLiveMode'>;
 }
 
 /**
@@ -448,6 +473,7 @@ export class CheckoutService {
   readonly #steps: CheckoutSteps;
   readonly #now: () => Date;
   readonly #report: (error: Error) => void;
+  readonly #payee: CheckoutDependencies['payee'];
 
   constructor(dependencies: CheckoutDependencies) {
     this.#settings = dependencies.settings;
@@ -458,6 +484,7 @@ export class CheckoutService {
     this.#steps = dependencies.steps;
     this.#now = dependencies.now ?? (() => new Date());
     this.#report = dependencies.report ?? reportError;
+    this.#payee = dependencies.payee;
   }
 
   /** `checkout.hold` (FR-351 to FR-353, FR-BOOK-12, FR-357). */
@@ -865,10 +892,23 @@ export class CheckoutService {
         { studentUserId: student.userId, enrollmentId },
         { orders: checkoutOrdersAmong, log },
       );
-    const { target, assessment } = await this.#steps.transaction(async (tx) => {
+    const { target, assessment, payeeUnverified } = await this.#steps.transaction(async (tx) => {
       const checked = await check(tx);
-      return { target: checked, assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId) };
+      return {
+        target: checked,
+        assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId),
+        payeeUnverified: await this.#payeeUnverified(tx, checked.teacherUserId),
+      };
     });
+    // 006:T016 (FR-716, FR-720): before the gateway, in live mode only.
+    if (payeeUnverified) {
+      throw programmeRefusal(
+        log,
+        { studentUserId: student.userId, enrollmentId },
+        'payee_unverified',
+        'A programme payment was refused',
+      );
+    }
     const gross_piasters = firstPaymentOf(plan, target, assessment.gross_piasters);
     if (gross_piasters === null) {
       log.info(
@@ -901,6 +941,11 @@ export class CheckoutService {
       },
     });
     return { checkoutUrl };
+  }
+
+  /** 006:T016: T008's «unverified in live mode» for the teacher, false where none is bound. */
+  async #payeeUnverified(tx: Transaction, teacherUserId: string): Promise<boolean> {
+    return (await this.#payee?.unverifiedInLiveMode(tx, teacherUserId)) ?? false;
   }
 
   async #cancelQuietly(gatewayOrderId: string): Promise<void> {
