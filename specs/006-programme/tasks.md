@@ -562,7 +562,7 @@ No open question remains.
   > month 1 paid twice, 1,000 EGP each: shares 350 + 700. Line drift: `checkout.service.ts:507-508` → `:646-658`;
   > `share-release.rules.ts:395` → `:422`. The monitor's `gatewayOrderId` is nullable for an automatic order
   > (`payments-monitor.repository.ts:12-15`).
-  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113; `ejazah-tools	rack2-p3paymob-docs.md` §2).** Q-10 (a)
+  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113; `ejazah-tools\track2\b-p3\paymob-docs.md` §2).** Q-10 (a)
   > with three adjustments: (1) `declineKind`'s code table follows Visa's categories: `soft` only for the «cannot
   > approve now» codes, 51 (insufficient funds), 61 and 65 (limits), 91 and 96 (issuer unavailable) and the rest of
   > Visa's Category 2, each code cited in the table's comment; every other code, and any unknown one, is `hard`, so no
