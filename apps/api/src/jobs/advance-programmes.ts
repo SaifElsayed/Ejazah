@@ -31,6 +31,14 @@
 // sent once by payments (the order's id recorded before the payment).
 import { z } from 'zod';
 
+import * as booking from '../modules/booking/index.js';
+import { compensationCasesAmong } from '../modules/moderation/index.js';
+import type { AutomaticCharges } from '../modules/payments/index.js';
+import { clockTimestamp } from '../platform/db/db-clock.js';
+import type { Database } from '../platform/db/prisma.repository.js';
+import { transactionsOver } from '../platform/db/transaction.repository.js';
+import { reportError } from '../platform/errors/reporting.js';
+import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import { EVERY_MINUTE } from './expire-cancellation-requests.js';
 import { defineJob, type Job } from './job.js';
 
@@ -72,8 +80,8 @@ export interface ProgrammeSweep {
 export interface AdvanceProgrammesOptions {
   readonly sweep: ProgrammeSweep;
   readonly log: { error(fields: Readonly<Record<string, unknown>>, message: string): void };
-  /** Error tracking. */
-  readonly report: (error: Error) => void;
+  /** Error tracking; `reportError` unless a spec sets one. */
+  readonly report?: (error: Error) => void;
   readonly pageSize?: number;
 }
 
@@ -83,7 +91,7 @@ const MONTH_STATES: ReadonlySet<SweptRow['state']> = new Set(['active', 'paused'
 export function advanceProgrammes({
   sweep,
   log,
-  report,
+  report = reportError,
   pageSize = PROGRAMME_PAGE_SIZE,
 }: AdvanceProgrammesOptions): Job {
   /** One paid programme: the ask, the survey again, then its steps and their calls after commit. */
@@ -131,4 +139,72 @@ export function advanceProgrammes({
       }
     },
   });
+}
+
+/** What `programmeSweepOver` composes the sweep from, bound in `worker.ts` (its `006:` block). */
+export interface ProgrammeSweepDependencies {
+  readonly database: Database;
+  readonly settings: SettingsReader;
+  readonly log: booking.ProgrammeWindowDependencies['log'];
+  /** Payments' «unverified in live mode» over `config.PAYMENT_MODE` (`createProgrammePayee`). */
+  readonly payee: booking.ProgrammeWindowDependencies['payee'];
+  /** Payments' `deleteProgrammeCard`, the close hook's card entry. */
+  readonly deleteProgrammeCard: booking.ProgrammeWindowDependencies['deleteProgrammeCard'];
+  /** Payments' `checkoutOrdersAmong`: the windows' «pending». */
+  readonly orders: booking.ProgrammeWindowDependencies['orders'];
+  /** Payments' `programmeMonthOrdersOf`: a month's orders and whether a card is saved. */
+  readonly monthOrders: booking.MonthOrdersOf;
+  /** Payments' automatic charge (`createProgrammeCharges`): `record` and `inquire`. */
+  readonly charges: Pick<AutomaticCharges, 'record' | 'inquire'>;
+}
+
+/**
+ * The sweep over booking's page, windows and month steps, moderation's cases and payments' charge
+ * (this file's head); each read and step on a transaction of its own.
+ */
+export function programmeSweepOver({
+  database,
+  settings,
+  log,
+  payee,
+  deleteProgrammeCard,
+  orders,
+  monthOrders,
+  charges,
+}: ProgrammeSweepDependencies): ProgrammeSweep {
+  const transactions = transactionsOver(database);
+  const suspensions: ReadonlySet<string> = new Set(booking.SWEEP_SUSPENSIONS);
+  return {
+    page: (after, take) =>
+      transactions.run(async (tx) =>
+        booking.programmesToSweep(tx, await clockTimestamp(tx), after, take),
+      ),
+    suspended: async (enrollmentIds) => {
+      if (enrollmentIds.length === 0) return new Set();
+      const cases = await transactions.run((tx) => compensationCasesAmong(tx, enrollmentIds));
+      return new Set(
+        enrollmentIds.filter((id) =>
+          (cases.get(id) ?? []).some(
+            ({ status, reason }) => status === 'open' && suspensions.has(reason),
+          ),
+        ),
+      );
+    },
+    windows: booking.createProgrammeWindows({
+      transactions,
+      settings,
+      payee,
+      deleteProgrammeCard,
+      orders,
+      log,
+    }),
+    months: booking.createProgrammeMonths({
+      transactions,
+      settings,
+      orders: monthOrders,
+      charges,
+      log,
+    }),
+    inquire: (paymentId) => charges.inquire(paymentId),
+  };
 }

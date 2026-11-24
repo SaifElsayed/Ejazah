@@ -705,6 +705,22 @@ No open question remains.
   > (approve: no charge found, the order expired as a soft decline, retries on; extend: keep asking) is T015's or
   > T021's: T015's text names the item's opening and withdrawal, not its decision. `ALLOWED.charge_unknown = []`
   > stays as lane b set it.
+  > **Settled (B-P3 lane c, 2026-11-24; the owner, «موافق», typed in the review session).** (1) booking's `index.ts`
+  > exports the month steps and the page. (2) payments' `programmeMonthOrdersOf` (no lock; `cardSaved` a boolean
+  > only, SC-707) and its export. (3) `createBookingServices` takes `programmeOrders`, bound at `main.ts` to
+  > `checkoutOrdersAmong`, so the API's `programme.cancel` refuses `payment_processing`
+  > (`advance-programmes-binds.spec.ts`). Q-4: approving or extending a `charge_unknown` item is T021's;
+  > `ALLOWED.charge_unknown = []` stays. Q-5: a failed automatic order with no kind is asked on the sweep minute after
+  > the failure (its `updated_at`), then every `slot_hold_ttl_minutes` (10), at most `programme_charge_inquiry_tries`
+  > (6) times; then asking stops and nothing is written (no item, no column): the order stays failed with no kind, is
+  > never retried, and the month is paid by hand; a later authenticated soft kind starts the retries from then. The
+  > job is registered in `worker.ts`'s `006:` block (`advance-programmes-binds.spec.ts`). DB specs: the double run
+  > (two sweeps at once: one order, one payment, one item) and the month step's races against the webhook's paid, a
+  > manual checkout of the same month and `programme.cancel` (`tests/db-integrity/advance-programmes-sweep.spec.ts`),
+  > red first. The race against a stop's approval is T017's.
+  > **Follow-up (B-P3 lane c, 2026-11-24).** The pause's `enrollment` signal is added on the transaction's publisher,
+  > which no worker binds: the worker has no live channel to the API's streams (`main.ts` holds the only
+  > `InProcessLiveBus`), so a pause reaches a client only on its next read (N-15). T008's windows' signal is the same.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:

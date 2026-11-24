@@ -88,6 +88,7 @@ const automatic = (change: Partial<AutomaticOrderFacts> = {}): AutomaticOrderFac
   expiresAt: at('2026-11-26T16:41:00Z'),
   declineKind: null,
   attempt: 0,
+  failedAt: null,
   ...change,
 });
 

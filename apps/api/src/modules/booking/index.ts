@@ -472,6 +472,27 @@ export {
   type ProgrammeWindows,
   type WindowStepOutcome,
 } from './programmes.service.js';
+// 006:T015 of specs/006-programme (FR-714, FR-717, FR-721; R-507, R-508; SRS DEC-110, DEC-113; Q-1
+// (a), Q-3 (a)): the sweep's page and its month steps for `advance-programmes`, with payments'
+// answer of the month's orders and its automatic charge handed in (booking imports no payments).
+export {
+  type AutomaticOrderFacts,
+  type MonthOrders,
+  type MonthStepKind,
+} from './programmes.rules.js';
+export {
+  createProgrammeMonths,
+  type MonthOrdersOf,
+  type MonthStepDone,
+  type MonthSurvey,
+  type ProgrammeChargeRequest,
+  type ProgrammeCharges,
+  type ProgrammeMonthDependencies,
+  type ProgrammeMonths,
+  type RecordedProgrammeCharge,
+  SWEEP_SUSPENSIONS,
+} from './programmes.service.js';
+export { programmesToSweep, type SweptProgramme } from './programmes.repository.js';
 export {
   createProgrammeDecisions,
   type ProgrammeDecision,

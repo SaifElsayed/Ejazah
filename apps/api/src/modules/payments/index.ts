@@ -450,6 +450,14 @@ export type {
   RecordedCharge,
 } from './automatic-charge.js';
 export { deleteProgrammeCard } from './programme-cards.js';
+// 006:T015 (R-508; SRS DEC-110, DEC-113; lane c's stop, approved 2026-11-24): a programme month's
+// orders and whether a card is saved (a boolean, never a card detail), with no lock, for the sweep's
+// steps, which read it under the enrollment's lock that every order's move takes first.
+export {
+  type MonthAutomaticOrder,
+  type ProgrammeMonthOrders,
+  programmeMonthOrdersOf,
+} from './payments.repository.js';
 
 // 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so
 // `tests/db-integrity/programme-months.spec.ts`' races reach them through the entry (R-API-3), as

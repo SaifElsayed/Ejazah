@@ -146,8 +146,11 @@ export function payWindowStep(facts: PayWindowFacts): PayStep {
 //
 // THE CADENCE. The asks are counted from the order's expiry on the instant: the k-th is due at the
 // expiry + (k − 1) × 10 minutes and is asked on the sweep minute that reaches it (the sweep runs every
-// minute), so no ask is stored; a failed order whose kind the gateway has not yet
-// answered is asked on every sweep minute until it answers (Q-10 (a) adjusted: «on the next minute»).
+// minute), so no ask is stored. A failed order whose kind the gateway has not yet answered (Q-10 (a)
+// adjusted; the owner's answer to lane c's Q-5, 2026-11-24) is asked on the sweep minute after the
+// failure, then every 10 minutes, at most `programme_charge_inquiry_tries` (6) times; then asking stops
+// and nothing is written: the order stays failed with no kind, never retried, the month by hand; a
+// later authenticated soft kind starts the retries from then.
 
 /** A session of the programme as the due point reads it: its month (none for the assessment). */
 export interface MonthSession {
@@ -180,6 +183,8 @@ export interface AutomaticOrderFacts {
   readonly expiresAt: Date;
   readonly declineKind: 'soft' | 'hard' | null;
   readonly attempt: number;
+  /** When the order failed (its `updated_at` as payments reads it); null unless `failed`. */
+  readonly failedAt: Date | null;
 }
 
 /** The month's orders, as payments answers them under the enrollment's lock. */
@@ -312,12 +317,26 @@ export function retryAtOf(
 }
 
 /** Whether this sweep minute asks the gateway about `order` (this section's head, THE CADENCE). */
-export function inquiryDue(now: Date, order: AutomaticOrderFacts, ttlMinutes: number): boolean {
-  if (order.status === 'failed') return order.declineKind === null;
-  if (!unanswered(order, now)) return false;
-  const elapsedSeconds = unixSeconds(now) - unixSeconds(order.expiresAt);
+export function inquiryDue(
+  now: Date,
+  order: AutomaticOrderFacts,
+  ttlMinutes: number,
+  tries: number,
+): boolean {
+  if (order.status === 'failed') {
+    if (order.declineKind !== null) return false;
+    // Q-5: from the sweep minute after the failure, every `ttlMinutes`, at most `tries` asks.
+    const first = new Date(addMinutes(order.failedAt ?? order.expiresAt, 1));
+    return askMinute(now, first, ttlMinutes) && asksMade(now, first, ttlMinutes) <= tries;
+  }
+  return unanswered(order, now) && askMinute(now, order.expiresAt, ttlMinutes);
+}
+
+/** Whether `now` falls in the sweep minute of an ask, the first at `first`, then every `ttlMinutes`. */
+function askMinute(now: Date, first: Date, ttlMinutes: number): boolean {
+  const elapsedSeconds = unixSeconds(now) - unixSeconds(first);
   // The sweep runs every minute (`EVERY_MINUTE`): the ask falls in the minute that reaches it.
-  return elapsedSeconds % secondsIn(ttlMinutes, now) < secondsIn(1, now);
+  return elapsedSeconds >= 0 && elapsedSeconds % secondsIn(ttlMinutes, now) < secondsIn(1, now);
 }
 
 /** How many asks the cadence has made by `now`: one at the expiry, then one every `ttlMinutes`. */

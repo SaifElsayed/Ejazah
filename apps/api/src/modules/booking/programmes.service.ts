@@ -1425,7 +1425,7 @@ export function createProgrammeMonths(dependencies: ProgrammeMonthDependencies):
         );
         const automatic = facts.orders.automatic;
         const ask =
-          automatic !== null && inquiryDue(facts.now, automatic, terms.ttlMinutes)
+          automatic !== null && inquiryDue(facts.now, automatic, terms.ttlMinutes, terms.tries)
             ? automatic.paymentId
             : null;
         return { ask, steps };

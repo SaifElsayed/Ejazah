@@ -36,6 +36,7 @@ const order = (change: Partial<AutomaticOrderFacts> = {}): AutomaticOrderFacts =
   expiresAt: THURSDAY_1841,
   declineKind: null,
   attempt: 0,
+  failedAt: null,
   ...change,
 });
 
@@ -309,7 +310,7 @@ describe('the pause step (R-507, R-508 step 4; FR-BOOK-17)', () => {
 describe('the inquiry’s cadence (Q-1 (a); Q-10 (a) adjusted)', () => {
   it('asks at the expiry, then every 10 minutes, on the sweep minute that reaches each', () => {
     const asked = (minutes: number, seconds = 0) =>
-      inquiryDue(new Date(addSeconds(later(THURSDAY_1841, minutes), seconds)), order(), 10);
+      inquiryDue(new Date(addSeconds(later(THURSDAY_1841, minutes), seconds)), order(), 10, 6);
     expect([asked(0), asked(0, 59), asked(1), asked(9), asked(10), asked(20), asked(50)]).toEqual([
       true,
       true,
@@ -322,12 +323,66 @@ describe('the inquiry’s cadence (Q-1 (a); Q-10 (a) adjusted)', () => {
   });
 
   it('red first: never before the expiry', () => {
-    expect(inquiryDue(later(THURSDAY_1841, -1), order(), 10)).toBe(false);
+    expect(inquiryDue(later(THURSDAY_1841, -1), order(), 10, 6)).toBe(false);
   });
 
-  it('asks a failed order with no kind on the next sweep minute (and each one until answered)', () => {
-    const failed = order({ status: 'failed', declineKind: null });
-    expect(inquiryDue(later(THURSDAY_1841, 3), failed, 10)).toBe(true);
+  // The owner's answer to lane c's Q-5 (2026-11-24): a failed order with no kind is asked on the
+  // sweep minute after the failure, then every 10 minutes, at most 6 times; then asking stops and
+  // nothing is written (no item): the order stays failed with no kind, never retried.
+  describe('a failed order with no kind (Q-5)', () => {
+    const failedAt = THURSDAY_1841;
+    const failed = order({ status: 'failed', declineKind: null, failedAt });
+    const asked = (minutes: number, seconds = 0) =>
+      inquiryDue(new Date(addSeconds(later(failedAt, minutes), seconds)), failed, 10, 6);
+
+    it('red first: the first ask on the sweep minute after the failure, not within its own minute', () => {
+      expect([asked(0), asked(0, 59), asked(1), asked(1, 59)]).toEqual([false, false, true, true]);
+    });
+
+    it('red first: the next asks every 10 minutes: at +11, not at +2', () => {
+      expect([asked(2), asked(10), asked(11), asked(21), asked(51)]).toEqual([
+        false,
+        false,
+        true,
+        true,
+        true,
+      ]);
+    });
+
+    it('red first: nothing after the sixth ask (+51): asking stops', () => {
+      expect([asked(61), asked(71), asked(24 * 60 + 1)]).toEqual([false, false, false]);
+    });
+
+    it('no retry throughout: the kind is unknown', () => {
+      for (const minutes of [1, 51, 61, 7 * 24 * 60]) {
+        expect(
+          monthStepOf(
+            'retry',
+            withOrders(
+              { automatic: failed },
+              { now: later(failedAt, minutes), firstFailureAt: failedAt, retriesDone: 0 },
+            ),
+          ),
+        ).toBeNull();
+      }
+    });
+
+    it('a later authenticated soft kind starts the retries from then', () => {
+      const soft = { ...failed, declineKind: 'soft' as const };
+      const answeredAt = later(failedAt, 3 * 24 * 60);
+      expect(monthStepOf('retry', withOrders({ automatic: soft }, { now: answeredAt }))).toEqual({
+        kind: 'failed',
+      });
+      expect(
+        monthStepOf(
+          'retry',
+          withOrders(
+            { automatic: soft },
+            { now: later(answeredAt, 24 * 60), firstFailureAt: answeredAt, retriesDone: 0 },
+          ),
+        ),
+      ).toEqual({ kind: 'retry', attempt: 1 });
+    });
   });
 
   it('red first: asks nothing about a settled order', () => {
@@ -337,7 +392,7 @@ describe('the inquiry’s cadence (Q-1 (a); Q-10 (a) adjusted)', () => {
       order({ status: 'failed', declineKind: 'hard' }),
       order({ status: 'failed', declineKind: 'soft' }),
     ]) {
-      expect(inquiryDue(later(THURSDAY_1841, 10), settled, 10)).toBe(false);
+      expect(inquiryDue(later(THURSDAY_1841, 10), settled, 10, 6)).toBe(false);
     }
   });
 

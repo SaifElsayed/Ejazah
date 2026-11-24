@@ -25,6 +25,7 @@ import {
   checkoutOrdersAmong,
   createProgrammePayee,
   type PaymentMode,
+  programmeMonthOrdersOf,
   programmeOfferAmountsOf,
 } from '../../apps/api/src/modules/payments/index';
 import { createCompletion } from '../../apps/api/src/modules/sessions/index';
@@ -419,4 +420,121 @@ describe('completion waits for a refused generation’s case (006:T015, Q-6 (a))
       expect((await stateOf(enrollmentId)).status).toBe('completed');
     },
   );
+});
+
+/** A saved card of the enrollment: sealed bytes, never a real token (SC-707). */
+const SEALED = Buffer.from('probe-sealed-token-bytes');
+async function savedCard(enrollmentId: string): Promise<void> {
+  await database.programmeCard.create({
+    data: {
+      enrollmentId,
+      tokenEncrypted: SEALED,
+      last4: '4242',
+      brand: 'visa',
+      consentedAt: new Date('2026-11-01T07:00:00Z'),
+    },
+  });
+}
+
+/**
+ * An automatic order of `month`, written by SQL as `expiry-world.ts`' orders are; its id. A failed
+ * one carries a gateway id (ERD §15 rule 72 admits none only on created, expired or a hard refusal).
+ */
+async function automaticOrder(
+  enrollmentId: string,
+  month: number,
+  {
+    status,
+    attempt = 0,
+    declineKind = null,
+    expiresInMinutes = -1,
+  }: {
+    readonly status: 'created' | 'expired' | 'failed' | 'paid';
+    readonly attempt?: number;
+    readonly declineKind?: 'soft' | 'hard' | null;
+    readonly expiresInMinutes?: number;
+  },
+): Promise<string> {
+  const expiresAt = new Date(addMinutes(await dbNow(), expiresInMinutes));
+  const gatewayOrderId = status === 'created' ? null : `probe-order-${randomUUID()}`;
+  const [row] = await database.$queryRaw<{ id: string }[]>`
+    INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                          status, expires_at, kind, instalment_month, automatic, attempt,
+                          decline_kind, teacher_share_rate_percent, teacher_share_piasters,
+                          updated_at)
+    VALUES (${enrollmentId}::uuid, 'fake', ${gatewayOrderId}, 100000, 'EGP',
+            ${status}::payment_status, ${expiresAt}, 'instalment', ${month}, true, ${attempt},
+            ${declineKind}::decline_kind, 70, 70000, now())
+    RETURNING id::text AS id`;
+  if (row === undefined) throw new Error('no order written');
+  return row.id;
+}
+
+const monthOrders = async (enrollmentId: string, month: number) =>
+  database.$transaction(async (tx) =>
+    programmeMonthOrdersOf(tx as Transaction, enrollmentId, month, await dbNow()),
+  );
+
+// 006:T015 (lane c's stop (2), approved 2026-11-24): payments' answer of a programme month's orders,
+// no lock; whether a card is saved is a boolean only (SC-707).
+describe('payments’ answer of a month’s orders (006:T015; SC-707)', () => {
+  it('red first: a saved card is a boolean, and the answer carries no card detail', async () => {
+    const { enrollmentId } = await offered(-60);
+    const without = await monthOrders(enrollmentId, 2);
+    expect(without.cardSaved).toBe(false);
+    await savedCard(enrollmentId);
+    const answer = await monthOrders(enrollmentId, 2);
+    expect(Object.keys(answer).sort()).toEqual(['automatic', 'cardSaved', 'payable', 'processing']);
+    expect(answer.cardSaved).toBe(true);
+    const text = JSON.stringify(answer);
+    for (const detail of ['4242', 'visa', SEALED.toString('base64'), 'probe-sealed']) {
+      expect(text).not.toContain(detail);
+    }
+  });
+
+  it('red first: the month’s latest automatic order, the failure’s instant on a failed one; another month’s and a manual order left out', async () => {
+    const { enrollmentId } = await offered(-60);
+    await automaticOrder(enrollmentId, 2, { status: 'expired' });
+    const latest = await automaticOrder(enrollmentId, 2, {
+      status: 'failed',
+      attempt: 1,
+      declineKind: null,
+    });
+    await automaticOrder(enrollmentId, 3, { status: 'created', expiresInMinutes: 10 });
+    await programmeOrder(enrollmentId, 'expired');
+    const { automatic } = await monthOrders(enrollmentId, 2);
+    const { updatedAt } = await database.payment.findUniqueOrThrow({
+      where: { id: latest },
+      select: { updatedAt: true },
+    });
+    expect(automatic).toStrictEqual({
+      paymentId: latest,
+      status: 'failed',
+      expiresAt: expect.any(Date),
+      declineKind: null,
+      attempt: 1,
+      failedAt: updatedAt,
+    });
+    expect((await monthOrders(enrollmentId, 4)).automatic).toBeNull();
+  });
+
+  it('red first: payable while a programme order is created and unexpired; processing while one is paid and unconfirmed', async () => {
+    const payable = await offered(-60);
+    await programmeOrder(payable.enrollmentId, 'payable');
+    expect(await monthOrders(payable.enrollmentId, 1)).toMatchObject({
+      payable: true,
+      processing: false,
+    });
+    const processing = await offered(-60);
+    const paid = await programmeOrder(processing.enrollmentId, 'processing');
+    expect(await monthOrders(processing.enrollmentId, 1)).toMatchObject({
+      payable: false,
+      processing: true,
+    });
+    await database.payment.update({ where: { id: paid }, data: { confirmedAt: new Date() } });
+    expect(await monthOrders(processing.enrollmentId, 1)).toMatchObject({ processing: false });
+    const expired = await offered(-60);
+    await programmeOrder(expired.enrollmentId, 'expired');
+    expect(await monthOrders(expired.enrollmentId, 1)).toMatchObject({ payable: false });
+  });
 });
