@@ -110,9 +110,17 @@ export const programmeGetOutput = z.object({
   /** The paid month's last session's end (`lastToEnd`, R-507). */
   nextDueAt: z.iso.datetime().nullable(),
   paused: z.object({ since: z.iso.datetime() }).nullable(),
-  /** «renew now» is open: no saved card and within `programme_renew_early_days` of the due time. */
+  /**
+   * 006:T018 (Q-f3 (a), the owner, 2026-11-24): `programme.renew` would be accepted now. With a card
+   * saved, true only after the month's automatic charge failed or expired («pay now», «change
+   * card»); with none, «renew now» from `programme_renew_early_days` before the due point. False
+   * while `payeePending`, `chargePending` or a suspension holds.
+   */
   renewOpen: z.boolean(),
-  /** An automatic order of the month is `created` and unexpired (FR-716). */
+  /**
+   * 006:T018 (Q-f2 (a), the owner, 2026-11-24): the month's automatic order is `created`, until the
+   * gateway answers it, expired or not (FR-716, SRS DEC-113).
+   */
   chargePending: z.boolean(),
   payeePending: z.boolean(),
   payBlocked: z.boolean(),

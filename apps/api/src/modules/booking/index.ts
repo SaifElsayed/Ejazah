@@ -522,3 +522,12 @@ export {
   PROGRAMME_RENEW_EARLY_DAYS_SETTING,
   type ProgrammeRenewTarget,
 } from './programmes.service.js';
+// 006:T018 of specs/006-programme (FR-726, FR-727; the owner's approval of lane f's stop,
+// 2026-11-24): the administrator's `programmes.queue` and `programmes.get`, and the payments reads
+// `main.ts` hands to them and to `programme.get` (booking imports nothing of payments, R-208).
+export {
+  createProgrammeAdminReads,
+  type ProgrammeAdminReadPayments,
+  type ProgrammeAdminReads,
+  type ProgrammeReadPayments,
+} from './programmes.service.js';

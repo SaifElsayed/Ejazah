@@ -1997,6 +1997,8 @@
           "releasesTitle": "ليه",
           "share": "نصيب المعلم منه: {amount}",
           "platformShare": "منها {amount} على المنصة: استُرد بعد صرف نصيب المعلم، فلا يُخصم منه",
+          "drawnTitle": "يُصرف من الطلبات:",
+          "drawnFrom": "{amount} من هذا الطلب",
           "student": "الطالب: {name}"
         },
         "empty": {

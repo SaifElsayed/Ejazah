@@ -300,6 +300,9 @@ const genderFlags = moderation.createGenderFlags({
 // 003:T105 (SRS DEC-81, DEC-89; the notes under T105): the releases of the teachers' shares, one
 // service for both surfaces: the teacher's «مستحقاتي» and the administrators' «تحويلات المعلمين».
 const payouts = payments.createPayoutServices({ database, settings, idempotency, cipher, log });
+// 006:T018 (FR-726, FR-727): «unverified in live mode» (T008's payments entry) for the reads'
+// `payeePending` and `payeeVerifiedNow`, over the payment mode.
+const programmePayee = payments.createProgrammePayee({ paymentMode: config.PAYMENT_MODE, cipher });
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -420,6 +423,13 @@ const services = {
     // 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): `programme.cancel` refuses `payment_processing`
     // while a programme order is payable or paid and not yet processed.
     programmeOrders: payments.checkoutOrdersAmong,
+    // 006:T018 (FR-726): `programme.get`'s payments reads: the payee, the month's orders and the
+    // student's card (its last four digits and brand only, SC-707).
+    programmeReads: {
+      payee: programmePayee,
+      monthOrders: payments.programmeMonthOrdersOf,
+      cardOf: payments.programmeCardOf,
+    },
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two
@@ -648,12 +658,29 @@ const adminServices = {
   payouts: payouts.admin,
   // 006:T008 (Q-7 (a)): `programmes.decide`, keyed on the kind's transaction; the close hook's card
   // entry is payments' (T013: the card row deleted).
-  programmes: booking.createProgrammeDecisions({
-    idempotency,
-    settings,
-    deleteProgrammeCard: payments.deleteProgrammeCard,
-    log,
-  }),
+  // 006:T018 (FR-727): and `programmes.queue` and `programmes.get`, over payments' reads: the
+  // payee, the month's orders (`cardSaved`), every order of the enrollment, and whether an
+  // `assessment` release is written.
+  programmes: {
+    ...booking.createProgrammeDecisions({
+      idempotency,
+      settings,
+      deleteProgrammeCard: payments.deleteProgrammeCard,
+      log,
+    }),
+    ...booking.createProgrammeAdminReads({
+      settings,
+      payments: {
+        payee: programmePayee,
+        monthOrders: payments.programmeMonthOrdersOf,
+        ordersOf: payments.enrollmentOrdersOf,
+        assessmentReleased: async (tx, enrollmentId) =>
+          (await payments.releasesOf(tx, [enrollmentId])).some(
+            ({ milestone }) => milestone === 'assessment',
+          ),
+      },
+    }),
+  },
 };
 
 const application = await createApplication({

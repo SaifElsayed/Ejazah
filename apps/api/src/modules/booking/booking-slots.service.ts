@@ -80,6 +80,7 @@ import {
   createProgrammeServices,
   fitsSlot,
   type ProgrammeReader,
+  type ProgrammeReadPayments,
   type ProgrammeServiceDependencies,
   type ProgrammeServices,
   withProgrammeTimes,
@@ -276,6 +277,7 @@ export function createBookingServices({
   programmeAmounts,
   deleteProgrammeCard,
   programmeOrders,
+  programmeReads,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
@@ -304,6 +306,11 @@ export function createBookingServices({
    * `programme.cancel` reads to refuse `payment_processing`; `main.ts` hands it in.
    */
   readonly programmeOrders?: ProgrammeServiceDependencies['orders'];
+  /**
+   * 006:T018 (FR-726): `programme.get`'s payments reads (the payee, the month's orders, the student's
+   * card), which `main.ts` hands in; run on these services' transactions.
+   */
+  readonly programmeReads?: ProgrammeReadPayments;
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
@@ -330,6 +337,9 @@ export function createBookingServices({
       log,
       ...(deleteProgrammeCard === undefined ? {} : { deleteProgrammeCard }),
       ...(programmeOrders === undefined ? {} : { orders: programmeOrders }),
+      ...(programmeReads === undefined
+        ? {}
+        : { reads: { transactions, payments: programmeReads } }),
     }),
   };
 }

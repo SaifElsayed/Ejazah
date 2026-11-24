@@ -71,6 +71,7 @@ import type {
   ProgrammeOfferRefusal,
   ProgrammePayRefusal,
   ProgrammeRenewRefusal,
+  ProgrammeGetInput,
   ProgrammeGetOutput,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
@@ -101,7 +102,11 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import { type LivePublisher, publisherOn } from '../../platform/live/live-publisher.js';
-import { positiveWhole, programmeChargeRetryDays } from '../../platform/settings/registry.js';
+import {
+  positiveWhole,
+  programmeChargeRetryDays,
+  wholeNonNegative,
+} from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
@@ -536,6 +541,15 @@ export interface ProgrammeServiceDependencies {
    * reads no order.
    */
   readonly orders?: CheckoutOrdersAmong;
+  /**
+   * 006:T018 (app-surface.md `programme.get`): the read's transactions and payments' reads (the
+   * payee, the month's orders, the student's card), bound by `createBookingServices` from what
+   * `main.ts` hands in; `programme.get` fails loudly where none is bound.
+   */
+  readonly reads?: {
+    readonly transactions: Transactions;
+    readonly payments: ProgrammeReadPayments;
+  };
 }
 
 /**
@@ -558,6 +572,8 @@ export interface ProgrammeServices {
     input: ProgrammeRequestInput,
     live: Pick<LivePublisher, 'afterCommit'>,
   ): Promise<ProgrammeRequestOutput>;
+  /** 006:T018 (FR-726): `programme.get`, either party's. */
+  get(userId: string, input: ProgrammeGetInput): Promise<ProgrammeGetOutput>;
   /** 006:T016 (FR-713a, DEC-95): `programme.autoRenewOff`, the student's. */
   autoRenewOff(
     studentUserId: string,
@@ -589,6 +605,17 @@ export function createProgrammeServices(
       ),
     autoRenewOff: (studentUserId, input, live) =>
       turnAutoRenewOff(studentUserId, input, live, dependencies),
+    get: async (userId, { enrollmentId }) => {
+      const { reads } = dependencies;
+      if (reads === undefined) throw new Error('programme.get: its reads are not bound');
+      const earlyDays = await dependencies.settings.read(
+        PROGRAMME_RENEW_EARLY_DAYS_SETTING,
+        wholeNonNegative,
+      );
+      return reads.transactions.run((tx) =>
+        readProgramme(tx, userId, enrollmentId, { payments: reads.payments, earlyDays }),
+      );
+    },
   };
 }
 
@@ -1684,6 +1711,49 @@ export const programmeRenewStore: ProgrammeRenewStore = {
 /** `programme.renew`'s own refusals (contracts' `programmeRenewRefusal`), the check's part. */
 type RenewRefusal = Exclude<ProgrammeRenewRefusal, 'payee_unverified'>;
 
+/** What a month by hand is decided on, each read only when the decision reaches it. */
+export interface RenewalReads {
+  /** A `teacher_suspended` or `student_suspended` case open. */
+  suspended(): Promise<boolean>;
+  /** The month's orders, `months_paid` + 1. */
+  month(): Promise<MonthOrders>;
+  /** The due point (`lastToEnd` over the paid month's sessions). */
+  due(): Promise<Date | null>;
+  readonly at: Date;
+  /** `programme_renew_early_days`. */
+  readonly earlyDays: number;
+}
+
+/**
+ * 006:T018 (Q-f3 (a), the owner, 2026-11-24): whether `programme.renew` takes the month now, and
+ * its refusal otherwise (this section's head): the renewal's check holds it under its locks, and
+ * `programme.get`'s `renewOpen` reads it with none, so the two never disagree.
+ */
+export async function renewalRefusalOf(
+  row: Pick<ProgrammeMonthRow, 'status' | 'state' | 'plan' | 'monthsPaid' | 'monthCount'>,
+  reads: RenewalReads,
+): Promise<RenewRefusal | null> {
+  if (row.status !== 'confirmed' || row.state === 'closed') return 'closed';
+  if (
+    (row.state !== 'active' && row.state !== 'paused') ||
+    row.plan !== 'monthly' ||
+    row.monthCount === null ||
+    row.monthsPaid >= row.monthCount
+  ) {
+    return 'nothing_due';
+  }
+  if (await reads.suspended()) return 'party_suspended';
+  const month = await reads.month();
+  const charge = month.automatic?.status;
+  if (charge === 'created') return 'charge_pending';
+  // «pay now» and «change card» after a failure of the month's charge (FR-716); otherwise «renew
+  // now» only without a card, from the early days before the due point (FR-715).
+  if (charge === 'failed' || charge === 'expired') return null;
+  if (month.cardSaved) return 'not_due_yet';
+  const due = await reads.due();
+  return due === null || reads.at < new Date(addDays(due, -reads.earlyDays)) ? 'not_due_yet' : null;
+}
+
 /** `programme.renew`'s check (this section's head, THE RENEWAL'S CHECK). */
 export async function checkedProgrammeRenew(
   tx: Transaction,
@@ -1723,28 +1793,14 @@ export async function checkedProgrammeRenew(
   await store.lockRows(tx, 'enrollments', enrollmentIds);
   const row = await store.programmeMonthOf(tx, enrollmentId);
   if (row === null || row.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
-  if (row.status !== 'confirmed' || row.state === 'closed') throw cause('closed');
-  if (
-    (row.state !== 'active' && row.state !== 'paused') ||
-    row.plan !== 'monthly' ||
-    row.monthCount === null ||
-    row.monthsPaid >= row.monthCount
-  ) {
-    throw cause('nothing_due');
-  }
-  if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) throw cause('party_suspended');
-  const month = await dependencies.monthOrders(tx, enrollmentId, row.monthsPaid + 1, at);
-  const charge = month.automatic?.status;
-  if (charge === 'created') throw cause('charge_pending');
-  // «pay now» and «change card» after a failure of the month's charge (FR-716); otherwise «renew
-  // now» only without a card, from the early days before the due point (FR-715).
-  if (charge !== 'failed' && charge !== 'expired') {
-    if (month.cardSaved) throw cause('not_due_yet');
-    const due = nextDueOf({ ...row, sessions: await store.sessionsOf(tx, enrollmentId) });
-    if (due === null || at < new Date(addDays(due, -dependencies.earlyDays))) {
-      throw cause('not_due_yet');
-    }
-  }
+  const refusal = await renewalRefusalOf(row, {
+    suspended: () => suspensionOpen(tx, enrollmentId, store.openCaseOf),
+    month: () => dependencies.monthOrders(tx, enrollmentId, row.monthsPaid + 1, at),
+    due: async () => nextDueOf({ ...row, sessions: await store.sessionsOf(tx, enrollmentId) }),
+    at,
+    earlyDays: dependencies.earlyDays,
+  });
+  if (refusal !== null) throw cause(refusal);
   const orders = await dependencies.orders(tx, enrollmentIds, at);
   for (const held of heldEnrollment) {
     const standing = orders.get(held);
@@ -1784,13 +1840,15 @@ export async function checkedProgrammeRenew(
 // else NOT_FOUND as an unknown id (R-GENDER-2's shape; the parties are of one gender, R-GENDER-4).
 // `card` (`last4`, brand) to the student alone, never its token (SC-707). `nextDueAt` derived from
 // the paid month's sessions (`nextDueOf`, as the sweep and the renewal derive it, Q-3 (a)).
-// `chargePending`: the month's automatic order `created` and unexpired (the contract's words).
+// `chargePending`: the month's automatic order `created`, until the gateway answers it, expired or
+// not (Q-f2 (a), the owner, 2026-11-24).
 // `payeePending`: payments' «unverified in live mode» (T008's entry), false in test mode.
 // `payBlocked`: a `pay_blocked` item open (FR-706b). `teacherUnavailable`: the teacher's account
-// gone, suspended or banned (FR-BOOK-19). `renewOpen`: «renew now» (FR-715): a monthly programme
-// `active` or `paused` of a confirmed enrollment, a month left, no card saved, no charge pending
-// (DEC-92), from `programme_renew_early_days` whole days before the due point on the database's
-// clock.
+// gone, suspended or banned (FR-BOOK-19). `renewOpen` (Q-f3 (a), the owner, 2026-11-24): `programme.renew`
+// would take the month now, its check's own rule (`renewalRefusalOf`): with a card saved only after
+// the month's charge failed or expired («pay now», «change card»), with none «renew now» from
+// `programme_renew_early_days` before the due point; false while `payeePending` (the checkout's
+// `payee_unverified`), `chargePending` or a suspension holds.
 //
 // THE QUEUE (`programmes.queue`, an administrator). Oldest first in pages of `admin_list_page_size`
 // (one row more read, a cursor only while more follow): `paused`, the longest paused first; every
@@ -1829,6 +1887,8 @@ export interface ProgrammeReadStore {
   payBlockedOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
   standingOf(tx: Transaction, userId: string): ReturnType<typeof readStanding>;
   clock(tx: Transaction): Promise<Date>;
+  /** Moderation's entry: the enrollment's open case of `reason`. */
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
 }
 
 export const programmeReadStore: ProgrammeReadStore = {
@@ -1838,6 +1898,7 @@ export const programmeReadStore: ProgrammeReadStore = {
   payBlockedOpen: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'pay_blocked'),
   standingOf: readStanding,
   clock: clockTimestamp,
+  openCaseOf,
 };
 
 /** The account states in which the teacher is unavailable to the student (FR-BOOK-19). */
@@ -1858,6 +1919,14 @@ function offerOf(view: ProgrammeView): ProgrammeGetOutput['offer'] {
     offeredAt: offer.offeredAt.toISOString(),
   };
 }
+
+/** No order read: a programme with no month to pay (`renewalRefusalOf` answers before it). */
+const NO_MONTH_ORDERS: MonthOrders = {
+  cardSaved: false,
+  payable: false,
+  processing: false,
+  automatic: null,
+};
 
 /** A month is still to pay on a monthly programme that runs (R-507). */
 function monthDue(view: ProgrammeView): boolean {
@@ -1897,15 +1966,20 @@ export async function readProgramme(
   const month = monthDue(view)
     ? await payments.monthOrders(tx, enrollmentId, view.monthsPaid + 1, at)
     : null;
-  const charge = month?.automatic ?? null;
-  const chargePending = charge?.status === 'created' && charge.expiresAt > at;
-  const renewOpen =
-    month !== null &&
-    !month.cardSaved &&
-    !chargePending &&
-    due !== null &&
-    at >= new Date(addDays(due, -dependencies.earlyDays));
+  // Q-f2 (a): pending until the gateway answers, expired or not.
+  const chargePending = month?.automatic?.status === 'created';
   const payeePending = await payments.payee.unverifiedInLiveMode(tx, view.teacherUserId);
+  // Q-f3 (a): `programme.renew` would take the month now; the checkout refuses it while
+  // `payeePending` (`payee_unverified`).
+  const renewOpen =
+    !payeePending &&
+    (await renewalRefusalOf(view, {
+      suspended: () => suspensionOpen(tx, enrollmentId, store.openCaseOf),
+      month: async () => month ?? NO_MONTH_ORDERS,
+      due: async () => due,
+      at,
+      earlyDays: dependencies.earlyDays,
+    })) === null;
   const payBlocked = await store.payBlockedOpen(tx, enrollmentId);
   const teacher = await store.standingOf(tx, view.teacherUserId);
   const card = userId === view.studentUserId ? await payments.cardOf(tx, enrollmentId) : null;

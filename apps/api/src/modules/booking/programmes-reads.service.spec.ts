@@ -16,15 +16,21 @@ import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
+  checkedProgrammeRenew,
   createProgrammeAdminReads,
   type ProgrammeAdminReadPayments,
   type ProgrammeAdminReadStore,
   type ProgrammeReadPayments,
   type ProgrammeReadStore,
+  type ProgrammeRenewStore,
   readProgramme,
 } from './programmes.service.js';
-import type { ProgrammeRequestView, ProgrammeView } from './programmes.repository.js';
-import type { MonthOrders } from './programmes.rules.js';
+import type {
+  ProgrammeMonthRow,
+  ProgrammeRequestView,
+  ProgrammeView,
+} from './programmes.repository.js';
+import type { AutomaticOrderFacts, MonthOrders } from './programmes.rules.js';
 
 const tx = {} as Transaction;
 const id = (n: number) => `0199d0a0-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -74,6 +80,40 @@ const NO_ORDERS: MonthOrders = {
   automatic: null,
 };
 
+/** The month's automatic order, `created` and unexpired unless changed. */
+function automaticOrder(change: Partial<AutomaticOrderFacts> = {}): AutomaticOrderFacts {
+  return {
+    paymentId: id(7),
+    status: 'created',
+    expiresAt: new Date('2026-12-10T10:05:00Z'),
+    declineKind: null,
+    attempt: 0,
+    failedAt: null,
+    ...change,
+  };
+}
+
+/** The same programme as the renewal's check reads it. */
+function monthRowOf(view: ProgrammeView): ProgrammeMonthRow {
+  return {
+    enrollmentId: view.enrollmentId,
+    studentUserId: view.studentUserId,
+    teacherUserId: view.teacherUserId,
+    status: view.status,
+    state: view.state,
+    plan: view.plan,
+    monthsPaid: view.monthsPaid,
+    monthCount: view.monthCount,
+    nextDueAt: null,
+    firstFailureAt: null,
+    retriesDone: 0,
+    slotId: id(6),
+    timezone: 'Africa/Cairo',
+    offerSessionCount: 40,
+    offerTotal_piasters: piasters(1_000_000),
+  };
+}
+
 function readStoreOf(overrides: Partial<ProgrammeReadStore> = {}): ProgrammeReadStore {
   return {
     viewOf: async (_tx, enrollmentId) => (enrollmentId === ENROLLMENT ? VIEW : null),
@@ -84,6 +124,7 @@ function readStoreOf(overrides: Partial<ProgrammeReadStore> = {}): ProgrammeRead
       teacher: { verificationStatus: 'approved', applicationStatus: 'approved' },
     }),
     clock: async () => NOW,
+    openCaseOf: async () => null,
     ...overrides,
   } as ProgrammeReadStore;
 }
@@ -191,65 +232,112 @@ describe('programme.get (006:T018, FR-726)', () => {
     },
   );
 
-  it('says chargePending while the month’s automatic order is created and unexpired', async () => {
-    const order = (status: 'created' | 'failed', expiresAt: Date) => ({
-      paymentId: id(7),
-      status,
-      expiresAt,
-      declineKind: null,
-      attempt: 0,
-      failedAt: null,
-    });
-    const pending = paymentsOf({
-      monthOrders: async (_tx, enrollmentId, month) => {
-        expect([enrollmentId, month]).toEqual([ENROLLMENT, 3]);
-        return { ...NO_ORDERS, automatic: order('created', new Date('2026-12-10T10:05:00Z')) };
-      },
-    });
-    expect((await read(STUDENT, { payments: pending })).chargePending).toBe(true);
-    const failed = paymentsOf({
-      monthOrders: async () => ({
-        ...NO_ORDERS,
-        automatic: order('failed', new Date('2026-12-10T10:05:00Z')),
-      }),
-    });
-    expect((await read(STUDENT, { payments: failed })).chargePending).toBe(false);
-  });
-
-  it('opens «renew now» with no card from the early days before the due point, and not before', async () => {
-    const noCard = paymentsOf({ monthOrders: async () => NO_ORDERS, cardOf: async () => null });
-    // 2026-12-10 10:00 is after 2026-12-09 18:00, the due point less 3 days.
-    expect((await read(STUDENT, { payments: noCard })).renewOpen).toBe(true);
-    const early = readStoreOf({ clock: async () => new Date('2026-12-09T17:59:00Z') });
-    expect((await read(STUDENT, { store: early, payments: noCard })).renewOpen).toBe(false);
-  });
-
-  it('keeps «renew now» closed with a card saved, a charge pending, in full, or every month paid', async () => {
-    expect((await read(STUDENT)).renewOpen).toBe(false);
-    const pending = paymentsOf({
-      cardOf: async () => null,
-      monthOrders: async () => ({
-        ...NO_ORDERS,
-        automatic: {
-          paymentId: id(7),
-          status: 'created',
-          expiresAt: new Date('2026-12-10T10:05:00Z'),
-          declineKind: null,
-          attempt: 0,
-          failedAt: null,
+  // Q-f2 (a), the owner, 2026-11-24: pending while the order is `created`, until the gateway
+  // answers, expired or not. Example: 1,000 EGP charged at 18:00, expiring at 18:10 unanswered.
+  it('says chargePending while the month’s automatic order is created, expired or not, until it is answered', async () => {
+    for (const [status, expiresAt, pending] of [
+      ['created', new Date('2026-12-10T10:05:00Z'), true],
+      ['created', new Date('2026-12-10T09:50:00Z'), true],
+      ['failed', new Date('2026-12-10T10:05:00Z'), false],
+      ['expired', new Date('2026-12-10T09:50:00Z'), false],
+    ] as const) {
+      const payments = paymentsOf({
+        monthOrders: async (_tx, enrollmentId, month) => {
+          expect([enrollmentId, month]).toEqual([ENROLLMENT, 3]);
+          return { ...NO_ORDERS, automatic: automaticOrder({ status, expiresAt }) };
         },
-      }),
-    });
-    expect((await read(STUDENT, { payments: pending })).renewOpen).toBe(false);
-    const noCard = paymentsOf({ monthOrders: async () => NO_ORDERS, cardOf: async () => null });
-    for (const view of [
-      { ...VIEW, plan: 'in_full' as const, monthsPaid: 10 },
-      { ...VIEW, monthsPaid: 10 },
-      { ...VIEW, state: 'closed' as const, closedAt: NOW },
-    ]) {
-      const store = readStoreOf({ viewOf: async () => view });
-      expect((await read(STUDENT, { store, payments: noCard })).renewOpen).toBe(false);
+      });
+      expect((await read(STUDENT, { payments })).chargePending).toBe(pending);
     }
+  });
+
+  // Q-f3 (a), the owner, 2026-11-24: `renewOpen` is «programme.renew would be accepted now». Each
+  // branch is held against the renewal's own check (`checkedProgrammeRenew`) on the same facts, and
+  // the read adds `payeePending` (the checkout's refusal before the gateway).
+  describe('renewOpen is programme.renew’s own answer (Q-f3 (a))', () => {
+    interface Branch {
+      readonly name: string;
+      readonly view?: ProgrammeView;
+      readonly month?: MonthOrders;
+      readonly now?: Date;
+      readonly suspension?: string;
+      readonly payeePending?: boolean;
+      readonly open: boolean;
+    }
+    const card = { ...NO_ORDERS, cardSaved: true };
+    const branches: readonly Branch[] = [
+      { name: 'no card, from the early days before the due point: renew now', open: true },
+      {
+        name: 'no card, before the early days',
+        now: new Date('2026-12-09T17:59:00Z'),
+        open: false,
+      },
+      { name: 'a card saved and no failure', month: card, open: false },
+      {
+        name: 'a card saved after a failed charge: pay now, change card',
+        month: { ...card, automatic: automaticOrder({ status: 'failed', declineKind: 'soft' }) },
+        open: true,
+      },
+      {
+        name: 'a card saved after an expired charge: pay now, change card',
+        month: { ...card, automatic: automaticOrder({ status: 'expired' }) },
+        open: true,
+      },
+      {
+        name: 'a charge pending, expired and unanswered',
+        month: {
+          ...card,
+          automatic: automaticOrder({ expiresAt: new Date('2026-12-10T09:50:00Z') }),
+        },
+        open: false,
+      },
+      { name: 'a suspension open', suspension: 'teacher_suspended', open: false },
+      { name: 'payeePending, renew now otherwise', payeePending: true, open: false },
+      { name: 'paid in full', view: { ...VIEW, plan: 'in_full', monthsPaid: 10 }, open: false },
+      { name: 'every month paid', view: { ...VIEW, monthsPaid: 10 }, open: false },
+      { name: 'closed', view: { ...VIEW, state: 'closed', closedAt: NOW }, open: false },
+    ];
+
+    it.each(branches)('$name', async (branch) => {
+      const view = branch.view ?? VIEW;
+      const month = branch.month ?? NO_ORDERS;
+      const now = branch.now ?? NOW;
+      const openCaseOf = async (_tx: Transaction, _id: string, reason: string) =>
+        branch.suspension === reason ? id(8) : null;
+      const answer = await read(STUDENT, {
+        store: readStoreOf({ viewOf: async () => view, clock: async () => now, openCaseOf }),
+        payments: paymentsOf({
+          monthOrders: async () => month,
+          cardOf: async () => (month.cardSaved ? { last4: '4242', brand: 'Visa' } : null),
+          payee: { unverifiedInLiveMode: async () => branch.payeePending === true },
+        }),
+      });
+      const renewStore: ProgrammeRenewStore = {
+        programmeMonthOf: async () => monthRowOf(view),
+        lockRows: async () => undefined,
+        ownActiveHold: async () => null,
+        activeHoldsByIds: async () => [],
+        openCaseOf,
+        clock: async () => now,
+        sessionsOf: async () => SESSIONS,
+      };
+      const accepted = await checkedProgrammeRenew(
+        tx,
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT },
+        {
+          orders: async () => new Map(),
+          monthOrders: async () => month,
+          earlyDays: EARLY_DAYS,
+          log: { info: () => undefined },
+          store: renewStore,
+        },
+      ).then(
+        () => true,
+        () => false,
+      );
+      expect(answer.renewOpen).toBe(branch.open);
+      expect(answer.renewOpen).toBe(accepted && branch.payeePending !== true);
+    });
   });
 
   it('answers a programme awaiting its offer with no offer, no month and no due point', async () => {

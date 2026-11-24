@@ -86,6 +86,25 @@ const INPUT = {
 };
 const ANSWER = { total_piasters: 1_000_000, sessionPrice_piasters: 25_000, monthCount: 10 };
 
+// 006:T018: `programme.get`'s answer, as the service would give it to the student.
+const GET_ANSWER = {
+  state: 'active',
+  offerDueAt: null,
+  payBy: '2026-10-03T10:00:00.000Z',
+  offer: null,
+  plan: 'monthly',
+  monthsPaid: 2,
+  monthCount: 10,
+  nextDueAt: '2026-12-12T18:00:00.000Z',
+  paused: null,
+  renewOpen: false,
+  chargePending: false,
+  payeePending: false,
+  payBlocked: false,
+  teacherUnavailable: false,
+  card: { last4: '4242', brand: 'Visa' },
+} as const;
+
 const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));
 
 function callerAs(who: UserSession | null) {
@@ -123,6 +142,17 @@ function callerAs(who: UserSession | null) {
         const [, input] = args as [string, { enrollmentId: string }];
         if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
         return { requestId: REQUEST, teacherUserId: CALLER } as never;
+      },
+      // 006:T018: the read, recorded; another's enrollment NOT_FOUND; a field no schema names
+      // (a card's token, as a careless service might add it) stripped.
+      get: async (...args: unknown[]) => {
+        calls.push(['get', ...args]);
+        const [, input] = args as [string, { enrollmentId: string }];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        return {
+          ...GET_ANSWER,
+          card: { ...GET_ANSWER.card, token: 'placeholder-card-token' },
+        } as never;
       },
       // 006:T016: the automatic renewal off, recorded; another's enrollment NOT_FOUND.
       autoRenewOff: async (...args: unknown[]) => {
@@ -572,6 +602,44 @@ describe("'programme.renew' (006:T016, FR-715, FR-716)", () => {
     expect(toErrorShape(pending as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
       code: 'CONFLICT',
       details: [{ path: 'cause', code: 'charge_pending' }],
+    });
+  });
+});
+
+// 006:T018 (FR-726; contracts/app-surface.md `programme.get`): the participant kind, either party
+// reaching the service with the session's own account; another's enrollment NOT_FOUND with no field;
+// no card token ever crosses (SC-707).
+describe("'programme.get' callers (006:T018)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a suspended account ACCOUNT_RESTRICTED before the service: 'programme.get'", async () => {
+    const anonymous = callerAs(null);
+    await expect(anonymous.caller.programme.get({ enrollmentId: OWN })).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const suspended = callerAs(sessionOf('suspended student'));
+    await expect(suspended.caller.programme.get({ enrollmentId: OWN })).rejects.toEqual(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect([...anonymous.calls, ...suspended.calls]).toEqual([]);
+  });
+
+  it("red first: hands the service the caller's own account, the student's and the teacher's alike, and strips any card token: 'programme.get'", async () => {
+    for (const who of ['student', 'approved'] as const) {
+      const { caller, calls } = callerAs(sessionOf(who));
+      const answer = await caller.programme.get({ enrollmentId: OWN, userId: OTHERS } as never);
+      expect(answer).toStrictEqual(GET_ANSWER);
+      expect(JSON.stringify(answer)).not.toMatch(/placeholder-card-token/);
+      expect(calls).toEqual([['get', CALLER, { enrollmentId: OWN }]]);
+    }
+  });
+
+  it("red first: sends another party's enrollment NOT_FOUND with no field: 'programme.get'", async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.programme
+      .get({ enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Not found.',
     });
   });
 });

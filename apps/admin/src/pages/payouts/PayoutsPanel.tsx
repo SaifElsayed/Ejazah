@@ -139,8 +139,31 @@ function TeacherPayoutsPanel({ detail }: { readonly detail: PayoutsDetail }) {
           <bdi>
             {t('admin.money.payouts.detail.student', { name: release.student.displayName })}
           </bdi>
-          {link(t('admin.common.action.openInPayments'), `/payments?payment=${release.paymentId}`)}
+          {release.orders.length > 1
+            ? null
+            : link(
+                t('admin.common.action.openInPayments'),
+                `/payments?payment=${release.paymentId}`,
+              )}
         </span>
+        {/* 006:T018 (FU-E1): a release drawn from more than one paid order lists each, with its amount. */}
+        {release.orders.length > 1 ? (
+          <span className="stack gap-1 text-caption">
+            <span className="tone-muted">{t('admin.money.payouts.detail.drawnTitle')}</span>
+            <span className="row wrap gap-2">
+              {release.orders.map((order) => (
+                <span key={order.paymentId}>
+                  {link(
+                    t('admin.money.payouts.detail.drawnFrom', {
+                      amount: pounds(piasters(order.amount_piasters)),
+                    }),
+                    `/payments?payment=${order.paymentId}`,
+                  )}
+                </span>
+              ))}
+            </span>
+          </span>
+        ) : null}
         {actions === null ? null : <span className="row wrap gap-2">{actions}</span>}
       </li>
     );

@@ -44,6 +44,7 @@ const E1 = '0193a6f0-0000-7000-8000-0000000000e1';
 const E2 = '0193a6f0-0000-7000-8000-0000000000e2';
 const P1 = '0193a6f0-0000-7000-8000-0000000000f1';
 const P2 = '0193a6f0-0000-7000-8000-0000000000f2';
+const P3 = '0193a6f0-0000-7000-8000-0000000000f3';
 const R1 = '0193a6f0-0000-7000-8000-0000000000a1';
 const R2 = '0193a6f0-0000-7000-8000-0000000000a2';
 const C1 = '0193a6f0-0000-7000-8000-0000000000d1';
@@ -110,6 +111,7 @@ const detail = {
       enrollmentId: E1,
       paymentId: P1,
       student: student1,
+      orders: [{ paymentId: P1, amount_piasters: 700_000 }],
     },
     {
       part: 'ijazah_half',
@@ -120,6 +122,11 @@ const detail = {
       enrollmentId: E2,
       paymentId: P2,
       student: student2,
+      // 006:T018 (FU-E1): the half draws the assessment's 350 and month 1's 1,400 EGP.
+      orders: [
+        { paymentId: P2, amount_piasters: 35_000 },
+        { paymentId: P3, amount_piasters: 140_000 },
+      ],
     },
     {
       part: 'ijazah_end',
@@ -129,6 +136,7 @@ const detail = {
       enrollmentId: E2,
       paymentId: P2,
       student: student2,
+      orders: [{ paymentId: P3, amount_piasters: 525_000 }],
     },
     {
       releaseId: R2,
@@ -141,6 +149,7 @@ const detail = {
       enrollmentId: E1,
       paymentId: P1,
       student: student1,
+      orders: [{ paymentId: P1, amount_piasters: 210_000 }],
     },
   ],
   deductions: [
@@ -429,6 +438,37 @@ describe('«تحويلات المعلمين»: a teacher’s detail (DEC-89)', (
     open(api, `/payouts?teacher=${T1}`);
     const second = await detailPanel();
     expect(second.getByText(ar('admin.money.payouts.detail.payoutAccountNone'))).toBeTruthy();
+  });
+});
+
+// 006:T018 (FU-E1 (a), the owner's «موافق» of 2026-11-23): a release drawn from more than one paid
+// order lists each with the amount from it and its link; one drawn from a single order keeps the
+// one link.
+describe('«تحويلات المعلمين»: the orders a release draws from (006:T018, FU-E1)', () => {
+  it('lists each order a release draws from with its amount and link, in both languages', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/payouts?teacher=${T1}`),
+      async (t) => {
+        const panel = await detailPanel(t);
+        const half = within(releaseRow(panel, t('admin.money.payouts.part.ijazahHalf')));
+        expect(half.getByText(t('admin.money.payouts.detail.drawnTitle'))).toBeTruthy();
+        const drawn: readonly (readonly [string, string])[] = [
+          [amount(t, '350.00'), P2],
+          [amount(t, '1,400.00'), P3],
+        ];
+        const links = drawn.map(
+          ([sum, paymentId]) =>
+            half
+              .getByRole('link', {
+                name: t('admin.money.payouts.detail.drawnFrom', { amount: sum }),
+              })
+              .getAttribute('href') === `/payments?payment=${paymentId}`,
+        );
+        expect(links).toEqual([true, true]);
+        const single = within(releaseRow(panel, t('admin.money.payouts.part.recitationEnd')));
+        expect(single.queryByText(t('admin.money.payouts.detail.drawnTitle'))).toBeNull();
+      },
+    );
   });
 });
 

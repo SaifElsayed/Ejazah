@@ -468,6 +468,11 @@ export type {
   RecordedCharge,
 } from './automatic-charge.js';
 export { deleteProgrammeCard } from './programme-cards.js';
+// 006:T018 (FR-726, FR-727; the owner's approval of lane f's stop, 2026-11-24): the student's saved
+// card for `programme.get` (its last four digits and brand, never its token, SC-707), and every
+// order of an enrollment for the administrator's programme page.
+export { programmeCardOf } from './programme-cards.repository.js';
+export { enrollmentOrdersOf } from './payments-monitor.repository.js';
 // 006:T015 (R-508; SRS DEC-110, DEC-113; lane c's stop, approved 2026-11-24): a programme month's
 // orders and whether a card is saved (a boolean, never a card detail), with no lock, for the sweep's
 // steps, which read it under the enrollment's lock that every order's move takes first.
