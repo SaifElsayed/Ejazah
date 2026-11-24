@@ -215,6 +215,18 @@ export class PaymentsRepository {
     return { gross_piasters: piasters(Number(grossPiasters)), currency };
   }
 
+  /**
+   * 006:T013 (R-510, FR-713): the instant the student consented to save the card on this order
+   * (`card_consent_at`, ERD §15 rule 82), or null; read under `lockOrder`.
+   */
+  async cardConsentOf(paymentId: string): Promise<Date | null> {
+    const { cardConsentAt } = await this.#tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { cardConsentAt: true },
+    });
+    return cardConsentAt;
+  }
+
   /** The order's status, read under `lockOrder`. */
   async statusOf(paymentId: string): Promise<OrderStatus> {
     const { status } = await this.#tx.payment.findUniqueOrThrow({

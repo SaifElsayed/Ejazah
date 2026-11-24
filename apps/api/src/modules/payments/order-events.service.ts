@@ -46,6 +46,13 @@
 // original payment with no signed amount, is recorded, adds no money and moves nothing; it sets
 // `refund_reported_at` the first time (`WHERE refund_reported_at IS NULL`), with one log line of ids
 // and a reason, so the monitor shows an administrator a refund whose child event never came.
+//
+// A SAVED CARD (006:T013; R-510, FR-713, SC-707). A `card_saved` event moves no status
+// (`MOVES_FROM.card_saved` is empty). Once recorded, its card is handed to payments' card writer on
+// this same transaction, under the locks above (`programme-cards.ts`: the order's consent and the
+// programme not closed, the token encrypted by the column cipher); a replay writes nothing. Nothing
+// is enqueued for it: the token travels in no job payload, and the one payload this branch enqueues
+// is a paid order's id.
 import { createHash } from 'node:crypto';
 
 import { type Piasters, RefundPastGrossError, refundedTotal, toPlainNumber } from '@ijazah/money';
@@ -64,6 +71,7 @@ import {
   PaymentsRepository,
   type ReportedPayment,
 } from './payments.repository.js';
+import { type ProgrammeCardWriter, unboundProgrammeCards } from './programme-cards.js';
 import type { Receipt } from './recipient-events.service.js';
 import { keyShareStudentsOfEnrollments, withOutcomeNotices } from '../booking/index.js';
 
@@ -99,6 +107,11 @@ export interface OrderEventsDependencies {
   /** The process's error reporting (T111); replaced by a recorder in the specs. */
   readonly report?: (error: Error) => void;
   readonly now?: () => Date;
+  /**
+   * 006:T013 (R-510): where a recorded `card_saved` event's card is written, on the event's
+   * transaction; none bound refuses a saved card loudly, so no token is ever dropped unnoticed.
+   */
+  readonly cards?: ProgrammeCardWriter;
 }
 
 /** What the branch did: moved the order, recorded it alone, found it recorded, or found no order. */
@@ -151,6 +164,7 @@ export class OrderEventsService {
   readonly #log: Pick<Logger, 'warn'>;
   readonly #report: (error: Error) => void;
   readonly #now: () => Date;
+  readonly #cards: ProgrammeCardWriter;
 
   constructor({
     database,
@@ -159,6 +173,7 @@ export class OrderEventsService {
     log,
     report = reportError,
     now = () => new Date(),
+    cards = unboundProgrammeCards,
   }: OrderEventsDependencies) {
     this.#database = database;
     this.#booking = booking;
@@ -166,6 +181,7 @@ export class OrderEventsService {
     this.#log = log;
     this.#report = report;
     this.#now = now;
+    this.#cards = cards;
   }
 
   /** Records `event` and applies it once; what happened, for the webhook to acknowledge. */
@@ -220,6 +236,11 @@ export class OrderEventsService {
       receivedAt: receipt.receivedAt,
     });
     if (!recorded) return 'replayed';
+    // 006:T013 (R-510): the card written beside its event, under the locks above; no status moves.
+    if (event.type === 'card_saved') {
+      await this.#cards.save(tx, order, event);
+      return 'unchanged';
+    }
     if (event.type === 'refunded' || event.type === 'refund_reported') {
       return applyRefund(payments, order, event, {
         log: this.#log,

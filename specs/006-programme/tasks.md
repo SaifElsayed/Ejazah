@@ -471,6 +471,27 @@ No open question remains.
   > `closeProgrammes`), proved by a DB spec; a student's own deletion is refused while a programme is live, and
   > `erase-kept-data` erases teachers' kept profiles only. A `card_saved` for a closed programme writes no card (R-510),
   > red first. The token column is registered in payments' `createEncryptedColumns` for `reencrypt-columns`.
+  > **Done in part (B-P3 lane a, 2026-11-24).** The port's optional `saveCard` and `card_saved`; Paymob's `TOKEN`
+  > callback (its eight signed fields, `paymob:<obj.id>:token`, the holder and the expiry never read; off without
+  > `savedCardIntegrationId`); the fake's `cardSavedEvent`; the card written on the webhook's transaction only for an
+  > order carrying `card_consent_at` and a programme not closed, the token under `ColumnCipher`, nothing enqueued;
+  > the real `deleteProgrammeCard`; the column in `createEncryptedColumns`; `worker.ts`'s `createEnrollmentSide` and
+  > the webhook's cipher bound in `006:` blocks; DB specs for Q-4 (a) and the close race
+  > (`tests/db-integrity/programme-cards.spec.ts`).
+  > **Follow-up (B-P3 lane a, 2026-11-24): waiting for approval.** (1) `createBookingServices`
+  > (`apps/api/src/modules/booking/booking-slots.service.ts:270`) takes no `deleteProgrammeCard`, so `main.ts:410`
+  > cannot bind it for `programme.cancel` without that file. (2) `checkout.service.ts:652-658` does not hand
+  > `saveCard` to the port yet. (3) Paymob's switch: `platform/ports/payment/index.ts` `paymobFrom` and the env
+  > schema need `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID`; until then the token callback stays off.
+  > **Follow-up (B-P3 lane a, 2026-11-24).** `tests/support/gateway-stand-in.ts` has no `card_saved` builder: the DB
+  > spec signs it by hand in the stand-in's shape. Paymob's token message keeps three open boundaries (`id` |
+  > `masked_pan`, `masked_pan` | `merchant_id`, `merchant_id` | `order_id`): check the merchant id against the
+  > account's at the closed test. A kernel.md row for the webhook's card write (enrollment, payment, then
+  > `programme_cards`, the programme's state read with no lock under the enrollment's) when the review agrees.
+  > **Follow-up (B-P3 lane a, 2026-11-24): a failing test that is not T013's.**
+  > `tests/db-integrity/ijazah-programme.spec.ts:196` («adds the members of share_release_milestone at its end»)
+  > fails on `ijazah_integrity_b`: its enum lacks `direct_end`, so
+  > `20261123174326_r1b_release_refund_and_encryption_events` seems not deployed there (its deploy needs the owner's word).
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.

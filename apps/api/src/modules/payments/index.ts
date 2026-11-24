@@ -53,6 +53,9 @@ import { type ConfirmationQueue, OrderEventsService } from './order-events.servi
 import { caseAmount } from './case-amount.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { PaymentsMonitorService } from './payments-monitor.service.js';
+// 006:T013: the saved card's writer on the webhook, and its encrypted column.
+import { createProgrammeCardWriter } from './programme-cards.js';
+import { programmeCardTokens } from './programme-cards.repository.js';
 // 003:T105: the payouts' reads and mark.
 import { createPayouts, type Payouts, payoutsStoreOver } from './payouts.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
@@ -65,7 +68,9 @@ export type { ConfirmationQueue };
  * `POST /webhooks/payment` (T077, T038), over the payment port, the identity module's two entries,
  * booking's `recordOrderFailed`, and the queue `confirm-enrollment` is enqueued on. 005:T016:
  * `notices`, the payment pushes' port (`NotificationWriter`, bound by `main.ts`), through which a
- * failed order's outcome records its `payment_failed` push.
+ * failed order's outcome records its `payment_failed` push. 006:T013 (R-510): `cipher`, the column
+ * cipher a saved card's token is encrypted with on the event's transaction; without it a
+ * `card_saved` event is refused loudly (a 500, so the gateway retries it), never dropped.
  */
 export function createPaymentWebhookRoute({
   database,
@@ -75,6 +80,7 @@ export function createPaymentWebhookRoute({
   confirmations,
   notices,
   report,
+  cipher,
 }: {
   readonly database: Database;
   readonly payment: Pick<PaymentPort, 'verifyAndParseEvent'>;
@@ -87,8 +93,11 @@ export function createPaymentWebhookRoute({
   readonly notices: PaymentOutcomeNotices;
   /** The process's error reporting by default (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /** 006:T013: the column cipher, bound by `main.ts`. */
+  readonly cipher?: Pick<ColumnCipher, 'encrypt'>;
 }): NodeHandler {
   const reporting = report === undefined ? {} : { report };
+  const cards = cipher === undefined ? {} : { cards: createProgrammeCardWriter({ cipher, log }) };
   return paymentWebhookRoute({
     verify: (rawBody, headers, query) => payment.verifyAndParseEvent(rawBody, headers, query),
     events: {
@@ -107,6 +116,7 @@ export function createPaymentWebhookRoute({
         confirmations,
         log,
         ...reporting,
+        ...cards,
       }),
     },
     log,
@@ -116,9 +126,10 @@ export function createPaymentWebhookRoute({
 
 /** The payments module's `_encrypted` column, for the `reencrypt-columns` job (T004, 002:T134, R-API-6). */
 export function createEncryptedColumns(
-  database: Pick<Database, 'payment'>,
+  database: Pick<Database, 'payment' | 'programmeCard'>,
 ): readonly EncryptedColumn[] {
-  return [checkoutAddresses(database)];
+  // 006:T013 (R-510): a programme's saved card's token, keyed by its enrollment.
+  return [checkoutAddresses(database), programmeCardTokens(database)];
 }
 
 /**
@@ -355,7 +366,8 @@ export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme
 // 006:T008 (FR-706b, FR-716; SRS DEC-101; R-510; B-P2's conflict check, Q-2 (a)): «unverified in
 // live mode», the one entry T008's `pay_blocked` window, T016 and T018 read, over the payment mode the
 // composition root hands in; and `deleteProgrammeCard`, which booking's close hook calls on every
-// close, a stub until T013 (booking imports nothing of payments, R-208: the root hands both in).
+// close, the card row deleted since T013 (booking imports nothing of payments, R-208: the root
+// hands both in).
 export { createProgrammePayee, type PaymentMode, type ProgrammePayee } from './programme-payee.js';
 export { deleteProgrammeCard } from './programme-cards.js';
 

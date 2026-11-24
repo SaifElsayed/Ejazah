@@ -20,6 +20,10 @@
 // check and persistence as a real gateway's event would. An order acted on, cancelled or past its
 // expiry is no longer payable, so the page cannot send a second event for it. `onCancel` sets what
 // `cancelCheckout` answers for one order, so FR-BOOK-12's branches are reachable.
+//
+// 006:T013 (R-510): a checkout may ask `saveCard`; for such an order the stand-in signs a
+// `card_saved` event (`cardSavedEvent`), a placeholder token with a last four and a brand, as the
+// gateway's token callback reports a saved card. It moves no order.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { piasters, type Piasters } from '@ijazah/money';
 import { z } from 'zod';
@@ -123,6 +127,15 @@ export interface OrderEventOptions extends PaidEventOptions {
   readonly refunded_piasters?: Piasters | 'whole_order';
 }
 
+/** 006:T013: the card a `card_saved` event reports; a placeholder card by default. */
+export interface CardSavedEventOptions extends EventOptions {
+  readonly last4?: string;
+  readonly brand?: string;
+}
+
+/** 006:T013: the stand-in's card, a well-known test card's last four digits and brand. */
+const PLACEHOLDER_CARD = { last4: '4242', brand: 'Visa' } as const;
+
 interface Order {
   readonly gross_piasters: Piasters;
   readonly currency: string;
@@ -130,6 +143,8 @@ interface Order {
   status: 'created' | 'cancelled' | OrderEventType;
   /** What `cancelCheckout` answers for this order, when a test set it (`onCancel`). */
   cancelOutcome?: CancelOutcome;
+  /** 006:T013: whether the checkout asked to save the card (`saveCard`). */
+  readonly savesCard: boolean;
 }
 
 const amount = z.number().transform((value) => piasters(value));
@@ -156,6 +171,14 @@ const eventBody = z.discriminatedUnion('type', [
     type: z.literal('refunded'),
     order: z.string().min(1),
     refunded_piasters: z.union([amount, z.literal('whole_order')]),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('card_saved'),
+    order: z.string().min(1),
+    token: z.string().min(1),
+    last4: z.string().regex(/^\d{4}$/),
+    brand: z.string().min(1),
   }),
   z.object({
     id: z.string().min(1),
@@ -205,13 +228,30 @@ export class FakePaymentAdapter
     currency: string,
     latestExpiry: Date,
     payee?: CheckoutPayee,
+    saveCard?: boolean,
   ): Promise<Checkout> {
     // T104: the payee and the teacher's share it carries are recorded as they were given, so a
-    // spec reads what the split would send; the stand-in settles nothing.
+    // spec reads what the split would send; the stand-in settles nothing. 006:T013: `saveCard` is
+    // recorded when it was asked.
     const failure =
-      payee === undefined
-        ? this.attempt('createCheckout', [enrollmentId, gross_piasters, currency, latestExpiry])
-        : this.attempt('createCheckout', [enrollmentId, gross_piasters, currency, latestExpiry, payee]);
+      saveCard === true
+        ? this.attempt('createCheckout', [
+            enrollmentId,
+            gross_piasters,
+            currency,
+            latestExpiry,
+            payee,
+            saveCard,
+          ])
+        : payee === undefined
+          ? this.attempt('createCheckout', [enrollmentId, gross_piasters, currency, latestExpiry])
+          : this.attempt('createCheckout', [
+              enrollmentId,
+              gross_piasters,
+              currency,
+              latestExpiry,
+              payee,
+            ]);
     if (failure !== undefined) return Promise.reject(failure);
     if (!/^[A-Z]{3}$/.test(currency)) {
       return Promise.reject(new RangeError('A currency is three capital letters (ISO 4217).'));
@@ -222,6 +262,7 @@ export class FakePaymentAdapter
       currency,
       expiresAt: latestExpiry,
       status: 'created',
+      savesCard: saveCard === true,
     });
     const checkoutUrl =
       this.#origin === undefined
@@ -336,6 +377,15 @@ export class FakePaymentAdapter
           providerEventId: body.id,
           gatewayOrderId: body.order,
         });
+      case 'card_saved':
+        return Promise.resolve({
+          type: body.type,
+          providerEventId: body.id,
+          gatewayOrderId: body.order,
+          token: body.token,
+          last4: body.last4,
+          brand: body.brand,
+        });
       case 'recipient_verified':
         return Promise.resolve({
           type: body.type,
@@ -406,6 +456,27 @@ export class FakePaymentAdapter
     // A reported refund moves nothing (003:T102): the order keeps its state.
     if (options.signature !== 'invalid' && type !== 'refund_reported') order.status = type;
     return this.#signed(body, options);
+  }
+
+  /**
+   * 006:T013 (R-510): the gateway reporting the card saved on an order this stand-in created whose
+   * checkout asked `saveCard`; a new placeholder token each time. It moves no order.
+   */
+  cardSavedEvent(gatewayOrderId: string, options: CardSavedEventOptions = {}): SignedEvent {
+    const order = this.#orders.get(gatewayOrderId);
+    if (order === undefined) throw new Error('unknown order: the stand-in did not create it.');
+    if (!order.savesCard) throw new Error('the order’s checkout did not ask to save its card.');
+    return this.#signed(
+      {
+        id: `fake_evt_${randomUUID()}`,
+        type: 'card_saved',
+        order: gatewayOrderId,
+        token: `fake_tok_${randomUUID()}`,
+        last4: options.last4 ?? PLACEHOLDER_CARD.last4,
+        brand: options.brand ?? PLACEHOLDER_CARD.brand,
+      },
+      options,
+    );
   }
 
   /** The gateway reporting on a payout recipient this stand-in registered. */

@@ -188,7 +188,7 @@ consequences.subscribe(
   booking.terminationSubscriber({
     orders: payments.orderStandingsOf,
     log,
-    // 006:T008 (Q-2 (a)): the close hook's card entry, payments' stub until T013.
+    // 006:T008 (Q-2 (a)): the close hook's card entry, payments' (T013: the card row deleted).
     deleteProgrammeCard: payments.deleteProgrammeCard,
   }),
 );
@@ -258,8 +258,8 @@ consequences.subscribe(ijazahRequests.deletionConsequence());
 // Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
-// 006:T008 (Q-2 (a)): the close hook's card entry (payments' stub until T013) and log, for the
-// programme closed by `terminateNoShow`, `complete` and `cancel`.
+// 006:T008 (Q-2 (a)): the close hook's card entry (payments', T013: the card row deleted) and log,
+// for the programme closed by `terminateNoShow`, `complete` and `cancel`.
 const enrollmentSide = booking.createEnrollmentSide({
   settings,
   programmes: { deleteProgrammeCard: payments.deleteProgrammeCard, log },
@@ -547,6 +547,8 @@ const routes = {
     },
     // 005:T016: an order's failure records its push on the event's transaction.
     notices: notificationWriter,
+    // 006:T013 (R-510, R-DB-8): a saved card's token encrypted on the event's transaction.
+    cipher,
   }),
   // The video provider's signed webhook (T012 of specs/004-sessions, R-SESS-7): its raw body read
   // under the request limit, verified through the video port before anything runs, and an
@@ -637,7 +639,7 @@ const adminServices = {
   // 003:T105: `payouts.*`, the service above.
   payouts: payouts.admin,
   // 006:T008 (Q-7 (a)): `programmes.decide`, keyed on the kind's transaction; the close hook's card
-  // entry is payments' stub until T013.
+  // entry is payments' (T013: the card row deleted).
   programmes: booking.createProgrammeDecisions({
     idempotency,
     settings,

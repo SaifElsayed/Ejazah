@@ -33,6 +33,22 @@
 // reports neither: they are never computed here (R-MONEY-5). A transaction's id and the state read
 // from it form the provider event id, so a callback Paymob sends again is a replay (R-MONEY-8).
 //
+// THE TOKEN CALLBACK (006:T013; R-510, FR-713, FR-719, SC-707; "HMAC for Card Tokens", read for
+// B-P3 in `track2\b-p3\paymob-docs.md` §1). A card the customer chose to save on Paymob's page
+// arrives as a callback of `type` `TOKEN`, signed with HMAC-SHA512 under the same secret over eight
+// fields of `obj` in their documented order, the digest in the query's `hmac` as above. It is off,
+// refused as a body this port does not record before anything of it is read, while no saved-card
+// integration is set (`savedCardIntegrationId`). On, the digest is compared in constant time and
+// only the eight fields are read: the order (`order_id`, our order's gateway id), the token, the last
+// four digits of `masked_pan` and the brand (`card_subtype`); the holder's name and the expiry the
+// body also carries are never read, so no event, log or row can hold them. The provider event id is
+// `paymob:<obj.id>:token`, so a token callback sent again is a replay. Refusals are the transaction
+// callback's: neither carries the body, the token or the digest. The message has no separators and
+// three read boundaries stay open (`id` | `masked_pan`, `masked_pan` | `merchant_id`, `merchant_id` |
+// `order_id`): a digit moved across one changes the last four digits or names another order id, but
+// only in a body Paymob itself signed; the payments module writes a card only for an order that
+// carries the student's consent to save it, on a programme not closed (T013).
+//
 // NOT OFFERED (OPEN-11): no documented call cancels an unpaid intention, so `cancelCheckout` answers
 // `unsupported` (ADR 0010 D6, FR-BOOK-12 then waits for the order's expiry). A teacher's onboarding
 // is Paymob's partner onboarding ("Register Merchant" with a phone, an email and documents, under a
@@ -163,6 +179,37 @@ type SignedTransaction = z.infer<typeof signedTransaction>;
 
 const callbackBody = z.object({ type: z.string(), obj: z.record(z.string(), z.unknown()) });
 
+/** 006:T013: the token callback's type, and its HMAC fields in their documented order. */
+const TOKEN_TYPE = 'TOKEN';
+const TOKEN_HMAC_FIELDS: readonly (readonly string[])[] = [
+  ['card_subtype'],
+  ['created_at'],
+  ['email'],
+  ['id'],
+  ['masked_pan'],
+  ['merchant_id'],
+  ['order_id'],
+  ['token'],
+];
+
+/** The message Paymob signs for a token callback's card (`obj`). */
+export function paymobTokenHmacMessage(obj: Record<string, unknown>): string {
+  return TOKEN_HMAC_FIELDS.map((path) => asMessagePart(fieldAt(obj, path))).join('');
+}
+
+/** The token callback's signed fields the mapping reads, and only those (no holder, no expiry). */
+const signedCard = z.object({
+  id: z.number().int(),
+  token: z.string().min(1),
+  masked_pan: z.string().regex(/\d{4}$/),
+  card_subtype: z.string().min(1),
+  order_id: z.union([z.string().regex(/^\d+$/), z.number().int()]),
+});
+
+type SignedCard = z.infer<typeof signedCard>;
+
+const LAST_FOUR = 4;
+
 const intentionAnswer = z.object({
   client_secret: z.string().min(1),
   intention_order_id: z.number().int(),
@@ -176,6 +223,11 @@ export interface PaymobOptions {
   readonly integrationId: number;
   /** The auth integration a split is paid on; without it, a split is refused. */
   readonly splitIntegrationId?: number;
+  /**
+   * 006:T013 (R-510): the saved-card integration. Without it the token callback is off: every
+   * `TOKEN` callback is refused (`MalformedEventError`) and no card is saved.
+   */
+  readonly savedCardIntegrationId?: number;
   /** Where Paymob posts its processed callbacks: the webhook on `PUBLIC_WEBHOOK_ORIGIN`. */
   readonly notificationUrl: string;
   /** The billing email every intention carries: the platform's `SUPPORT_EMAIL`, never a student's. */
@@ -207,6 +259,9 @@ export class PaymobPaymentAdapter implements PaymentPort {
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
+  // 006:T013: `saveCard` adds nothing to the intention. Paymob takes no field that asks to save a card:
+  // the customer chooses it on Paymob's page, and the token callback is recorded as a card only for
+  // an order that carries the student's consent (`paymob-docs.md` §1).
   async createCheckout(
     enrollmentId: string,
     gross_piasters: Piasters,
@@ -353,13 +408,8 @@ export class PaymobPaymentAdapter implements PaymentPort {
   #verified(rawBody: Buffer, hmac: string | undefined): GatewayEvent {
     if (hmac === undefined || !/^[0-9a-fA-F]+$/.test(hmac)) throw new EventSignatureError();
     const body = callbackBody.parse(JSON.parse(rawBody.toString('utf8')));
-    const expected = createHmac('sha512', this.#options.hmacSecret)
-      .update(paymobHmacMessage(body.obj))
-      .digest();
-    const given = Buffer.from(hmac, 'hex');
-    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-      throw new EventSignatureError();
-    }
+    if (body.type === TOKEN_TYPE) return this.#savedCard(body.obj, hmac);
+    this.#refuseUnlessSigned(paymobHmacMessage(body.obj), hmac);
     // Signed from here: what cannot be read is a body this port does not record.
     const transaction = signedTransaction.safeParse(body.obj);
     if (
@@ -371,6 +421,36 @@ export class PaymobPaymentAdapter implements PaymentPort {
     }
     return eventOf(transaction.data);
   }
+
+  /** 006:T013: the card a token callback saved (this file's head); off with no saved-card integration. */
+  #savedCard(obj: Record<string, unknown>, hmac: string): GatewayEvent {
+    if (this.#options.savedCardIntegrationId === undefined) throw new MalformedEventError();
+    this.#refuseUnlessSigned(paymobTokenHmacMessage(obj), hmac);
+    const saved = signedCard.safeParse(obj);
+    if (!saved.success) throw new MalformedEventError();
+    return cardEventOf(saved.data);
+  }
+
+  /** `EventSignatureError` unless `hmac` is the secret's digest of `message`, compared in constant time. */
+  #refuseUnlessSigned(message: string, hmac: string): void {
+    const expected = createHmac('sha512', this.#options.hmacSecret).update(message).digest();
+    const given = Buffer.from(hmac, 'hex');
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      throw new EventSignatureError();
+    }
+  }
+}
+
+/** 006:T013: the port's `card_saved` for a signed card, read from its signed fields alone. */
+function cardEventOf(saved: SignedCard): GatewayEvent {
+  return {
+    type: 'card_saved',
+    providerEventId: `paymob:${String(saved.id)}:token`,
+    gatewayOrderId: String(saved.order_id),
+    token: saved.token,
+    last4: saved.masked_pan.slice(-LAST_FOUR),
+    brand: saved.card_subtype,
+  };
 }
 
 const ONBOARDING_AT_CONTRACTING =
