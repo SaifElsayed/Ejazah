@@ -499,6 +499,13 @@ No open question remains.
   > `cardSaved` (`gateway-stand-in.fixtures.ts`, `tests/support/gateway-stand-in.ts`), which the DB spec now uses. The
   > failing test: R1b's two migrations deployed on `ijazah_integrity_b`, and `ijazah-programme.spec.ts` is green.
   > Follow-up (3) waits for the review sessions to agree the env hunk with R2.
+  > **Settled (B-P3 lane a, 2026-11-24; the env hunk agreed by the review session for R2).** Follow-up (3):
+  > `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID` (optional in both modes, a provider key, a whole number) in the env
+  > schema and `.env.example`, and `paymobFrom` hands it to the adapter as `savedCardIntegrationId` (`config.spec.ts`,
+  > `index.spec.ts`, red first). `PAYMENT_GATEWAY_API_KEY` already exists (`env.schema.ts:205`), so Q-11 (a) needs no
+  > new key: T014 reads it in `paymobFrom` and changes only its `.env.example` comment.
+  > **Follow-up (B-P3 lane a, 2026-11-24).** `docs/RUNBOOK.md:319` lists the keys set at contracting; it should name
+  > `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID` too (not edited here).
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.

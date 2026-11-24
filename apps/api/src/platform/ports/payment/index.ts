@@ -44,6 +44,7 @@ export type PaymentConfig = Pick<
   | 'PAYMENT_GATEWAY_PUBLIC_KEY'
   | 'PAYMENT_GATEWAY_INTEGRATION_ID'
   | 'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'
+  | 'PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID'
   | 'PUBLIC_WEBHOOK_ORIGIN'
 > &
   Partial<Pick<Config, 'SUPPORT_EMAIL'>>;
@@ -107,6 +108,10 @@ function paymobFrom(config: PaymentConfig, log?: PaymentLog): PaymobPaymentAdapt
     ...(config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID === undefined
       ? {}
       : { splitIntegrationId: config.PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID }),
+    // 006:T013 (R-510): the token callback is taken only where the saved-card integration is set.
+    ...(config.PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID === undefined
+      ? {}
+      : { savedCardIntegrationId: config.PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID }),
     notificationUrl: new URL(WEBHOOK_PATH, origin).toString(),
     billingEmail: required(config.SUPPORT_EMAIL, 'SUPPORT_EMAIL'),
   });
