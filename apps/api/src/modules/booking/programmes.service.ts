@@ -71,11 +71,19 @@ import type {
   ProgrammeOfferRefusal,
   ProgrammePayRefusal,
   ProgrammeRenewRefusal,
+  ProgrammeGetOutput,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
 } from '@ijazah/contracts';
-import { MAX_PROGRAMME_SESSION_COUNT } from '@ijazah/contracts';
-import type { Piasters, ProgrammeOfferAmounts } from '@ijazah/money';
+import type {
+  ProgrammeOrderItem,
+  ProgrammeRequestItem,
+  ProgrammesGetOutput,
+  ProgrammesQueueInput,
+  ProgrammesQueueOutput,
+} from '@ijazah/contracts/admin';
+import { MAX_PROGRAMME_SESSION_COUNT, sessionLengthMinutes } from '@ijazah/contracts';
+import { type Piasters, perSession, type ProgrammeOfferAmounts } from '@ijazah/money';
 import {
   addDays,
   addHours,
@@ -105,7 +113,7 @@ import {
   type SlotRow,
   teacherPackageOf,
 } from '../catalog/index.js';
-import { lockAccount, readStanding } from '../identity/index.js';
+import { displayNamesOf, lockAccount, readStanding } from '../identity/index.js';
 import { openCaseOf } from '../moderation/index.js';
 import {
   type AssessmentOutcome,
@@ -140,6 +148,15 @@ import {
   type FrozenOffer,
   insertAwaitingOffer,
   type OfferEnrollment,
+  openItemsPage,
+  type PausedProgramme,
+  pausedPage,
+  type ProgrammeRequestView,
+  programmeRequestsOf,
+  type ProgrammeView,
+  programmeViewOf,
+  type QueuedProgramme,
+  queuedProgrammesAmong,
   offerEnrollmentOf,
   type PayEnrollment,
   payEnrollmentOf,
@@ -1755,5 +1772,385 @@ export async function checkedProgrammeRenew(
     instalmentMonth: row.monthsPaid + 1,
     offerSessionCount: row.offerSessionCount,
     total_piasters: row.offerTotal_piasters,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T018 (FR-726, FR-727; app-surface.md `programme.get`, admin-surface.md `programmes.queue`
+// and `programmes.get`; B-P3's conflict check, the owner's «موافق على الكل (أ) مع تحسين س٢»): the
+// reads. Each on one transaction with no lock: a read decides nothing.
+//
+// THE PROGRAMME (`programme.get`, either party). The programme read for its two parties only, anyone
+// else NOT_FOUND as an unknown id (R-GENDER-2's shape; the parties are of one gender, R-GENDER-4).
+// `card` (`last4`, brand) to the student alone, never its token (SC-707). `nextDueAt` derived from
+// the paid month's sessions (`nextDueOf`, as the sweep and the renewal derive it, Q-3 (a)).
+// `chargePending`: the month's automatic order `created` and unexpired (the contract's words).
+// `payeePending`: payments' «unverified in live mode» (T008's entry), false in test mode.
+// `payBlocked`: a `pay_blocked` item open (FR-706b). `teacherUnavailable`: the teacher's account
+// gone, suspended or banned (FR-BOOK-19). `renewOpen`: «renew now» (FR-715): a monthly programme
+// `active` or `paused` of a confirmed enrollment, a month left, no card saved, no charge pending
+// (DEC-92), from `programme_renew_early_days` whole days before the due point on the database's
+// clock.
+//
+// THE QUEUE (`programmes.queue`, an administrator). Oldest first in pages of `admin_list_page_size`
+// (one row more read, a cursor only while more follow): `paused`, the longest paused first; every
+// other filter, the open items of its kind by their time-ordered id (`refusal` has none since SRS
+// DEC-112). Each row names the two parties, the programme's state and pause, and its item: a
+// `no_offer` one with whether the assessment was held (PR #158 r1 Q-R1 (b)), a `pay_blocked` one
+// with whether the payout account is verified now (FR-706b).
+//
+// THE PROGRAMME'S PAGE (`programmes.get`, an administrator). The programme, its orders by kind
+// (payments', oldest first), its items with their reasons, `cardSaved` (a boolean, never a card
+// detail; Q-9 (a)), and, on a closed programme with no `assessment` release, whether the assessment
+// was held (PR #158 r2 Follow-up 2). An unknown or soft-deleted enrollment NOT_FOUND.
+
+/** The student's saved card as `programme.get` shows it: never its token (SC-707). */
+export interface ProgrammeCardView {
+  readonly last4: string;
+  readonly brand: string;
+}
+
+/** Payments' reads for `programme.get`, handed in by the composition root (R-208). */
+export interface ProgrammeReadPayments {
+  /** «Unverified in live mode» (T008's entry). */
+  readonly payee: {
+    unverifiedInLiveMode(tx: Transaction, teacherUserId: string): Promise<boolean>;
+  };
+  /** The month's orders and whether a card is saved, with no lock. */
+  readonly monthOrders: MonthOrdersOf;
+  /** The student's saved card, or null. */
+  readonly cardOf: (tx: Transaction, enrollmentId: string) => Promise<ProgrammeCardView | null>;
+}
+
+/** What `programme.get` reads of booking's rows and the owners' entries; stood in by a spec. */
+export interface ProgrammeReadStore {
+  viewOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeView | null>;
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  payBlockedOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  standingOf(tx: Transaction, userId: string): ReturnType<typeof readStanding>;
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmeReadStore: ProgrammeReadStore = {
+  viewOf: programmeViewOf,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+  payBlockedOpen: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'pay_blocked'),
+  standingOf: readStanding,
+  clock: clockTimestamp,
+};
+
+/** The account states in which the teacher is unavailable to the student (FR-BOOK-19). */
+const UNAVAILABLE_ACCOUNTS: ReadonlySet<string> = new Set(['suspended', 'banned']);
+
+/** The offer as both reads show it, the session's price `packages/money`'s (R-MONEY-5). */
+function offerOf(view: ProgrammeView): ProgrammeGetOutput['offer'] {
+  const { offer } = view;
+  if (offer === null) return null;
+  return {
+    level: offer.level,
+    readiness: offer.readiness,
+    expectedLength: offer.expectedLength,
+    durationMinutes: sessionLengthMinutes.parse(offer.durationMinutes),
+    sessionCount: offer.sessionCount,
+    total_piasters: offer.total_piasters,
+    sessionPrice_piasters: perSession(offer.total_piasters, offer.sessionCount),
+    offeredAt: offer.offeredAt.toISOString(),
+  };
+}
+
+/** A month is still to pay on a monthly programme that runs (R-507). */
+function monthDue(view: ProgrammeView): boolean {
+  return (
+    view.status === 'confirmed' &&
+    (view.state === 'active' || view.state === 'paused') &&
+    view.plan === 'monthly' &&
+    view.monthCount !== null &&
+    view.monthsPaid < view.monthCount
+  );
+}
+
+const isoOrNull = (at: Date | null): string | null => (at === null ? null : at.toISOString());
+
+/** `programme.get` on `tx` for `userId` (this section's head, THE PROGRAMME). */
+export async function readProgramme(
+  tx: Transaction,
+  userId: string,
+  enrollmentId: string,
+  dependencies: {
+    readonly payments: ProgrammeReadPayments;
+    /** `programme_renew_early_days`, read before the transaction. */
+    readonly earlyDays: number;
+    readonly store?: ProgrammeReadStore;
+  },
+): Promise<ProgrammeGetOutput> {
+  const store = dependencies.store ?? programmeReadStore;
+  const { payments } = dependencies;
+  const view = await store.viewOf(tx, enrollmentId);
+  if (view === null || (userId !== view.studentUserId && userId !== view.teacherUserId)) {
+    throw new DomainError('NOT_FOUND');
+  }
+  const at = await store.clock(tx);
+  const due = monthDue(view)
+    ? nextDueOf({ ...view, sessions: await store.sessionsOf(tx, enrollmentId) })
+    : null;
+  const month = monthDue(view)
+    ? await payments.monthOrders(tx, enrollmentId, view.monthsPaid + 1, at)
+    : null;
+  const charge = month?.automatic ?? null;
+  const chargePending = charge?.status === 'created' && charge.expiresAt > at;
+  const renewOpen =
+    month !== null &&
+    !month.cardSaved &&
+    !chargePending &&
+    due !== null &&
+    at >= new Date(addDays(due, -dependencies.earlyDays));
+  const payeePending = await payments.payee.unverifiedInLiveMode(tx, view.teacherUserId);
+  const payBlocked = await store.payBlockedOpen(tx, enrollmentId);
+  const teacher = await store.standingOf(tx, view.teacherUserId);
+  const card = userId === view.studentUserId ? await payments.cardOf(tx, enrollmentId) : null;
+  return {
+    state: view.state,
+    offerDueAt: isoOrNull(view.offerDueAt),
+    payBy: isoOrNull(view.payByAt),
+    offer: offerOf(view),
+    plan: view.plan,
+    monthsPaid: view.monthsPaid,
+    monthCount: view.monthCount,
+    nextDueAt: isoOrNull(due),
+    paused:
+      view.state === 'paused' && view.pausedAt !== null
+        ? { since: view.pausedAt.toISOString() }
+        : null,
+    renewOpen,
+    chargePending,
+    payeePending,
+    payBlocked,
+    teacherUnavailable: teacher === null || UNAVAILABLE_ACCOUNTS.has(teacher.accountStatus),
+    // The last four digits and the brand alone, to the student alone (SC-707).
+    card: card === null ? null : { last4: card.last4, brand: card.brand },
+  };
+}
+
+/** An order of the programme as payments answers it for the administrator's page. */
+export interface ProgrammeOrderRow {
+  readonly id: string;
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  readonly instalmentMonth: number | null;
+  readonly status: 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
+  readonly automatic: boolean;
+  readonly declineKind: 'soft' | 'hard' | null;
+  readonly createdAt: Date;
+}
+
+/** Payments' reads for the administrator's two reads, handed in by the composition root. */
+export interface ProgrammeAdminReadPayments extends Pick<
+  ProgrammeReadPayments,
+  'payee' | 'monthOrders'
+> {
+  /** Every order of the enrollment, oldest first. */
+  readonly ordersOf: (
+    tx: Transaction,
+    enrollmentId: string,
+  ) => Promise<readonly ProgrammeOrderRow[]>;
+  /** Whether an `assessment` release is written for the enrollment. */
+  readonly assessmentReleased: (tx: Transaction, enrollmentId: string) => Promise<boolean>;
+}
+
+/** What the administrator's reads read of booking's rows and the owners' entries. */
+export interface ProgrammeAdminReadStore {
+  viewOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeView | null>;
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  requestsOf(tx: Transaction, enrollmentId: string): Promise<readonly ProgrammeRequestView[]>;
+  openItemsPage(
+    tx: Transaction,
+    kind: ProgrammeRequestView['kind'],
+    after: string | undefined,
+    take: number,
+  ): Promise<readonly ProgrammeRequestView[]>;
+  pausedPage(
+    tx: Transaction,
+    after: string | undefined,
+    take: number,
+  ): Promise<readonly PausedProgramme[]>;
+  programmesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, QueuedProgramme>>;
+  /** Sessions' entry: where session 1's outcome chain stands. */
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
+  /** Identity's: display names by account. */
+  namesOf(tx: Transaction, userIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmeAdminReadStore: ProgrammeAdminReadStore = {
+  viewOf: programmeViewOf,
+  sessionsOf: programmeReadStore.sessionsOf,
+  requestsOf: programmeRequestsOf,
+  openItemsPage,
+  pausedPage,
+  programmesAmong: queuedProgrammesAmong,
+  assessmentOutcome,
+  namesOf: displayNamesOf,
+  clock: clockTimestamp,
+};
+
+/** The administrator's two reads on the call's transaction. */
+export interface ProgrammeAdminReads {
+  queue(tx: Transaction, input: ProgrammesQueueInput): Promise<ProgrammesQueueOutput>;
+  get(tx: Transaction, enrollmentId: string): Promise<ProgrammesGetOutput>;
+}
+
+/** The page size of every admin list (SRS §3.14, FR-412). */
+const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
+
+/** An item as the administrator's reads show it; `assessmentHeld` on a `no_offer` one only. */
+function requestItemOf(
+  item: ProgrammeRequestView,
+  assessmentHeld: boolean | undefined,
+): ProgrammeRequestItem {
+  return {
+    requestId: item.id,
+    kind: item.kind,
+    ...(item.reason === null ? {} : { reason: item.reason }),
+    status: item.status,
+    createdAt: item.createdAt.toISOString(),
+    ...(item.decidedAt === null ? {} : { decidedAt: item.decidedAt.toISOString() }),
+    ...(item.kind === 'no_offer' && assessmentHeld !== undefined ? { assessmentHeld } : {}),
+  };
+}
+
+/** An order of the programme as its page shows it: a month and a decline only where set. */
+function orderItemOf(order: ProgrammeOrderRow): ProgrammeOrderItem {
+  return {
+    paymentId: order.id,
+    kind: order.kind,
+    ...(order.instalmentMonth === null ? {} : { instalmentMonth: order.instalmentMonth }),
+    status: order.status,
+    automatic: order.automatic,
+    ...(order.declineKind === null ? {} : { declineKind: order.declineKind }),
+    createdAt: order.createdAt.toISOString(),
+  };
+}
+
+/** The administrator's reads over `dependencies` (this section's head). */
+export function createProgrammeAdminReads(dependencies: {
+  readonly settings: SettingsReader;
+  readonly payments: ProgrammeAdminReadPayments;
+  readonly store?: ProgrammeAdminReadStore;
+}): ProgrammeAdminReads {
+  const store = dependencies.store ?? programmeAdminReadStore;
+  const { payments } = dependencies;
+  const held = async (tx: Transaction, enrollmentId: string): Promise<boolean> =>
+    (await store.assessmentOutcome(tx, enrollmentId)).kind === 'delivered';
+  const nameIn = (names: ReadonlyMap<string, string>, userId: string) => ({
+    displayName: names.get(userId) ?? '',
+  });
+
+  /** The queue's rows of a page: one per paused programme, or one per open item. */
+  const rowsOf = async (
+    tx: Transaction,
+    filter: ProgrammesQueueInput['filter'],
+    after: string | undefined,
+    take: number,
+  ): Promise<
+    readonly {
+      readonly cursor: string;
+      readonly enrollmentId: string;
+      readonly item?: ProgrammeRequestView;
+    }[]
+  > => {
+    if (filter === 'paused') {
+      return (await store.pausedPage(tx, after, take)).map(({ enrollmentId }) => ({
+        cursor: enrollmentId,
+        enrollmentId,
+      }));
+    }
+    return (await store.openItemsPage(tx, filter, after, take)).map((item) => ({
+      cursor: item.id,
+      enrollmentId: item.enrollmentId,
+      item,
+    }));
+  };
+
+  return {
+    queue: async (tx, { filter, cursor }) => {
+      const pageSize = await dependencies.settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+      const rows = await rowsOf(tx, filter, cursor, pageSize + 1);
+      const page = rows.slice(0, pageSize);
+      const programmes = await store.programmesAmong(tx, [
+        ...new Set(page.map(({ enrollmentId }) => enrollmentId)),
+      ]);
+      const shown = page.flatMap((row) => {
+        const programme = programmes.get(row.enrollmentId);
+        return programme === undefined ? [] : [{ ...row, programme }];
+      });
+      const names = await store.namesOf(tx, [
+        ...new Set(
+          shown.flatMap(({ programme }) => [programme.studentUserId, programme.teacherUserId]),
+        ),
+      ]);
+      // Bounded by the page: one read each where the item's kind needs it.
+      const items: ProgrammesQueueOutput['items'] = [];
+      for (const { programme, item } of shown) {
+        const assessmentHeld =
+          item?.kind === 'no_offer' ? await held(tx, programme.enrollmentId) : undefined;
+        const payeeVerifiedNow =
+          item?.kind === 'pay_blocked'
+            ? !(await payments.payee.unverifiedInLiveMode(tx, programme.teacherUserId))
+            : null;
+        items.push({
+          enrollmentId: programme.enrollmentId,
+          teacher: nameIn(names, programme.teacherUserId),
+          student: nameIn(names, programme.studentUserId),
+          state: programme.state,
+          pausedSince: isoOrNull(programme.pausedAt),
+          request: item === undefined ? null : requestItemOf(item, assessmentHeld),
+          payeeVerifiedNow,
+        });
+      }
+      const last = page.at(-1);
+      return rows.length > pageSize && last !== undefined
+        ? { items, nextCursor: last.cursor }
+        : { items };
+    },
+
+    get: async (tx, enrollmentId) => {
+      const view = await store.viewOf(tx, enrollmentId);
+      if (view === null) throw new DomainError('NOT_FOUND');
+      const at = await store.clock(tx);
+      const sessions = monthDue(view) ? await store.sessionsOf(tx, enrollmentId) : [];
+      const requests = await store.requestsOf(tx, enrollmentId);
+      const orders = await payments.ordersOf(tx, enrollmentId);
+      const month = await payments.monthOrders(tx, enrollmentId, view.monthsPaid + 1, at);
+      const assessmentHeld =
+        requests.some(({ kind }) => kind === 'no_offer') || view.state === 'closed'
+          ? await held(tx, enrollmentId)
+          : undefined;
+      const unreleased =
+        view.state === 'closed' && !(await payments.assessmentReleased(tx, enrollmentId));
+      const names = await store.namesOf(tx, [view.studentUserId, view.teacherUserId]);
+      return {
+        enrollmentId,
+        teacher: nameIn(names, view.teacherUserId),
+        student: nameIn(names, view.studentUserId),
+        state: view.state,
+        offerDueAt: isoOrNull(view.offerDueAt),
+        payBy: isoOrNull(view.payByAt),
+        offer: offerOf(view),
+        plan: view.plan,
+        monthsPaid: view.monthsPaid,
+        monthCount: view.monthCount,
+        nextDueAt: isoOrNull(monthDue(view) ? nextDueOf({ ...view, sessions }) : null),
+        pausedAt: isoOrNull(view.pausedAt),
+        closedAt: isoOrNull(view.closedAt),
+        orders: orders.map(orderItemOf),
+        requests: requests.map((item) => requestItemOf(item, assessmentHeld)),
+        // Whether a card is saved, never a card detail (Q-9 (a), SC-707).
+        cardSaved: month.cardSaved === true,
+        ...(unreleased && assessmentHeld !== undefined ? { assessmentHeld } : {}),
+      };
+    },
   };
 }

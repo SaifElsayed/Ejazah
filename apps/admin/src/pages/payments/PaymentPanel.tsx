@@ -7,6 +7,9 @@
 // B42, T047 (R-323 GAP-8): the enrollment's holds, oldest first as the server answered them, each
 // placed and expiring, then released with its reason, a release with none read «not recorded», or
 // not released.
+// 006:T018 (the follow-up carried from T014, option (d)): an automatic order with no Paymob number
+// arrives with an empty reference; the header, the references and the paid orders show «—» with a
+// line saying why (refused before it was sent, or Paymob gave none).
 import { piasters } from '@ijazah/money';
 
 import {
@@ -37,6 +40,18 @@ export const PAYMENT_STATUS: Readonly<
 };
 
 type EnrollmentStatus = NonNullable<PaymentDetail['enrollment']>['status'];
+
+/** 006:T018 (option (d)): an order's Paymob number, or «—» and the line saying it has none. */
+export function OrderReference({ value }: { readonly value: string }) {
+  const t = useT();
+  if (value !== '') return <bdi>{value}</bdi>;
+  return (
+    <span className="stack">
+      <span>{t('admin.payments.dash')}</span>
+      <span className="text-caption tone-muted">{t('admin.payments.noOrderNo')}</span>
+    </span>
+  );
+}
 
 const ENROLLMENT_STATUS: Readonly<
   Record<EnrollmentStatus, { readonly label: MessageKey; readonly tone: StatusTone }>
@@ -81,7 +96,7 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
       header={
         <span className="stack grow">
           <strong className="text-title-3">
-            <bdi>{detail.gatewayOrderId}</bdi>
+            <OrderReference value={detail.gatewayOrderId} />
           </strong>
           {enrollment === undefined ? (
             <bdi className="text-caption tone-muted">{detail.student.displayName}</bdi>
@@ -167,7 +182,7 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
           items={[
             {
               label: t('admin.payments.detail.orderNo'),
-              value: <bdi>{detail.gatewayOrderId}</bdi>,
+              value: <OrderReference value={detail.gatewayOrderId} />,
             },
             {
               label: t('admin.payments.detail.transactionNo'),
@@ -239,7 +254,7 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
           <ul className="stack gap-2">
             {detail.paidOrders.map((order) => (
               <li key={order.paymentId} className="row gap-2 text-callout">
-                <bdi>{order.gatewayOrderId}</bdi>
+                <OrderReference value={order.gatewayOrderId} />
                 <Badge
                   label={t(PAYMENT_STATUS[order.status].label)}
                   tone={PAYMENT_STATUS[order.status].tone}

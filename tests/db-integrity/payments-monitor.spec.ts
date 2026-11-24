@@ -45,7 +45,7 @@ import {
   createAdminRouter,
 } from '../../apps/api/src/surfaces/procedures.js';
 import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures.js';
-import { paymentsGetOutput } from '../../packages/contracts/src/admin/index.js';
+import { paymentsGetOutput, paymentsListOutput } from '../../packages/contracts/src/admin/index.js';
 import { addMinutes, dateColumnOf, timeColumnOf } from '../../packages/time/src/index.js';
 
 let database: Database;
@@ -454,6 +454,75 @@ describe('payments.get over the real tables', () => {
   it('answers NOT_FOUND for an id no order holds', async () => {
     await rolledBack(async (tx) => {
       await expect(monitor.get(tx, randomUUID())).rejects.toEqual(new DomainError('NOT_FOUND'));
+    });
+  });
+});
+
+// 006:T018 (the follow-up carried from T014, option (d), the owner's «موافق» of 2026-11-24): an
+// automatic order with no gateway id (its intention unanswered, or refused before it was sent; ERD §15
+// rule 72) is listed with `''` beside every other order of its page, read by `payments.get` with `''`,
+// and never matched by a search; each order carries its kind, month, automatic and decline, and the
+// whole answer passes the contract's parse. Example: a 1,000 EGP automatic month.
+describe("the programme's orders over the real tables (006:T018)", () => {
+  async function automatic(
+    tx: Transaction,
+    enrollmentId: string,
+    month: number,
+    status: 'expired' | 'failed',
+  ): Promise<string> {
+    const [row] = await tx.$queryRaw<{ id: string }[]>`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at, kind, instalment_month, automatic,
+                            attempt, decline_kind)
+      VALUES (${enrollmentId}::uuid, 'fake', NULL, 100000, 'EGP', ${status}::payment_status,
+              ${NOW}, now(), 'instalment', ${month}, true, 0,
+              ${status === 'failed' ? 'hard' : null}::decline_kind)
+      RETURNING id::text AS id`;
+    if (row === undefined) throw new Error('no order written');
+    return row.id;
+  }
+
+  it('lists a page holding an order with no gateway id whole, and reads it with an empty reference', async () => {
+    await rolledBack(async (tx) => {
+      const w = await world(tx);
+      const hudas = (await tx.payment.findUniqueOrThrow({ where: { id: w.created.id } }))
+        .enrollmentId;
+      const unanswered = await automatic(tx, hudas, 2, 'expired');
+      const refused = await automatic(tx, hudas, 3, 'failed');
+      const page = await monitor.list(tx, { enrollmentId: hudas });
+      expect(page.items.map(({ paymentId }) => paymentId)).toEqual([refused, unanswered]);
+      const rest = await monitor.list(tx, {
+        enrollmentId: hudas,
+        ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
+      });
+      expect(rest.items.map(({ paymentId }) => paymentId)).toEqual([w.created.id]);
+      expect(page.items[0]).toMatchObject({
+        gatewayOrderId: '',
+        kind: 'instalment',
+        instalmentMonth: 3,
+        automatic: true,
+        declineKind: 'hard',
+        status: 'failed',
+      });
+      expect(page.items[1]).toMatchObject({ gatewayOrderId: '', instalmentMonth: 2 });
+      expect(page.items[1]).not.toHaveProperty('declineKind');
+      expect(rest.items[0]).toMatchObject({ kind: 'package', automatic: false });
+      // A name search lists it too; no reference search matches it.
+      const named = await monitor.list(tx, { search: `هدى-${w.token}` });
+      expect(named.items.map(({ paymentId }) => paymentId)).toContain(unanswered);
+      const byReference = await monitor.list(tx, { search: w.created.reference });
+      expect(byReference.items.map(({ paymentId }) => paymentId)).toEqual([w.created.id]);
+      const detail = await monitor.get(tx, unanswered);
+      expect(detail).toMatchObject({
+        paymentId: unanswered,
+        gatewayOrderId: '',
+        kind: 'instalment',
+        instalmentMonth: 2,
+        automatic: true,
+        status: 'expired',
+      });
+      expect(paymentsGetOutput.parse(detail).gatewayOrderId).toBe('');
+      expect(paymentsListOutput.parse(page).items).toHaveLength(2);
     });
   });
 });

@@ -2227,6 +2227,7 @@
         "refunded": "Refunded"
       },
       "dash": "—",
+      "noOrderNo": "No Paymob order number: refused before it was sent, or Paymob gave none",
       "detail": {
         "a11y": "Order details",
         "a11yEvents": "Order events",
