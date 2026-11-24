@@ -169,6 +169,48 @@ describe('the harness builds signed events the webhook accepts (T013, R-213)', (
     ]);
   });
 
+  // 006:T013 (R-510): the gateway's word that it saved the card of an order whose checkout asked.
+  it('cardSaved: the order’s card_saved, a fresh placeholder token each time, the card as named', async () => {
+    const { gatewayOrderId } = await payment.createCheckout(
+      'enr-1',
+      piasters(25_000),
+      'EGP',
+      PAY_BY,
+      undefined,
+      true,
+    );
+    const plain = stand.cardSaved(gatewayOrderId);
+    const named = stand.cardSaved(gatewayOrderId, { last4: '1111', brand: 'MasterCard' });
+
+    expect(await stand.deliverInOrder([plain, named])).toEqual([200, 200]);
+    expect(arrivals.map((arrival) => arrival.event)).toEqual([
+      {
+        type: 'card_saved',
+        providerEventId: plain.providerEventId,
+        gatewayOrderId,
+        token: expect.stringMatching(/^fake_tok_/),
+        last4: '4242',
+        brand: 'Visa',
+      },
+      {
+        type: 'card_saved',
+        providerEventId: named.providerEventId,
+        gatewayOrderId,
+        token: expect.stringMatching(/^fake_tok_/),
+        last4: '1111',
+        brand: 'MasterCard',
+      },
+    ]);
+    const tokens = arrivals.map(({ event }) => (event?.type === 'card_saved' ? event.token : null));
+    expect(new Set(tokens).size).toBe(2);
+  });
+
+  it('cardSaved refuses an order whose checkout did not ask to save its card', async () => {
+    expect(() => stand.cardSaved('fake_ord_nobody_created')).toThrow(/unknown order/);
+    const gatewayOrderId = await order();
+    expect(() => stand.cardSaved(gatewayOrderId)).toThrow(/did not ask to save/);
+  });
+
   it('recipientVerified and recipientRejected, with and without a reason, for any reference', async () => {
     const recipientRef = 'fake_rcp_registered_by_another_process';
     const verified = stand.recipientVerified(recipientRef);

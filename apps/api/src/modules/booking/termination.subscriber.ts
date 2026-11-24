@@ -111,8 +111,8 @@
 // (`programme-close.service.ts`) on the enrollments it cancelled, after their events and before a
 // paused case's closing (`disputes` last): the programme `closed`, its open items `withdrawn` (a
 // `pay_blocked` item among them: a ban, a departure or a deletion ends it, FR-706b), payments'
-// `deleteProgrammeCard`, handed in by `main.ts` (a stub until T013), one line each. A suspension
-// keeps its enrollments `confirmed`, so it closes no programme.
+// `deleteProgrammeCard`, handed in by `main.ts` (T013: the card deleted), one line each. A
+// suspension keeps its enrollments `confirmed`, so it closes no programme.
 //
 // A TEACHER'S SUSPENSION AND THE SAVED CARD (006:T012 of specs/006-programme; DEC-94, FR-729). The
 // programme's saved card is deleted at once at a teacher's suspension, ban or departure. A ban or a
@@ -275,7 +275,7 @@ export interface TerminationDependencies {
   readonly store?: TerminationStore;
   /**
    * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard`, which `main.ts` hands in for the close hook
-   * (a stub until T013); none deleted where it binds none (no card exists before T013).
+   * (T013: deletes the card's row); none deleted where a caller binds none.
    */
   readonly deleteProgrammeCard?: DeleteProgrammeCard;
 }

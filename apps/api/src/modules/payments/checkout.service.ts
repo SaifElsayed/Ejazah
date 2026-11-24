@@ -655,6 +655,8 @@ export class CheckoutService {
       ORDER_CURRENCY,
       order.latestExpiry,
       payee,
+      // 006:T013 (R-510, FR-713): the card is asked to be saved only with the student's consent.
+      order.cardConsentAt === undefined ? undefined : true,
     );
     let recordedHere = false;
     let stored: StoredOrder;

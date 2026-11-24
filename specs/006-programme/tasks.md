@@ -492,6 +492,13 @@ No open question remains.
   > `tests/db-integrity/ijazah-programme.spec.ts:196` («adds the members of share_release_milestone at its end»)
   > fails on `ijazah_integrity_b`: its enum lacks `direct_end`, so
   > `20261123174326_r1b_release_refund_and_encryption_events` seems not deployed there (its deploy needs the owner's word).
+  > **Settled (B-P3 lane a, 2026-11-24; the owner, «موافق على الملفات برا المهام», «موافق على الاتنين»).** Follow-up
+  > (1): `createBookingServices` takes `deleteProgrammeCard`, bound at `main.ts:410`, so the API's `programme.cancel`
+  > deletes the card (`programme-windows.spec.ts`, `programme-cards-binds.spec.ts`, red first). (2): the checkout asks
+  > `saveCard` exactly when the order carries the consent (`checkout.service.spec.ts`, red first). The harness has
+  > `cardSaved` (`gateway-stand-in.fixtures.ts`, `tests/support/gateway-stand-in.ts`), which the DB spec now uses. The
+  > failing test: R1b's two migrations deployed on `ijazah_integrity_b`, and `ijazah-programme.spec.ts` is green.
+  > Follow-up (3) waits for the review sessions to agree the env hunk with R2.
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.

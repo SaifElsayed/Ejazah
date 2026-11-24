@@ -9,9 +9,9 @@
 // the database's instant (`paused_at` cleared, rule 77); every open item of theirs is `withdrawn`
 // (a `pay_blocked` item among them: a close ends it, FR-706b; data-model.md: «a close withdraws an
 // open item»); then payments' `deleteProgrammeCard`, handed in (booking imports no payments, R-208;
-// R-API-6: each module writes its own tables), once per programme closed: a stub until T013, its
-// call asserted by the specs. One info line per programme closed, its id and the reason only. An
-// enrollment that is no programme, or one already closed, is not touched.
+// R-API-6: each module writes its own tables), once per programme closed: since T013 it deletes the
+// card's row, its call asserted by the specs. One info line per programme closed, its id and the
+// reason only. An enrollment that is no programme, or one already closed, is not touched.
 //
 // THE LOCKS (kernel.md, 006:T008's row). The caller holds the programmes' rows, taken before the
 // enrollments' (`lockRows(tx, 'programmes', …)`, the one order: … `slot_holds`, `programmes`,
@@ -34,7 +34,7 @@ import { withdrawOpenRequests } from './programme-requests.repository.js';
 import { closeProgrammeRows } from './programmes.repository.js';
 import type { ProgrammeLog } from './programmes.service.js';
 
-/** Payments' `deleteProgrammeCard` (a stub until T013), handed in: booking imports no payments. */
+/** Payments' `deleteProgrammeCard` (T013: the card deleted), handed in: booking imports none. */
 export type DeleteProgrammeCard = (tx: Transaction, enrollmentId: string) => Promise<void>;
 
 /** Why a programme closes: the enrollment's cancellation reason, or its move. */

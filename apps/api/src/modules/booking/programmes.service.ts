@@ -422,8 +422,8 @@ export interface ProgrammeServiceDependencies {
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: ProgrammeOfferStore;
   /**
-   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard` for the close hook (a stub until T013); none
-   * deleted where the composition root binds none (no card exists before T013).
+   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard` for the close hook (T013: the card
+   * deleted), bound by `main.ts` through `createBookingServices`; none where a caller binds none.
    */
   readonly deleteProgrammeCard?: DeleteProgrammeCard;
   /** 006:T008: the cancellation's reads and the programme's own end, stood in by a spec. */

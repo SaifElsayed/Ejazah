@@ -12,7 +12,7 @@
 // - (SRS DEC-112) no refusal request: `programme.request` takes `stop` only; a `no_offer` decision
 //   carries the administrator's reason, and approving one waits for session 1's pending make-up;
 // - the close hook on every close: the programme `closed`, its open items `withdrawn`, payments'
-//   card entry called (a stub until T013);
+//   card entry called (since T013, through `createBookingServices` too);
 // - two races: an administrator's decision against the sweep's step (both under the programme's row
 //   lock), and an account's termination against the decision (the programme's row before the
 //   enrollment's on both: no deadlock).
@@ -31,6 +31,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  createBookingServices,
   createProgrammeDecisions,
   createProgrammeServices,
   createProgrammeWindows,
@@ -69,7 +70,7 @@ let decisions: ProgrammeDecisions;
 let idempotency: IdempotencyService<Transaction>;
 const lines: Readonly<Record<string, unknown>>[] = [];
 const log = { info: (fields: Readonly<Record<string, unknown>>) => lines.push(fields) };
-/** Payments' `deleteProgrammeCard` as the root hands it (a stub until T013), its calls recorded. */
+/** Payments' `deleteProgrammeCard` as the roots hand it, stood in here, its calls recorded. */
 const cardsDeleted: string[] = [];
 const deleteProgrammeCard = async (_tx: Transaction, enrollmentId: string): Promise<void> => {
   cardsDeleted.push(enrollmentId);
@@ -609,6 +610,25 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     expect(programme.state).toBe('closed');
     expect(items).toMatchObject([{ kind: 'pay_blocked', status: 'withdrawn' }]);
     expect(cancelled).toBe(1);
+    expect(cardsDeleted).toContain(enrollmentId);
+  });
+
+  it('the cancellation through the API’s booking services reaches the card entry they are handed (006:T013)', async () => {
+    const booking = createBookingServices({
+      database,
+      settings,
+      // 005:T006: the enrollment reads' port, which no case here reaches.
+      ijazahRequests: { of: async () => new Map() },
+      idempotency,
+      log,
+      programmeAmounts: programmeOfferAmountsOf,
+      deleteProgrammeCard,
+    });
+    const { studentId, enrollmentId } = await offered();
+    await expect(
+      booking.programme.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    ).resolves.toStrictEqual({ ok: true });
+    expect((await rowsOf(enrollmentId)).programme.state).toBe('closed');
     expect(cardsDeleted).toContain(enrollmentId);
   });
 

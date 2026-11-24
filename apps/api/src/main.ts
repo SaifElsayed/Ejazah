@@ -415,6 +415,8 @@ const services = {
     idempotency,
     log,
     programmeAmounts: payments.programmeOfferAmountsOf,
+    // 006:T013 (DEC-112 Q-B2 (a)): `programme.cancel`'s close hook deletes the saved card.
+    deleteProgrammeCard: payments.deleteProgrammeCard,
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two

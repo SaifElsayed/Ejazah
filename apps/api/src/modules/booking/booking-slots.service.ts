@@ -274,6 +274,7 @@ export function createBookingServices({
   idempotency,
   log,
   programmeAmounts,
+  deleteProgrammeCard,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
@@ -292,6 +293,11 @@ export function createBookingServices({
   readonly idempotency: ProgrammeServiceDependencies['idempotency'];
   readonly log: ProgrammeServiceDependencies['log'];
   readonly programmeAmounts: ProgrammeServiceDependencies['amounts'];
+  /**
+   * 006:T013 (DEC-112 Q-B2 (a)): payments' `deleteProgrammeCard` for the close hook of
+   * `programme.cancel`, which `main.ts` hands in; none deleted where a caller binds none.
+   */
+  readonly deleteProgrammeCard?: ProgrammeServiceDependencies['deleteProgrammeCard'];
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
@@ -311,6 +317,12 @@ export function createBookingServices({
         bookingSlotsOf(tx, store, student, input, clock, () => programmeAvailabilityOf(settings)),
       );
     },
-    programme: createProgrammeServices({ idempotency, settings, amounts: programmeAmounts, log }),
+    programme: createProgrammeServices({
+      idempotency,
+      settings,
+      amounts: programmeAmounts,
+      log,
+      ...(deleteProgrammeCard === undefined ? {} : { deleteProgrammeCard }),
+    }),
   };
 }

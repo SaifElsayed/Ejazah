@@ -21,7 +21,7 @@
 // Observed red: every case against T013's stubs (the writer writing nothing, the deletion deleting
 // nothing); the negatives under named mutants (`R/lane-a`), restored and `cmp`-checked.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -64,7 +64,6 @@ import { createLogger } from '../../apps/api/src/platform/logging/logger';
 import {
   createPaymentPort,
   type PaymentConfig,
-  standInWebhookSecret,
 } from '../../apps/api/src/platform/ports/payment/index';
 import type { PaymentPort } from '../../apps/api/src/platform/ports/payment/payment.port';
 import { MemorySingleUseMarks } from '../../apps/api/src/platform/redis/single-use-marks.fixtures';
@@ -73,7 +72,7 @@ import {
   type SettingsReader,
 } from '../../apps/api/src/platform/settings/settings-reader';
 import { piasters } from '../../packages/money/src/index';
-import { gatewayStandIn } from '../support/gateway-stand-in';
+import { gatewayStandIn, type SavedCard } from '../support/gateway-stand-in';
 import {
   CAIRO,
   confirmationWorld,
@@ -90,7 +89,6 @@ const PAYMENT: PaymentConfig = {
   PAYMENT_MODE: 'test',
   ENCRYPTION_KEY: KEY,
 };
-const WEBHOOK_SECRET = standInWebhookSecret(PAYMENT);
 const CONSENT = new Date('2026-11-24T09:00:00Z');
 const SILENT = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
@@ -134,38 +132,13 @@ interface SignedEvent {
   readonly headers: Readonly<Record<string, string>>;
 }
 
-/**
- * The stand-in's events, signed as `fake.adapter.ts` signs them (HMAC-SHA256 of the body under the
- * webhook secret, `x-fake-signature`), its wire shape held by `fake.adapter.spec.ts`. Built here:
- * `tests/support/gateway-stand-in.ts` has no `card_saved` builder yet (a follow-up of T013).
- */
-function signedEvent(body: object, secret = WEBHOOK_SECRET): SignedEvent {
-  const rawBody = Buffer.from(JSON.stringify(body));
-  const signature = createHmac('sha256', secret).update(rawBody).digest('hex');
-  return { rawBody, headers: { 'x-fake-signature': signature } };
-}
+/** The stand-in's harness for the webhook this spec listens with (`tests/support`). */
+const stand = () => gatewayStandIn({ origin, config: PAYMENT, payment: gateway });
 
 /** The gateway's word that it saved the order's card: a new placeholder token each time. */
-function cardSaved(
-  gatewayOrderId: string,
-  {
-    last4 = '4242',
-    brand = 'Visa',
-    signature = 'valid',
-  }: { last4?: string; brand?: string; signature?: 'valid' | 'invalid' } = {},
-): SignedEvent {
-  return signedEvent(
-    {
-      id: `fake_evt_${randomUUID()}`,
-      type: 'card_saved',
-      order: gatewayOrderId,
-      token: `fake_tok_${randomUUID()}`,
-      last4,
-      brand,
-    },
-    signature === 'valid' ? WEBHOOK_SECRET : randomBytes(32).toString('hex'),
-  );
-}
+const cardSaved = (gatewayOrderId: string, card?: SavedCard): SignedEvent =>
+  stand().cardSaved(gatewayOrderId, card);
+
 /** Every line the webhook's logger wrote, as written. */
 const logLines: string[] = [];
 /** Every value the webhook handed `confirm-enrollment`'s queue. */
@@ -579,9 +552,10 @@ describe('no card detail leaves the webhook (SC-707)', () => {
 
     expect(await deliver(saved)).toBe(200);
     expect(await deliver(saved)).toBe(200);
-    expect(await deliver(cardSaved(w.gatewayOrderId, { signature: 'invalid' }))).toBe(401);
-    const stand = gatewayStandIn({ origin, config: PAYMENT, payment: gateway });
-    expect(await deliver(stand.paid(gatewayOrderId))).toBe(200);
+    expect(await deliver(stand().tamper(stand().cardSaved(w.gatewayOrderId), 'wrong_secret'))).toBe(
+      401,
+    );
+    expect(await deliver(stand().paid(gatewayOrderId))).toBe(200);
 
     const written = [...logLines.slice(lines), ...answers.slice(said)].join('\n');
     expect(written).not.toContain(token);

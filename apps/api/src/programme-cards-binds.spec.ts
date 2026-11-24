@@ -6,11 +6,13 @@
 // WHAT IS READ. `main.ts` and `worker.ts` are entrypoints that start a process when imported, so
 // their composition is read as source, parsed with TypeScript: every call of
 // `booking.createEnrollmentSide(...)` must carry `programmes: { deleteProgrammeCard:
-// payments.deleteProgrammeCard, log }`, and `payments.createPaymentWebhookRoute(...)` must carry
-// `cipher`. A call bound some other way (a stub, no log) is red.
+// payments.deleteProgrammeCard, log }`; `payments.createPaymentWebhookRoute(...)` must carry
+// `cipher`, and `booking.createBookingServices(...)` must carry `deleteProgrammeCard:
+// payments.deleteProgrammeCard`. A call bound some other way (a stub, no log) is red.
 //
 // Observed red: `worker.ts` before T013 (its `createEnrollmentSide({ settings })`, the close hook's
-// silent default) and `main.ts` before T013 (the webhook with no cipher).
+// silent default), `main.ts` before T013 (the webhook with no cipher) and before the bind of
+// `createBookingServices` (its `programme.cancel` on the silent default).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -85,5 +87,13 @@ describe('the payment webhook’s column cipher (006:T013, R-510, R-DB-8)', () =
     const calls = callsOf('main.ts', 'payments', 'createPaymentWebhookRoute');
     expect(calls).toHaveLength(1);
     expect(calls[0]?.get('cipher')).toBe('cipher');
+  });
+});
+
+describe('the API’s programme.cancel deletes the card through payments’ entry (006:T013, DEC-112 Q-B2 (a))', () => {
+  it('main.ts hands booking’s services payments’ deleteProgrammeCard', () => {
+    const calls = callsOf('main.ts', 'booking', 'createBookingServices');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.get('deleteProgrammeCard')).toBe('payments.deleteProgrammeCard');
   });
 });
