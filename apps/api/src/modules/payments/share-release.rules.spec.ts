@@ -17,6 +17,7 @@ import {
   type ReleaseOrder,
   type ReleaseProgramme,
   type ReleaseSession,
+  refundPartsOf,
   refundShareOf,
   takenOffAtEnd,
 } from './share-release.rules.js';
@@ -76,6 +77,7 @@ function facts(
     sessions: sessionsWith(count, count),
     caseReasons: [],
     caseOpen: false,
+    coversSuspension: false,
     written: [],
     ...rest,
   };
@@ -516,13 +518,10 @@ describe('the closes that release (Q-5 (a))', () => {
     ).toMatchObject([{ milestone: 'teacher_dropout', amount: 1_000 }]);
   });
 
-  it('releases nothing on any other reason, a gender correction included', () => {
-    for (const reason of [
-      'gender_correction',
-      'admin_ended',
-      'admin_cancellation',
-      'makeup_refused',
-    ]) {
+  // 003:T125 (SRS DEC-104; an approved rewrite): `admin_ended`, `account_deleted` and
+  // `gender_correction` now release `direct_end` (below); any other reason still releases nothing.
+  it('releases nothing on any other reason', () => {
+    for (const reason of ['admin_cancellation', 'makeup_refused', 'refund_choice']) {
       expect(plan(closed(reason))).toEqual([]);
     }
   });
@@ -537,7 +536,8 @@ describe('the closes that release (Q-5 (a))', () => {
         facts({
           status: 'cancelled',
           sessions: sessionsWith(3),
-          caseReasons: ['gender_correction', 'student_banned', 'teacher_ended'],
+          // 003:T125 (rule d): `gender_correction` now releases, so a reason that never does leads.
+          caseReasons: ['makeup_refused', 'student_banned', 'teacher_ended'],
         }),
       ),
     ).toMatchObject([{ milestone: 'student_complaint_close' }]);
@@ -634,6 +634,7 @@ function programmeFacts({
     sessions: sessionsWith(delivered, count),
     caseReasons: [],
     caseOpen,
+    coversSuspension: false,
     written,
   };
 }
@@ -1126,6 +1127,7 @@ describe('006:T012 a programme’s close on a complaint against the student rele
       sessions,
       caseReasons: ['student_complaint_ended'],
       caseOpen: false,
+      coversSuspension: false,
       written: [],
     };
   };
@@ -1266,5 +1268,232 @@ describe('the ijazah half over the N+1 snapshot count (006:T010, DEC-94: 41 → 
       { milestone: 'ijazah_half', due: true, dueAt: windowAfter(21) },
       { milestone: 'ijazah_end' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T125 (SRS DEC-104, DEC-96; ADR 0025 as amended; Q-1 (a), Q-2 (a), Q-3 (a)): an end by the
+// administration, the student's stop (`admin_ended`), a student's deletion by an administrator
+// (`account_deleted`) and a gender correction (`gender_correction`), releases as `direct_end` the
+// share of the consumed sessions less what was already released (`complaintCloseAmount`'s
+// arithmetic), on both tracks, held while the case is open, due after the last consumed session's
+// window. A programme's `admin_ended` that covered its suspension stays a dropout (T012 as amended):
+// nothing more. Written before the rule, run red first.
+describe('003:T125 an end by the administration releases `direct_end` (DEC-104)', () => {
+  /** Ten sessions, the first `taken` delivered, the rest cancelled at the end. */
+  const ended = (reason: string, taken = 4) =>
+    facts({
+      status: 'cancelled',
+      sessions: sessionsWith(10).map((one, index) =>
+        index < taken ? one : { ...one, outcome: 'cancelled_by_admin' },
+      ),
+      caseReasons: [reason],
+    });
+
+  it.each(['admin_ended', 'account_deleted', 'gender_correction'])(
+    'recitation, 10,000 EGP, 4 of 10 delivered, %s: the teacher 2,800 EGP after the 4th session’s window',
+    (reason) => {
+      expect(plan(ended(reason))).toEqual([
+        {
+          milestone: 'direct_end',
+          amount: 280_000,
+          dueAt: windowAfter(4),
+          due: true,
+          waitsForCase: false,
+        },
+      ]);
+    },
+  );
+
+  it('counts a session the student missed as consumed: 3 done + 1 missed = 2,800 EGP', () => {
+    const input = ended('account_deleted', 3);
+    const sessions = input.sessions.map((one) =>
+      one.sequenceNumber === 4 ? { ...one, outcome: 'student_no_show' } : one,
+    );
+    expect(plan({ ...input, sessions })).toMatchObject([
+      { milestone: 'direct_end', amount: 280_000, dueAt: windowAfter(4) },
+    ]);
+  });
+
+  it('is held while its case is open, waiting for the administrator’s resolution', () => {
+    for (const reason of ['admin_ended', 'account_deleted', 'gender_correction']) {
+      expect(plan({ ...ended(reason), caseOpen: true })).toEqual([
+        {
+          milestone: 'direct_end',
+          amount: 280_000,
+          dueAt: windowAfter(4),
+          due: false,
+          waitsForCase: true,
+        },
+      ]);
+    }
+  });
+
+  it('ijazah, 6 of 10 delivered, the half (1,750 EGP) released: 2,450 EGP more (4,200 in all)', () => {
+    expect(
+      plan({
+        ...ended('admin_ended', 6),
+        enrollment: { ...ended('admin_ended', 6).enrollment, track: 'ijazah_track' },
+        written: [{ milestone: 'ijazah_half', amount_piasters: piasters(175_000) }],
+      }),
+    ).toEqual([
+      {
+        milestone: 'direct_end',
+        amount: 245_000,
+        dueAt: windowAfter(6),
+        due: true,
+        waitsForCase: false,
+      },
+    ]);
+  });
+
+  it('the teacher’s stop on the ijazah track releases nothing more (DEC-85), on recitation `teacher_dropout`', () => {
+    const stopped = ended('teacher_ended', 6);
+    expect(
+      plan({
+        ...stopped,
+        enrollment: { ...stopped.enrollment, track: 'ijazah_track' },
+        written: [{ milestone: 'ijazah_half', amount_piasters: piasters(175_000) }],
+      }),
+    ).toEqual([]);
+    expect(plan(ended('teacher_ended'))).toMatchObject([
+      { milestone: 'teacher_dropout', amount: 280_000 },
+    ]);
+  });
+
+  describe('a programme (006:T012 as amended)', () => {
+    /** Session 1 the assessment, then 40 offer sessions of the rest in full; `taken` delivered. */
+    const programmeEnded = (taken: number, coversSuspension: boolean): ReleaseFacts => {
+      const base = programmeFacts({
+        orders: [ASSESSMENT, REST_IN_FULL],
+        status: 'cancelled',
+        cancellationReason: 'admin',
+      });
+      return {
+        ...base,
+        sessions: Array.from({ length: 41 }, (_, index) => ({
+          ...at(index + 1, index < taken ? 'done' : 'cancelled_by_admin'),
+          ...(index === 0 ? {} : { programmeMonth: Math.floor((index - 1) / 4) + 1 }),
+        })),
+        caseReasons: ['admin_ended'],
+        coversSuspension,
+      };
+    };
+
+    it('the student’s stop releases each session by its own order: 350 + 5 × 166.25 = 1,181.25 EGP', () => {
+      expect(plan(programmeEnded(6, false))).toEqual([
+        {
+          milestone: 'direct_end',
+          amount: 118_125,
+          dueAt: windowAfter(6),
+          due: true,
+          waitsForCase: false,
+        },
+      ]);
+    });
+
+    it('an end that covered the programme’s suspension stays a dropout: nothing more', () => {
+      expect(plan(programmeEnded(6, true))).toEqual([]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T127 (SRS DEC-98; ERD §15 rule 83; Q-4 (a)): an end release (`recitation_end`, `ijazah_end`,
+// `programme_stopped`) carries the teacher's share of the refunds it took off when it was written,
+// `takenOffAtEnd` or the programme's refund; every other release carries nothing. Once written, that
+// share alone is the teacher's «عليك»; a refund recorded afterwards is the platform's, given to the
+// enrollment's refunded orders in id order (`refundPartsOf`). Written before the field, run red first.
+describe('003:T127 the refund share an end release takes off (DEC-98)', () => {
+  const takenOff = (input: ReleaseFacts) =>
+    plannedReleases(input, { windowHours: WINDOW, now: LATER }).map(
+      ({ milestone, refundTakenOff_piasters }) => [
+        milestone,
+        toPlainNumber(refundTakenOff_piasters),
+      ],
+    );
+  const refundedOrder = (input: ReleaseFacts, refunded: number): ReleaseFacts => ({
+    ...input,
+    order: { ...input.order, refunded_piasters: piasters(refunded) },
+    orders: [{ ...input.order, refunded_piasters: piasters(refunded) }],
+  });
+
+  it('recitation_end, 1,000 EGP refunded before it: takes 700 EGP off and keeps it', () => {
+    expect(takenOff(refundedOrder(facts(), 100_000))).toEqual([['recitation_end', 70_000]]);
+  });
+
+  it('ijazah_end on a package keeps the 700 EGP it took off', () => {
+    const base = facts({
+      track: 'ijazah_track',
+      written: [{ milestone: 'ijazah_half', amount_piasters: piasters(175_000) }],
+    });
+    expect(takenOff(refundedOrder(base, 100_000))).toEqual([['ijazah_end', 70_000]]);
+  });
+
+  it('a programme’s ijazah_end and programme_stopped keep the programme’s refund share', () => {
+    const [first, ...rest] = months(10);
+    const refundedMonth = { ...(first as ReleaseOrder), refunded_piasters: piasters(100_000) };
+    expect(
+      takenOff(
+        programmeFacts({
+          orders: [ASSESSMENT, refundedMonth, ...rest],
+          status: 'completed',
+          delivered: 41,
+          written: [{ milestone: 'ijazah_half', amount_piasters: piasters(183_750) }],
+        }),
+      ),
+    ).toEqual([['ijazah_end', 70_000]]);
+    expect(
+      takenOff(
+        programmeFacts({
+          orders: [ASSESSMENT, refundedMonth, ...months(4).slice(1)],
+          status: 'cancelled',
+          cancellationReason: 'programme_stopped',
+          delivered: 12,
+          programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+        }),
+      ),
+    ).toEqual([['programme_stopped', 70_000]]);
+  });
+
+  it('a closing release takes nothing off, a refund recorded or not (rule 83)', () => {
+    const closed = (reason: string) =>
+      refundedOrder(
+        facts({ status: 'cancelled', sessions: sessionsWith(3), caseReasons: [reason] }),
+        100_000,
+      );
+    expect(takenOff(closed('teacher_ended'))).toEqual([['teacher_dropout', 0]]);
+    expect(takenOff(closed('student_banned'))).toEqual([['student_complaint_close', 0]]);
+    expect(takenOff(closed('admin_ended'))).toEqual([['direct_end', 0]]);
+  });
+
+  describe('refundPartsOf: each refunded order’s share, the teacher’s and the platform’s', () => {
+    const refunded = (refunded_piasters: Piasters) => ({ refunded_piasters, sharePercent: 70 });
+    const parts = (orders: ReturnType<typeof refunded>[], end_piasters: Piasters | undefined) =>
+      refundPartsOf(orders, end_piasters).map(({ teacher_piasters, platform_piasters }) => [
+        toPlainNumber(teacher_piasters),
+        toPlainNumber(platform_piasters),
+      ]);
+
+    it('with no end release written, every share is the teacher’s (as today)', () => {
+      expect(parts([refunded(piasters(100_000))], undefined)).toEqual([[70_000, 0]]);
+    });
+
+    it('«due 7,000», then 1,000 EGP refunded: the 700 EGP is the platform’s, none the teacher’s', () => {
+      expect(parts([refunded(piasters(100_000))], piasters(0))).toEqual([[0, 70_000]]);
+    });
+
+    it('a refund before the release stays the teacher’s, one after it the platform’s', () => {
+      expect(parts([refunded(piasters(200_000))], piasters(70_000))).toEqual([[70_000, 70_000]]);
+    });
+
+    it('gives the share taken off to the orders in id order', () => {
+      expect(
+        parts([refunded(piasters(50_000)), refunded(piasters(50_000))], piasters(50_000)),
+      ).toEqual([
+        [35_000, 0],
+        [15_000, 20_000],
+      ]);
+    });
   });
 });

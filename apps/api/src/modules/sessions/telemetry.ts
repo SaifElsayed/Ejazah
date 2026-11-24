@@ -13,6 +13,8 @@
 //   reads the number the outcome was decided on; 0 for a session never evaluated.
 // - Who joined, by FR-442 (T013's `evaluateAttendance`, the four attendance settings read now).
 // - The outage windows overlapping the session (FR-445).
+// - 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a)): the session's encryption failures, oldest first,
+//   each the side whose phone could not encrypt and when (`session_events` `encryption_failed`).
 import type { Telemetry, TelemetryEvent } from '@ijazah/contracts/admin';
 import type { Interval } from '@ijazah/time';
 import { z } from 'zod';
@@ -28,6 +30,7 @@ import {
 import { attendanceEventsOf } from './evaluation.repository.js';
 import { ATTENDANCE_SETTINGS } from './evaluation.service.js';
 import { outagesOver, type RecordedOutage, type TelemetrySession } from './review.repository.js';
+import { type EncryptionFailureRow, encryptionFailuresOf } from './session-events.repository.js';
 
 const wholeNonNegative = z.int().nonnegative();
 const positive = z.number().positive();
@@ -39,9 +42,18 @@ const SECONDS = ':00';
 export interface TelemetryStore {
   attendanceEventsOf(tx: Transaction, sessionId: string): Promise<readonly AttendanceEvent[]>;
   outagesOver(tx: Transaction, window: Interval): Promise<readonly RecordedOutage[]>;
+  /** T084: the session's encryption failures, oldest first. */
+  encryptionFailuresOf(
+    tx: Transaction,
+    sessionId: string,
+  ): Promise<readonly EncryptionFailureRow[]>;
 }
 
-export const telemetryStore: TelemetryStore = { attendanceEventsOf, outagesOver };
+export const telemetryStore: TelemetryStore = {
+  attendanceEventsOf,
+  outagesOver,
+  encryptionFailuresOf,
+};
 
 export interface TelemetryReader {
   /** The session's connection record (this file's head). */
@@ -99,9 +111,10 @@ export function createTelemetryReader({
   return {
     of: async (tx, session) => {
       const window: Interval = { startsAt: session.startsAt, endsAt: session.endsAt };
-      // One transaction runs one statement at a time, so its two reads are awaited in turn.
+      // One transaction runs one statement at a time, so its reads are awaited in turn.
       const events = await store.attendanceEventsOf(tx, session.id);
       const outages = await store.outagesOver(tx, window);
+      const failures = await store.encryptionFailuresOf(tx, session.id);
       const rules = await attendanceSettings();
       const attendanceWindow = {
         ...window,
@@ -133,6 +146,10 @@ export function createTelemetryReader({
           outageId: id,
           startsAt: iso(startsAt),
           endsAt: iso(endsAt),
+        })),
+        encryptionFailures: failures.map(({ party, occurredAt }) => ({
+          party,
+          occurredAt: iso(occurredAt),
         })),
       };
     },

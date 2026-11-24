@@ -314,6 +314,12 @@ export {
   recordApplicationCall,
 } from './application.repository.js';
 /**
+ * R1b (002:T186; SRS DEC-97): the call's notes a new record replaces and whether the teacher was ever
+ * approved, read by verification's `recordCall` under the application's lock, which keeps an
+ * ever-approved teacher's earlier notes in the history as a `call_replaced` row.
+ */
+export { type CallNotes, readCallNotes } from './application.repository.js';
+/**
  * R1a (002:T176; Q-C1-1 (a), the owner's «موافق على الاتنين» of 2026-11-22): the live applicants
  * never approved whose identity document is due, paged for verification's `erase-identity-documents`.
  */
@@ -329,6 +335,8 @@ export {
   type ApplicationHistoryRow,
   listOf as applicationHistoryOf,
   record as recordApplicationHistory,
+  // R1b round 2 (002:T186): the same insert answering the row's id, for `recordCall`'s audit entry.
+  recordWithId as recordApplicationHistoryWithId,
 } from './application-history.repository.js';
 
 /**

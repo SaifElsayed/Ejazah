@@ -1263,9 +1263,10 @@ describe('B42a Q-B2 (a): a teacher’s suspension, a teacher’s end and a held 
   });
 
   it('names a `teacher_ended` case as a ban, a revocation or a deletion, never a suspension', () => {
+    // 003:T125 (rule d): the direct end's «المعلم وقف» opens this case too.
     expect(both(CASE_REASON.teacher_ended)).toEqual({
-      ar: 'حظر المعلم أو سحب اعتماده أو حذف حسابه',
-      en: 'The teacher banned, their approval revoked or their account deleted',
+      ar: 'حظر المعلم أو سحب اعتماده أو حذف حسابه أو توقفه',
+      en: 'The teacher banned, their approval revoked, their account deleted or they stopped',
     });
   });
 
@@ -1677,5 +1678,32 @@ describe('T083: the restore of an enrollment an administrator ended (T073; N9)',
       ar: 'إنهاء الإدارة الاشتراك',
       en: 'The administration ended the enrollment',
     });
+  });
+});
+
+// 004:T084 (SRS DEC-105, FR-ADMIN-20 (a)): a phone that could not encrypt the session, on the
+// timeline with the side it was, in both catalogues.
+describe('T084: a phone that could not encrypt, on the timeline with its side', () => {
+  const words = (event: MonitoredEvent, locale: 'ar' | 'en') =>
+    eventWords(
+      event,
+      new Map(),
+      (key, values) => translate(locale, key, values),
+      locale,
+      panelTimeZone(),
+    );
+  const occurredAt = '2026-11-23T10:00:00.000Z';
+
+  it('names the side whose phone could not encrypt, in Arabic and English', () => {
+    for (const [party, ar, en] of [
+      ['student', 'على جهاز الطالب', "On the student's phone"],
+      ['teacher', 'على جهاز المعلم', "On the teacher's phone"],
+    ] as const) {
+      const event = { source: 'session', kind: 'encryption_failed', party, occurredAt } as const;
+      expect({ ar: words(event, 'ar'), en: words(event, 'en') }).toEqual({
+        ar: { title: 'تعذّر تشفير الحصة على جهاز أحد الطرفين', detail: ar },
+        en: { title: "A party's phone could not encrypt the session", detail: en },
+      });
+    }
   });
 });

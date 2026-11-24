@@ -438,7 +438,8 @@
         "teacherDropout": "باقة أُنهيت بانسحابك: الحصص التي تمت",
         "studentComplaintClose": "باقة أُغلقت بشكوى ضد الطالب",
         "assessment": "جلسة الاختبار (لم يكمل الطالب)",
-        "programmeStopped": "برنامج أُوقف: الحصص التي تمت"
+        "programmeStopped": "برنامج أُوقف: الحصص التي تمت",
+        "directEnd": "أنهت الإدارة الباقة"
       },
       "state": {
         "held": "محجوز",
@@ -472,7 +473,8 @@
         "teacherSuspended": "إيقاف حسابك",
         "adminEnded": "إنهاء الباقة من الإدارة",
         "genderCorrection": "تصحيح بيانات الحساب",
-        "studentComplaintEnded": "إنهاء الباقة بشكوى ضد الطالب"
+        "studentComplaintEnded": "إنهاء الباقة بشكوى ضد الطالب",
+        "accountDeleted": "حذف حساب الطالب بطلبه"
       },
       "empty": {
         "title": "لا مستحقات بعد",
@@ -847,7 +849,9 @@
       "anotherDevice": {
         "message": "دخلت إلى هذه الجلسة من جهاز آخر.",
         "action": "الدخول من هذا الجهاز"
-      }
+      },
+      "connectFailed": "تعذّر الاتصال بالجلسة من هذا الجهاز.",
+      "counterpartyUnavailable": "صوت الطرف الآخر وصورته غير متاحين الآن."
     }
   },
   "status": {

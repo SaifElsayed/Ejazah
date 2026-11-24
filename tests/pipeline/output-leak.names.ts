@@ -97,4 +97,6 @@ export const tokenOutputNames: readonly string[] = [
   'refreshToken',
   'sessionToken',
   'onboardingToken',
+  // 004:T084 (R1b; the owner's answer of 2026-11-23): the session's media key, never stored.
+  'mediaKey',
 ];

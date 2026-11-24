@@ -29,12 +29,25 @@
 // room (`rejoin.ts`, no new constant), until it joins, a final refusal, or the scheduled end
 // (`sessions.get`'s `endsAt`, which the screen hands in); a try with no answer is tried again.
 // T065: a first join that failed keeps its error, so the screen can say `RATE_LIMITED`'s time.
+//
+// 004:T084 (R1b; SRS DEC-102, DEC-105, NFR-SEC-13, R-HONEST): every room is encrypted end to end
+// with the session's key (`sessions.join`'s `mediaKey`), or not joined at all. The key is set in
+// the phone's frame cryptor and awaited (`encryption.ts`), the `Room` is made with the SDK's
+// manager, and `setE2EEEnabled(true)` runs before `connect`, so nothing is published unencrypted
+// (livekit-client 2.23.0 `Room.ts:539-556`, `LocalParticipant.ts:493-507`). A key that cannot be
+// set, encryption that cannot be turned on, or this side's encryption failing in the room leaves
+// it: the screen says the session could not connect, `sessions.encryptionFailed` is told once and
+// its own failure changes nothing, and no try follows. A counterparty track that is not encrypted
+// is unsubscribed (audio plays natively once subscribed); it, and frames that cannot be decrypted,
+// are said to be unavailable, not drawn black. The screen never names the encryption (DEC-107).
+// The key is in memory only and dropped with the room.
 import type { SessionsJoinOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import type { TrackReference } from '@livekit/react-native';
 import {
   DisconnectReason,
   type Participant,
+  type RemoteTrackPublication,
   Room,
   RoomEvent,
   Track,
@@ -44,6 +57,8 @@ import {
 import { errorCodeOf, errorDetailsOf } from '../../../lib/client';
 import { startAudio, stopAudio } from '../../../lib/livekit';
 import { startRoomKeepAlive, stopRoomKeepAlive } from '../../../lib/room-keep-alive';
+import { encryptionFor, type MediaEncryption } from './encryption';
+import { type CryptionChange, watchFrameCryption } from './frame-cryption';
 import { askAccess, askNotifications } from './permissions';
 import { isFinalRefusal, rejoinDelayMs } from './rejoin';
 
@@ -61,7 +76,9 @@ export type RoomPhase =
   /** The first join had no answer; the participant may try again. `error`: what refused it (T065). */
   | { readonly kind: 'failed'; readonly error?: unknown }
   /** The room was lost and the scheduled end came before it could be joined again. */
-  | { readonly kind: 'ended' };
+  | { readonly kind: 'ended' }
+  /** 004:T084: this phone could not encrypt; the room was not joined, or was left. */
+  | { readonly kind: 'encryptionFailed' };
 
 export interface RoomView {
   readonly counterpartyPresent: boolean;
@@ -80,9 +97,19 @@ export interface RoomView {
   readonly startingShare: boolean;
   /** A share is stopping: no new one is offered until the stop has settled. */
   readonly stoppingShare: boolean;
+  /** 004:T084: a counterparty track came unencrypted: it is not played. */
+  readonly counterpartyUnencrypted: boolean;
+  /** A counterparty frame cryptor cannot decrypt: none of their video is drawn. */
+  readonly counterpartyUndecryptable: boolean;
 }
 
 const MS_PER_SECOND = 1_000;
+/** A counterparty cryptor's states in which its frames cannot be read (`frame-cryption.ts`). */
+const UNREADABLE = new Set(['decryptionFailed', 'missingKey', 'internalError']);
+/** This side's cryptor's states in which its media goes out unencrypted or not at all. */
+const UNSENDABLE = new Set(['encryptionFailed', 'missingKey', 'internalError']);
+/** The counterparty's tracks whose encryption is checked. */
+const MEDIA_SOURCES = [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare];
 /** How long leaving waits for each of its steps: the SDK's disconnect was seen never to answer. */
 const LEAVE_WAIT_MS = 5_000;
 
@@ -136,10 +163,17 @@ export class RoomConnection {
   private shareTrack: NativeTrack | undefined;
   private keepingAlive = false;
   private askedNotifications = false;
+  /** 004:T084: the current room's key, and the watch of its frame cryptors. */
+  private encryption: MediaEncryption | undefined;
+  private unwatch: (() => void) | undefined;
+  /** The counterparty's cryptors that cannot decrypt now, by id. */
+  private readonly undecryptable = new Set<string>();
 
   constructor(
     private readonly join: () => Promise<SessionsJoinOutput>,
     private readonly changed: () => void,
+    /** 004:T084: `sessions.encryptionFailed` for this session (DEC-105). */
+    private readonly reportEncryptionFailure: () => Promise<unknown>,
     /** The session's scheduled end (`sessions.get`'s `endsAt`), when the screen has read it. */
     private readonly scheduledEnd: () => string | undefined = () => undefined,
   ) {}
@@ -175,10 +209,16 @@ export class RoomConnection {
     const room = this.joined ? this.room : undefined;
     const remote = room?.remoteParticipants.values().next().value;
     const local = room?.localParticipant;
+    const undecryptable = this.undecryptable.size > 0;
+    /** A counterparty video drawn only when it is encrypted and its frames can be read. */
+    const counterpartyTrack = (source: Track.Source) => {
+      const track = trackOf(remote, source);
+      return undecryptable || track?.publication.isEncrypted !== true ? undefined : track;
+    };
     return {
       counterpartyPresent: remote !== undefined,
-      counterpartyCamera: trackOf(remote, Track.Source.Camera),
-      counterpartyScreen: trackOf(remote, Track.Source.ScreenShare),
+      counterpartyCamera: counterpartyTrack(Track.Source.Camera),
+      counterpartyScreen: counterpartyTrack(Track.Source.ScreenShare),
       ownCamera: trackOf(local, Track.Source.Camera),
       cameraOn: local?.isCameraEnabled ?? false,
       sharing: local?.isScreenShareEnabled ?? false,
@@ -187,6 +227,10 @@ export class RoomConnection {
       shareWarningOpen: this.shareWarningOpen,
       startingShare: this.startingShare,
       stoppingShare: this.stoppingShare,
+      counterpartyUnencrypted: MEDIA_SOURCES.some(
+        (source) => remote?.getTrackPublication(source)?.isEncrypted === false,
+      ),
+      counterpartyUndecryptable: undecryptable,
     };
   }
 
@@ -306,6 +350,7 @@ export class RoomConnection {
       room.removeAllListeners();
       await settled(room.disconnect());
     }
+    this.forgetEncryption();
     this.endShare();
     await settled(stopAudio());
   }
@@ -330,9 +375,8 @@ export class RoomConnection {
     }
     if (this.closed) return;
     this.endsAt = grant.validUntil;
-    const room = new Room();
-    this.room = room;
-    this.listen(room);
+    const room = await this.encryptedRoom(grant.mediaKey);
+    if (room === undefined) return;
     try {
       await room.connect(grant.serverUrl, grant.token);
       if (this.closed || this.room !== room) return;
@@ -351,6 +395,84 @@ export class RoomConnection {
       room.disconnect().catch(() => undefined);
       this.notJoined(mode);
     }
+  }
+
+  /**
+   * 004:T084: the key set and awaited, then a room made with the SDK's manager and its encryption
+   * turned on, all before it connects; none when this side cannot encrypt.
+   */
+  private async encryptedRoom(mediaKey: string): Promise<Room | undefined> {
+    let encryption: MediaEncryption;
+    try {
+      encryption = await encryptionFor(mediaKey);
+    } catch {
+      this.cannotEncrypt();
+      return undefined;
+    }
+    if (this.closed) {
+      encryption.forget();
+      return undefined;
+    }
+    const room = new Room({ encryption: { e2eeManager: encryption.manager } });
+    this.room = room;
+    this.encryption = encryption;
+    this.listen(room);
+    this.unwatch = watchFrameCryption((change) => this.cryption(room, change));
+    try {
+      await room.setE2EEEnabled(true);
+    } catch {
+      if (this.closed || this.room !== room) return undefined;
+      this.drop(room);
+      this.cannotEncrypt();
+      return undefined;
+    }
+    return this.closed || this.room !== room ? undefined : room;
+  }
+
+  /**
+   * NFR-SEC-13: no room unencrypted; the screen says the session could not connect (DEC-107) and
+   * the server hears it once (DEC-105).
+   */
+  private cannotEncrypt(): void {
+    if (this.closed) return;
+    this.set({ kind: 'encryptionFailed' });
+    // Fail-open: the record's own failure changes nothing here.
+    this.reportEncryptionFailure().catch(() => undefined);
+  }
+
+  /** This side's encryption failed in a room it holds: the room is left. */
+  private encryptionBroke(room: Room): void {
+    if (this.closed || this.room !== room) return;
+    this.drop(room);
+    room.disconnect().catch(() => undefined);
+    this.cannotEncrypt();
+  }
+
+  /** A frame cryptor's change: this side's failing leaves; the counterparty's is said in words. */
+  private cryption(room: Room, { participantId, frameCryptorId, state }: CryptionChange): void {
+    if (this.room !== room) return;
+    if (participantId === room.localParticipant.identity) {
+      if (UNSENDABLE.has(state)) this.encryptionBroke(room);
+      return;
+    }
+    if (UNREADABLE.has(state)) this.undecryptable.add(frameCryptorId);
+    else this.undecryptable.delete(frameCryptorId);
+    this.changed();
+  }
+
+  /** A counterparty track that is not encrypted is not received: audio would play natively. */
+  private refuseUnencrypted(publication: RemoteTrackPublication): void {
+    if (!publication.isEncrypted) publication.setSubscribed(false);
+    this.changed();
+  }
+
+  /** The key dropped from the frame cryptor and the cryptors' watch ended, once per room. */
+  private forgetEncryption(): void {
+    this.unwatch?.();
+    this.unwatch = undefined;
+    this.undecryptable.clear();
+    this.encryption?.forget();
+    this.encryption = undefined;
   }
 
   private refused(error: unknown, mode: AttemptMode): void {
@@ -406,12 +528,16 @@ export class RoomConnection {
       .on(RoomEvent.Disconnected, (reason) => this.lost(room, reason))
       .on(RoomEvent.ParticipantConnected, changed)
       .on(RoomEvent.ParticipantDisconnected, changed)
-      .on(RoomEvent.TrackSubscribed, changed)
+      .on(RoomEvent.TrackPublished, (publication) => this.refuseUnencrypted(publication))
+      .on(RoomEvent.TrackSubscribed, (_track, publication) => this.refuseUnencrypted(publication))
       .on(RoomEvent.TrackUnsubscribed, changed)
       .on(RoomEvent.TrackMuted, changed)
       .on(RoomEvent.TrackUnmuted, changed)
       .on(RoomEvent.LocalTrackPublished, changed)
-      .on(RoomEvent.LocalTrackUnpublished, changed);
+      .on(RoomEvent.LocalTrackUnpublished, changed)
+      .on(RoomEvent.EncryptionError, (_error, participant) => {
+        if (participant === undefined || participant.isLocal) this.encryptionBroke(room);
+      });
   }
 
   private whileJoined(room: Room, phase: RoomPhase): void {
@@ -452,6 +578,7 @@ export class RoomConnection {
     this.joined = false;
     this.shareWarningOpen = false;
     this.endShare();
+    this.forgetEncryption();
   }
 
   /** The next try on the schedule, or none once the scheduled end comes first. */

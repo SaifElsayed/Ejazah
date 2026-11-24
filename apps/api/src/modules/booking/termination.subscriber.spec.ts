@@ -309,7 +309,10 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
     ]);
   });
 
-  it("a student's: each of their teachers' keys in ascending id, and no case", async () => {
+  // 003:T125 (SRS DEC-96, FR-AUTH-14, FR-ADMIN-22 as amended; an approved rewrite): a student's
+  // deletion by an administrator opens one `account_deleted` case per enrollment it ends, which its
+  // sessions' rows name and its open remedies are handed to. Run red first.
+  it("a student's: each of their teachers' keys in ascending id, and one account_deleted case each", async () => {
     const { journal, subscriber, holdsOfStudents } = world([
       { id: E2, studentUserId: STUDENT, teacherUserId: HIGH_TEACHER },
       { id: E1, studentUserId: STUDENT, teacherUserId: LOW_TEACHER },
@@ -321,14 +324,15 @@ describe("a deletion ends the account's confirmed enrollments (T004, FR-AUTH-14,
       `lock-key:${LOW_TEACHER}`,
       `lock-key:${HIGH_TEACHER}`,
     ]);
-    expect(journal.some((entry) => entry.startsWith('case:'))).toBe(false);
     expect(journal).toEqual(
       expect.arrayContaining([
         // 006:T008 (rule d): the programmes before the enrollments.
         `lock programmes:${E1},${E2}`,
         `lock enrollments:${E1},${E2}`,
-        `case-of:${E1}:null`,
-        `case-of:${E2}:null`,
+        `case:${E1}:account_deleted`,
+        `case-of:${E1}:case-of-${E1}`,
+        `case:${E2}:account_deleted`,
+        `case-of:${E2}:case-of-${E2}`,
         `cancel-confirmed:${E1},${E2}:account_deleted`,
         `events:${E1}:cancelled,${E2}:cancelled`,
         `close-programmes:${E1},${E2}:account_deleted`,
@@ -578,7 +582,8 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
 
   it.each([
     ['P4 a teacher’s own deletion', TEACHER, `case-of-${E1}`],
-    ['P5 a student’s own deletion', STUDENT, null],
+    // 003:T125 (rule d): a student's deletion opens its `account_deleted` case too.
+    ['P5 a student’s own deletion', STUDENT, `case-of-${E1}`],
   ] as const)(
     '%s leaves it open with one warn line of ids (no administrator acted)',
     async (_path, userId, endCase) => {
@@ -748,7 +753,8 @@ describe('one info line per account end, ids and counts only (the note under T00
     ]);
   });
 
-  it("a deletion, either role: a teacher's with its cases, a student's with none, nothing handed and its remedy lapsed", async () => {
+  // 003:T125 (an approved rewrite): a student's deletion opens its case too, its remedy handed to it.
+  it("a deletion, either role: a teacher's with its cases, a student's with its account_deleted case, its remedy handed", async () => {
     const teacher = world([
       { id: E1, studentUserId: STUDENT, teacherUserId: TEACHER },
       { id: E2, studentUserId: OTHER_STUDENT, teacherUserId: TEACHER },
@@ -775,9 +781,9 @@ describe('one info line per account end, ids and counts only (the note under T00
         enrollments: 1,
         cancelledSessions: 2,
         frozenRemedies: 0,
-        handedRemedies: 0,
-        lapsedRemedies: 1,
-        cases: 0,
+        handedRemedies: 1,
+        lapsedRemedies: 0,
+        cases: 1,
       }),
     ]);
   });

@@ -32,15 +32,13 @@ import {
   closingCauseOf,
   type ReleaseEnrollment,
   type ReleaseSession,
+  SUSPENSION_COVERING_END,
 } from './share-release.rules.js';
-import { releaseReads, releaseSessionsOf } from './share-release.service.js';
-
-/** 006:T012: the end that reads whether it covered a teacher's suspension. */
-const SUSPENSION_COVERING_END = 'admin_ended';
-/** 006:T012: sessions' `PAUSED_CASE_REASON` (`teacher-suspension.service.ts`). */
-const PAUSED_CASE_REASON = 'teacher_suspended';
-/** 006:T012: sessions' `ENDED_MEANWHILE_NOTE`, the note an end closes a paused case with. */
-const ENDED_MEANWHILE_NOTE = 'ended_meanwhile';
+import {
+  releaseReads,
+  releaseSessionsOf,
+  suspensionsCoveredAmong,
+} from './share-release.service.js';
 
 /** What the amount is computed from, each read on the caller's transaction; faked in a spec. */
 export interface CaseAmountReads {
@@ -95,18 +93,17 @@ function sessionsWithMonths(
   });
 }
 
-/** 006:T012: whether the end closed the enrollment's `teacher_suspended` case (this file's head). */
+/**
+ * 006:T012: whether the end closed the enrollment's `teacher_suspended` case (this file's head), by
+ * the releases' own read (003:T125), so the case and the release never disagree.
+ */
 async function coveredSuspension(
   tx: Transaction,
   enrollmentId: string,
   reads: CaseAmountReads,
 ): Promise<boolean> {
-  const cases = (await reads.casesAmong(tx, [enrollmentId])).get(enrollmentId) ?? [];
-  const suspensions = cases.filter(({ reason }) => reason === PAUSED_CASE_REASON);
-  const records = await Promise.all(
-    suspensions.map(({ caseId }) => reads.caseRecordOf(tx, caseId)),
-  );
-  return records.some((one) => one?.resolutionNotes === ENDED_MEANWHILE_NOTE);
+  const cases = await reads.casesAmong(tx, [enrollmentId]);
+  return (await suspensionsCoveredAmong(tx, cases, reads.caseRecordOf)).has(enrollmentId);
 }
 
 /** The amount case `caseId` shows, none for a reason outside the map; NOT_FOUND for no case. */
@@ -119,7 +116,8 @@ export async function caseAmount(
   if (found === null) throw new DomainError('NOT_FOUND');
   const coveringEnd = found.reason === SUSPENSION_COVERING_END;
   if (found.kind !== 'compensation_case') return {};
-  if (closingCauseOf(found.reason) === undefined && !coveringEnd) return {};
+  // 003:T125: `admin_ended`, `account_deleted` and `gender_correction` are in the map (`direct_end`).
+  if (closingCauseOf(found.reason) === undefined) return {};
   const ids = [found.enrollmentId];
   const [orders, releases, enrollments, sessions, makeups, covers] = await Promise.all([
     reads.caseOrdersOf(tx, found.enrollmentId),

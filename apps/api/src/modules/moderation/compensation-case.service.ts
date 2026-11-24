@@ -87,6 +87,10 @@ export const COMPENSATION_REASONS = [
   // end on a teacher's complaint against the student (`sessions.endEnrollment`'s cause), a close on a
   // complaint against the student: T105's release and T110's amounts follow (`CLOSE_RELEASES`).
   'student_complaint_ended',
+  // 003:T125 (SRS DEC-96, DEC-104, FR-AUTH-14, FR-ADMIN-22 as amended): a student's deletion by an
+  // administrator, one case per enrollment it ends, which its sessions' rows name and its open
+  // remedies are handed to; T105's release reads it as an end by the administration (`direct_end`).
+  'account_deleted',
 ] as const;
 
 /**

@@ -234,6 +234,8 @@ import type {
   SessionsJoinInput,
   SessionsJoinOutput,
   SessionsPostponeInput,
+  // 004:T084.
+  SessionsEncryptionFailedInput,
   SessionsPostponeOutput,
   SessionsRemedyAcceptInput,
   SessionsRemedyAcceptOutput,
@@ -432,6 +434,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   rate_limit_signed_in_default: { limit: 150, window_seconds: 60 },
   // 004:T060: `sessions.complaint.raise` declares its own limit (FR-452).
   rate_limit_absence_complaint: { limit: 5, window_seconds: 3600 },
+  // 004:T084 (DEC-106): `sessions.encryptionFailed` declares its own limit.
+  rate_limit_encryption_failure: { limit: 5, window_seconds: 60 },
   slot_hold_ttl_minutes: 10,
   slot_hold_grace_minutes: 5,
   first_session_lead_hours: 24,
@@ -570,6 +574,8 @@ export interface AppCaller {
     };
     /** 003:T112: a postponement, attacked in `sessions-postpone.attacks.ts`. */
     postpone(input: SessionsPostponeInput): Promise<SessionsPostponeOutput>;
+    /** 004:T084: a phone that could not encrypt, attacked in `sessions-encryption.attacks.ts`. */
+    encryptionFailed(input: SessionsEncryptionFailedInput): Promise<void>;
   };
   /** T037 of specs/004-sessions: an enrollment's chat read and written, attacked in `chat.attacks.ts`. */
   readonly chat: {

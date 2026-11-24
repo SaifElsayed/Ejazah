@@ -40,6 +40,7 @@ export type {
   ApplicantStatus,
   ApplicationHistoryEntry,
   ApplicationHistoryRow,
+  CallNotes,
   CallRecord,
 } from '../identity/index.js';
 import type {
@@ -49,6 +50,7 @@ import type {
   ApplicantStatus,
   ApplicationHistoryEntry,
   ApplicationHistoryRow,
+  CallNotes,
   CallRecord,
 } from '../identity/index.js';
 
@@ -101,6 +103,11 @@ export interface ApplicationReviewStore {
   credentialsOf(tx: Transaction, userIds: readonly string[]): Promise<CredentialOfApplicant[]>;
   documentUploadedAt(tx: Transaction, documentId: string): Promise<Date | null>;
   openRequestOf(tx: Transaction, userId: string): Promise<OpenIdentityRequest | null>;
+  /**
+   * R1b (002:T186): the call's notes a new record replaces and whether the teacher was ever
+   * approved, identity's; read under the application's lock.
+   */
+  callNotesOf(tx: Transaction, userId: string): Promise<CallNotes | null>;
   recordCall(tx: Transaction, userId: string, call: CallRecord): Promise<boolean>;
   decide(tx: Transaction, userId: string, decision: ApplicationDecision): Promise<boolean>;
   grantSubjects(tx: Transaction, userId: string, subjectIds: readonly string[]): Promise<void>;
@@ -108,9 +115,9 @@ export interface ApplicationReviewStore {
   closeCredentials(tx: Transaction, closure: CredentialClosure): Promise<number>;
   /**
    * R1a (002:T174): one row of the application's history, identity's entry, on the profile the
-   * decision holds locked.
+   * decision holds locked; the row's id (R1b round 2, 002:T186).
    */
-  recordHistory(tx: Transaction, entry: ApplicationHistoryEntry): Promise<void>;
+  recordHistory(tx: Transaction, entry: ApplicationHistoryEntry): Promise<string>;
   /** R1a (002:T174): the application's history, oldest first, identity's entry. */
   historyOf(tx: Transaction, userId: string): Promise<ApplicationHistoryRow[]>;
 }
@@ -143,10 +150,14 @@ type ListRow = z.input<typeof applicationsListOutput>['rows'][number];
 /** The call's day and outcome, as the audit entry holds them; null for none recorded. */
 type CallState = { readonly completedOn: string | null; readonly outcome: string | null };
 
-/** A recorded call before and after, for the audit entry (T116). */
+/**
+ * A recorded call before and after, for the audit entry (T116); `after` names the `call_replaced`
+ * history row by its id when the record wrote one, and has no such field otherwise (R1b round 2,
+ * 002:T186, the owner's «موافق» of 2026-11-23: ids only).
+ */
 export interface CallMove {
   readonly before: CallState;
-  readonly after: CallState;
+  readonly after: CallState & { readonly historyId?: string };
 }
 
 export class ApplicationReviewService {
@@ -236,11 +247,12 @@ export class ApplicationReviewService {
 
   /**
    * `applications.recordCall`: the call's day, outcome and notes on an open application; answers the
-   * day and the outcome before and after it, notes left out as the entry leaves them (T116).
+   * day and the outcome before and after it, notes left out as the entry leaves them (T116). An
+   * ever-approved teacher's earlier notes are first kept in the history (R1b, 002:T186).
    */
   async recordCall(
     tx: Transaction,
-    _adminId: string,
+    adminId: string,
     input: z.output<typeof applicationsRecordCallInput>,
   ): Promise<CallMove> {
     let today: string;
@@ -259,13 +271,21 @@ export class ApplicationReviewService {
       completedOn: callCompletedOn === null ? null : calendarDateOf(callCompletedOn),
       outcome: callOutcome,
     };
+    const historyId = await this.#keepEarlierCallNotes(tx, adminId, input.teacherUserId);
     const written = await this.#store.recordCall(tx, input.teacherUserId, {
       completedOn: dateColumnOf(input.completedOn),
       outcome: input.outcome,
       notes: input.notes,
     });
     if (!written) await this.#refuseMoved(tx, input.teacherUserId);
-    return { before, after: { completedOn: input.completedOn, outcome: input.outcome } };
+    return {
+      before,
+      after: {
+        completedOn: input.completedOn,
+        outcome: input.outcome,
+        ...(historyId === null ? {} : { historyId }),
+      },
+    };
   }
 
   /** `applications.approve`: refused with every blocking reason; the approved subjects granted. */
@@ -403,6 +423,31 @@ export class ApplicationReviewService {
     const written = await this.#store.decide(tx, userId, { kind, adminId, at, note });
     if (!written) await this.#refuseMoved(tx, userId);
     await this.#store.recordHistory(tx, { teacherUserId: userId, action: kind, note, adminId, at });
+  }
+
+  /**
+   * R1b (002:T186; SRS DEC-97; the note under T186, (2) and (3)): a teacher once approved keeps the
+   * call's notes with no end date, so before a new call replaces them they are written to the
+   * application's history as one `call_replaced` row, by the recording administrator, now. Read
+   * under the application's lock the record already holds, so two records at once each keep the
+   * notes the other left; an insert referencing only the profile, so no new lock. A refused record
+   * rolls the row back with its transaction. None for an applicant never approved, none without notes.
+   * The row's id, for the audit entry (round 2); null when none was written.
+   */
+  async #keepEarlierCallNotes(
+    tx: Transaction,
+    adminId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const call = await this.#store.callNotesOf(tx, userId);
+    if (call === null || !call.everApproved || call.notes === null) return null;
+    return this.#store.recordHistory(tx, {
+      teacherUserId: userId,
+      action: 'call_replaced',
+      note: call.notes,
+      adminId,
+      at: this.#now(),
+    });
   }
 
   #rowOf(row: ApplicantRow, credentials: readonly CredentialOfApplicant[]): ListRow {

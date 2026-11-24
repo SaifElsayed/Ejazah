@@ -114,6 +114,9 @@ enum TeacherApplicationHistoryAction {
   request_info
   ban
   revoke
+  // 002:T186 (SRS DEC-97; ERD changelog row 79): an ever-approved teacher's earlier call notes, kept
+  // when a new call is recorded on a later application.
+  call_replaced
 
   @@map("teacher_application_history_action")
 }
@@ -458,6 +461,8 @@ enum SessionEventKind {
   counter_booking_refused
   // 003:T112 (ERD changelog row 59): written for each session a postponement moves.
   postponed
+  // 004:T084 (SRS DEC-105; ERD changelog row 78): a participant's phone could not encrypt the room.
+  encryption_failed
 
   @@map("session_event_kind")
 }
@@ -537,6 +542,9 @@ enum ShareReleaseMilestone {
   // not continue, and a programme closed by an approved stop.
   assessment
   programme_stopped
+  // 003:T125 (SRS DEC-104; ERD changelog row 77): an administrator's direct end on the student's
+  // stop, a student's deletion by an administrator and a gender correction.
+  direct_end
 
   @@map("share_release_milestone")
 }

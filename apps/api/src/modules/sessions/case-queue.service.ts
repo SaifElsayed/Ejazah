@@ -71,7 +71,10 @@ import {
 } from './case-covers.repository.js';
 import type { EnrollmentSide } from './enrollment-side.port.js';
 import { teacherNoShowCountsOf } from './repeated-absence.repository.js';
-import { REPEATED_ABSENCE_FLAG_SETTING, repeatedAbsenceFlagCount } from './repeated-absence.service.js';
+import {
+  REPEATED_ABSENCE_FLAG_SETTING,
+  repeatedAbsenceFlagCount,
+} from './repeated-absence.service.js';
 
 /** The page size of every admin list (SRS §3.14, FR-412). */
 const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
@@ -81,7 +84,8 @@ const positiveWhole = z.int().positive();
 /**
  * The reasons of the case an enrollment's end opens (R-312, as T004 lists them); and (T082, Q2 (a))
  * `admin_ended`, an administrator's direct end; and (003:T112, the owner's Q-C (a))
- * `student_complaint_ended`, that end on a teacher's complaint against the student.
+ * `student_complaint_ended`, that end on a teacher's complaint against the student; and (003:T125,
+ * SRS DEC-96) `account_deleted`, a student's deletion by an administrator.
  */
 export const END_REASONS: ReadonlySet<string> = new Set([
   'absence_termination',
@@ -90,6 +94,7 @@ export const END_REASONS: ReadonlySet<string> = new Set([
   'student_fault_confirmed',
   'admin_ended',
   'student_complaint_ended',
+  'account_deleted',
 ]);
 
 /** What the queue reads, each through its owner on the caller's transaction; faked in a spec. */
@@ -131,7 +136,11 @@ export interface CaseQueue {
   /** `cases.list` (this file's head). */
   list(tx: Transaction, adminId: string, input: CasesListInput): Promise<CasesListOutput>;
   /** `cases.get` (this file's head). */
-  get(tx: Transaction, adminId: string, input: { readonly caseId: string }): Promise<CasesGetOutput>;
+  get(
+    tx: Transaction,
+    adminId: string,
+    input: { readonly caseId: string },
+  ): Promise<CasesGetOutput>;
 }
 
 /** Why a queue read was refused, as its one log line names it. */
@@ -178,7 +187,11 @@ function decisionOf(record: CaseRecord): ComplaintDecision | undefined {
   return undefined;
 }
 
-const CLOSING_RESOLUTIONS = ['compensation_ordered', 'enrollment_ended', 'party_suspended'] as const;
+const CLOSING_RESOLUTIONS = [
+  'compensation_ordered',
+  'enrollment_ended',
+  'party_suspended',
+] as const;
 
 /** The resolution a case's closing wrote, of the three a case or complaint is closed with. */
 function resolutionOf(record: CaseRecord): CaseDetail['resolution'] {

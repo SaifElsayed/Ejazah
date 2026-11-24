@@ -132,6 +132,12 @@ export const sessionsGetOutput = z.object({
   postponement: sessionPostponement.optional(),
 });
 
+/**
+ * 004:T084: 32 bytes in base64, read without decoding (the phone has no `Buffer`): 43 characters and
+ * one `=`, which only a 32-byte value gives (31 bytes end `==`, 33 bytes in no `=`).
+ */
+const MEDIA_KEY_BASE64 = /^[A-Za-z0-9+/]{43}=$/;
+
 /** What the phone connects with (FR-431): bound to this session and this caller (R-GENDER-7). */
 export const sessionsJoinOutput = z.object({
   sessionId: z.uuid(),
@@ -141,7 +147,21 @@ export const sessionsJoinOutput = z.object({
   token: z.string().min(1),
   /** The session's scheduled end: the token opens no connection after it (R-302). */
   validUntil: z.iso.datetime(),
+  /**
+   * 004:T084 (SRS DEC-102, NFR-SEC-13): the session's media key, 32 bytes in base64, the same for
+   * both participants and no other session's; the phone encrypts the room's media with it, so the
+   * provider forwards frames it cannot read. Kept in memory only; never logged (R-SEC-2).
+   * Additive (R-API-9).
+   */
+  mediaKey: z.base64().regex(MEDIA_KEY_BASE64),
 });
+
+// 004:T084 (SRS DEC-105; the note under T084, Q-5 (a)): `sessions.encryptionFailed`, a participant's
+// phone that could not set the session's media key or turn its encryption on, said once per failed
+// join. The caller names the session and nothing else: the side that failed is the server's reading
+// of the caller (R-GENDER-4). It answers nothing.
+export const sessionsEncryptionFailedInput = z.object({ sessionId: z.uuid() });
+export const sessionsEncryptionFailedOutput = z.void();
 
 export type SessionsGetInput = z.infer<typeof sessionsGetInput>;
 export type SessionsJoinInput = z.infer<typeof sessionsJoinInput>;
@@ -149,6 +169,7 @@ export type SessionParty = z.infer<typeof sessionParty>;
 export type RemedyView = z.infer<typeof remedyView>;
 export type SessionsGetOutput = z.infer<typeof sessionsGetOutput>;
 export type SessionsJoinOutput = z.infer<typeof sessionsJoinOutput>;
+export type SessionsEncryptionFailedInput = z.infer<typeof sessionsEncryptionFailedInput>;
 
 // ---------------------------------------------------------------------------------------------
 // T021: `sessions.cancellation` (contracts/app-surface.md, "`sessions.cancellation`"; FR-456 to

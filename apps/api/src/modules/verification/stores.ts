@@ -27,9 +27,10 @@ import {
   lockApplication,
   readApplicant,
   readApplication,
+  readCallNotes,
   readStanding,
   recordApplicationCall,
-  recordApplicationHistory,
+  recordApplicationHistoryWithId,
   setApplication,
 } from '../identity/index.js';
 import type { ApplicationReviewStore } from './application-review.service.js';
@@ -172,12 +173,15 @@ export function createApplicationReviewStore(): ApplicationReviewStore {
             }),
       };
     },
+    // R1b (002:T186): the notes a new call replaces, through identity's entry.
+    callNotesOf: readCallNotes,
     recordCall: recordApplicationCall,
     decide: decideApplication,
     grantSubjects,
     closeCredentials: closeUndecidedCredentials,
-    // R1a (002:T174): the application's history, through identity's one entry.
-    recordHistory: recordApplicationHistory,
+    // R1a (002:T174): the application's history, through identity's one entry; R1b round 2
+    // (002:T186): its id, which `recordCall`'s audit entry names its `call_replaced` row by.
+    recordHistory: recordApplicationHistoryWithId,
     historyOf: applicationHistoryOf,
   };
 }

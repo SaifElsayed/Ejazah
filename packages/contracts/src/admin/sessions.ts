@@ -256,6 +256,9 @@ export const compensationCaseReason = z.enum([
   // complaint against the student (`sessionsEndEnrollmentInput`'s `cause`); added, additively
   // (R-API-9).
   'student_complaint_ended',
+  // 003:T125 (SRS DEC-104, DEC-96, FR-AUTH-14, FR-ADMIN-22): a student's deletion by an
+  // administrator, one case per enrollment it ends; added, additively (R-API-9).
+  'account_deleted',
 ]);
 
 /** One compensation case of the enrollment, newest first (a complaint is `/cases`'). */
@@ -322,6 +325,9 @@ export const timelineEventKind = z.enum([
   'programme_paused',
   'programme_resumed',
   'programme_reopened',
+  // 004:T084 (SRS DEC-105; ERD changelog row 78): the `session_event_kind` value of a participant's
+  // phone that could not encrypt the room; added, additively (R-API-9).
+  'encryption_failed',
 ]);
 
 /**
@@ -338,6 +344,11 @@ export const timelineEvent = z.object({
   outcomeBefore: sessionStatus.optional(),
   outcomeAfter: sessionStatus.optional(),
   previousStartAt: z.iso.datetime().optional(),
+  /**
+   * 004:T084 (SRS DEC-105; ERD §15 rule 84): on an `encryption_failed` row only, the side whose
+   * phone could not encrypt. Additive (R-API-9).
+   */
+  party: z.enum(['student', 'teacher']).optional(),
   occurredAt: z.iso.datetime(),
 });
 
@@ -422,6 +433,12 @@ export const telemetryOutage = z.object({
   endsAt: z.iso.datetime(),
 });
 
+/** 004:T084: a participant's phone that could not encrypt the session, its side and when. */
+export const telemetryEncryptionFailure = z.object({
+  party: z.enum(['student', 'teacher']),
+  occurredAt: z.iso.datetime(),
+});
+
 /**
  * A session's connection record (admin-surface.md, `Telemetry`; FR-SESS-9): its schedule, every
  * recorded join and leave and the room's end, oldest first, each party's connected intervals and
@@ -447,6 +464,11 @@ export const telemetry = z.object({
   simultaneousSeconds: z.int().nonnegative(),
   joined: z.object({ student: z.boolean(), teacher: z.boolean() }),
   outages: z.array(telemetryOutage),
+  /**
+   * 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a)): the session's `encryption_failed` rows, oldest
+   * first, each the side whose phone could not encrypt and when. Additive (R-API-9).
+   */
+  encryptionFailures: z.array(telemetryEncryptionFailure).optional(),
 });
 
 export const sessionsReviewGetOutput = telemetry;
@@ -573,9 +595,15 @@ export const enrollmentEndSlot = z.enum(['hold', 'release']);
  * case reason the end opens: `admin_ended`, the direct end as T082 built it (the default), or
  * `student_complaint_ended`, the close on a teacher's complaint against the student (made by a
  * report, `reports.create`), whose case closes as a complaint close (T105's release, T110's
- * amounts). Additive (R-API-9).
+ * amounts). Additive (R-API-9). 003:T125 (SRS DEC-104; Q-1 (a)): `admin_ended` is the student's stop
+ * («الطالب قرر يوقف»), and `teacher_ended` the teacher's («المعلم وقف»), which follows a teacher's stop
+ * (DEC-85): on recitation the share of the consumed sessions, on the ijazah track nothing more.
  */
-export const enrollmentEndCause = z.enum(['admin_ended', 'student_complaint_ended']);
+export const enrollmentEndCause = z.enum([
+  'admin_ended',
+  'student_complaint_ended',
+  'teacher_ended',
+]);
 
 /**
  * Why an end was refused, as `CONFLICT`'s `details.cause`: the enrollment not `confirmed`, or a

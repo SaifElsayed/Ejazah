@@ -35,7 +35,7 @@
 // (`provider_outages`), not a video event, so no harness of the provider's events can produce it.
 //
 // Nothing here logs: the secret, the signatures and the bodies stay in the caller's hands (R-SEC-2).
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { addSeconds, unixSeconds } from '@ijazah/time';
 import {
   FakeVideoAdapter,
@@ -142,8 +142,11 @@ export function createVideoStandIn({
   config,
   fetch: send = fetch,
 }: VideoStandInOptions): VideoStandIn {
-  // Used to sign only: its rooms are never asked for.
-  const signer = new FakeVideoAdapter({ webhookSecret: standInVideoWebhookSecret(config) });
+  // Used to sign only: its rooms are never asked for, so no token and no media key (T084) either.
+  const signer = new FakeVideoAdapter({
+    webhookSecret: standInVideoWebhookSecret(config),
+    mediaKeySecret: randomBytes(32),
+  });
   const webhook = new URL(webhookPath, origin);
 
   const event = (body: StandInVideoEventBody): VideoStandInEvent => ({

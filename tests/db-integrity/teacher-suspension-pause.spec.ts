@@ -542,6 +542,8 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
     });
     expect(await enrollmentStatusOf(on.enrollmentId)).toBe('cancelled');
     expect((await caseOf(on.enrollmentId, 'teacher_suspended')).status).toBe('open');
+    // 003:T125 (R1b, SRS DEC-104): the deletion's own case covers the paused sessions.
+    const deleted = await caseOf(on.enrollmentId, 'account_deleted');
     expect(lines.filter(({ level }) => level === 'warn')).toEqual([
       {
         level: 'warn',
@@ -550,7 +552,7 @@ describe('an end of a paused enrollment closes its teacher_suspended case (T071,
           cause: 'account_deleted',
           enrollmentId: on.enrollmentId,
           caseId: paused.id,
-          coveredByCaseId: null,
+          coveredByCaseId: deleted.id,
         },
         message: 'A paused enrollment ended with no administrator: its teacher_suspended case is left open',
       },

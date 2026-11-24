@@ -439,6 +439,8 @@ const HISTORY_ACTION_TEXT: Readonly<
   request_info: 'admin.applications.detail.history.actions.requestInfo',
   ban: 'admin.applications.detail.history.actions.ban',
   revoke: 'admin.applications.detail.history.actions.revoke',
+  // 002:T186 (R1b): an ever-approved teacher's earlier call notes.
+  call_replaced: 'admin.applications.detail.history.actions.callReplaced',
 };
 
 /**

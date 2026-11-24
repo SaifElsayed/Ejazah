@@ -21,6 +21,8 @@ export const PART: Readonly<Record<ShareReleaseMilestone, MessageKey>> = {
   // 006:T001 (B-P1, the labels the owner approved 2026-11-22): the programme's two parts.
   assessment: 'admin.money.payouts.part.assessment',
   programme_stopped: 'admin.money.payouts.part.programmeStopped',
+  // 003:T125 (SRS DEC-104, Q-3 (a)): an administrator's direct end, a deletion, a gender correction.
+  direct_end: 'admin.money.payouts.part.directEnd',
 };
 
 export const STATE: Readonly<

@@ -53,8 +53,9 @@ interface Fixture {
 
 /**
  * T1: E1 completed (its release written and marked paid on 2026-11-02), E2 completed (its release
- * written, due since 2026-10-13), E3 running (held), E4 cancelled by a gender correction with a
- * refund of 1,000 EGP. T2: E5 completed, its release written and due since 2026-10-05.
+ * written, due since 2026-10-13), E3 running (held), E4 cancelled by an administrator's cancellation
+ * with a refund of 1,000 EGP (003:T125, rule d: was a gender correction, which now releases). T2: E5
+ * completed, its release written and due since 2026-10-05.
  */
 const fixtures: readonly Fixture[] = [
   {
@@ -85,7 +86,7 @@ const fixtures: readonly Fixture[] = [
     status: 'cancelled',
     done: 2,
     refunded: 100_000,
-    cases: [{ caseId: id(404), reason: 'gender_correction', status: 'resolved', createdAt: NOW }],
+    cases: [{ caseId: id(404), reason: 'admin_cancellation', status: 'resolved', createdAt: NOW }],
   },
   {
     enrollmentId: id(105),
@@ -117,6 +118,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-13T10:00:00Z'),
     markedAt: new Date('2026-11-02T09:00:00Z'),
+    refundTakenOff_piasters: piasters(0),
   },
   {
     id: id(502),
@@ -126,6 +128,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-13T10:00:00Z'),
     markedAt: null,
+    refundTakenOff_piasters: piasters(0),
   },
   {
     id: id(505),
@@ -135,6 +138,7 @@ const written: ReleaseRow[] = [
     amount_piasters: piasters(700_000),
     dueAt: new Date('2026-10-05T10:00:00Z'),
     markedAt: null,
+    refundTakenOff_piasters: piasters(0),
   },
 ];
 
@@ -167,6 +171,7 @@ function store(overrides: Partial<PayoutsStore> = {}): {
       sessionsAmong: async (_tx, ids) => byIds(ids, (f) => sessions(f.done)),
       casesAmong: async (_tx, ids) => byIds(ids, (f) => [...(f.cases ?? [])]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       makeupsAmong: async () => new Map(),
     },
     enrollmentIdsOfTeacher: async (_tx, teacherUserId) =>
@@ -258,7 +263,7 @@ describe('teacher.dues.get: «مستحقاتي» (DEC-89)', () => {
           waitsForCase: false,
         },
       ],
-      deductions: [{ share_piasters: 70_000, caseReason: 'gender_correction' }],
+      deductions: [{ share_piasters: 70_000, caseReason: 'admin_cancellation' }],
       disputeWindowHours: 72,
     });
   });
@@ -401,7 +406,7 @@ describe('payouts.get: a teacher’s detail', () => {
         student: { userId: id(204), displayName: 'name-204' },
         refunded_piasters: 100_000,
         share_piasters: 70_000,
-        case: { caseId: id(404), reason: 'gender_correction' },
+        case: { caseId: id(404), reason: 'admin_cancellation' },
       },
     ]);
     expect(detail.figures).toMatchObject({
@@ -424,7 +429,16 @@ describe('payouts.mark: «تم الصرف»', () => {
       idempotencyKey: 'k'.repeat(16),
     });
 
-    expect(marked).toEqual({ teacherUserId: T1, replayed: false });
+    expect(marked).toEqual({
+      teacherUserId: T1,
+      release: {
+        releaseId: id(502),
+        enrollmentId: id(102),
+        milestone: 'recitation_end',
+        amount_piasters: 700_000,
+      },
+      replayed: false,
+    });
     expect(marks).toEqual([{ releaseId: id(502), adminId: ADMIN, at: NOW }]);
     expect(lines).toEqual([
       [
@@ -486,7 +500,16 @@ describe('payouts.unmark: a mark made in error undone (DEC-89, the owner of 2026
       idempotencyKey: KEY,
     });
 
-    expect(undone).toEqual({ teacherUserId: T1, replayed: false });
+    expect(undone).toEqual({
+      teacherUserId: T1,
+      release: {
+        releaseId: id(501),
+        enrollmentId: id(101),
+        milestone: 'recitation_end',
+        amount_piasters: 700_000,
+      },
+      replayed: false,
+    });
     expect(unmarks).toEqual([id(501)]);
     expect(lines).toEqual([
       [
@@ -543,5 +566,262 @@ describe('the month and the mask', () => {
 
   it('shows the reference’s last four characters only', () => {
     expect(maskedReference('rcp_00001234')).toBe('••••1234');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 003:T127 (SRS DEC-98; Q-4 (a)): once an enrollment's end release is written, a refund recorded
+// afterwards is the platform's: the teacher's «عليك» and `takenOff` show only the share the release
+// took off (`refund_taken_off_piasters`), the administrator's page shows the rest marked as the
+// platform's. A refund before the release, and a closing release, as today. E2: «due 7,000».
+describe('003:T127 a refund after the end release (DEC-98)', () => {
+  const E2 = id(102);
+  const e2 = fixtures[1] as Fixture;
+  /** E2's order refunded `refunded` piasters, its end release keeping `takenOff`. */
+  const after = (
+    refunded: number,
+    takenOff: number,
+    milestone: ReleaseRow['milestone'] = 'recitation_end',
+  ) => {
+    const rows = written.map((row) =>
+      row.enrollmentId === E2
+        ? { ...row, milestone, refundTakenOff_piasters: piasters(takenOff) }
+        : row,
+    );
+    const refundedOrder = { ...order(e2), refunded_piasters: piasters(refunded) };
+    const base = store().store;
+    return payouts({
+      reads: {
+        ...base.reads,
+        releasesOf: async (_tx, ids) => rows.filter((row) => ids.includes(row.enrollmentId)),
+      },
+      releasesAfter: async (_tx, from, take) =>
+        rows.filter((row) => from === undefined || row.id > from).slice(0, take),
+      refundedOrdersOf: async (_tx, ids) => (ids.includes(E2) ? [refundedOrder] : []),
+      refundedOrdersAfter: async (_tx, from, take) =>
+        [refundedOrder].filter((one) => from === undefined || one.paymentId > from).slice(0, take),
+    }).service;
+  };
+
+  it('«due 7,000», then 1,000 EGP refunded: the row stays 7,000 and the teacher sees no «عليك 700»', async () => {
+    const dues = await after(100_000, 0).teacherDues(tx, T1);
+
+    expect(dues.deductions).toEqual([]);
+    expect(dues.releases).toContainEqual(
+      expect.objectContaining({ part: 'recitation_end', amount_piasters: 700_000, state: 'due' }),
+    );
+  });
+
+  it('the administrator sees the 700 EGP marked the platform’s, none of it taken off the teacher', async () => {
+    const service = after(100_000, 0);
+    const detail = await service.get(tx, ADMIN, T1);
+
+    expect(detail.deductions).toEqual([
+      {
+        paymentId: order(e2).paymentId,
+        enrollmentId: E2,
+        student: { userId: id(202), displayName: 'name-202' },
+        refunded_piasters: 100_000,
+        share_piasters: 70_000,
+        platformShare_piasters: 70_000,
+      },
+    ]);
+    expect(detail.figures.takenOff_piasters).toBe(0);
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(0);
+  });
+
+  it('a refund before the release, taken off by it, stays the teacher’s as today', async () => {
+    const service = after(100_000, 70_000);
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    const detail = await service.get(tx, ADMIN, T1);
+    expect(detail.deductions[0]).not.toHaveProperty('platformShare_piasters');
+    expect(detail.figures.takenOff_piasters).toBe(70_000);
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(70_000);
+  });
+
+  it('a refund partly after the release: 700 EGP the teacher’s, 700 EGP the platform’s', async () => {
+    const service = after(200_000, 70_000);
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    expect((await service.get(tx, ADMIN, T1)).deductions[0]).toMatchObject({
+      share_piasters: 140_000,
+      platformShare_piasters: 70_000,
+    });
+  });
+
+  // PR #159 r1 Minor 2: the list reads the refunded orders a page at a time (page size 1 here), so
+  // the share the end release took off is given once across the pages, not on each (mutant S9).
+  it('the list gives the end release’s taken-off share once across pages: 350 EGP, not 700', async () => {
+    const rows = written.map((row) =>
+      row.enrollmentId === E2
+        ? {
+            ...row,
+            milestone: 'recitation_end' as const,
+            refundTakenOff_piasters: piasters(35_000),
+          }
+        : row,
+    );
+    const first = { ...order(e2), refunded_piasters: piasters(50_000) };
+    const second = {
+      ...order(e2),
+      paymentId: `${first.paymentId.slice(0, -1)}x`,
+      refunded_piasters: piasters(50_000),
+    };
+    const refunded = [first, second];
+    const base = store().store;
+    const service = payouts({
+      reads: {
+        ...base.reads,
+        releasesOf: async (_tx, ids) => rows.filter((row) => ids.includes(row.enrollmentId)),
+      },
+      releasesAfter: async (_tx, from, take) =>
+        rows.filter((row) => from === undefined || row.id > from).slice(0, take),
+      refundedOrdersOf: async (_tx, ids) => (ids.includes(E2) ? refunded : []),
+      refundedOrdersAfter: async (_tx, from, take) =>
+        refunded.filter((one) => from === undefined || one.paymentId > from).slice(0, take),
+    }).service;
+
+    expect((await service.list(tx, ADMIN, {})).totals.takenOff_piasters).toBe(35_000);
+  });
+
+  it('a closing release keeps today’s reading: the whole share the teacher’s (T120’s open case)', async () => {
+    const service = after(100_000, 0, 'teacher_dropout');
+
+    expect((await service.teacherDues(tx, T1)).deductions).toEqual([{ share_piasters: 70_000 }]);
+    expect((await service.get(tx, ADMIN, T1)).deductions[0]).not.toHaveProperty(
+      'platformShare_piasters',
+    );
+  });
+});
+
+// 003:T126 (SRS DEC-96's last clause; the owner's Q15 (a)): the mark and the unmark answer the release
+// they touched, its id, enrollment, part and amount, read before the write, for the audit entry.
+// Three releases of one teacher, 7,000, 1,750 and 2,800 EGP, marked then unmarked over a store that
+// writes as the repository does (the unmark clears `marked_at` only): each answer names its own, and
+// a replay answers the first call's release from the key, as the key's row stores it (JSON).
+describe('003:T126 the mark and the unmark name the release and its amount', () => {
+  const THREE = [
+    { releaseId: id(511), enrollmentId: id(111), milestone: 'recitation_end', amount: 700_000 },
+    { releaseId: id(512), enrollmentId: id(112), milestone: 'ijazah_half', amount: 175_000 },
+    { releaseId: id(513), enrollmentId: id(113), milestone: 'direct_end', amount: 280_000 },
+  ] as const;
+  const KEY = 'r'.repeat(16);
+
+  /** The three rows, marked and unmarked in place as `markRelease` and `unmarkRelease` write. */
+  function live(): Partial<PayoutsStore> {
+    const rows: ReleaseRow[] = THREE.map((one) => ({
+      id: one.releaseId,
+      enrollmentId: one.enrollmentId,
+      teacherUserId: T1,
+      milestone: one.milestone,
+      amount_piasters: piasters(one.amount),
+      dueAt: new Date('2026-11-10T10:00:00Z'),
+      markedAt: null,
+      refundTakenOff_piasters: piasters(0),
+    }));
+    const write = (releaseId: string, markedAt: Date | null): boolean => {
+      const at = rows.findIndex((row) => row.id === releaseId);
+      const row = rows[at];
+      if (row === undefined || (row.markedAt === null) === (markedAt === null)) return false;
+      rows[at] = { ...row, markedAt };
+      return true;
+    };
+    return {
+      releaseById: async (_tx, releaseId) => rows.find((row) => row.id === releaseId) ?? null,
+      releasesAfter: async (_tx, after, take) =>
+        rows.filter((row) => after === undefined || row.id > after).slice(0, take),
+      markRelease: async (_tx, mark) => write(mark.releaseId, mark.at),
+      unmarkRelease: async (_tx, releaseId) => write(releaseId, null),
+    };
+  }
+
+  /** A key's first outcome stored as its row stores it, and replayed from there. */
+  function keyed() {
+    const stored = new Map<string, unknown>();
+    return {
+      runOn: async <T>(
+        _tx: Transaction,
+        request: { readonly scope: string; readonly key: string },
+        effect: (on: Transaction) => Promise<T>,
+      ) => {
+        const at = `${request.scope}:${request.key}`;
+        if (stored.has(at)) return { outcome: stored.get(at) as T, replayed: true };
+        const outcome = JSON.parse(JSON.stringify(await effect(tx))) as T;
+        stored.set(at, outcome);
+        return { outcome, replayed: false };
+      },
+    };
+  }
+
+  const serviceOver = () =>
+    createPayouts({
+      settings,
+      idempotency: keyed() as never,
+      store: store(live()).store,
+      log: { info: () => undefined },
+      clock: async () => NOW,
+    });
+
+  const named = (one: (typeof THREE)[number]) => ({
+    releaseId: one.releaseId,
+    enrollmentId: one.enrollmentId,
+    milestone: one.milestone,
+    amount_piasters: one.amount,
+  });
+
+  it('each mark answers its own release: 7,000, 1,750 and 2,800 EGP', async () => {
+    const service = serviceOver();
+    for (const one of THREE) {
+      expect(
+        await service.mark(tx, ADMIN, {
+          releaseId: one.releaseId,
+          idempotencyKey: `${KEY}${one.releaseId.slice(-1)}`,
+        }),
+      ).toEqual({ teacherUserId: T1, release: named(one), replayed: false });
+    }
+  });
+
+  it('each unmark answers its own release after the mark’s columns are cleared', async () => {
+    const service = serviceOver();
+    for (const one of THREE) {
+      await service.mark(tx, ADMIN, {
+        releaseId: one.releaseId,
+        idempotencyKey: `m${KEY}${one.releaseId.slice(-1)}`,
+      });
+    }
+    for (const one of THREE) {
+      expect(
+        await service.unmark(tx, ADMIN, {
+          releaseId: one.releaseId,
+          reason: 'the transfer did not go through',
+          idempotencyKey: `u${KEY}${one.releaseId.slice(-1)}`,
+        }),
+      ).toEqual({ teacherUserId: T1, release: named(one), replayed: false });
+    }
+  });
+
+  it('a replay answers the first call’s release from the key', async () => {
+    const service = serviceOver();
+    const [first] = THREE;
+    const mark = { releaseId: first.releaseId, idempotencyKey: `m${KEY}` };
+    const unmark = {
+      ...mark,
+      reason: 'the transfer did not go through',
+      idempotencyKey: `u${KEY}`,
+    };
+    await service.mark(tx, ADMIN, mark);
+    await service.unmark(tx, ADMIN, unmark);
+
+    expect(await service.mark(tx, ADMIN, mark)).toEqual({
+      teacherUserId: T1,
+      release: named(first),
+      replayed: true,
+    });
+    expect(await service.unmark(tx, ADMIN, unmark)).toEqual({
+      teacherUserId: T1,
+      release: named(first),
+      replayed: true,
+    });
   });
 });

@@ -87,6 +87,12 @@ export const payoutDeduction = z.object({
   refunded_piasters: amountPiasters,
   /** The teacher's share of it: the refund × the order's rate, rounded up. */
   share_piasters: amountPiasters,
+  /**
+   * 003:T127 (SRS DEC-98): the part of `share_piasters` the platform bears, a refund recorded after
+   * the enrollment's end release was written, not shown to the teacher; absent when none. Added,
+   * additively (R-API-9).
+   */
+  platformShare_piasters: amountPiasters.optional(),
   /** The enrollment's closing case, when one closed it. */
   case: z.object({ caseId: z.uuid(), reason: z.string().max(64) }).optional(),
 });

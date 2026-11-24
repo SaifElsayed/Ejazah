@@ -37,7 +37,7 @@ import type {
   ShareReleaseState,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
-import { type Piasters, piasters, sumOf, toPlainNumber } from '@ijazah/money';
+import { type Piasters, piasters, shareLeft, sumOf, toPlainNumber } from '@ijazah/money';
 import { localDateIn, startOfLocalDay } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -63,7 +63,13 @@ import {
   type ShareOrderRow,
   shareOrdersAfter,
 } from './share-release.repository.js';
-import { plannedReleases, refundShareOf } from './share-release.rules.js';
+import {
+  END_RELEASES,
+  plannedReleases,
+  type RefundPart,
+  refundPartsOf,
+  refundShareOf,
+} from './share-release.rules.js';
 import {
   type EnrollmentReleases,
   releaseReads,
@@ -145,6 +151,45 @@ function closingCaseOf(one: EnrollmentReleases | undefined): EnrollmentCase | un
 
 const amountsIn = (lines: readonly ReleaseLine[], state: ShareReleaseState): Piasters =>
   sumOf(lines.filter((line) => line.state === state).map(({ amount_piasters }) => amount_piasters));
+
+/** 003:T127: the share an enrollment's end releases took off, or undefined while none is written. */
+function endTakenOffOf(written: readonly ReleaseRow[]): Piasters | undefined {
+  const ends = written.filter(({ milestone }) => END_RELEASES.has(milestone));
+  return ends.length === 0
+    ? undefined
+    : sumOf(ends.map(({ refundTakenOff_piasters }) => refundTakenOff_piasters));
+}
+
+/**
+ * 003:T127 (SRS DEC-98; Q-4 (a)): each refunded order's share split (`refundPartsOf`), by enrollment,
+ * the orders in id order. `left` holds each enrollment's share its end release took off and not yet
+ * given to an order (undefined while none is written) and is drawn down, so a scan in pages gives
+ * it once. By payment id.
+ */
+function splitRefunds(
+  orders: readonly ShareOrderRow[],
+  left: Map<string, Piasters | undefined>,
+): ReadonlyMap<string, RefundPart> {
+  const parts = new Map<string, RefundPart>();
+  for (const enrollmentId of new Set(orders.map((one) => one.enrollmentId))) {
+    const own = orders.filter((one) => one.enrollmentId === enrollmentId);
+    const taken_piasters = left.get(enrollmentId);
+    const split = refundPartsOf(own, taken_piasters);
+    own.forEach((one, index) => {
+      const part = split[index];
+      if (part !== undefined) parts.set(one.paymentId, part);
+    });
+    if (taken_piasters !== undefined) {
+      const given = split.map(({ teacher_piasters }) => teacher_piasters);
+      left.set(enrollmentId, shareLeft(taken_piasters, given, piasters(0)));
+    }
+  }
+  return parts;
+}
+
+/** 003:T127: the teacher's part of an order's refund share, the whole share where none is split. */
+const teacherPartOf = (parts: ReadonlyMap<string, RefundPart>, order: ShareOrderRow): Piasters =>
+  parts.get(order.paymentId)?.teacher_piasters ?? refundShareOf(order);
 
 /** The first instant of `now`'s calendar month in the payouts' zone. */
 export function monthStartOf(now: Date): Date {
@@ -228,6 +273,24 @@ export function payoutsStoreOver(cipher: Pick<ColumnCipher, 'decrypt'>): Payouts
   };
 }
 
+/**
+ * 003:T126 (SRS DEC-96's last clause; Q15 (a)): the release a mark or an unmark touched, as its
+ * audit entry's `after` names it: ids and an amount, no personal data. Read before the write, so the
+ * unmark's names the release although it clears the mark's columns; the key's row stores it (JSON).
+ */
+export type MarkedRelease = {
+  readonly releaseId: string;
+  readonly enrollmentId: string;
+  readonly milestone: ShareReleaseMilestone;
+  readonly amount_piasters: Piasters;
+};
+
+/** What a mark or an unmark answers: the teacher and the release, for the audit entry. */
+export type MarkOutcome = {
+  readonly teacherUserId: string;
+  readonly release: MarkedRelease;
+};
+
 /** The teacher's read and the administrator's four procedures. */
 export interface Payouts {
   /** `teacher.dues.get`: the caller's own releases and his share of each refund. */
@@ -236,18 +299,31 @@ export interface Payouts {
   list(tx: Transaction, adminId: string, input: PayoutsListInput): Promise<PayoutsListOutput>;
   /** `payouts.get`. */
   get(tx: Transaction, adminId: string, teacherUserId: string): Promise<PayoutsGetOutput>;
-  /** `payouts.mark`, keyed; the marked release's teacher, for the audit entry. */
+  /** `payouts.mark`, keyed; the marked release and its teacher, for the audit entry. */
   mark(
     tx: Transaction,
     adminId: string,
     input: PayoutsMarkInput,
-  ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
-  /** `payouts.unmark`, keyed; a mark made in error undone; the teacher, for the audit entry. */
+  ): Promise<MarkOutcome & { readonly replayed: boolean }>;
+  /** `payouts.unmark`, keyed; a mark made in error undone; the release and its teacher, as `mark`. */
   unmark(
     tx: Transaction,
     adminId: string,
     input: PayoutsUnmarkInput,
-  ): Promise<{ readonly teacherUserId: string; readonly replayed: boolean }>;
+  ): Promise<MarkOutcome & { readonly replayed: boolean }>;
+}
+
+/** The release `row` as a mark's or an unmark's outcome names it. */
+function markOutcomeOf(row: ReleaseRow): MarkOutcome {
+  return {
+    teacherUserId: row.teacherUserId,
+    release: {
+      releaseId: row.id,
+      enrollmentId: row.enrollmentId,
+      milestone: row.milestone,
+      amount_piasters: row.amount_piasters,
+    },
+  };
 }
 
 export interface PayoutsDependencies {
@@ -281,7 +357,12 @@ export function createPayouts({
     const byEnrollment = new Map(own.map((one) => [one.facts.enrollment.enrollmentId, one]));
     // His own refunded orders only, as his own releases.
     const ownRefunded = refunded.filter(({ enrollmentId }) => byEnrollment.has(enrollmentId));
-    return { lines, refunded: ownRefunded, byEnrollment, now, windowHours };
+    // 003:T127: each refund's share split by the end release's taken-off share (DEC-98).
+    const parts = splitRefunds(
+      ownRefunded,
+      new Map(own.map((one) => [one.facts.enrollment.enrollmentId, endTakenOffOf(one.written)])),
+    );
+    return { lines, refunded: ownRefunded, parts, byEnrollment, now, windowHours };
   };
 
   const refusal = (
@@ -302,7 +383,7 @@ export function createPayouts({
 
   return {
     teacherDues: async (tx, teacherUserId) => {
-      const { lines, refunded, byEnrollment, windowHours } = await teacherPicture(
+      const { lines, refunded, parts, byEnrollment, windowHours } = await teacherPicture(
         tx,
         teacherUserId,
       );
@@ -317,12 +398,17 @@ export function createPayouts({
           waitsForCase: line.waitsForCase,
           ...(line.paidAt === undefined ? {} : { paidAt: line.paidAt.toISOString() }),
         })),
-        deductions: refunded.map((order) => {
+        // 003:T127 (DEC-98): a refund after the end release is the platform's, never listed here.
+        deductions: refunded.flatMap((order) => {
+          const share = toPlainNumber(teacherPartOf(parts, order));
+          if (share === 0) return [];
           const closing = closingCaseOf(byEnrollment.get(order.enrollmentId));
-          return {
-            share_piasters: toPlainNumber(refundShareOf(order)),
-            ...(closing === undefined ? {} : { caseReason: closing.reason }),
-          };
+          return [
+            {
+              share_piasters: share,
+              ...(closing === undefined ? {} : { caseReason: closing.reason }),
+            },
+          ];
         }),
         // The window as read at this request (the owner, 2026-11-18): the held line's hours.
         disputeWindowHours: windowHours,
@@ -375,20 +461,31 @@ export function createPayouts({
         if (rows.length < pageSize || next === undefined || next === releasesFrom) break;
         releasesFrom = next;
       }
-      // «عليه»: every order with a refund recorded, by its enrollment's teacher.
+      // «عليه»: every order with a refund recorded, by its enrollment's teacher; 003:T127: the
+      // teacher's part only, each enrollment's end release read once, its share drawn down.
       let refundsFrom: string | undefined;
+      const left = new Map<string, Piasters | undefined>();
       for (;;) {
         const orders = await store.refundedOrdersAfter(tx, refundsFrom, pageSize);
-        const enrollments = await store.reads.enrollmentsAmong(
-          tx,
-          orders.map(({ enrollmentId }) => enrollmentId),
-        );
+        const ids = [...new Set(orders.map(({ enrollmentId }) => enrollmentId))];
+        const fresh = ids.filter((enrollmentId) => !left.has(enrollmentId));
+        const [enrollments, written] = await Promise.all([
+          store.reads.enrollmentsAmong(tx, ids),
+          store.reads.releasesOf(tx, fresh),
+        ]);
+        for (const enrollmentId of fresh) {
+          left.set(
+            enrollmentId,
+            endTakenOffOf(written.filter((row) => row.enrollmentId === enrollmentId)),
+          );
+        }
+        const parts = splitRefunds(orders, left);
         for (const order of orders) {
           const teacherUserId = enrollments.get(order.enrollmentId)?.teacherUserId;
           if (teacherUserId === undefined) continue;
           takenOff.set(teacherUserId, [
             ...(takenOff.get(teacherUserId) ?? []),
-            refundShareOf(order),
+            teacherPartOf(parts, order),
           ]);
         }
         const next = orders.at(-1)?.paymentId;
@@ -447,7 +544,7 @@ export function createPayouts({
     },
 
     get: async (tx, _adminId, teacherUserId) => {
-      const { lines, refunded, byEnrollment, now } = await teacherPicture(tx, teacherUserId);
+      const { lines, refunded, parts, byEnrollment, now } = await teacherPicture(tx, teacherUserId);
       const people = [
         teacherUserId,
         ...lines.map(({ studentUserId }) => studentUserId),
@@ -477,6 +574,10 @@ export function createPayouts({
         const one = byEnrollment.get(order.enrollmentId);
         if (one === undefined) return [];
         const closing = closingCaseOf(one);
+        // 003:T127 (DEC-98): the part a refund after the end release leaves to the platform.
+        const platform = toPlainNumber(
+          parts.get(order.paymentId)?.platform_piasters ?? piasters(0),
+        );
         return [
           {
             paymentId: order.paymentId,
@@ -484,6 +585,7 @@ export function createPayouts({
             student: named(one.facts.enrollment.studentUserId),
             refunded_piasters: toPlainNumber(order.refunded_piasters),
             share_piasters: toPlainNumber(refundShareOf(order)),
+            ...(platform === 0 ? {} : { platformShare_piasters: platform }),
             ...(closing === undefined
               ? {}
               : { case: { caseId: closing.caseId, reason: closing.reason } }),
@@ -493,14 +595,18 @@ export function createPayouts({
       return {
         teacher: named(teacherUserId),
         ...(reference === null ? {} : { payoutAccountMasked: maskedReference(reference) }),
-        figures: figuresOf(lines, refunded.map(refundShareOf), monthStartOf(now)),
+        figures: figuresOf(
+          lines,
+          refunded.map((order) => teacherPartOf(parts, order)),
+          monthStartOf(now),
+        ),
         releases,
         deductions,
       };
     },
 
     mark: async (tx, adminId, { releaseId, idempotencyKey }) => {
-      const { outcome, replayed } = await idempotency.runOn<{ teacherUserId: string }>(
+      const { outcome, replayed } = await idempotency.runOn<MarkOutcome>(
         tx,
         { scope: MARK_SCOPE, key: idempotencyKey, actorId: adminId, input: { releaseId } },
         async (on) => {
@@ -520,14 +626,14 @@ export function createPayouts({
             },
             "A release of the teacher's share was marked paid",
           );
-          return { teacherUserId: release.teacherUserId };
+          return markOutcomeOf(release);
         },
       );
-      return { teacherUserId: outcome.teacherUserId, replayed };
+      return { ...outcome, replayed };
     },
 
     unmark: async (tx, adminId, { releaseId, reason, idempotencyKey }) => {
-      const { outcome, replayed } = await idempotency.runOn<{ teacherUserId: string }>(
+      const { outcome, replayed } = await idempotency.runOn<MarkOutcome>(
         tx,
         {
           scope: UNMARK_SCOPE,
@@ -552,10 +658,11 @@ export function createPayouts({
             },
             "A release of the teacher's share was unmarked",
           );
-          return { teacherUserId: release.teacherUserId };
+          // The figures of the read before the write (T126): the unmark clears the mark only.
+          return markOutcomeOf(release);
         },
       );
-      return { teacherUserId: outcome.teacherUserId, replayed };
+      return { ...outcome, replayed };
     },
   };
 }

@@ -543,6 +543,7 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
           outcomeBefore: 'student_no_show',
           outcomeAfter: 'done',
           previousStartAt: null,
+          party: null,
           occurredAt: at('2026-11-10T08:00:00Z'),
         },
         {
@@ -552,6 +553,7 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
           outcomeBefore: null,
           outcomeAfter: null,
           previousStartAt: null,
+          party: null,
           occurredAt: at('2026-11-09T10:00:00Z'),
         },
         {
@@ -561,6 +563,7 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
           outcomeBefore: null,
           outcomeAfter: null,
           previousStartAt: at('2026-11-03T11:00:00Z'),
+          party: null,
           occurredAt: at('2026-11-01T10:00:00Z'),
         },
       ],
@@ -598,6 +601,36 @@ describe('sessions.monitor.get (T024, FR-479; R-323 GAP-1, GAP-4; FR-439; FR-454
       },
       { source: 'enrollment', kind: 'confirmed', occurredAt: '2026-11-01T10:00:00.000Z' },
     ]);
+  });
+
+  // 004:T084 (SRS DEC-105, FR-ADMIN-20 (a)): a phone that could not encrypt, with its side.
+  it('answers an encryption_failed row with the side whose phone could not encrypt, and the output schema admits it (T084)', async () => {
+    const { monitor } = world({
+      pages: [item(1)],
+      sessions,
+      sessionEvents: [
+        {
+          sessionId: id(2),
+          kind: 'encryption_failed',
+          caseId: null,
+          outcomeBefore: null,
+          outcomeAfter: null,
+          previousStartAt: null,
+          party: 'teacher',
+          occurredAt: new Date('2026-11-23T10:00:00Z'),
+        },
+      ],
+    });
+    const answer = await monitor.get(tx, ADMIN, { enrollmentId: id(1) });
+    const encryption = {
+      source: 'session',
+      kind: 'encryption_failed',
+      sessionId: id(2),
+      party: 'teacher',
+      occurredAt: '2026-11-23T10:00:00.000Z',
+    };
+    expect(answer.events).toContainEqual(encryption);
+    expect(sessionsMonitorGetOutput.parse(answer).events).toContainEqual(encryption);
   });
 
   it('T069: a slot_released and a slot_hold_ended row reach the timeline, and the output schema admits them', async () => {

@@ -119,6 +119,7 @@
       ],
       "shareReleaseMilestone": [
         "assessment",
+        "direct_end",
         "ijazah_end",
         "ijazah_half",
         "programme_stopped",
@@ -282,6 +283,7 @@
         "dispute_raised",
         "dispute_resolved",
         "dispute_revised",
+        "encryption_failed",
         "instants_reresolved",
         "makeup_booked",
         "outage_reclassified",
@@ -318,6 +320,7 @@
       ],
       "ShareReleaseMilestone": [
         "assessment",
+        "direct_end",
         "ijazah_end",
         "ijazah_half",
         "programme_stopped",
@@ -325,7 +328,14 @@
         "student_complaint_close",
         "teacher_dropout"
       ],
-      "TeacherApplicationHistoryAction": ["approve", "ban", "reject", "request_info", "revoke"],
+      "TeacherApplicationHistoryAction": [
+        "approve",
+        "ban",
+        "call_replaced",
+        "reject",
+        "request_info",
+        "revoke"
+      ],
       "TeacherApplicationStatus": ["approved", "banned", "in_review", "needs_document", "rejected"],
       "TeacherCredentialHistoryAction": ["approve", "correct", "reject", "request_document"],
       "TeacherCredentialStatus": ["approved", "needs_document", "pending", "rejected"],
@@ -480,7 +490,7 @@
           "$.history[].action": {
             "required": true,
             "type": "string",
-            "values": ["approve", "ban", "reject", "request_info", "revoke"]
+            "values": ["approve", "ban", "call_replaced", "reject", "request_info", "revoke"]
           },
           "$.history[].adminName": { "required": true, "type": "string" },
           "$.history[].at": { "required": true, "type": "string" },
@@ -856,6 +866,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",
@@ -988,6 +999,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",
@@ -1316,6 +1328,14 @@
           },
           "$.revisions[].revisedAt": { "required": true, "type": "string" },
           "$.telemetry": { "required": true, "type": "object" },
+          "$.telemetry.encryptionFailures": { "type": "array" },
+          "$.telemetry.encryptionFailures[]": { "type": "object" },
+          "$.telemetry.encryptionFailures[].occurredAt": { "required": true, "type": "string" },
+          "$.telemetry.encryptionFailures[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
           "$.telemetry.events": { "required": true, "type": "array" },
           "$.telemetry.events[]": { "type": "object" },
           "$.telemetry.events[].connectionRef": { "type": "string" },
@@ -2031,6 +2051,7 @@
             "required": true,
             "type": "string",
             "values": [
+              "direct_end",
               "ijazah_dropout",
               "recitation_dropout",
               "student_complaint_close",
@@ -2273,6 +2294,7 @@
           "$.deductions[].case.reason": { "required": true, "type": "string" },
           "$.deductions[].enrollmentId": { "required": true, "type": "string" },
           "$.deductions[].paymentId": { "required": true, "type": "string" },
+          "$.deductions[].platformShare_piasters": { "type": "integer" },
           "$.deductions[].refunded_piasters": { "required": true, "type": "integer" },
           "$.deductions[].share_piasters": { "required": true, "type": "integer" },
           "$.deductions[].student": { "required": true, "type": "object" },
@@ -2296,6 +2318,7 @@
             "type": "string",
             "values": [
               "assessment",
+              "direct_end",
               "ijazah_end",
               "ijazah_half",
               "programme_stopped",
@@ -2517,7 +2540,10 @@
       "sessions.endEnrollment": {
         "input": {
           "$": { "type": "object" },
-          "$.cause": { "type": "string", "values": ["admin_ended", "student_complaint_ended"] },
+          "$.cause": {
+            "type": "string",
+            "values": ["admin_ended", "student_complaint_ended", "teacher_ended"]
+          },
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.internalNote": { "type": "string" },
@@ -2566,6 +2592,7 @@
             "type": "string",
             "values": [
               "absence_termination",
+              "account_deleted",
               "admin_cancellation",
               "admin_ended",
               "admin_opened_for_student",
@@ -2667,6 +2694,7 @@
               "dispute_raised",
               "dispute_resolved",
               "dispute_revised",
+              "encryption_failed",
               "instants_reresolved",
               "makeup_booked",
               "order_failed",
@@ -2722,6 +2750,7 @@
               "under_threshold"
             ]
           },
+          "$.events[].party": { "type": "string", "values": ["student", "teacher"] },
           "$.events[].previousStartAt": { "type": "string" },
           "$.events[].sessionId": { "type": "string" },
           "$.events[].source": {
@@ -2948,6 +2977,14 @@
         "kind": "query",
         "output": {
           "$": { "type": "object" },
+          "$.encryptionFailures": { "type": "array" },
+          "$.encryptionFailures[]": { "type": "object" },
+          "$.encryptionFailures[].occurredAt": { "required": true, "type": "string" },
+          "$.encryptionFailures[].party": {
+            "required": true,
+            "type": "string",
+            "values": ["student", "teacher"]
+          },
           "$.events": { "required": true, "type": "array" },
           "$.events[]": { "type": "object" },
           "$.events[].connectionRef": { "type": "string" },
@@ -4885,6 +4922,15 @@
           "$.status": { "required": true, "type": "string", "values": ["open"] }
         }
       },
+      "sessions.encryptionFailed": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.sessionId": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": { "$": { "type": "unknown" } }
+      },
       "sessions.get": {
         "caller": "participant",
         "input": {
@@ -4998,6 +5044,7 @@
         "kind": "mutation",
         "output": {
           "$": { "type": "object" },
+          "$.mediaKey": { "required": true, "type": "string" },
           "$.serverUrl": { "required": true, "type": "string" },
           "$.sessionId": { "required": true, "type": "string" },
           "$.token": { "required": true, "type": "string" },
@@ -5373,6 +5420,7 @@
             "type": "string",
             "values": [
               "assessment",
+              "direct_end",
               "ijazah_end",
               "ijazah_half",
               "programme_stopped",

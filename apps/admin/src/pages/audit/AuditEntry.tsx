@@ -5,7 +5,12 @@
 // added (the footer). R1a (002:T174; SRS DEC-97, FR-ADMIN-17 as amended; the owner's Q-1 (a)): a
 // reason kept in a history is stored as the marker `note_given` and said in words, linked to the
 // entry's target, here and in the list (`AuditReason`); the marker itself is never shown.
+// 003:T126 (SRS DEC-96's last clause; Q15 (a)): a release's mark and unmark name the release in
+// `after`; its amount reads in pounds (the payouts page's formatter), its part in the payouts page's
+// words, never as stored.
+import type { ShareReleaseMilestone } from '@ijazah/contracts';
 import { AUDIT_REASON_NOTE_GIVEN } from '@ijazah/contracts/admin';
+import { isPiasters } from '@ijazah/money';
 import { useNavigate } from 'react-router';
 
 import {
@@ -19,9 +24,10 @@ import {
 } from '../../design/components';
 import { type MessageKey, useLocale, useT } from '../../i18n';
 import { errorMessageKey } from '../../lib/error-message';
-import { dayMonthYear, timeOfDay } from '../../lib/format';
+import { dayMonthYear, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { DECISION_REASONS } from '../applications/DecisionDialog';
+import { PART } from '../payouts/words';
 import { actionText, targetHref, targetText } from './actions';
 import { type AuditEntry as Entry, useAuditEntry } from './queries';
 
@@ -42,6 +48,13 @@ const FIELD_TEXT: Readonly<Record<string, MessageKey>> = {
   subjectIds: 'admin.audit.fields.subjectIds',
   requestId: 'admin.audit.fields.requestId',
   documentId: 'admin.audit.fields.documentId',
+  // 003:T126: the release a mark or an unmark touched.
+  releaseId: 'admin.audit.fields.releaseId',
+  enrollmentId: 'admin.audit.fields.enrollmentId',
+  milestone: 'admin.audit.fields.milestone',
+  amount_piasters: 'admin.audit.fields.amount',
+  // 002:T186: the application history row a recorded call wrote (`call_replaced`).
+  historyId: 'admin.audit.fields.historyId',
 };
 
 /** The standings the panel already names, by field. */
@@ -96,6 +109,9 @@ function wordOf(action: string, field: string, value: string): MessageKey | unde
   if ((action.startsWith('application.') && field === 'status') || field === 'applicationStatus') {
     return APPLICATION_STATUS_TEXT[value];
   }
+  if (action.startsWith('payout_release.') && field === 'milestone') {
+    return Object.hasOwn(PART, value) ? PART[value as ShareReleaseMilestone] : undefined;
+  }
   const decision = DECISION_OF_ACTION[action];
   if (decision !== undefined && (field === 'reasonChoice' || field === 'needed')) {
     return DECISION_REASONS[decision].get(value) ?? RETIRED_REASON_TEXT[value];
@@ -130,7 +146,7 @@ function Detail({ entry }: { readonly entry: Entry }) {
   const valueOf = (field: string, value: unknown) => {
     const word = typeof value === 'string' ? wordOf(entry.action, field, value) : undefined;
     if (word !== undefined) {
-      return field === 'reasonChoice' ? (
+      return field === 'reasonChoice' || field === 'milestone' ? (
         <span>{t(word)}</span>
       ) : (
         <Badge label={t(word)} tone="neutral" />
@@ -311,6 +327,9 @@ function plainText(
   }
   if (field === 'completedOn' && typeof value === 'string')
     return dayMonthYear(value, locale, zone);
+  if (field === 'amount_piasters' && typeof value === 'number' && isPiasters(value)) {
+    return formatPounds(value, locale);
+  }
   if (Array.isArray(value)) {
     return value
       .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))

@@ -433,6 +433,47 @@ describe('a dispute’s detail (FR-475, FR-426)', () => {
     });
     expect(await within(aside).findByText(ar('admin.common.loadError.text'))).toBeTruthy();
   });
+
+  // 004:T084 (SRS DEC-105; the owner's Q-C1-2 (a), 2026-11-23): the session's encryption failures
+  // beside its telemetry, each with its side and its time in the session's zone; none, no section.
+  it('lists the session’s encryption failures with their side and time, in both languages (T084)', async () => {
+    const api = fakeApi();
+    api.disputes.get.query.mockResolvedValue({
+      ...OPEN_DETAIL,
+      telemetry: {
+        ...TELEMETRY,
+        encryptionFailures: [
+          { party: 'teacher', occurredAt: '2026-11-08T06:01:00.000Z' },
+          { party: 'student', occurredAt: '2026-11-08T06:02:00.000Z' },
+        ],
+      },
+    });
+    await inBothLocales(
+      () => open(api, `/disputes?dispute=${D1}`),
+      async (t, locale) => {
+        const aside = await detail(t);
+        expect(aside.getByText(t('admin.disputes.telemetry.encryptionTitle'))).toBeTruthy();
+        for (const [party, at] of [
+          ['teacher', '2026-11-08T06:01:00.000Z'],
+          ['student', '2026-11-08T06:02:00.000Z'],
+        ] as const) {
+          expect(
+            aside.getByText(
+              t(`admin.disputes.telemetry.encryptionFailed.${party}`, {
+                time: timeOfDay(at, locale, ZONE),
+              }),
+            ),
+          ).toBeTruthy();
+        }
+      },
+    );
+  });
+
+  it('draws no encryption section for a session with none (T084)', async () => {
+    open(fakeApi(), `/disputes?dispute=${D1}`);
+    const aside = await detail();
+    expect(aside.queryByText(ar('admin.disputes.telemetry.encryptionTitle'))).toBeNull();
+  });
 });
 
 describe('the enrollment’s chat on the dispute’s page (FR-475; the note under T049, Q2)', () => {
@@ -953,7 +994,10 @@ describe('a ruling’s revision (FR-472; SRS FR-DISPUTE-7)', () => {
 
 describe('T058: RATE_LIMITED on /disputes', () => {
   const limited = (seconds?: string) =>
-    refusal('RATE_LIMITED', seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }]);
+    refusal(
+      'RATE_LIMITED',
+      seconds === undefined ? [] : [{ path: 'retryAfterSeconds', code: seconds }],
+    );
 
   it('the queue says when to try again', async () => {
     const api = fakeApi();

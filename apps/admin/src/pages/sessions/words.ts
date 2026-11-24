@@ -107,6 +107,8 @@ export const CASE_REASON: Readonly<Record<MonitoredCase['reason'], MessageKey>> 
   gender_correction: 'admin.sessions.caseReason.genderCorrection',
   // 003:T112 (Q-4 (a)): the case of the administrator's end on a complaint against the student.
   student_complaint_ended: 'admin.sessions.endCause.caseReason',
+  // 003:T125 (SRS DEC-96): the case of a student's deletion by an administrator.
+  account_deleted: 'admin.sessions.caseReason.accountDeleted',
 };
 
 export const CASE_STATUS: Readonly<Record<MonitoredCase['status'], Drawn>> = {
@@ -157,6 +159,8 @@ const EVENT_KIND: Readonly<Record<MonitoredEvent['kind'], MessageKey>> = {
   programme_paused: 'admin.sessions.event.kind.programmePaused',
   programme_resumed: 'admin.sessions.event.kind.programmeResumed',
   programme_reopened: 'admin.sessions.event.kind.programmeReopened',
+  // 004:T084 (SRS DEC-105, Q-5 (a)): a party's phone could not encrypt the room.
+  encryption_failed: 'admin.sessions.event.kind.encryptionFailed',
 };
 
 const CANCELLATION_REASON: Readonly<
@@ -206,6 +210,12 @@ export function panelTime(startsAt: string, t: Translate, locale: Locale, zone: 
   });
 }
 
+/** 004:T084: the side an `encryption_failed` row names. */
+const ENCRYPTION_FAILED_SIDE: Readonly<Record<NonNullable<MonitoredEvent['party']>, MessageKey>> = {
+  student: 'admin.sessions.event.party.student',
+  teacher: 'admin.sessions.event.party.teacher',
+};
+
 /** A timeline row's title, its session's number when it names one, and what it changed. */
 export function eventWords(
   event: MonitoredEvent,
@@ -239,6 +249,8 @@ export function eventWords(
       }),
     };
   }
+  // 004:T084 (SRS DEC-105): the side whose phone could not encrypt the session.
+  if (event.party !== undefined) return { title, detail: t(ENCRYPTION_FAILED_SIDE[event.party]) };
   return { title };
 }
 

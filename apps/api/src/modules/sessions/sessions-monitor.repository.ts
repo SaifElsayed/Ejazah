@@ -182,6 +182,8 @@ export interface SessionEventRow {
   readonly outcomeBefore: SessionStatus | null;
   readonly outcomeAfter: SessionStatus | null;
   readonly previousStartAt: Date | null;
+  /** 004:T084: on `encryption_failed` only, the side whose phone could not encrypt (rule 84). */
+  readonly party: 'student' | 'teacher' | null;
   readonly occurredAt: Date;
 }
 
@@ -200,6 +202,7 @@ export function sessionEventsOf(
       outcomeBefore: true,
       outcomeAfter: true,
       previousStartAt: true,
+      party: true,
       occurredAt: true,
     },
   });

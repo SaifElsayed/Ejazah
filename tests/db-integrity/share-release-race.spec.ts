@@ -103,6 +103,7 @@ describe('two release sweeps at once (003:T105, rule 62)', () => {
       sessionsAmong: async () => new Map([[w.enrollmentId, delivered()]]),
       casesAmong: async () => new Map([[w.enrollmentId, []]]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       makeupsAmong: async () => new Map(),
     };
     const lines: unknown[][] = [];

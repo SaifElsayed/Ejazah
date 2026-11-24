@@ -8,8 +8,10 @@
 // («تم الصرف») records that an administrator executed a due release by hand in the gateway's
 // dashboard; it moves no money and calls nothing (N1, FR-PAYG-11). Keyed (`idempotencyKey`, `runOn`
 // on the kind's transaction): a replay records no second entry (`audit.replayed()`); the mark is
-// audited `payout_release.marked` on the teacher (`user` target). Mounted under `payouts` by
-// `admin.router.ts` (the integration's line).
+// audited `payout_release.marked` on the teacher (`user` target). 003:T126 (SRS DEC-96's last
+// clause; Q15 (a)): the mark's and the unmark's entries name the release the service answered as
+// `after`, its id, enrollment, part and amount (read before the write), passed as answered. Mounted
+// under `payouts` by `admin.router.ts` (the integration's line).
 import {
   payoutsGetInput,
   payoutsGetOutput,
@@ -55,7 +57,7 @@ export const payoutsAdminRouter = createAdminRouter({
     output: z.void(),
     rateLimit: { key: 'rate_limit_payout_mark', subject: 'caller' },
   }).mutation(async ({ ctx, input }) => {
-    const { teacherUserId, replayed } = await ctx.services.payouts.mark(
+    const { teacherUserId, release, replayed } = await ctx.services.payouts.mark(
       ctx.tx,
       ctx.administrator.adminId,
       input,
@@ -68,6 +70,7 @@ export const payoutsAdminRouter = createAdminRouter({
       action: 'payout_release.marked',
       targetType: 'user',
       targetId: teacherUserId,
+      after: release,
     });
   }),
 
@@ -79,7 +82,7 @@ export const payoutsAdminRouter = createAdminRouter({
     output: z.void(),
     rateLimit: { key: 'rate_limit_payout_mark', subject: 'caller' },
   }).mutation(async ({ ctx, input }) => {
-    const { teacherUserId, replayed } = await ctx.services.payouts.unmark(
+    const { teacherUserId, release, replayed } = await ctx.services.payouts.unmark(
       ctx.tx,
       ctx.administrator.adminId,
       input,
@@ -93,6 +96,7 @@ export const payoutsAdminRouter = createAdminRouter({
       targetType: 'user',
       targetId: teacherUserId,
       reason: input.reason,
+      after: release,
     });
   }),
 });

@@ -56,7 +56,8 @@
 //                   card fragment      cvv, cvc; or card with number, pan, last, last4, digits,
 //                                      expiry, bin, fragment or holder
 //                   credential         password, passwd, secret, credential; or key with api,
-//                                      private, signing, secret, encryption, webhook or access
+//                                      private, signing, secret, encryption, webhook, access or
+//                                      media (004:T084, a session's media key)
 //
 // Each is found through optional chaining (`req?.body`), the TypeScript wrappers, a conditional
 // (`debug ? req.body : null`), `||`, `&&`, `??`, a spread, a nested object or array at any depth
@@ -296,7 +297,17 @@ function prohibitedKind(name) {
   if (hasAny(words, ['password', 'passwd', 'secret', 'credential'])) return 'a credential';
   if (
     words.has('key') &&
-    hasAny(words, ['api', 'private', 'signing', 'secret', 'encryption', 'webhook', 'access'])
+    // 004:T084 (SRS DEC-102): `media`, a session's media key.
+    hasAny(words, [
+      'api',
+      'private',
+      'signing',
+      'secret',
+      'encryption',
+      'webhook',
+      'access',
+      'media',
+    ])
   ) {
     return 'a credential';
   }

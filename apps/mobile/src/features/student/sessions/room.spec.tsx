@@ -17,6 +17,10 @@ import { Room } from './index';
 
 jest.mock('livekit-client', () => require('../../shared/room/__tests__/fake-room'));
 jest.mock('@livekit/react-native', () => require('../../shared/room/__tests__/fake-livekit-rn'));
+// 004:T084 (R1b): the room watches the native frame cryptors; the fake stands in for the native module.
+jest.mock('../../shared/room/frame-cryption', () =>
+  require('../../shared/room/__tests__/fake-frame-cryption'),
+);
 // 005:T021, E1 (a): the report's idempotency key.
 let mockKey = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `report-key-${++mockKey}` }));

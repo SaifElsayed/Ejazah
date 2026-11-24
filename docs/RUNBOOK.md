@@ -536,6 +536,8 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   webhook secrets of the payment stand-in (when
   `PAYMENT_GATEWAY_WEBHOOK_SECRET` is empty) and the video stand-in, and the
   banned-identifier key (T097).
+  In development and test with `VIDEO_MEDIA_KEY_SECRET` empty, the session media keys' stand-in
+  changes with it too (004:T084); a hosted server never uses that stand-in.
   The pepper, the link signature and the stand-in secrets protect only
   short-lived values: codes already sent stop verifying, and links and
   stand-in events already signed are refused. The banned-identifier key is
@@ -596,6 +598,16 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   tokens and verifies the webhooks (`specs/004-sessions/research.md` R-302).
   Replaying an attendance webhook is safe
   (`session_participant_events.provider_event_id` is unique).
+- **`VIDEO_MEDIA_KEY_SECRET`**, the platform's own secret every session's media key is made from
+  (HMAC-SHA-256 of the session's id; 004:T084, SRS DEC-102, NFR-SEC-13), never LiveKit's and never
+  sent to LiveKit. Required outside development and test: the API refuses to start without it.
+  Generate it with `openssl rand -base64 32`, install it, restart the API and the worker. Its second
+  copy is kept in the owner's password manager, under the deployment's entry beside
+  `ENCRYPTION_KEY`'s (T179), never written here or anywhere else by value. Whoever holds it can
+  derive any session's key and read a recorded stream, so a leak is rotated at once; a rotation
+  changes every session's key from the next join, so two participants who joined on either side of
+  the restart hear and see nothing of each other until both rejoin. Nothing is stored under it, so
+  nothing is re-encrypted.
 - **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
   (not chosen yet) and in the Expo account's access tokens.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage

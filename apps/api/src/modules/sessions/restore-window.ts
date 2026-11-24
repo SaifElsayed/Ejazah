@@ -21,7 +21,12 @@
 //     confirmed), `student_banned` (a student's ban) or (T082, N8) `admin_ended` (an administrator's
 //     direct end, `sessions.endEnrollment`);
 //   - `cancelled` with `teacher_suspended`, the case `teacher_ended` (a teacher's ban or revocation;
-//     T071 makes a suspension pause, so no suspension closes an enrollment this way any more).
+//     T071 makes a suspension pause, so no suspension closes an enrollment this way any more);
+//   - 003:T125, Q-A1 (a) (the owner, 2026-11-23; DEC-69, FR-CANCEL-10): `cancelled` with `admin`,
+//     the case `teacher_ended` (an administrator's direct end «المعلم وقف»), a direct end and no
+//     ban: its own kind `teacher_stopped`, so its slot is held through the enrollment's window, it is
+//     never paused (`enrollment-lists.service.ts`' `BAN_CLOSINGS`), never lifted (`ban-lift.service.ts`'
+//     `KIND_OF`) and never a person's own held closing (`ongoing-enrollments.repository.ts`).
 //
 // Never a deletion's closing (`account_deleted`, whatever its case) or a gender correction's
 // (`gender_correction`), nor any other status or pairing. The kind is restorable only while its case
@@ -75,7 +80,9 @@ export type ClosingKind =
   // T082 (N8): an administrator's direct end.
   | 'admin_ended'
   // 003:T112 (the owner's Q-C (a); DEC-69): the direct end on a complaint against the student.
-  | 'student_complaint_ended';
+  | 'student_complaint_ended'
+  // 003:T125, Q-A1 (a): the direct end on the teacher's stop, its case `teacher_ended`.
+  | 'teacher_stopped';
 
 /** T070: what the rule reads of an enrollment's closing. */
 export interface ClosingFacts {
@@ -93,15 +100,27 @@ export interface Closing {
   readonly restorable: boolean;
 }
 
-/** The kinds each status and last cancellation's reason admit (this file's head). */
-function kindsOf(status: EnrollmentStatus, reason: string | null): readonly ClosingKind[] {
-  if (status === 'terminated_no_show') return ['absence_termination'];
-  if (status !== 'cancelled') return [];
-  if (reason === 'admin') {
-    return ['student_fault_confirmed', 'student_banned', 'admin_ended', 'student_complaint_ended'];
+/** The kind each end case's reason gives, by status and last cancellation's reason (this file's head). */
+function kindsOf(
+  status: EnrollmentStatus,
+  reason: string | null,
+): ReadonlyMap<string, ClosingKind> {
+  if (status === 'terminated_no_show') {
+    return new Map([['absence_termination', 'absence_termination']]);
   }
-  if (reason === 'teacher_suspended') return ['teacher_ended'];
-  return [];
+  if (status !== 'cancelled') return new Map();
+  if (reason === 'admin') {
+    return new Map<string, ClosingKind>([
+      ['student_fault_confirmed', 'student_fault_confirmed'],
+      ['student_banned', 'student_banned'],
+      ['admin_ended', 'admin_ended'],
+      ['student_complaint_ended', 'student_complaint_ended'],
+      // 003:T125, Q-A1 (a): the direct end «المعلم وقف», a direct end's window, no ban's.
+      ['teacher_ended', 'teacher_stopped'],
+    ]);
+  }
+  if (reason === 'teacher_suspended') return new Map([['teacher_ended', 'teacher_ended']]);
+  return new Map();
 }
 
 /** T070: of an enrollment's cases, newest first, the newest of an end's reason; null for none. */
@@ -116,7 +135,7 @@ export function closingOf({
   endCase,
 }: ClosingFacts): Closing | undefined {
   if (endCase === null) return undefined;
-  const kind = kindsOf(status, lastCancellationReason).find((one) => one === endCase.reason);
+  const kind = kindsOf(status, lastCancellationReason).get(endCase.reason);
   if (kind === undefined) return undefined;
   return { kind, closingCase: endCase, restorable: endCase.status === 'open' };
 }

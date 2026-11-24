@@ -26,6 +26,11 @@
 //   `student_banned`; the last counted session's dispute window passed; no case open. The share of
 //   the sessions delivered and of those the student missed (`student_no_show`, consumed)
 //   less what earlier releases gave, never below nothing (`complaintCloseAmount`, Q-B1-5 (a)).
+// - `direct_end` (003:T125; SRS DEC-104, DEC-96; Q-1 (a) to Q-3 (a)): either track; closed with a
+//   case `admin_ended` (the student's stop), `account_deleted` (a student's deletion by an
+//   administrator) or `gender_correction`; the complaint close's arithmetic under its own name, held
+//   while the case is open. A programme's `admin_ended` that covered its suspension
+//   (`coversSuspension`, the fact its case reads) stays a dropout: nothing more (006:T012 as amended).
 // A delivered make-up (numbered past the package's count) takes the value of the session it makes
 // up (`valuedSequence`, Q-B1-4 (a)); its original, never delivered, is not counted twice.
 // A disputed session counts by its frozen outcome, as sessions' `progress.ts` counts it; one not yet
@@ -138,6 +143,11 @@ export interface ReleaseFacts {
   readonly caseReasons: readonly string[];
   /** Whether a dispute, a case or a complaint on the enrollment is open. */
   readonly caseOpen: boolean;
+  /**
+   * 003:T125 (006:T012 as amended): an `admin_ended` case covered the enrollment's open
+   * `teacher_suspended` case, the fact the case's amount reads (`coversSuspension`).
+   */
+  readonly coversSuspension: boolean;
   readonly written: readonly WrittenRelease[];
 }
 
@@ -150,13 +160,21 @@ export interface PlannedRelease {
   readonly due: boolean;
   /** An open case keeps it from falling due now. */
   readonly waitsForCase: boolean;
+  /**
+   * 003:T127 (ERD §15 rule 83): the teacher's share of the refunds an end release takes off, kept on
+   * its row; nothing on every other release.
+   */
+  readonly refundTakenOff_piasters: Piasters;
 }
+
+/** The release a closing's case gives (Q-5 (a); 003:T125's `direct_end`). */
+export type ClosingCause = 'teacher_dropout' | 'student_complaint_close' | 'direct_end';
 
 /**
  * The closings that release (Q-5 (a)): a closed set of the reasons it covers, so a reason added
- * later (B47's `gender_correction` among those already left out) compiles and releases nothing.
+ * later compiles and releases nothing.
  */
-const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint_close'> = new Map([
+const CLOSE_RELEASES: ReadonlyMap<string, ClosingCause> = new Map([
   ['teacher_ended', 'teacher_dropout'],
   ['absence_termination', 'teacher_dropout'],
   ['student_fault_confirmed', 'student_complaint_close'],
@@ -164,17 +182,26 @@ const CLOSE_RELEASES: ReadonlyMap<string, 'teacher_dropout' | 'student_complaint
   // 003:T112 (SRS FR-POSTPONE-6, DEC-90; Q-4 (a)): the administrator's end on a teacher's complaint
   // against the student is a close on a complaint against the student.
   ['student_complaint_ended', 'student_complaint_close'],
+  // 003:T125 (SRS DEC-104, DEC-96; Q-1 (a), Q-2 (a), Q-3 (a)): an end by the administration, the
+  // student's stop, a student's deletion by an administrator and a gender correction.
+  ['admin_ended', 'direct_end'],
+  ['account_deleted', 'direct_end'],
+  ['gender_correction', 'direct_end'],
 ]);
 
 /**
  * 003:T110: the cause one case reason gives, or none, from the same closed set, so T110's case
  * amount and these releases never disagree (T112 added DEC-86's complaint against the student here).
  */
-export function closingCauseOf(
-  reason: string,
-): 'teacher_dropout' | 'student_complaint_close' | undefined {
+export function closingCauseOf(reason: string): ClosingCause | undefined {
   return CLOSE_RELEASES.get(reason);
 }
+
+/**
+ * 006:T012 (003:T125): the end that is a programme's dropout only where it covered the programme's
+ * `teacher_suspended` case; otherwise the student's stop.
+ */
+export const SUSPENSION_COVERING_END = 'admin_ended';
 
 const DELIVERED: ReadonlySet<string> = new Set(['done']);
 /** The sessions consumed, a Student-No-Show counted too; T110's refund is every other session. */
@@ -308,13 +335,13 @@ export function refundShareOf(order: ReleaseOrder): Piasters {
   return teacherShare(order.refunded_piasters, order.sharePercent);
 }
 
-/** The newest case reason that releases, or none. */
+/** The newest case reason that releases, with its release, or none. */
 function closingRelease(
   reasons: readonly string[],
-): 'teacher_dropout' | 'student_complaint_close' | undefined {
+): { readonly reason: string; readonly release: ClosingCause } | undefined {
   for (const reason of reasons) {
     const release = CLOSE_RELEASES.get(reason);
-    if (release !== undefined) return release;
+    if (release !== undefined) return { reason, release };
   }
   return undefined;
 }
@@ -454,6 +481,7 @@ export function plannedReleases(
     amount_piasters: Piasters,
     dueAt: Date | undefined,
     ready: boolean,
+    refundTakenOff_piasters: Piasters = piasters(0),
   ): void => {
     if (written.has(milestone) || amount_piasters === 0) return;
     const due = ready && !caseOpen && dueAt !== undefined && dueAt.getTime() <= now.getTime();
@@ -463,6 +491,7 @@ export function plannedReleases(
       ...(dueAt === undefined ? {} : { dueAt }),
       due,
       waitsForCase: caseOpen,
+      refundTakenOff_piasters,
     });
   };
   const sequencesOf = (kept: ReadonlySet<string>): ReleaseSession[] =>
@@ -478,6 +507,7 @@ export function plannedReleases(
       shareLeft(order.share_piasters, [], takenOffAtEnd(order)),
       after(last, windowHours),
       completed,
+      takenOffAtEnd(order),
     );
   }
 
@@ -506,13 +536,16 @@ export function plannedReleases(
       ...written.values(),
       ...(halfOwed === undefined ? [] : [halfOwed.amount_piasters]),
     ];
+    const endTakenOff_piasters =
+      programme === undefined ? takenOffAtEnd(order) : programme.refund_piasters;
     owe(
       'ijazah_end',
       programme === undefined
-        ? shareLeft(order.share_piasters, before, takenOffAtEnd(order))
-        : shareLeft(programme.paidShares_piasters, before, programme.refund_piasters),
+        ? shareLeft(order.share_piasters, before, endTakenOff_piasters)
+        : shareLeft(programme.paidShares_piasters, before, endTakenOff_piasters),
       after(last, windowHours),
       completed,
+      endTakenOff_piasters,
     );
   }
 
@@ -537,12 +570,20 @@ export function plannedReleases(
         shareLeft(programme.paidShares_piasters, [...written.values()], programme.refund_piasters),
         after(lastToEnd(sequencesOf(CONSUMED)), windowHours),
         true,
+        programme.refund_piasters,
       );
     }
   }
 
   if (closed) {
-    const release = closingRelease(caseReasons);
+    const closing = closingRelease(caseReasons);
+    // 003:T125 (006:T012 as amended): a programme's end that covered its suspension stays a
+    // dropout, as its case reads it: nothing more (DEC-85).
+    const coveredDropout =
+      programme !== undefined &&
+      closing?.reason === SUSPENSION_COVERING_END &&
+      facts.coversSuspension;
+    const release = coveredDropout ? 'teacher_dropout' : closing?.release;
     if (release === 'teacher_dropout' && enrollment.track === 'recitation') {
       // 003:T110, Q-C3 (b): a session the student missed is consumed, its share released.
       const taken = sequencesOf(CONSUMED);
@@ -553,7 +594,9 @@ export function plannedReleases(
         true,
       );
     }
-    if (release === 'student_complaint_close') {
+    // 003:T125 (DEC-104): an end by the administration releases as a complaint close does, under
+    // its own name, `direct_end`.
+    if (release === 'student_complaint_close' || release === 'direct_end') {
       const counted = sequencesOf(CONSUMED);
       const taken = counted.map(valuedSequence);
       // 006:T012 (R-512, G-3): a programme's sessions each by their own order; a package's by its
@@ -565,7 +608,7 @@ export function plannedReleases(
               shareOfSessions(paid.share_piasters, count, positions),
             );
       owe(
-        'student_complaint_close',
+        release,
         complaintCloseAmount(share_piasters, [...written.values()]),
         after(lastToEnd(counted), windowHours),
         true,
@@ -573,4 +616,44 @@ export function plannedReleases(
     }
   }
   return plan;
+}
+
+/** 003:T127 (ERD §15 rule 83): the releases that take an enrollment's refunds off when written. */
+export const END_RELEASES: ReadonlySet<ShareReleaseMilestone> = new Set([
+  'recitation_end',
+  'ijazah_end',
+  'programme_stopped',
+]);
+
+/** 003:T127: one refunded order's teacher's share, split between the teacher and the platform. */
+export interface RefundPart {
+  /** What «عليك» shows: the share the end release took off, or all of it before one is written. */
+  readonly teacher_piasters: Piasters;
+  /** A refund recorded after the end release: the platform's alone (DEC-98). */
+  readonly platform_piasters: Piasters;
+}
+
+/**
+ * 003:T127 (SRS DEC-98; Q-4 (a)): the enrollment's refunded orders, in id order, each one's share of
+ * its refund (`refundShareOf`) split. With no end release written (`takenOff` undefined), every share
+ * is the teacher's, as today; once written, the share it took off is the teacher's, given to the
+ * orders in id order, and the rest the platform's. «Due 7,000», then 1,000 EGP refunded: 0 and 700.
+ */
+export function refundPartsOf(
+  orders: readonly Pick<ReleaseOrder, 'refunded_piasters' | 'sharePercent'>[],
+  takenOff_piasters: Piasters | undefined,
+): readonly RefundPart[] {
+  let left_piasters = takenOff_piasters;
+  return orders.map((order) => {
+    const share_piasters = teacherShare(order.refunded_piasters, order.sharePercent);
+    if (left_piasters === undefined) {
+      return { teacher_piasters: share_piasters, platform_piasters: piasters(0) };
+    }
+    const teacher_piasters = lowest([share_piasters, left_piasters]);
+    left_piasters = shareLeft(left_piasters, [teacher_piasters], piasters(0));
+    return {
+      teacher_piasters,
+      platform_piasters: shareLeft(share_piasters, [teacher_piasters], piasters(0)),
+    };
+  });
 }

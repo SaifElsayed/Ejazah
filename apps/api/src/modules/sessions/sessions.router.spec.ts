@@ -111,6 +111,8 @@ const joined = {
   serverUrl: 'wss://video-stand-in.invalid',
   token: 'fake_vtk_spec',
   validUntil: '2026-11-12T08:00:00.000Z',
+  // 004:T084: required by the output schema; a stand-in shape, never a real key.
+  mediaKey: Buffer.alloc(32, 6).toString('base64'),
 };
 
 // T021.
@@ -180,6 +182,11 @@ const sessions: SessionsServices = {
     if (input.enrollmentId !== ENROLLMENT) throw new DomainError('NOT_FOUND');
     // A field no schema names, as a careless service might add it: stripped (R-HONEST-4).
     return { ...postponed, reason: input.reason } as never;
+  },
+  // 004:T084.
+  encryptionFailed: async (caller, input) => {
+    calls.push(['encryptionFailed', caller, input]);
+    if (input.sessionId !== SESSION) throw new DomainError('NOT_FOUND');
   },
   // T060.
   complaint: {
@@ -1255,4 +1262,122 @@ describe("'sessions.cancellation': the request's live list (T066)", () => {
       expect(published).toEqual([]);
     },
   );
+});
+
+// 004:T084 (SRS DEC-105; the note under T084, (3), Q-5 (a)): `sessions.encryptionFailed`, a mutation of
+// the participant kind handing the service the caller's own account and the session id only (the side
+// that failed is the server's reading of the caller, never the input), answering nothing. Its own
+// limit, `rate_limit_encryption_failure` (5 per 60 s, the caller as subject; SRS DEC-106, Q-C1-1 (a)),
+// so a refused call reaches no service and writes nothing, and the first refusal per window is logged.
+describe("'sessions.encryptionFailed' (T084)", () => {
+  const report = (caller: Caller, input: Record<string, unknown>) =>
+    caller.sessions.encryptionFailed(input as never);
+
+  it("refuses an anonymous caller UNAUTHENTICATED and a restricted account ACCOUNT_RESTRICTED before the service: 'sessions.encryptionFailed'", async () => {
+    await expect(report(callerAs(null), { sessionId: SESSION })).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    for (const who of RESTRICTED) {
+      await expect(report(callerAs(sessionOf(who)), { sessionId: SESSION }), who).rejects.toEqual(
+        refused('ACCOUNT_RESTRICTED'),
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("hands the service the caller's own account and the session id, whatever else the input says, and answers nothing: 'sessions.encryptionFailed'", async () => {
+    for (const who of ['student', 'teacher'] as const) {
+      const answer = await report(callerAs(sessionOf(who)), {
+        sessionId: SESSION,
+        party: who === 'student' ? 'teacher' : 'student',
+        userId: OTHER,
+      });
+      expect(answer).toBeUndefined();
+    }
+    expect(calls).toEqual([
+      ['encryptionFailed', { userId: CALLER }, { sessionId: SESSION }],
+      ['encryptionFailed', { userId: CALLER }, { sessionId: SESSION }],
+    ]);
+  });
+
+  it("answers the service's NOT_FOUND with no field: 'sessions.encryptionFailed'", async () => {
+    await expect(report(callerAs(sessionOf('student')), { sessionId: OTHER })).rejects.toEqual(
+      refused('NOT_FOUND'),
+    );
+  });
+
+  it("refuses a session id that is not one VALIDATION_FAILED before the service: 'sessions.encryptionFailed'", async () => {
+    for (const input of [{}, { sessionId: 'not-an-id' }]) {
+      const thrown: unknown = await report(callerAs(sessionOf('student')), input).catch(
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body.code).toBe(
+        'VALIDATION_FAILED',
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("is a mutation of the participant kind declaring rate_limit_encryption_failure: 'sessions.encryptionFailed'", () => {
+    expect(metaOf('sessions.encryptionFailed')).toEqual({
+      surface: 'app',
+      caller: 'participant',
+      rateLimit: 'rate_limit_encryption_failure',
+    });
+    expect(typeOf('sessions.encryptionFailed')).toBe('mutation');
+  });
+
+  // SRS DEC-106: the sixth report in a minute is refused before the service, so nothing is written;
+  // the first refusal of the window writes one line, a later one none.
+  it("refuses the sixth report in a minute RATE_LIMITED before the service, logging the first refusal once: 'sessions.encryptionFailed'", async () => {
+    const read: string[] = [];
+    const warned: Record<string, unknown>[] = [];
+    let count = 5;
+    const rateLimiter = new RateLimiter({
+      settings: {
+        read: async (key, schema) => {
+          read.push(key);
+          return schema.parse({ limit: 5, window_seconds: 60 });
+        },
+      },
+      counter: { hit: async () => (count += 1) },
+      subjectKey: Buffer.alloc(32, 7),
+      log: { warn: (fields: Record<string, unknown>) => void warned.push(fields) } as never,
+    });
+    const services: AppServices = {
+      settings: { read: async () => Promise.reject(new Error('no setting in this spec')) },
+      publicConfig: { supportEmail: 'support@ijazah.invalid' },
+      subjects: { listActive: async () => [] },
+      identity: unusedIdentityServices,
+      verification: unusedVerificationServices,
+      teacherProfile: unusedTeacherProfileServices,
+      catalog: unusedCatalogServices,
+      discovery: unusedDiscoveryServices,
+      booking: unusedBookingServices,
+      checkout: unusedCheckoutServices,
+      sessions,
+      chat: unusedChatServices,
+      certification: unusedCertificationServices,
+      moderation: unusedModerationServices,
+    };
+    const caller = callerFor(
+      createAppContext({
+        session: sessionOf('teacher'),
+        log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+        rateLimiter,
+        clientAddress: '203.0.113.9',
+        services,
+      }),
+    );
+    for (const _call of ['sixth', 'seventh']) {
+      const thrown: unknown = await report(caller, { sessionId: SESSION }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(toErrorShape(thrown as never).body.code).toBe('RATE_LIMITED');
+    }
+    expect(read).toEqual(['rate_limit_encryption_failure', 'rate_limit_encryption_failure']);
+    expect(warned).toEqual([{ procedure: 'sessions.encryptionFailed', userId: CALLER }]);
+    expect(calls).toEqual([]);
+  });
 });

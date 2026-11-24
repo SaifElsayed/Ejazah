@@ -105,6 +105,7 @@ describe('the sweep insert against a path in the one order (003:T105, T005 rule 
       sessionsAmong: async () => new Map([[w.enrollmentId, delivered()]]),
       casesAmong: async () => new Map([[w.enrollmentId, []]]),
       openMattersAmong: async () => new Set(),
+      caseRecordOf: async () => null,
       makeupsAmong: async () => new Map(),
     };
     const reported: Error[] = [];
