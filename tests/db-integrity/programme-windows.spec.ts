@@ -665,6 +665,29 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
   });
 });
 
+// 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's `charge_unknown` item takes no decision
+// until T015/T021 build its approve and extend; each is refused and the item stays open.
+describe('the charge_unknown item takes no decision yet (006:T014, Q-b3 (a))', () => {
+  it.each(['approve', 'extend', 'decline'] as const)(
+    'refuses %s decision_not_allowed, the item left open',
+    async (decision) => {
+      const { teacherId, enrollmentId } = await offered();
+      const [item] = await database.$queryRaw<{ id: string }[]>`
+        INSERT INTO programme_requests (enrollment_id, teacher_user_id, kind, status, updated_at)
+        VALUES (${enrollmentId}::uuid, ${teacherId}::uuid, 'charge_unknown', 'open', now())
+        RETURNING id::text AS id`;
+      if (item === undefined) throw new Error('no item written');
+      const adminId = await admin();
+
+      expect(await causeOf(decide(adminId, item.id, decision, SUPPORT_REASON))).toBe(
+        'decision_not_allowed',
+      );
+      const { items } = await rowsOf(enrollmentId);
+      expect(items).toMatchObject([{ kind: 'charge_unknown', status: 'open' }]);
+    },
+  );
+});
+
 // SRS DEC-112: the teacher's app has no refusal request; the refusal is the `no_offer` path above.
 describe('programme.request takes stop only (006:T008, SRS DEC-112; T017 builds it)', () => {
   it('refuses a stop not_paused on a programme that is not paused, writing nothing', async () => {

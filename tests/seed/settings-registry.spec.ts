@@ -235,6 +235,7 @@ describe('the programme’s eight settings (006:T002, R-515)', () => {
           'programme_stop_request_days',
           'programme_renew_early_days',
           'programme_charge_retry_days',
+          'programme_charge_inquiry_tries',
         ].map((key) => [key, at(key)?.srsRow]),
       ),
     ).toEqual({
@@ -252,7 +253,21 @@ describe('the programme’s eight settings (006:T002, R-515)', () => {
         'Programme: days before a paid month ends that a Student without a saved card may renew (days)',
       programme_charge_retry_days:
         'Programme: retries of a failed automatic charge on a soft decline (count, and days after the failure)',
+      programme_charge_inquiry_tries:
+        'Programme: unanswered asks about an automatic charge before an Administrator item (count; asked every checkout lifetime)',
     });
+  });
+
+  // 006:T014 (SRS DEC-113): a count of asks, at least one, 6 by default.
+  it('takes the inquiry tries as a whole count of at least 1, defaulting to 6', () => {
+    expect(at('programme_charge_inquiry_tries')).toMatchObject({
+      unit: 'count',
+      group: 'booking',
+      default: 6,
+    });
+    expect(settingRefusal('programme_charge_inquiry_tries', 1)).toBeUndefined();
+    expect(settingRefusal('programme_charge_inquiry_tries', 0)).not.toBeUndefined();
+    expect(settingRefusal('programme_charge_inquiry_tries', 1.5)).toBe('invalid');
   });
 
   it('takes the switch as 0 or 1 only: 1 admitted, 2 refused by the read site’s schema', () => {

@@ -2700,6 +2700,7 @@
         "postponement_interval_weeks": "Interval between postponements, per party",
         "postponement_notice_hours": "Postponement notice before a session",
         "price_average_min_teachers": "Fewest teachers for the average price",
+        "programme_charge_inquiry_tries": "Ijazah programme: unanswered asks about an automatic charge before an Administrator item",
         "programme_charge_retry_days": "Ijazah programme: retry days of a failed automatic charge",
         "programme_enabled": "Ijazah programme: turned on",
         "programme_offer_hours": "Ijazah programme: time to send the offer after the assessment",

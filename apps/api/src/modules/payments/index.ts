@@ -54,8 +54,11 @@ import { caseAmount } from './case-amount.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { PaymentsMonitorService } from './payments-monitor.service.js';
 // 006:T013: the saved card's writer on the webhook, and its encrypted column.
-import { createProgrammeCardWriter } from './programme-cards.js';
+import { createProgrammeCardWriter, type ProgrammeCardWriter } from './programme-cards.js';
 import { programmeCardTokens } from './programme-cards.repository.js';
+// 006:T014: the automatic charge.
+import { type AutomaticCharges, createAutomaticCharges } from './automatic-charge.js';
+import type { PaymentMode } from './programme-payee.js';
 // 003:T105: the payouts' reads and mark.
 import { createPayouts, type Payouts, payoutsStoreOver } from './payouts.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
@@ -107,20 +110,89 @@ export function createPaymentWebhookRoute({
         log,
         ...reporting,
       }),
-      orders: new OrderEventsService({
-        database,
-        booking: {
-          recordOrderFailed: (tx, enrollmentId, paymentId, occurredAt) =>
-            recordOrderFailed(tx, enrollmentId, paymentId, occurredAt, notices),
-        },
-        confirmations,
-        log,
-        ...reporting,
-        ...cards,
-      }),
+      orders: orderEventsOf({ database, confirmations, notices, log, ...reporting, ...cards }),
     },
     log,
     maxBodyBytes,
+  });
+}
+
+/** The webhook's order branch, as the webhook and the automatic charge's inquiry (006:T014) use it. */
+function orderEventsOf({
+  database,
+  confirmations,
+  notices,
+  log,
+  report,
+  cards,
+}: {
+  readonly database: Database;
+  readonly confirmations: ConfirmationQueue;
+  readonly notices: PaymentOutcomeNotices;
+  readonly log: Logger;
+  readonly report?: (error: Error) => void;
+  readonly cards?: ProgrammeCardWriter;
+}): OrderEventsService {
+  return new OrderEventsService({
+    database,
+    booking: {
+      recordOrderFailed: (tx, enrollmentId, paymentId, occurredAt) =>
+        recordOrderFailed(tx, enrollmentId, paymentId, occurredAt, notices),
+    },
+    confirmations,
+    log,
+    ...(report === undefined ? {} : { report }),
+    ...(cards === undefined ? {} : { cards }),
+  });
+}
+
+/**
+ * 006:T014 (R-509; SRS DEC-110, DEC-113): the automatic charge of a programme's saved card, the
+ * entry the sweep (T015) calls (`automatic-charge.ts`). Its inquiry's answers are recorded through
+ * the webhook's own order branch, with the webhook's confirmations and payment pushes.
+ */
+export function createProgrammeCharges({
+  database,
+  payment,
+  cipher,
+  gateway,
+  paymentMode,
+  settings,
+  log,
+  confirmations,
+  notices,
+  report,
+  now,
+}: {
+  readonly database: Database;
+  readonly payment: Pick<PaymentPort, 'chargeSavedCard' | 'inquireOrder'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  readonly gateway: 'fake' | 'paymob';
+  readonly paymentMode: PaymentMode;
+  readonly settings: SettingsReader;
+  readonly log: Logger;
+  readonly confirmations: ConfirmationQueue;
+  readonly notices: PaymentOutcomeNotices;
+  readonly report?: (error: Error) => void;
+  /** The entry's clock, the real one unless a spec moves it. */
+  readonly now?: () => Date;
+}): AutomaticCharges {
+  return createAutomaticCharges({
+    database,
+    payment,
+    cipher,
+    gateway,
+    paymentMode,
+    settings,
+    log,
+    ...(now === undefined ? {} : { now }),
+    orderEvents: orderEventsOf({
+      database,
+      confirmations,
+      notices,
+      log,
+      ...(report === undefined ? {} : { report }),
+    }),
   });
 }
 
@@ -369,6 +441,14 @@ export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme
 // close, the card row deleted since T013 (booking imports nothing of payments, R-208: the root
 // hands both in).
 export { createProgrammePayee, type PaymentMode, type ProgrammePayee } from './programme-payee.js';
+// 006:T014: what the sweep (T015) reads of the automatic charge.
+export type {
+  AutomaticChargeRequest,
+  AutomaticCharges,
+  ChargeResult,
+  InquiryOutcome,
+  RecordedCharge,
+} from './automatic-charge.js';
 export { deleteProgrammeCard } from './programme-cards.js';
 
 // 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so

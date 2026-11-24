@@ -96,6 +96,11 @@ export interface ReleaseOrder {
   readonly halfPercent: number | null;
   /** The order's refunded total (T102). */
   readonly refunded_piasters: Piasters;
+  /**
+   * 006:T014 (Q-5 (a)): when the confirm step processed the order (`confirmed_at`); null or absent
+   * while it has not.
+   */
+  readonly processedAt?: Date | null;
 }
 
 /** The enrollment as booking answers it. */
@@ -403,6 +408,7 @@ export function programmeSharesOf(facts: ReleaseFacts): ProgrammeShares | undefi
   if (assessment === undefined) return undefined;
   const { programme } = facts.enrollment;
   const inFull = facts.orders.some(({ kind }) => kind === 'rest_in_full');
+  const awaited = awaitedOrdersOf(facts.orders);
   return {
     assessment,
     continued: facts.orders.some(({ kind }) => CONTINUED_KINDS.has(kind)),
@@ -419,9 +425,45 @@ export function programmeSharesOf(facts: ReleaseFacts): ProgrammeShares | undefi
             ),
             assessment.halfPercent ?? 0,
           ),
-    paidShares_piasters: sumOf(facts.orders.map(({ share_piasters }) => share_piasters)),
-    refund_piasters: sumOf(facts.orders.map(refundShareOf)),
+    // 006:T014 (Q-5 (a)): a duplicate's share and its refunds are the `duplicate_payment` case's.
+    paidShares_piasters: sumOf(awaited.map(({ share_piasters }) => share_piasters)),
+    refund_piasters: sumOf(awaited.map(refundShareOf)),
   };
+}
+
+/**
+ * 006:T014 (#158 r1 FU4; B-P3's Q-5 (a)): the orders a programme's shares read: every order but
+ * the programme's (`rest_in_full`, `instalment`), and of those only the ones the confirm step awaited,
+ * walked as it walks them (`confirm-enrollment.ts`, `awaitedAfter`): the processed ones by
+ * `confirmed_at`, then id, then the unprocessed in id order, as it will process them; the rest in
+ * full counts only before any month, a month only when it is the next one, and nothing after the
+ * rest. Month 1 paid twice, 1,000 EGP each: the second and its refunds are left out.
+ */
+function awaitedOrdersOf(orders: readonly ReleaseOrder[]): ReleaseOrder[] {
+  const programmeOrders = orders.filter(({ kind }) => CONTINUED_KINDS.has(kind)).sort(walkOrder);
+  const awaited = new Set<ReleaseOrder>();
+  let next = 1;
+  let inFull = false;
+  for (const order of programmeOrders) {
+    if (inFull) break;
+    if (order.kind === 'rest_in_full') {
+      if (next === 1) {
+        inFull = true;
+        awaited.add(order);
+      }
+    } else if (order.instalmentMonth === next) {
+      next += 1;
+      awaited.add(order);
+    }
+  }
+  return orders.filter((order) => !CONTINUED_KINDS.has(order.kind) || awaited.has(order));
+}
+
+/** The confirm step's order: processed first, by `confirmed_at` then id; the unprocessed by id. */
+function walkOrder(a: ReleaseOrder, b: ReleaseOrder): number {
+  const at = (order: ReleaseOrder) => order.processedAt?.getTime() ?? Number.POSITIVE_INFINITY;
+  if (at(a) !== at(b)) return at(a) < at(b) ? -1 : 1;
+  return a.paymentId < b.paymentId ? -1 : a.paymentId > b.paymentId ? 1 : 0;
 }
 
 /**

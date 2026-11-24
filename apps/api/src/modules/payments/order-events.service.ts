@@ -53,6 +53,13 @@
 // programme not closed, the token encrypted by the column cipher); a replay writes nothing. Nothing
 // is enqueued for it: the token travels in no job payload, and the one payload this branch enqueues
 // is a paid order's id.
+//
+// AN AUTOMATIC CHARGE'S INQUIRY (006:T014; SRS DEC-110, DEC-113; Q-10 (a) adjusted). The automatic
+// charge's inquiry (`automatic-charge.ts`) records the gateway's authenticated answer through this
+// branch, under the provider event id the signed callback carries, so whichever arrives second is a
+// replay. Its failed answer carries the decline kind, which no signed callback does; the kind is
+// written on the failed automatic order under the locks above, also when the callback recorded the
+// failure first (the replay) and once only.
 import { createHash } from 'node:crypto';
 
 import { type Piasters, RefundPastGrossError, refundedTotal, toPlainNumber } from '@ijazah/money';
@@ -235,7 +242,11 @@ export class OrderEventsService {
       payloadHash: createHash('sha256').update(receipt.rawBody).digest('hex'),
       receivedAt: receipt.receivedAt,
     });
-    if (!recorded) return 'replayed';
+    if (!recorded) {
+      // 006:T014: the inquiry's answer after the signed callback recorded the same failure.
+      await recordDeclineKind(payments, order, event);
+      return 'replayed';
+    }
     // 006:T013 (R-510): the card written beside its event, under the locks above; no status moves.
     if (event.type === 'card_saved') {
       await this.#cards.save(tx, order, event);
@@ -249,13 +260,31 @@ export class OrderEventsService {
       });
     }
     const status = await payments.statusOf(order.paymentId);
-    if (!MOVES_FROM[event.type].includes(status)) return 'unchanged';
+    if (!MOVES_FROM[event.type].includes(status)) {
+      await recordDeclineKind(payments, order, event);
+      return 'unchanged';
+    }
     await payments.moveOrder(order.paymentId, event.type, reportedBy(event));
     if (event.type === 'failed') {
       await this.#booking.recordOrderFailed(tx, order.enrollmentId, order.paymentId, this.#now());
     }
+    await recordDeclineKind(payments, order, event);
     return 'moved';
   }
+}
+
+/**
+ * 006:T014 (SRS DEC-113, Q-10 (a) adjusted): a failed event's decline kind, which only the
+ * inquiry's authenticated answer carries, written on the failed automatic order under `lockOrder`
+ * (once; `recordDeclineKind`'s filter); nothing for any other event or a callback with no kind.
+ */
+async function recordDeclineKind(
+  payments: PaymentsRepository,
+  order: OrderRef,
+  event: OrderEvent,
+): Promise<void> {
+  if (event.type !== 'failed' || event.declineKind === undefined) return;
+  await payments.recordDeclineKind(order.paymentId, event.declineKind);
 }
 
 /**

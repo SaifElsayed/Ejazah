@@ -654,6 +654,15 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
       'Programme: retries of a failed automatic charge on a soft decline (count, and days after the failure)',
     default: [1, 3, 5, 7],
   },
+  // 006:T014 (SRS §3.14, DEC-113; research R-515 as amended): the unanswered asks about an automatic
+  // charge before the `charge_unknown` Administrator item; asked every `slot_hold_ttl_minutes`.
+  programme_charge_inquiry_tries: whole(
+    positiveWhole,
+    'count',
+    'booking',
+    'Programme: unanswered asks about an automatic charge before an Administrator item (count; asked every checkout lifetime)',
+    6,
+  ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,
     'minutes',

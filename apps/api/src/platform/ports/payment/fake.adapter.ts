@@ -24,6 +24,14 @@
 // 006:T013 (R-510): a checkout may ask `saveCard`; for such an order the stand-in signs a
 // `card_saved` event (`cardSavedEvent`), a placeholder token with a last four and a brand, as the
 // gateway's token callback reports a saved card. It moves no order.
+//
+// 006:T014 (R-509; SRS DEC-110, DEC-113): an automatic charge (`chargeSavedCard`) creates an order
+// with no hosted page, hands its id to the caller, and only once the caller recorded it «pays»: as
+// set by `onCharge`, paid (the default), declined soft or hard, or lost (no transaction); or its
+// order goes unanswered and nothing is created. `inquireOrder` answers the order's transaction under
+// the provider event id the order's signed callback (`orderEvent`) carries, the kind on a decline
+// (the callback carries none, as Paymob's signs none), `none` with no transaction, or what
+// `onInquiry` set for the order.
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { piasters, type Piasters } from '@ijazah/money';
 import { z } from 'zod';
@@ -34,11 +42,21 @@ import {
   type CancelOutcome,
   type Checkout,
   type CheckoutPayee,
+  type DeclineKind,
   type GatewayEvent,
+  type OrderInquiry,
   type PaymentPort,
   type PayoutDetails,
   type RecipientStatus,
+  type SavedCardCharge,
 } from './payment.port.js';
+
+/**
+ * 006:T014: what the stand-in does with the next automatic charge: the gateway's order unanswered
+ * (nothing charged), or the payment sent and then paid, declined soft or hard, or lost (the gateway
+ * holds no transaction).
+ */
+export type ChargeAnswer = 'paid' | 'soft' | 'hard' | 'order_unanswered' | 'payment_lost';
 
 const SIGNATURE_HEADER = 'x-fake-signature';
 
@@ -145,6 +163,21 @@ interface Order {
   cancelOutcome?: CancelOutcome;
   /** 006:T013: whether the checkout asked to save the card (`saveCard`). */
   readonly savesCard: boolean;
+  /** 006:T014: an automatic charge's order, which has no hosted page. */
+  readonly automatic?: boolean;
+  /** 006:T014: the transaction the charge's payment made, if any: paid, or declined with its kind. */
+  charge?: {
+    readonly transaction: string;
+    readonly type: 'paid' | 'failed';
+    readonly declineKind?: DeclineKind;
+  };
+  /** 006:T014: what `inquireOrder` answers for this order, when a test set it (`onInquiry`). */
+  inquiry?: 'none' | 'no_answer';
+}
+
+/** 006:T014: the provider event id of a charge's transaction, the inquiry's and the callback's. */
+function chargeEventId(transaction: string, type: 'paid' | 'failed'): string {
+  return `fake_evt_${transaction}_${type}`;
 }
 
 const amount = z.number().transform((value) => piasters(value));
@@ -214,6 +247,8 @@ export class FakePaymentAdapter
   readonly #now: () => Date;
   readonly #orders = new Map<string, Order>();
   readonly #recipients = new Map<string, RecipientStatus>();
+  /** 006:T014: the answers set for the next automatic charges, in order (`onCharge`). */
+  readonly #chargeAnswers: ChargeAnswer[] = [];
 
   constructor(options: FakePaymentOptions) {
     super();
@@ -271,6 +306,98 @@ export class FakePaymentAdapter
     return Promise.resolve({ gatewayOrderId, checkoutUrl, expiresAt: latestExpiry });
   }
 
+  // 006:T014: this file's head. The token is recorded among the call's arguments, in memory only.
+  async chargeSavedCard(
+    paymentId: string,
+    gross_piasters: Piasters,
+    currency: string,
+    latestExpiry: Date,
+    cardToken: string,
+    payee: CheckoutPayee | undefined,
+    recordOrder: (gatewayOrderId: string) => Promise<boolean>,
+  ): Promise<SavedCardCharge> {
+    const failure = this.attempt('chargeSavedCard', [
+      paymentId,
+      gross_piasters,
+      currency,
+      latestExpiry,
+      cardToken,
+      payee,
+      recordOrder,
+    ]);
+    if (failure !== undefined) throw failure;
+    const answer = this.#chargeAnswers.shift() ?? 'paid';
+    if (answer === 'order_unanswered') return { step: 'order_unanswered' };
+    const gatewayOrderId = `fake_ord_${randomUUID()}`;
+    const order: Order = {
+      gross_piasters,
+      currency,
+      expiresAt: latestExpiry,
+      status: 'created',
+      savesCard: false,
+      automatic: true,
+    };
+    this.#orders.set(gatewayOrderId, order);
+    if (!(await recordOrder(gatewayOrderId))) return { step: 'order_not_recorded', gatewayOrderId };
+    if (answer !== 'payment_lost') {
+      order.charge = {
+        transaction: `fake_txn_${randomUUID()}`,
+        type: answer === 'paid' ? 'paid' : 'failed',
+        ...(answer === 'paid' ? {} : { declineKind: answer }),
+      };
+    }
+    return { step: 'payment_sent', gatewayOrderId };
+  }
+
+  /** 006:T014: the order's last transaction as an inquiry answers it (this file's head). */
+  inquireOrder(gatewayOrderId: string): Promise<OrderInquiry> {
+    const failure = this.attempt('inquireOrder', [gatewayOrderId]);
+    if (failure !== undefined) return Promise.reject(failure);
+    const order = this.#orders.get(gatewayOrderId);
+    if (order === undefined) {
+      return Promise.reject(new Error('unknown order: the stand-in did not create it.'));
+    }
+    if (order.inquiry !== undefined) return Promise.resolve({ answer: order.inquiry });
+    const { charge } = order;
+    if (charge === undefined) return Promise.resolve({ answer: 'none' });
+    const providerEventId = chargeEventId(charge.transaction, charge.type);
+    const event: Extract<GatewayEvent, { readonly type: 'paid' | 'failed' }> =
+      charge.type === 'paid'
+        ? {
+            type: 'paid',
+            providerEventId,
+            gatewayOrderId,
+            gatewayTransactionId: charge.transaction,
+            gross_piasters: order.gross_piasters,
+            gateway_fee_piasters: piasters(0),
+            net_piasters: order.gross_piasters,
+            currency: order.currency,
+          }
+        : {
+            type: 'failed',
+            providerEventId,
+            gatewayOrderId,
+            ...(charge.declineKind === undefined ? {} : { declineKind: charge.declineKind }),
+          };
+    return Promise.resolve({
+      answer: 'transaction',
+      event,
+      rawBody: Buffer.from(JSON.stringify(event)),
+    });
+  }
+
+  /** 006:T014: what the next automatic charge does; paid when nothing was set. */
+  onCharge(answer: ChargeAnswer): void {
+    this.#chargeAnswers.push(answer);
+  }
+
+  /** 006:T014: what the inquiry answers for this order from now on, whatever it holds. */
+  onInquiry(gatewayOrderId: string, answer: 'none' | 'no_answer'): void {
+    const order = this.#orders.get(gatewayOrderId);
+    if (order === undefined) throw new Error('unknown order: the stand-in did not create it.');
+    order.inquiry = answer;
+  }
+
   cancelCheckout(gatewayOrderId: string): Promise<CancelOutcome> {
     const failure = this.attempt('cancelCheckout', [gatewayOrderId]);
     if (failure !== undefined) return Promise.reject(failure);
@@ -293,7 +420,9 @@ export class FakePaymentAdapter
 
   payableOrder(gatewayOrderId: string): PayableOrder | undefined {
     const order = this.#orders.get(gatewayOrderId);
-    if (order?.status !== 'created' || this.#now() >= order.expiresAt) return undefined;
+    if (order?.status !== 'created' || order.automatic === true || this.#now() >= order.expiresAt) {
+      return undefined;
+    }
     return {
       gatewayOrderId,
       amount_piasters: order.gross_piasters,
@@ -428,14 +557,19 @@ export class FakePaymentAdapter
   ): SignedEvent {
     const order = this.#orders.get(gatewayOrderId);
     if (order === undefined) throw new Error('unknown order: the stand-in did not create it.');
-    const id = `fake_evt_${randomUUID()}`;
+    // 006:T014: an automatic charge's callback carries its transaction's id, as the inquiry does.
+    const charged = order.charge?.type === type ? order.charge : undefined;
+    const id =
+      charged === undefined
+        ? `fake_evt_${randomUUID()}`
+        : chargeEventId(charged.transaction, charged.type);
     const body: EventBody =
       type === 'paid'
         ? {
             id,
             type,
             order: gatewayOrderId,
-            transaction: `fake_txn_${randomUUID()}`,
+            transaction: charged?.transaction ?? `fake_txn_${randomUUID()}`,
             gross_piasters: order.gross_piasters,
             gateway_fee_piasters:
               options.gateway_fee_piasters === undefined

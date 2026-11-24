@@ -206,6 +206,9 @@ const ALLOWED: Readonly<Record<ProgrammeRequestRow['kind'], readonly ProgrammesD
   pay_blocked: ['approve', 'extend'],
   // T017's: approving a stop closes `programme_stopped`; no stop item exists before it.
   stop: [],
+  // 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's item for an unanswered automatic charge;
+  // its approve and extend are built with the sweep (T015) and the panel (T021), none before them.
+  charge_unknown: [],
 };
 
 /** What an approval ends, and the state it ends from. */

@@ -19,7 +19,11 @@ import { createPaymentPort, type PaymentConfig } from './index.js';
 import { EventSignatureError, type GatewayEvent, type PaymentPort } from './payment.port.js';
 
 const KEY = Buffer.alloc(32, 9).toString('base64');
-const CONFIG: PaymentConfig = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY: KEY };
+const CONFIG: PaymentConfig = {
+  PAYMENT_GATEWAY: 'fake',
+  PAYMENT_MODE: 'test',
+  ENCRYPTION_KEY: KEY,
+};
 const WEBHOOK_PATH = '/receiver';
 const PAY_BY = new Date('2099-01-01T00:00:00Z');
 
@@ -266,6 +270,8 @@ describe('the harness builds signed events the webhook accepts (T013, R-213)', (
       verifyAndParseEvent: () => Promise.reject(new Error('unused')),
       registerPayoutRecipient: () => Promise.reject(new Error('unused')),
       getRecipientStatus: () => Promise.reject(new Error('unused')),
+      chargeSavedCard: () => Promise.reject(new Error('unused')),
+      inquireOrder: () => Promise.reject(new Error('unused')),
     };
     const elsewhere = createGatewayStandIn({
       origin,
