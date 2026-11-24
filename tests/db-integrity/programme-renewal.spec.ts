@@ -6,6 +6,10 @@
 //   waits, then deletes the card; the order already recorded stays (DEC-95's reading); (b) the «off»
 //   first, paused after its delete: the due step waits, then reads no card and records nothing. An
 //   «off» that has answered is never followed by a new automatic order.
+// - `programme.renew` against the automatic charge of the same month: (e) a retry recorded while the
+//   renewal is at the gateway refuses it `charge_pending` under the record's locks, its order
+//   cancelled; (f) the renewal first: the retry step reads the manual order and records nothing;
+//   (g), (h) the composed checkout refuses `payee_unverified` in live mode only.
 // - the paid month's resume against the sweep's pause: (c) the pause first, paused inside its
 //   transaction: the confirm step waits on the programme, then resumes it (`active`, `paused_at`
 //   cleared, one `programme_resumed`); (d) the confirm step first, paused after the record: the pause
@@ -24,6 +28,7 @@ import {
 import { createNotificationWriter } from '../../apps/api/src/modules/notifications/index';
 import {
   checkoutOrdersAmong,
+  createCheckoutServices,
   createProgrammeCharges,
   deleteProgrammeCard,
   programmeMonthOrdersOf,
@@ -45,6 +50,8 @@ import {
   createPaymentPort,
   type PaymentConfig,
 } from '../../apps/api/src/platform/ports/payment/index';
+import type { RequesterGender } from '../../apps/api/src/platform/guards/requester-gender';
+import type { PaymentPort } from '../../apps/api/src/platform/ports/payment/payment.port';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
 import { addHours, addMinutes } from '../../packages/time/src/index.js';
 import { CAIRO, confirmationWorld, SETTINGS, THURSDAY_0900 } from './confirmation-world';
@@ -486,5 +493,141 @@ describe('the paid month’s resume against the sweep’s pause (006:T016; FR-72
       monthsPaid: 2,
     });
     expect(await eventsOf(enrollmentId)).toEqual([]);
+  });
+});
+
+/** Month 2's first automatic charge, failed `soft` a day and a minute ago: retry 1 is due now. */
+async function failedMonthTwo(enrollmentId: string): Promise<void> {
+  await database.$executeRaw`
+    INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                          status, expires_at, kind, instalment_month, automatic, attempt,
+                          decline_kind, teacher_share_rate_percent, teacher_share_piasters,
+                          updated_at)
+    VALUES (${enrollmentId}::uuid, 'fake', ${`probe-order-${randomUUID()}`}, 100000, 'EGP',
+            'failed', clock_timestamp() - interval '1 day 1 minute', 'instalment', 2, true, 0,
+            'soft', 70, 70000, now())`;
+  await database.$executeRaw`
+    UPDATE programmes SET first_failure_at = clock_timestamp() - interval '1 day 1 minute'
+    WHERE enrollment_id = ${enrollmentId}::uuid`;
+}
+
+/** Payments' checkout as `main.ts` composes it, over `payment` and the payment mode. */
+function checkoutOver(payment: PaymentPort, paymentMode: 'test' | 'live') {
+  return createCheckoutServices({
+    database,
+    settings,
+    idempotency: new IdempotencyService<Transaction>({
+      store: new IdempotencyRepository(database),
+      settings,
+    }),
+    payment,
+    cipher,
+    gateway: 'fake',
+    notices: writer,
+    paymentMode,
+  });
+}
+
+async function monthTwoOrdersOf(enrollmentId: string) {
+  return database.payment.findMany({
+    where: { enrollmentId, instalmentMonth: 2 },
+    orderBy: { id: 'asc' },
+    select: { automatic: true, status: true, attempt: true },
+  });
+}
+
+const log = { info: () => undefined };
+const student = (userId: string) => ({ userId, gender: 'male' as RequesterGender });
+
+describe('programme.renew against the automatic charge of the same month (006:T016; R-509; kernel.md)', () => {
+  it('(e) red first: a retry recorded while the renewal is at the gateway refuses it charge_pending under the record’s locks; its order cancelled, one order for the month', async () => {
+    const { studentId, enrollmentId } = await monthlyWorld({ card: true, endedAgoHours: 48 });
+    await failedMonthTwo(enrollmentId);
+    const cancelled: string[] = [];
+    let retried: unknown;
+    // While the renewal's order is at the gateway (no lock held), the sweep's retry step runs whole.
+    const payment: PaymentPort = {
+      ...fake,
+      createCheckout: async (...args) => {
+        const checkout = await fake.createCheckout(...args);
+        retried = await monthsOf().step('retry', enrollmentId, { askedNoAnswer: false });
+        return checkout;
+      },
+      cancelCheckout: async (gatewayOrderId) => {
+        cancelled.push(gatewayOrderId);
+        return fake.cancelCheckout(gatewayOrderId);
+      },
+    };
+    const error: unknown = await checkoutOver(payment, 'test')
+      .programmeRenew(
+        student(studentId),
+        { enrollmentId, saveCard: false, idempotencyKey: randomUUID() },
+        log,
+      )
+      .catch((thrown: unknown) => thrown);
+    expect(retried).toMatchObject({ action: 'retry' });
+    expect((error as { details?: { code: string }[] }).details?.[0]?.code).toBe('charge_pending');
+    expect(cancelled).toHaveLength(1);
+    expect(await monthTwoOrdersOf(enrollmentId)).toEqual([
+      { automatic: true, status: 'failed', attempt: 0 },
+      { automatic: true, status: 'created', attempt: 1 },
+    ]);
+  });
+
+  it('(f) the renewal first: the retry step then reads the month’s manual order payable and records nothing', async () => {
+    const { studentId, enrollmentId } = await monthlyWorld({ card: true, endedAgoHours: 48 });
+    await failedMonthTwo(enrollmentId);
+    await expect(
+      checkoutOver(fake, 'test').programmeRenew(
+        student(studentId),
+        { enrollmentId, saveCard: false, idempotencyKey: randomUUID() },
+        log,
+      ),
+    ).resolves.toHaveProperty('checkoutUrl');
+    await expect(
+      monthsOf().step('retry', enrollmentId, { askedNoAnswer: false }),
+    ).resolves.toMatchObject({ action: 'none' });
+    expect(await monthTwoOrdersOf(enrollmentId)).toEqual([
+      { automatic: true, status: 'failed', attempt: 0 },
+      { automatic: false, status: 'created', attempt: null },
+    ]);
+  });
+});
+
+describe('programme.renew and programme.pay in live mode through the composed checkout (006:T016; FR-720)', () => {
+  it('(g) red first: the teacher’s payout account unverified refuses payee_unverified before the gateway, nothing written', async () => {
+    const { studentId, enrollmentId } = await monthlyWorld({ card: false, endedAgoHours: 48 });
+    const created: unknown[] = [];
+    const payment: PaymentPort = {
+      ...fake,
+      createCheckout: async (...args) => {
+        created.push(args);
+        return fake.createCheckout(...args);
+      },
+    };
+    const error: unknown = await checkoutOver(payment, 'live')
+      .programmeRenew(
+        student(studentId),
+        { enrollmentId, saveCard: false, idempotencyKey: randomUUID() },
+        log,
+      )
+      .catch((thrown: unknown) => thrown);
+    expect((error as { details?: { code: string }[] }).details?.[0]?.code).toBe('payee_unverified');
+    expect(created).toEqual([]);
+    expect(await monthTwoOrdersOf(enrollmentId)).toEqual([]);
+  });
+
+  it('(h) test mode takes the same month by hand: the stand-in charges with no payee', async () => {
+    const { studentId, enrollmentId } = await monthlyWorld({ card: false, endedAgoHours: 48 });
+    await expect(
+      checkoutOver(fake, 'test').programmeRenew(
+        student(studentId),
+        { enrollmentId, saveCard: false, idempotencyKey: randomUUID() },
+        log,
+      ),
+    ).resolves.toHaveProperty('checkoutUrl');
+    expect(await monthTwoOrdersOf(enrollmentId)).toEqual([
+      { automatic: false, status: 'created', attempt: null },
+    ]);
   });
 });

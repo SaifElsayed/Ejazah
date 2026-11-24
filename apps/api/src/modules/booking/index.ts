@@ -514,3 +514,11 @@ export {
   type ProgrammePayTarget,
   recordProgrammePaid,
 } from './programmes.service.js';
+// 006:T016 of specs/006-programme (FR-715, FR-716; R-509; FR-BOOK-12; the owner's approval of lane
+// d's stop, 2026-11-24): `programme.renew`'s check, run by payments' checkout as `programme.pay`'s is,
+// with payments' reads of the orders handed in, and the early-renewal days' setting it reads.
+export {
+  checkedProgrammeRenew,
+  PROGRAMME_RENEW_EARLY_DAYS_SETTING,
+  type ProgrammeRenewTarget,
+} from './programmes.service.js';

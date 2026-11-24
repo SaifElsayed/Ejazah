@@ -157,6 +157,18 @@ function callerAs(who: UserSession | null) {
         }
         return { checkoutUrl: PAY_URL, paymentId: 'never shown' } as never;
       },
+      // 006:T016: programme.renew reaches payments' checkout too; a saved-card renewal refused.
+      programmeRenew: async (...args: unknown[]) => {
+        calls.push(['programmeRenew', ...args]);
+        const [, input] = args as [unknown, typeof RENEW_INPUT];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        if (input.saveCard) {
+          throw new DomainError('CONFLICT', undefined, {
+            details: [{ path: 'cause', code: 'charge_pending' }],
+          });
+        }
+        return { checkoutUrl: PAY_URL, paymentId: 'never shown' } as never;
+      },
     } as AppServices['checkout'],
     sessions: unusedSessionsServices,
     chat: unusedChatServices,
@@ -488,6 +500,78 @@ describe("'programme.autoRenewOff' callers (006:T016)", () => {
     expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body).toEqual({
       code: 'NOT_FOUND',
       message: 'Not found.',
+    });
+  });
+});
+
+// 006:T016 (FR-713a, FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student kind,
+// counted under `rate_limit_payment_initiation` as `programme.pay` (it creates a gateway order); one
+// call of payments' checkout with the session's own account and gender, the validated input and the
+// request's log; another's enrollment NOT_FOUND, a refusal CONFLICT with its cause.
+const RENEW_INPUT = { enrollmentId: OWN, saveCard: false, idempotencyKey: KEY };
+
+describe("'programme.renew' callers (006:T016)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.renew'", async () => {
+    await expect(callerAs(null).caller.programme.renew(RENEW_INPUT)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    await expect(caller.programme.renew(RENEW_INPUT)).rejects.toEqual(refused('FORBIDDEN'));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended student ACCOUNT_RESTRICTED before the service: 'programme.renew'", async () => {
+    const { caller, calls } = callerAs(sessionOf('suspended student'));
+    await expect(caller.programme.renew(RENEW_INPUT)).rejects.toEqual(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("'programme.renew' (006:T016, FR-715, FR-716)", () => {
+  it("red first: hands payments' checkout the session's own account and gender, the validated input and the request's log", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await caller.programme.renew({ ...RENEW_INPUT, studentUserId: OTHERS, amount: 1 } as never);
+    expect(calls).toHaveLength(1);
+    const [name, student, input, log] = calls[0] ?? [];
+    expect([name, student, input]).toEqual([
+      'programmeRenew',
+      { userId: CALLER, gender: 'female' },
+      RENEW_INPUT,
+    ]);
+    expect(log).toHaveProperty('info');
+  });
+
+  it('red first: answers the hosted checkout alone: a field the schema does not name is stripped', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    await expect(caller.programme.renew(RENEW_INPUT)).resolves.toStrictEqual({
+      checkoutUrl: PAY_URL,
+    });
+  });
+
+  it("counts the call under rate_limit_payment_initiation by the caller's id, as programme.pay", async () => {
+    const { caller, limited } = callerAs(sessionOf('student'));
+    await caller.programme.renew(RENEW_INPUT);
+    expect(limited).toContainEqual([
+      'rate_limit_payment_initiation',
+      { kind: 'user', userId: CALLER },
+      'programme.renew',
+    ]);
+  });
+
+  it('red first: sends another student’s enrollment NOT_FOUND, and a refusal CONFLICT with its cause', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const missing: unknown = await caller.programme
+      .renew({ ...RENEW_INPUT, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(missing as Parameters<typeof toErrorShape>[0]).status).toBe(404);
+    const pending: unknown = await caller.programme
+      .renew({ ...RENEW_INPUT, saveCard: true })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(pending as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'charge_pending' }],
     });
   });
 });

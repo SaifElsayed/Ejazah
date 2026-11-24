@@ -4829,6 +4829,20 @@
           "$.checkoutUrl": { "required": true, "type": "string" }
         }
       },
+      "programme.renew": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.saveCard": { "required": true, "type": "boolean" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" }
+        }
+      },
       "programme.request": {
         "caller": "teacher",
         "input": {

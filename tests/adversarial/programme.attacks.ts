@@ -449,6 +449,39 @@ const autoRenewOffAttacks = partyAttacks(
   },
 );
 
+// 006:T016 (FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student's next month by
+// hand; on the pair's programme awaiting its offer it is refused `nothing_due` (no month is due before
+// the first payment), so the attacks show the own student reaches the check and everyone else meets
+// NOT_FOUND, with no gateway order made.
+type RenewInput = Parameters<SessionParty['caller']['programme']['renew']>[0];
+
+function renew(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.renew({
+    enrollmentId,
+    saveCard: false,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as RenewInput);
+}
+
+const renewAttacks = partyAttacks(
+  'programme.renew',
+  'R-GENDER-2, R-GENDER-4, FR-715, FR-716, FR-410',
+  renew,
+  (pair) => pair.student,
+  (pair) => pair.teacher,
+  async (answer) => {
+    const refusal: unknown = await answer.then(
+      () => new Error('answered instead of refused'),
+      (error: unknown) => error,
+    );
+    expect(toErrorShape(refusal as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'nothing_due' }],
+    });
+  },
+);
+
 export const programmeAttacks: readonly ProcedureAttacks[] = [
   offerAttacks,
   // 006:T008.
@@ -458,4 +491,5 @@ export const programmeAttacks: readonly ProcedureAttacks[] = [
   payAttacks,
   // 006:T016.
   autoRenewOffAttacks,
+  renewAttacks,
 ];

@@ -354,6 +354,8 @@ function checkoutServices(payment?: Webhook['payment']) {
     payment: payment ?? createPaymentPort(config),
     cipher: new ColumnCipher(randomBytes(32).toString('base64')),
     gateway: 'fake',
+    // 006:T016 (rule d): the payment mode the payee read is bound over.
+    paymentMode: 'test',
     notices: writer,
   });
 }

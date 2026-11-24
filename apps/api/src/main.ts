@@ -433,6 +433,9 @@ const services = {
     gateway: config.PAYMENT_GATEWAY,
     // 005:T016: the checkout's payment outcomes record their push.
     notices: notificationWriter,
+    // 006:T016 (FR-716, FR-720): the payment mode T008's «unverified in live mode» is read over, so
+    // `programme.pay` and `programme.renew` refuse `payee_unverified` before the gateway in live mode.
+    paymentMode: config.PAYMENT_MODE,
   }),
   // `sessions.get` and `sessions.join` (T011 of specs/004-sessions): the session read under both
   // accounts' locks, the room and the token through the video port after the commit. The kernel's

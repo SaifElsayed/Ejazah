@@ -25,7 +25,7 @@ import {
   type HeldRow,
   PayableCheckout,
 } from '../booking/index.js';
-import type { ProgrammePayTarget } from '../booking/index.js';
+import type { ProgrammePayTarget, ProgrammeRenewTarget } from '../booking/index.js';
 import type { AssessmentOrder } from './checkout.repository.js';
 import { CHECKOUT_URL_COLUMN, CheckoutService, type CheckoutSteps } from './checkout.service.js';
 import { createProgrammePayee, type PaymentMode } from './programme-payee.js';
@@ -61,6 +61,16 @@ const PROGRAMME: ProgrammePayTarget = {
   offerSessionCount: 40,
   total_piasters: piasters(1_000_000),
 };
+/** 006:T016: month 2 of that offer by hand, 4 × 250 = 1,000 EGP. */
+const RENEW: ProgrammeRenewTarget = {
+  enrollmentId: ENROLLMENT,
+  studentUserId: STUDENT,
+  teacherUserId: TEACHER,
+  track: 'ijazah_track',
+  instalmentMonth: 2,
+  offerSessionCount: 40,
+  total_piasters: piasters(1_000_000),
+};
 const ASSESSMENT_ORDER: AssessmentOrder = {
   gross_piasters: piasters(50_000),
   teacherShareRatePercent: 70,
@@ -82,6 +92,8 @@ const settings: SettingsReader = {
         programme_enabled: 1,
         assessment_price_piasters: 20_000,
         assessment_duration_minutes: 30,
+        // 006:T016: the early-renewal days, the seed's.
+        programme_renew_early_days: 3,
       }[key],
     ),
 };
@@ -219,6 +231,10 @@ interface World {
    * recipient read as `recipient`); none bound by default.
    */
   readonly paymentMode?: PaymentMode;
+  /** 006:T016: what booking's programme.renew check answers, when not month 2 of the default offer. */
+  readonly renew?: Partial<ProgrammeRenewTarget>;
+  /** 006:T016: the renewal check's refusal, before the gateway (`first`) or under the record's locks. */
+  readonly renewRefusal?: { readonly at: 'first' | 'record'; readonly error: Error };
 }
 
 function setUp(world: World = {}) {
@@ -235,6 +251,7 @@ function setUp(world: World = {}) {
   let draws = 0;
   let orders = 0;
   let checks = 0;
+  let renewChecks = 0;
   /** 006:T009: what each placement was handed as payments' read of the programme orders. */
   const handed: string[] = [];
   const steps: CheckoutSteps = {
@@ -377,6 +394,24 @@ function setUp(world: World = {}) {
     assessmentOrderOf: async (_tx, enrollmentId) => {
       log.push(['assessment order', enrollmentId]);
       return world.assessmentOrder ?? ASSESSMENT_ORDER;
+    },
+    // 006:T016: booking's check of programme.renew, before the gateway and under the record's locks.
+    programmeRenewTarget: async (_tx, request, dependencies) => {
+      renewChecks += 1;
+      log.push([
+        'renew check',
+        request.studentUserId,
+        request.enrollmentId,
+        dependencies.earlyDays,
+        typeof dependencies.orders,
+        typeof dependencies.monthOrders,
+        renewChecks,
+      ]);
+      const refused = world.renewRefusal;
+      if (refused !== undefined && (refused.at === 'first') === (renewChecks === 1)) {
+        throw refused.error;
+      }
+      return { ...RENEW, ...world.renew };
     },
   };
   const payment = {
@@ -1376,6 +1411,158 @@ describe('programme.pay refuses payee_unverified before the gateway (006:T016; F
     });
     expect(payees).toEqual([undefined]);
     expect(steps.some(([kind]) => kind === 'payee read')).toBe(false);
+  });
+});
+
+describe('programme.renew: the next month by hand (006:T016; FR-713a, FR-715, FR-716, FR-720)', () => {
+  const renew = (saveCard = false) => ({ enrollmentId: ENROLLMENT, saveCard, idempotencyKey: KEY });
+  const lines: [object, string][] = [];
+  const log = { info: (fields: object, message: string) => void lines.push([fields, message]) };
+
+  it('red first: renews month 2 as 4 × the session price: 1,000 EGP, an instalment of month 2, at the assessment’s rates', async () => {
+    const { service, inserted, saveCards } = setUp({
+      sharePercent: 50,
+      assessmentOrder: {
+        gross_piasters: piasters(50_000),
+        teacherShareRatePercent: 65,
+        halfReleaseRatePercent: 20,
+      },
+    });
+    await expect(service.programmeRenew(student, renew(), log)).resolves.toEqual({
+      checkoutUrl: 'https://pay.example/1',
+    });
+    expect(inserted).toEqual([
+      expect.objectContaining({
+        enrollmentId: ENROLLMENT,
+        kind: 'instalment',
+        instalmentMonth: 2,
+        gross_piasters: 100_000,
+        teacherShareRatePercent: 65,
+        teacherShare_piasters: 65_000,
+        halfReleaseRatePercent: 20,
+      }),
+    ]);
+    expect(inserted[0]).not.toHaveProperty('cardConsentAt');
+    expect(saveCards).toEqual([undefined]);
+  });
+
+  it('red first: the last month takes the remainder: month 11 of 42 sessions is 2 × 250 = 500 EGP', async () => {
+    const { service, inserted } = setUp({
+      renew: { instalmentMonth: 11, offerSessionCount: 42, total_piasters: piasters(1_050_000) },
+    });
+    await service.programmeRenew(student, renew(), log);
+    expect(inserted.map(({ gross_piasters }) => gross_piasters)).toEqual([50_000]);
+  });
+
+  it('red first: «change card»: a ticked consent is kept on the order and the gateway asked to save the card', async () => {
+    const { service, inserted, saveCards } = setUp();
+    await service.programmeRenew(student, renew(true), log);
+    expect(inserted[0]).toMatchObject({ cardConsentAt: NOW });
+    expect(saveCards).toEqual([true]);
+  });
+
+  it('red first: the order expires at now + slot_hold_ttl_minutes (no hold), with the check’s early days', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmeRenew(student, renew(), log);
+    expect(steps).toContainEqual([
+      'gateway create',
+      ENROLLMENT,
+      100_000,
+      'EGP',
+      ORDER_EXPIRES.toISOString(),
+    ]);
+    expect(steps).toContainEqual([
+      'renew check',
+      STUDENT,
+      ENROLLMENT,
+      3,
+      'function',
+      'function',
+      1,
+    ]);
+  });
+
+  it('red first: checks before the gateway and again under the record’s locks, the gateway between', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmeRenew(student, renew(), log);
+    expect(
+      steps
+        .map(([kind]) => kind)
+        .filter((kind) =>
+          ['renew check', 'gateway create', 'transaction', 'insert order', 'commit'].includes(
+            kind as string,
+          ),
+        ),
+    ).toEqual([
+      'renew check',
+      'gateway create',
+      'transaction',
+      'renew check',
+      'insert order',
+      'commit',
+    ]);
+  });
+
+  it('red first: answers the check’s refusal before the gateway, calling none and writing nothing', async () => {
+    const error = new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'charge_pending' }],
+    });
+    const { service, log: steps, inserted } = setUp({ renewRefusal: { at: 'first', error } });
+    await expect(service.programmeRenew(student, renew(), log)).rejects.toBe(error);
+    expect(steps.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+  });
+
+  it('red first: cancels the order at the gateway when the check refuses under the record’s locks (an automatic charge recorded meanwhile)', async () => {
+    const error = new DomainError('CONFLICT', undefined, {
+      details: [{ path: 'cause', code: 'charge_pending' }],
+    });
+    const { service, log: steps, inserted } = setUp({ renewRefusal: { at: 'record', error } });
+    await expect(service.programmeRenew(student, renew(), log)).rejects.toBe(error);
+    expect(steps).toContainEqual(['gateway cancel', 'fake_ord_1']);
+    expect(inserted).toEqual([]);
+  });
+
+  it('red first: live mode, the payout account unverified: CONFLICT payee_unverified before the gateway, one line', async () => {
+    lines.length = 0;
+    const { service, log: steps, inserted } = setUp({ paymentMode: 'live', recipient: null });
+    const refused = await refusal(service.programmeRenew(student, renew(), log));
+    expect(refused).toEqual(
+      new DomainError('CONFLICT', undefined, {
+        details: [{ path: 'cause', code: 'payee_unverified' }],
+      }),
+    );
+    expect(steps.some(([kind]) => kind === 'gateway create')).toBe(false);
+    expect(inserted).toEqual([]);
+    expect(lines).toEqual([
+      [
+        { studentUserId: STUDENT, enrollmentId: ENROLLMENT, reason: 'payee_unverified' },
+        'A programme renewal was refused',
+      ],
+    ]);
+  });
+
+  it('after a no_payee refusal, once the payout account is verified, takes the month by hand with its payee (PR #153 r4 Minor 1)', async () => {
+    const { service, payees } = setUp({ paymentMode: 'live', recipient: 'rcp_verified' });
+    await service.programmeRenew(student, renew(), log);
+    expect(payees).toEqual([{ recipientRef: 'rcp_verified', share_piasters: 70_000 }]);
+  });
+
+  it('test mode refuses nothing: the stand-in charges with no payee', async () => {
+    const { service, payees } = setUp({ paymentMode: 'test', recipient: null });
+    await service.programmeRenew(student, renew(), log);
+    expect(payees).toEqual([undefined]);
+  });
+
+  it('red first: is keyed on programme.renew: a completed key answers the address read again, calling no gateway', async () => {
+    const { service, log: steps } = setUp();
+    await service.programmeRenew(student, renew(), log);
+    const created = steps.filter(([kind]) => kind === 'gateway create').length;
+    await expect(service.programmeRenew(student, renew(), log)).resolves.toEqual({
+      checkoutUrl: `https://pay.example/again/${CHECKOUT_URL_COLUMN}/${PAYMENT}`,
+    });
+    expect(steps.filter(([kind]) => kind === 'gateway create').length).toBe(created);
+    expect(steps).toContainEqual(['key read', 'programme.renew']);
   });
 });
 

@@ -146,6 +146,8 @@ beforeAll(() => {
     },
     cipher,
     gateway: 'fake',
+    // 006:T016 (rule d): the payment mode the payee read is bound over.
+    paymentMode: 'test',
   });
 });
 
@@ -171,6 +173,8 @@ function servicesAt(at: Date): CheckoutServices {
     },
     cipher,
     gateway: 'fake',
+    // 006:T016 (rule d): the payment mode the payee read is bound over.
+    paymentMode: 'test',
     now: () => at,
   });
 }

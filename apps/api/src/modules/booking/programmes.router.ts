@@ -22,6 +22,7 @@ import {
   programmeOfferInput,
   programmeOfferOutput,
   programmePayInput,
+  programmeRenewInput,
   programmeRequestInput,
   programmeRequestOutput,
 } from '@ijazah/contracts';
@@ -74,5 +75,21 @@ export const programmesRouter = createAppRouter({
     output: programmeActionOutput,
   }).mutation(({ ctx, input }) =>
     ctx.services.booking.programme.autoRenewOff(ctx.caller.userId, input, ctx.live),
+  ),
+
+  // 006:T016 (FR-713a, FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student kind,
+  // counted under `rate_limit_payment_initiation` by the caller's own id as `programme.pay` is (it
+  // creates a gateway order); one call of payments' checkout with the session's account and gender
+  // and the request's log. Keyed (scope `programme.renew`). Another student's enrollment NOT_FOUND.
+  renew: studentProcedure({
+    input: programmeRenewInput,
+    output: programmeCheckoutOutput,
+    rateLimit: initiation,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.checkout.programmeRenew(
+      { userId: ctx.caller.userId, gender: ctx.caller.gender },
+      input,
+      ctx.log,
+    ),
   ),
 });

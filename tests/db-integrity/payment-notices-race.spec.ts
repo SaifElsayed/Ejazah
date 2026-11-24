@@ -353,6 +353,8 @@ function checkoutServices() {
     payment: createPaymentPort(config),
     cipher,
     gateway: 'fake',
+    // 006:T016 (rule d): the payment mode the payee read is bound over.
+    paymentMode: 'test',
     notices: writer,
   });
 }
