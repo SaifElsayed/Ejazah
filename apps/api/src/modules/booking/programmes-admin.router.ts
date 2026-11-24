@@ -12,6 +12,10 @@
 import {
   programmesDecideInput,
   programmesDecideOutput,
+  programmesGetInput,
+  programmesGetOutput,
+  programmesQueueInput,
+  programmesQueueOutput,
   programmesReopenInput,
   programmesReopenOutput,
 } from '@ijazah/contracts/admin';
@@ -19,6 +23,28 @@ import {
 import { adminProcedure, createAdminRouter } from '../../surfaces/procedures.js';
 
 export const programmesAdminRouter = createAdminRouter({
+  // 006:T018 (FR-727; admin-surface.md `programmes.queue`; Q-f4 (a), the owner, 2026-11-24): the
+  // queue, oldest first, on the call's transaction; audited `programmes.listed` naming the reader, as
+  // `payments.list` is (a queue has no single target).
+  queue: adminProcedure({ input: programmesQueueInput, output: programmesQueueOutput }).query(
+    ({ ctx, input }) => {
+      const { adminId } = ctx.administrator;
+      ctx.audit.record({ action: 'programmes.listed', targetType: 'admin', targetId: adminId });
+      return ctx.services.programmes.queue(ctx.tx, input);
+    },
+  ),
+  // 006:T018 (FR-727; admin-surface.md `programmes.get`; Q-f4 (a)): one programme's page, audited
+  // `programmes.viewed` on the enrollment, as `payments.get` names its order.
+  get: adminProcedure({ input: programmesGetInput, output: programmesGetOutput }).query(
+    ({ ctx, input }) => {
+      ctx.audit.record({
+        action: 'programmes.viewed',
+        targetType: 'enrollment',
+        targetId: input.enrollmentId,
+      });
+      return ctx.services.programmes.get(ctx.tx, input.enrollmentId);
+    },
+  ),
   decide: adminProcedure({ input: programmesDecideInput, output: programmesDecideOutput }).mutation(
     async ({ ctx, input }) => {
       const { answer, replayed, enrollmentId } = await ctx.services.programmes.decide(

@@ -694,3 +694,64 @@ describe('B42a Q-B2 (a): a teacher’s end and a held slot on the order’s hist
     );
   });
 });
+
+// 006:T018 (the follow-up carried from T014, option (d), the owner's «موافق» of 2026-11-24): an
+// automatic order with no Paymob number (its intention unanswered, or refused before it was sent)
+// arrives with `gatewayOrderId: ''`; the table row, the panel's header, its references and the
+// enrollment's paid orders show «—» with the line saying why, in both languages. Example: a 1,000 EGP
+// automatic month, listed beside every other order of its page.
+describe('an order with no Paymob number (006:T018)', () => {
+  const P5 = '0193a6f0-0000-7000-8000-0000000000f5';
+  const unnumbered = {
+    ...created,
+    paymentId: P5,
+    gatewayOrderId: '',
+    gross_piasters: 100_000,
+    status: 'expired',
+    kind: 'instalment',
+    instalmentMonth: 2,
+    automatic: true,
+  } as const;
+  const unnumberedDetail = {
+    ...detail,
+    paymentId: P5,
+    gatewayOrderId: '',
+    status: 'expired',
+    gross_piasters: 100_000,
+    paidOrders: [{ ...detail.paidOrders[0], gatewayOrderId: '' }, detail.paidOrders[1]],
+  } as const;
+
+  function unnumberedApi() {
+    const api = fakeApi();
+    api.payments.list.query.mockResolvedValue({ items: [reported, unnumbered] });
+    api.payments.get.query.mockResolvedValue(unnumberedDetail);
+    return api;
+  }
+
+  it('lists it beside the page’s other orders with «—» and the line saying why, in both languages', async () => {
+    await inBothLocales(
+      () => open(unnumberedApi()),
+      async (t) => {
+        await rowOf(reported.gatewayOrderId);
+        const line = await screen.findByText(t('admin.payments.noOrderNo'));
+        // «—» stands where the number would, beside the line; the row's amounts are its own.
+        expect(
+          within(line.parentElement as HTMLElement).getByText(t('admin.payments.dash')),
+        ).toBeTruthy();
+        const row = within(line.closest('tr') as HTMLElement);
+        expect(row.getByText(t('admin.common.amount', { amount: '1,000.00' }))).toBeTruthy();
+      },
+    );
+  });
+
+  it('shows «—» and the line in the panel’s header, its references and the paid orders', async () => {
+    open(unnumberedApi(), `/payments?payment=${P5}`);
+    const aside = within(
+      await screen.findByRole('complementary', { name: ar('admin.payments.detail.a11y') }),
+    );
+    await aside.findByText(ar('admin.payments.detail.amountsTitle'));
+    // The header, the order number in the references, and the first paid order.
+    expect(aside.getAllByText(ar('admin.payments.noOrderNo'))).toHaveLength(3);
+    expect(aside.getByText('paymob_order_4')).toBeTruthy();
+  });
+});

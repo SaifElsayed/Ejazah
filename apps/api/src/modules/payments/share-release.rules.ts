@@ -439,7 +439,7 @@ export function programmeSharesOf(facts: ReleaseFacts): ProgrammeShares | undefi
  * full counts only before any month, a month only when it is the next one, and nothing after the
  * rest. Month 1 paid twice, 1,000 EGP each: the second and its refunds are left out.
  */
-function awaitedOrdersOf(orders: readonly ReleaseOrder[]): ReleaseOrder[] {
+export function awaitedOrdersOf(orders: readonly ReleaseOrder[]): ReleaseOrder[] {
   const programmeOrders = orders.filter(({ kind }) => CONTINUED_KINDS.has(kind)).sort(walkOrder);
   const awaited = new Set<ReleaseOrder>();
   let next = 1;

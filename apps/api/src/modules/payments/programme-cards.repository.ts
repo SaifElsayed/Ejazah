@@ -75,3 +75,24 @@ export function programmeCardTokens(database: Client): EncryptedColumn {
     },
   };
 }
+
+/** 006:T018 (app-surface.md `programme.get`): the student's saved card as it is shown. */
+export interface ProgrammeCardShown {
+  readonly last4: string;
+  readonly brand: string;
+}
+
+/**
+ * 006:T018 (R-510, SC-707): the programme's saved card's last four digits and brand, or null; the
+ * token is never selected, so it never leaves the row. By the primary key, with no lock.
+ */
+export async function programmeCardOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeCardShown | null> {
+  const row = await tx.programmeCard.findUnique({
+    where: { enrollmentId },
+    select: { last4: true, brand: true },
+  });
+  return row === null ? null : { last4: row.last4, brand: row.brand };
+}

@@ -215,6 +215,8 @@ import type { SettingsReader } from '../platform/settings/settings-reader.js';
 import type { BookingServices, DiscoveryServices } from '../modules/booking/index.js';
 // 006:T008 of specs/006-programme (Q-7 (a)): booking's `programmes.decide`.
 import type { ProgrammeDecisions } from '../modules/booking/index.js';
+// 006:T018 of specs/006-programme: booking's `programmes.queue` and `programmes.get`.
+import type { ProgrammeAdminReads } from '../modules/booking/index.js';
 import type { CatalogServices, SubjectsReader } from '../modules/catalog/index.js';
 // T037 of specs/004-sessions.
 import type { ChatServices } from '../modules/chat/index.js';
@@ -1050,8 +1052,10 @@ export interface AdminSurfaceServices {
   /**
    * 006:T008 of specs/006-programme (Q-7 (a); contracts/admin-surface.md `programmes.decide`): an
    * administrator's decision on a programme's item, booking's, keyed on the kind's transaction.
+   * 006:T018 (FR-727): and the two reads, `programmes.queue` and `programmes.get`, on the call's
+   * transaction.
    */
-  readonly programmes: ProgrammeDecisions;
+  readonly programmes: ProgrammeDecisions & ProgrammeAdminReads;
 }
 
 /**

@@ -117,8 +117,12 @@ import {
 import {
   createCheckoutServices,
   createPaymentWebhookRoute,
+  // 006:T018: `programme.get`'s payments reads, as `main.ts` binds them.
+  createProgrammePayee,
   orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
+  programmeCardOf,
+  programmeMonthOrdersOf,
   programmeOfferAmountsOf,
 } from '../../apps/api/src/modules/payments/index.js';
 // 005:T011 (Q-X1): reports, over the `Pairings` bodies, bound as `main.ts` will bind them.
@@ -216,6 +220,8 @@ import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
   ProgrammeCheckoutOutput,
+  ProgrammeGetInput,
+  ProgrammeGetOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammePayInput,
@@ -599,6 +605,8 @@ export interface AppCaller {
     autoRenewOff(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
     /** 006:T016: the student's next month by hand, attacked in the same file. */
     renew(input: ProgrammeRenewInput): Promise<ProgrammeCheckoutOutput>;
+    /** 006:T018: either party's read of the programme, attacked in the same file. */
+    get(input: ProgrammeGetInput): Promise<ProgrammeGetOutput>;
   };
 }
 
@@ -1046,6 +1054,12 @@ async function build(): Promise<Built> {
       idempotency,
       log,
       programmeAmounts: programmeOfferAmountsOf,
+      // 006:T018: `programme.get`'s payments reads, as `main.ts` binds them (test mode).
+      programmeReads: {
+        payee: createProgrammePayee({ paymentMode: 'test', cipher }),
+        monthOrders: programmeMonthOrdersOf,
+        cardOf: programmeCardOf,
+      },
     }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({

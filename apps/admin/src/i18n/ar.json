@@ -1997,6 +1997,8 @@
           "releasesTitle": "ليه",
           "share": "نصيب المعلم منه: {amount}",
           "platformShare": "منها {amount} على المنصة: استُرد بعد صرف نصيب المعلم، فلا يُخصم منه",
+          "drawnTitle": "يُصرف من الطلبات:",
+          "drawnFrom": "{amount} من هذا الطلب",
           "student": "الطالب: {name}"
         },
         "empty": {
@@ -2227,6 +2229,7 @@
         "refunded": "المسترد"
       },
       "dash": "—",
+      "noOrderNo": "لا رقم طلب من Paymob: رُفض قبل إرساله، أو لم يُعطه Paymob رقمًا",
       "detail": {
         "a11y": "تفاصيل الطلب",
         "a11yEvents": "أحداث الطلب",

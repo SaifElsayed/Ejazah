@@ -1997,6 +1997,8 @@
           "releasesTitle": "Owed",
           "share": "The teacher's share of it: {amount}",
           "platformShare": "Of it, {amount} is the platform's: refunded after the teacher's share was released, so not taken off them",
+          "drawnTitle": "Drawn from the orders:",
+          "drawnFrom": "{amount} from this order",
           "student": "Student: {name}"
         },
         "empty": {
@@ -2227,6 +2229,7 @@
         "refunded": "Refunded"
       },
       "dash": "—",
+      "noOrderNo": "No Paymob order number: refused before it was sent, or Paymob gave none",
       "detail": {
         "a11y": "Order details",
         "a11yEvents": "Order events",

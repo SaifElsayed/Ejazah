@@ -63,6 +63,15 @@ export const payoutsListOutput = z.object({
 
 export const payoutsGetInput = z.object({ teacherUserId: z.uuid() });
 
+/**
+ * 006:T018 (FU-E1 (a), the owner's «موافق» of 2026-11-23): a paid order a release draws from, and the
+ * amount it draws from it.
+ */
+export const payoutReleaseOrder = z.object({
+  paymentId: z.uuid(),
+  amount_piasters: amountPiasters,
+});
+
 /** One release of the teacher («ليه»), with the order and the student behind it. */
 export const payoutRelease = z.object({
   /** A written release's id, which `payouts.mark` names; absent on a `held` one, never stored. */
@@ -76,6 +85,14 @@ export const payoutRelease = z.object({
   enrollmentId: z.uuid(),
   paymentId: z.uuid(),
   student: namedPerson,
+  /**
+   * 006:T018 (FU-E1 (a)): the paid orders the release draws from, in the order drawn, with the amount
+   * from each; one order for a package's release. A programme's draws its orders' shares oldest first,
+   * each less what the releases before it drew: the half of an offer of 10,000 EGP by months, fee
+   * 500 EGP, draws 350 from the assessment, 700 from each of months 1 and 2, and 87.50 from month 3.
+   * Additive (R-API-9).
+   */
+  orders: z.array(payoutReleaseOrder),
 });
 
 /** One refund recorded on the teacher's orders («عليه»). */
@@ -126,6 +143,7 @@ export type PayoutsListItem = z.infer<typeof payoutsListItem>;
 export type PayoutsListOutput = z.infer<typeof payoutsListOutput>;
 export type PayoutsGetInput = z.infer<typeof payoutsGetInput>;
 export type PayoutRelease = z.infer<typeof payoutRelease>;
+export type PayoutReleaseOrder = z.infer<typeof payoutReleaseOrder>;
 export type PayoutDeduction = z.infer<typeof payoutDeduction>;
 export type PayoutsGetOutput = z.infer<typeof payoutsGetOutput>;
 export type PayoutsMarkInput = z.infer<typeof payoutsMarkInput>;

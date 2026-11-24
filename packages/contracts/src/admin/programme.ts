@@ -7,6 +7,12 @@
 // audited (R-API-12), rate limited by the administrator limit and keyed by an idempotency key; no
 // card detail appears in an output or an audit entry. No amount crosses here: the orders' amounts
 // are the payments monitor's (`payments.ts`). Additive only once merged (R-API-9).
+//
+// 006:T018 (FR-726, FR-727; B-P3's conflict check, the owner's «موافق على الكل (أ) مع تحسين س٢»,
+// 2026-11-24): the queue offers `charge_unknown` beside `pay_blocked` (Q-1 (a), SRS DEC-113); a
+// `no_offer` item carries whether the assessment was held (PR #158 r1 Q-R1 (b)); `programmes.get`
+// carries `cardSaved`, a boolean, never a card detail (Q-9 (a), SC-707), and, on a closed programme
+// with no `assessment` release, whether the assessment was held (PR #158 r2 Follow-up 2). Additive.
 import { z } from 'zod';
 
 import { paymentStatus } from '../checkout.js';
@@ -33,6 +39,8 @@ export const programmesQueueFilter = z.enum([
   'refusal',
   'no_offer',
   'pay_blocked',
+  /** 006:T018 (Q-1 (a), SRS DEC-113): an automatic charge the gateway has not answered. */
+  'charge_unknown',
 ]);
 
 export const programmesQueueInput = z.object({
@@ -47,11 +55,21 @@ const namedPerson = z.object({ displayName: z.string() });
 export const programmeRequestItem = z.object({
   requestId: z.uuid(),
   kind: programmeRequestKind,
-  /** The teacher's reason, on `stop` and `refusal` (FR-727); absent on the sweep's items. */
+  /**
+   * The teacher's reason on a `stop` (FR-727); on a decided `no_offer` item, the administrator's
+   * record of what the teacher sent support, written by `programmes.decide` (T008, SRS DEC-112);
+   * absent otherwise.
+   */
   reason: z.string().optional(),
   status: programmeRequestStatus,
   createdAt: z.iso.datetime(),
   decidedAt: z.iso.datetime().optional(),
+  /**
+   * 006:T018 (PR #158 r1 Q-R1 (b)): on a `no_offer` item only, whether the assessment was held
+   * (session 1's outcome chain consumed, `done` or `student_no_show`); false is «the assessment was
+   * not held; the fee is unreleased» (T021).
+   */
+  assessmentHeld: z.boolean().optional(),
 });
 
 /** One row of the queue, oldest first: how late it is reads from its time. */
@@ -103,6 +121,14 @@ export const programmesGetOutput = z.object({
   closedAt: z.iso.datetime().nullable(),
   orders: z.array(programmeOrderItem),
   requests: z.array(programmeRequestItem),
+  /** 006:T018 (Q-9 (a)): whether a card is saved for the automatic charge; never a card detail. */
+  cardSaved: z.boolean(),
+  /**
+   * 006:T018 (PR #158 r2 Follow-up 2): on a closed programme with no `assessment` release, whether
+   * the assessment was held; false is «the assessment was not held; the fee is unreleased» (T021).
+   * Absent on any other programme.
+   */
+  assessmentHeld: z.boolean().optional(),
 });
 
 /**

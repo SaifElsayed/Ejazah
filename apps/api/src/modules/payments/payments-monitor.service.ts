@@ -24,6 +24,14 @@
 // reported them (FR-PAYG-7): a gateway that reports neither on its paid event leaves both absent.
 // Each leaves the database's integer as `Piasters` (R-MONEY-1) and is never computed from another
 // (R-MONEY-5).
+//
+// 006:T018 (FR-727; admin-surface.md `payments.monitor`; the follow-up carried from T014, option (d),
+// the owner's «موافق» of 2026-11-24). Every order carries its kind and whether it is automatic, an
+// `instalment`'s month and a failed automatic order's decline where the row holds them. An order
+// with no gateway id (an automatic one the gateway never answered, or refused before it was sent)
+// stays in the list, the detail and the paid orders: the rows keep the NULL and only this edge maps
+// it to `''`, the contract's string (no nullable field until a page needs one, R-API-9). A search
+// compares the row's own value, so `''` never matches one (`adminSearch` is at least one character).
 import type {
   PaymentEnrollmentHold,
   PaymentsGetOutput,
@@ -110,6 +118,21 @@ export interface PaymentsMonitorDependencies {
 /** An amount the gateway reported, or none. */
 function reported(amount: bigint | null): Piasters | undefined {
   return amount === null ? undefined : piasters(Number(amount));
+}
+
+/** 006:T018 (option (d)): the contract's reference, `''` for an order with no gateway id. */
+function referenceOf(row: MonitorOrderRow): string {
+  return row.gatewayOrderId ?? '';
+}
+
+/** 006:T018: the order's programme terms, a month and a decline only where the row holds them. */
+function termsOf(row: MonitorOrderRow) {
+  return {
+    kind: row.kind,
+    ...(row.instalmentMonth === null ? {} : { instalmentMonth: row.instalmentMonth }),
+    automatic: row.automatic,
+    ...(row.declineKind === null ? {} : { declineKind: row.declineKind }),
+  };
 }
 
 /** The fee and net as reported, each present only once reported (FR-PAYG-7). */
@@ -227,7 +250,8 @@ export class PaymentsMonitorService {
       userId === undefined ? '' : (names.get(userId) ?? '');
     return {
       paymentId: order.id,
-      gatewayOrderId: order.gatewayOrderId,
+      ...termsOf(order),
+      gatewayOrderId: referenceOf(order),
       ...(order.gatewayTransactionId === null
         ? {}
         : { gatewayTransactionId: order.gatewayTransactionId }),
@@ -273,7 +297,8 @@ export class PaymentsMonitorService {
         })),
       paidOrders: paid.map((row) => ({
         paymentId: row.id,
-        gatewayOrderId: row.gatewayOrderId,
+        ...termsOf(row),
+        gatewayOrderId: referenceOf(row),
         status: row.status,
         createdAt: row.createdAt.toISOString(),
       })),
@@ -308,7 +333,8 @@ function itemOf(
 ): PaymentsListItem {
   return {
     paymentId: row.id,
-    gatewayOrderId: row.gatewayOrderId,
+    ...termsOf(row),
+    gatewayOrderId: referenceOf(row),
     createdAt: row.createdAt.toISOString(),
     student: {
       displayName: party === undefined ? '' : (names.get(party.studentUserId) ?? ''),

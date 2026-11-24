@@ -833,7 +833,7 @@ No open question remains.
   > **Follow-up (B-P3 lane e, 2026-11-24).** The admin harness of `tests/adversarial` covers the user surface only:
   > `programmes.reopen`'s gender refusal is asserted both ways in the unit and DB specs, not by the harness.
   > `programme.request`'s registration is unchanged (both directions, `not_paused`).
-- [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
+- [x] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19),
@@ -882,6 +882,32 @@ No open question remains.
   > published field forever). Example: a 1,000 EGP automatic order whose intention got no answer is listed with
   > «—», and every other order on its page is listed too. Red first: the list page, `payments.get` and the
   > enrollment's `paidOrders`.
+  > **Settled (the owner, 2026-11-24, «موافق عالكل», typed in B-P3's review session; lane f's stop 1).** Q-f1 (a):
+  > `booking-slots.service.ts`, `booking/index.ts`, `payments/programme-cards.repository.ts` (`programmeCardOf`, the last
+  > four and the brand only), `payments/index.ts` and `share-release.rules.ts` (`export` on `awaitedOrdersOf`) approved.
+  > Q-f2 (a): `chargePending` is true while the month's automatic order is `created`, until the gateway answers, expired
+  > or not. Q-f3 (a): `renewOpen` is «`programme.renew` would be accepted now» (one rule, `renewalRefusalOf`, shared
+  > with the renewal's check): with a card saved only after a failed or expired charge («pay now», «change card»), with
+  > none «renew now»; false while `payeePending`, `chargePending` or a suspension holds; no new field. Q-f4 (a): the two
+  > administrator reads are audited `programmes.listed` and `programmes.viewed` (admin-surface.md amended). Q-f5 (a):
+  > each programme release draws its orders' shares oldest first, each less what earlier releases took (offer 10,000
+  > EGP over 10 months, fee 500, 70 %: `ijazah_half` 1,837.50 = 350 + 700 + 700 + 87.50; `ijazah_end` 5,512.50 =
+  > 612.50 + 700 × 7).
+  > **Done (B-P3 lane f, 2026-11-24).** `programme.get` (participant; NOT_FOUND to anyone but the two parties; the card's
+  > last four and brand to the student only; `payeePending` through T008's payee entry, a spec per mode against the
+  > real `createProgrammePayee`), `programmes.queue` (`charge_unknown` added; `no_offer` with `assessmentHeld`,
+  > `pay_blocked` with `payeeVerifiedNow`) and the admin `programmes.get` (orders by kind, items with reasons,
+  > `cardSaved`, `assessmentHeld` on a closed programme with no `assessment` release); the monitor's four columns and
+  > option (d) («—» and its line on the admin pages); FU-E1 (`payoutRelease.orders`, the payouts page); the binds in
+  > `main.ts` and `surfaces/context.ts` (`006:T018` lines, a source-level bind spec); adversarial `programme.get`, both
+  > directions; `tests/db-integrity/programme-reads.spec.ts`.
+  > **Follow-up (B-P3 lane f, 2026-11-24).** (1) `packages/contracts/src/admin/payments.ts:58-60` still says the four
+  > terms are «absent until T018 answers them»: a stale comment (the owner, 2026-11-24). (2) The queue reads a
+  > `no_offer` item's `assessmentHeld` and a `pay_blocked` item's payee once per item (sessions has no batched entry),
+  > bounded by `admin_list_page_size`. (3) `programmes.listed` and `programmes.viewed` have no label in
+  > `apps/admin/src/pages/audit/actions.ts` yet: the audit page shows the stored action (T021). (4) FU-E1: a refund's
+  > share is taken off the end release, so the last orders stay partly undrawn; a complaint or direct-end close is
+  > attributed oldest first too, not by each session's own order (Q-f5 (a)).
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 

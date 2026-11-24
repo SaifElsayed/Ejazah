@@ -38,7 +38,7 @@ import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
 import { amountOrDash } from './history';
-import { PAYMENT_STATUS, PaymentPanel } from './PaymentPanel';
+import { OrderReference, PAYMENT_STATUS, PaymentPanel } from './PaymentPanel';
 import { type PaymentsFilter, type PaymentStatus, usePaymentsPage } from './queries';
 
 /** The tab with no status filter. */
@@ -145,7 +145,9 @@ export function AdminPayments() {
           cells: {
             order: (
               <span className="stack">
-                <bdi className="text-medium">{row.gatewayOrderId}</bdi>
+                <span className="text-medium">
+                  <OrderReference value={row.gatewayOrderId} />
+                </span>
                 <span className="text-caption tone-muted">
                   {t('admin.common.dateTime', {
                     date: dayMonth(row.createdAt, locale, zone),
