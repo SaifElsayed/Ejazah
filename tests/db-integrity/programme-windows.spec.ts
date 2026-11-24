@@ -41,6 +41,7 @@ import {
 } from '../../apps/api/src/modules/booking/index';
 import { lockAccount } from '../../apps/api/src/modules/identity/index';
 import {
+  checkoutOrdersAmong,
   createProgrammePayee,
   orderStandingsOf,
   type PaymentMode,
@@ -92,6 +93,8 @@ function windowsIn(paymentMode: PaymentMode) {
     settings,
     payee: createProgrammePayee({ paymentMode, cipher }),
     deleteProgrammeCard,
+    // 006:T015 (rule d): the windows' «pending» reads payments' orders.
+    orders: checkoutOrdersAmong,
     log,
   });
 }

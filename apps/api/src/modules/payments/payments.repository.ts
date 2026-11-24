@@ -298,6 +298,78 @@ export function automaticOrderOf(
   });
 }
 
+/** 006:T015: a programme month's latest automatic order, as the sweep decides on it. */
+export interface MonthAutomaticOrder {
+  readonly paymentId: string;
+  readonly status: OrderStatus;
+  readonly expiresAt: Date;
+  readonly declineKind: DeclineKind | null;
+  readonly attempt: number;
+  /** Its `updated_at` once `failed` (the failure's instant); null otherwise. */
+  readonly failedAt: Date | null;
+}
+
+/** 006:T015: a programme month's orders and whether a card is saved (never a card detail). */
+export interface ProgrammeMonthOrders {
+  readonly cardSaved: boolean;
+  readonly payable: boolean;
+  readonly processing: boolean;
+  readonly automatic: MonthAutomaticOrder | null;
+}
+
+/**
+ * 006:T015 (R-508; SRS DEC-110, DEC-113): the enrollment's programme orders (`rest_in_full`,
+ * `instalment`) as the sweep's month `month` reads them, with no lock (the sweep's step holds the
+ * enrollment, which every order's move takes first): whether one is `created` and unexpired at `at`
+ * (payable), whether one is paid and not yet processed by the confirm step (`confirmed_at` NULL), and
+ * the month's latest automatic order by id (a UUIDv7's creation order); and whether a card is saved,
+ * its key only (never a card detail, SC-707). Two statements over `payments_enrollment_id_idx` and
+ * `programme_cards`' primary key, bounded by the enrollment's few orders.
+ */
+export async function programmeMonthOrdersOf(
+  tx: Pick<Transaction, 'payment' | 'programmeCard'>,
+  enrollmentId: string,
+  month: number,
+  at: Date,
+): Promise<ProgrammeMonthOrders> {
+  const card = await tx.programmeCard.findUnique({
+    where: { enrollmentId },
+    select: { enrollmentId: true },
+  });
+  const orders = await tx.payment.findMany({
+    where: { enrollmentId, kind: { in: ['rest_in_full', 'instalment'] } },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      expiresAt: true,
+      confirmedAt: true,
+      automatic: true,
+      instalmentMonth: true,
+      attempt: true,
+      declineKind: true,
+      updatedAt: true,
+    },
+  });
+  const latest = orders.filter((one) => one.automatic && one.instalmentMonth === month).at(-1);
+  return {
+    cardSaved: card !== null,
+    payable: orders.some((one) => one.status === 'created' && one.expiresAt > at),
+    processing: orders.some((one) => one.status === 'paid' && one.confirmedAt === null),
+    automatic:
+      latest === undefined
+        ? null
+        : {
+            paymentId: latest.id,
+            status: latest.status,
+            expiresAt: latest.expiresAt,
+            declineKind: latest.declineKind,
+            attempt: latest.attempt ?? 0,
+            failedAt: latest.status === 'failed' ? latest.updatedAt : null,
+          },
+  };
+}
+
 /** A signed recipient event as it is kept: never the body, only its hash (R-SEC-2). */
 export interface RecipientEventRecord {
   readonly providerEventId: string;

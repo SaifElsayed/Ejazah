@@ -26,7 +26,10 @@
 //     enrollment paused until the teacher's reinstatement or its end closes it, moderation's rows
 //     read through its entry (R-301);
 //   - (006:T010 of specs/006-programme, FR-712, R-501 V-1) a programme's enrollment, first: fully
-//     paid and not `awaiting_offer`, `offered` or `paused` (`programmeMayComplete`).
+//     paid and not `awaiting_offer`, `offered` or `paused` (`programmeMayComplete`); and (006:T015,
+//     PR #158 r1 Follow-up 2, Q-6 (a)) no `slot_unavailable` or `party_restricted` case open on it,
+//     the two the confirm step opens when a paid month's or the rest's generation is refused, so a
+//     programme paid in full with only session 1 written waits for the administrator's resolution.
 // An enrollment in any other state, or with no session, is left as it is.
 //
 // NO COUNT (FR-448, R-322, the owner's decision of 2026-11-05). Nothing here reads the
@@ -117,7 +120,15 @@ export interface CompletionStore {
   adminCancellationCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
   /** T071: whether a `teacher_suspended` compensation case is open on it (the pause). */
   teacherSuspendedCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  /**
+   * 006:T015 (Q-6 (a)): whether a `slot_unavailable` or `party_restricted` case is open on it, the
+   * two the confirm step opens when a paid programme order's generation is refused.
+   */
+  generationCaseOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
 }
+
+/** 006:T015 (Q-6 (a)): the cases a refused generation of a paid programme order opens. */
+const GENERATION_CASES = ['slot_unavailable', 'party_restricted'] as const;
 
 const completionStore: CompletionStore = {
   sessionsOf: completionSessionsOf,
@@ -127,6 +138,13 @@ const completionStore: CompletionStore = {
     (await openCaseOf(tx, enrollmentId, 'admin_cancellation')) !== null,
   teacherSuspendedCaseOpen: async (tx, enrollmentId) =>
     (await openCaseOf(tx, enrollmentId, 'teacher_suspended')) !== null,
+  generationCaseOpen: async (tx, enrollmentId) => {
+    // One query at a time on the one transaction (PR #156 r1 nit: pg's «already executing» warning).
+    for (const reason of GENERATION_CASES) {
+      if ((await openCaseOf(tx, enrollmentId, reason)) !== null) return true;
+    }
+    return false;
+  },
 };
 
 export interface Completion {
@@ -209,6 +227,10 @@ export function createCompletion({
       if (await store.studentSuspendedCaseOpen(tx, enrollmentId)) return false;
       if (await store.adminCancellationCaseOpen(tx, enrollmentId)) return false;
       if (await store.teacherSuspendedCaseOpen(tx, enrollmentId)) return false;
+      // 006:T015 (Q-6 (a)): a programme whose paid sessions were never generated waits for its case.
+      if (terms.programme !== undefined && (await store.generationCaseOpen(tx, enrollmentId))) {
+        return false;
+      }
       return enrollments.complete(tx, enrollmentId);
     },
   };

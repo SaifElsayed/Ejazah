@@ -417,6 +417,9 @@ const services = {
     programmeAmounts: payments.programmeOfferAmountsOf,
     // 006:T013 (DEC-112 Q-B2 (a)): `programme.cancel`'s close hook deletes the saved card.
     deleteProgrammeCard: payments.deleteProgrammeCard,
+    // 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): `programme.cancel` refuses `payment_processing`
+    // while a programme order is payable or paid and not yet processed.
+    programmeOrders: payments.checkoutOrdersAmong,
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two

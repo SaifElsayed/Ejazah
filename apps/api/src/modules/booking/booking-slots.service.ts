@@ -275,6 +275,7 @@ export function createBookingServices({
   log,
   programmeAmounts,
   deleteProgrammeCard,
+  programmeOrders,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
@@ -298,6 +299,11 @@ export function createBookingServices({
    * `programme.cancel`, which `main.ts` hands in; none deleted where a caller binds none.
    */
   readonly deleteProgrammeCard?: ProgrammeServiceDependencies['deleteProgrammeCard'];
+  /**
+   * 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): payments' `checkoutOrdersAmong`, which
+   * `programme.cancel` reads to refuse `payment_processing`; `main.ts` hands it in.
+   */
+  readonly programmeOrders?: ProgrammeServiceDependencies['orders'];
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
@@ -323,6 +329,7 @@ export function createBookingServices({
       amounts: programmeAmounts,
       log,
       ...(deleteProgrammeCard === undefined ? {} : { deleteProgrammeCard }),
+      ...(programmeOrders === undefined ? {} : { orders: programmeOrders }),
     }),
   };
 }

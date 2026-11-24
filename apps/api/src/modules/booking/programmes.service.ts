@@ -90,7 +90,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import { type LivePublisher, publisherOn } from '../../platform/live/live-publisher.js';
-import { positiveWhole } from '../../platform/settings/registry.js';
+import { positiveWhole, programmeChargeRetryDays } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
@@ -104,7 +104,12 @@ import {
 } from '../catalog/index.js';
 import { lockAccount, readStanding } from '../identity/index.js';
 import { openCaseOf } from '../moderation/index.js';
-import { type AssessmentOutcome, assessmentOutcome, type HeldTime } from '../sessions/index.js';
+import {
+  type AssessmentOutcome,
+  assessmentOutcome,
+  type HeldTime,
+  sessionsOfEnrollments,
+} from '../sessions/index.js';
 import { ownActiveHold } from './checkout-holds.repository.js';
 import { type HeldOrders, previousCheckout } from './checkout-holds.service.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
@@ -137,13 +142,34 @@ import {
   payEnrollmentOf,
   type ProgrammeFacts,
   programmeFactsOf,
+  type ProgrammeMonthRow,
+  programmeMonthOf,
   type ProgrammePayment,
   type ProgrammeState,
+  withdrawOpenItem,
+  writeAttempt,
+  writeFirstFailure,
+  writeNextDue,
   writeOffer,
   writeOfferDue,
+  writePaused,
   writeProgrammePaid,
 } from './programmes.repository.js';
-import { noOfferStep, offerDueOf, payByPassed, payWindowStep } from './programmes.rules.js';
+import {
+  inquiryDue,
+  type MonthAction,
+  type MonthFacts,
+  type MonthOrders,
+  type MonthSession,
+  type MonthStepKind,
+  monthStepOf,
+  nextDueOf,
+  nextOccurrenceAt,
+  noOfferStep,
+  offerDueOf,
+  payByPassed,
+  payWindowStep,
+} from './programmes.rules.js';
 import type { SessionsBetween } from './session-overlap.service.js';
 
 /** The programme's availability now (catalog's `programmeAvailabilityOf`, bound to settings). */
@@ -431,6 +457,12 @@ export interface ProgrammeServiceDependencies {
   readonly end?: ProgrammeEndStore;
   /** 006:T008: the refusal request's reads and writes, stood in by a spec. */
   readonly requests?: ProgrammeRequestStore;
+  /**
+   * 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): payments' `checkoutOrdersAmong`, which the
+   * cancellation reads under its locks to refuse `payment_processing`; a caller that binds none
+   * reads no order.
+   */
+  readonly orders?: CheckoutOrdersAmong;
 }
 
 /**
@@ -643,19 +675,25 @@ function isActiveTeacher(standing: Awaited<ReturnType<typeof readStanding>>): bo
 // the enrollment no longer `confirmed`, and (PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ»;
 // FR-BOOK-15, «after the assessment») `assessment_not_settled` until session 1's outcome chain
 // (sessions' `assessmentOutcome`, read as the windows' step reads it) is consumed, `done` or
-// `student_no_show`: still to come, waiting for a make-up, or ended with no assessment held.
+// `student_no_show`: still to come, waiting for a make-up, or ended with no assessment held; and
+// (006:T015, PR #158 r2 Follow-up 1, Q-8 (a)) `payment_processing` while a programme order of the
+// enrollment is payable, or paid and not yet processed by the confirm step (payments'
+// `checkoutOrdersAmong`, handed in as `orders`, its rows locked after the enrollment's).
 // `enrollment` to both parties after the commit.
 //
 // THE WINDOWS' STEP (R-508's step 1, for T015's `advance-programmes`). One programme in a transaction
 // of its own, under its row lock: the teacher's `users` row key-shared first (an item's insert
 // key-shares it through its foreign key, and `programme.offer` and `programme.request` take that row
 // `FOR UPDATE` before the programme, kernel.md, 006:T008's row), then the programme's row, then the
-// enrollment's; read again under them, a programme whose enrollment is not `confirmed` is left alone.
+// enrollment's; read again under them, a programme whose enrollment is not `confirmed` is left alone,
+// and (006:T015, R-508, N-1) so is one with an open `teacher_suspended` or `student_suspended` case.
 // - `awaiting_offer`: the deadline derived from session 1's outcome chain and the latest extension
 //   (`noOfferStep`), written when it changed (Q-3 (a) amended); the `no_offer` item once per deadline.
 // - `offered`: past `pay_by_at` with no `pay_blocked` item open, payments' «unverified in live mode»
 //   read at that instant (FR-706b); the `pay_blocked` item once per deadline, or the lapse
-//   (`offer_lapsed`, through `endProgramme`) (`payWindowStep`).
+//   (`offer_lapsed`, through `endProgramme`) (`payWindowStep`). 006:T015 («pending», A-1; Q-8 (a)):
+//   neither while a programme order is payable, or paid and not yet processed by the confirm step
+//   (payments' `checkoutOrdersAmong`, `orders`, its rows locked after the enrollment's).
 // Each item and each lapse writes one info line of ids and the reason; `enrollment` to both parties
 // after the commit on the transaction's bound publisher (none in a worker until T015 binds one).
 // Double run (R-API-14): the second run reads the item open, or the programme closed, and does
@@ -678,6 +716,18 @@ export const programmeCancelStore: ProgrammeCancelStore = {
 
 /** The states the student may cancel in: before any payment of the rest. */
 const CANCELLABLE: ReadonlySet<ProgrammeState> = new Set(['awaiting_offer', 'offered']);
+
+/**
+ * 006:T015 («pending», A-1; PR #158 r2 Follow-up 1, Q-8 (a)): whether a programme order of the
+ * enrollment is payable, or paid and not yet processed by the confirm step, in payments' answer.
+ */
+function orderPending(
+  orders: ReadonlyMap<string, ProgrammePayOrders>,
+  { enrollmentId }: { readonly enrollmentId: string },
+): boolean {
+  const own = orders.get(enrollmentId);
+  return own !== undefined && (own.payable !== null || own.programmeProcessing);
+}
 
 /** `programme.cancel` (this section's head, THE CANCELLATION). */
 export function cancelProgramme(
@@ -707,6 +757,12 @@ export function cancelProgramme(
       if (!CANCELLABLE.has(facts.state)) throw refused('rest_paid');
       if ((await store.assessmentOutcome(tx, facts.enrollmentId)).kind !== 'delivered') {
         throw refused('assessment_not_settled');
+      }
+      if (dependencies.orders !== undefined) {
+        const at = await (dependencies.clock ?? clockTimestamp)(tx);
+        if (orderPending(await dependencies.orders(tx, [facts.enrollmentId], at), facts)) {
+          throw refused('payment_processing');
+        }
       }
       const ended = await endProgramme(tx, facts.enrollmentId, 'offer_declined', {
         deleteProgrammeCard: dependencies.deleteProgrammeCard ?? noProgrammeCardYet,
@@ -754,9 +810,12 @@ export interface ProgrammeWindowStore {
       readonly kind: ItemKind;
     },
   ): Promise<string>;
+  /** 006:T015 (R-508, N-1): moderation's open case of `reason`, read under the enrollment's lock. */
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
 }
 
 export const programmeWindowStore: ProgrammeWindowStore = {
+  openCaseOf,
   programmeFactsOf,
   keyShareTeacher: (tx, teacherUserId) => keyShareRows(tx, 'users', [teacherUserId]),
   lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
@@ -779,11 +838,31 @@ export interface ProgrammeWindowDependencies {
     unverifiedInLiveMode(tx: Transaction, teacherUserId: string): Promise<boolean>;
   };
   readonly deleteProgrammeCard: DeleteProgrammeCard;
+  /**
+   * 006:T015 («pending», A-1; Q-8 (a)): payments' `checkoutOrdersAmong`, read past `pay_by_at`
+   * under the enrollment's lock: a payable or paid, unconfirmed programme order holds the lapse.
+   */
+  readonly orders: CheckoutOrdersAmong;
   readonly log: ProgrammeLog;
   /** The database's clock on the transaction (`clock_timestamp()`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: ProgrammeWindowStore;
   readonly end?: ProgrammeEndStore;
+}
+
+/** 006:T015 (R-508, analyze N-1; PR #153 r1 Minor 2): the cases a suspension pauses the sweep with. */
+export const SWEEP_SUSPENSIONS = ['teacher_suspended', 'student_suspended'] as const;
+
+/** Whether a suspension case is open on the enrollment, one query at a time on the transaction. */
+async function suspensionOpen(
+  tx: Transaction,
+  enrollmentId: string,
+  openCase: (tx: Transaction, enrollmentId: string, reason: string) => Promise<string | null>,
+): Promise<boolean> {
+  for (const reason of SWEEP_SUSPENSIONS) {
+    if ((await openCase(tx, enrollmentId, reason)) !== null) return true;
+  }
+  return false;
 }
 
 /** The windows' step over `dependencies` (this section's head, THE WINDOWS' STEP). */
@@ -823,6 +902,10 @@ export function createProgrammeWindows(
     // `pay_by_at` is set with the offer (R-505; rule 76 sets `offered_at` in `offered`).
     if (facts.payByAt === null) throw new Error('advance-programmes: an offer without pay_by_at');
     if (!payByPassed(now, facts.payByAt)) return 'none';
+    // 006:T015 («pending», A-1; Q-8 (a)): a first payment under way, or paid and not yet processed.
+    if (orderPending(await dependencies.orders(tx, [facts.enrollmentId], now), facts)) {
+      return 'none';
+    }
     const openItem = await store.openRequestExists(tx, facts.enrollmentId, 'pay_blocked');
     const step = payWindowStep({
       now,
@@ -857,6 +940,8 @@ export function createProgrammeWindows(
         await store.lockEnrollment(tx, enrollmentId);
         const facts = await store.programmeFactsOf(tx, enrollmentId);
         if (facts?.status !== 'confirmed') return 'none';
+        // 006:T015 (R-508, N-1): a suspension pauses; read again under the locks the sweep chose by.
+        if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) return 'none';
         const now = await clock(tx);
         let outcome: WindowStepOutcome = 'none';
         if (facts.state === 'awaiting_offer') outcome = await awaitingOffer(tx, facts, now);
@@ -931,7 +1016,7 @@ export const programmePayStore: ProgrammePayStore = {
 };
 
 /** The suspensions a first payment waits out (PR #153 r1 Minor 2): a suspension pauses. */
-const PAY_SUSPENSIONS = ['teacher_suspended', 'student_suspended'] as const;
+const PAY_SUSPENSIONS = SWEEP_SUSPENSIONS;
 
 /** `programme.pay`'s own refusals (contracts' `programmePayRefusal`), the check's part. */
 type PayRefusal = Extract<ProgrammePayRefusal, 'not_offered' | 'pay_by_passed' | 'party_suspended'>;
@@ -1039,4 +1124,343 @@ async function ownHeldEnrollment(
   const [held] = await store.activeHoldsByIds(tx, [own.id]);
   if (held === undefined || held.expiresAt.getTime() <= at.getTime()) return [];
   return held.enrollmentId === null ? [] : [held.enrollmentId];
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T015 (FR-714, FR-717, FR-721; R-507, R-508, R-509; SRS DEC-110, DEC-113; B-P3's conflict
+// check, Q-1 (a), Q-3 (a); Q-10 (a) adjusted): THE MONTHS, the sweep's steps on a paid programme
+// (`active` or `paused`), for `advance-programmes`.
+//
+// THE SURVEY. One read with no lock (`survey`): the programme, its paid month's sessions, its weekly
+// time and payments' answer of the month's orders, decided by `programmes.rules.ts`' `monthStepOf`:
+// the steps that may act now (`item`, `retry`, `due`, `pause`, in that order; `due` also when the
+// derived due point moved), and the month's automatic order the gateway is asked about on this
+// minute (`inquiryDue`). The sweep asks (payments' `inquire`, never under a lock) before the steps.
+//
+// EACH STEP (`step`), a transaction of its own, in kernel.md's order: the teacher's `users` row
+// key-shared (an item's insert key-shares it, as the windows' step), the programme's row, the
+// enrollment's; read again under them; a programme whose enrollment is not `confirmed`, that is not
+// `active` or `paused`, or that has an open `teacher_suspended` or `student_suspended` case (a
+// suspension pauses, N-1) is left alone. Then the due point derived (Q-3 (a)) and written when it
+// moved, payments' answer of the month's orders read under the enrollment's lock (every order's move
+// takes it first), and the step's action decided again:
+// - `withdraw_item` / `raise_item`: the `charge_unknown` item withdrawn, or opened once (Q-1 (a));
+// - `failed`: the month's first failure written once (`first_failure_at`);
+// - `due` / `retry`: payments' `record` writes the month's automatic order on this transaction
+//   (`created`, no gateway id, expiring in `slot_hold_ttl_minutes`; or `failed`/`hard` with no payee
+//   in live mode), and the programme its attempt (0: the failure and the retries cleared; n:
+//   `retries_done` n); the gateway is called by the returned `charge`, which the sweep runs after the
+//   commit, once, never under a lock (R-509);
+// - `pause`: `paused` since the next occurrence's start, one `programme_paused` enrollment event on
+//   the same transaction (FU-A1 (a)), and `enrollment` to both parties after the commit on the
+//   transaction's bound publisher (N-15).
+// One info line per action, ids and a reason only; nothing for no action.
+// Double run (R-API-14): every step reads the state it moves from under the lock: a second run finds
+// the order recorded, the failure written, the item open or withdrawn, or the programme paused, and
+// does nothing; each write is a conditional update besides.
+
+/** §3.14: the days after a soft-declined automatic charge it is retried on ([1, 3, 5, 7]). */
+export const PROGRAMME_CHARGE_RETRY_DAYS_SETTING = 'programme_charge_retry_days';
+/** §3.14 (DEC-113): the unanswered asks before the `charge_unknown` item (6). */
+export const PROGRAMME_CHARGE_INQUIRY_TRIES_SETTING = 'programme_charge_inquiry_tries';
+/** §3.14: the checkout's lifetime, an automatic order's and the asks' interval (10 minutes). */
+const SLOT_HOLD_TTL_SETTING = 'slot_hold_ttl_minutes';
+
+/**
+ * Payments' answer of a programme's month `month` (its orders, and whether a card is saved), read
+ * with no lock on the caller's transaction; under the step's enrollment lock, which every order's
+ * move takes first, it cannot change before the commit. Handed in (booking imports no payments).
+ */
+export type MonthOrdersOf = (
+  tx: Transaction,
+  enrollmentId: string,
+  month: number,
+  at: Date,
+) => Promise<MonthOrders>;
+
+/** What the sweep hands payments for a month's automatic charge (payments' request's shape). */
+export interface ProgrammeChargeRequest {
+  readonly enrollmentId: string;
+  readonly teacherUserId: string;
+  readonly instalmentMonth: number;
+  readonly attempt: number;
+  readonly offerTotal_piasters: Piasters;
+  readonly offerSessionCount: number;
+}
+
+/** What payments' `record` wrote; `charge` is run once, after the step's commit. */
+export type RecordedProgrammeCharge =
+  | { readonly outcome: 'no_card' }
+  | { readonly outcome: 'refused'; readonly paymentId: string }
+  | {
+      readonly outcome: 'recorded';
+      readonly paymentId: string;
+      readonly charge: () => Promise<unknown>;
+    };
+
+/** Payments' automatic charge, as the sweep's steps record it (handed in). */
+export interface ProgrammeCharges {
+  record(tx: Transaction, request: ProgrammeChargeRequest): Promise<RecordedProgrammeCharge>;
+}
+
+/** What the month steps read and write, over booking's rows and the owners' entries. */
+export interface ProgrammeMonthStore {
+  programmeMonthOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeMonthRow | null>;
+  keyShareTeacher(tx: Transaction, teacherUserId: string): Promise<void>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+  /** Sessions' entry: the enrollment's sessions with their months. */
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
+  openItemExists(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  lastItemAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  insertItem(
+    tx: Transaction,
+    item: { readonly enrollmentId: string; readonly teacherUserId: string },
+  ): Promise<string>;
+  withdrawItem(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  writeNextDue(tx: Transaction, enrollmentId: string, nextDueAt: Date | null): Promise<void>;
+  writeFirstFailure(tx: Transaction, enrollmentId: string, at: Date): Promise<boolean>;
+  writeAttempt(tx: Transaction, enrollmentId: string, attempt: number): Promise<boolean>;
+  writePaused(tx: Transaction, enrollmentId: string, pausedAt: Date): Promise<boolean>;
+  /** FU-A1 (a): the pause's `programme_paused` row, on the pause's transaction. */
+  recordPaused(tx: Transaction, enrollmentId: string, occurredAt: Date): Promise<void>;
+}
+
+export const programmeMonthStore: ProgrammeMonthStore = {
+  programmeMonthOf,
+  keyShareTeacher: (tx, teacherUserId) => keyShareRows(tx, 'users', [teacherUserId]),
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  openCaseOf,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+  readSlot,
+  openItemExists: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'charge_unknown'),
+  lastItemAt: (tx, enrollmentId) => lastRequestAt(tx, enrollmentId, 'charge_unknown'),
+  insertItem: (tx, { enrollmentId, teacherUserId }) =>
+    insertRequest(tx, { enrollmentId, teacherUserId, kind: 'charge_unknown' }),
+  withdrawItem: (tx, enrollmentId) => withdrawOpenItem(tx, enrollmentId, 'charge_unknown'),
+  writeNextDue,
+  writeFirstFailure,
+  writeAttempt,
+  writePaused,
+  recordPaused: (tx, enrollmentId, occurredAt) =>
+    recordEnrollmentEvents(tx, [{ kind: 'programme_paused', enrollmentId, occurredAt }]),
+};
+
+/** What the month steps are built over (`advance-programmes` in the worker). */
+export interface ProgrammeMonthDependencies {
+  readonly transactions: Transactions;
+  readonly settings: SettingsReader;
+  /** Payments' answer of the month's orders (handed in). */
+  readonly orders: MonthOrdersOf;
+  /** Payments' automatic charge's `record` (handed in). */
+  readonly charges: ProgrammeCharges;
+  readonly log: ProgrammeLog;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
+  readonly store?: ProgrammeMonthStore;
+}
+
+/** The survey's answer (this section's head, THE SURVEY). */
+export interface MonthSurvey {
+  /** The month's automatic order the gateway is asked about on this minute; null for none. */
+  readonly ask: string | null;
+  /** The steps that may act now, in order. */
+  readonly steps: readonly MonthStepKind[];
+}
+
+/** What a step did: its action, and the gateway's call to run after its commit, once. */
+export interface MonthStepDone {
+  readonly action: MonthAction['kind'] | 'none';
+  readonly charge?: () => Promise<unknown>;
+}
+
+/** The month steps (this section's head). */
+export interface ProgrammeMonths {
+  survey(enrollmentId: string): Promise<MonthSurvey | null>;
+  step(
+    step: MonthStepKind,
+    enrollmentId: string,
+    context: { readonly askedNoAnswer: boolean },
+  ): Promise<MonthStepDone>;
+}
+
+const MONTH_STEPS: readonly MonthStepKind[] = ['item', 'retry', 'due', 'pause'];
+
+/** The settings the month steps read, once per step. */
+interface MonthTerms {
+  readonly retryDays: readonly number[];
+  readonly ttlMinutes: number;
+  readonly tries: number;
+}
+
+/** A programme the month steps act on: its enrollment `confirmed`, the programme paid. */
+type SweptMonthRow = ProgrammeMonthRow & { readonly state: 'active' | 'paused' };
+
+function swept(row: ProgrammeMonthRow): row is SweptMonthRow {
+  return row.status === 'confirmed' && (row.state === 'active' || row.state === 'paused');
+}
+
+function sameInstant(one: Date | null, other: Date | null): boolean {
+  return (one?.getTime() ?? null) === (other?.getTime() ?? null);
+}
+
+/** The month steps over `dependencies` (this section's head). */
+export function createProgrammeMonths(dependencies: ProgrammeMonthDependencies): ProgrammeMonths {
+  const store = dependencies.store ?? programmeMonthStore;
+  const clock = dependencies.clock ?? clockTimestamp;
+  const { settings, log } = dependencies;
+
+  const termsOf = async (): Promise<MonthTerms> => {
+    const [retryDays, ttlMinutes, tries] = await Promise.all([
+      settings.read(PROGRAMME_CHARGE_RETRY_DAYS_SETTING, programmeChargeRetryDays),
+      settings.read(SLOT_HOLD_TTL_SETTING, positiveWhole),
+      settings.read(PROGRAMME_CHARGE_INQUIRY_TRIES_SETTING, positiveWhole),
+    ]);
+    return { retryDays, ttlMinutes, tries };
+  };
+
+  /** The month's facts on `tx`, with or without the step's locks; one query at a time. */
+  const factsOf = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    terms: MonthTerms,
+    askedNoAnswer: boolean,
+  ): Promise<MonthFacts> => {
+    const now = await clock(tx);
+    const sessions = await store.sessionsOf(tx, row.enrollmentId);
+    const nextDueAt = nextDueOf({ ...row, sessions });
+    let nextOccurrence: Date | null = null;
+    if (nextDueAt !== null) {
+      const slot = await store.readSlot(tx, row.slotId);
+      // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).
+      if (slot === null) throw new Error('advance-programmes: an enrollment without its slot');
+      nextOccurrence = nextOccurrenceAt(slot, row.timezone, nextDueAt);
+    }
+    const orders = await dependencies.orders(tx, row.enrollmentId, row.monthsPaid + 1, now);
+    const open = await store.openItemExists(tx, row.enrollmentId);
+    const lastAt = await store.lastItemAt(tx, row.enrollmentId);
+    return {
+      now,
+      state: row.state,
+      nextDueAt,
+      nextOccurrenceAt: nextOccurrence,
+      firstFailureAt: row.firstFailureAt,
+      retriesDone: row.retriesDone,
+      retryDays: terms.retryDays,
+      orders,
+      item: { open, lastAt },
+      inquiry: { ttlMinutes: terms.ttlMinutes, tries: terms.tries },
+      askedNoAnswer,
+    };
+  };
+
+  /** The month's automatic charge recorded by payments, and its attempt on the programme. */
+  const recordCharge = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    attempt: number,
+  ): Promise<MonthStepDone['charge']> => {
+    const recorded = await dependencies.charges.record(tx, {
+      enrollmentId: row.enrollmentId,
+      teacherUserId: row.teacherUserId,
+      instalmentMonth: row.monthsPaid + 1,
+      attempt,
+      offerTotal_piasters: row.offerTotal_piasters,
+      offerSessionCount: row.offerSessionCount,
+    });
+    if (recorded.outcome === 'no_card') return undefined;
+    await store.writeAttempt(tx, row.enrollmentId, attempt);
+    return recorded.outcome === 'recorded' ? recorded.charge : undefined;
+  };
+
+  const apply = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    action: MonthAction,
+    now: Date,
+  ): Promise<MonthStepDone> => {
+    const { enrollmentId } = row;
+    switch (action.kind) {
+      case 'withdraw_item':
+        await store.withdrawItem(tx, enrollmentId);
+        return { action: action.kind };
+      case 'raise_item':
+        await store.insertItem(tx, row);
+        return { action: action.kind };
+      case 'failed':
+        await store.writeFirstFailure(tx, enrollmentId, now);
+        return { action: action.kind };
+      case 'due':
+      case 'retry': {
+        const call = await recordCharge(tx, row, action.kind === 'due' ? 0 : action.attempt);
+        return call === undefined ? { action: action.kind } : { action: action.kind, charge: call };
+      }
+      case 'pause':
+        if (await store.writePaused(tx, enrollmentId, action.pausedAt)) {
+          await store.recordPaused(tx, enrollmentId, action.pausedAt);
+          publisherOn(tx)?.afterCommit([row.studentUserId, row.teacherUserId], {
+            type: 'enrollment',
+            enrollmentId,
+          });
+        }
+        return { action: action.kind };
+    }
+  };
+
+  return {
+    survey: async (enrollmentId) => {
+      const terms = await termsOf();
+      return dependencies.transactions.run(async (tx): Promise<MonthSurvey | null> => {
+        const row = await store.programmeMonthOf(tx, enrollmentId);
+        if (row === null || !swept(row)) return null;
+        const facts = await factsOf(tx, row, terms, true);
+        const steps = MONTH_STEPS.filter(
+          (step) =>
+            monthStepOf(step, facts) !== null ||
+            (step === 'due' && !sameInstant(facts.nextDueAt, row.nextDueAt)),
+        );
+        const automatic = facts.orders.automatic;
+        const ask =
+          automatic !== null && inquiryDue(facts.now, automatic, terms.ttlMinutes, terms.tries)
+            ? automatic.paymentId
+            : null;
+        return { ask, steps };
+      });
+    },
+
+    step: async (step, enrollmentId, { askedNoAnswer }) => {
+      const terms = await termsOf();
+      return dependencies.transactions.run(async (tx): Promise<MonthStepDone> => {
+        const seen = await store.programmeMonthOf(tx, enrollmentId);
+        if (seen === null) return { action: 'none' };
+        await store.keyShareTeacher(tx, seen.teacherUserId);
+        await store.lockProgramme(tx, enrollmentId);
+        await store.lockEnrollment(tx, enrollmentId);
+        const row = await store.programmeMonthOf(tx, enrollmentId);
+        if (row === null || !swept(row)) return { action: 'none' };
+        if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) return { action: 'none' };
+        const facts = await factsOf(tx, row, terms, askedNoAnswer);
+        if (!sameInstant(facts.nextDueAt, row.nextDueAt)) {
+          await store.writeNextDue(tx, enrollmentId, facts.nextDueAt);
+        }
+        const action = monthStepOf(step, facts);
+        if (action === null) return { action: 'none' };
+        const done = await apply(tx, row, action, facts.now);
+        log.info(
+          {
+            enrollmentId,
+            instalmentMonth: row.monthsPaid + 1,
+            reason: action.kind,
+            ...(action.kind === 'retry' ? { attempt: action.attempt } : {}),
+          },
+          'A programme month step acted',
+        );
+        return done;
+      });
+    },
+  };
 }
