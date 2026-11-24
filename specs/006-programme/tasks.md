@@ -808,6 +808,31 @@ No open question remains.
   > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** `programme_stopped` joins `ProgrammeEndReason`
   > (`programme-close.service.ts:96`) and releases through its own branch (`share-release.rules.ts:565-575`); R1b's
   > `CLOSE_RELEASES` is untouched.
+  > **Lane e's questions (the owner, 2026-11-24, «موافق عالكل», typed in B-P3's review session).** Q-e1 (a): the
+  > reopen moves the enrollment through a third writer of the status, `reopenStoppedEnrollment`
+  > (`enrollment-side.repository.ts`; `cancelled` `programme_stopped` with `confirmed_at` set → `confirmed`, the reason,
+  > `slot_released_at` and `admin_end_reason` cleared, never `confirmed_at`), its one reach the reopen; the confirmation
+  > gate widened. Q-e2 (a) `not_stopped`, Q-e3 (b) `slot_inactive`, Q-e6 `time_taken` (another booking of a party
+  > over the weekly time's coming weeks, as restore reads it), additive in `programmesReopenRefusal`. Q-e4 (b): a stop's
+  > approval refused `sessions_pending` (additive in `programmesDecideRefusal`) while a session of the programme is
+  > `scheduled` or a remedy is open; example: month 1 is 4 × 250 EGP, a make-up set for 12/03, the approval on 11/30 →
+  > refused. Q-e5 (a): the audit label of `programme.reopened` («إعادة فتح برنامج الإجازة» / «Programme reopened»).
+  > **Done (B-P3 lane e, 2026-11-24).**
+  > - `programme.request` `stop` (`programme-requests.service.ts`): `not_paused`, `too_early` (`paused_at` +
+  >   `programme_stop_request_days`, whole days on the instant, the database's clock), `request_open`; the open stop
+  >   with the reason, its teacher the row's; one line of ids; `enrollment` to both parties.
+  > - `programmes.decide` on a stop: approve → `programme_stopped` through booking's own end and the close hook (the
+  >   time free at once, the card deleted, T011's release: 17,500 + 70,000 = 87,500 pt in the DB spec); decline;
+  >   `sessions_pending`; `not_open` once no longer paused; no extension.
+  > - `programmes.reopen` (`programmes-admin.router.ts`, audited `programme.reopened` with the administrator's
+  >   reason): users, the teacher's slots' key, the slot, the programme, the enrollment; `not_stopped`,
+  >   `party_restricted`, `gender_mismatch` (both directions), `slot_inactive`, `slot_taken`, `time_taken`; the
+  >   enrollment `confirmed`, the programme `paused` since the reopen, one `programme_reopened` row; no session.
+  > - Races, red first (`tests/db-integrity/programme-stop.spec.ts`; kernel.md 006:T017): the approval against the
+  >   sweep's due step (006:T015's open item), the reopen against a new booking of the same weekly time.
+  > **Follow-up (B-P3 lane e, 2026-11-24).** The admin harness of `tests/adversarial` covers the user surface only:
+  > `programmes.reopen`'s gender refusal is asserted both ways in the unit and DB specs, not by the harness.
+  > `programme.request`'s registration is unchanged (both directions, `not_paused`).
 - [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:

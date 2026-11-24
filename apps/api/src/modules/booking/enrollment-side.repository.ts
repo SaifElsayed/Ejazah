@@ -147,6 +147,33 @@ export async function restoreEnrollment(tx: Client, id: string): Promise<boolean
   return count === 1;
 }
 
+/**
+ * 006:T017 (FR-725, R-513; B-P3 lane e's Q-e1 (a), the owner, 2026-11-24): an administrator's reopen
+ * of a programme an approved stop closed: `cancelled` with the reason `programme_stopped`, of an
+ * enrollment a payment once confirmed (`confirmed_at` set) → `confirmed`, the reason,
+ * `slot_released_at` and `admin_end_reason` cleared as `restoreEnrollment` clears them, by one
+ * conditional update; answers whether it moved. The confirmation path's third writer of the status
+ * (`tests/pipeline/confirmation-path.spec.ts`, ALLOWED), reached only from the reopen's store
+ * (`programme-requests.service.ts`); it never writes `confirmed_at` (R-HONEST-1).
+ */
+export async function reopenStoppedEnrollment(tx: Client, id: string): Promise<boolean> {
+  const { count } = await tx.enrollment.updateMany({
+    where: {
+      id,
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      confirmedAt: { not: null },
+    },
+    data: {
+      status: 'confirmed',
+      cancellationReason: null,
+      slotReleasedAt: null,
+      adminEndReason: null,
+    },
+  });
+  return count === 1;
+}
+
 /** The enrollment's `enrollment_events` rows, oldest first, the id breaking a tie; no payment. */
 export async function enrollmentEventsOf(
   tx: Client,

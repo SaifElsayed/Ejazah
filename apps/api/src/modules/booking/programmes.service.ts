@@ -556,16 +556,19 @@ export function createProgrammeServices(
   const offers = new ProgrammeOffers(dependencies);
   const requestDependencies: ProgrammeRequestDependencies = {
     log: dependencies.log,
+    // 006:T017: the stop's `programme_stop_request_days`, on the database's clock.
+    settings: dependencies.settings,
+    ...(dependencies.clock === undefined ? {} : { clock: dependencies.clock }),
     ...(dependencies.requests === undefined ? {} : { store: dependencies.requests }),
   };
   return {
     offer: (teacherUserId, input, live) => offers.offer(teacherUserId, input, live),
     cancel: (studentUserId, input, live) =>
       cancelProgramme(studentUserId, input, live, dependencies),
-    request: (teacherUserId, { idempotencyKey, ...input }) =>
+    request: (teacherUserId, { idempotencyKey, ...input }, live) =>
       dependencies.idempotency.run(
         { scope: 'programme.request', key: idempotencyKey, actorId: teacherUserId, input },
-        (tx) => requestProgramme(tx, teacherUserId, input, requestDependencies),
+        (tx) => requestProgramme(tx, teacherUserId, input, live, requestDependencies),
       ),
     autoRenewOff: (studentUserId, input, live) =>
       turnAutoRenewOff(studentUserId, input, live, dependencies),

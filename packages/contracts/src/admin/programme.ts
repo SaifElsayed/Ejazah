@@ -135,7 +135,8 @@ export const programmesDecideOutput = z.object({ status: programmeRequestStatus 
  * programme is no longer `offered`; `offer_sent` approving a `no_offer` item once an offer was sent.
  * 006:T008 (SRS DEC-112): `reason_required`, a `no_offer` decision without the administrator's
  * reason; `makeup_pending`, approving a `no_offer` item while session 1's make-up is pending (Q-B5
- * (a)).
+ * (a)). 006:T017 (B-P3 lane e, Q-e4 (b), the owner, 2026-11-24): `sessions_pending`, approving a
+ * stop while a session of the programme is still scheduled or a remedy of one is open.
  */
 export const programmesDecideRefusal = z.enum([
   'not_open',
@@ -144,6 +145,7 @@ export const programmesDecideRefusal = z.enum([
   'offer_sent',
   'reason_required',
   'makeup_pending',
+  'sessions_pending',
 ]);
 
 /** `programmes.reopen`: a `programme_stopped` programme, back to `paused` (R-513, FR-725). */
@@ -155,11 +157,19 @@ export const programmesReopenInput = z.object({
 
 export const programmesReopenOutput = z.object({ state: z.literal('paused') });
 
-/** `programmes.reopen`'s refusals, restore's (R-513; admin-surface.md). */
+/**
+ * `programmes.reopen`'s refusals, restore's (R-513; admin-surface.md). 006:T017 (B-P3 lane e, the
+ * owner, 2026-11-24): `not_stopped`, a programme no approved stop closed (Q-e2 (a)); `slot_inactive`,
+ * its weekly time deactivated or removed since (Q-e3 (b)); `time_taken`, another session, hold,
+ * reserved time or programme of either party over the weekly time's coming weeks (Q-e6).
+ */
 export const programmesReopenRefusal = z.enum([
   'slot_taken',
   'party_restricted',
   'gender_mismatch',
+  'not_stopped',
+  'slot_inactive',
+  'time_taken',
 ]);
 
 export type ProgrammesQueueFilter = z.infer<typeof programmesQueueFilter>;
