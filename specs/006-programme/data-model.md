@@ -81,7 +81,7 @@ An index on (`state`, `next_due_at`) for the sweep.
 |---|---|---|
 | `id` | uuid v7 | |
 | `enrollment_id`, `teacher_user_id` | uuid FKs | from the enrollment, never the input |
-| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) · `pay_blocked` (FR-706b) | `no_offer` and `pay_blocked` are raised by the sweep, not by the teacher; `refusal` unused since SRS DEC-112 (below) |
+| `kind` | enum `programme_request_kind`: `stop` · `refusal` · `no_offer` (I-2 (a)) · `pay_blocked` (FR-706b) · `charge_unknown` (SRS DEC-113, B-P3) | `no_offer`, `pay_blocked` and `charge_unknown` are raised by the sweep, not by the teacher; `refusal` unused since SRS DEC-112 (below) |
 | `reason` | text (1–500) | mandatory for `stop` and `refusal`; on a `no_offer` item, the administrator's record of why no offer was made, written at the decision (SRS DEC-112, below) |
 | `status` | enum `programme_request_status`: `open` · `approved` · `declined` · `withdrawn` · `extended` (a `no_offer` or `pay_blocked` item only) | |
 | `decided_by_admin_id`, `decided_at` | | set together on approve or decline (a check) |

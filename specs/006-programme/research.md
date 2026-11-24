@@ -258,6 +258,11 @@ Settled by the review session on recorded precedents:
   the reason when a hold is released, so a failed instalment needs no change there. The failure's `payment_failed`
   push is today's path (`order-failed.repository.ts:19-31` → `payment-outcome-notices.port.ts:47-48`).
 
+- **Amended 2026-11-24 (B-P3's conflict check, Q-1 (a), Q-2 (a) amended; SRS DEC-113; the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).**
+  - The gateway is asked at the automatic order's expiry, then every `slot_hold_ttl_minutes` (10); after `programme_charge_inquiry_tries` (6) unanswered asks a `charge_unknown` item opens; asking goes on, and an answer withdraws it; approve = no charge found (expired, a soft decline, the retries go on), extend = keep asking.
+  - The charge is two gateway steps, the intention then the token payment. The intention's `intention_order_id` is written to `gateway_order_id` in its own short transaction right after it, before the payment. An intention with no answer = no charge possible: a soft decline at once, no inquiry. A payment with no answer: its late callback is matched by the signed `order.id`, and the inquiry asks by that id. The unsigned `merchant_order_id` is never trusted (Paymob's HMAC covers `order.id`, not it: `paymob.adapter.ts:92-113`). The payment is sent once. This replaces «a late webhook is matched by the merchant reference» above.
+  - `expire-pending-payments` leaves automatic orders to this inquiry (`order-expiry.repository.ts:28-37`).
+
 ## R-510 — The saved card
 
 - **Decision.**
@@ -378,6 +383,8 @@ month, not an operational number (K-2, settled).
 
 The admin catalogues gain their labels. A boolean setting is new to the registry: if the bounds shapes
 (`registry.ts:66-74`) refuse it, `programme_enabled` is a `count` 0/1 (decided in T002).
+
+- **Amended 2026-11-24 (B-P3, SRS DEC-113, the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** A ninth key, `programme_charge_inquiry_tries` (6, ≥ 1, `count`, `booking`): the unanswered asks about an automatic charge before the `charge_unknown` item; the count 108 → 109.
 
 ## R-516 — The catalogue and the editor
 

@@ -1652,3 +1652,9 @@ Amended on 2026-11-23 by T186 of `specs/002-identity/tasks.md` (R1b), on the own
 | # | Change | Migration |
 |---|---|---|
 | 79 | §2 enum `teacher_application_history_action` gains `call_replaced`, at its end, committed before use: an ever-approved teacher's earlier verification call notes, written to the history when a new call is recorded on a later application, kept with no end date; §15 rule 67's bound is 2,000 characters on that row (the call's notes, `applicationsRecordCallInput`) | `20261123180222_r1b_application_history_call_replaced` (R1b) |
+
+Amended on 2026-11-24 for T014 of `specs/006-programme/tasks.md` (B-P3), on the owner's answers of 2026-11-24 on B-P3's conflict check («موافق على الكل (أ) مع تحسين س٢», typed in B-P3's review session; SRS DEC-113). No table; the enum count stays 51.
+
+| # | Change | Migration |
+|---|---|---|
+| 80 | §5 enum `programme_request_kind` gains `charge_unknown`, at its end, committed before use: the sweep's Administrator item for an automatic charge the gateway has not answered after `programme_charge_inquiry_tries` asks (one open per enrollment and kind, the existing partial unique index); approved = no charge found, extended = keep asking | `<stamp>_programme_charge_unknown` (B-P3) |
