@@ -143,7 +143,8 @@ function TeacherPayoutsPanel({ detail }: { readonly detail: PayoutsDetail }) {
             ? null
             : link(
                 t('admin.common.action.openInPayments'),
-                `/payments?payment=${release.paymentId}`,
+                // PR #160 r1 Minor 5: the one order the release draws from, else the release's own.
+                `/payments?payment=${release.orders[0]?.paymentId ?? release.paymentId}`,
               )}
         </span>
         {/* 006:T018 (FU-E1): a release drawn from more than one paid order lists each, with its amount. */}

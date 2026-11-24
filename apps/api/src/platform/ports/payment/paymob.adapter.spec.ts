@@ -382,7 +382,9 @@ describe("mapping Paymob's transaction states to the port's events", () => {
   it('refuses, as a signed body it cannot read, an unknown type', async () => {
     const obj = transaction();
     const { query } = callback(obj);
-    const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));
+    // Since 006:T013 `TOKEN` is a type this port reads (its own eight signed fields); a type it does
+    // not read stands here instead (PR #160 r1 Minor 2 checks the token's signature first).
+    const rawBody = Buffer.from(JSON.stringify({ type: 'DELIVERY_STATUS', obj }));
     await expect(adapter().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
       MalformedEventError,
     );
@@ -498,7 +500,8 @@ describe("Paymob's token callback (006:T013, R-510; the saved card)", () => {
     expect(again.providerEventId).toBe(first.providerEventId);
   });
 
-  it('refuses every token callback, signed or not, while no saved-card integration is set (off)', async () => {
+  // PR #160 r1 Minor 2: the signature is checked before «off», so an unsigned body is 401, never 400.
+  it('refuses every token callback while no saved-card integration is set (off): signed → malformed, unsigned → signature', async () => {
     const signed = tokenCallback(card());
     const unsigned = tokenCallback(card(), 'another-secret');
 
@@ -507,7 +510,7 @@ describe("Paymob's token callback (006:T013, R-510; the saved card)", () => {
     );
     await expect(
       adapter().verifyAndParseEvent(unsigned.rawBody, {}, unsigned.query),
-    ).rejects.toThrow(MalformedEventError);
+    ).rejects.toThrow(EventSignatureError);
   });
 
   it('refuses a token callback signed under another secret, or with no hmac', async () => {

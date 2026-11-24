@@ -114,7 +114,8 @@ export const programmeGetOutput = z.object({
    * 006:T018 (Q-f3 (a), the owner, 2026-11-24): `programme.renew` would be accepted now. With a card
    * saved, true only after the month's automatic charge failed or expired («pay now», «change
    * card»); with none, «renew now» from `programme_renew_early_days` before the due point. False
-   * while `payeePending`, `chargePending` or a suspension holds.
+   * while `payeePending`, `chargePending` or a suspension holds. A payable manual checkout of the
+   * month is not read here: `programme.renew` then answers `PREVIOUS_CHECKOUT` (PR #160 r1 nit).
    */
   renewOpen: z.boolean(),
   /**

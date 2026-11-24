@@ -656,8 +656,9 @@ export class PaymobPaymentAdapter implements PaymentPort {
 
   /** 006:T013: the card a token callback saved (this file's head); off with no saved-card integration. */
   #savedCard(obj: Record<string, unknown>, hmac: string): GatewayEvent {
-    if (this.#options.savedCardIntegrationId === undefined) throw new MalformedEventError();
+    // PR #160 r1 Minor 2: signed first, so «off» is told only to a holder of the secret (401 before 400).
     this.#refuseUnlessSigned(paymobTokenHmacMessage(obj), hmac);
+    if (this.#options.savedCardIntegrationId === undefined) throw new MalformedEventError();
     const saved = signedCard.safeParse(obj);
     if (!saved.success) throw new MalformedEventError();
     return cardEventOf(saved.data);

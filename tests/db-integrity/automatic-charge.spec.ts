@@ -444,6 +444,63 @@ describe('the call (006:T014, SRS DEC-113 (2))', () => {
     ).toHaveLength(1);
   });
 
+  // PR #160 r1 Minor 3: the one database guard of «sent once» (`recordGatewayOrderId`'s
+  // `gatewayOrderId: null`). Two calls for one order, as a second caller would make them: the first
+  // writes its id and pays, the second's id is refused and it pays nothing.
+  it('records the order id once: a second call for the same order is refused its id and sends no payment', async () => {
+    const world = await programmeWorld();
+    const recordedIds: boolean[] = [];
+    const steps: string[] = [];
+    const gatewayIds: string[] = [];
+    const twice: PaymentPort = Object.assign(Object.create(fake) as PaymentPort, {
+      inquireOrder: (id: string) => fake.inquireOrder(id),
+      chargeSavedCard: async (...args: Parameters<PaymentPort['chargeSavedCard']>) => {
+        const counting = async (id: string) => {
+          const took = await args[6](id);
+          recordedIds.push(took);
+          return took;
+        };
+        const first = await fake.chargeSavedCard(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          counting,
+        );
+        const second = await fake.chargeSavedCard(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          counting,
+        );
+        for (const one of [first, second]) {
+          steps.push(one.step);
+          if ('gatewayOrderId' in one) gatewayIds.push(one.gatewayOrderId);
+        }
+        return first;
+      },
+    });
+    const answer = await database.$transaction((tx) =>
+      charges({ payment: twice }).record(tx as Transaction, month2(world)),
+    );
+    if (answer.outcome !== 'recorded') throw new Error('not recorded');
+
+    await expect(answer.charge()).resolves.toBe('sent');
+
+    expect(recordedIds).toEqual([true, false]);
+    expect(steps).toEqual(['payment_sent', 'order_not_recorded']);
+    expect(await automaticOrdersOf(world.enrollmentId)).toMatchObject([
+      { status: 'created', gateway_order_id: gatewayIds[0] },
+    ]);
+    const answers = await Promise.all(gatewayIds.map((id) => fake.inquireOrder(id)));
+    expect(answers.map(({ answer }) => answer)).toEqual(['transaction', 'none']);
+  });
+
   it('expires the order at once when the gateway’s order went unanswered (a soft decline, no inquiry)', async () => {
     const world = await programmeWorld();
     const answer = await recorded(world);

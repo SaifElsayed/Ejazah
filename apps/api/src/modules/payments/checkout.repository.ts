@@ -149,13 +149,16 @@ export async function orderById(tx: Client, paymentId: string): Promise<Addresse
   return row === null ? null : withGatewayOrderId(row);
 }
 
-/** The enrollment's latest order (ids are UUIDv7, so the greatest is the latest), or null. */
+/**
+ * The enrollment's latest manual order (ids are UUIDv7, so the greatest is the latest), or null. An
+ * automatic order (006:T014) is never read here: it has no page to continue (PR #160 r1 Minor 4).
+ */
 export async function lastOrderOf(
   tx: Client,
   enrollmentId: string,
 ): Promise<AddressedOrder | null> {
   const row = await tx.payment.findFirst({
-    where: { enrollmentId },
+    where: { enrollmentId, automatic: false },
     orderBy: { id: 'desc' },
     select: {
       id: true,
@@ -271,7 +274,10 @@ export async function checkoutOrdersAmong(
   return answer;
 }
 
-/** Among `enrollmentIds`, a programme order still payable at `at`, or null; no lock. */
+/**
+ * Among `enrollmentIds`, a manual programme order still payable at `at`, or null; no lock. An
+ * automatic order under way is no checkout to continue (PR #160 r1 Minor 4).
+ */
 export async function payableProgrammeOrderAmong(
   tx: Client,
   enrollmentIds: readonly string[],
@@ -281,6 +287,7 @@ export async function payableProgrammeOrderAmong(
     where: {
       enrollmentId: { in: [...enrollmentIds] },
       kind: { in: ['rest_in_full', 'instalment'] },
+      automatic: false,
       status: 'created',
       expiresAt: { gt: at },
     },

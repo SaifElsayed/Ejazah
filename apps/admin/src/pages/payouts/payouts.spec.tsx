@@ -470,6 +470,23 @@ describe('«تحويلات المعلمين»: the orders a release draws from (
       },
     );
   });
+
+  // PR #160 r1 Minor 5: a release drawn from one later order links that order, not the assessment's.
+  // Example: a stop after month 3 releases 612.50, all from month 3's order; the link is month 3's.
+  it('links the one order a release draws from, not the programme’s first order', async () => {
+    await inBothLocales(
+      () => open(fakeApi(), `/payouts?teacher=${T1}`),
+      async (t) => {
+        const panel = await detailPanel(t);
+        const end = within(releaseRow(panel, t('admin.money.payouts.part.ijazahEnd')));
+        expect(
+          end
+            .getByRole('link', { name: t('admin.common.action.openInPayments') })
+            .getAttribute('href'),
+        ).toBe(`/payments?payment=${P3}`);
+      },
+    );
+  });
 });
 
 describe('«تم الصرف» (DEC-89)', () => {

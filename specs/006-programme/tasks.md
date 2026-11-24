@@ -510,6 +510,10 @@ No open question remains.
   > (`specs/004-sessions/contracts/kernel.md`): the webhook's card write under `lockOrder` (the enrollment, then the
   > order), after the event's row; the delete on the close hook's transaction. Left to the closed-test checklist:
   > Paymob's token message's three open boundaries, and the merchant id against the account's.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 4).** `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID`'s number is never used:
+  > `paymob.adapter.ts` reads only whether it is set; a `saveCard` checkout is created on `integrationId`, and
+  > `#integrations()` does not list it, so a transaction paid on a separate saved-card integration would be refused.
+  > Closed-test checklist: either the consent checkout names that integration, or the key becomes a switch.
 - [x] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
@@ -627,6 +631,17 @@ No open question remains.
   >   `currency` and `created_at`.
   > - The auth token's lifetime.
   > - The Category 2 table, against Visa's own publication.
+  > **Settled (PR #160 r1, 2026-11-24, Major 1; the owner's answers (a) and «(a) ADR 0026»).** ADR 0026, constitution 2.7.0. The inquiry's authenticated `paid` is recorded through the
+  > webhook's branch (DEC-110 (2)); R-HONEST-1, SRS FR-PAYG-3 and ERD `payment_events.signature_verified_at` now say
+  > «the gateway's signed webhook, or the gateway's authenticated answer to the platform's own inquiry about an
+  > automatic charge (DEC-110, DEC-113)». Whether an inquiry's row should be told apart from a signed one (a column or
+  > an event-id suffix, an ERD change) is a follow-up for the owner.
+  > **Closed-test checklist (PR #160 r1, 2026-11-24, Major 1; Paymob question 11 in `ejazah-tools\paymob-questions-additions.md`).**
+  > ⚠️ Is the inquiry's `success: true` / `pending: false` as final as the signed callback, and can a transaction it
+  > reports paid be voided, refunded or charged back with no signed callback?
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 5).** The stand-in's `inquireOrder` about an order it does not hold (a worker restarted
+  > after the charge) rejects «unknown order»: the month stays `charge_pending`, the error is reported every 10 minutes
+  > and no item opens. Development only; answering `no_answer` would follow DEC-110.
 - [x] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -723,6 +738,15 @@ No open question remains.
   > **Follow-up (B-P3 lane c, 2026-11-24).** The pause's `enrollment` signal is added on the transaction's publisher,
   > which no worker binds: the worker has no live channel to the API's streams (`main.ts` holds the only
   > `InProcessLiveBus`), so a pause reaches a client only on its next read (N-15). T008's windows' signal is the same.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 1).** The last month's `charge_unknown` item is not withdrawn by its answer:
+  > `programmesToSweep` (`booking/programmes.repository.ts`) takes only `months_paid < month_count`, so once the last
+  > month's unanswered charge is recorded paid the programme leaves the page and the item stays open until completion's
+  > close hook withdraws it. T021's decision must read the order's state before it acts. Rare.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 3).** The asking cadence stores no ask: `inquiryDue` / `asksMade`
+  > (`booking/programmes.rules.ts`) count by the clock, so a sweep minute that misses an ask's 60-second window (a slow
+  > run, a restart) skips it, and the item can open after fewer than 6 real asks. For a failed order with no kind the
+  > six windows end 51 minutes after the failure whether or not an ask ran: a worker down for that hour leaves a soft
+  > decline (insufficient funds) never retried, the month by hand. Safe; worth one stored counter.
 - [x] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
@@ -833,6 +857,13 @@ No open question remains.
   > **Follow-up (B-P3 lane e, 2026-11-24).** The admin harness of `tests/adversarial` covers the user surface only:
   > `programmes.reopen`'s gender refusal is asserted both ways in the unit and DB specs, not by the harness.
   > `programme.request`'s registration is unchanged (both directions, `not_paused`).
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 2).** A close while a charge is under way: approving a stop refuses
+  > `sessions_pending` but has no `payment_processing` (the cancel and the lapse have it since Q-8). Example: the
+  > student pays month 4, 1,000 EGP, by `programme.renew` while the administrator approves the stop; the paid order lands
+  > on a cancelled enrollment as a `duplicate_payment` case, and `awaitedOrdersOf` (which walks by month number only)
+  > counts its 700 EGP share in the `programme_stopped` release until the refund is recorded. Also, after any close an
+  > unanswered automatic order is never asked about again (the sweep takes `confirmed` enrollments only). Rare; needs
+  > an additive refusal code.
 - [x] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
