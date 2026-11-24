@@ -510,7 +510,7 @@ No open question remains.
   > (`specs/004-sessions/contracts/kernel.md`): the webhook's card write under `lockOrder` (the enrollment, then the
   > order), after the event's row; the delete on the close hook's transaction. Left to the closed-test checklist:
   > Paymob's token message's three open boundaries, and the merchant id against the account's.
-- [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
+- [x] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
   - **Declines:** `GatewayEvent.failed.declineKind` from a code table, unknown → hard; persisted in
@@ -614,6 +614,8 @@ No open question remains.
   > `admin payments.get $.gatewayOrderId`, `$.paidOrders[].gatewayOrderId` and `payments.list $.items[].gatewayOrderId`
   > as `string → null|string` (R-API-9). The change is held as a patch (`track2\runs\b-p3\lane-b\48-monitor-held.patch`),
   > so the monitor still refuses an automatic order that has no gateway id.
+  > **Settled (the owner, 2026-11-24, «موافق», typed in B-P3's review session).** Option (d): the monitor's part is T018's (lane f), carried by the follow-up
+  > under T018; the held patch is not used. T014 is done with it carried.
   > **Follow-up (B-P3 lane b, 2026-11-24).** «Neither "pay now" nor "change card" while `payeePending`»
   > (`tasks.md:529-531`) is `programme.get`'s (T018) and the screen's (T020). T014 builds the no-push half.
   > `share-release.rules.ts`' half base still reads `inFull` from any `rest_in_full`, a duplicate after months included
@@ -772,6 +774,17 @@ No open question remains.
   > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** Q-9 (a): the admin `programmes.get` gains `cardSaved` (a boolean, never a card
   > detail). Under Q-1 (a) the queue offers `charge_unknown` beside `pay_blocked` (T021 shows it). FU-E1:
   > `payoutRelease` gains `orders: [{ paymentId, amount_piasters }]` (additive).
+  > **Follow-up (carried from T014 (the owner, 2026-11-24, «موافق», typed in B-P3's review session); option (d)).** The admin monitor and an automatic order with no
+  > gateway id (its first step unanswered, or refused before it was sent): the contract keeps `gatewayOrderId:
+  > z.string()`, with no snapshot change and no new field. `payments-monitor.repository.ts` drops the refusal in
+  > `withGatewayOrderId` (today one such order fails the whole list page); the rows keep `string | null` inside, the
+  > search compares the inner value (`adminSearch` is `min(1)`, so `''` never matches), and only the contract's edge
+  > maps NULL to `''`. The admin pages (`AdminPayments.tsx:148`, `PaymentPanel.tsx:84`, `:170`, `:242`; outside
+  > files, approved) show «—» for `''` with a short ar/en line saying the order has no Paymob number (refused before
+  > it was sent, or Paymob gave none); `check:i18n:admin`. No nullable field until a page needs one (R-API-9 keeps a
+  > published field forever). Example: a 1,000 EGP automatic order whose intention got no answer is listed with
+  > «—», and every other order on its page is listed too. Red first: the list page, `payments.get` and the
+  > enrollment's `paidOrders`.
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
