@@ -527,6 +527,18 @@ No open question remains.
   > month 1 paid twice, 1,000 EGP each: shares 350 + 700. Line drift: `checkout.service.ts:507-508` → `:646-658`;
   > `share-release.rules.ts:395` → `:422`. The monitor's `gatewayOrderId` is nullable for an automatic order
   > (`payments-monitor.repository.ts:12-15`).
+  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113; `ejazah-tools	rack2-p3paymob-docs.md` §2).** Q-10 (a)
+  > with three adjustments: (1) `declineKind`'s code table follows Visa's categories: `soft` only for the «cannot
+  > approve now» codes, 51 (insufficient funds), 61 and 65 (limits), 91 and 96 (issuer unavailable) and the rest of
+  > Visa's Category 2, each code cited in the table's comment; every other code, and any unknown one, is `hard`, so no
+  > retry ever reaches a Category 1 card (lost, stolen, closed, invalid, expired 54, stop-recurring R0/R1/R3). (2) The
+  > kind comes only from the inquiry's authenticated answer: the callback's `txn_response_code` and
+  > `acq_response_code` are outside Paymob's HMAC and are never read; a signed `failed` callback records the failure
+  > with no kind. (3) An answer with no code is `hard` (the month by hand). This replaces «unknown → hard» read from
+  > the event. Q-11 (a): one optional env value `PAYMENT_GATEWAY_API_KEY` (`config/env.schema.ts`, `.env.example`),
+  > the inquiry's auth token taken from it; with no value the live inquiry is off (the owner sets it at contracting);
+  > the hunk agreed with R2's review session before lane b commits it. Closed-test checklist: whether the inquiry's
+  > answer carries `data.txn_response_code` and `acq_response_code`. Red first, each.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -575,6 +587,10 @@ No open question remains.
   > last session moves it. Q-6 (a): `programmeMayComplete` (`completion.service.ts:178-181`) also waits while an open
   > `slot_unavailable` or `party_restricted` case is on the enrollment. Follow-up 3 (settled by its text): the first
   > payment's sessions start after max(last end, `pay_by_at`, the confirm instant), lead 0.
+  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113).** The sweep asks the gateway at once after an automatic
+  > order fails, on the next minute, not only before the day-1 retry, so the student sees «pay now» or «change card»
+  > right away. No retry ever runs without an authenticated kind: an unanswered inquiry means no retry (DEC-110), an
+  > answer with no code means `hard`. Red first.
 - [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:

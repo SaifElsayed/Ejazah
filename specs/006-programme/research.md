@@ -262,6 +262,9 @@ Settled by the review session on recorded precedents:
   - The gateway is asked at the automatic order's expiry, then every `slot_hold_ttl_minutes` (10); after `programme_charge_inquiry_tries` (6) unanswered asks a `charge_unknown` item opens; asking goes on, and an answer withdraws it; approve = no charge found (expired, a soft decline, the retries go on), extend = keep asking.
   - The charge is two gateway steps, the intention then the token payment. The intention's `intention_order_id` is written to `gateway_order_id` in its own short transaction right after it, before the payment. An intention with no answer = no charge possible: a soft decline at once, no inquiry. A payment with no answer: its late callback is matched by the signed `order.id`, and the inquiry asks by that id. The unsigned `merchant_order_id` is never trusted (Paymob's HMAC covers `order.id`, not it: `paymob.adapter.ts:92-113`). The payment is sent once. This replaces «a late webhook is matched by the merchant reference» above.
   - `expire-pending-payments` leaves automatic orders to this inquiry (`order-expiry.repository.ts:28-37`).
+- **Amended 2026-11-24 (lane b's Paymob questions, Q-10 (a) adjusted and Q-11 (a); SRS DEC-113; the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session).**
+  - `declineKind` follows Visa's categories: `soft` only for «cannot approve now» (51, 61, 65, 91, 96 and the rest of Category 2, each cited); every other or unknown code `hard`. The kind comes only from the inquiry's authenticated answer, asked on the next minute after a failure; the callback's `txn_response_code`/`acq_response_code` (outside the HMAC) are never read; no code in the answer = `hard`; an unanswered inquiry = no retry.
+  - The inquiry's `auth_token` comes from one optional env value `PAYMENT_GATEWAY_API_KEY`; without it the live inquiry is off.
 
 ## R-510 — The saved card
 
