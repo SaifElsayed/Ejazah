@@ -45,6 +45,10 @@ export type PaymentConfig = Pick<
   | 'PAYMENT_GATEWAY_INTEGRATION_ID'
   | 'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID'
   | 'PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID'
+  // 006:T014 (Q-11 (a)): the API key the inquiry's auth token is made from; the Moto integration a
+  // saved card is charged on (lane b's Q-b1 (a)).
+  | 'PAYMENT_GATEWAY_API_KEY'
+  | 'PAYMENT_GATEWAY_MOTO_INTEGRATION_ID'
   | 'PUBLIC_WEBHOOK_ORIGIN'
 > &
   Partial<Pick<Config, 'SUPPORT_EMAIL'>>;
@@ -112,6 +116,14 @@ function paymobFrom(config: PaymentConfig, log?: PaymentLog): PaymobPaymentAdapt
     ...(config.PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID === undefined
       ? {}
       : { savedCardIntegrationId: config.PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID }),
+    // 006:T014 (Q-11 (a), Q-b1 (a)): the inquiry is off without the API key; the automatic charge
+    // is off unless both the Moto integration and the API key are set (the adapter's rule).
+    ...(config.PAYMENT_GATEWAY_API_KEY === undefined
+      ? {}
+      : { apiKey: config.PAYMENT_GATEWAY_API_KEY }),
+    ...(config.PAYMENT_GATEWAY_MOTO_INTEGRATION_ID === undefined
+      ? {}
+      : { motoIntegrationId: config.PAYMENT_GATEWAY_MOTO_INTEGRATION_ID }),
     notificationUrl: new URL(WEBHOOK_PATH, origin).toString(),
     billingEmail: required(config.SUPPORT_EMAIL, 'SUPPORT_EMAIL'),
   });

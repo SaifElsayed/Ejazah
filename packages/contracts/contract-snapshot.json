@@ -84,7 +84,7 @@
         "party_suspended",
         "payee_unverified"
       ],
-      "programmeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "programmeRequestKind": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"],
       "programmeRequestRefusal": [
         "assessment_not_delivered",
         "not_paused",
@@ -252,7 +252,7 @@
       "PaymentGateway": ["fake", "paymob"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "ProgrammePlan": ["in_full", "monthly"],
-      "ProgrammeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "ProgrammeRequestKind": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"],
       "ProgrammeRequestStatus": ["approved", "declined", "extended", "open", "withdrawn"],
       "ProgrammeState": ["active", "awaiting_offer", "closed", "offered", "paused"],
       "RemedyKind": ["makeup", "refund"],

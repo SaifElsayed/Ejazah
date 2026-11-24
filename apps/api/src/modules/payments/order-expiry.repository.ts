@@ -17,6 +17,9 @@
 // deciding under its own. Which of them still await confirmation is booking's and moderation's
 // answer, asked by the sweep through their entries (R-API-6).
 //
+// 006:T014 (SRS DEC-110, DEC-113; Q-1 (a)): an automatic charge's order is never expired here; the
+// automatic charge's inquiry (`automatic-charge.ts`) asks the gateway first and ends it.
+//
 // Every page is at most `limit` rows after the caller's cursor; no new index (R-DB-9): a page scans
 // the orders by their primary key.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
@@ -34,6 +37,8 @@ export async function expiredOrderIds(
   const rows = await tx.payment.findMany({
     where: {
       status: 'created',
+      // 006:T014 (SRS DEC-110, DEC-113): an automatic order is the inquiry's to end, never expired here.
+      automatic: false,
       expiresAt: { lte: at },
       ...(after === undefined ? {} : { id: { gt: after } }),
     },
@@ -58,7 +63,7 @@ export async function markOrdersExpired(
   const ids = [...new Set(paymentIds)].sort();
   await lockRows(tx, 'payments', ids);
   await tx.payment.updateMany({
-    where: { id: { in: ids }, status: 'created', expiresAt: { lte: at } },
+    where: { id: { in: ids }, status: 'created', automatic: false, expiresAt: { lte: at } },
     data: { status: 'expired', checkoutUrlEncrypted: null },
   });
 }

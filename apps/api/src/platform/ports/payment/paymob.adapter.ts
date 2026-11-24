@@ -49,6 +49,33 @@
 // only in a body Paymob itself signed; the payments module writes a card only for an order that
 // carries the student's consent to save it, on a programme not closed (T013).
 //
+// THE AUTOMATIC CHARGE (006:T014; R-509, FR-714; SRS DEC-113 (2), Q-2 (a) amended; "Pay with Saved
+// Card (MIT)", `paymob-docs.md` row 4). Two steps, never retried. Off (`charge_off`, nothing sent)
+// unless both the Moto integration and the API key are set (lane b's Q-b1 (a): a payment left with no
+// answer must be one the inquiry can ask about); in live mode a charge naming no payee is refused (`no_payee`,
+// nothing sent), as a checkout is. Step 1: an intention on the Moto integration for the gross, with
+// the split as a checkout's and the platform's payment id as `special_reference`; its
+// `intention_order_id` is the order the callbacks name, and `payment_keys[0].key` the payment token.
+// An intention with no readable answer charged nothing: `order_unanswered`. The order's id is then
+// handed to the caller, which records it; only once it answers that it did is step 2 sent:
+// `api/acceptance/payments/pay` with the card token as a `TOKEN` source, once. Its synchronous answer
+// is not documented and nothing of it is read: the result is the signed callback's (matched by its
+// signed `order.id`) or the inquiry's. The card token is sent in that request alone, and reaches no
+// log, no error and no answer (SC-707). UNVERIFIED (closed-test checklist): the pay request's
+// authorisation (the secret key is sent, as the intention's), and the Moto split's
+// `split_payment_methods` (the auth integration's, as a checkout's).
+//
+// THE INQUIRY (006:T014; SRS DEC-110, DEC-113 (1); Q-10 (a) adjusted, Q-11 (a); "Transaction
+// Inquiry", `paymob-docs.md` row 6). Off (`no_answer`, nothing sent) while no API key is set. An auth
+// token is made from the API key, then the order is asked by its order id; the answer is the order's
+// last transaction, read only when it is final and the order's own on this adapter's integrations:
+// paid as the paid event its callback carries (the same provider event id, so whichever is recorded
+// first makes the other a replay), failed with its decline kind from Visa's categories
+// (`declineKindOf`: soft only for Category 2, anything else, unknown or absent hard). Anything else
+// (pending, a refund or a void, an authorisation alone, another order, an unreadable answer, no
+// answer at all) is `no_answer`. Paymob's answer for an order with no transaction is not documented,
+// so it is never read as «none»: this adapter does not answer `none` (closed-test checklist).
+//
 // NOT OFFERED (OPEN-11): no documented call cancels an unpaid intention, so `cancelCheckout` answers
 // `unsupported` (ADR 0010 D6, FR-BOOK-12 then waits for the order's expiry). A teacher's onboarding
 // is Paymob's partner onboarding ("Register Merchant" with a phone, an email and documents, under a
@@ -62,17 +89,54 @@ import { piasters, toPlainNumber, type Piasters } from '@ijazah/money';
 import { addSeconds, unixSeconds } from '@ijazah/time';
 import { z } from 'zod';
 import {
+  ChargeRefusedError,
   EventSignatureError,
   MalformedEventError,
   NonFinalEventError,
   type CancelOutcome,
   type Checkout,
   type CheckoutPayee,
+  type DeclineKind,
   type GatewayEvent,
+  type OrderInquiry,
   type PaymentPort,
   type PayoutDetails,
   type RecipientStatus,
+  type SavedCardCharge,
 } from './payment.port.js';
+
+/**
+ * 006:T014 (SRS DEC-113; Q-10 (a) adjusted, the owner, 2026-11-24): the issuer's answers that may be
+ * retried, Visa's Category 2, «issuer cannot approve at this time» (Visa's rules for retrying
+ * declined transactions). Every other code, Category 1 (never approve), Category 3 (not with these
+ * details, 54 expired among them), Category 4 (generic) and any unknown one, is hard: no retry ever
+ * reaches a card the issuer will not approve. The list matches Visa's Category 2 as Adyen's «Visa
+ * integrity fees» page gives it (docs.adyen.com/development-resources/raw-acquirer-responses/
+ * visa-integrity-fees, last modified 2026-11-23; checked by B-P3's review session on 2026-11-24);
+ * the closed-test checklist checks it against Visa's own publication.
+ */
+const SOFT_DECLINE_CODES: ReadonlySet<string> = new Set([
+  '03', // invalid merchant
+  '19', // re-enter transaction
+  '51', // insufficient funds, or over the credit limit
+  '59', // suspected fraud
+  '61', // exceeds the approval amount limit
+  '62', // restricted card
+  '65', // exceeds the withdrawal frequency limit
+  '75', // allowable number of PIN tries exceeded
+  '78', // blocked, first used
+  '86', // cannot verify PIN
+  '91', // issuer or switch inoperative
+  '93', // transaction cannot be completed, violation of law
+  '96', // system malfunction
+  'N3', // cash service not available
+  'N4', // cash request exceeds the issuer's or approved limit
+]);
+
+/** 006:T014: an issuer's response code as soft or hard (above); absent or unknown is hard. */
+export function declineKindOf(code: string | undefined): DeclineKind {
+  return code !== undefined && SOFT_DECLINE_CODES.has(code) ? 'soft' : 'hard';
+}
 
 /** Egypt's API host (Paymob's regional base URL; test and live share it, the keys decide the mode). */
 const API_ORIGIN = 'https://accept.paymob.com';
@@ -215,6 +279,47 @@ const intentionAnswer = z.object({
   intention_order_id: z.number().int(),
 });
 
+/** 006:T014: the token payment ("Pay with Saved Card", MIT) and the source's subtype. */
+const PAY_PATH = '/api/acceptance/payments/pay';
+const TOKEN_SUBTYPE = 'TOKEN';
+/**
+ * 006:T014: the auth token ("Authentication Request (Generate Auth Token)", read for B-P3 on
+ * 2026-11-24: `POST api/auth/tokens {api_key}` → 200 `{profile, token}`, only `token` read; the page
+ * gives no lifetime, so a fresh token is made for each inquiry, and the lifetime is on the
+ * closed-test checklist) and the inquiry ("Transaction Inquiry by order id").
+ */
+const AUTH_TOKEN_PATH = '/api/auth/tokens';
+const INQUIRY_PATH = '/api/ecommerce/orders/transaction_inquiry';
+
+/** 006:T014: the Moto intention's answer: its order, and the payment key the token payment uses. */
+const motoIntentionAnswer = z.object({
+  intention_order_id: z.number().int(),
+  payment_keys: z.tuple([z.object({ key: z.string().min(1) })]).rest(z.unknown()),
+});
+
+const authTokenAnswer = z.object({ token: z.string().min(1) });
+
+/** An issuer's response code as an answer carries it: a string, or a number written as two digits. */
+const responseCode = z
+  .union([z.string(), z.number().int().nonnegative()])
+  .transform((code) => (typeof code === 'number' ? String(code).padStart(2, '0') : code))
+  .optional();
+
+/**
+ * 006:T014: the inquiry's answer, the order's last transaction (authenticated by the auth token over
+ * TLS, so every field is the gateway's word), read for what the port records; the issuer's code from
+ * `data.acq_response_code`, or `acq_response_code` (which of the two Paymob fills is on the
+ * closed-test checklist). `txn_response_code` is not an issuer's code and is not read.
+ */
+const inquiredTransaction = signedTransaction.extend({
+  data: z.object({ acq_response_code: responseCode }).optional(),
+  acq_response_code: responseCode,
+});
+
+type InquiredTransaction = z.infer<typeof inquiredTransaction>;
+
+const NO_ANSWER: OrderInquiry = { answer: 'no_answer' };
+
 export interface PaymobOptions {
   readonly secretKey: string;
   readonly publicKey: string;
@@ -228,6 +333,16 @@ export interface PaymobOptions {
    * `TOKEN` callback is refused (`MalformedEventError`) and no card is saved.
    */
   readonly savedCardIntegrationId?: number;
+  /**
+   * 006:T014 (R-509): the Moto integration a saved card is charged on (MIT). Without it, or without
+   * `apiKey`, the automatic charge is off: `chargeSavedCard` refuses `charge_off` before any request.
+   */
+  readonly motoIntegrationId?: number;
+  /**
+   * 006:T014 (Q-11 (a)): the API key the inquiry's auth token is made from. Without it the live
+   * inquiry is off: `inquireOrder` answers `no_answer`, sending nothing.
+   */
+  readonly apiKey?: string;
   /** Where Paymob posts its processed callbacks: the webhook on `PUBLIC_WEBHOOK_ORIGIN`. */
   readonly notificationUrl: string;
   /** The billing email every intention carries: the platform's `SUPPORT_EMAIL`, never a student's. */
@@ -296,7 +411,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
         },
         expiration: lifetimeSeconds,
         notification_url: this.#options.notificationUrl,
-        ...this.#split(enrollmentId, payee),
+        ...this.#split({ enrollmentId }, payee),
       }),
     );
     if (!answer.success) throw new GatewayRequestError('unreadable');
@@ -312,6 +427,107 @@ export class PaymobPaymentAdapter implements PaymentPort {
 
   cancelCheckout(_gatewayOrderId: string): Promise<CancelOutcome> {
     return Promise.resolve('unsupported');
+  }
+
+  // 006:T014: this file's head, THE AUTOMATIC CHARGE.
+  async chargeSavedCard(
+    paymentId: string,
+    gross_piasters: Piasters,
+    currency: string,
+    latestExpiry: Date,
+    cardToken: string,
+    payee: CheckoutPayee | undefined,
+    recordOrder: (gatewayOrderId: string) => Promise<boolean>,
+  ): Promise<SavedCardCharge> {
+    const { motoIntegrationId } = this.#options;
+    // Off unless both are set: a payment with no answer must be one the inquiry can ask about.
+    if (motoIntegrationId === undefined || this.#options.apiKey === undefined) {
+      throw new ChargeRefusedError('charge_off');
+    }
+    if (this.#options.mode === 'live' && payee === undefined) {
+      throw new ChargeRefusedError('no_payee');
+    }
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      throw new RangeError('A currency is three capital letters (ISO 4217).');
+    }
+    const now = this.#now();
+    const lifetimeSeconds = unixSeconds(latestExpiry) - unixSeconds(now);
+    if (lifetimeSeconds < ONE_SECOND) {
+      throw new RangeError('The latest expiry leaves the order less than a second.');
+    }
+    const amount = toPlainNumber(gross_piasters);
+    const split = this.#split({ paymentId }, payee);
+    let order: z.infer<typeof motoIntentionAnswer>;
+    try {
+      const answer = motoIntentionAnswer.safeParse(
+        await this.#post(INTENTION_PATH, {
+          amount,
+          currency,
+          payment_methods: [motoIntegrationId],
+          items: [{ name: ITEM_NAME, amount, quantity: 1 }],
+          billing_data: {
+            first_name: NOT_GIVEN,
+            last_name: NOT_GIVEN,
+            email: this.#options.billingEmail,
+            phone_number: NOT_GIVEN,
+          },
+          expiration: lifetimeSeconds,
+          notification_url: this.#options.notificationUrl,
+          special_reference: paymentId,
+          ...split,
+        }),
+      );
+      if (!answer.success) return { step: 'order_unanswered' };
+      order = answer.data;
+    } catch (error: unknown) {
+      if (error instanceof GatewayRequestError) return { step: 'order_unanswered' };
+      throw error;
+    }
+    const gatewayOrderId = String(order.intention_order_id);
+    if (!(await recordOrder(gatewayOrderId))) return { step: 'order_not_recorded', gatewayOrderId };
+    try {
+      await this.#post(PAY_PATH, {
+        source: { identifier: cardToken, subtype: TOKEN_SUBTYPE },
+        payment_token: order.payment_keys[0].key,
+      });
+    } catch (error: unknown) {
+      // Sent: whether it was charged is the callback's or the inquiry's to say, never a resend.
+      if (!(error instanceof GatewayRequestError)) throw error;
+    }
+    return { step: 'payment_sent', gatewayOrderId };
+  }
+
+  // 006:T014: this file's head, THE INQUIRY.
+  async inquireOrder(gatewayOrderId: string): Promise<OrderInquiry> {
+    const { apiKey } = this.#options;
+    if (apiKey === undefined) return NO_ANSWER;
+    try {
+      const auth = authTokenAnswer.safeParse(
+        JSON.parse(await this.#send(AUTH_TOKEN_PATH, { api_key: apiKey }, false)),
+      );
+      if (!auth.success) return NO_ANSWER;
+      const rawBody = Buffer.from(
+        await this.#send(
+          INQUIRY_PATH,
+          { auth_token: auth.data.token, order_id: Number(gatewayOrderId) },
+          false,
+        ),
+        'utf8',
+      );
+      const inquired = inquiredTransaction.safeParse(JSON.parse(rawBody.toString('utf8')));
+      if (
+        !inquired.success ||
+        String(inquired.data.order.id) !== gatewayOrderId ||
+        !this.#integrations().includes(inquired.data.integration_id)
+      ) {
+        return NO_ANSWER;
+      }
+      const event = inquiredEventOf(inquired.data);
+      return event === null ? NO_ANSWER : { answer: 'transaction', event, rawBody };
+    } catch (error: unknown) {
+      if (error instanceof GatewayRequestError || error instanceof SyntaxError) return NO_ANSWER;
+      throw error;
+    }
   }
 
   verifyAndParseEvent(
@@ -340,8 +556,11 @@ export class PaymobPaymentAdapter implements PaymentPort {
 
   /** The integrations this adapter's orders are paid on. */
   #integrations(): readonly number[] {
-    const { integrationId, splitIntegrationId } = this.#options;
-    return splitIntegrationId === undefined ? [integrationId] : [integrationId, splitIntegrationId];
+    const { integrationId, splitIntegrationId, motoIntegrationId } = this.#options;
+    // 006:T014: an automatic charge's transaction is paid on the Moto integration.
+    return [integrationId, splitIntegrationId, motoIntegrationId].filter(
+      (id): id is number => id !== undefined,
+    );
   }
 
   /**
@@ -351,13 +570,13 @@ export class PaymobPaymentAdapter implements PaymentPort {
    * would fail every checkout there. Live mode always has one (the env schema, T109); its absence
    * there is refused, sending nothing.
    */
-  #split(enrollmentId: string, payee: CheckoutPayee | undefined): Record<string, unknown> {
+  #split(ids: object, payee: CheckoutPayee | undefined): Record<string, unknown> {
     if (payee === undefined) return {};
     const { splitIntegrationId } = this.#options;
     if (splitIntegrationId === undefined) {
       if (this.#options.mode === 'test') {
         this.#options.log?.warn(
-          { enrollmentId, reason: 'no_split_integration' },
+          { ...ids, reason: 'no_split_integration' },
           'A test-mode checkout goes with no split: no PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID is set',
         );
         return {};
@@ -377,12 +596,25 @@ export class PaymobPaymentAdapter implements PaymentPort {
   }
 
   async #post(path: string, body: object): Promise<unknown> {
+    const text = await this.#send(path, body, true);
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new GatewayRequestError('unreadable');
+    }
+  }
+
+  /**
+   * The answer's text to a POST of `body`, authorised by the secret key when `authorised` (006:T014:
+   * the auth token's and the inquiry's requests carry their credential in the body instead).
+   */
+  async #send(path: string, body: object, authorised: boolean): Promise<string> {
     let response: Response;
     try {
       response = await this.#fetch(new URL(path, API_ORIGIN), {
         method: 'POST',
         headers: {
-          authorization: `Token ${this.#options.secretKey}`,
+          ...(authorised ? { authorization: `Token ${this.#options.secretKey}` } : {}),
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -398,7 +630,7 @@ export class PaymobPaymentAdapter implements PaymentPort {
       throw new GatewayRequestError(response.status);
     }
     try {
-      return (await response.json()) as unknown;
+      return await response.text();
     } catch {
       throw new GatewayRequestError('unreadable');
     }
@@ -494,6 +726,52 @@ function eventOf(transaction: SignedTransaction): GatewayEvent {
     gatewayOrderId,
     gatewayTransactionId: transactionId,
     gross_piasters: signedAmount(transaction),
+    gateway_fee_piasters: null,
+    net_piasters: null,
+    currency: transaction.currency,
+  };
+}
+
+/**
+ * 006:T014: the event an inquired transaction reports, under the provider event id its callback
+ * carries; null for any transaction this port does not decide on (this file's head, THE INQUIRY).
+ */
+function inquiredEventOf(
+  transaction: InquiredTransaction,
+): Extract<GatewayEvent, { readonly type: 'paid' | 'failed' }> | null {
+  if (
+    transaction.pending ||
+    transaction.has_parent_transaction ||
+    transaction.is_refunded ||
+    transaction.is_voided ||
+    (transaction.is_auth && !transaction.is_capture)
+  ) {
+    return null;
+  }
+  const gatewayOrderId = String(transaction.order.id);
+  const transactionId = String(transaction.id);
+  if (!transaction.success) {
+    return {
+      type: 'failed',
+      providerEventId: `paymob:${transactionId}:failed`,
+      gatewayOrderId,
+      declineKind: declineKindOf(
+        transaction.data?.acq_response_code ?? transaction.acq_response_code,
+      ),
+    };
+  }
+  let gross_piasters: Piasters;
+  try {
+    gross_piasters = piasters(transaction.amount_cents);
+  } catch {
+    return null;
+  }
+  return {
+    type: 'paid',
+    providerEventId: `paymob:${transactionId}:paid`,
+    gatewayOrderId,
+    gatewayTransactionId: transactionId,
+    gross_piasters,
     gateway_fee_piasters: null,
     net_piasters: null,
     currency: transaction.currency,

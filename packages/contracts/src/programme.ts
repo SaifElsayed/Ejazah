@@ -37,10 +37,23 @@ export const programmeState = z.enum(['awaiting_offer', 'offered', 'active', 'pa
 /** ERD `programme_plan`: how the student pays the rest; absent until the first payment. */
 export const programmePlan = z.enum(['in_full', 'monthly']);
 
-/** ERD `programme_request_kind`: `stop` and `refusal` are the teacher's; the sweep raises the others. */
-export const programmeRequestKind = z.enum(['stop', 'refusal', 'no_offer', 'pay_blocked']);
+/**
+ * ERD `programme_request_kind`: `stop` and `refusal` are the teacher's; the sweep raises the others.
+ * 006:T014 (SRS DEC-113, ERD changelog row 80): `charge_unknown`, an automatic charge the gateway has
+ * not answered after `programme_charge_inquiry_tries` asks.
+ */
+export const programmeRequestKind = z.enum([
+  'stop',
+  'refusal',
+  'no_offer',
+  'pay_blocked',
+  'charge_unknown',
+]);
 
-/** ERD `programme_request_status`: `extended` on a `no_offer` or `pay_blocked` item only. */
+/**
+ * ERD `programme_request_status`: `extended` on a `no_offer`, `pay_blocked` or `charge_unknown` item
+ * only (rule 80).
+ */
 export const programmeRequestStatus = z.enum([
   'open',
   'approved',

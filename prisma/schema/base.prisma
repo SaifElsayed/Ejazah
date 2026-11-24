@@ -334,12 +334,15 @@ enum ProgrammePlan {
 }
 
 // 006:T001 (R-513, I-2 (a), FR-706b): an item for an administrator. `stop` and `refusal` are the
-// teacher's, with a reason; `no_offer` and `pay_blocked` are raised by the sweep.
+// teacher's, with a reason; `no_offer` and `pay_blocked` are raised by the sweep. B-P3 (T014, SRS
+// DEC-113; ERD changelog row 80): `charge_unknown`, the sweep's item for an automatic charge the
+// gateway has not answered after `programme_charge_inquiry_tries` asks.
 enum ProgrammeRequestKind {
   stop
   refusal
   no_offer
   pay_blocked
+  charge_unknown
 
   @@map("programme_request_kind")
 }

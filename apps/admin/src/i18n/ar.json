@@ -2700,6 +2700,7 @@
         "postponement_interval_weeks": "المدة بين تأجيلين لكل طرف",
         "postponement_notice_hours": "مهلة التأجيل قبل الجلسة",
         "price_average_min_teachers": "أقل عدد من المعلمين لمتوسط السعر",
+        "programme_charge_inquiry_tries": "برنامج الإجازة: مرات السؤال عن خصم تلقائي بلا رد قبل فتح بند للإدارة",
         "programme_charge_retry_days": "برنامج الإجازة: أيام إعادة محاولة الخصم التلقائي",
         "programme_enabled": "برنامج الإجازة: التشغيل",
         "programme_offer_hours": "برنامج الإجازة: مهلة إرسال العرض بعد الاختبار",

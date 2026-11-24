@@ -85,6 +85,8 @@ describe("the stand-in's hosted page (T012, R-213)", () => {
       verifyAndParseEvent: () => Promise.reject(new Error('unused')),
       registerPayoutRecipient: () => Promise.reject(new Error('unused')),
       getRecipientStatus: () => Promise.reject(new Error('unused')),
+      chargeSavedCard: () => Promise.reject(new Error('unused')),
+      inquireOrder: () => Promise.reject(new Error('unused')),
     };
 
     expect(standInCheckoutOf(createPaymentPort(base))).toBeDefined();
@@ -155,7 +157,9 @@ describe('the gateway (T056)', () => {
     const sent: unknown[] = [];
     vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
       sent.push(init.body);
-      return Promise.resolve(Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 }));
+      return Promise.resolve(
+        Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 }),
+      );
     });
     const live = createPaymentPort({
       ...paymob,
@@ -163,7 +167,9 @@ describe('the gateway (T056)', () => {
       PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID: 1_000_002,
     });
 
-    await expect(live.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER)).rejects.toThrow(/payee/);
+    await expect(live.createCheckout('enr-1', piasters(100), 'EGP', PAY_BY_LATER)).rejects.toThrow(
+      /payee/,
+    );
     expect(sent).toEqual([]);
   });
 
@@ -199,9 +205,78 @@ describe('the gateway (T056)', () => {
     ).rejects.toBeInstanceOf(MalformedEventError);
   });
 
+  // 006:T014 (Q-11 (a)): the inquiry's auth token is made from PAYMENT_GATEWAY_API_KEY; without it
+  // the live inquiry is off and sends nothing.
+  it('hands Paymob the API key: the inquiry asks with it, and sends nothing without it (006:T014)', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)));
+      return Promise.resolve(Response.json({ detail: 'refused' }, { status: 403 }));
+    });
+
+    await expect(createPaymentPort(paymob).inquireOrder('217503754')).resolves.toEqual({
+      answer: 'no_answer',
+    });
+    expect(sent).toEqual([]);
+    await createPaymentPort({
+      ...paymob,
+      PAYMENT_GATEWAY_API_KEY: 'placeholder-api-key',
+    }).inquireOrder('217503754');
+    expect(sent).toEqual([{ api_key: 'placeholder-api-key' }]);
+  });
+
+  // 006:T014 (Q-b1 (a) as adjusted): the automatic charge runs on PAYMENT_GATEWAY_MOTO_INTEGRATION_ID,
+  // and only with PAYMENT_GATEWAY_API_KEY set too; with either missing it is off and sends nothing.
+  const charge = (config: PaymentConfig) =>
+    createPaymentPort(config).chargeSavedCard(
+      'pay-1',
+      piasters(100),
+      'EGP',
+      PAY_BY_LATER,
+      'placeholder-card-token',
+      undefined,
+      () => Promise.resolve(true),
+    );
+
+  it('hands Paymob the Moto integration: with the API key the charge is sent on it (006:T014)', async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return Promise.resolve(Response.json({ detail: 'refused' }, { status: 400 }));
+    });
+
+    await expect(
+      charge({
+        ...paymob,
+        PAYMENT_GATEWAY_MOTO_INTEGRATION_ID: 1_000_004,
+        PAYMENT_GATEWAY_API_KEY: 'placeholder-api-key',
+      }),
+    ).resolves.toEqual({ step: 'order_unanswered' });
+    expect(bodies).toMatchObject([{ payment_methods: [1_000_004] }]);
+  });
+
+  it.each([
+    ['neither', {}],
+    ['the Moto integration alone', { PAYMENT_GATEWAY_MOTO_INTEGRATION_ID: 1_000_004 }],
+    ['the API key alone', { PAYMENT_GATEWAY_API_KEY: 'placeholder-api-key' }],
+  ])('refuses the charge charge_off, sending nothing, with %s set (006:T014)', async (_, keys) => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('fetch', (_url: URL, init: RequestInit) => {
+      sent.push(init.body);
+      return Promise.resolve(Response.json({}, { status: 201 }));
+    });
+
+    await expect(
+      charge({ ...paymob, PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID: 1_000_003, ...keys }),
+    ).rejects.toMatchObject({ name: 'ChargeRefusedError', reason: 'charge_off' });
+    expect(sent).toEqual([]);
+  });
+
   it('hands Paymob the logger: a test-mode payee with no split integration writes one warn line (003:T101)', async () => {
     vi.stubGlobal('fetch', () =>
-      Promise.resolve(Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 })),
+      Promise.resolve(
+        Response.json({ client_secret: 'csk', intention_order_id: 1 }, { status: 201 }),
+      ),
     );
     const warned: unknown[] = [];
     const port = createPaymentPort(paymob, { warn: (fields: object) => void warned.push(fields) });

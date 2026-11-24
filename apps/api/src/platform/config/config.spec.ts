@@ -808,6 +808,22 @@ describe('the gateway (T056)', () => {
     }
   });
 
+  // 006:T014 (R-509; lane b's Q-b1 (a)): the Moto integration a saved card is charged on, optional
+  // in both modes; unset, the automatic charge is off.
+  it('reads the Moto integration id as a number, unset by default, refusing one not whole (006:T014)', () => {
+    expect(loadConfig(paymobTest).PAYMENT_GATEWAY_MOTO_INTEGRATION_ID).toBeUndefined();
+    expect(loadConfig(paymobLive).PAYMENT_GATEWAY_MOTO_INTEGRATION_ID).toBeUndefined();
+    expect(
+      loadConfig({ ...paymobTest, PAYMENT_GATEWAY_MOTO_INTEGRATION_ID: '1000004' })
+        .PAYMENT_GATEWAY_MOTO_INTEGRATION_ID,
+    ).toBe(1_000_004);
+    for (const value of ['moto', '0', '1.5']) {
+      expect(
+        refusal({ ...paymobTest, PAYMENT_GATEWAY_MOTO_INTEGRATION_ID: value }).offendingKeys,
+      ).toEqual(['PAYMENT_GATEWAY_MOTO_INTEGRATION_ID']);
+    }
+  });
+
   it.each([
     'PAYMENT_GATEWAY_SECRET_KEY',
     'PAYMENT_GATEWAY_PUBLIC_KEY',
@@ -852,7 +868,10 @@ describe('the gateway (T056)', () => {
   };
 
   it('requires the payment mode, test or live, with no default, naming it (003:T109)', () => {
-    for (const env of [without(validEnv, 'PAYMENT_MODE'), { ...validEnv, PAYMENT_MODE: 'sandbox' }]) {
+    for (const env of [
+      without(validEnv, 'PAYMENT_MODE'),
+      { ...validEnv, PAYMENT_MODE: 'sandbox' },
+    ]) {
       const failure = refusal(env);
       expect(failure.offendingKeys).toEqual(['PAYMENT_MODE']);
     }
@@ -866,9 +885,14 @@ describe('the gateway (T056)', () => {
   });
 
   it('refuses a live key in test mode, naming the key and never its value (003:T109)', () => {
-    const failure = refusal({ ...paymobTest, PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder' });
+    const failure = refusal({
+      ...paymobTest,
+      PAYMENT_GATEWAY_SECRET_KEY: 'egy_sk_live_placeholder',
+    });
     expect(failure.offendingKeys).toEqual(['PAYMENT_GATEWAY_SECRET_KEY']);
-    expect(failure.message).toMatch(/PAYMENT_GATEWAY_SECRET_KEY \(a live key is refused in test mode/);
+    expect(failure.message).toMatch(
+      /PAYMENT_GATEWAY_SECRET_KEY \(a live key is refused in test mode/,
+    );
     expect(failure.message).not.toContain('placeholder');
   });
 
@@ -963,6 +987,7 @@ describe('the gateway (T056)', () => {
       'PAYMENT_GATEWAY_INTEGRATION_ID',
       'PAYMENT_GATEWAY_SPLIT_INTEGRATION_ID',
       'PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID',
+      'PAYMENT_GATEWAY_MOTO_INTEGRATION_ID',
     ]) {
       expect(providerKeys).toContain(key);
       expect(platformKeys).not.toContain(key);
@@ -1141,9 +1166,7 @@ describe('the sign-in provider (002:T148)', () => {
       const failure = refusal({ ...env, APPLE_CLIENT_ID: 'app.ijazah.placeholder' });
 
       expect(failure.offendingKeys).toEqual(['GOOGLE_CLIENT_IDS']);
-      expect(failure.message).toContain(
-        'GOOGLE_CLIENT_IDS (required when SIGN_IN_PROVIDER=live',
-      );
+      expect(failure.message).toContain('GOOGLE_CLIENT_IDS (required when SIGN_IN_PROVIDER=live');
       expect(failure.message).not.toContain('placeholder');
     }
   });
@@ -1272,9 +1295,7 @@ describe('the session media key secret (T084)', () => {
 
   it('starts in development and test without it', () => {
     for (const nodeEnv of ['development', 'test']) {
-      expect(
-        loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).VIDEO_MEDIA_KEY_SECRET,
-      ).toBeUndefined();
+      expect(loadConfig({ ...validEnv, NODE_ENV: nodeEnv }).VIDEO_MEDIA_KEY_SECRET).toBeUndefined();
     }
   });
 

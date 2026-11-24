@@ -578,6 +578,53 @@ No open question remains.
   > the inquiry's auth token taken from it; with no value the live inquiry is off (the owner sets it at contracting);
   > the hunk agreed with R2's review session before lane b commits it. Closed-test checklist: whether the inquiry's
   > answer carries `data.txn_response_code` and `acq_response_code`. Red first, each.
+  > **Done in part (B-P3 lane b, 2026-11-24; stop 1's answers, the owner's «Approve all», Q-b1 (a) adjusted, Q-b2 (a),
+  > Q-b3 (a); Q-b4 settled by the Generate Auth Token page).**
+  > - **The port:** `chargeSavedCard` runs two steps through the caller's `recordOrder`: the payment is sent only
+  >   after the gateway's order id is recorded, once. `inquireOrder` answers `transaction`, `none` or `no_answer`.
+  >   `failed.declineKind` is set only from the inquiry.
+  > - **Paymob:**
+  >   - The Moto intention carries the split and `special_reference`, then `payments/pay` with the token.
+  >   - `charge_off` unless both `PAYMENT_GATEWAY_MOTO_INTEGRATION_ID` and `PAYMENT_GATEWAY_API_KEY` are set;
+  >     `no_payee` in live mode.
+  >   - The inquiry makes a fresh auth token from the API key, then asks by the order id. Anything not final or
+  >     unreadable is `no_answer`; Paymob's adapter never answers `none`.
+  >   - Visa's Category 2 table (soft) is checked against Adyen's «Visa integrity fees» page; every other code is
+  >     hard.
+  > - **The fake:** `onCharge` and `onInquiry`.
+  > - **The charge entry:** `modules/payments/automatic-charge.ts`, through payments' `createProgrammeCharges`.
+  >   - `record`: on the caller's transaction, the order is `created` with no gateway id and expires in 10
+  >     minutes. With no card nothing is written. In live mode with no payee the order is `failed`/`hard`.
+  >   - `charge`: after commit, with no lock held, sent once. An unanswered first step is expired (a soft
+  >     decline). A refusal is recorded `failed`/`hard` with no push.
+  >   - `inquire`: nothing is asked before the expiry. An order with no id is expired with no question. The answer
+  >     is recorded through the webhook's branch, which writes the decline kind (also on a replay). `none` expires
+  >     the order.
+  > - **The rest:**
+  >   - `expire-pending-payments` leaves automatic orders to the inquiry.
+  >   - Q-5 (a): the shares read only the awaited orders.
+  >   - The migration `20261124105820_programme_charge_unknown`: the value, a `COMMIT`, then rule 80's check
+  >     replaced.
+  >   - The setting `programme_charge_inquiry_tries` = 6.
+  >   - The contract `programmeRequestKind` gains `charge_unknown`; `ALLOWED.charge_unknown = []`.
+  > - **Specs:** `paymob.charge.spec.ts`, `fake.charge.spec.ts`, `tests/db-integrity/automatic-charge.spec.ts`,
+  >   `tests/seed/programme-charge-unknown.spec.ts`, red first, with named mutants.
+  > **Follow-up (B-P3 lane b, 2026-11-24): waiting for a decision.** The monitor's nullable `gatewayOrderId` (settled
+  > by `payments-monitor.repository.ts:12-15`) fails `contract:snapshot --check`. The gate reports
+  > `admin payments.get $.gatewayOrderId`, `$.paidOrders[].gatewayOrderId` and `payments.list $.items[].gatewayOrderId`
+  > as `string → null|string` (R-API-9). The change is held as a patch (`track2\runs\b-p3\lane-b\48-monitor-held.patch`),
+  > so the monitor still refuses an automatic order that has no gateway id.
+  > **Follow-up (B-P3 lane b, 2026-11-24).** «Neither "pay now" nor "change card" while `payeePending`»
+  > (`tasks.md:529-531`) is `programme.get`'s (T018) and the screen's (T020). T014 builds the no-push half.
+  > `share-release.rules.ts`' half base still reads `inFull` from any `rest_in_full`, a duplicate after months included
+  > (rare; outside Q-5's two sums).
+  > **Closed-test checklist (B-P3 lane b).**
+  > - The pay call's synchronous answer and its authorisation (the secret key is sent).
+  > - The Moto split's `split_payment_methods`.
+  > - The inquiry: its «no transaction» answer; where it carries `acq_response_code` (`data.` or the top level); its
+  >   `currency` and `created_at`.
+  > - The auth token's lifetime.
+  > - The Category 2 table, against Visa's own publication.
 - [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;

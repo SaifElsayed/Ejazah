@@ -196,6 +196,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   ['programme_stop_request_days', 7],
   ['programme_renew_early_days', 3],
   ['programme_charge_retry_days', [1, 3, 5, 7]],
+  // 006:T014 (SRS §3.14, DEC-113; research R-515 as amended): the unanswered asks about an automatic
+  // charge before the `charge_unknown` Administrator item.
+  ['programme_charge_inquiry_tries', 6],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],

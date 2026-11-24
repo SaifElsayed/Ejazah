@@ -29,13 +29,16 @@ function gateway(): FakePaymentAdapter {
 }
 
 describe('the payment port (T117, ADR 0007)', () => {
-  it('has exactly five operations: no balance, transfer or refund exists', () => {
+  // 006:T014 adds the saved card's charge and the inquiry; neither moves funds between parties.
+  it('has exactly seven operations: no balance, transfer or refund exists', () => {
     expectTypeOf<keyof PaymentPort>().toEqualTypeOf<
       | 'createCheckout'
       | 'cancelCheckout'
       | 'verifyAndParseEvent'
       | 'registerPayoutRecipient'
       | 'getRecipientStatus'
+      | 'chargeSavedCard'
+      | 'inquireOrder'
     >();
   });
 
