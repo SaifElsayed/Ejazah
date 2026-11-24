@@ -506,6 +506,10 @@ No open question remains.
   > new key: T014 reads it in `paymobFrom` and changes only its `.env.example` comment.
   > **Follow-up (B-P3 lane a, 2026-11-24).** `docs/RUNBOOK.md:319` lists the keys set at contracting; it should name
   > `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID` too (not edited here).
+  > **Settled (B-P3, 2026-11-24; the owner, «Approve all», typed in the review session).** kernel.md's 006:T013 row
+  > (`specs/004-sessions/contracts/kernel.md`): the webhook's card write under `lockOrder` (the enrollment, then the
+  > order), after the event's row; the delete on the close hook's transaction. Left to the closed-test checklist:
+  > Paymob's token message's three open boundaries, and the merchant id against the account's.
 - [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
