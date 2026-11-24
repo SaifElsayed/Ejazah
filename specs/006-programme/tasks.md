@@ -440,7 +440,7 @@ No open question remains.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
-- [ ] T013 [US3] Saved cards and the close hook (FR-713, FR-719; R-510):
+- [x] T013 [US3] Saved cards and the close hook (FR-713, FR-719; R-510):
   - **The port:** `platform/ports/payment/payment.port.ts` `createCheckout`'s `saveCard` and the `card_saved` event.
   - **Paymob:** `paymob.adapter.ts` takes the token callback (`payment_event_type` `card_saved`, id
     `paymob:<txId>:token`), refused unless verified; off without the saved-card integration id.
