@@ -782,7 +782,7 @@ No open question remains.
   > **Follow-up (B-P3 lane d, 2026-11-24).** The paid month's resume signals `enrollment` on the confirm
   > step's transaction publisher, which no worker binds (lane c's N-15 follow-up under T015): a client
   > sees the resume on its next read.
-- [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
+- [x] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
   `modules/booking/programmes-admin.router.ts` (the admin decisions):
   - `programme.request` `stop` (refused before 7 days);
