@@ -236,6 +236,14 @@ export const programmeCancelRefusal = z.enum([
   'payment_processing',
 ]);
 
+/**
+ * 006:T016 (FR-713a, SRS DEC-95; B-P3's conflict check, B-P2 Q-B1's precedent: one refusal enum per
+ * procedure): `programme.autoRenewOff`'s refusals: `party_suspended` while a `teacher_suspended` or
+ * `student_suspended` case is open, `closed` once the programme is closed or its enrollment no longer
+ * `confirmed`. Additive.
+ */
+export const programmeAutoRenewOffRefusal = z.enum(['party_suspended', 'closed']);
+
 /** `programme.autoRenewOff` and `programme.cancel`: the student's, on the enrollment. */
 export const programmeActionInput = z.object({
   enrollmentId: z.uuid(),
@@ -266,5 +274,6 @@ export type ProgrammeRequestInput = z.infer<typeof programmeRequestInput>;
 export type ProgrammeRequestOutput = z.infer<typeof programmeRequestOutput>;
 export type ProgrammeRequestRefusal = z.infer<typeof programmeRequestRefusal>;
 export type ProgrammeCancelRefusal = z.infer<typeof programmeCancelRefusal>;
+export type ProgrammeAutoRenewOffRefusal = z.infer<typeof programmeAutoRenewOffRefusal>;
 export type ProgrammeActionInput = z.infer<typeof programmeActionInput>;
 export type ProgrammeActionOutput = z.infer<typeof programmeActionOutput>;

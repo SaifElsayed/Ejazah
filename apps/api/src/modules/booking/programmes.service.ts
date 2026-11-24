@@ -64,17 +64,20 @@
 import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
+  ProgrammeAutoRenewOffRefusal,
   ProgrammeCancelRefusal,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammeOfferRefusal,
   ProgrammePayRefusal,
+  ProgrammeRenewRefusal,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
 } from '@ijazah/contracts';
 import { MAX_PROGRAMME_SESSION_COUNT } from '@ijazah/contracts';
 import type { Piasters, ProgrammeOfferAmounts } from '@ijazah/money';
 import {
+  addDays,
   addHours,
   calendarWeeksAfter,
   type DayOfWeek,
@@ -153,6 +156,7 @@ import {
   writeOffer,
   writeOfferDue,
   writePaused,
+  withdrawOpenStop,
   writeProgrammePaid,
 } from './programmes.repository.js';
 import {
@@ -346,15 +350,67 @@ export function withProgrammeTimes(
 }
 
 /**
- * 006:T009 (the owner's Q-C1 (a)): the programme's payment, recorded by the confirm step under the
- * programme's lock (`programmes.repository.ts`' `writeProgrammePaid`).
+ * 006:T016 (FR-722, FR-724; B-P3's conflict check; FU-A1 (a)): what the paid month's record reads
+ * and writes, over booking's rows; stood in by a spec.
  */
-export function recordProgrammePaid(
+export interface ProgrammePaidStore {
+  writeProgrammePaid(
+    tx: Transaction,
+    enrollmentId: string,
+    payment: ProgrammePayment,
+  ): Promise<boolean>;
+  withdrawOpenStop(tx: Transaction, enrollmentId: string): Promise<string | null>;
+  /** FU-A1 (a): the resume's `programme_resumed` row, on the paid month's transaction. */
+  recordResumed(tx: Transaction, enrollmentId: string, occurredAt: Date): Promise<void>;
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmePaidStore: ProgrammePaidStore = {
+  writeProgrammePaid,
+  withdrawOpenStop,
+  recordResumed: (tx, enrollmentId, occurredAt) =>
+    recordEnrollmentEvents(tx, [{ kind: 'programme_resumed', enrollmentId, occurredAt }]),
+  programmeFactsOf,
+  clock: clockTimestamp,
+};
+
+/**
+ * 006:T009 (the owner's Q-C1 (a)): the programme's payment, recorded by the confirm step under the
+ * programme's lock (`programmes.repository.ts`' `writeProgrammePaid`). 006:T016 (FR-722, FR-724;
+ * B-P3's conflict check; FU-A1 (a)): every paid month lands here, an automatic one after a pause
+ * included. A `paused` programme is resumed (`active`, `paused_at` cleared) with one
+ * `programme_resumed` enrollment event at the database's instant on the same transaction, one line
+ * and `enrollment` to both parties after the commit (the transaction's bound publisher: none in the
+ * worker, N-15); an open stop request is withdrawn with one line of ids and the reason. `log` is the
+ * confirm step's.
+ */
+export async function recordProgrammePaid(
   tx: Transaction,
   enrollmentId: string,
   payment: ProgrammePayment,
+  log?: ProgrammeLog,
+  store: ProgrammePaidStore = programmePaidStore,
 ): Promise<void> {
-  return writeProgrammePaid(tx, enrollmentId, payment);
+  const resumed = await store.writeProgrammePaid(tx, enrollmentId, payment);
+  const withdrawn = await store.withdrawOpenStop(tx, enrollmentId);
+  if (withdrawn !== null) {
+    log?.info(
+      { enrollmentId, requestId: withdrawn, reason: 'renewed' },
+      'A programme stop request was withdrawn by a paid month',
+    );
+  }
+  if (!resumed) return;
+  await store.recordResumed(tx, enrollmentId, await store.clock(tx));
+  log?.info({ enrollmentId, reason: 'resumed' }, 'A paused programme was resumed by a paid month');
+  const facts = await store.programmeFactsOf(tx, enrollmentId);
+  if (facts !== null) {
+    publisherOn(tx)?.afterCommit([facts.studentUserId, facts.teacherUserId], {
+      type: 'enrollment',
+      enrollmentId,
+    });
+  }
 }
 
 export type { ProgrammePayment };
@@ -485,6 +541,12 @@ export interface ProgrammeServices {
     input: ProgrammeRequestInput,
     live: Pick<LivePublisher, 'afterCommit'>,
   ): Promise<ProgrammeRequestOutput>;
+  /** 006:T016 (FR-713a, DEC-95): `programme.autoRenewOff`, the student's. */
+  autoRenewOff(
+    studentUserId: string,
+    input: ProgrammeActionInput,
+    live: Pick<LivePublisher, 'afterCommit'>,
+  ): Promise<ProgrammeActionOutput>;
 }
 
 /** The programme's services over `dependencies` (this file's head, THE OFFER; 006:T008 below). */
@@ -505,6 +567,8 @@ export function createProgrammeServices(
         { scope: 'programme.request', key: idempotencyKey, actorId: teacherUserId, input },
         (tx) => requestProgramme(tx, teacherUserId, input, requestDependencies),
       ),
+    autoRenewOff: (studentUserId, input, live) =>
+      turnAutoRenewOff(studentUserId, input, live, dependencies),
   };
 }
 
@@ -1114,7 +1178,7 @@ export async function checkedProgrammePay(
  */
 async function ownHeldEnrollment(
   tx: Transaction,
-  store: ProgrammePayStore,
+  store: Pick<ProgrammePayStore, 'ownActiveHold' | 'lockRows' | 'activeHoldsByIds'>,
   studentUserId: string,
   at: Date,
 ): Promise<string[]> {
@@ -1462,5 +1526,231 @@ export function createProgrammeMonths(dependencies: ProgrammeMonthDependencies):
         return done;
       });
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T016 (FR-713a, FR-715, FR-716, FR-722, FR-724; R-508, R-509, R-510; SRS DEC-95, DEC-110,
+// DEC-113; B-P3's conflict check, the owner's «موافق على الكل (أ)»): the automatic renewal off.
+//
+// THE AUTOMATIC RENEWAL OFF (`programme.autoRenewOff`, the student, at any time; DEC-95). Keyed
+// (`programme.autoRenewOff`). The programme read once with no lock for its student, anyone else
+// NOT_FOUND as an unknown id; then the programme's row and the enrollment's (kernel.md's order, the
+// locks the sweep's due step reads the card under, 006:T015's row), read again under them; then
+// payments' `deleteProgrammeCard` deletes the saved card, if any, on this transaction. An «off» that
+// has answered is never followed by a new automatic order: a due step that took the programme first
+// has committed its order (a charge already `created` stays, the review session's reading of
+// DEC-95), and one that waits reads no card. Later months by hand (`programme.renew`). Refused
+// `CONFLICT` with the cause, nothing deleted, one line of ids and a reason: `closed` (the programme
+// closed or its enrollment no longer `confirmed`), `party_suspended` (an open `teacher_suspended` or
+// `student_suspended` case; PR #153 r1 Minor 2). One info line of ids and the reason; `enrollment`
+// to both parties after the commit.
+
+/** What the «off» reads and locks, over booking's rows and moderation's entry. */
+export interface AutoRenewOffStore {
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+}
+
+export const autoRenewOffStore: AutoRenewOffStore = {
+  programmeFactsOf,
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  openCaseOf,
+};
+
+/** `programme.autoRenewOff` (this section's head, THE AUTOMATIC RENEWAL OFF). */
+export function turnAutoRenewOff(
+  studentUserId: string,
+  { idempotencyKey, ...input }: ProgrammeActionInput,
+  live: Pick<LivePublisher, 'afterCommit'>,
+  dependencies: ProgrammeServiceDependencies & { readonly offStore?: AutoRenewOffStore },
+): Promise<ProgrammeActionOutput> {
+  const store = dependencies.offStore ?? autoRenewOffStore;
+  const ids = { studentUserId, enrollmentId: input.enrollmentId };
+  const refused = (cause: ProgrammeAutoRenewOffRefusal): DomainError => {
+    dependencies.log.info({ ...ids, reason: cause }, 'The automatic renewal off was refused');
+    return markRefusalLogged(
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: cause }] }),
+    );
+  };
+  return dependencies.idempotency.run(
+    { scope: 'programme.autoRenewOff', key: idempotencyKey, actorId: studentUserId, input },
+    async (tx) => {
+      const seen = await store.programmeFactsOf(tx, input.enrollmentId);
+      if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+      await store.lockProgramme(tx, seen.enrollmentId);
+      await store.lockEnrollment(tx, seen.enrollmentId);
+      const facts = await store.programmeFactsOf(tx, seen.enrollmentId);
+      if (facts === null) throw new DomainError('NOT_FOUND');
+      if (facts.status !== 'confirmed' || facts.state === 'closed') throw refused('closed');
+      if (await suspensionOpen(tx, facts.enrollmentId, store.openCaseOf)) {
+        throw refused('party_suspended');
+      }
+      await (dependencies.deleteProgrammeCard ?? noProgrammeCardYet)(tx, facts.enrollmentId);
+      dependencies.log.info(
+        { ...ids, reason: 'auto_renew_off' },
+        'The automatic renewal was turned off',
+      );
+      live.afterCommit([facts.studentUserId, facts.teacherUserId], {
+        type: 'enrollment',
+        enrollmentId: facts.enrollmentId,
+      });
+      return { ok: true as const };
+    },
+  );
+}
+
+// THE RENEWAL'S CHECK (`programme.renew`, FR-715, FR-716, FR-720; R-509; FR-BOOK-12), run by
+// payments' checkout before the gateway and again on the record's transaction, as `programme.pay`'s
+// (006:T009). The programme read with no lock for its student (anyone else NOT_FOUND); then both
+// accounts, the student's unexpired own hold, the programme, the enrollments (the programme's and
+// the hold's), the instant the database's clock; then, under them, the month's orders (payments'
+// `monthOrders`, no lock: every order's move takes the enrollment first, held here) and FR-BOOK-12's
+// orders (payments' `orders`, their rows locked after the enrollments'). The month by hand is the
+// next one, `months_paid` + 1. Refused, with one line of ids and a reason: `closed` (closed, or the
+// enrollment no longer `confirmed`); `nothing_due` (not `active` or `paused`, in full, or every month
+// paid); `party_suspended` (a suspension case open); `charge_pending` (the month's automatic order
+// `created`, answered or not: the gateway may still take it, DEC-113 (1)); `not_due_yet` with no
+// failure of the month's automatic charge (failed, of either kind, or expired: «pay now» and «change
+// card», FR-716) while a card is saved (the month is charged by itself), or, with none, before the
+// due point (`lastToEnd`, derived from the sessions as the sweep derives it) less
+// `programme_renew_early_days` whole days on the instant (FR-715); and FR-BOOK-12's
+// `PREVIOUS_CHECKOUT` as `programme.pay`'s. A `no_payee` refusal is a hard failure, so once the
+// payout account is verified the month is taken by hand (PR #153 r4 Minor 1); `payee_unverified` is
+// the checkout's, before the gateway.
+
+/** §3.14: the days before the due point a student without a saved card may renew by hand (3). */
+export const PROGRAMME_RENEW_EARLY_DAYS_SETTING = 'programme_renew_early_days';
+
+/** What `programme.renew` creates its order from, read and checked under the locks (R-509). */
+export interface ProgrammeRenewTarget {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  /** A programme is an `ijazah_track` enrollment (R-501). */
+  readonly track: 'ijazah_track';
+  /** The month by hand, `months_paid` + 1. */
+  readonly instalmentMonth: number;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+  /** The offer's frozen total (R-506). */
+  readonly total_piasters: Piasters;
+}
+
+/** What the renewal's check reads and locks, over booking's rows and the owners' entries. */
+export interface ProgrammeRenewStore extends Pick<
+  ProgrammePayStore,
+  'lockRows' | 'ownActiveHold' | 'activeHoldsByIds' | 'openCaseOf' | 'clock'
+> {
+  programmeMonthOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeMonthRow | null>;
+  /** Sessions' entry: the enrollment's sessions with their months. */
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+}
+
+export const programmeRenewStore: ProgrammeRenewStore = {
+  programmeMonthOf,
+  lockRows,
+  ownActiveHold,
+  activeHoldsByIds,
+  openCaseOf,
+  clock: clockTimestamp,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+};
+
+/** `programme.renew`'s own refusals (contracts' `programmeRenewRefusal`), the check's part. */
+type RenewRefusal = Exclude<ProgrammeRenewRefusal, 'payee_unverified'>;
+
+/** `programme.renew`'s check (this section's head, THE RENEWAL'S CHECK). */
+export async function checkedProgrammeRenew(
+  tx: Transaction,
+  {
+    studentUserId,
+    enrollmentId,
+  }: { readonly studentUserId: string; readonly enrollmentId: string },
+  dependencies: {
+    readonly orders: CheckoutOrdersAmong;
+    readonly monthOrders: MonthOrdersOf;
+    /** `programme_renew_early_days`, read before the transaction. */
+    readonly earlyDays: number;
+    readonly log: ProgrammeLog;
+    readonly store?: ProgrammeRenewStore;
+  },
+): Promise<ProgrammeRenewTarget> {
+  const store = dependencies.store ?? programmeRenewStore;
+  const refused = (reason: RenewRefusal | 'previous_checkout', error: DomainError): DomainError => {
+    dependencies.log.info(
+      { studentUserId, enrollmentId, reason },
+      'A programme renewal was refused',
+    );
+    return markRefusalLogged(error);
+  };
+  const cause = (reason: RenewRefusal) =>
+    refused(
+      reason,
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: reason }] }),
+    );
+  const seen = await store.programmeMonthOf(tx, enrollmentId);
+  if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+  await store.lockRows(tx, 'users', [...new Set([studentUserId, seen.teacherUserId])].sort());
+  const at = await store.clock(tx);
+  const heldEnrollment = await ownHeldEnrollment(tx, store, studentUserId, at);
+  const enrollmentIds = [...new Set([enrollmentId, ...heldEnrollment])].sort();
+  await store.lockRows(tx, 'programmes', [enrollmentId]);
+  await store.lockRows(tx, 'enrollments', enrollmentIds);
+  const row = await store.programmeMonthOf(tx, enrollmentId);
+  if (row === null || row.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+  if (row.status !== 'confirmed' || row.state === 'closed') throw cause('closed');
+  if (
+    (row.state !== 'active' && row.state !== 'paused') ||
+    row.plan !== 'monthly' ||
+    row.monthCount === null ||
+    row.monthsPaid >= row.monthCount
+  ) {
+    throw cause('nothing_due');
+  }
+  if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) throw cause('party_suspended');
+  const month = await dependencies.monthOrders(tx, enrollmentId, row.monthsPaid + 1, at);
+  const charge = month.automatic?.status;
+  if (charge === 'created') throw cause('charge_pending');
+  // «pay now» and «change card» after a failure of the month's charge (FR-716); otherwise «renew
+  // now» only without a card, from the early days before the due point (FR-715).
+  if (charge !== 'failed' && charge !== 'expired') {
+    if (month.cardSaved) throw cause('not_due_yet');
+    const due = nextDueOf({ ...row, sessions: await store.sessionsOf(tx, enrollmentId) });
+    if (due === null || at < new Date(addDays(due, -dependencies.earlyDays))) {
+      throw cause('not_due_yet');
+    }
+  }
+  const orders = await dependencies.orders(tx, enrollmentIds, at);
+  for (const held of heldEnrollment) {
+    const standing = orders.get(held);
+    if (standing?.paid === true) {
+      throw refused('previous_checkout', previousCheckout(held, 'processing'));
+    }
+    if (standing?.payable) {
+      const { expiresAt } = standing.payable;
+      throw refused('previous_checkout', previousCheckout(held, 'payable', expiresAt));
+    }
+  }
+  const own = orders.get(enrollmentId);
+  if (own?.payable) {
+    const { expiresAt } = own.payable;
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'payable', expiresAt));
+  }
+  if (own?.programmeProcessing === true) {
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'processing'));
+  }
+  return {
+    enrollmentId,
+    studentUserId,
+    teacherUserId: row.teacherUserId,
+    track: 'ijazah_track',
+    instalmentMonth: row.monthsPaid + 1,
+    offerSessionCount: row.offerSessionCount,
+    total_piasters: row.offerTotal_piasters,
   };
 }

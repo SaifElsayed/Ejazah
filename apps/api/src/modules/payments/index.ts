@@ -22,6 +22,7 @@ import type {
   CheckoutStatusOutput,
   ProgrammeCheckoutOutput,
   ProgrammePayInput,
+  ProgrammeRenewInput,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
 // 003:T110: the case's amount, the monitor's third read.
@@ -58,7 +59,7 @@ import { createProgrammeCardWriter, type ProgrammeCardWriter } from './programme
 import { programmeCardTokens } from './programme-cards.repository.js';
 // 006:T014: the automatic charge.
 import { type AutomaticCharges, createAutomaticCharges } from './automatic-charge.js';
-import type { PaymentMode } from './programme-payee.js';
+import { createProgrammePayee, type PaymentMode } from './programme-payee.js';
 // 003:T105: the payouts' reads and mark.
 import { createPayouts, type Payouts, payoutsStoreOver } from './payouts.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
@@ -276,6 +277,15 @@ export interface CheckoutServices {
     input: ProgrammePayInput,
     log: ProgrammeLog,
   ): Promise<ProgrammeCheckoutOutput>;
+  /**
+   * 006:T016 (FR-713a, FR-715, FR-716, R-509): `programme.renew`, the next month by hand, mounted by
+   * booking's `programmesRouter`; `log` takes its refusals' lines.
+   */
+  programmeRenew(
+    student: CheckoutStudent,
+    input: ProgrammeRenewInput,
+    log: ProgrammeLog,
+  ): Promise<ProgrammeCheckoutOutput>;
 }
 
 export { checkoutRouter } from './checkout.router.js';
@@ -296,6 +306,7 @@ export function createCheckoutServices({
   cipher,
   gateway,
   notices,
+  paymentMode,
   now,
 }: {
   readonly database: Database;
@@ -306,6 +317,11 @@ export function createCheckoutServices({
   readonly gateway: PaymentGateway;
   /** 005:T016: the payment pushes' port. */
   readonly notices: PaymentOutcomeNotices;
+  /**
+   * 006:T016 (FR-716, FR-720): `config.PAYMENT_MODE`, over which T008's «unverified in live mode»
+   * refuses `programme.pay` and `programme.renew` `payee_unverified` before the gateway.
+   */
+  readonly paymentMode: PaymentMode;
   readonly now?: () => Date;
 }): CheckoutServices {
   const service = new CheckoutService({
@@ -316,6 +332,7 @@ export function createCheckoutServices({
     gateway,
     steps: checkoutStepsOver(database, cipher, notices, now),
     ...(now === undefined ? {} : { now }),
+    payee: createProgrammePayee({ paymentMode, cipher }),
   });
   return {
     hold: (student, input) => service.hold(student, input),
@@ -325,6 +342,7 @@ export function createCheckoutServices({
     continue: (student, input) => service.continue(student, input),
     status: (student, input) => service.status(student, input),
     programmePay: (student, input, log) => service.programmePay(student, input, log),
+    programmeRenew: (student, input, log) => service.programmeRenew(student, input, log),
   };
 }
 

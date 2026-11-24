@@ -59,6 +59,7 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
+      "programmeAutoRenewOffRefusal": ["closed", "party_suspended"],
       "programmeCancelRefusal": [
         "assessment_not_settled",
         "closed",
@@ -4767,6 +4768,19 @@
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
+      "programme.autoRenewOff": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.ok": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
       "programme.cancel": {
         "caller": "student",
         "input": {
@@ -4807,6 +4821,20 @@
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.plan": { "required": true, "type": "string", "values": ["in_full", "monthly"] },
+          "$.saveCard": { "required": true, "type": "boolean" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" }
+        }
+      },
+      "programme.renew": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
           "$.saveCard": { "required": true, "type": "boolean" }
         },
         "kind": "mutation",

@@ -723,7 +723,7 @@ No open question remains.
   > **Follow-up (B-P3 lane c, 2026-11-24).** The pause's `enrollment` signal is added on the transaction's publisher,
   > which no worker binds: the worker has no live channel to the API's streams (`main.ts` holds the only
   > `InProcessLiveBus`), so a pause reaches a client only on its next read (N-15). T008's windows' signal is the same.
-- [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
+- [x] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
   - `programme.autoRenewOff` (the student, at any time) deletes the card under the programme's row lock (kernel.md's
@@ -754,6 +754,34 @@ No open question remains.
   > `programmes.repository.ts:259-277`), where every paid month lands, an automatic one after a pause included.
   > `programme.autoRenewOff` gains its refusal enum (`party_suspended`, `closed`; B-P2 Q-B1's precedent). `programme.pay`
   > gains the `payee_unverified` check with `programme.renew` (no code refuses it today).
+  > **Done (B-P3 lane d, 2026-11-24).** `programme.autoRenewOff` (booking `turnAutoRenewOff`; refusals
+  > `closed`, `party_suspended`, contract `programmeAutoRenewOffRefusal`): the programme's lock, then the
+  > enrollment's, then payments' `deleteProgrammeCard`, one line, `enrollment` to both parties.
+  > `programme.renew` (payments' `programmeRenew` over booking's `checkedProgrammeRenew`, run before the
+  > gateway and again under the record's locks): month `months_paid` + 1 at `packages/money`'s month
+  > amount (10,000 EGP over 40 sessions: month 2 = 1,000; the last month the remainder), the assessment
+  > order's rates (R-511), the checkout's TTL, a ticked consent kept as `card_consent_at` («change card»);
+  > refused `closed`, `nothing_due`, `party_suspended`, `charge_pending` (the month's automatic order
+  > `created`), `not_due_yet` (a card and no failure; no card before the due point less
+  > `programme_renew_early_days`), FR-BOOK-12's `PREVIOUS_CHECKOUT`. `programme.pay` and `programme.renew`
+  > refuse `payee_unverified` before the gateway through T008's `createProgrammePayee`, which
+  > `createCheckoutServices` builds over `paymentMode` (`main.ts`'s `006:` line,
+  > `programme-renewal-binds.spec.ts`). The paid month's resume in `writeProgrammePaid` /
+  > `recordProgrammePaid` (the confirm step hands its log): `active`, `paused_at` cleared,
+  > `programme_resumed`, an open stop withdrawn, one line each. Races
+  > (`tests/db-integrity/programme-renewal.spec.ts`): the «off» against the due step both ways, the resume
+  > against the pause both ways, the renewal against a retry of the same month; kernel.md `006:T016`;
+  > adversarial `autoRenewOff` and `renew`, both directions. Approved outside files (the owner,
+  > «موافق عالكل», 2026-11-24): booking's and payments' `index.ts`, `main.ts`'s `006:` line.
+  > **Follow-up (B-P3 lane d, 2026-11-24; the owner, Q-D2 (a)).** A card saved by a «change card» payment
+  > can be written again after the student turns the automatic renewal off, when Paymob's TOKEN callback
+  > arrives after the «off» (month 3 paid 18:00:00 with consent, «off» at 18:00:20, the callback at 18:00:30:
+  > the card saved again and month 4, 1,000 EGP, charged at its due point). Rare (a window of seconds);
+  > not guarded: the «off» stores no state (it only deletes the card), and refusing a card after an «off»
+  > would also refuse a later consent. The student turns it off again; the screen shows the card.
+  > **Follow-up (B-P3 lane d, 2026-11-24).** The paid month's resume signals `enrollment` on the confirm
+  > step's transaction publisher, which no worker binds (lane c's N-15 follow-up under T015): a client
+  > sees the resume on its next read.
 - [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
   `modules/booking/programmes-admin.router.ts` (the admin decisions):

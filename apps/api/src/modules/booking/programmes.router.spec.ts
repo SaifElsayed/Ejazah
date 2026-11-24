@@ -124,6 +124,13 @@ function callerAs(who: UserSession | null) {
         if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
         return { requestId: REQUEST, teacherUserId: CALLER } as never;
       },
+      // 006:T016: the automatic renewal off, recorded; another's enrollment NOT_FOUND.
+      autoRenewOff: async (...args: unknown[]) => {
+        calls.push(['autoRenewOff', ...args]);
+        const [, input] = args as [string, { enrollmentId: string }];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        return { ok: true, studentUserId: CALLER } as never;
+      },
     },
   } as unknown as BookingServices;
   const services: AppServices = {
@@ -146,6 +153,18 @@ function callerAs(who: UserSession | null) {
         if (input.plan === 'in_full' && input.saveCard) {
           throw new DomainError('CONFLICT', undefined, {
             details: [{ path: 'cause', code: 'pay_by_passed' }],
+          });
+        }
+        return { checkoutUrl: PAY_URL, paymentId: 'never shown' } as never;
+      },
+      // 006:T016: programme.renew reaches payments' checkout too; a saved-card renewal refused.
+      programmeRenew: async (...args: unknown[]) => {
+        calls.push(['programmeRenew', ...args]);
+        const [, input] = args as [unknown, typeof RENEW_INPUT];
+        if (input.enrollmentId === OTHERS) throw new DomainError('NOT_FOUND');
+        if (input.saveCard) {
+          throw new DomainError('CONFLICT', undefined, {
+            details: [{ path: 'cause', code: 'charge_pending' }],
           });
         }
         return { checkoutUrl: PAY_URL, paymentId: 'never shown' } as never;
@@ -436,5 +455,123 @@ describe("'programme.pay' (006:T009, FR-710)", () => {
       'VALIDATION_FAILED',
     );
     expect(calls).toEqual([]);
+  });
+});
+
+// 006:T016 (FR-713a, DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student kind,
+// handed the session's own account, the validated input and the request's after-commit list;
+// another's enrollment NOT_FOUND with no field.
+describe("'programme.autoRenewOff' callers (006:T016)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.autoRenewOff'", async () => {
+    const anonymous = callerAs(null);
+    await expect(anonymous.caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const teacher = callerAs(sessionOf('approved'));
+    await expect(teacher.caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('FORBIDDEN'),
+    );
+    expect([...anonymous.calls, ...teacher.calls]).toEqual([]);
+  });
+
+  it("refuses a suspended student ACCOUNT_RESTRICTED before the service: 'programme.autoRenewOff'", async () => {
+    const { caller, calls } = callerAs(sessionOf('suspended student'));
+    await expect(caller.programme.autoRenewOff(ACTION)).rejects.toEqual(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("red first: hands the service the student's own account, the validated input and the after-commit list: 'programme.autoRenewOff'", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await expect(
+      caller.programme.autoRenewOff({ ...ACTION, studentUserId: OTHERS } as never),
+    ).resolves.toStrictEqual({ ok: true });
+    const [name, account, input, live] = calls[0] ?? [];
+    expect([name, account, input]).toEqual(['autoRenewOff', CALLER, ACTION]);
+    expect(live).toHaveProperty('afterCommit');
+  });
+
+  it("red first: sends another student's enrollment NOT_FOUND with no field: 'programme.autoRenewOff'", async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const thrown: unknown = await caller.programme
+      .autoRenewOff({ ...ACTION, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(thrown as Parameters<typeof toErrorShape>[0]).body).toEqual({
+      code: 'NOT_FOUND',
+      message: 'Not found.',
+    });
+  });
+});
+
+// 006:T016 (FR-713a, FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student kind,
+// counted under `rate_limit_payment_initiation` as `programme.pay` (it creates a gateway order); one
+// call of payments' checkout with the session's own account and gender, the validated input and the
+// request's log; another's enrollment NOT_FOUND, a refusal CONFLICT with its cause.
+const RENEW_INPUT = { enrollmentId: OWN, saveCard: false, idempotencyKey: KEY };
+
+describe("'programme.renew' callers (006:T016)", () => {
+  it("refuses an anonymous caller UNAUTHENTICATED and a teacher FORBIDDEN before the service: 'programme.renew'", async () => {
+    await expect(callerAs(null).caller.programme.renew(RENEW_INPUT)).rejects.toEqual(
+      refused('UNAUTHENTICATED'),
+    );
+    const { caller, calls } = callerAs(sessionOf('approved'));
+    await expect(caller.programme.renew(RENEW_INPUT)).rejects.toEqual(refused('FORBIDDEN'));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a suspended student ACCOUNT_RESTRICTED before the service: 'programme.renew'", async () => {
+    const { caller, calls } = callerAs(sessionOf('suspended student'));
+    await expect(caller.programme.renew(RENEW_INPUT)).rejects.toEqual(
+      refused('ACCOUNT_RESTRICTED'),
+    );
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("'programme.renew' (006:T016, FR-715, FR-716)", () => {
+  it("red first: hands payments' checkout the session's own account and gender, the validated input and the request's log", async () => {
+    const { caller, calls } = callerAs(sessionOf('student'));
+    await caller.programme.renew({ ...RENEW_INPUT, studentUserId: OTHERS, amount: 1 } as never);
+    expect(calls).toHaveLength(1);
+    const [name, student, input, log] = calls[0] ?? [];
+    expect([name, student, input]).toEqual([
+      'programmeRenew',
+      { userId: CALLER, gender: 'female' },
+      RENEW_INPUT,
+    ]);
+    expect(log).toHaveProperty('info');
+  });
+
+  it('red first: answers the hosted checkout alone: a field the schema does not name is stripped', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    await expect(caller.programme.renew(RENEW_INPUT)).resolves.toStrictEqual({
+      checkoutUrl: PAY_URL,
+    });
+  });
+
+  it("counts the call under rate_limit_payment_initiation by the caller's id, as programme.pay", async () => {
+    const { caller, limited } = callerAs(sessionOf('student'));
+    await caller.programme.renew(RENEW_INPUT);
+    expect(limited).toContainEqual([
+      'rate_limit_payment_initiation',
+      { kind: 'user', userId: CALLER },
+      'programme.renew',
+    ]);
+  });
+
+  it('red first: sends another student’s enrollment NOT_FOUND, and a refusal CONFLICT with its cause', async () => {
+    const { caller } = callerAs(sessionOf('student'));
+    const missing: unknown = await caller.programme
+      .renew({ ...RENEW_INPUT, enrollmentId: OTHERS })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(missing as Parameters<typeof toErrorShape>[0]).status).toBe(404);
+    const pending: unknown = await caller.programme
+      .renew({ ...RENEW_INPUT, saveCard: true })
+      .catch((error: unknown) => error);
+    expect(toErrorShape(pending as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'charge_pending' }],
+    });
   });
 });

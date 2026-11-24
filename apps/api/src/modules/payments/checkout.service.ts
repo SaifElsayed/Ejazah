@@ -57,6 +57,18 @@
 // by months month 1 (4 × the session price, the whole offer below 4 sessions). The rate and the 25 %
 // are copied from the assessment order (R-511); the order expires at the checkout's TTL or at
 // `pay_by_at`, whichever is first; a ticked «save my card» is kept as `card_consent_at` (Q-4 (a)).
+// 006:T016 (FR-716, FR-720): `payee_unverified` before the gateway while, in live mode, the
+// teacher's payout account is not verified (T008's `createProgrammePayee`, the `payee` dependency).
+//
+// THE RENEWAL (`programme.renew`, 006:T016; FR-713a, FR-715, FR-716, FR-722, R-509, R-511). Keyed as
+// `programme.pay` is, with no hold: the next month by hand («renew now», «pay now», «change card»).
+// Booking's `checkedProgrammeRenew` runs before the gateway and again in the recording transaction
+// (the accounts, the own hold, the programme, the enrollments, the month's orders, then FR-BOOK-12's),
+// so an automatic order the sweep recorded meanwhile refuses `charge_pending` there and this order is
+// cancelled at the gateway. The amount is `packages/money`'s month (`monthPaymentOf`); the rate and
+// the 25 % are copied from the assessment order; the order expires at the checkout's TTL; a ticked
+// consent is kept as `card_consent_at` and its saved card replaces the row («change card», R-510);
+// `payee_unverified` as above. The paid month resumes a paused programme in the confirm step.
 //
 // A CANCELLATION THE GATEWAY FAILS is reported (T111) and never hides the answer it followed: the
 // order it left is the one FR-375's `duplicate_payment` case covers if it is ever paid.
@@ -84,6 +96,7 @@ import type {
   CheckoutStatusOutput,
   ProgrammeCheckoutOutput,
   ProgrammePayInput,
+  ProgrammeRenewInput,
 } from '@ijazah/contracts';
 import { teacherSharePercent } from '@ijazah/contracts';
 import {
@@ -107,7 +120,7 @@ import { reportError } from '../../platform/errors/reporting.js';
 import type { RequesterGender } from '../../platform/guards/requester-gender.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import type { PaymentPort } from '../../platform/ports/payment/payment.port.js';
-import { ijazahHalfReleasePercent } from '../../platform/settings/registry.js';
+import { ijazahHalfReleasePercent, wholeNonNegative } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import {
   type CheckoutEnrollmentRow,
@@ -115,6 +128,10 @@ import {
   type CheckoutOrdersAmong,
   activeProgrammeEnrollmentsOf,
   checkedProgrammePay,
+  checkedProgrammeRenew,
+  type MonthOrdersOf,
+  PROGRAMME_RENEW_EARLY_DAYS_SETTING,
+  type ProgrammeRenewTarget,
   type ProgrammeLog,
   type ProgrammePayTarget,
   checkoutTeacherName,
@@ -162,7 +179,8 @@ import {
   type PaymentGateway,
 } from './checkout.repository.js';
 import { orderStandingsOf } from './order-standing.repository.js';
-import { lockOrder, PaymentsRepository } from './payments.repository.js';
+import { lockOrder, PaymentsRepository, programmeMonthOrdersOf } from './payments.repository.js';
+import type { ProgrammePayee } from './programme-payee.js';
 
 /**
  * 006:T009 (FR-711, DEC-93; K-5): the first payment's amount, `packages/money`'s. In full: the
@@ -181,6 +199,40 @@ function firstPaymentOf(
   }
   const sessionPrice_piasters = perSession(target.total_piasters, target.offerSessionCount);
   const sessions = Math.min(SESSIONS_PER_PROGRAMME_MONTH, target.offerSessionCount);
+  return programmeOfferAmounts(sessionPrice_piasters, sessions).total_piasters;
+}
+
+/**
+ * 006:T016 (FR-733): a programme payment's refusal before the gateway, `CONFLICT` with its cause,
+ * its one line of ids and the reason logged.
+ */
+function programmeRefusal(
+  log: ProgrammeLog,
+  ids: { readonly studentUserId: string; readonly enrollmentId: string },
+  reason: string,
+  message: string,
+): DomainError {
+  log.info({ ...ids, reason }, message);
+  return markRefusalLogged(
+    new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: reason }] }),
+  );
+}
+
+/**
+ * 006:T016 (FR-711, DEC-93; K-5): month `month`'s amount by hand, `packages/money`'s: its sessions (4,
+ * the last month the remainder) at the offer's per-session price. 10,000 EGP over 40 sessions: month
+ * 2 is 4 × 250 = 1,000; over 42 sessions, month 11 is the remaining 2 sessions.
+ */
+function monthPaymentOf(
+  target: Pick<ProgrammeRenewTarget, 'instalmentMonth' | 'offerSessionCount' | 'total_piasters'>,
+): Piasters {
+  const before = SESSIONS_PER_PROGRAMME_MONTH * (target.instalmentMonth - 1);
+  const sessions = Math.min(SESSIONS_PER_PROGRAMME_MONTH, target.offerSessionCount - before);
+  // Booking's check answers only a month still to pay (`months_paid` < `month_count`).
+  if (sessions < 1) {
+    throw new RangeError(`Month ${String(target.instalmentMonth)} is past the offer's sessions`);
+  }
+  const sessionPrice_piasters = perSession(target.total_piasters, target.offerSessionCount);
   return programmeOfferAmounts(sessionPrice_piasters, sessions).total_piasters;
 }
 
@@ -212,7 +264,8 @@ export interface CheckoutStudent {
 
 /** A keyed request of the checkout (`packages/contracts`' `idempotent-procedures.ts`). */
 interface KeyedRequest {
-  readonly scope: 'checkout.hold' | 'checkout.pay' | 'checkout.retry' | 'programme.pay';
+  readonly scope:
+    'checkout.hold' | 'checkout.pay' | 'checkout.retry' | 'programme.pay' | 'programme.renew';
   readonly key: string;
   readonly actorId: string;
   readonly input: { readonly [key: string]: string | number };
@@ -316,6 +369,17 @@ export interface CheckoutSteps {
   ): Promise<{ readonly enrollmentId: string; readonly expiresAt: Date } | null>;
   /** 006:T009 (R-511): the programme's assessment order, its gross and rates (payments' own read). */
   assessmentOrderOf(tx: Transaction, enrollmentId: string): Promise<AssessmentOrder>;
+  /** 006:T016: `programme.renew`'s check, before the gateway and under the record's locks (booking). */
+  programmeRenewTarget(
+    tx: Transaction,
+    request: { readonly studentUserId: string; readonly enrollmentId: string },
+    dependencies: {
+      readonly orders: CheckoutOrdersAmong;
+      readonly monthOrders: MonthOrdersOf;
+      readonly earlyDays: number;
+      readonly log: ProgrammeLog;
+    },
+  ): Promise<ProgrammeRenewTarget>;
 }
 
 /**
@@ -362,6 +426,7 @@ export function checkoutStepsOver(
     programmeOrderOf: async (tx, studentUserId, at) =>
       payableProgrammeOrderAmong(tx, await activeProgrammeEnrollmentsOf(tx, studentUserId), at),
     assessmentOrderOf,
+    programmeRenewTarget: checkedProgrammeRenew,
   };
 }
 
@@ -376,6 +441,14 @@ export interface CheckoutDependencies {
   readonly now?: () => Date;
   /** The process's error reporting (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /**
+   * 006:T016 (FR-716, FR-720; PR #153 r3 Minor 1, r4 Minor 2): «unverified in live mode», T008's
+   * payments entry (`createProgrammePayee`) over the payment mode the composition root hands in;
+   * `programme.pay` and `programme.renew` refuse `payee_unverified` before the gateway while it
+   * answers true. None bound: nothing is refused here, and a live gateway refuses an order with no
+   * payee itself (`paymob.adapter.ts`).
+   */
+  readonly payee?: Pick<ProgrammePayee, 'unverifiedInLiveMode'>;
 }
 
 /**
@@ -448,6 +521,7 @@ export class CheckoutService {
   readonly #steps: CheckoutSteps;
   readonly #now: () => Date;
   readonly #report: (error: Error) => void;
+  readonly #payee: CheckoutDependencies['payee'];
 
   constructor(dependencies: CheckoutDependencies) {
     this.#settings = dependencies.settings;
@@ -458,6 +532,7 @@ export class CheckoutService {
     this.#steps = dependencies.steps;
     this.#now = dependencies.now ?? (() => new Date());
     this.#report = dependencies.report ?? reportError;
+    this.#payee = dependencies.payee;
   }
 
   /** `checkout.hold` (FR-351 to FR-353, FR-BOOK-12, FR-357). */
@@ -865,10 +940,23 @@ export class CheckoutService {
         { studentUserId: student.userId, enrollmentId },
         { orders: checkoutOrdersAmong, log },
       );
-    const { target, assessment } = await this.#steps.transaction(async (tx) => {
+    const { target, assessment, payeeUnverified } = await this.#steps.transaction(async (tx) => {
       const checked = await check(tx);
-      return { target: checked, assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId) };
+      return {
+        target: checked,
+        assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId),
+        payeeUnverified: await this.#payeeUnverified(tx, checked.teacherUserId),
+      };
     });
+    // 006:T016 (FR-716, FR-720): before the gateway, in live mode only.
+    if (payeeUnverified) {
+      throw programmeRefusal(
+        log,
+        { studentUserId: student.userId, enrollmentId },
+        'payee_unverified',
+        'A programme payment was refused',
+      );
+    }
     const gross_piasters = firstPaymentOf(plan, target, assessment.gross_piasters);
     if (gross_piasters === null) {
       log.info(
@@ -901,6 +989,80 @@ export class CheckoutService {
       },
     });
     return { checkoutUrl };
+  }
+
+  /**
+   * `programme.renew` (006:T016; FR-713a, FR-715, FR-716, FR-720, FR-722, R-509, R-511; this file's
+   * head, THE RENEWAL): the next month by hand, keyed as `programme.pay` is, with no hold.
+   */
+  async programmeRenew(
+    student: CheckoutStudent,
+    input: ProgrammeRenewInput,
+    log: ProgrammeLog,
+  ): Promise<ProgrammeCheckoutOutput> {
+    const { enrollmentId, saveCard } = input;
+    const request = {
+      scope: 'programme.renew' as const,
+      key: input.idempotencyKey,
+      actorId: student.userId,
+      input: { enrollmentId, saveCard: saveCard ? 1 : 0 },
+    };
+    const stored = await this.#idempotency.completed<StoredOrder>(request);
+    if (stored !== undefined) {
+      return { checkoutUrl: (await this.#handoverAgain(stored.paymentId)).checkoutUrl };
+    }
+    const now = this.#now();
+    const [{ ttlMinutes }, earlyDays] = await Promise.all([
+      readHoldTerms(this.#settings, now),
+      this.#settings.read(PROGRAMME_RENEW_EARLY_DAYS_SETTING, wholeNonNegative),
+    ]);
+    const check = (tx: Transaction) =>
+      this.#steps.programmeRenewTarget(
+        tx,
+        { studentUserId: student.userId, enrollmentId },
+        { orders: checkoutOrdersAmong, monthOrders: programmeMonthOrdersOf, earlyDays, log },
+      );
+    const { target, assessment, payeeUnverified } = await this.#steps.transaction(async (tx) => {
+      const checked = await check(tx);
+      return {
+        target: checked,
+        assessment: await this.#steps.assessmentOrderOf(tx, enrollmentId),
+        payeeUnverified: await this.#payeeUnverified(tx, checked.teacherUserId),
+      };
+    });
+    // FR-716, FR-720: before the gateway, in live mode only.
+    if (payeeUnverified) {
+      throw programmeRefusal(
+        log,
+        { studentUserId: student.userId, enrollmentId },
+        'payee_unverified',
+        'A programme renewal was refused',
+      );
+    }
+    const { checkoutUrl } = await this.#createAndRecord(request, {
+      enrollmentId,
+      teacherUserId: target.teacherUserId,
+      gross_piasters: monthPaymentOf(target),
+      track: target.track,
+      kind: 'instalment',
+      instalmentMonth: target.instalmentMonth,
+      ...(saveCard ? { cardConsentAt: now } : {}),
+      rates: {
+        teacherShareRatePercent: assessment.teacherShareRatePercent,
+        halfReleaseRatePercent: assessment.halfReleaseRatePercent,
+      },
+      // No hold (R-509): the checkout's TTL.
+      latestExpiry: new Date(addMinutes(now, ttlMinutes)),
+      lockTarget: async (tx) => {
+        await check(tx);
+      },
+    });
+    return { checkoutUrl };
+  }
+
+  /** 006:T016: T008's «unverified in live mode» for the teacher, false where none is bound. */
+  async #payeeUnverified(tx: Transaction, teacherUserId: string): Promise<boolean> {
+    return (await this.#payee?.unverifiedInLiveMode(tx, teacherUserId)) ?? false;
   }
 
   async #cancelQuietly(gatewayOrderId: string): Promise<void> {
