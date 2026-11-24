@@ -1,8 +1,10 @@
 <!--
-SYNC IMPACT REPORT (2.7.0, 2026-11-24)
+SYNC IMPACT REPORT (R-HONEST-1 amended, 2026-11-24)
 =====================================
-Version change: 2.6.2 -> 2.7.0 (MINOR: R-HONEST-1 gains a second confirmation
-source for automatic charges only; ADR 0026 records what replaces the protection).
+Version change: none yet. The amendment is MINOR and takes 2.7.0
+at the integration's version pass (tracks-coordination.md section 3; the owner, 2026-11-24, «Yes, keep 2.6.2»); until then the version stays 2.6.2.
+R-HONEST-1 gains a second confirmation source for automatic charges only;
+ADR 0026 records what replaces the protection.
 
 Modified rules: R-HONEST-1, and its line in "the five rules". Templates: none
 changed. Companion documents: SRS FR-PAYG-3 and ERD payment_events.signature_verified_at
@@ -118,7 +120,7 @@ owns each prohibition. README.md points here instead.
 
 # Ijazah Constitution
 
-Version 2.7.0. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md), [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md) and [ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md).
+Version 2.6.2. Companion to SRS v1.4, ARCHITECTURE v3.2, ERD v1.15. Amended by [ADR 0005](../../docs/adr/0005-phase-0-document-amendments.md), [ADR 0007](../../docs/adr/0007-direct-gateway-checkout.md), [ADR 0009](../../docs/adr/0009-reresolve-sessions-on-tzdata-change.md), [ADR 0010](../../docs/adr/0010-database-refuses-double-booking.md), [ADR 0022](../../docs/adr/0022-simultaneous-connected-seconds-as-a-recorded-figure.md) and [ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md).
 
 Every prohibition in the project lives here, each with an ID and an enforcement
 mechanism. This document is the source for the lint configuration, the CI gates,
@@ -309,7 +311,7 @@ payload.
 
 | ID | Rule | Enforced |
 |---|---|---|
-| R-HONEST-1 | **Never** show a payment as confirmed unless the gateway's signed webhook confirmed it, or, for an automatic charge only, the gateway's authenticated answer to the platform's own inquiry about it (DEC-110, DEC-113; [ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md), 2.7.0) - never from a client redirect, a return URL, a manual toggle, an admin override or an upload, none of which exist as write paths. Never imply the platform holds, guarantees or refunds funds. | `CI` test asserts `confirmed_at` has one write path and no proof-upload endpoint exists; `REVIEW` |
+| R-HONEST-1 | **Never** show a payment as confirmed unless the gateway's signed webhook confirmed it, or, for an automatic charge only, the gateway's authenticated answer to the platform's own inquiry about it (DEC-110, DEC-113; [ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md)) - never from a client redirect, a return URL, a manual toggle, an admin override or an upload, none of which exist as write paths. Never imply the platform holds, guarantees or refunds funds. | `CI` test asserts `confirmed_at` has one write path and no proof-upload endpoint exists; `REVIEW` |
 | R-HONEST-2 | **Never** present an unverified isnad as verified. The `unverified` label renders wherever the chain renders. | `CI` - component test on the chain display |
 | R-HONEST-3 | **Never** let an uploaded certificate's verification page imply the platform attests its content. The "uploaded by teacher, not platform-generated" statement is mandatory (FR-IJAZAH-14). | `CI` - verification-page test per mode |
 | R-HONEST-4 | **Never** expose one user's `is_minor`, DOB, documents, or gender-dispute history to another user. Admin-only fields stay off both public routers. | `TYPE` - output schemas; `CI` field-leak test |
@@ -463,7 +465,7 @@ that was rejected.
 | Version | Date | Change |
 |---|---|---|
 | 1.1.0 | 2026-08-25 | Initial ratification, materializing "Ijazah - The Rules" v1.1: ten principles, 99 rules, the enforcement map and the twelve-item PR checklist. |
-| 2.7.0 | 2026-11-24 | MINOR ([ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md); the owner's answer (a) on PR #160's first review, Major 1; SRS DEC-110, DEC-113): R-HONEST-1 and its line in the five rules name a second confirmation source, for an automatic charge only: the gateway's authenticated answer to the platform's own inquiry, asked by the order's own gateway id over TLS with an auth token from the gateway's API key, read only in a final state, on the adapter's integrations, its amount checked against the order, and recorded through the webhook's branch under the callback's provider event id (a late callback is a replay). Every other order stays confirmed by the signed webhook alone. The prohibition is weakened for that case, so ADR 0026 records what replaces the signature, the open check (the gateway's question on finality, and a void or refund with no signed callback) and the fallback. The CI test that holds R-HONEST-1 is unchanged: the confirm step still writes `confirmed_at` alone. Follows 2.6.2. |
+| 2.7.0 (at the integration's version pass) | 2026-11-24 | MINOR, taking 2.7.0 at the integration's version pass (tracks-coordination.md section 3; the owner, 2026-11-24, «Yes, keep 2.6.2»); the version line stays 2.6.2 until then ([ADR 0026](../../docs/adr/0026-inquiry-answer-confirms-an-automatic-charge.md); the owner's answer (a) on PR #160's first review, Major 1; SRS DEC-110, DEC-113): R-HONEST-1 and its line in the five rules name a second confirmation source, for an automatic charge only: the gateway's authenticated answer to the platform's own inquiry, asked by the order's own gateway id over TLS with an auth token from the gateway's API key, read only in a final state, on the adapter's integrations, its amount checked against the order, and recorded through the webhook's branch under the callback's provider event id (a late callback is a replay). Every other order stays confirmed by the signed webhook alone. The prohibition is weakened for that case, so ADR 0026 records what replaces the signature, the open check (the gateway's question on finality, and a void or refund with no signed callback) and the fallback. The CI test that holds R-HONEST-1 is unchanged: the confirm step still writes `confirmed_at` alone. Follows 2.6.2. |
 | 2.6.2 | 2026-11-06 | PATCH (the owner's decision of 2026-11-06 on B33, T001 of `specs/004-sessions/tasks.md`): the gate's wording for a prefixed zone column (`counter_timezone`). R-TIME-3's and R-TIME-5's enforcement cells say the schema gate accepts an `_local` column beside a `timezone` column, or `<p>_timezone` when the `_local` column's name starts with `<p>_`, as `scripts/schema-check.ts` does since T001. No rule changed. Follows 2.6.1. |
 | 2.6.1 | 2026-11-06 | PATCH (Phase 3's fifth analysis, C3 and C4, the owner's decision of 2026-11-06; `specs/004-sessions/plan.md`, "Decisions on the fifth analysis", item 3): R-MONEY-12's exception names four more numbers it already reached, each with its reason: the live channel's inactivity restart (60 s), its per-stream queue bound, the phone's coalescing of live re-reads (1 per second) and the phone's wait after `RATE_LIMITED` (60 s); the live channel's ping and inactivity restart named in `apps/api/src/platform/live/`, inside the kernel the exception names. PATCH: the exception's reach is unchanged. Follows 2.6.0. |
 | 2.6.0 | 2026-11-06 | MINOR (Phase 3's fourth analysis, C1, the owner's decision of 2026-11-06; `specs/004-sessions/plan.md`, "Decisions on the fourth analysis", item 6): R-MONEY-12 gains an exception that changes its bounds: the transport and protection operating numbers in the kernel (`apps/api/src/platform/**`) and on the phone (the rate limiter's 60 s settings cache, 100 ms counter timeout and 10 s breaker, the live channel's 25 s ping, the phone's reconnect backoff) are named constants, each with its reason beside it, while the work's own windows and limits stay settings; its enforcement cell adds `REVIEW` of the exception. MINOR rather than PATCH under the versioning policy: a semantic change to a rule's reach (the owner's decision). Follows 2.5.1. |
@@ -494,4 +496,4 @@ policy; idempotency split into money operations (R-MONEY-8) and jobs generally
 (R-API-14); R-SEC and R-MONEY renumbered from 13 rules to 12; the enforcement map
 recomputed and the checklist redefined as the `REVIEW`-only tier.
 
-**Version**: 2.7.0 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-24
+**Version**: 2.6.2 | **Ratified**: 2026-08-25 | **Last Amended**: 2026-11-06

@@ -1,7 +1,7 @@
 # ADR 0026 — The gateway's authenticated answer to the platform's own inquiry confirms an automatic charge
 
 **Status:** accepted · **Date:** 2026-11-24 · **Decided by:** the owner, 2026-11-24 («(a) ADR 0026», typed in B-P3's
-review session, on PR #160's first review, Major 1) · **Amends:** constitution R-HONEST-1 (2.6.2 → 2.7.0), SRS
+review session, on PR #160's first review, Major 1) · **Amends:** constitution R-HONEST-1 (MINOR: 2.7.0 at the integration's version pass), SRS
 FR-PAYG-3, ERD `payment_events.signature_verified_at` · **Rests on:** SRS DEC-110 (2), DEC-113 (1)
 
 ## Context
@@ -66,7 +66,9 @@ word. Recording a failure or «no transaction» from the inquiry is not affected
 
 ## Consequences
 
-- The constitution goes to 2.7.0 (MINOR): R-HONEST-1 and the «five rules» paragraph name the second source.
+- The constitution's R-HONEST-1 and its «five rules» paragraph name the second source. The amendment is MINOR and takes
+  2.7.0 at the integration's version pass (`tracks-coordination.md` §3; the owner, 2026-11-24, «Yes, keep 2.6.2»); the
+  version line stays 2.6.2 until then.
 - SRS FR-PAYG-3 and the ERD's `signature_verified_at` carry the same sentence.
 - The CI test that holds R-HONEST-1 (one write path to `confirmed_at`) is unchanged. The inquiry moves a payment to
   `paid` through the webhook's own branch and does not write `confirmed_at`; the confirm step does, as for every order.

@@ -631,7 +631,7 @@ No open question remains.
   >   `currency` and `created_at`.
   > - The auth token's lifetime.
   > - The Category 2 table, against Visa's own publication.
-  > **Settled (PR #160 r1, 2026-11-24, Major 1; the owner's answers (a) and «(a) ADR 0026»).** ADR 0026, constitution 2.7.0. The inquiry's authenticated `paid` is recorded through the
+  > **Settled (PR #160 r1, 2026-11-24, Major 1; the owner's answers (a) and «(a) ADR 0026»).** ADR 0026; the constitution's R-HONEST-1 amended, 2.7.0 at the integration's version pass (the version line stays 2.6.2). The inquiry's authenticated `paid` is recorded through the
   > webhook's branch (DEC-110 (2)); R-HONEST-1, SRS FR-PAYG-3 and ERD `payment_events.signature_verified_at` now say
   > «the gateway's signed webhook, or the gateway's authenticated answer to the platform's own inquiry about an
   > automatic charge (DEC-110, DEC-113)». Whether an inquiry's row should be told apart from a signed one (a column or
