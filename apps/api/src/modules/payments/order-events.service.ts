@@ -46,6 +46,20 @@
 // original payment with no signed amount, is recorded, adds no money and moves nothing; it sets
 // `refund_reported_at` the first time (`WHERE refund_reported_at IS NULL`), with one log line of ids
 // and a reason, so the monitor shows an administrator a refund whose child event never came.
+//
+// A SAVED CARD (006:T013; R-510, FR-713, SC-707). A `card_saved` event moves no status
+// (`MOVES_FROM.card_saved` is empty). Once recorded, its card is handed to payments' card writer on
+// this same transaction, under the locks above (`programme-cards.ts`: the order's consent and the
+// programme not closed, the token encrypted by the column cipher); a replay writes nothing. Nothing
+// is enqueued for it: the token travels in no job payload, and the one payload this branch enqueues
+// is a paid order's id.
+//
+// AN AUTOMATIC CHARGE'S INQUIRY (006:T014; SRS DEC-110, DEC-113; Q-10 (a) adjusted). The automatic
+// charge's inquiry (`automatic-charge.ts`) records the gateway's authenticated answer through this
+// branch, under the provider event id the signed callback carries, so whichever arrives second is a
+// replay. Its failed answer carries the decline kind, which no signed callback does; the kind is
+// written on the failed automatic order under the locks above, also when the callback recorded the
+// failure first (the replay) and once only.
 import { createHash } from 'node:crypto';
 
 import { type Piasters, RefundPastGrossError, refundedTotal, toPlainNumber } from '@ijazah/money';
@@ -64,6 +78,7 @@ import {
   PaymentsRepository,
   type ReportedPayment,
 } from './payments.repository.js';
+import { type ProgrammeCardWriter, unboundProgrammeCards } from './programme-cards.js';
 import type { Receipt } from './recipient-events.service.js';
 import { keyShareStudentsOfEnrollments, withOutcomeNotices } from '../booking/index.js';
 
@@ -99,6 +114,11 @@ export interface OrderEventsDependencies {
   /** The process's error reporting (T111); replaced by a recorder in the specs. */
   readonly report?: (error: Error) => void;
   readonly now?: () => Date;
+  /**
+   * 006:T013 (R-510): where a recorded `card_saved` event's card is written, on the event's
+   * transaction; none bound refuses a saved card loudly, so no token is ever dropped unnoticed.
+   */
+  readonly cards?: ProgrammeCardWriter;
 }
 
 /** What the branch did: moved the order, recorded it alone, found it recorded, or found no order. */
@@ -151,6 +171,7 @@ export class OrderEventsService {
   readonly #log: Pick<Logger, 'warn'>;
   readonly #report: (error: Error) => void;
   readonly #now: () => Date;
+  readonly #cards: ProgrammeCardWriter;
 
   constructor({
     database,
@@ -159,6 +180,7 @@ export class OrderEventsService {
     log,
     report = reportError,
     now = () => new Date(),
+    cards = unboundProgrammeCards,
   }: OrderEventsDependencies) {
     this.#database = database;
     this.#booking = booking;
@@ -166,6 +188,7 @@ export class OrderEventsService {
     this.#log = log;
     this.#report = report;
     this.#now = now;
+    this.#cards = cards;
   }
 
   /** Records `event` and applies it once; what happened, for the webhook to acknowledge. */
@@ -219,7 +242,16 @@ export class OrderEventsService {
       payloadHash: createHash('sha256').update(receipt.rawBody).digest('hex'),
       receivedAt: receipt.receivedAt,
     });
-    if (!recorded) return 'replayed';
+    if (!recorded) {
+      // 006:T014: the inquiry's answer after the signed callback recorded the same failure.
+      await recordDeclineKind(payments, order, event);
+      return 'replayed';
+    }
+    // 006:T013 (R-510): the card written beside its event, under the locks above; no status moves.
+    if (event.type === 'card_saved') {
+      await this.#cards.save(tx, order, event);
+      return 'unchanged';
+    }
     if (event.type === 'refunded' || event.type === 'refund_reported') {
       return applyRefund(payments, order, event, {
         log: this.#log,
@@ -228,13 +260,31 @@ export class OrderEventsService {
       });
     }
     const status = await payments.statusOf(order.paymentId);
-    if (!MOVES_FROM[event.type].includes(status)) return 'unchanged';
+    if (!MOVES_FROM[event.type].includes(status)) {
+      await recordDeclineKind(payments, order, event);
+      return 'unchanged';
+    }
     await payments.moveOrder(order.paymentId, event.type, reportedBy(event));
     if (event.type === 'failed') {
       await this.#booking.recordOrderFailed(tx, order.enrollmentId, order.paymentId, this.#now());
     }
+    await recordDeclineKind(payments, order, event);
     return 'moved';
   }
+}
+
+/**
+ * 006:T014 (SRS DEC-113, Q-10 (a) adjusted): a failed event's decline kind, which only the
+ * inquiry's authenticated answer carries, written on the failed automatic order under `lockOrder`
+ * (once; `recordDeclineKind`'s filter); nothing for any other event or a callback with no kind.
+ */
+async function recordDeclineKind(
+  payments: PaymentsRepository,
+  order: OrderRef,
+  event: OrderEvent,
+): Promise<void> {
+  if (event.type !== 'failed' || event.declineKind === undefined) return;
+  await payments.recordDeclineKind(order.paymentId, event.declineKind);
 }
 
 /**

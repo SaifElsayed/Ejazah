@@ -12,7 +12,7 @@
 // - (SRS DEC-112) no refusal request: `programme.request` takes `stop` only; a `no_offer` decision
 //   carries the administrator's reason, and approving one waits for session 1's pending make-up;
 // - the close hook on every close: the programme `closed`, its open items `withdrawn`, payments'
-//   card entry called (a stub until T013);
+//   card entry called (since T013, through `createBookingServices` too);
 // - two races: an administrator's decision against the sweep's step (both under the programme's row
 //   lock), and an account's termination against the decision (the programme's row before the
 //   enrollment's on both: no deadlock).
@@ -31,6 +31,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  createBookingServices,
   createProgrammeDecisions,
   createProgrammeServices,
   createProgrammeWindows,
@@ -40,6 +41,7 @@ import {
 } from '../../apps/api/src/modules/booking/index';
 import { lockAccount } from '../../apps/api/src/modules/identity/index';
 import {
+  checkoutOrdersAmong,
   createProgrammePayee,
   orderStandingsOf,
   type PaymentMode,
@@ -69,7 +71,7 @@ let decisions: ProgrammeDecisions;
 let idempotency: IdempotencyService<Transaction>;
 const lines: Readonly<Record<string, unknown>>[] = [];
 const log = { info: (fields: Readonly<Record<string, unknown>>) => lines.push(fields) };
-/** Payments' `deleteProgrammeCard` as the root hands it (a stub until T013), its calls recorded. */
+/** Payments' `deleteProgrammeCard` as the roots hand it, stood in here, its calls recorded. */
 const cardsDeleted: string[] = [];
 const deleteProgrammeCard = async (_tx: Transaction, enrollmentId: string): Promise<void> => {
   cardsDeleted.push(enrollmentId);
@@ -91,6 +93,8 @@ function windowsIn(paymentMode: PaymentMode) {
     settings,
     payee: createProgrammePayee({ paymentMode, cipher }),
     deleteProgrammeCard,
+    // 006:T015 (rule d): the windows' «pending» reads payments' orders.
+    orders: checkoutOrdersAmong,
     log,
   });
 }
@@ -612,6 +616,25 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     expect(cardsDeleted).toContain(enrollmentId);
   });
 
+  it('the cancellation through the API’s booking services reaches the card entry they are handed (006:T013)', async () => {
+    const booking = createBookingServices({
+      database,
+      settings,
+      // 005:T006: the enrollment reads' port, which no case here reaches.
+      ijazahRequests: { of: async () => new Map() },
+      idempotency,
+      log,
+      programmeAmounts: programmeOfferAmountsOf,
+      deleteProgrammeCard,
+    });
+    const { studentId, enrollmentId } = await offered();
+    await expect(
+      booking.programme.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    ).resolves.toStrictEqual({ ok: true });
+    expect((await rowsOf(enrollmentId)).programme.state).toBe('closed');
+    expect(cardsDeleted).toContain(enrollmentId);
+  });
+
   it('the decision approved: the lapse, offer_lapsed', async () => {
     const { enrollmentId } = await offered();
     await windowsIn('live').step(enrollmentId);
@@ -643,6 +666,29 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     expect(items).toMatchObject([{ status: 'extended', decidedByAdminId: adminId }]);
     await expect(windowsIn('test').step(enrollmentId)).resolves.toBe('none');
   });
+});
+
+// 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's `charge_unknown` item takes no decision
+// until T015/T021 build its approve and extend; each is refused and the item stays open.
+describe('the charge_unknown item takes no decision yet (006:T014, Q-b3 (a))', () => {
+  it.each(['approve', 'extend', 'decline'] as const)(
+    'refuses %s decision_not_allowed, the item left open',
+    async (decision) => {
+      const { teacherId, enrollmentId } = await offered();
+      const [item] = await database.$queryRaw<{ id: string }[]>`
+        INSERT INTO programme_requests (enrollment_id, teacher_user_id, kind, status, updated_at)
+        VALUES (${enrollmentId}::uuid, ${teacherId}::uuid, 'charge_unknown', 'open', now())
+        RETURNING id::text AS id`;
+      if (item === undefined) throw new Error('no item written');
+      const adminId = await admin();
+
+      expect(await causeOf(decide(adminId, item.id, decision, SUPPORT_REASON))).toBe(
+        'decision_not_allowed',
+      );
+      const { items } = await rowsOf(enrollmentId);
+      expect(items).toMatchObject([{ kind: 'charge_unknown', status: 'open' }]);
+    },
+  );
 });
 
 // SRS DEC-112: the teacher's app has no refusal request; the refusal is the `no_offer` path above.

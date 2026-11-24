@@ -117,8 +117,12 @@ import {
 import {
   createCheckoutServices,
   createPaymentWebhookRoute,
+  // 006:T018: `programme.get`'s payments reads, as `main.ts` binds them.
+  createProgrammePayee,
   orderStandingsOf,
   PAYMENT_WEBHOOK_PATH,
+  programmeCardOf,
+  programmeMonthOrdersOf,
   programmeOfferAmountsOf,
 } from '../../apps/api/src/modules/payments/index.js';
 // 005:T011 (Q-X1): reports, over the `Pairings` bodies, bound as `main.ts` will bind them.
@@ -216,9 +220,12 @@ import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
   ProgrammeCheckoutOutput,
+  ProgrammeGetInput,
+  ProgrammeGetOutput,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammePayInput,
+  ProgrammeRenewInput,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
   SessionsCancellationAnswerInput,
@@ -443,6 +450,8 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   // 006:T007: the offer's 24 hours after the delivered assessment, and the rest's 48 after the offer.
   programme_offer_hours: 24,
   programme_pay_rest_hours: 48,
+  // 006:T016: the early-renewal days `programme.renew` reads before its check (the seed's).
+  programme_renew_early_days: 3,
   // 003:T104 (ADR 0025 D1): the teacher's share setting, read when an order is created.
   teacher_share_percent: 70,
   // 004:T070: a closed enrollment's slot is held through its kind's window (the seed's values, T069).
@@ -592,6 +601,12 @@ export interface AppCaller {
     request(input: ProgrammeRequestInput): Promise<ProgrammeRequestOutput>;
     /** 006:T009: the student's first payment, attacked in the same file. */
     pay(input: ProgrammePayInput): Promise<ProgrammeCheckoutOutput>;
+    /** 006:T016: the student's automatic renewal off, attacked in the same file. */
+    autoRenewOff(input: ProgrammeActionInput): Promise<ProgrammeActionOutput>;
+    /** 006:T016: the student's next month by hand, attacked in the same file. */
+    renew(input: ProgrammeRenewInput): Promise<ProgrammeCheckoutOutput>;
+    /** 006:T018: either party's read of the programme, attacked in the same file. */
+    get(input: ProgrammeGetInput): Promise<ProgrammeGetOutput>;
   };
 }
 
@@ -1039,6 +1054,12 @@ async function build(): Promise<Built> {
       idempotency,
       log,
       programmeAmounts: programmeOfferAmountsOf,
+      // 006:T018: `programme.get`'s payments reads, as `main.ts` binds them (test mode).
+      programmeReads: {
+        payee: createProgrammePayee({ paymentMode: 'test', cipher }),
+        monthOrders: programmeMonthOrdersOf,
+        cardOf: programmeCardOf,
+      },
     }),
     // As `main.ts` binds it (T036): the checkout over the stand-in gateway, keyed in two steps.
     checkout: createCheckoutServices({
@@ -1049,6 +1070,8 @@ async function build(): Promise<Built> {
       payment,
       cipher,
       gateway: 'fake',
+      // 006:T016 (rule d): the payment mode the payee read is bound over.
+      paymentMode: 'test',
     }),
     // As `main.ts` binds it (T011 of specs/004-sessions): over the video port and booking's side.
     sessions: createSessionsServices({

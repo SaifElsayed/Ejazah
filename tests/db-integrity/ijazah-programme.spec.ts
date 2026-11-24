@@ -52,7 +52,10 @@ async function tryRow(
 }
 
 /** An order of a fresh enrollment, its amount left to the harness (R-MONEY-6). */
-async function tryOrder(probe: Db, values: Readonly<Record<string, unknown>>): Promise<string | null> {
+async function tryOrder(
+  probe: Db,
+  values: Readonly<Record<string, unknown>>,
+): Promise<string | null> {
   const { enrollmentId } = await makeEnrollment(probe);
   return tryRow(probe, 'payments', {
     enrollment_id: enrollmentId,
@@ -66,7 +69,10 @@ async function tryOrder(probe: Db, values: Readonly<Record<string, unknown>>): P
 }
 
 /** A package of a fresh teacher and subject, in the shape given. */
-async function tryPackage(probe: Db, values: Readonly<Record<string, unknown>>): Promise<string | null> {
+async function tryPackage(
+  probe: Db,
+  values: Readonly<Record<string, unknown>>,
+): Promise<string | null> {
   const teacherId = await makeUser(probe);
   const subjectId = await makeSubject(probe);
   return tryRow(probe, 'packages', {
@@ -83,7 +89,10 @@ const NO_OLD = { session_count: null, session_duration_minutes: null, price_pias
 const PROGRAMME_PACKAGE = { track: 'ijazah_track', is_programme: true, ...NO_OLD, ...PRICES };
 
 /** A programme of a fresh enrollment, in the state and columns given. */
-async function tryProgramme(probe: Db, values: Readonly<Record<string, unknown>>): Promise<string | null> {
+async function tryProgramme(
+  probe: Db,
+  values: Readonly<Record<string, unknown>>,
+): Promise<string | null> {
   const { enrollmentId } = await makeEnrollment(probe);
   return tryRow(probe, 'programmes', { enrollment_id: enrollmentId, ...values });
 }
@@ -91,7 +100,10 @@ async function tryProgramme(probe: Db, values: Readonly<Record<string, unknown>>
 const OFFERED = { offered_at: '2026-11-22T09:00:00Z', month_count: 10 };
 
 /** A programme item of a fresh enrollment, by its teacher. */
-async function tryRequest(probe: Db, values: Readonly<Record<string, unknown>>): Promise<string | null> {
+async function tryRequest(
+  probe: Db,
+  values: Readonly<Record<string, unknown>>,
+): Promise<string | null> {
   const { enrollmentId, teacherId } = await makeEnrollment(probe);
   return tryRow(probe, 'programme_requests', {
     enrollment_id: enrollmentId,
@@ -158,7 +170,9 @@ const ENUMS: readonly (readonly [name: string, labels: readonly string[]])[] = [
   ['decline_kind', ['soft', 'hard']],
   ['programme_state', ['awaiting_offer', 'offered', 'active', 'paused', 'closed']],
   ['programme_plan', ['in_full', 'monthly']],
-  ['programme_request_kind', ['stop', 'refusal', 'no_offer', 'pay_blocked']],
+  // B-P3 (T014, SRS DEC-113, ERD changelog row 80): `charge_unknown` appended by
+  // `20261124105820_programme_charge_unknown`.
+  ['programme_request_kind', ['stop', 'refusal', 'no_offer', 'pay_blocked', 'charge_unknown']],
   ['programme_request_status', ['open', 'approved', 'declined', 'withdrawn', 'extended']],
 ];
 
@@ -166,8 +180,16 @@ const ENUMS: readonly (readonly [name: string, labels: readonly string[]])[] = [
  * The labels each existing enum gained (each added at its end, ERD changelog row 65), then the labels a
  * later batch appended after them (R1b's `direct_end`, ERD changelog row 77).
  */
-const ADDED: readonly (readonly [name: string, labels: readonly string[], later: readonly string[]])[] = [
-  ['cancellation_reason', ['offer_declined', 'offer_lapsed', 'assessment_refused', 'programme_stopped'], []],
+const ADDED: readonly (readonly [
+  name: string,
+  labels: readonly string[],
+  later: readonly string[],
+])[] = [
+  [
+    'cancellation_reason',
+    ['offer_declined', 'offer_lapsed', 'assessment_refused', 'programme_stopped'],
+    [],
+  ],
   ['share_release_milestone', ['assessment', 'programme_stopped'], ['direct_end']],
   [
     'enrollment_event_kind',
@@ -214,7 +236,12 @@ describe('the migration on ijazah_integrity_b: the catalogue (006:T001)', () => 
   });
 
   it('makes the gateway id and the three old package columns NULL-able, and adds the new columns', async () => {
-    const { rows } = await db.query<{ column: string; type: string; nullable: string; fallback: string | null }>(
+    const { rows } = await db.query<{
+      column: string;
+      type: string;
+      nullable: string;
+      fallback: string | null;
+    }>(
       `SELECT table_name || '.' || column_name AS column, udt_name AS type, is_nullable AS nullable,
               column_default AS fallback
          FROM information_schema.columns
@@ -236,14 +263,24 @@ describe('the migration on ijazah_integrity_b: the catalogue (006:T001)', () => 
       { column: 'packages.price_60_piasters', type: 'int8', nullable: 'YES', fallback: null },
       { column: 'packages.price_piasters', type: 'int8', nullable: 'YES', fallback: null },
       { column: 'packages.session_count', type: 'int4', nullable: 'YES', fallback: null },
-      { column: 'packages.session_duration_minutes', type: 'int4', nullable: 'YES', fallback: null },
+      {
+        column: 'packages.session_duration_minutes',
+        type: 'int4',
+        nullable: 'YES',
+        fallback: null,
+      },
       { column: 'payments.attempt', type: 'int2', nullable: 'YES', fallback: null },
       { column: 'payments.automatic', type: 'bool', nullable: 'NO', fallback: 'false' },
       { column: 'payments.confirmed_at', type: 'timestamptz', nullable: 'YES', fallback: null },
       { column: 'payments.decline_kind', type: 'decline_kind', nullable: 'YES', fallback: null },
       { column: 'payments.gateway_order_id', type: 'text', nullable: 'YES', fallback: null },
       { column: 'payments.instalment_month', type: 'int2', nullable: 'YES', fallback: null },
-      { column: 'payments.kind', type: 'order_kind', nullable: 'NO', fallback: "'package'::order_kind" },
+      {
+        column: 'payments.kind',
+        type: 'order_kind',
+        nullable: 'NO',
+        fallback: "'package'::order_kind",
+      },
       { column: 'sessions.programme_month', type: 'int2', nullable: 'YES', fallback: null },
     ]);
   });
@@ -298,7 +335,12 @@ describe('no existing row is changed (P2 (a)): a row written as before reads the
         [rows[0]?.id],
       );
       expect(read).toEqual([
-        { is_programme: false, price_30_piasters: null, price_45_piasters: null, price_60_piasters: null },
+        {
+          is_programme: false,
+          price_30_piasters: null,
+          price_45_piasters: null,
+          price_60_piasters: null,
+        },
       ]);
     });
   });
@@ -453,7 +495,10 @@ describe('ERD §15 rule 75: a session programme month 1 and up', () => {
     await inRollback(db, async (probe) => {
       const { sessionId } = await makeSession(probe);
       const set = (month: number | null) =>
-        attempt(probe, 'UPDATE sessions SET programme_month = $1 WHERE id = $2', [month, sessionId]);
+        attempt(probe, 'UPDATE sessions SET programme_month = $1 WHERE id = $2', [
+          month,
+          sessionId,
+        ]);
       expect(await set(null)).toBeNull();
       expect(await set(1)).toBeNull();
       expect(await set(0)).toBe(SQLSTATE.checkViolation);
@@ -479,7 +524,9 @@ describe('ERD §15 rule 77: paused_at exactly while paused', () => {
     await inRollback(db, async (probe) => {
       const at = '2026-11-22T09:30:00Z';
       expect(await tryProgramme(probe, { state: 'paused', ...OFFERED, paused_at: at })).toBeNull();
-      expect(await tryProgramme(probe, { state: 'paused', ...OFFERED })).toBe(SQLSTATE.checkViolation);
+      expect(await tryProgramme(probe, { state: 'paused', ...OFFERED })).toBe(
+        SQLSTATE.checkViolation,
+      );
       expect(await tryProgramme(probe, { state: 'awaiting_offer', paused_at: at })).toBe(
         SQLSTATE.checkViolation,
       );
@@ -503,7 +550,9 @@ describe('ERD §15 rule 77: closed_at exactly once closed', () => {
 describe('ERD §15 rule 78: the paid months never above the month count', () => {
   it('admits all months paid, and refuses one more, a paid month before the count, and a count of 0', async () => {
     await inRollback(db, async (probe) => {
-      expect(await tryProgramme(probe, { state: 'active', ...OFFERED, months_paid: 10 })).toBeNull();
+      expect(
+        await tryProgramme(probe, { state: 'active', ...OFFERED, months_paid: 10 }),
+      ).toBeNull();
       expect(await tryProgramme(probe, { state: 'active', ...OFFERED, months_paid: 11 })).toBe(
         SQLSTATE.checkViolation,
       );
@@ -520,7 +569,9 @@ describe('ERD §15 rule 78: the paid months never above the month count', () => 
 describe('ERD §15 rule 78: the retries from 0 to 4', () => {
   it('admits 4 and refuses 5 and -1', async () => {
     await inRollback(db, async (probe) => {
-      expect(await tryProgramme(probe, { state: 'active', ...OFFERED, retries_done: 4 })).toBeNull();
+      expect(
+        await tryProgramme(probe, { state: 'active', ...OFFERED, retries_done: 4 }),
+      ).toBeNull();
       expect(await tryProgramme(probe, { state: 'active', ...OFFERED, retries_done: 5 })).toBe(
         SQLSTATE.checkViolation,
       );
@@ -572,7 +623,9 @@ describe('a programme per enrollment, a card per programme (the primary keys)', 
       expect(await tryRow(probe, 'programme_cards', card)).toBe(SQLSTATE.uniqueViolation);
       // The close hook deletes the card row (R-510): the application role keeps DELETE.
       expect(
-        await attempt(probe, 'DELETE FROM programme_cards WHERE enrollment_id = $1', [enrollmentId]),
+        await attempt(probe, 'DELETE FROM programme_cards WHERE enrollment_id = $1', [
+          enrollmentId,
+        ]),
       ).toBeNull();
     });
   });
@@ -602,7 +655,9 @@ describe('ERD §15 rule 79: one open item per enrollment and kind', () => {
 describe('ERD §15 rule 80: the reason, given on a stop and a refusal, 1 to 500 characters', () => {
   it('admits a stop with 500 characters and a no_offer item with none', async () => {
     await inRollback(db, async (probe) => {
-      expect(await tryRequest(probe, { kind: 'stop', status: 'open', reason: 'ا'.repeat(500) })).toBeNull();
+      expect(
+        await tryRequest(probe, { kind: 'stop', status: 'open', reason: 'ا'.repeat(500) }),
+      ).toBeNull();
       expect(await tryRequest(probe, { kind: 'no_offer', status: 'open' })).toBeNull();
       expect(await tryRequest(probe, { kind: 'pay_blocked', status: 'open' })).toBeNull();
     });
@@ -610,7 +665,9 @@ describe('ERD §15 rule 80: the reason, given on a stop and a refusal, 1 to 500 
 
   it('refuses a stop or a refusal without a reason, and a reason empty, blank or of 501', async () => {
     await inRollback(db, async (probe) => {
-      expect(await tryRequest(probe, { kind: 'stop', status: 'open' })).toBe(SQLSTATE.checkViolation);
+      expect(await tryRequest(probe, { kind: 'stop', status: 'open' })).toBe(
+        SQLSTATE.checkViolation,
+      );
       expect(await tryRequest(probe, { kind: 'refusal', status: 'open' })).toBe(
         SQLSTATE.checkViolation,
       );
@@ -623,11 +680,13 @@ describe('ERD §15 rule 80: the reason, given on a stop and a refusal, 1 to 500 
   });
 });
 
-describe('ERD §15 rule 80: extended only on a no_offer or pay_blocked item', () => {
-  it('admits it on both, and refuses it on a stop and a refusal', async () => {
+// B-P3 (T014; rule 80 as amended, ERD changelog row 80): `charge_unknown` is extended too.
+describe('ERD §15 rule 80: extended only on a no_offer, pay_blocked or charge_unknown item', () => {
+  it('admits it on the three, and refuses it on a stop and a refusal', async () => {
     await inRollback(db, async (probe) => {
       expect(await tryRequest(probe, { kind: 'no_offer', status: 'extended' })).toBeNull();
       expect(await tryRequest(probe, { kind: 'pay_blocked', status: 'extended' })).toBeNull();
+      expect(await tryRequest(probe, { kind: 'charge_unknown', status: 'extended' })).toBeNull();
       expect(await tryRequest(probe, { kind: 'stop', status: 'extended', reason: 'سبب' })).toBe(
         SQLSTATE.checkViolation,
       );
@@ -643,8 +702,12 @@ describe('ERD §15 rule 81: the deciding administrator and the instant together,
     await inRollback(db, async (probe) => {
       const admin = await makeAdmin(probe);
       const decided = { decided_by_admin_id: admin, decided_at: '2026-11-22T09:00:00Z' };
-      expect(await tryRequest(probe, { kind: 'no_offer', status: 'approved', ...decided })).toBeNull();
-      expect(await tryRequest(probe, { kind: 'no_offer', status: 'declined', ...decided })).toBeNull();
+      expect(
+        await tryRequest(probe, { kind: 'no_offer', status: 'approved', ...decided }),
+      ).toBeNull();
+      expect(
+        await tryRequest(probe, { kind: 'no_offer', status: 'declined', ...decided }),
+      ).toBeNull();
       expect(await tryRequest(probe, { kind: 'no_offer', status: 'open' })).toBeNull();
     });
   });
@@ -662,7 +725,11 @@ describe('ERD §15 rule 81: the deciding administrator and the instant together,
         await tryRequest(probe, { kind: 'no_offer', status: 'open', decided_by_admin_id: admin }),
       ).toBe(SQLSTATE.checkViolation);
       expect(
-        await tryRequest(probe, { kind: 'no_offer', status: 'open', decided_at: '2026-11-22T09:00:00Z' }),
+        await tryRequest(probe, {
+          kind: 'no_offer',
+          status: 'open',
+          decided_at: '2026-11-22T09:00:00Z',
+        }),
       ).toBe(SQLSTATE.checkViolation);
     });
   });

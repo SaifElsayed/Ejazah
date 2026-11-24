@@ -213,6 +213,7 @@
         "issueIjazahOnRequest": "Issue ijazah on teacher's request",
         "paymentsListed": "View payments",
         "paymentsViewed": "View a payment order",
+        "programmeReopened": "Programme reopened",
         "programmeRequestApproved": "Programme request approved",
         "programmeRequestDeclined": "Programme request declined",
         "programmeRequestExtended": "Programme deadline extended",
@@ -1996,6 +1997,8 @@
           "releasesTitle": "Owed",
           "share": "The teacher's share of it: {amount}",
           "platformShare": "Of it, {amount} is the platform's: refunded after the teacher's share was released, so not taken off them",
+          "drawnTitle": "Drawn from the orders:",
+          "drawnFrom": "{amount} from this order",
           "student": "Student: {name}"
         },
         "empty": {
@@ -2226,6 +2229,7 @@
         "refunded": "Refunded"
       },
       "dash": "—",
+      "noOrderNo": "No Paymob order number: refused before it was sent, or Paymob gave none",
       "detail": {
         "a11y": "Order details",
         "a11yEvents": "Order events",
@@ -2700,6 +2704,7 @@
         "postponement_interval_weeks": "Interval between postponements, per party",
         "postponement_notice_hours": "Postponement notice before a session",
         "price_average_min_teachers": "Fewest teachers for the average price",
+        "programme_charge_inquiry_tries": "Ijazah programme: unanswered asks about an automatic charge before an Administrator item",
         "programme_charge_retry_days": "Ijazah programme: retry days of a failed automatic charge",
         "programme_enabled": "Ijazah programme: turned on",
         "programme_offer_hours": "Ijazah programme: time to send the offer after the assessment",

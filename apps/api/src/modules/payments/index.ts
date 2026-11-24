@@ -22,6 +22,7 @@ import type {
   CheckoutStatusOutput,
   ProgrammeCheckoutOutput,
   ProgrammePayInput,
+  ProgrammeRenewInput,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
 // 003:T110: the case's amount, the monitor's third read.
@@ -53,6 +54,12 @@ import { type ConfirmationQueue, OrderEventsService } from './order-events.servi
 import { caseAmount } from './case-amount.service.js';
 import { checkoutAddresses } from './payments.repository.js';
 import { PaymentsMonitorService } from './payments-monitor.service.js';
+// 006:T013: the saved card's writer on the webhook, and its encrypted column.
+import { createProgrammeCardWriter, type ProgrammeCardWriter } from './programme-cards.js';
+import { programmeCardTokens } from './programme-cards.repository.js';
+// 006:T014: the automatic charge.
+import { type AutomaticCharges, createAutomaticCharges } from './automatic-charge.js';
+import { createProgrammePayee, type PaymentMode } from './programme-payee.js';
 // 003:T105: the payouts' reads and mark.
 import { createPayouts, type Payouts, payoutsStoreOver } from './payouts.service.js';
 import { RecipientEventsService } from './recipient-events.service.js';
@@ -65,7 +72,9 @@ export type { ConfirmationQueue };
  * `POST /webhooks/payment` (T077, T038), over the payment port, the identity module's two entries,
  * booking's `recordOrderFailed`, and the queue `confirm-enrollment` is enqueued on. 005:T016:
  * `notices`, the payment pushes' port (`NotificationWriter`, bound by `main.ts`), through which a
- * failed order's outcome records its `payment_failed` push.
+ * failed order's outcome records its `payment_failed` push. 006:T013 (R-510): `cipher`, the column
+ * cipher a saved card's token is encrypted with on the event's transaction; without it a
+ * `card_saved` event is refused loudly (a 500, so the gateway retries it), never dropped.
  */
 export function createPaymentWebhookRoute({
   database,
@@ -75,6 +84,7 @@ export function createPaymentWebhookRoute({
   confirmations,
   notices,
   report,
+  cipher,
 }: {
   readonly database: Database;
   readonly payment: Pick<PaymentPort, 'verifyAndParseEvent'>;
@@ -87,8 +97,11 @@ export function createPaymentWebhookRoute({
   readonly notices: PaymentOutcomeNotices;
   /** The process's error reporting by default (T111); a recorder in the specs. */
   readonly report?: (error: Error) => void;
+  /** 006:T013: the column cipher, bound by `main.ts`. */
+  readonly cipher?: Pick<ColumnCipher, 'encrypt'>;
 }): NodeHandler {
   const reporting = report === undefined ? {} : { report };
+  const cards = cipher === undefined ? {} : { cards: createProgrammeCardWriter({ cipher, log }) };
   return paymentWebhookRoute({
     verify: (rawBody, headers, query) => payment.verifyAndParseEvent(rawBody, headers, query),
     events: {
@@ -98,27 +111,98 @@ export function createPaymentWebhookRoute({
         log,
         ...reporting,
       }),
-      orders: new OrderEventsService({
-        database,
-        booking: {
-          recordOrderFailed: (tx, enrollmentId, paymentId, occurredAt) =>
-            recordOrderFailed(tx, enrollmentId, paymentId, occurredAt, notices),
-        },
-        confirmations,
-        log,
-        ...reporting,
-      }),
+      orders: orderEventsOf({ database, confirmations, notices, log, ...reporting, ...cards }),
     },
     log,
     maxBodyBytes,
   });
 }
 
+/** The webhook's order branch, as the webhook and the automatic charge's inquiry (006:T014) use it. */
+function orderEventsOf({
+  database,
+  confirmations,
+  notices,
+  log,
+  report,
+  cards,
+}: {
+  readonly database: Database;
+  readonly confirmations: ConfirmationQueue;
+  readonly notices: PaymentOutcomeNotices;
+  readonly log: Logger;
+  readonly report?: (error: Error) => void;
+  readonly cards?: ProgrammeCardWriter;
+}): OrderEventsService {
+  return new OrderEventsService({
+    database,
+    booking: {
+      recordOrderFailed: (tx, enrollmentId, paymentId, occurredAt) =>
+        recordOrderFailed(tx, enrollmentId, paymentId, occurredAt, notices),
+    },
+    confirmations,
+    log,
+    ...(report === undefined ? {} : { report }),
+    ...(cards === undefined ? {} : { cards }),
+  });
+}
+
+/**
+ * 006:T014 (R-509; SRS DEC-110, DEC-113): the automatic charge of a programme's saved card, the
+ * entry the sweep (T015) calls (`automatic-charge.ts`). Its inquiry's answers are recorded through
+ * the webhook's own order branch, with the webhook's confirmations and payment pushes.
+ */
+export function createProgrammeCharges({
+  database,
+  payment,
+  cipher,
+  gateway,
+  paymentMode,
+  settings,
+  log,
+  confirmations,
+  notices,
+  report,
+  now,
+}: {
+  readonly database: Database;
+  readonly payment: Pick<PaymentPort, 'chargeSavedCard' | 'inquireOrder'>;
+  readonly cipher: Pick<ColumnCipher, 'decrypt'>;
+  readonly gateway: 'fake' | 'paymob';
+  readonly paymentMode: PaymentMode;
+  readonly settings: SettingsReader;
+  readonly log: Logger;
+  readonly confirmations: ConfirmationQueue;
+  readonly notices: PaymentOutcomeNotices;
+  readonly report?: (error: Error) => void;
+  /** The entry's clock, the real one unless a spec moves it. */
+  readonly now?: () => Date;
+}): AutomaticCharges {
+  return createAutomaticCharges({
+    database,
+    payment,
+    cipher,
+    gateway,
+    paymentMode,
+    settings,
+    log,
+    ...(now === undefined ? {} : { now }),
+    orderEvents: orderEventsOf({
+      database,
+      confirmations,
+      notices,
+      log,
+      ...(report === undefined ? {} : { report }),
+    }),
+  });
+}
+
 /** The payments module's `_encrypted` column, for the `reencrypt-columns` job (T004, 002:T134, R-API-6). */
 export function createEncryptedColumns(
-  database: Pick<Database, 'payment'>,
+  database: Pick<Database, 'payment' | 'programmeCard'>,
 ): readonly EncryptedColumn[] {
-  return [checkoutAddresses(database)];
+  // 006:T013 (R-510): a programme's saved card's token, keyed by its enrollment.
+  return [checkoutAddresses(database), programmeCardTokens(database)];
 }
 
 /**
@@ -193,6 +277,15 @@ export interface CheckoutServices {
     input: ProgrammePayInput,
     log: ProgrammeLog,
   ): Promise<ProgrammeCheckoutOutput>;
+  /**
+   * 006:T016 (FR-713a, FR-715, FR-716, R-509): `programme.renew`, the next month by hand, mounted by
+   * booking's `programmesRouter`; `log` takes its refusals' lines.
+   */
+  programmeRenew(
+    student: CheckoutStudent,
+    input: ProgrammeRenewInput,
+    log: ProgrammeLog,
+  ): Promise<ProgrammeCheckoutOutput>;
 }
 
 export { checkoutRouter } from './checkout.router.js';
@@ -213,6 +306,7 @@ export function createCheckoutServices({
   cipher,
   gateway,
   notices,
+  paymentMode,
   now,
 }: {
   readonly database: Database;
@@ -223,6 +317,11 @@ export function createCheckoutServices({
   readonly gateway: PaymentGateway;
   /** 005:T016: the payment pushes' port. */
   readonly notices: PaymentOutcomeNotices;
+  /**
+   * 006:T016 (FR-716, FR-720): `config.PAYMENT_MODE`, over which T008's «unverified in live mode»
+   * refuses `programme.pay` and `programme.renew` `payee_unverified` before the gateway.
+   */
+  readonly paymentMode: PaymentMode;
   readonly now?: () => Date;
 }): CheckoutServices {
   const service = new CheckoutService({
@@ -233,6 +332,7 @@ export function createCheckoutServices({
     gateway,
     steps: checkoutStepsOver(database, cipher, notices, now),
     ...(now === undefined ? {} : { now }),
+    payee: createProgrammePayee({ paymentMode, cipher }),
   });
   return {
     hold: (student, input) => service.hold(student, input),
@@ -242,6 +342,7 @@ export function createCheckoutServices({
     continue: (student, input) => service.continue(student, input),
     status: (student, input) => service.status(student, input),
     programmePay: (student, input, log) => service.programmePay(student, input, log),
+    programmeRenew: (student, input, log) => service.programmeRenew(student, input, log),
   };
 }
 
@@ -355,9 +456,31 @@ export { type ProgrammeOfferAmounts, programmeOfferAmountsOf } from './programme
 // 006:T008 (FR-706b, FR-716; SRS DEC-101; R-510; B-P2's conflict check, Q-2 (a)): «unverified in
 // live mode», the one entry T008's `pay_blocked` window, T016 and T018 read, over the payment mode the
 // composition root hands in; and `deleteProgrammeCard`, which booking's close hook calls on every
-// close, a stub until T013 (booking imports nothing of payments, R-208: the root hands both in).
+// close, the card row deleted since T013 (booking imports nothing of payments, R-208: the root
+// hands both in).
 export { createProgrammePayee, type PaymentMode, type ProgrammePayee } from './programme-payee.js';
+// 006:T014: what the sweep (T015) reads of the automatic charge.
+export type {
+  AutomaticChargeRequest,
+  AutomaticCharges,
+  ChargeResult,
+  InquiryOutcome,
+  RecordedCharge,
+} from './automatic-charge.js';
 export { deleteProgrammeCard } from './programme-cards.js';
+// 006:T018 (FR-726, FR-727; the owner's approval of lane f's stop, 2026-11-24): the student's saved
+// card for `programme.get` (its last four digits and brand, never its token, SC-707), and every
+// order of an enrollment for the administrator's programme page.
+export { programmeCardOf } from './programme-cards.repository.js';
+export { enrollmentOrdersOf } from './payments-monitor.repository.js';
+// 006:T015 (R-508; SRS DEC-110, DEC-113; lane c's stop, approved 2026-11-24): a programme month's
+// orders and whether a card is saved (a boolean, never a card detail), with no lock, for the sweep's
+// steps, which read it under the enrollment's lock that every order's move takes first.
+export {
+  type MonthAutomaticOrder,
+  type ProgrammeMonthOrders,
+  programmeMonthOrdersOf,
+} from './payments.repository.js';
 
 // 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so
 // `tests/db-integrity/programme-months.spec.ts`' races reach them through the entry (R-API-3), as

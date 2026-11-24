@@ -19,15 +19,23 @@ import {
   programmeActionInput,
   programmeActionOutput,
   programmeCheckoutOutput,
+  programmeGetInput,
+  programmeGetOutput,
   programmeOfferInput,
   programmeOfferOutput,
   programmePayInput,
+  programmeRenewInput,
   programmeRequestInput,
   programmeRequestOutput,
 } from '@ijazah/contracts';
 
 import { defaultRateLimits } from '../../platform/guards/rate-limit.guard.js';
-import { createAppRouter, studentProcedure, teacherProcedure } from '../../surfaces/procedures.js';
+import {
+  createAppRouter,
+  participantProcedure,
+  studentProcedure,
+  teacherProcedure,
+} from '../../surfaces/procedures.js';
 
 // The caller the student kind authenticated, never a value computed here (T062).
 const initiation = { key: defaultRateLimits.paymentInitiation, subject: 'caller' } as const;
@@ -61,6 +69,38 @@ export const programmesRouter = createAppRouter({
     rateLimit: initiation,
   }).mutation(({ ctx, input }) =>
     ctx.services.checkout.programmePay(
+      { userId: ctx.caller.userId, gender: ctx.caller.gender },
+      input,
+      ctx.log,
+    ),
+  ),
+
+  // 006:T018 (FR-726; contracts/app-surface.md `programme.get`): the participant kind, either party,
+  // the service handed the session's own account; anyone else NOT_FOUND as an unknown id. A query:
+  // no key, no limit of its own (the general limit covers it).
+  get: participantProcedure({ input: programmeGetInput, output: programmeGetOutput }).query(
+    ({ ctx, input }) => ctx.services.booking.programme.get(ctx.caller.userId, input),
+  ),
+
+  // 006:T016 (FR-713a, DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student kind,
+  // at any time; keyed (`programme.autoRenewOff`); another student's enrollment NOT_FOUND.
+  autoRenewOff: studentProcedure({
+    input: programmeActionInput,
+    output: programmeActionOutput,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.booking.programme.autoRenewOff(ctx.caller.userId, input, ctx.live),
+  ),
+
+  // 006:T016 (FR-713a, FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student kind,
+  // counted under `rate_limit_payment_initiation` by the caller's own id as `programme.pay` is (it
+  // creates a gateway order); one call of payments' checkout with the session's account and gender
+  // and the request's log. Keyed (scope `programme.renew`). Another student's enrollment NOT_FOUND.
+  renew: studentProcedure({
+    input: programmeRenewInput,
+    output: programmeCheckoutOutput,
+    rateLimit: initiation,
+  }).mutation(({ ctx, input }) =>
+    ctx.services.checkout.programmeRenew(
       { userId: ctx.caller.userId, gender: ctx.caller.gender },
       input,
       ctx.log,

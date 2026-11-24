@@ -188,7 +188,7 @@ consequences.subscribe(
   booking.terminationSubscriber({
     orders: payments.orderStandingsOf,
     log,
-    // 006:T008 (Q-2 (a)): the close hook's card entry, payments' stub until T013.
+    // 006:T008 (Q-2 (a)): the close hook's card entry, payments' (T013: the card row deleted).
     deleteProgrammeCard: payments.deleteProgrammeCard,
   }),
 );
@@ -258,8 +258,8 @@ consequences.subscribe(ijazahRequests.deletionConsequence());
 // Sessions' `EnrollmentSide` port bound to booking's side (T008, bound by T015 of specs/004-sessions,
 // the note under T015): one instance, handed to the sessions services and the administrator's
 // outages (T016), as `booking.createCatalogUse({ settings })` is bound below.
-// 006:T008 (Q-2 (a)): the close hook's card entry (payments' stub until T013) and log, for the
-// programme closed by `terminateNoShow`, `complete` and `cancel`.
+// 006:T008 (Q-2 (a)): the close hook's card entry (payments', T013: the card row deleted) and log,
+// for the programme closed by `terminateNoShow`, `complete` and `cancel`.
 const enrollmentSide = booking.createEnrollmentSide({
   settings,
   programmes: { deleteProgrammeCard: payments.deleteProgrammeCard, log },
@@ -300,6 +300,9 @@ const genderFlags = moderation.createGenderFlags({
 // 003:T105 (SRS DEC-81, DEC-89; the notes under T105): the releases of the teachers' shares, one
 // service for both surfaces: the teacher's «مستحقاتي» and the administrators' «تحويلات المعلمين».
 const payouts = payments.createPayoutServices({ database, settings, idempotency, cipher, log });
+// 006:T018 (FR-726, FR-727): «unverified in live mode» (T008's payments entry) for the reads'
+// `payeePending` and `payeeVerifiedNow`, over the payment mode.
+const programmePayee = payments.createProgrammePayee({ paymentMode: config.PAYMENT_MODE, cipher });
 const services = {
   settings,
   // 003:T109 (track 2, B-M1): the payment mode every app's «نسخة تجريبية» banner reads.
@@ -415,6 +418,18 @@ const services = {
     idempotency,
     log,
     programmeAmounts: payments.programmeOfferAmountsOf,
+    // 006:T013 (DEC-112 Q-B2 (a)): `programme.cancel`'s close hook deletes the saved card.
+    deleteProgrammeCard: payments.deleteProgrammeCard,
+    // 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): `programme.cancel` refuses `payment_processing`
+    // while a programme order is payable or paid and not yet processed.
+    programmeOrders: payments.checkoutOrdersAmong,
+    // 006:T018 (FR-726): `programme.get`'s payments reads: the payee, the month's orders and the
+    // student's card (its last four digits and brand only, SC-707).
+    programmeReads: {
+      payee: programmePayee,
+      monthOrders: payments.programmeMonthOrdersOf,
+      cardOf: payments.programmeCardOf,
+    },
   }),
   // `checkout` (T036): the payments module's, the gateway's orders created outside any transaction
   // over the payment port and recorded through booking's holds and enrollments (R-208), keyed in two
@@ -428,6 +443,9 @@ const services = {
     gateway: config.PAYMENT_GATEWAY,
     // 005:T016: the checkout's payment outcomes record their push.
     notices: notificationWriter,
+    // 006:T016 (FR-716, FR-720): the payment mode T008's «unverified in live mode» is read over, so
+    // `programme.pay` and `programme.renew` refuse `payee_unverified` before the gateway in live mode.
+    paymentMode: config.PAYMENT_MODE,
   }),
   // `sessions.get` and `sessions.join` (T011 of specs/004-sessions): the session read under both
   // accounts' locks, the room and the token through the video port after the commit. The kernel's
@@ -547,6 +565,8 @@ const routes = {
     },
     // 005:T016: an order's failure records its push on the event's transaction.
     notices: notificationWriter,
+    // 006:T013 (R-510, R-DB-8): a saved card's token encrypted on the event's transaction.
+    cipher,
   }),
   // The video provider's signed webhook (T012 of specs/004-sessions, R-SESS-7): its raw body read
   // under the request limit, verified through the video port before anything runs, and an
@@ -637,13 +657,30 @@ const adminServices = {
   // 003:T105: `payouts.*`, the service above.
   payouts: payouts.admin,
   // 006:T008 (Q-7 (a)): `programmes.decide`, keyed on the kind's transaction; the close hook's card
-  // entry is payments' stub until T013.
-  programmes: booking.createProgrammeDecisions({
-    idempotency,
-    settings,
-    deleteProgrammeCard: payments.deleteProgrammeCard,
-    log,
-  }),
+  // entry is payments' (T013: the card row deleted).
+  // 006:T018 (FR-727): and `programmes.queue` and `programmes.get`, over payments' reads: the
+  // payee, the month's orders (`cardSaved`), every order of the enrollment, and whether an
+  // `assessment` release is written.
+  programmes: {
+    ...booking.createProgrammeDecisions({
+      idempotency,
+      settings,
+      deleteProgrammeCard: payments.deleteProgrammeCard,
+      log,
+    }),
+    ...booking.createProgrammeAdminReads({
+      settings,
+      payments: {
+        payee: programmePayee,
+        monthOrders: payments.programmeMonthOrdersOf,
+        ordersOf: payments.enrollmentOrdersOf,
+        assessmentReleased: async (tx, enrollmentId) =>
+          (await payments.releasesOf(tx, [enrollmentId])).some(
+            ({ milestone }) => milestone === 'assessment',
+          ),
+      },
+    }),
+  },
 };
 
 const application = await createApplication({

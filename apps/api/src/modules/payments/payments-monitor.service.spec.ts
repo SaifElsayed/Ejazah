@@ -12,6 +12,9 @@
 //   - the detail names the student and the teacher, carries the enrollment's package and progress,
 //     the order's events, the outcomes that concern this order, and every paid order of the
 //     enrollment (the note under T052); an unknown order answers NOT_FOUND.
+//   - 006:T018: each order carries its kind and whether it is automatic, an `instalment`'s month and
+//     a failed automatic order's decline; an order with no gateway id (option (d)) is listed, read and
+//     named among the paid orders with `''`, which no search matches.
 import { piasters } from '@ijazah/money';
 import { describe, expect, it } from 'vitest';
 
@@ -55,6 +58,10 @@ function order(n: number, overrides: Partial<MonitorOrderRow> = {}): MonitorOrde
     refundReportedAt: null,
     currency: 'EGP',
     createdAt: new Date(CREATED[n - 1] ?? '2026-11-09T10:00:00Z'),
+    kind: 'package',
+    instalmentMonth: null,
+    automatic: false,
+    declineKind: null,
     ...overrides,
   };
 }
@@ -243,6 +250,8 @@ describe('payments.list', () => {
     expect(answer.items).toEqual([
       {
         paymentId: orderId(2),
+        kind: 'package',
+        automatic: false,
         gatewayOrderId: 'fake_order_2',
         createdAt: '2026-11-02T10:00:00.000Z',
         student: { displayName: 'هدى سمير' },
@@ -255,6 +264,8 @@ describe('payments.list', () => {
       },
       {
         paymentId: orderId(1),
+        kind: 'package',
+        automatic: false,
         gatewayOrderId: 'fake_order_1',
         createdAt: '2026-11-01T10:00:00.000Z',
         student: { displayName: 'آمال علي' },
@@ -365,6 +376,8 @@ describe('payments.get', () => {
   it('answers the order as reported, its references, the enrollment, the events, its outcomes and the enrollment’s paid orders', async () => {
     expect(await serviceOver(storeOf(orders)).get(tx, orderId(3))).toEqual({
       paymentId: orderId(3),
+      kind: 'package',
+      automatic: false,
       gatewayOrderId: 'fake_order_3',
       gatewayTransactionId: 'txn_3',
       status: 'paid',
@@ -416,12 +429,16 @@ describe('payments.get', () => {
       paidOrders: [
         {
           paymentId: orderId(3),
+          kind: 'package',
+          automatic: false,
           gatewayOrderId: 'fake_order_3',
           status: 'paid',
           createdAt: '2026-11-03T10:00:00.000Z',
         },
         {
           paymentId: orderId(5),
+          kind: 'package',
+          automatic: false,
           gatewayOrderId: 'fake_order_5',
           status: 'refunded',
           createdAt: '2026-11-05T10:00:00.000Z',
@@ -433,7 +450,10 @@ describe('payments.get', () => {
   it('answers the order’s rate and teacher share where it keeps them, and neither otherwise (003:T104)', async () => {
     const withShare = order(1, { teacherShareRatePercent: 65, teacherSharePiasters: 78_000n });
     const answer = await serviceOver(storeOf([withShare, ...orders.slice(1)])).get(tx, orderId(1));
-    expect(answer).toMatchObject({ teacherShareRatePercent: 65, teacherShare_piasters: piasters(78_000) });
+    expect(answer).toMatchObject({
+      teacherShareRatePercent: 65,
+      teacherShare_piasters: piasters(78_000),
+    });
     const before = await serviceOver(storeOf(orders)).get(tx, orderId(1));
     expect(before).not.toHaveProperty('teacherShareRatePercent');
     expect(before).not.toHaveProperty('teacherShare_piasters');
@@ -477,5 +497,109 @@ describe('payments.get', () => {
     await expect(serviceOver(storeOf(orders)).get(tx, orderId(7))).rejects.toEqual(
       new DomainError('NOT_FOUND'),
     );
+  });
+});
+
+// 006:T018 (FR-727; admin-surface.md `payments.monitor`; the follow-up carried from T014, option (d),
+// the owner's «موافق» of 2026-11-24). Example: an automatic 1,000 EGP month whose intention got no
+// answer has no gateway id; it is listed with `''` (the panel's «—»), and every other order of its
+// page is listed too.
+describe("the programme's orders on the monitor (006:T018)", () => {
+  const unanswered = order(4, {
+    gatewayOrderId: null,
+    status: 'expired',
+    grossPiasters: 100_000n,
+    kind: 'instalment',
+    instalmentMonth: 2,
+    automatic: true,
+  });
+  const refused = order(5, {
+    gatewayOrderId: null,
+    status: 'failed',
+    grossPiasters: 100_000n,
+    kind: 'instalment',
+    instalmentMonth: 3,
+    automatic: true,
+    declineKind: 'hard',
+  });
+
+  it('lists a page holding an order with no gateway id whole, its reference empty', async () => {
+    const answer = await serviceOver(storeOf([order(3), unanswered, refused])).list(tx, {});
+    expect(answer.items.map(({ paymentId }) => paymentId)).toEqual([orderId(5), orderId(4)]);
+    expect(answer.items.map(({ gatewayOrderId }) => gatewayOrderId)).toEqual(['', '']);
+    const next = await serviceOver(storeOf([order(3), unanswered, refused])).list(tx, {
+      cursor: orderId(4),
+    });
+    expect(next.items.map(({ gatewayOrderId }) => gatewayOrderId)).toEqual(['fake_order_3']);
+  });
+
+  it("answers each order's kind, month, automatic and decline, absent where the order has none", async () => {
+    const answer = await serviceOver(storeOf([order(3), refused])).list(tx, {});
+    expect(answer.items[0]).toMatchObject({
+      paymentId: orderId(5),
+      kind: 'instalment',
+      instalmentMonth: 3,
+      automatic: true,
+      declineKind: 'hard',
+      gross_piasters: piasters(100_000),
+    });
+    expect(answer.items[1]).toMatchObject({ kind: 'package', automatic: false });
+    expect(answer.items[1]).not.toHaveProperty('instalmentMonth');
+    expect(answer.items[1]).not.toHaveProperty('declineKind');
+  });
+
+  it('never matches an order with no gateway id by a search of a reference', async () => {
+    const store = storeOf([order(1), unanswered, refused]);
+    for (const search of ['fake_order_1', 'fake_order_4', 'x']) {
+      const answer = await serviceOver(store).list(tx, { search });
+      expect(answer.items.map(({ paymentId }) => paymentId)).not.toContain(orderId(4));
+      expect(answer.items.map(({ paymentId }) => paymentId)).not.toContain(orderId(5));
+    }
+    const named = await serviceOver(store).list(tx, { search: 'fake_order_1' });
+    expect(named.items.map(({ paymentId }) => paymentId)).toEqual([orderId(1)]);
+  });
+
+  it('answers payments.get of an order with no gateway id, its reference empty, and its terms', async () => {
+    const odd = order(5, { ...refused, enrollmentId: E_AMAL });
+    const answer = await serviceOver(storeOf([odd])).get(tx, orderId(5));
+    expect(answer).toMatchObject({
+      paymentId: orderId(5),
+      gatewayOrderId: '',
+      kind: 'instalment',
+      instalmentMonth: 3,
+      automatic: true,
+      declineKind: 'hard',
+    });
+  });
+
+  it("names a paid order with no gateway id among the enrollment's paid orders with an empty reference", async () => {
+    const assessment = order(1, { status: 'paid', kind: 'assessment' });
+    const month = order(3, {
+      status: 'paid',
+      gatewayOrderId: null,
+      kind: 'instalment',
+      instalmentMonth: 1,
+      automatic: true,
+    });
+    const answer = await serviceOver(storeOf([assessment, month])).get(tx, orderId(1));
+    expect(answer.paidOrders).toEqual([
+      {
+        paymentId: orderId(1),
+        kind: 'assessment',
+        automatic: false,
+        gatewayOrderId: 'fake_order_1',
+        status: 'paid',
+        createdAt: '2026-11-01T10:00:00.000Z',
+      },
+      {
+        paymentId: orderId(3),
+        kind: 'instalment',
+        instalmentMonth: 1,
+        automatic: true,
+        gatewayOrderId: '',
+        status: 'paid',
+        createdAt: '2026-11-03T10:00:00.000Z',
+      },
+    ]);
   });
 });

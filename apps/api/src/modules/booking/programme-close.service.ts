@@ -9,22 +9,25 @@
 // the database's instant (`paused_at` cleared, rule 77); every open item of theirs is `withdrawn`
 // (a `pay_blocked` item among them: a close ends it, FR-706b; data-model.md: «a close withdraws an
 // open item»); then payments' `deleteProgrammeCard`, handed in (booking imports no payments, R-208;
-// R-API-6: each module writes its own tables), once per programme closed: a stub until T013, its
-// call asserted by the specs. One info line per programme closed, its id and the reason only. An
-// enrollment that is no programme, or one already closed, is not touched.
+// R-API-6: each module writes its own tables), once per programme closed: since T013 it deletes the
+// card's row, its call asserted by the specs. One info line per programme closed, its id and the
+// reason only. An enrollment that is no programme, or one already closed, is not touched.
 //
 // THE LOCKS (kernel.md, 006:T008's row). The caller holds the programmes' rows, taken before the
 // enrollments' (`lockRows(tx, 'programmes', …)`, the one order: … `slot_holds`, `programmes`,
 // `enrollments` …), so the hook's writes touch rows already held: the programme's update, the items'
 // (`FOR NO KEY UPDATE`, no key column changed), and the card row T013 will delete.
 //
-// THE PROGRAMME'S OWN END (`endProgramme`: `offer_declined`, `offer_lapsed`, `assessment_refused`).
-// The caller holds the programme's row, then the enrollment's. The enrollment moves `confirmed` →
-// `cancelled` with the reason by one conditional update (nothing is written when it did not move);
-// then sessions' hand-off cancels what is left of it (a make-up of session 1 still scheduled, its
-// open remedy lapsed, no case: these closings keep the fee and owe nothing, DEC-94), its one
+// THE PROGRAMME'S OWN END (`endProgramme`: `offer_declined`, `offer_lapsed`, `assessment_refused`,
+// and 006:T017's `programme_stopped`, an administrator's approval of a stop, FR-725). The caller
+// holds the programme's row, then the enrollment's. The enrollment moves `confirmed` → `cancelled`
+// with the reason by one conditional update (nothing is written when it did not move); then
+// sessions' hand-off cancels what is left of it (a make-up of session 1 still scheduled, its open
+// remedy lapsed, no case: these closings keep the fee and owe nothing, DEC-94), its one
 // `enrollment_events` row, and the close hook. The weekly time is offered again at once: none of the
-// three reasons is in the occupancy's held closings (`slot-occupancy.repository.ts`).
+// four reasons is in the occupancy's held closings (`slot-occupancy.repository.ts`). A stop's
+// release is payments' own `programme_stopped` branch (`share-release.rules.ts`, T011), reached by
+// the enrollment's reason; R1b's `CLOSE_RELEASES` is not one of these paths.
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { cancelRemainingSessions } from '../sessions/index.js';
@@ -34,7 +37,7 @@ import { withdrawOpenRequests } from './programme-requests.repository.js';
 import { closeProgrammeRows } from './programmes.repository.js';
 import type { ProgrammeLog } from './programmes.service.js';
 
-/** Payments' `deleteProgrammeCard` (a stub until T013), handed in: booking imports no payments. */
+/** Payments' `deleteProgrammeCard` (T013: the card deleted), handed in: booking imports none. */
 export type DeleteProgrammeCard = (tx: Transaction, enrollmentId: string) => Promise<void>;
 
 /** Why a programme closes: the enrollment's cancellation reason, or its move. */
@@ -92,8 +95,9 @@ export async function closeProgrammes(
   return closed;
 }
 
-/** The programme's own closings (R-505, R-513, FR-709). */
-export type ProgrammeEndReason = 'offer_declined' | 'offer_lapsed' | 'assessment_refused';
+/** The programme's own closings (R-505, R-513, FR-709; 006:T017, FR-725: an approved stop). */
+export type ProgrammeEndReason =
+  'offer_declined' | 'offer_lapsed' | 'assessment_refused' | 'programme_stopped';
 
 /** What the programme's own end writes, over the owners' entries. */
 export interface ProgrammeEndStore {

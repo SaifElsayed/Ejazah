@@ -440,7 +440,7 @@ No open question remains.
 
 ## Phase 3: Renewal, the pause and the stop (B-P3)
 
-- [ ] T013 [US3] Saved cards and the close hook (FR-713, FR-719; R-510):
+- [x] T013 [US3] Saved cards and the close hook (FR-713, FR-719; R-510):
   - **The port:** `platform/ports/payment/payment.port.ts` `createCheckout`'s `saveCard` and the `card_saved` event.
   - **Paymob:** `paymob.adapter.ts` takes the token callback (`payment_event_type` `card_saved`, id
     `paymob:<txId>:token`), refused unless verified; off without the saved-card integration id.
@@ -465,7 +465,56 @@ No open question remains.
   > log into booking's close hook where it is built: in `worker.ts`'s `createEnrollmentSide` (`apps/api/src/worker.ts:231`)
   > and in `createBookingServices` (`apps/api/src/main.ts:398`), replacing T008's stub. A close the worker runs then
   > writes its log line as the API's does (ids and a reason only), red first.
-- [ ] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** Line drift: `createBookingServices` is `main.ts:410`. Q-4 (a): no edit
+  > to `deletion.service.ts`, `consequences.ts` or `erase-kept-data.ts`: an account's erasure reaches the card through
+  > the close hook (an administrator's deletion → `onAccountTerminated` → the termination subscriber →
+  > `closeProgrammes`), proved by a DB spec; a student's own deletion is refused while a programme is live, and
+  > `erase-kept-data` erases teachers' kept profiles only. A `card_saved` for a closed programme writes no card (R-510),
+  > red first. The token column is registered in payments' `createEncryptedColumns` for `reencrypt-columns`.
+  > **Done in part (B-P3 lane a, 2026-11-24).** The port's optional `saveCard` and `card_saved`; Paymob's `TOKEN`
+  > callback (its eight signed fields, `paymob:<obj.id>:token`, the holder and the expiry never read; off without
+  > `savedCardIntegrationId`); the fake's `cardSavedEvent`; the card written on the webhook's transaction only for an
+  > order carrying `card_consent_at` and a programme not closed, the token under `ColumnCipher`, nothing enqueued;
+  > the real `deleteProgrammeCard`; the column in `createEncryptedColumns`; `worker.ts`'s `createEnrollmentSide` and
+  > the webhook's cipher bound in `006:` blocks; DB specs for Q-4 (a) and the close race
+  > (`tests/db-integrity/programme-cards.spec.ts`).
+  > **Follow-up (B-P3 lane a, 2026-11-24): waiting for approval.** (1) `createBookingServices`
+  > (`apps/api/src/modules/booking/booking-slots.service.ts:270`) takes no `deleteProgrammeCard`, so `main.ts:410`
+  > cannot bind it for `programme.cancel` without that file. (2) `checkout.service.ts:652-658` does not hand
+  > `saveCard` to the port yet. (3) Paymob's switch: `platform/ports/payment/index.ts` `paymobFrom` and the env
+  > schema need `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID`; until then the token callback stays off.
+  > **Follow-up (B-P3 lane a, 2026-11-24).** `tests/support/gateway-stand-in.ts` has no `card_saved` builder: the DB
+  > spec signs it by hand in the stand-in's shape. Paymob's token message keeps three open boundaries (`id` |
+  > `masked_pan`, `masked_pan` | `merchant_id`, `merchant_id` | `order_id`): check the merchant id against the
+  > account's at the closed test. A kernel.md row for the webhook's card write (enrollment, payment, then
+  > `programme_cards`, the programme's state read with no lock under the enrollment's) when the review agrees.
+  > **Follow-up (B-P3 lane a, 2026-11-24): a failing test that is not T013's.**
+  > `tests/db-integrity/ijazah-programme.spec.ts:196` («adds the members of share_release_milestone at its end»)
+  > fails on `ijazah_integrity_b`: its enum lacks `direct_end`, so
+  > `20261123174326_r1b_release_refund_and_encryption_events` seems not deployed there (its deploy needs the owner's word).
+  > **Settled (B-P3 lane a, 2026-11-24; the owner, «موافق على الملفات برا المهام», «موافق على الاتنين»).** Follow-up
+  > (1): `createBookingServices` takes `deleteProgrammeCard`, bound at `main.ts:410`, so the API's `programme.cancel`
+  > deletes the card (`programme-windows.spec.ts`, `programme-cards-binds.spec.ts`, red first). (2): the checkout asks
+  > `saveCard` exactly when the order carries the consent (`checkout.service.spec.ts`, red first). The harness has
+  > `cardSaved` (`gateway-stand-in.fixtures.ts`, `tests/support/gateway-stand-in.ts`), which the DB spec now uses. The
+  > failing test: R1b's two migrations deployed on `ijazah_integrity_b`, and `ijazah-programme.spec.ts` is green.
+  > Follow-up (3) waits for the review sessions to agree the env hunk with R2.
+  > **Settled (B-P3 lane a, 2026-11-24; the env hunk agreed by the review session for R2).** Follow-up (3):
+  > `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID` (optional in both modes, a provider key, a whole number) in the env
+  > schema and `.env.example`, and `paymobFrom` hands it to the adapter as `savedCardIntegrationId` (`config.spec.ts`,
+  > `index.spec.ts`, red first). `PAYMENT_GATEWAY_API_KEY` already exists (`env.schema.ts:205`), so Q-11 (a) needs no
+  > new key: T014 reads it in `paymobFrom` and changes only its `.env.example` comment.
+  > **Follow-up (B-P3 lane a, 2026-11-24).** `docs/RUNBOOK.md:319` lists the keys set at contracting; it should name
+  > `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID` too (not edited here).
+  > **Settled (B-P3, 2026-11-24; the owner, «Approve all», typed in the review session).** kernel.md's 006:T013 row
+  > (`specs/004-sessions/contracts/kernel.md`): the webhook's card write under `lockOrder` (the enrollment, then the
+  > order), after the event's row; the delete on the close hook's transaction. Left to the closed-test checklist:
+  > Paymob's token message's three open boundaries, and the merchant id against the account's.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 4).** `PAYMENT_GATEWAY_SAVED_CARD_INTEGRATION_ID`'s number is never used:
+  > `paymob.adapter.ts` reads only whether it is set; a `saveCard` checkout is created on `integrationId`, and
+  > `#integrations()` does not list it, so a transaction paid on a separate saved-card integration would be refused.
+  > Closed-test checklist: either the consent checkout names that integration, or the key becomes a switch.
+- [x] T014 [US3] The automatic charge (FR-714, FR-716, FR-717; R-509):
   - **The port:** `PaymentPort.chargeSavedCard(paymentId, …)`; Paymob on the Moto integration with the split, off until
     configured; the fake's paid, soft and hard answers.
   - **Declines:** `GatewayEvent.failed.declineKind` from a code table, unknown → hard; persisted in
@@ -502,7 +551,98 @@ No open question remains.
   > each): shares 350 + 700 + 700. Once the duplicate's refund is recorded it nets out (700 − 700); if its case is
   > closed with no refund recorded, the stop or the end pays 700 too much. With this task's duplicate handling, red
   > first.
-- [ ] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»; SRS DEC-113).** Q-1 (a): the gateway is asked at the automatic order's
+  > expiry and then every `slot_hold_ttl_minutes` (10); after `programme_charge_inquiry_tries` (6) unanswered asks an
+  > Administrator item `charge_unknown` opens (one `programme_request_kind` value, ERD row 80); asking goes on while it
+  > is open and an answer withdraws it; approve = no charge found in the gateway (expired, a soft decline, the retries
+  > go on), extend = keep asking; while unanswered, no retry, and `charge_pending` refuses a manual payment. Example:
+  > order sent Thursday 18:31, no answer from 18:41 to 19:31 → the item; «paid» at 19:45 → recorded paid, the item
+  > withdrawn. Q-2 (a) amended: the automatic charge is two gateway steps, the intention, then the token payment. The
+  > intention's `intention_order_id` is written to `gateway_order_id` in its own short transaction right after the
+  > intention step and before the token payment. An intention with no answer means no charge was possible: a soft
+  > decline at once, with no inquiry. A token payment with no answer: its late callback is matched by the signed
+  > `order.id`, and Q-1's inquiry asks by that order id; the unsigned `merchant_order_id` is never trusted. The token
+  > payment is sent once, never again. Both steps' shapes are verified on Paymob's developer pages before the Paymob
+  > part. This replaces the note's «matched by the merchant reference, the order's `gatewayOrderId` written from the
+  > event». Today's expiry sweep leaves automatic orders to the inquiry (`order-expiry.repository.ts:28-37` takes every
+  > `created` order), red first. Q-5 (a): the shares read only the awaited orders (the confirm step's walk by
+  > `confirmed_at`, id); a duplicate's share and its refunds are left out (the `duplicate_payment` case's). Example:
+  > month 1 paid twice, 1,000 EGP each: shares 350 + 700. Line drift: `checkout.service.ts:507-508` → `:646-658`;
+  > `share-release.rules.ts:395` → `:422`. The monitor's `gatewayOrderId` is nullable for an automatic order
+  > (`payments-monitor.repository.ts:12-15`).
+  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113; `ejazah-tools\track2\b-p3\paymob-docs.md` §2).** Q-10 (a)
+  > with three adjustments: (1) `declineKind`'s code table follows Visa's categories: `soft` only for the «cannot
+  > approve now» codes, 51 (insufficient funds), 61 and 65 (limits), 91 and 96 (issuer unavailable) and the rest of
+  > Visa's Category 2, each code cited in the table's comment; every other code, and any unknown one, is `hard`, so no
+  > retry ever reaches a Category 1 card (lost, stolen, closed, invalid, expired 54, stop-recurring R0/R1/R3). (2) The
+  > kind comes only from the inquiry's authenticated answer: the callback's `txn_response_code` and
+  > `acq_response_code` are outside Paymob's HMAC and are never read; a signed `failed` callback records the failure
+  > with no kind. (3) An answer with no code is `hard` (the month by hand). This replaces «unknown → hard» read from
+  > the event. Q-11 (a): one optional env value `PAYMENT_GATEWAY_API_KEY` (`config/env.schema.ts`, `.env.example`),
+  > the inquiry's auth token taken from it; with no value the live inquiry is off (the owner sets it at contracting);
+  > the hunk agreed with R2's review session before lane b commits it. Closed-test checklist: whether the inquiry's
+  > answer carries `data.txn_response_code` and `acq_response_code`. Red first, each.
+  > **Done in part (B-P3 lane b, 2026-11-24; stop 1's answers, the owner's «Approve all», Q-b1 (a) adjusted, Q-b2 (a),
+  > Q-b3 (a); Q-b4 settled by the Generate Auth Token page).**
+  > - **The port:** `chargeSavedCard` runs two steps through the caller's `recordOrder`: the payment is sent only
+  >   after the gateway's order id is recorded, once. `inquireOrder` answers `transaction`, `none` or `no_answer`.
+  >   `failed.declineKind` is set only from the inquiry.
+  > - **Paymob:**
+  >   - The Moto intention carries the split and `special_reference`, then `payments/pay` with the token.
+  >   - `charge_off` unless both `PAYMENT_GATEWAY_MOTO_INTEGRATION_ID` and `PAYMENT_GATEWAY_API_KEY` are set;
+  >     `no_payee` in live mode.
+  >   - The inquiry makes a fresh auth token from the API key, then asks by the order id. Anything not final or
+  >     unreadable is `no_answer`; Paymob's adapter never answers `none`.
+  >   - Visa's Category 2 table (soft) is checked against Adyen's «Visa integrity fees» page; every other code is
+  >     hard.
+  > - **The fake:** `onCharge` and `onInquiry`.
+  > - **The charge entry:** `modules/payments/automatic-charge.ts`, through payments' `createProgrammeCharges`.
+  >   - `record`: on the caller's transaction, the order is `created` with no gateway id and expires in 10
+  >     minutes. With no card nothing is written. In live mode with no payee the order is `failed`/`hard`.
+  >   - `charge`: after commit, with no lock held, sent once. An unanswered first step is expired (a soft
+  >     decline). A refusal is recorded `failed`/`hard` with no push.
+  >   - `inquire`: nothing is asked before the expiry. An order with no id is expired with no question. The answer
+  >     is recorded through the webhook's branch, which writes the decline kind (also on a replay). `none` expires
+  >     the order.
+  > - **The rest:**
+  >   - `expire-pending-payments` leaves automatic orders to the inquiry.
+  >   - Q-5 (a): the shares read only the awaited orders.
+  >   - The migration `20261124105820_programme_charge_unknown`: the value, a `COMMIT`, then rule 80's check
+  >     replaced.
+  >   - The setting `programme_charge_inquiry_tries` = 6.
+  >   - The contract `programmeRequestKind` gains `charge_unknown`; `ALLOWED.charge_unknown = []`.
+  > - **Specs:** `paymob.charge.spec.ts`, `fake.charge.spec.ts`, `tests/db-integrity/automatic-charge.spec.ts`,
+  >   `tests/seed/programme-charge-unknown.spec.ts`, red first, with named mutants.
+  > **Follow-up (B-P3 lane b, 2026-11-24): waiting for a decision.** The monitor's nullable `gatewayOrderId` (settled
+  > by `payments-monitor.repository.ts:12-15`) fails `contract:snapshot --check`. The gate reports
+  > `admin payments.get $.gatewayOrderId`, `$.paidOrders[].gatewayOrderId` and `payments.list $.items[].gatewayOrderId`
+  > as `string → null|string` (R-API-9). The change is held as a patch (`track2\runs\b-p3\lane-b\48-monitor-held.patch`),
+  > so the monitor still refuses an automatic order that has no gateway id.
+  > **Settled (the owner, 2026-11-24, «موافق», typed in B-P3's review session).** Option (d): the monitor's part is T018's (lane f), carried by the follow-up
+  > under T018; the held patch is not used. T014 is done with it carried.
+  > **Follow-up (B-P3 lane b, 2026-11-24).** «Neither "pay now" nor "change card" while `payeePending`»
+  > (`tasks.md:529-531`) is `programme.get`'s (T018) and the screen's (T020). T014 builds the no-push half.
+  > `share-release.rules.ts`' half base still reads `inFull` from any `rest_in_full`, a duplicate after months included
+  > (rare; outside Q-5's two sums).
+  > **Closed-test checklist (B-P3 lane b).**
+  > - The pay call's synchronous answer and its authorisation (the secret key is sent).
+  > - The Moto split's `split_payment_methods`.
+  > - The inquiry: its «no transaction» answer; where it carries `acq_response_code` (`data.` or the top level); its
+  >   `currency` and `created_at`.
+  > - The auth token's lifetime.
+  > - The Category 2 table, against Visa's own publication.
+  > **Settled (PR #160 r1, 2026-11-24, Major 1; the owner's answers (a) and «(a) ADR 0026»).** ADR 0026; the constitution's R-HONEST-1 amended, 2.7.0 at the integration's version pass (the version line stays 2.6.2). The inquiry's authenticated `paid` is recorded through the
+  > webhook's branch (DEC-110 (2)); R-HONEST-1, SRS FR-PAYG-3 and ERD `payment_events.signature_verified_at` now say
+  > «the gateway's signed webhook, or the gateway's authenticated answer to the platform's own inquiry about an
+  > automatic charge (DEC-110, DEC-113)». Whether an inquiry's row should be told apart from a signed one (a column or
+  > an event-id suffix, an ERD change) is a follow-up for the owner.
+  > **Closed-test checklist (PR #160 r1, 2026-11-24, Major 1; Paymob question 11 in `ejazah-tools\paymob-questions-additions.md`).**
+  > ⚠️ Is the inquiry's `success: true` / `pending: false` as final as the signed callback, and can a transaction it
+  > reports paid be voided, refunded or charged back with no signed callback?
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 5).** The stand-in's `inquireOrder` about an order it does not hold (a worker restarted
+  > after the charge) rejects «unknown order»: the month stays `charge_pending`, the error is reported every 10 minutes
+  > and no item opens. Development only; answering `no_answer` would follow DEC-110.
+- [x] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
   - the `pay_by` (the lapse, or FR-706b's `pay_blocked` item, once per deadline, and no lapse while one is open; T008's functions), due, retry (1, 3, 5, 7; at most 4; soft only; only while a saved card exists, otherwise the month is by hand) and
@@ -539,7 +679,75 @@ No open question remains.
   > payment confirmed late generates from `pay_by_at`, which may be in the past (`jobs/confirm-enrollment.ts:509-514`,
   > `from = pay_by_at`, lead 0): a paid event processed after the first weekly occurrence past `pay_by_at` writes a
   > session already begun. With this task's «pending at `pay_by`» rule: floor at the confirm instant, red first.
-- [ ] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
+  > **Follow-up (PR #158 r2 Follow-up 1, 2026-11-23; B-P3's conflict check Q-8 (a), the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** A close ignores a
+  > first payment still being processed (paid, `confirmed_at` NULL): `programme.cancel` (`programmes.service.ts:683-725`)
+  > and the lapse (`:818-848`) read no order. «Pending» at `pay_by` also counts a paid, unconfirmed programme order
+  > (`programmeProcessing`, `:893-900`), so the lapse waits; `programme.cancel` refuses it `payment_processing` (additive
+  > in `programmeCancelRefusal`). Example: 9,500 EGP paid two minutes before `pay_by`, the worker restarting: no lapse
+  > and no cancel until the confirm step runs. Red first, each.
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** Q-3 (a): the sweep derives `next_due_at` under the programme's lock on every
+  > step from the paid months' sessions (`lastToEnd`) and writes it when it moved (no writer exists today); a postponed
+  > last session moves it. Q-6 (a): `programmeMayComplete` (`completion.service.ts:178-181`) also waits while an open
+  > `slot_unavailable` or `party_restricted` case is on the enrollment. Follow-up 3 (settled by its text): the first
+  > payment's sessions start after max(last end, `pay_by_at`, the confirm instant), lead 0.
+  > **Lane b's Paymob questions (the owner, 2026-11-24, «موافق على س١٠ (أ) بالتظبيطات وس١١ (أ)», typed in B-P3's review session; SRS DEC-113).** The sweep asks the gateway at once after an automatic
+  > order fails, on the next minute, not only before the day-1 retry, so the student sees «pay now» or «change card»
+  > right away. No retry ever runs without an authenticated kind: an unanswered inquiry means no retry (DEC-110), an
+  > answer with no code means `hard`. Red first.
+  > **Done in part (B-P3 lane c, 2026-11-24).**
+  > - The windows' step reads the suspension cases again under its locks, and past `pay_by_at` waits while a programme
+  >   order is payable or paid and not yet processed (payments' `checkoutOrdersAmong`, bound as `orders`);
+  >   `programme.cancel` refuses `payment_processing` then (additive in `programmeCancelRefusal`), once `orders` is bound.
+  > - `programmes.rules.ts`: the due point by `lastToEnd` over the paid month's sessions (Q-3 (a)); the due, retry
+  >   (1, 3, 5, 7 whole days on the instant, soft only, at most 4, only with a card, never while unanswered or with no
+  >   authenticated kind), `charge_unknown` (the 6th unanswered ask, 10 minutes apart, once per order; withdrawn by an
+  >   answer) and pause steps; the cadence; the DST spec of the day-7 retry against the next occurrence.
+  > - `programmes.service.ts` `createProgrammeMonths`: each step its own transaction (the teacher key-shared, the
+  >   programme, the enrollment), the due point written when it moved, payments' `record` on the step's transaction, the
+  >   gateway's call handed back for after the commit, the pause's `programme_paused` row and live signal.
+  > - `jobs/advance-programmes.ts`: the page, the suspension filter, the windows' step, the ask before the steps, the
+  >   call after commit; its double-run spec over a stand-in sweep.
+  > - Q-6 (a) in `completion.service.ts`; FU3 in `confirm-enrollment.ts`; kernel.md's 006:T015 row.
+  > - Specs: `programmes-months.rules.spec.ts`, `programmes-months.service.spec.ts`, `advance-programmes.spec.ts`,
+  >   `tests/db-integrity/advance-programmes.spec.ts`, red first, with named mutants.
+  > **Follow-up (B-P3 lane c, 2026-11-24): waiting for approval (outside lane c's files).** (1) `modules/booking/index.ts`
+  > exports `createProgrammeMonths`, `programmesToSweep` and their types, so the job and the DB specs reach them through
+  > the entry. (2) Payments has no answer of a month's orders: a reader of the month's latest automatic order (status,
+  > expiry, decline kind, attempt), whether a programme order is payable or paid unconfirmed, and whether a card is
+  > saved (a boolean), with its `index.ts` export; `worker.ts` binds the job only once it exists. (3)
+  > `booking-slots.service.ts` and `main.ts` hand `checkoutOrdersAmong` to `programme.cancel`, so its
+  > `payment_processing` runs in the API. (4) The worker has no live channel to the API's streams: the pause's
+  > `enrollment` signal goes on the transaction's publisher, which no worker binds (N-15).
+  > **Follow-up (B-P3 lane c, 2026-11-24): a question.** Whether approving or extending a `charge_unknown` item
+  > (approve: no charge found, the order expired as a soft decline, retries on; extend: keep asking) is T015's or
+  > T021's: T015's text names the item's opening and withdrawal, not its decision. `ALLOWED.charge_unknown = []`
+  > stays as lane b set it.
+  > **Settled (B-P3 lane c, 2026-11-24; the owner, «موافق», typed in the review session).** (1) booking's `index.ts`
+  > exports the month steps and the page. (2) payments' `programmeMonthOrdersOf` (no lock; `cardSaved` a boolean
+  > only, SC-707) and its export. (3) `createBookingServices` takes `programmeOrders`, bound at `main.ts` to
+  > `checkoutOrdersAmong`, so the API's `programme.cancel` refuses `payment_processing`
+  > (`advance-programmes-binds.spec.ts`). Q-4: approving or extending a `charge_unknown` item is T021's;
+  > `ALLOWED.charge_unknown = []` stays. Q-5: a failed automatic order with no kind is asked on the sweep minute after
+  > the failure (its `updated_at`), then every `slot_hold_ttl_minutes` (10), at most `programme_charge_inquiry_tries`
+  > (6) times; then asking stops and nothing is written (no item, no column): the order stays failed with no kind, is
+  > never retried, and the month is paid by hand; a later authenticated soft kind starts the retries from then. The
+  > job is registered in `worker.ts`'s `006:` block (`advance-programmes-binds.spec.ts`). DB specs: the double run
+  > (two sweeps at once: one order, one payment, one item) and the month step's races against the webhook's paid, a
+  > manual checkout of the same month and `programme.cancel` (`tests/db-integrity/advance-programmes-sweep.spec.ts`),
+  > red first. The race against a stop's approval is T017's.
+  > **Follow-up (B-P3 lane c, 2026-11-24).** The pause's `enrollment` signal is added on the transaction's publisher,
+  > which no worker binds: the worker has no live channel to the API's streams (`main.ts` holds the only
+  > `InProcessLiveBus`), so a pause reaches a client only on its next read (N-15). T008's windows' signal is the same.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 1).** The last month's `charge_unknown` item is not withdrawn by its answer:
+  > `programmesToSweep` (`booking/programmes.repository.ts`) takes only `months_paid < month_count`, so once the last
+  > month's unanswered charge is recorded paid the programme leaves the page and the item stays open until completion's
+  > close hook withdraws it. T021's decision must read the order's state before it acts. Rare.
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 3).** The asking cadence stores no ask: `inquiryDue` / `asksMade`
+  > (`booking/programmes.rules.ts`) count by the clock, so a sweep minute that misses an ask's 60-second window (a slow
+  > run, a restart) skips it, and the item can open after fewer than 6 real asks. For a failed order with no kind the
+  > six windows end 51 minutes after the failure whether or not an ask ran: a worker down for that hour leaves a soft
+  > decline (insufficient funds) never retried, the month by hand. Safe; worth one stored counter.
+- [x] T016 [US3] Manual renewal and the automatic renewal off (FR-713a, FR-715, FR-716, FR-722, FR-724),
   `programme.renew` and `programme.autoRenewOff`, in `modules/booking/programmes.service.ts`, `programmes.router.ts`,
   `modules/payments/checkout.service.ts`, `modules/payments/programme-cards.*`:
   - `programme.autoRenewOff` (the student, at any time) deletes the card under the programme's row lock (kernel.md's
@@ -565,7 +773,40 @@ No open question remains.
   > **Follow-up (B-P2 lane a, 2026-11-23; the owner, «موافق الكل أ»).** The paid month that clears `paused_at`
   > writes the `programme_resumed` enrollment event, one row on its transaction, red first, as T007's offer writes
   > `programme_offered` (FU-A1 (a)).
-- [ ] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** The paid month's resume (`active`, `paused_at` cleared, an open stop withdrawn
+  > with one line, `programme_resumed`) is written by the confirm step's booking entry (`writeProgrammePaid`,
+  > `programmes.repository.ts:259-277`), where every paid month lands, an automatic one after a pause included.
+  > `programme.autoRenewOff` gains its refusal enum (`party_suspended`, `closed`; B-P2 Q-B1's precedent). `programme.pay`
+  > gains the `payee_unverified` check with `programme.renew` (no code refuses it today).
+  > **Done (B-P3 lane d, 2026-11-24).** `programme.autoRenewOff` (booking `turnAutoRenewOff`; refusals
+  > `closed`, `party_suspended`, contract `programmeAutoRenewOffRefusal`): the programme's lock, then the
+  > enrollment's, then payments' `deleteProgrammeCard`, one line, `enrollment` to both parties.
+  > `programme.renew` (payments' `programmeRenew` over booking's `checkedProgrammeRenew`, run before the
+  > gateway and again under the record's locks): month `months_paid` + 1 at `packages/money`'s month
+  > amount (10,000 EGP over 40 sessions: month 2 = 1,000; the last month the remainder), the assessment
+  > order's rates (R-511), the checkout's TTL, a ticked consent kept as `card_consent_at` («change card»);
+  > refused `closed`, `nothing_due`, `party_suspended`, `charge_pending` (the month's automatic order
+  > `created`), `not_due_yet` (a card and no failure; no card before the due point less
+  > `programme_renew_early_days`), FR-BOOK-12's `PREVIOUS_CHECKOUT`. `programme.pay` and `programme.renew`
+  > refuse `payee_unverified` before the gateway through T008's `createProgrammePayee`, which
+  > `createCheckoutServices` builds over `paymentMode` (`main.ts`'s `006:` line,
+  > `programme-renewal-binds.spec.ts`). The paid month's resume in `writeProgrammePaid` /
+  > `recordProgrammePaid` (the confirm step hands its log): `active`, `paused_at` cleared,
+  > `programme_resumed`, an open stop withdrawn, one line each. Races
+  > (`tests/db-integrity/programme-renewal.spec.ts`): the «off» against the due step both ways, the resume
+  > against the pause both ways, the renewal against a retry of the same month; kernel.md `006:T016`;
+  > adversarial `autoRenewOff` and `renew`, both directions. Approved outside files (the owner,
+  > «موافق عالكل», 2026-11-24): booking's and payments' `index.ts`, `main.ts`'s `006:` line.
+  > **Follow-up (B-P3 lane d, 2026-11-24; the owner, Q-D2 (a)).** A card saved by a «change card» payment
+  > can be written again after the student turns the automatic renewal off, when Paymob's TOKEN callback
+  > arrives after the «off» (month 3 paid 18:00:00 with consent, «off» at 18:00:20, the callback at 18:00:30:
+  > the card saved again and month 4, 1,000 EGP, charged at its due point). Rare (a window of seconds);
+  > not guarded: the «off» stores no state (it only deletes the card), and refusing a card after an «off»
+  > would also refuse a later consent. The student turns it off again; the screen shows the card.
+  > **Follow-up (B-P3 lane d, 2026-11-24).** The paid month's resume signals `enrollment` on the confirm
+  > step's transaction publisher, which no worker binds (lane c's N-15 follow-up under T015): a client
+  > sees the resume on its next read.
+- [x] T017 [US4] The stop request, the close and the reopen (FR-723, FR-725, FR-727; R-513), in
   `modules/booking/programmes.service.ts`, `programme-requests.*`, `programmes.router.ts`,
   `modules/booking/programmes-admin.router.ts` (the admin decisions):
   - `programme.request` `stop` (refused before 7 days);
@@ -588,7 +829,42 @@ No open question remains.
   > **Follow-up (B-P2 lane b, T008, 2026-11-23).** T008's `programme.request` answers `stop` with `not_paused` while
   > the programme is not `paused` and throws on a paused one (no path pauses before T015); `programmes.decide`
   > refuses any decision on a `stop` item `decision_not_allowed`. T017 replaces both.
-- [ ] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** `programme_stopped` joins `ProgrammeEndReason`
+  > (`programme-close.service.ts:96`) and releases through its own branch (`share-release.rules.ts:565-575`); R1b's
+  > `CLOSE_RELEASES` is untouched.
+  > **Lane e's questions (the owner, 2026-11-24, «موافق عالكل», typed in B-P3's review session).** Q-e1 (a): the
+  > reopen moves the enrollment through a third writer of the status, `reopenStoppedEnrollment`
+  > (`enrollment-side.repository.ts`; `cancelled` `programme_stopped` with `confirmed_at` set → `confirmed`, the reason,
+  > `slot_released_at` and `admin_end_reason` cleared, never `confirmed_at`), its one reach the reopen; the confirmation
+  > gate widened. Q-e2 (a) `not_stopped`, Q-e3 (b) `slot_inactive`, Q-e6 `time_taken` (another booking of a party
+  > over the weekly time's coming weeks, as restore reads it), additive in `programmesReopenRefusal`. Q-e4 (b): a stop's
+  > approval refused `sessions_pending` (additive in `programmesDecideRefusal`) while a session of the programme is
+  > `scheduled` or a remedy is open; example: month 1 is 4 × 250 EGP, a make-up set for 12/03, the approval on 11/30 →
+  > refused. Q-e5 (a): the audit label of `programme.reopened` («إعادة فتح برنامج الإجازة» / «Programme reopened»).
+  > **Done (B-P3 lane e, 2026-11-24).**
+  > - `programme.request` `stop` (`programme-requests.service.ts`): `not_paused`, `too_early` (`paused_at` +
+  >   `programme_stop_request_days`, whole days on the instant, the database's clock), `request_open`; the open stop
+  >   with the reason, its teacher the row's; one line of ids; `enrollment` to both parties.
+  > - `programmes.decide` on a stop: approve → `programme_stopped` through booking's own end and the close hook (the
+  >   time free at once, the card deleted, T011's release: 17,500 + 70,000 = 87,500 pt in the DB spec); decline;
+  >   `sessions_pending`; `not_open` once no longer paused; no extension.
+  > - `programmes.reopen` (`programmes-admin.router.ts`, audited `programme.reopened` with the administrator's
+  >   reason): users, the teacher's slots' key, the slot, the programme, the enrollment; `not_stopped`,
+  >   `party_restricted`, `gender_mismatch` (both directions), `slot_inactive`, `slot_taken`, `time_taken`; the
+  >   enrollment `confirmed`, the programme `paused` since the reopen, one `programme_reopened` row; no session.
+  > - Races, red first (`tests/db-integrity/programme-stop.spec.ts`; kernel.md 006:T017): the approval against the
+  >   sweep's due step (006:T015's open item), the reopen against a new booking of the same weekly time.
+  > **Follow-up (B-P3 lane e, 2026-11-24).** The admin harness of `tests/adversarial` covers the user surface only:
+  > `programmes.reopen`'s gender refusal is asserted both ways in the unit and DB specs, not by the harness.
+  > `programme.request`'s registration is unchanged (both directions, `not_paused`).
+  > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 2).** A close while a charge is under way: approving a stop refuses
+  > `sessions_pending` but has no `payment_processing` (the cancel and the lapse have it since Q-8). Example: the
+  > student pays month 4, 1,000 EGP, by `programme.renew` while the administrator approves the stop; the paid order lands
+  > on a cancelled enrollment as a `duplicate_payment` case, and `awaitedOrdersOf` (which walks by month number only)
+  > counts its 700 EGP share in the `programme_stopped` release until the refund is recorded. Also, after any close an
+  > unanswered automatic order is never asked about again (the sweep takes `confirmed` enrollments only). Rare; needs
+  > an additive refusal code.
+- [x] T018 [US2] [US6] The reads (FR-726, FR-727), in `modules/booking/programmes.service.ts`,
   `programmes.repository.ts`, `programmes.router.ts`, `modules/booking/programmes-admin.router.ts`, and
   `modules/payments/payments-monitor.*`:
   - `programme.get`, the two parties only, the card to the student only, `teacherUnavailable` (FR-BOOK-19),
@@ -618,6 +894,51 @@ No open question remains.
   > **The owner, 2026-11-23, «ايوة الادمن ساعتها بقا بتقرر اننا نديها للطالب بطريقة ما» (PR #158 r1 Q-R1 (b)).**
   > `programmes.queue` and the admin `programmes.get` carry, on a `no_offer` item, whether the assessment was held
   > (session 1's outcome chain, T008's read), so T021 can show «the assessment was not held; the fee is unreleased».
+  > **Follow-up (PR #158 r2 Follow-up 2, 2026-11-23; the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** «The fee is unreleased» is reachable only from the
+  > `no_offer` decision. The admin `programmes.get` carries «the assessment was not held» on any closed programme with no
+  > `assessment` release (`assessmentHeld`, `share-release.rules.ts:463-467`), so T021 shows it on the programme's page
+  > too. Example: fee 500 EGP; cancelled Monday; a dispute upheld Wednesday as the teacher's no-show → the 500
+  > unreleased, the page says so. Red first.
+  > **B-P3's conflict check (the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** Q-9 (a): the admin `programmes.get` gains `cardSaved` (a boolean, never a card
+  > detail). Under Q-1 (a) the queue offers `charge_unknown` beside `pay_blocked` (T021 shows it). FU-E1:
+  > `payoutRelease` gains `orders: [{ paymentId, amount_piasters }]` (additive).
+  > **Follow-up (carried from T014 (the owner, 2026-11-24, «موافق», typed in B-P3's review session); option (d)).** The admin monitor and an automatic order with no
+  > gateway id (its first step unanswered, or refused before it was sent): the contract keeps `gatewayOrderId:
+  > z.string()`, with no snapshot change and no new field. `payments-monitor.repository.ts` drops the refusal in
+  > `withGatewayOrderId` (today one such order fails the whole list page); the rows keep `string | null` inside, the
+  > search compares the inner value (`adminSearch` is `min(1)`, so `''` never matches), and only the contract's edge
+  > maps NULL to `''`. The admin pages (`AdminPayments.tsx:148`, `PaymentPanel.tsx:84`, `:170`, `:242`; outside
+  > files, approved) show «—» for `''` with a short ar/en line saying the order has no Paymob number (refused before
+  > it was sent, or Paymob gave none); `check:i18n:admin`. No nullable field until a page needs one (R-API-9 keeps a
+  > published field forever). Example: a 1,000 EGP automatic order whose intention got no answer is listed with
+  > «—», and every other order on its page is listed too. Red first: the list page, `payments.get` and the
+  > enrollment's `paidOrders`.
+  > **Settled (the owner, 2026-11-24, «موافق عالكل», typed in B-P3's review session; lane f's stop 1).** Q-f1 (a):
+  > `booking-slots.service.ts`, `booking/index.ts`, `payments/programme-cards.repository.ts` (`programmeCardOf`, the last
+  > four and the brand only), `payments/index.ts` and `share-release.rules.ts` (`export` on `awaitedOrdersOf`) approved.
+  > Q-f2 (a): `chargePending` is true while the month's automatic order is `created`, until the gateway answers, expired
+  > or not. Q-f3 (a): `renewOpen` is «`programme.renew` would be accepted now» (one rule, `renewalRefusalOf`, shared
+  > with the renewal's check): with a card saved only after a failed or expired charge («pay now», «change card»), with
+  > none «renew now»; false while `payeePending`, `chargePending` or a suspension holds; no new field. Q-f4 (a): the two
+  > administrator reads are audited `programmes.listed` and `programmes.viewed` (admin-surface.md amended). Q-f5 (a):
+  > each programme release draws its orders' shares oldest first, each less what earlier releases took (offer 10,000
+  > EGP over 10 months, fee 500, 70 %: `ijazah_half` 1,837.50 = 350 + 700 + 700 + 87.50; `ijazah_end` 5,512.50 =
+  > 612.50 + 700 × 7).
+  > **Done (B-P3 lane f, 2026-11-24).** `programme.get` (participant; NOT_FOUND to anyone but the two parties; the card's
+  > last four and brand to the student only; `payeePending` through T008's payee entry, a spec per mode against the
+  > real `createProgrammePayee`), `programmes.queue` (`charge_unknown` added; `no_offer` with `assessmentHeld`,
+  > `pay_blocked` with `payeeVerifiedNow`) and the admin `programmes.get` (orders by kind, items with reasons,
+  > `cardSaved`, `assessmentHeld` on a closed programme with no `assessment` release); the monitor's four columns and
+  > option (d) («—» and its line on the admin pages); FU-E1 (`payoutRelease.orders`, the payouts page); the binds in
+  > `main.ts` and `surfaces/context.ts` (`006:T018` lines, a source-level bind spec); adversarial `programme.get`, both
+  > directions; `tests/db-integrity/programme-reads.spec.ts`.
+  > **Follow-up (B-P3 lane f, 2026-11-24).** (1) `packages/contracts/src/admin/payments.ts:58-60` still says the four
+  > terms are «absent until T018 answers them»: a stale comment (the owner, 2026-11-24). (2) The queue reads a
+  > `no_offer` item's `assessmentHeld` and a `pay_blocked` item's payee once per item (sessions has no batched entry),
+  > bounded by `admin_list_page_size`. (3) `programmes.listed` and `programmes.viewed` have no label in
+  > `apps/admin/src/pages/audit/actions.ts` yet: the audit page shows the stored action (T021). (4) FU-E1: a refund's
+  > share is taken off the end release, so the last orders stay partly undrawn; a complaint or direct-end close is
+  > attributed oldest first too, not by each session's own order (Q-f5 (a)).
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 

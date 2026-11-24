@@ -18,6 +18,7 @@ import type { EncryptedColumn, EncryptedValue } from '../../platform/crypto/encr
 import { clockTimestamp } from '../../platform/db/db-clock.js';
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { lockRows } from '../../platform/db/row-lock.js';
+import type { DeclineKind } from '../../platform/ports/payment/payment.port.js';
 
 type Client = Pick<Transaction, 'paymentEvent' | 'payment'>;
 
@@ -169,6 +170,206 @@ export async function markOrderConfirmed(tx: Transaction, paymentId: string): Pr
   });
 }
 
+/**
+ * 006:T014 (R-509; SRS DEC-113): an automatic charge's order as it is recorded, before any gateway
+ * call: `created` with no gateway id until the gateway's order answers, or `failed` with a `hard`
+ * decline when it was refused before the gateway (`no_payee`; ERD §15 rule 72 admits both NULL).
+ */
+export interface NewAutomaticOrder {
+  readonly enrollmentId: string;
+  readonly gateway: 'fake' | 'paymob';
+  readonly gross_piasters: Piasters;
+  readonly currency: string;
+  readonly expiresAt: Date;
+  readonly teacherShareRatePercent: number;
+  readonly teacherShare_piasters: Piasters;
+  readonly halfReleaseRatePercent: number | null;
+  readonly instalmentMonth: number;
+  readonly attempt: number;
+  readonly status: 'created' | 'failed';
+}
+
+/** Writes the automatic order (above); its id. The caller holds the enrollment's lock. */
+export async function insertAutomaticOrder(
+  tx: Pick<Transaction, 'payment'>,
+  order: NewAutomaticOrder,
+): Promise<string> {
+  const { gross_piasters, teacherShare_piasters, status, ...rest } = order;
+  const { id } = await tx.payment.create({
+    data: {
+      ...rest,
+      grossPiasters: BigInt(toPlainNumber(gross_piasters)),
+      teacherSharePiasters: BigInt(toPlainNumber(teacherShare_piasters)),
+      kind: 'instalment',
+      automatic: true,
+      status,
+      ...(status === 'failed' ? { declineKind: 'hard' as const } : {}),
+    },
+    select: { id: true },
+  });
+  return id;
+}
+
+/** 006:T014: the programme's saved card's encrypted token, or null (the caller holds the programme). */
+export async function programmeCardTokenOf(
+  tx: Pick<Transaction, 'programmeCard'>,
+  enrollmentId: string,
+): Promise<Uint8Array | null> {
+  const card = await tx.programmeCard.findUnique({
+    where: { enrollmentId },
+    select: { tokenEncrypted: true },
+  });
+  return card?.tokenEncrypted ?? null;
+}
+
+/**
+ * 006:T014 (SRS DEC-113 (2)): records the gateway's order id on an automatic order still `created`
+ * with none, under `lockOrder`; whether it did. The one guard of the token payment: only the call
+ * that wrote the id sends it, so two calls for one order send one payment.
+ */
+export async function recordGatewayOrderId(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+  gatewayOrderId: string,
+): Promise<boolean> {
+  const { count } = await tx.payment.updateMany({
+    where: { id: paymentId, automatic: true, status: 'created', gatewayOrderId: null },
+    data: { gatewayOrderId },
+  });
+  return count === 1;
+}
+
+/**
+ * 006:T014: ends an automatic order no payment was sent for (`created`, no gateway id), under
+ * `lockOrder`: `expired` (the gateway's order unanswered, or no id ever recorded: a soft decline), or
+ * `failed` with a `hard` decline (refused before the gateway). Whether it moved.
+ */
+export async function closeUnsentAutomaticOrder(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+  to: 'expired' | 'failed',
+): Promise<boolean> {
+  const { count } = await tx.payment.updateMany({
+    where: { id: paymentId, automatic: true, status: 'created', gatewayOrderId: null },
+    data: to === 'failed' ? { status: 'failed', declineKind: 'hard' } : { status: 'expired' },
+  });
+  return count === 1;
+}
+
+/**
+ * 006:T014 (SRS DEC-110 (3)): an automatic order the gateway says has no transaction, `expired`
+ * (a soft decline), under `lockOrder`; whether it moved.
+ */
+export async function expireAutomaticOrder(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+): Promise<boolean> {
+  const { count } = await tx.payment.updateMany({
+    where: { id: paymentId, automatic: true, status: 'created' },
+    data: { status: 'expired' },
+  });
+  return count === 1;
+}
+
+/** 006:T014: what the inquiry decides on of an automatic order, read with no lock. */
+export interface AutomaticOrderState {
+  readonly enrollmentId: string;
+  readonly automatic: boolean;
+  readonly status: OrderStatus;
+  readonly gatewayOrderId: string | null;
+  readonly declineKind: DeclineKind | null;
+  readonly expiresAt: Date;
+}
+
+export function automaticOrderOf(
+  tx: Pick<Transaction, 'payment'>,
+  paymentId: string,
+): Promise<AutomaticOrderState> {
+  return tx.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: {
+      enrollmentId: true,
+      automatic: true,
+      status: true,
+      gatewayOrderId: true,
+      declineKind: true,
+      expiresAt: true,
+    },
+  });
+}
+
+/** 006:T015: a programme month's latest automatic order, as the sweep decides on it. */
+export interface MonthAutomaticOrder {
+  readonly paymentId: string;
+  readonly status: OrderStatus;
+  readonly expiresAt: Date;
+  readonly declineKind: DeclineKind | null;
+  readonly attempt: number;
+  /** Its `updated_at` once `failed` (the failure's instant); null otherwise. */
+  readonly failedAt: Date | null;
+}
+
+/** 006:T015: a programme month's orders and whether a card is saved (never a card detail). */
+export interface ProgrammeMonthOrders {
+  readonly cardSaved: boolean;
+  readonly payable: boolean;
+  readonly processing: boolean;
+  readonly automatic: MonthAutomaticOrder | null;
+}
+
+/**
+ * 006:T015 (R-508; SRS DEC-110, DEC-113): the enrollment's programme orders (`rest_in_full`,
+ * `instalment`) as the sweep's month `month` reads them, with no lock (the sweep's step holds the
+ * enrollment, which every order's move takes first): whether one is `created` and unexpired at `at`
+ * (payable), whether one is paid and not yet processed by the confirm step (`confirmed_at` NULL), and
+ * the month's latest automatic order by id (a UUIDv7's creation order); and whether a card is saved,
+ * its key only (never a card detail, SC-707). Two statements over `payments_enrollment_id_idx` and
+ * `programme_cards`' primary key, bounded by the enrollment's few orders.
+ */
+export async function programmeMonthOrdersOf(
+  tx: Pick<Transaction, 'payment' | 'programmeCard'>,
+  enrollmentId: string,
+  month: number,
+  at: Date,
+): Promise<ProgrammeMonthOrders> {
+  const card = await tx.programmeCard.findUnique({
+    where: { enrollmentId },
+    select: { enrollmentId: true },
+  });
+  const orders = await tx.payment.findMany({
+    where: { enrollmentId, kind: { in: ['rest_in_full', 'instalment'] } },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      expiresAt: true,
+      confirmedAt: true,
+      automatic: true,
+      instalmentMonth: true,
+      attempt: true,
+      declineKind: true,
+      updatedAt: true,
+    },
+  });
+  const latest = orders.filter((one) => one.automatic && one.instalmentMonth === month).at(-1);
+  return {
+    cardSaved: card !== null,
+    payable: orders.some((one) => one.status === 'created' && one.expiresAt > at),
+    processing: orders.some((one) => one.status === 'paid' && one.confirmedAt === null),
+    automatic:
+      latest === undefined
+        ? null
+        : {
+            paymentId: latest.id,
+            status: latest.status,
+            expiresAt: latest.expiresAt,
+            declineKind: latest.declineKind,
+            attempt: latest.attempt ?? 0,
+            failedAt: latest.status === 'failed' ? latest.updatedAt : null,
+          },
+  };
+}
+
 /** A signed recipient event as it is kept: never the body, only its hash (R-SEC-2). */
 export interface RecipientEventRecord {
   readonly providerEventId: string;
@@ -215,6 +416,18 @@ export class PaymentsRepository {
     return { gross_piasters: piasters(Number(grossPiasters)), currency };
   }
 
+  /**
+   * 006:T013 (R-510, FR-713): the instant the student consented to save the card on this order
+   * (`card_consent_at`, ERD §15 rule 82), or null; read under `lockOrder`.
+   */
+  async cardConsentOf(paymentId: string): Promise<Date | null> {
+    const { cardConsentAt } = await this.#tx.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { cardConsentAt: true },
+    });
+    return cardConsentAt;
+  }
+
   /** The order's status, read under `lockOrder`. */
   async statusOf(paymentId: string): Promise<OrderStatus> {
     const { status } = await this.#tx.payment.findUniqueOrThrow({
@@ -250,6 +463,19 @@ export class PaymentsRepository {
    * 003:T102 (Q-2 (a)'s safety net): sets `refund_reported_at` the first time the gateway flags a
    * refund on the order, never again (`WHERE refund_reported_at IS NULL`). True when it set it.
    */
+  /**
+   * 006:T014 (SRS DEC-113, Q-10 (a) adjusted): the decline kind the inquiry's authenticated answer
+   * gave, written once on a `failed` automatic order (`WHERE decline_kind IS NULL`), under
+   * `lockOrder`. True when it wrote it.
+   */
+  async recordDeclineKind(paymentId: string, declineKind: DeclineKind): Promise<boolean> {
+    const { count } = await this.#tx.payment.updateMany({
+      where: { id: paymentId, automatic: true, status: 'failed', declineKind: null },
+      data: { declineKind },
+    });
+    return count === 1;
+  }
+
   async markRefundReported(paymentId: string, at: Date): Promise<boolean> {
     const { count } = await this.#tx.payment.updateMany({
       where: { id: paymentId, refundReportedAt: null },

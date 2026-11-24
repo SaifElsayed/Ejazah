@@ -37,7 +37,7 @@ import type {
   ShareReleaseState,
   TeacherDuesGetOutput,
 } from '@ijazah/contracts';
-import { type Piasters, piasters, shareLeft, sumOf, toPlainNumber } from '@ijazah/money';
+import { lowest, type Piasters, piasters, shareLeft, sumOf, toPlainNumber } from '@ijazah/money';
 import { localDateIn, startOfLocalDay } from '@ijazah/time';
 import { z } from 'zod';
 
@@ -64,8 +64,10 @@ import {
   shareOrdersAfter,
 } from './share-release.repository.js';
 import {
+  awaitedOrdersOf,
   END_RELEASES,
   plannedReleases,
+  programmeSharesOf,
   type RefundPart,
   refundPartsOf,
   refundShareOf,
@@ -94,6 +96,12 @@ const MASK = '••••';
 const MARK_SCOPE = 'payouts.mark';
 const UNMARK_SCOPE = 'payouts.unmark';
 
+/** 006:T018 (FU-E1): a paid order a release draws from, and the amount from it. */
+export interface ReleaseDraw {
+  readonly paymentId: string;
+  readonly amount_piasters: Piasters;
+}
+
 /** One release of an enrollment as both pages read it. */
 export interface ReleaseLine {
   readonly releaseId?: string;
@@ -107,6 +115,46 @@ export interface ReleaseLine {
   readonly fallsDueAt?: Date;
   readonly waitsForCase: boolean;
   readonly paidAt?: Date;
+  /** 006:T018 (FU-E1): the paid orders it draws from, in the order drawn, with the amount from each. */
+  readonly orders: readonly ReleaseDraw[];
+}
+
+/**
+ * 006:T018 (FU-E1 (a), Q-f5 (a), the owners' «موافق» of 2026-11-23 and 2026-11-24): the orders each of
+ * `amounts` draws from, in order. A programme's releases draw the shares of the orders its shares
+ * count (`awaitedOrdersOf`: a duplicate month is the `duplicate_payment` case's, Q-5 (a)) oldest
+ * first, each order less what the releases before took from it; a package's release draws its one
+ * order. Offer 10,000 EGP over 10 months, fee 500 EGP, 70 %: the half, 1,837.50, draws 350 + 700 + 700
+ * + 87.50; the end, 5,512.50, draws 612.50 + 700 × 7. All arithmetic is `packages/money`'s.
+ */
+function drawsOf(
+  facts: EnrollmentReleases['facts'],
+  amounts: readonly Piasters[],
+): readonly (readonly ReleaseDraw[])[] {
+  if (programmeSharesOf(facts) === undefined) {
+    return amounts.map((amount_piasters) => [
+      { paymentId: facts.order.paymentId, amount_piasters },
+    ]);
+  }
+  const pool = awaitedOrdersOf(facts.orders);
+  const taken = new Map<string, Piasters[]>();
+  return amounts.map((amount_piasters) => {
+    const orders: ReleaseDraw[] = [];
+    let need_piasters = amount_piasters;
+    for (const paid of pool) {
+      if (need_piasters === 0) break;
+      const before = taken.get(paid.paymentId) ?? [];
+      const draw_piasters = lowest([
+        shareLeft(paid.share_piasters, before, piasters(0)),
+        need_piasters,
+      ]);
+      if (draw_piasters === 0) continue;
+      taken.set(paid.paymentId, [...before, draw_piasters]);
+      need_piasters = shareLeft(need_piasters, [draw_piasters], piasters(0));
+      orders.push({ paymentId: paid.paymentId, amount_piasters: draw_piasters });
+    }
+    return orders;
+  });
 }
 
 /** Every release of `one`: the written ones, then the owed ones the rules plan. */
@@ -121,7 +169,13 @@ export function releaseLinesOf(
     teacherUserId: enrollment.teacherUserId,
     studentUserId: enrollment.studentUserId,
   };
-  const written = one.written.map((row): ReleaseLine => ({
+  const planned = plannedReleases(one.facts, { windowHours, now });
+  const draws = drawsOf(one.facts, [
+    ...one.written.map(({ amount_piasters }) => amount_piasters),
+    ...planned.map(({ amount_piasters }) => amount_piasters),
+  ]);
+  const drawnBy = (index: number): readonly ReleaseDraw[] => draws[index] ?? [];
+  const written = one.written.map((row, index): ReleaseLine => ({
     ...base,
     releaseId: row.id,
     part: row.milestone,
@@ -130,14 +184,16 @@ export function releaseLinesOf(
     fallsDueAt: row.dueAt,
     waitsForCase: false,
     ...(row.markedAt === null ? {} : { paidAt: row.markedAt }),
+    orders: drawnBy(index),
   }));
-  const owed = plannedReleases(one.facts, { windowHours, now }).map((planned): ReleaseLine => ({
+  const owed = planned.map((release, index): ReleaseLine => ({
     ...base,
-    part: planned.milestone,
-    amount_piasters: planned.amount_piasters,
-    state: planned.due ? 'due' : 'held',
-    ...(planned.dueAt === undefined ? {} : { fallsDueAt: planned.dueAt }),
-    waitsForCase: planned.waitsForCase,
+    part: release.milestone,
+    amount_piasters: release.amount_piasters,
+    state: release.due ? 'due' : 'held',
+    ...(release.dueAt === undefined ? {} : { fallsDueAt: release.dueAt }),
+    waitsForCase: release.waitsForCase,
+    orders: drawnBy(one.written.length + index),
   }));
   return [...written, ...owed];
 }
@@ -455,6 +511,8 @@ export function createPayouts({
             fallsDueAt: row.dueAt,
             waitsForCase: false,
             ...(row.markedAt === null ? {} : { paidAt: row.markedAt }),
+            // 006:T018 (FU-E1): counted in the figures only; no paid order reaches it any more.
+            orders: [],
           });
         }
         const next = rows.at(-1)?.id;
@@ -569,6 +627,10 @@ export function createPayouts({
         enrollmentId: line.enrollmentId,
         paymentId: line.paymentId,
         student: named(line.studentUserId),
+        orders: line.orders.map(({ paymentId, amount_piasters }) => ({
+          paymentId,
+          amount_piasters: toPlainNumber(amount_piasters),
+        })),
       }));
       const deductions: PayoutDeduction[] = refunded.flatMap((order) => {
         const one = byEnrollment.get(order.enrollmentId);

@@ -13,8 +13,9 @@
 // (R-API-4). The kernel imports no module, so the webhook's path is handed in by the caller.
 //
 // THE EVENTS. An order event (`paid`, `failed`, `expired`; since 003:T102 `refunded` with its amount,
-// and `refund_reported`) is the stand-in's own `orderEvent` for an
-// order it created through the port the API holds, so its amounts are the order's and the stand-in's
+// and `refund_reported`; since 006:T013 `card_saved`, for an order whose checkout asked `saveCard`,
+// a fresh placeholder token each time) is the stand-in's own event for an order it created through
+// the port the API holds, so its amounts are the order's and the stand-in's
 // state moves as the gateway's would (`cancelCheckout` answers `paid` once paid). A recipient event
 // is built here for any reference, since the reference may have been registered by another process
 // (`scripts/dev/emit-recipient-event.ts` reads it from the database). Every event carries a fresh
@@ -27,7 +28,12 @@
 // Nothing here logs: the secret, the signatures and the bodies stay in the caller's hands (R-SEC-2).
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { Piasters } from '@ijazah/money';
-import { FakePaymentAdapter, type PaidEventOptions, type SignedEvent } from './fake.adapter.js';
+import {
+  type CardSavedEventOptions,
+  FakePaymentAdapter,
+  type PaidEventOptions,
+  type SignedEvent,
+} from './fake.adapter.js';
 import { type PaymentConfig, standInWebhookSecret } from './index.js';
 import type { CancelOutcome, PaymentPort } from './payment.port.js';
 
@@ -59,6 +65,9 @@ export const UNREPORTED_AMOUNTS: ReportedAmounts = {
   net_piasters: null,
 };
 
+/** 006:T013: the saved card's last four digits and brand; by default the stand-in's test card. */
+export type SavedCard = Omit<CardSavedEventOptions, 'signature'>;
+
 /** A provider event id the caller decides, so the same command twice is a replay. */
 export interface EventIdOption {
   readonly eventId?: string;
@@ -72,6 +81,8 @@ export interface GatewayStandIn {
   refunded(gatewayOrderId: string, refunded_piasters: Piasters | 'whole_order'): StandInEvent;
   /** 003:T102 (Q-2 (a)): a refund flagged on the original payment, with no amount. */
   refundReported(gatewayOrderId: string): StandInEvent;
+  /** 006:T013 (R-510): the card saved on an order whose checkout asked `saveCard`. */
+  cardSaved(gatewayOrderId: string, card?: SavedCard): StandInEvent;
   recipientVerified(recipientRef: string, options?: EventIdOption): StandInEvent;
   recipientRejected(recipientRef: string, reason?: string, options?: EventIdOption): StandInEvent;
   /** POSTs the event to the webhook; the status it answered. */
@@ -147,6 +158,8 @@ export function createGatewayStandIn({
       withId(standIn().orderEvent(gatewayOrderId, 'refunded', { refunded_piasters })),
     refundReported: (gatewayOrderId) =>
       withId(standIn().orderEvent(gatewayOrderId, 'refund_reported')),
+    cardSaved: (gatewayOrderId, card = {}) =>
+      withId(standIn().cardSavedEvent(gatewayOrderId, card)),
     recipientVerified: (recipientRef, options = {}) =>
       recipientEvent({
         id: options.eventId ?? freshEventId(),

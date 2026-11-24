@@ -427,6 +427,147 @@ const payAttacks: ProcedureAttacks = {
   },
 };
 
+// 006:T016 (FR-713a, SRS DEC-95; contracts/app-surface.md `programme.autoRenewOff`): the student's, at
+// any time; on the pair's programme awaiting its offer it answers `{ ok: true }` (no card to delete),
+// so the attacks show the own student reaches the service and everyone else meets NOT_FOUND.
+function autoRenewOff(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.autoRenewOff({
+    enrollmentId,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as ActionInput);
+}
+
+const autoRenewOffAttacks = partyAttacks(
+  'programme.autoRenewOff',
+  'R-GENDER-2, R-GENDER-4, FR-713a, FR-410, SRS DEC-95',
+  autoRenewOff,
+  (pair) => pair.student,
+  (pair) => pair.teacher,
+  async (answer) => {
+    expect(await answer).toEqual({ ok: true });
+  },
+);
+
+// 006:T016 (FR-715, FR-716; contracts/app-surface.md `programme.renew`): the student's next month by
+// hand; on the pair's programme awaiting its offer it is refused `nothing_due` (no month is due before
+// the first payment), so the attacks show the own student reaches the check and everyone else meets
+// NOT_FOUND, with no gateway order made.
+type RenewInput = Parameters<SessionParty['caller']['programme']['renew']>[0];
+
+function renew(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.renew({
+    enrollmentId,
+    saveCard: false,
+    idempotencyKey: randomUUID(),
+    ...extra,
+  } as RenewInput);
+}
+
+const renewAttacks = partyAttacks(
+  'programme.renew',
+  'R-GENDER-2, R-GENDER-4, FR-715, FR-716, FR-410',
+  renew,
+  (pair) => pair.student,
+  (pair) => pair.teacher,
+  async (answer) => {
+    const refusal: unknown = await answer.then(
+      () => new Error('answered instead of refused'),
+      (error: unknown) => error,
+    );
+    expect(toErrorShape(refusal as Parameters<typeof toErrorShape>[0]).body).toMatchObject({
+      code: 'CONFLICT',
+      details: [{ path: 'cause', code: 'nothing_due' }],
+    });
+  },
+);
+
+// 006:T018 (FR-726; contracts/app-surface.md `programme.get`): either party's read. Both the pair's
+// student and its teacher are answered (the programme awaiting its offer, no card); everyone else,
+// the other gender's parties above all, meets NOT_FOUND exactly as an unknown enrollment, both ways.
+type GetInput = Parameters<SessionParty['caller']['programme']['get']>[0];
+
+function get(party: SessionParty, enrollmentId: string, extra: object = {}) {
+  return party.caller.programme.get({ enrollmentId, ...extra } as GetInput);
+}
+
+/** The pair's two parties each read the programme, awaiting its offer; the teacher sees no card. */
+async function expectRead(pair: ProgrammePair, extra: object = {}): Promise<void> {
+  for (const party of [pair.student, pair.teacher]) {
+    expect(await get(party, pair.enrollmentId, extra)).toMatchObject({
+      state: 'awaiting_offer',
+      offer: null,
+      card: null,
+      payeePending: false,
+    });
+  }
+}
+
+const getAttacks: ProcedureAttacks = {
+  path: 'programme.get',
+  holds: 'R-GENDER-2, R-GENDER-4, FR-726, FR-410, SC-707',
+  attacks: {
+    directCall: async (direction) => {
+      const { own, theirs, neighbour } = await worldFor(direction);
+      for (const party of [own.student, own.teacher]) {
+        await expectHiddenTo(get, party, theirs.enrollmentId);
+      }
+      for (const party of [neighbour.student, neighbour.teacher]) {
+        await expectHiddenTo(get, party, own.enrollmentId);
+      }
+      await expectRead(own);
+      await expectRead(theirs);
+    },
+    forgedId: async (direction) => {
+      const { own, theirs, neighbour } = await worldFor(direction);
+      for (const forged of [
+        theirs.enrollmentId,
+        neighbour.enrollmentId,
+        own.student.userId,
+        own.teacher.userId,
+        theirs.student.userId,
+        theirs.teacher.userId,
+      ]) {
+        await expectHiddenTo(get, own.student, forged);
+        await expectHiddenTo(get, own.teacher, forged);
+      }
+      await expectRead(own);
+    },
+    guessedId: async (direction) => {
+      const { own } = await worldFor(direction);
+      for (const guessed of [
+        randomUUID(),
+        randomUUID(),
+        neighbourOf(own.enrollmentId),
+        neighbourOf(own.enrollmentId).toUpperCase(),
+      ]) {
+        await expectHiddenTo(get, own.student, guessed);
+      }
+      await expectRead(own);
+    },
+    tamperedToken: async (direction) => {
+      const { surface, own, theirs } = await worldFor(direction);
+      for (const token of tamperedTokens(
+        direction,
+        own.student.accessToken,
+        theirs.student.sessionId,
+      )) {
+        const tampered = await surface.bearing(token);
+        await expectUnauthenticated(() =>
+          get({ ...own.student, caller: tampered }, own.enrollmentId),
+        );
+      }
+      await expectRead(own);
+    },
+    clientSuppliedGender: async (direction) => {
+      const { own, theirs } = await worldFor(direction);
+      await expectHiddenTo(get, own.student, theirs.enrollmentId, { gender: direction.other });
+      await expectHiddenTo(get, own.teacher, theirs.enrollmentId, { gender: direction.other });
+      await expectRead(own, { gender: direction.other });
+    },
+  },
+};
+
 export const programmeAttacks: readonly ProcedureAttacks[] = [
   offerAttacks,
   // 006:T008.
@@ -434,4 +575,9 @@ export const programmeAttacks: readonly ProcedureAttacks[] = [
   requestAttacks,
   // 006:T009.
   payAttacks,
+  // 006:T016.
+  autoRenewOffAttacks,
+  renewAttacks,
+  // 006:T018.
+  getAttacks,
 ];

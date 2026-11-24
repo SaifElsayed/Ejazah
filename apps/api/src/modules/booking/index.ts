@@ -472,6 +472,27 @@ export {
   type ProgrammeWindows,
   type WindowStepOutcome,
 } from './programmes.service.js';
+// 006:T015 of specs/006-programme (FR-714, FR-717, FR-721; R-507, R-508; SRS DEC-110, DEC-113; Q-1
+// (a), Q-3 (a)): the sweep's page and its month steps for `advance-programmes`, with payments'
+// answer of the month's orders and its automatic charge handed in (booking imports no payments).
+export {
+  type AutomaticOrderFacts,
+  type MonthOrders,
+  type MonthStepKind,
+} from './programmes.rules.js';
+export {
+  createProgrammeMonths,
+  type MonthOrdersOf,
+  type MonthStepDone,
+  type MonthSurvey,
+  type ProgrammeChargeRequest,
+  type ProgrammeCharges,
+  type ProgrammeMonthDependencies,
+  type ProgrammeMonths,
+  type RecordedProgrammeCharge,
+  SWEEP_SUSPENSIONS,
+} from './programmes.service.js';
+export { programmesToSweep, type SweptProgramme } from './programmes.repository.js';
 export {
   createProgrammeDecisions,
   type ProgrammeDecision,
@@ -492,4 +513,21 @@ export {
   type ProgrammePayOrders,
   type ProgrammePayTarget,
   recordProgrammePaid,
+} from './programmes.service.js';
+// 006:T016 of specs/006-programme (FR-715, FR-716; R-509; FR-BOOK-12; the owner's approval of lane
+// d's stop, 2026-11-24): `programme.renew`'s check, run by payments' checkout as `programme.pay`'s is,
+// with payments' reads of the orders handed in, and the early-renewal days' setting it reads.
+export {
+  checkedProgrammeRenew,
+  PROGRAMME_RENEW_EARLY_DAYS_SETTING,
+  type ProgrammeRenewTarget,
+} from './programmes.service.js';
+// 006:T018 of specs/006-programme (FR-726, FR-727; the owner's approval of lane f's stop,
+// 2026-11-24): the administrator's `programmes.queue` and `programmes.get`, and the payments reads
+// `main.ts` hands to them and to `programme.get` (booking imports nothing of payments, R-208).
+export {
+  createProgrammeAdminReads,
+  type ProgrammeAdminReadPayments,
+  type ProgrammeAdminReads,
+  type ProgrammeReadPayments,
 } from './programmes.service.js';

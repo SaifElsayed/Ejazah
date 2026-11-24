@@ -52,7 +52,7 @@ const HOLD_ON_B = id(61);
 const STUDENT_HOLD = id(62);
 const NOW = new Date('2026-11-03T08:00:00Z');
 const orders: OrderStandings = async () => new Map();
-/** 006:T008: payments' `deleteProgrammeCard` as the root hands it (a stub until T013). */
+/** 006:T008: payments' `deleteProgrammeCard` as the root hands it (T013: the card deleted). */
 const CARD = async (): Promise<void> => undefined;
 
 interface Released {

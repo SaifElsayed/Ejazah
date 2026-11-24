@@ -103,6 +103,8 @@ const checkout: CheckoutServices = {
   },
   // 006:T009 (rule d): programme.pay is mounted by booking's router, never reached here.
   programmePay: async () => Promise.reject(new Error('programme.pay is not reached here')),
+  // 006:T016 (rule d): programme.renew, which no case here reaches either.
+  programmeRenew: async () => Promise.reject(new Error('programme.renew is not reached here')),
   pay: async (...args) => {
     calls.push(['pay', ...args]);
     return { enrollmentId: ENROLLMENT, ...handover };

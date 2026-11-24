@@ -141,7 +141,12 @@ beforeAll(async () => {
     [STAND_IN_CHECKOUT_PATH]: (request, response) => page(request, response),
     [WEBHOOK_PATH]: (request, response) => webhook(request, response),
   }));
-  config = { PAYMENT_GATEWAY: 'fake', PAYMENT_MODE: 'test', ENCRYPTION_KEY: KEY, API_PUBLIC_ORIGIN: origin };
+  config = {
+    PAYMENT_GATEWAY: 'fake',
+    PAYMENT_MODE: 'test',
+    ENCRYPTION_KEY: KEY,
+    API_PUBLIC_ORIGIN: origin,
+  };
   payment = createPaymentPort(config);
   webhook = receiverOver(createPaymentPort(config));
   const routes = standInCheckoutRoutes({ payment, rateLimiter, log });
@@ -349,6 +354,8 @@ describe("the stand-in's hosted page exists only with the stand-in (T012, R-213)
     verifyAndParseEvent: unused,
     registerPayoutRecipient: unused,
     getRecipientStatus: unused,
+    chargeSavedCard: unused,
+    inquireOrder: unused,
   };
 
   it('mounts nothing for another gateway', () => {

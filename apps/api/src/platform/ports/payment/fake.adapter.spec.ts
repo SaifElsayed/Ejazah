@@ -29,13 +29,16 @@ function gateway(): FakePaymentAdapter {
 }
 
 describe('the payment port (T117, ADR 0007)', () => {
-  it('has exactly five operations: no balance, transfer or refund exists', () => {
+  // 006:T014 adds the saved card's charge and the inquiry; neither moves funds between parties.
+  it('has exactly seven operations: no balance, transfer or refund exists', () => {
     expectTypeOf<keyof PaymentPort>().toEqualTypeOf<
       | 'createCheckout'
       | 'cancelCheckout'
       | 'verifyAndParseEvent'
       | 'registerPayoutRecipient'
       | 'getRecipientStatus'
+      | 'chargeSavedCard'
+      | 'inquireOrder'
     >();
   });
 
@@ -284,6 +287,102 @@ describe('the payment stand-in: signed events (T117, FR-074, R-MONEY-8, R-MONEY-
     expect(() => payments.recipientEvent('fake_rcp_unknown', 'recipient_verified')).toThrow(
       'unknown recipient',
     );
+  });
+});
+
+// 006:T013 (R-510, FR-713): the stand-in saves the card of an order whose checkout asked it, as the
+// gateway's token callback would report it.
+describe('the payment stand-in: a saved card (006:T013, R-510)', () => {
+  async function savingCheckout(payments: FakePaymentAdapter): Promise<string> {
+    const { gatewayOrderId } = await payments.createCheckout(
+      'enr-1',
+      piasters(100_000),
+      'EGP',
+      PAY_BY,
+      undefined,
+      true,
+    );
+    return gatewayOrderId;
+  }
+
+  it('parses a correctly signed card_saved for an order whose checkout asked saveCard: the card, its token, last four and brand', async () => {
+    const payments = gateway();
+    const gatewayOrderId = await savingCheckout(payments);
+    const { rawBody, headers } = payments.cardSavedEvent(gatewayOrderId, {
+      last4: '1111',
+      brand: 'MasterCard',
+    });
+
+    const event = await payments.verifyAndParseEvent(rawBody, headers);
+    expect(event).toEqual({
+      type: 'card_saved',
+      providerEventId: expect.stringMatching(/^fake_evt_/) as unknown as string,
+      gatewayOrderId,
+      token: expect.stringMatching(/^fake_tok_/) as unknown as string,
+      last4: '1111',
+      brand: 'MasterCard',
+    });
+  });
+
+  it('reports a placeholder card by default, a new token for each card saved', async () => {
+    const payments = gateway();
+    const gatewayOrderId = await savingCheckout(payments);
+    const parse = async (): Promise<GatewayEvent> => {
+      const { rawBody, headers } = payments.cardSavedEvent(gatewayOrderId);
+      return payments.verifyAndParseEvent(rawBody, headers);
+    };
+
+    const [first, second] = await Promise.all([parse(), parse()]);
+    expect(first).toMatchObject({ type: 'card_saved', last4: '4242', brand: 'Visa' });
+    expect((first as { token: string }).token).not.toBe((second as { token: string }).token);
+  });
+
+  it('a replayed card_saved parses to the same provider event id, for the unique column', async () => {
+    const payments = gateway();
+    const { rawBody, headers } = payments.cardSavedEvent(await savingCheckout(payments));
+
+    const first = await payments.verifyAndParseEvent(rawBody, headers);
+    const replay = await payments.verifyAndParseEvent(rawBody, headers);
+    expect(replay.providerEventId).toBe(first.providerEventId);
+  });
+
+  it('throws on an incorrectly signed card_saved', async () => {
+    const payments = gateway();
+    const { rawBody, headers } = payments.cardSavedEvent(await savingCheckout(payments), {
+      signature: 'invalid',
+    });
+
+    await expect(payments.verifyAndParseEvent(rawBody, headers)).rejects.toThrow(
+      EventSignatureError,
+    );
+  });
+
+  it('moves no order: the order saved on stays payable', async () => {
+    const before = new Date('2026-10-07T10:00:00Z');
+    const payments = new FakePaymentAdapter({ webhookSecret: SECRET, now: () => before });
+    const gatewayOrderId = await savingCheckout(payments);
+    payments.cardSavedEvent(gatewayOrderId);
+
+    expect(payments.payableOrder(gatewayOrderId)).toMatchObject({ gatewayOrderId });
+  });
+
+  it('produces no card_saved for an order whose checkout did not ask saveCard, or one it never created', async () => {
+    const payments = gateway();
+    const { gatewayOrderId } = await payments.createCheckout('enr-1', piasters(1), 'EGP', PAY_BY);
+
+    expect(() => payments.cardSavedEvent(gatewayOrderId)).toThrow('did not ask to save');
+    expect(() => payments.cardSavedEvent('fake_ord_unknown')).toThrow('unknown order');
+  });
+
+  it('records saveCard among a checkout’s arguments only when it was asked', async () => {
+    const payments = gateway();
+    await savingCheckout(payments);
+    await payments.createCheckout('enr-2', piasters(1), 'EGP', PAY_BY);
+
+    expect(payments.calls).toEqual([
+      { operation: 'createCheckout', args: ['enr-1', 100_000, 'EGP', PAY_BY, undefined, true] },
+      { operation: 'createCheckout', args: ['enr-2', 1, 'EGP', PAY_BY] },
+    ]);
   });
 });
 

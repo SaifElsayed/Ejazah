@@ -59,7 +59,13 @@
       "paymentMode": ["live", "test"],
       "paymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "payoutState": ["not_configured", "pending_verification", "rejected", "verified"],
-      "programmeCancelRefusal": ["assessment_not_settled", "closed", "rest_paid"],
+      "programmeAutoRenewOffRefusal": ["closed", "party_suspended"],
+      "programmeCancelRefusal": [
+        "assessment_not_settled",
+        "closed",
+        "payment_processing",
+        "rest_paid"
+      ],
       "programmeOfferRefusal": [
         "assessment_not_delivered",
         "count_out_of_bounds",
@@ -84,7 +90,7 @@
         "party_suspended",
         "payee_unverified"
       ],
-      "programmeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "programmeRequestKind": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"],
       "programmeRequestRefusal": [
         "assessment_not_delivered",
         "not_paused",
@@ -252,7 +258,7 @@
       "PaymentGateway": ["fake", "paymob"],
       "PaymentStatus": ["created", "expired", "failed", "paid", "refunded"],
       "ProgrammePlan": ["in_full", "monthly"],
-      "ProgrammeRequestKind": ["no_offer", "pay_blocked", "refusal", "stop"],
+      "ProgrammeRequestKind": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"],
       "ProgrammeRequestStatus": ["approved", "declined", "extended", "open", "withdrawn"],
       "ProgrammeState": ["active", "awaiting_offer", "closed", "offered", "paused"],
       "RemedyKind": ["makeup", "refund"],
@@ -2312,6 +2318,10 @@
           "$.releases[].amount_piasters": { "required": true, "type": "integer" },
           "$.releases[].enrollmentId": { "required": true, "type": "string" },
           "$.releases[].fallsDueAt": { "type": "string" },
+          "$.releases[].orders": { "required": true, "type": "array" },
+          "$.releases[].orders[]": { "type": "object" },
+          "$.releases[].orders[].amount_piasters": { "required": true, "type": "integer" },
+          "$.releases[].orders[].paymentId": { "required": true, "type": "string" },
           "$.releases[].paidAt": { "type": "string" },
           "$.releases[].part": {
             "required": true,
@@ -2412,6 +2422,142 @@
             "type": "string",
             "values": ["approved", "declined", "extended", "open", "withdrawn"]
           }
+        }
+      },
+      "programmes.get": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.assessmentHeld": { "type": "boolean" },
+          "$.cardSaved": { "required": true, "type": "boolean" },
+          "$.closedAt": { "required": true, "type": "null|string" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.monthCount": { "required": true, "type": "integer|null" },
+          "$.monthsPaid": { "required": true, "type": "integer" },
+          "$.nextDueAt": { "required": true, "type": "null|string" },
+          "$.offer": { "required": true, "type": "null|object" },
+          "$.offer.durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.offer.expectedLength": { "required": true, "type": "string" },
+          "$.offer.level": { "required": true, "type": "string" },
+          "$.offer.offeredAt": { "required": true, "type": "string" },
+          "$.offer.readiness": { "required": true, "type": "string" },
+          "$.offer.sessionCount": { "required": true, "type": "integer" },
+          "$.offer.sessionPrice_piasters": { "required": true, "type": "integer" },
+          "$.offer.total_piasters": { "required": true, "type": "integer" },
+          "$.offerDueAt": { "required": true, "type": "null|string" },
+          "$.orders": { "required": true, "type": "array" },
+          "$.orders[]": { "type": "object" },
+          "$.orders[].automatic": { "required": true, "type": "boolean" },
+          "$.orders[].createdAt": { "required": true, "type": "string" },
+          "$.orders[].declineKind": { "type": "string", "values": ["hard", "soft"] },
+          "$.orders[].instalmentMonth": { "type": "integer" },
+          "$.orders[].kind": {
+            "required": true,
+            "type": "string",
+            "values": ["assessment", "instalment", "package", "rest_in_full"]
+          },
+          "$.orders[].paymentId": { "required": true, "type": "string" },
+          "$.orders[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["created", "expired", "failed", "paid", "refunded"]
+          },
+          "$.pausedAt": { "required": true, "type": "null|string" },
+          "$.payBy": { "required": true, "type": "null|string" },
+          "$.plan": { "required": true, "type": "null|string", "values": ["in_full", "monthly"] },
+          "$.requests": { "required": true, "type": "array" },
+          "$.requests[]": { "type": "object" },
+          "$.requests[].assessmentHeld": { "type": "boolean" },
+          "$.requests[].createdAt": { "required": true, "type": "string" },
+          "$.requests[].decidedAt": { "type": "string" },
+          "$.requests[].kind": {
+            "required": true,
+            "type": "string",
+            "values": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"]
+          },
+          "$.requests[].reason": { "type": "string" },
+          "$.requests[].requestId": { "required": true, "type": "string" },
+          "$.requests[].status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "declined", "extended", "open", "withdrawn"]
+          },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
+          "$.student": { "required": true, "type": "object" },
+          "$.student.displayName": { "required": true, "type": "string" },
+          "$.teacher": { "required": true, "type": "object" },
+          "$.teacher.displayName": { "required": true, "type": "string" }
+        }
+      },
+      "programmes.queue": {
+        "input": {
+          "$": { "type": "object" },
+          "$.cursor": { "type": "string" },
+          "$.filter": {
+            "required": true,
+            "type": "string",
+            "values": ["charge_unknown", "no_offer", "paused", "pay_blocked", "refusal", "stop"]
+          }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.items": { "required": true, "type": "array" },
+          "$.items[]": { "type": "object" },
+          "$.items[].enrollmentId": { "required": true, "type": "string" },
+          "$.items[].pausedSince": { "required": true, "type": "null|string" },
+          "$.items[].payeeVerifiedNow": { "required": true, "type": "boolean|null" },
+          "$.items[].request": { "required": true, "type": "null|object" },
+          "$.items[].request.assessmentHeld": { "type": "boolean" },
+          "$.items[].request.createdAt": { "required": true, "type": "string" },
+          "$.items[].request.decidedAt": { "type": "string" },
+          "$.items[].request.kind": {
+            "required": true,
+            "type": "string",
+            "values": ["charge_unknown", "no_offer", "pay_blocked", "refusal", "stop"]
+          },
+          "$.items[].request.reason": { "type": "string" },
+          "$.items[].request.requestId": { "required": true, "type": "string" },
+          "$.items[].request.status": {
+            "required": true,
+            "type": "string",
+            "values": ["approved", "declined", "extended", "open", "withdrawn"]
+          },
+          "$.items[].state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
+          "$.items[].student": { "required": true, "type": "object" },
+          "$.items[].student.displayName": { "required": true, "type": "string" },
+          "$.items[].teacher": { "required": true, "type": "object" },
+          "$.items[].teacher.displayName": { "required": true, "type": "string" },
+          "$.nextCursor": { "type": "string" }
+        }
+      },
+      "programmes.reopen": {
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
+          "$.reason": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.state": { "required": true, "type": "string", "values": ["paused"] }
         }
       },
       "reports.chat": {
@@ -4762,6 +4908,19 @@
           "$.termsVersion": { "required": true, "type": "string" }
         }
       },
+      "programme.autoRenewOff": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.ok": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
       "programme.cancel": {
         "caller": "student",
         "input": {
@@ -4773,6 +4932,51 @@
         "output": {
           "$": { "type": "object" },
           "$.ok": { "required": true, "type": "boolean", "values": ["true"] }
+        }
+      },
+      "programme.get": {
+        "caller": "participant",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" }
+        },
+        "kind": "query",
+        "output": {
+          "$": { "type": "object" },
+          "$.card": { "required": true, "type": "null|object" },
+          "$.card.brand": { "required": true, "type": "string" },
+          "$.card.last4": { "required": true, "type": "string" },
+          "$.chargePending": { "required": true, "type": "boolean" },
+          "$.monthCount": { "required": true, "type": "integer|null" },
+          "$.monthsPaid": { "required": true, "type": "integer" },
+          "$.nextDueAt": { "required": true, "type": "null|string" },
+          "$.offer": { "required": true, "type": "null|object" },
+          "$.offer.durationMinutes": {
+            "required": true,
+            "type": "number",
+            "values": ["30", "45", "60"]
+          },
+          "$.offer.expectedLength": { "required": true, "type": "string" },
+          "$.offer.level": { "required": true, "type": "string" },
+          "$.offer.offeredAt": { "required": true, "type": "string" },
+          "$.offer.readiness": { "required": true, "type": "string" },
+          "$.offer.sessionCount": { "required": true, "type": "integer" },
+          "$.offer.sessionPrice_piasters": { "required": true, "type": "integer" },
+          "$.offer.total_piasters": { "required": true, "type": "integer" },
+          "$.offerDueAt": { "required": true, "type": "null|string" },
+          "$.paused": { "required": true, "type": "null|object" },
+          "$.paused.since": { "required": true, "type": "string" },
+          "$.payBlocked": { "required": true, "type": "boolean" },
+          "$.payBy": { "required": true, "type": "null|string" },
+          "$.payeePending": { "required": true, "type": "boolean" },
+          "$.plan": { "required": true, "type": "null|string", "values": ["in_full", "monthly"] },
+          "$.renewOpen": { "required": true, "type": "boolean" },
+          "$.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
+          "$.teacherUnavailable": { "required": true, "type": "boolean" }
         }
       },
       "programme.offer": {
@@ -4802,6 +5006,20 @@
           "$.enrollmentId": { "required": true, "type": "string" },
           "$.idempotencyKey": { "required": true, "type": "string" },
           "$.plan": { "required": true, "type": "string", "values": ["in_full", "monthly"] },
+          "$.saveCard": { "required": true, "type": "boolean" }
+        },
+        "kind": "mutation",
+        "output": {
+          "$": { "type": "object" },
+          "$.checkoutUrl": { "required": true, "type": "string" }
+        }
+      },
+      "programme.renew": {
+        "caller": "student",
+        "input": {
+          "$": { "type": "object" },
+          "$.enrollmentId": { "required": true, "type": "string" },
+          "$.idempotencyKey": { "required": true, "type": "string" },
           "$.saveCard": { "required": true, "type": "boolean" }
         },
         "kind": "mutation",

@@ -32,6 +32,8 @@ export interface ShareOrderRow {
   readonly sharePercent: number;
   readonly halfPercent: number | null;
   readonly refunded_piasters: Piasters;
+  /** 006:T014 (Q-5 (a)): when the confirm step processed the order; null while it has not. */
+  readonly processedAt?: Date | null;
 }
 
 /** A release as written. */
@@ -68,6 +70,7 @@ interface SelectedOrder {
   readonly teacherShareRatePercent: number | null;
   readonly halfReleaseRatePercent: number | null;
   readonly refundedPiasters: bigint;
+  readonly confirmedAt: Date | null;
 }
 
 /** An order read with a share, or null for one created before the commission (rule 52's pair). */
@@ -83,6 +86,7 @@ function shareOrderOf(row: SelectedOrder): ShareOrderRow | null {
     sharePercent: row.teacherShareRatePercent,
     halfPercent: row.halfReleaseRatePercent,
     refunded_piasters: piasters(Number(row.refundedPiasters)),
+    processedAt: row.confirmedAt,
   };
 }
 
@@ -132,6 +136,7 @@ export async function shareOrdersAfter(
       enrollmentId: true,
       kind: true,
       instalmentMonth: true,
+      confirmedAt: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -166,6 +171,7 @@ export async function shareOrdersOf(
       enrollmentId: true,
       kind: true,
       instalmentMonth: true,
+      confirmedAt: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -202,6 +208,7 @@ export async function refundedShareOrdersAfter(
       enrollmentId: true,
       kind: true,
       instalmentMonth: true,
+      confirmedAt: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,
@@ -230,6 +237,7 @@ export async function refundedShareOrdersOf(
       enrollmentId: true,
       kind: true,
       instalmentMonth: true,
+      confirmedAt: true,
       grossPiasters: true,
       teacherSharePiasters: true,
       teacherShareRatePercent: true,

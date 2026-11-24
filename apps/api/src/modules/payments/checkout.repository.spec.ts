@@ -81,7 +81,7 @@ describe('orderById and lastOrderOf (Q-2 (a))', () => {
     expect(await lastOrderOf(orders([]), ENROLLMENT)).toBeNull();
   });
 
-  it('refuse an order with no gateway id', async () => {
+  it('refuse a manual order with no gateway id (an automatic one is never read here: Minor 4)', async () => {
     const unanswered = orders([order(1, { gatewayOrderId: null })]);
     await expect(orderById(unanswered, order(1).id)).rejects.toThrow(NO_GATEWAY_ID);
     await expect(lastOrderOf(unanswered, ENROLLMENT)).rejects.toThrow(NO_GATEWAY_ID);
@@ -243,6 +243,8 @@ describe('the orders programme.pay reads (006:T009)', () => {
           where: {
             enrollmentId: { in: [ENROLLMENT, OTHER] },
             kind: { in: ['rest_in_full', 'instalment'] },
+            // PR #160 r1 Minor 4 (a): an automatic order under way is no checkout to continue.
+            automatic: false,
             status: 'created',
             expiresAt: { gt: AT },
           },
@@ -254,6 +256,32 @@ describe('the orders programme.pay reads (006:T009)', () => {
     expect(
       await payableProgrammeOrderAmong(recording({ findFirst: null }).client, [ENROLLMENT], AT),
     ).toBeNull();
+  });
+
+  // PR #160 r1 Minor 4 (b): the student's status and continue read the latest manual order; an
+  // automatic one (since T014, often with no gateway id: refused, or its intention unanswered) is
+  // never read here. Example: Friday's retry `expired` with no id; Saturday's status still answers.
+  it('reads the enrollment’s latest manual order, never an automatic one', async () => {
+    const row = order(1);
+    const { client, calls } = recording({ findFirst: row });
+    expect((await lastOrderOf(client, ENROLLMENT))?.gatewayOrderId).toBe('fake_1');
+    expect(calls).toEqual([
+      [
+        'findFirst',
+        {
+          where: { enrollmentId: ENROLLMENT, automatic: false },
+          orderBy: { id: 'desc' },
+          select: {
+            id: true,
+            enrollmentId: true,
+            gatewayOrderId: true,
+            status: true,
+            expiresAt: true,
+            checkoutUrlEncrypted: true,
+          },
+        },
+      ],
+    ]);
   });
 
   it('writes a programme order with its kind, its month and the card consent, and a package order without them', async () => {

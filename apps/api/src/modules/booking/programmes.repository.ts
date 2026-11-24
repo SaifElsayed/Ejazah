@@ -258,22 +258,50 @@ export interface ProgrammePayment {
 
 /**
  * 006:T009 (the owner's Q-C1 (a), 2026-11-23): the programme's payment, on the confirm step's
- * transaction holding the programme's lock: from `offered`, `active` with its plan (a paused
- * programme stays paused: its payment is T016's to resume); then the months paid.
+ * transaction holding the programme's lock: from `offered`, `active` with its plan; 006:T016 (FR-722,
+ * B-P3's conflict check): from `paused`, `active` with `paused_at` cleared (rule 77: one update, so
+ * the two move together), every paid month landing here, an automatic one after a pause included;
+ * then the months paid. Whether the programme was resumed from `paused`.
  */
 export async function writeProgrammePaid(
   tx: Client,
   enrollmentId: string,
   payment: ProgrammePayment,
-): Promise<void> {
+): Promise<boolean> {
   await tx.programme.updateMany({
     where: { enrollmentId, state: 'offered' },
     data: { state: 'active', paymentPlan: payment.plan },
+  });
+  const { count: resumed } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'paused' },
+    data: { state: 'active', pausedAt: null },
   });
   await tx.programme.updateMany({
     where: { enrollmentId },
     data: { monthsPaid: payment.monthsPaid },
   });
+  return resumed === 1;
+}
+
+/**
+ * 006:T016 (FR-724, FR-BOOK-18): the enrollment's open `stop` request withdrawn by one conditional
+ * update, as a paid month withdraws it; its id, or null when none was open. The caller holds the
+ * programme's lock, which every writer of a stop request takes first (kernel.md, 006:T008's row).
+ */
+export async function withdrawOpenStop(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  enrollmentId: string,
+): Promise<string | null> {
+  const open = await tx.programmeRequest.findFirst({
+    where: { enrollmentId, kind: 'stop', status: 'open' },
+    select: { id: true },
+  });
+  if (open === null) return null;
+  const { count } = await tx.programmeRequest.updateMany({
+    where: { id: open.id, status: 'open' },
+    data: { status: 'withdrawn' },
+  });
+  return count === 1 ? open.id : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -370,4 +398,437 @@ export async function closeProgrammeRows(
     data: { state: 'closed', closedAt, pausedAt: null },
   });
   return ids;
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T015 (FR-714, FR-717, FR-721; R-507, R-508; Q-1 (a), Q-3 (a)): the sweep's reads and writes,
+// each on the caller's transaction. The steps' writes are made holding the programme's row lock;
+// the page and the survey read with none.
+
+/** The `advance-programmes` sweep's page row: a programme the sweep may act on, and its state. */
+export interface SweptProgramme {
+  readonly enrollmentId: string;
+  readonly state: ProgrammeState;
+}
+
+/**
+ * The sweep's page (R-508), by enrollment id after `after`, at most `take`: of the confirmed,
+ * undeleted enrollments' programmes, every one `awaiting_offer` (its deadline derived on every
+ * read), every one `offered` past `pay_by_at`, and every monthly one `active` or `paused` with a
+ * month still to pay whose due point is unset or reached at `now` (the database's). Over the
+ * primary key's order and `programmes_state_next_due_at_idx`; bounded by `take`.
+ */
+export async function programmesToSweep(
+  tx: Client,
+  now: Date,
+  after: string | undefined,
+  take: number,
+): Promise<SweptProgramme[]> {
+  return tx.programme.findMany({
+    where: {
+      ...(after === undefined ? {} : { enrollmentId: { gt: after } }),
+      enrollment: { status: 'confirmed', deletedAt: null },
+      OR: [
+        { state: 'awaiting_offer' },
+        { state: 'offered', payByAt: { lte: now } },
+        {
+          state: { in: ['active', 'paused'] },
+          paymentPlan: 'monthly',
+          monthsPaid: { lt: tx.programme.fields.monthCount },
+          OR: [{ nextDueAt: null }, { nextDueAt: { lte: now } }],
+        },
+      ],
+    },
+    orderBy: { enrollmentId: 'asc' },
+    take,
+    select: { enrollmentId: true, state: true },
+  });
+}
+
+/** A paid programme as the sweep's month steps read it (R-508 steps 2 to 4). */
+export interface ProgrammeMonthRow {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly status: EnrollmentStatus;
+  readonly state: ProgrammeState;
+  readonly plan: 'in_full' | 'monthly' | null;
+  readonly monthsPaid: number;
+  readonly monthCount: number | null;
+  /** The column: the last derived due point (Q-3 (a)). */
+  readonly nextDueAt: Date | null;
+  readonly firstFailureAt: Date | null;
+  readonly retriesDone: number;
+  readonly slotId: string;
+  /** `snapshot_slot_timezone`, the zone the weekly time is resolved in. */
+  readonly timezone: string;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+  /** The offer's frozen total (R-506). */
+  readonly offerTotal_piasters: Piasters;
+}
+
+/** The enrollment's programme for the month steps, or null for none or a soft-deleted enrollment. */
+export async function programmeMonthOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeMonthRow | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      paymentPlan: true,
+      monthsPaid: true,
+      monthCount: true,
+      nextDueAt: true,
+      firstFailureAt: true,
+      retriesDone: true,
+      enrollment: {
+        select: {
+          studentUserId: true,
+          teacherUserId: true,
+          status: true,
+          slotId: true,
+          snapshotSlotTimezone: true,
+          snapshotSessionCount: true,
+          snapshotPricePiasters: true,
+        },
+      },
+    },
+  });
+  if (row === null) return null;
+  const { enrollment } = row;
+  return {
+    enrollmentId,
+    studentUserId: enrollment.studentUserId,
+    teacherUserId: enrollment.teacherUserId,
+    status: enrollment.status,
+    state: row.state,
+    plan: row.paymentPlan,
+    monthsPaid: row.monthsPaid,
+    monthCount: row.monthCount,
+    nextDueAt: row.nextDueAt,
+    firstFailureAt: row.firstFailureAt,
+    retriesDone: row.retriesDone,
+    slotId: enrollment.slotId,
+    timezone: enrollment.snapshotSlotTimezone,
+    offerSessionCount: enrollment.snapshotSessionCount - 1,
+    offerTotal_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
+  };
+}
+
+/** Q-3 (a): the derived due point written (the column holds the last derived value). */
+export async function writeNextDue(
+  tx: Client,
+  enrollmentId: string,
+  nextDueAt: Date | null,
+): Promise<void> {
+  await tx.programme.updateMany({
+    where: { enrollmentId, state: { in: ['active', 'paused'] } },
+    data: { nextDueAt },
+  });
+}
+
+/** The month's first failure (R-508 step 3), written once; whether it was. */
+export async function writeFirstFailure(
+  tx: Client,
+  enrollmentId: string,
+  at: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: { in: ['active', 'paused'] }, firstFailureAt: null },
+    data: { firstFailureAt: at },
+  });
+  return count === 1;
+}
+
+/**
+ * The automatic order's attempt recorded on the programme, by one conditional update: attempt 0
+ * (the month's first charge) clears the earlier month's failure and retries; a retry n moves
+ * `retries_done` from n − 1 to n. Whether it moved.
+ */
+export async function writeAttempt(
+  tx: Client,
+  enrollmentId: string,
+  attempt: number,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: {
+      enrollmentId,
+      state: { in: ['active', 'paused'] },
+      ...(attempt === 0 ? {} : { retriesDone: attempt - 1 }),
+    },
+    data: attempt === 0 ? { firstFailureAt: null, retriesDone: 0 } : { retriesDone: attempt },
+  });
+  return count === 1;
+}
+
+/** The pause (R-507, FR-BOOK-17): an `active` programme `paused` since `pausedAt`; whether it moved. */
+export async function writePaused(
+  tx: Client,
+  enrollmentId: string,
+  pausedAt: Date,
+): Promise<boolean> {
+  const { count } = await tx.programme.updateMany({
+    where: { enrollmentId, state: 'active' },
+    data: { state: 'paused', pausedAt },
+  });
+  return count === 1;
+}
+
+/**
+ * Q-1 (a): the enrollment's open item of `kind` withdrawn by one conditional update (an answer came
+ * to the charge it was opened for); whether one was. `programme_requests` is booking's table.
+ */
+export async function withdrawOpenItem(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  enrollmentId: string,
+  kind: 'charge_unknown',
+): Promise<boolean> {
+  const { count } = await tx.programmeRequest.updateMany({
+    where: { enrollmentId, kind, status: 'open' },
+    data: { status: 'withdrawn' },
+  });
+  return count === 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T018 (FR-726, FR-727; app-surface.md `programme.get`, admin-surface.md `programmes.queue` and
+// `programmes.get`): the reads, each on the caller's transaction, with no lock: a read decides
+// nothing. Bounded: one programme by its primary key; its items by `programme_requests`'
+// `enrollment_id` index (an enrollment's few); a queue page of open items by its
+// `(status, created_at)` index after the cursor's id, at most `take`; a page of paused programmes by
+// the leading `state` of `programmes_state_next_due_at_idx` (paused programmes are few), at most
+// `take`.
+
+/** The frozen offer as the reads show it (R-506): the teacher's words, N, the length and the total. */
+export interface ProgrammeOfferView {
+  readonly level: string;
+  readonly readiness: string;
+  readonly expectedLength: string;
+  readonly offeredAt: Date;
+  readonly durationMinutes: number;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly sessionCount: number;
+  readonly total_piasters: Piasters;
+}
+
+/** A programme as its reads show it; null for none or a soft-deleted enrollment. */
+export interface ProgrammeView {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly status: EnrollmentStatus;
+  readonly state: ProgrammeState;
+  readonly offerDueAt: Date | null;
+  readonly payByAt: Date | null;
+  readonly offer: ProgrammeOfferView | null;
+  readonly plan: 'in_full' | 'monthly' | null;
+  readonly monthsPaid: number;
+  readonly monthCount: number | null;
+  readonly pausedAt: Date | null;
+  readonly closedAt: Date | null;
+}
+
+export async function programmeViewOf(
+  tx: Client,
+  enrollmentId: string,
+): Promise<ProgrammeView | null> {
+  const row = await tx.programme.findFirst({
+    where: { enrollmentId, enrollment: { deletedAt: null } },
+    select: {
+      state: true,
+      offerDueAt: true,
+      payByAt: true,
+      level: true,
+      readiness: true,
+      expectedLength: true,
+      offeredAt: true,
+      paymentPlan: true,
+      monthsPaid: true,
+      monthCount: true,
+      pausedAt: true,
+      closedAt: true,
+      enrollment: {
+        select: {
+          studentUserId: true,
+          teacherUserId: true,
+          status: true,
+          snapshotSessionCount: true,
+          snapshotDurationMinutes: true,
+          snapshotPricePiasters: true,
+        },
+      },
+    },
+  });
+  if (row === null) return null;
+  const { enrollment, offeredAt, level, readiness, expectedLength } = row;
+  return {
+    enrollmentId,
+    studentUserId: enrollment.studentUserId,
+    teacherUserId: enrollment.teacherUserId,
+    status: enrollment.status,
+    state: row.state,
+    offerDueAt: row.offerDueAt,
+    payByAt: row.payByAt,
+    // Set together at the offer (R-506), and the snapshot with them: N + 1, the length, the total.
+    offer:
+      offeredAt === null || level === null || readiness === null || expectedLength === null
+        ? null
+        : {
+            level,
+            readiness,
+            expectedLength,
+            offeredAt,
+            durationMinutes: enrollment.snapshotDurationMinutes,
+            sessionCount: enrollment.snapshotSessionCount - 1,
+            total_piasters: piasters(Number(enrollment.snapshotPricePiasters)),
+          },
+    plan: row.paymentPlan,
+    monthsPaid: row.monthsPaid,
+    monthCount: row.monthCount,
+    pausedAt: row.pausedAt,
+    closedAt: row.closedAt,
+  };
+}
+
+/** An administrator's item as the reads show it (ERD `programme_requests`). */
+export interface ProgrammeRequestView {
+  readonly id: string;
+  readonly enrollmentId: string;
+  readonly kind: 'stop' | 'refusal' | 'no_offer' | 'pay_blocked' | 'charge_unknown';
+  readonly reason: string | null;
+  readonly status: 'open' | 'approved' | 'declined' | 'withdrawn' | 'extended';
+  readonly createdAt: Date;
+  readonly decidedAt: Date | null;
+}
+
+/** The programme's items, oldest first by their time-ordered id. */
+export async function programmeRequestsOf(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  enrollmentId: string,
+): Promise<ProgrammeRequestView[]> {
+  return tx.programmeRequest.findMany({
+    where: { enrollmentId },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      enrollmentId: true,
+      kind: true,
+      reason: true,
+      status: true,
+      createdAt: true,
+      decidedAt: true,
+    },
+  });
+}
+
+/** A page of the open items of `kind`, oldest first, after `after`, of undeleted enrollments. */
+export async function openItemsPage(
+  tx: Pick<Transaction, 'programmeRequest'>,
+  kind: ProgrammeRequestView['kind'],
+  after: string | undefined,
+  take: number,
+): Promise<ProgrammeRequestView[]> {
+  return tx.programmeRequest.findMany({
+    where: {
+      status: 'open',
+      kind,
+      enrollment: { deletedAt: null },
+      ...(after === undefined ? {} : { id: { gt: after } }),
+    },
+    orderBy: { id: 'asc' },
+    take,
+    select: {
+      id: true,
+      enrollmentId: true,
+      kind: true,
+      reason: true,
+      status: true,
+      createdAt: true,
+      decidedAt: true,
+    },
+  });
+}
+
+/** A paused programme on the queue: its enrollment and since when (rule 77: set while paused). */
+export interface PausedProgramme {
+  readonly enrollmentId: string;
+  readonly pausedAt: Date;
+}
+
+/**
+ * A page of the paused programmes of undeleted enrollments, the longest paused first (FR-727), the
+ * enrollment id breaking a tie, after the cursor's programme; a cursor whose programme is no longer
+ * paused starts the list again (it left the queue between two pages).
+ */
+export async function pausedPage(
+  tx: Client,
+  after: string | undefined,
+  take: number,
+): Promise<PausedProgramme[]> {
+  const cursor =
+    after === undefined
+      ? null
+      : await tx.programme.findFirst({
+          where: { enrollmentId: after, state: 'paused' },
+          select: { pausedAt: true },
+        });
+  const from = cursor?.pausedAt ?? null;
+  const rows = await tx.programme.findMany({
+    where: {
+      state: 'paused',
+      pausedAt: { not: null },
+      enrollment: { deletedAt: null },
+      ...(from === null || after === undefined
+        ? {}
+        : {
+            OR: [{ pausedAt: { gt: from } }, { pausedAt: from, enrollmentId: { gt: after } }],
+          }),
+    },
+    orderBy: [{ pausedAt: 'asc' }, { enrollmentId: 'asc' }],
+    take,
+    select: { enrollmentId: true, pausedAt: true },
+  });
+  return rows.flatMap(({ enrollmentId, pausedAt }) =>
+    pausedAt === null ? [] : [{ enrollmentId, pausedAt }],
+  );
+}
+
+/** A queued programme's parties, state and pause, as a queue row shows it. */
+export interface QueuedProgramme {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  readonly state: ProgrammeState;
+  readonly pausedAt: Date | null;
+}
+
+/** Of `enrollmentIds`, their undeleted programmes, by enrollment id; none for an empty list. */
+export async function queuedProgrammesAmong(
+  tx: Client,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, QueuedProgramme>> {
+  if (enrollmentIds.length === 0) return new Map();
+  const rows = await tx.programme.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] }, enrollment: { deletedAt: null } },
+    select: {
+      enrollmentId: true,
+      state: true,
+      pausedAt: true,
+      enrollment: { select: { studentUserId: true, teacherUserId: true } },
+    },
+  });
+  return new Map(
+    rows.map(({ enrollmentId, state, pausedAt, enrollment }) => [
+      enrollmentId,
+      {
+        enrollmentId,
+        studentUserId: enrollment.studentUserId,
+        teacherUserId: enrollment.teacherUserId,
+        state,
+        pausedAt,
+      },
+    ]),
+  );
 }

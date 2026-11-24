@@ -37,10 +37,23 @@ export const programmeState = z.enum(['awaiting_offer', 'offered', 'active', 'pa
 /** ERD `programme_plan`: how the student pays the rest; absent until the first payment. */
 export const programmePlan = z.enum(['in_full', 'monthly']);
 
-/** ERD `programme_request_kind`: `stop` and `refusal` are the teacher's; the sweep raises the others. */
-export const programmeRequestKind = z.enum(['stop', 'refusal', 'no_offer', 'pay_blocked']);
+/**
+ * ERD `programme_request_kind`: `stop` and `refusal` are the teacher's; the sweep raises the others.
+ * 006:T014 (SRS DEC-113, ERD changelog row 80): `charge_unknown`, an automatic charge the gateway has
+ * not answered after `programme_charge_inquiry_tries` asks.
+ */
+export const programmeRequestKind = z.enum([
+  'stop',
+  'refusal',
+  'no_offer',
+  'pay_blocked',
+  'charge_unknown',
+]);
 
-/** ERD `programme_request_status`: `extended` on a `no_offer` or `pay_blocked` item only. */
+/**
+ * ERD `programme_request_status`: `extended` on a `no_offer`, `pay_blocked` or `charge_unknown` item
+ * only (rule 80).
+ */
 export const programmeRequestStatus = z.enum([
   'open',
   'approved',
@@ -97,9 +110,18 @@ export const programmeGetOutput = z.object({
   /** The paid month's last session's end (`lastToEnd`, R-507). */
   nextDueAt: z.iso.datetime().nullable(),
   paused: z.object({ since: z.iso.datetime() }).nullable(),
-  /** «renew now» is open: no saved card and within `programme_renew_early_days` of the due time. */
+  /**
+   * 006:T018 (Q-f3 (a), the owner, 2026-11-24): `programme.renew` would be accepted now. With a card
+   * saved, true only after the month's automatic charge failed or expired («pay now», «change
+   * card»); with none, «renew now» from `programme_renew_early_days` before the due point. False
+   * while `payeePending`, `chargePending` or a suspension holds. A payable manual checkout of the
+   * month is not read here: `programme.renew` then answers `PREVIOUS_CHECKOUT` (PR #160 r1 nit).
+   */
   renewOpen: z.boolean(),
-  /** An automatic order of the month is `created` and unexpired (FR-716). */
+  /**
+   * 006:T018 (Q-f2 (a), the owner, 2026-11-24): the month's automatic order is `created`, until the
+   * gateway answers it, expired or not (FR-716, SRS DEC-113).
+   */
   chargePending: z.boolean(),
   payeePending: z.boolean(),
   payBlocked: z.boolean(),
@@ -212,9 +234,24 @@ export const programmeRequestRefusal = z.enum([
  * is paid (`active`, `paused`), `closed` once the programme is closed or its enrollment no longer
  * `confirmed`. PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ» (FR-BOOK-15, «after the
  * assessment»): `assessment_not_settled` until session 1's outcome chain is consumed (`done` or
- * `student_no_show`). Additive.
+ * `student_no_show`). Additive. 006:T015 (PR #158 r2 Follow-up 1; B-P3's conflict check, Q-8 (a)):
+ * `payment_processing` while a programme order of the enrollment is payable or paid and not yet
+ * processed by the confirm step. Additive.
  */
-export const programmeCancelRefusal = z.enum(['rest_paid', 'closed', 'assessment_not_settled']);
+export const programmeCancelRefusal = z.enum([
+  'rest_paid',
+  'closed',
+  'assessment_not_settled',
+  'payment_processing',
+]);
+
+/**
+ * 006:T016 (FR-713a, SRS DEC-95; B-P3's conflict check, B-P2 Q-B1's precedent: one refusal enum per
+ * procedure): `programme.autoRenewOff`'s refusals: `party_suspended` while a `teacher_suspended` or
+ * `student_suspended` case is open, `closed` once the programme is closed or its enrollment no longer
+ * `confirmed`. Additive.
+ */
+export const programmeAutoRenewOffRefusal = z.enum(['party_suspended', 'closed']);
 
 /** `programme.autoRenewOff` and `programme.cancel`: the student's, on the enrollment. */
 export const programmeActionInput = z.object({
@@ -246,5 +283,6 @@ export type ProgrammeRequestInput = z.infer<typeof programmeRequestInput>;
 export type ProgrammeRequestOutput = z.infer<typeof programmeRequestOutput>;
 export type ProgrammeRequestRefusal = z.infer<typeof programmeRequestRefusal>;
 export type ProgrammeCancelRefusal = z.infer<typeof programmeCancelRefusal>;
+export type ProgrammeAutoRenewOffRefusal = z.infer<typeof programmeAutoRenewOffRefusal>;
 export type ProgrammeActionInput = z.infer<typeof programmeActionInput>;
 export type ProgrammeActionOutput = z.infer<typeof programmeActionOutput>;

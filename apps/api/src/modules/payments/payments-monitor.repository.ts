@@ -10,30 +10,22 @@
 // Retry, a second payment).
 //
 // 006:T001 (Q-2 (a)): `gateway_order_id` is NULL-able (ERD §15 rule 72), NULL only on a programme's
-// automatic order, which T014 writes. The monitor's contract keeps the reference a string until T014
-// and T018 widen it, so the three order reads refuse a NULL as a broken invariant
-// (`withGatewayOrderId`) rather than hand it to the contract.
+// automatic order the gateway has not answered or that was refused before it. 006:T018 (the
+// follow-up carried from T014, option (d), the owner's «موافق» of 2026-11-24): the rows keep the
+// NULL, so a page holding such an order is listed whole; only the contract's edge maps it to `''`
+// (`payments-monitor.service.ts`). Each read also selects the programme's terms of the order (its
+// kind, its month, whether it is automatic and why it failed), columns of the same row.
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { OrderEventType, OrderStatus } from './payments.repository.js';
 
 type Client = Pick<Transaction, 'payment' | 'paymentEvent'>;
 
-/** The order with its gateway reference; one without is a broken invariant for the monitor. */
-function withGatewayOrderId<T extends { readonly gatewayOrderId: string | null }>(
-  row: T,
-): T & { readonly gatewayOrderId: string } {
-  const { gatewayOrderId } = row;
-  if (gatewayOrderId === null) {
-    throw new Error('payments monitor: an order with no gateway id on a manual path');
-  }
-  return { ...row, gatewayOrderId };
-}
-
 /** One gateway order as the monitor reads it: the amounts as the gateway reported them. */
 export interface MonitorOrderRow {
   readonly id: string;
   readonly enrollmentId: string;
-  readonly gatewayOrderId: string;
+  /** NULL only on an automatic order the gateway has not answered or that was refused before it. */
+  readonly gatewayOrderId: string | null;
   readonly gatewayTransactionId: string | null;
   readonly status: OrderStatus;
   readonly grossPiasters: bigint;
@@ -47,6 +39,11 @@ export interface MonitorOrderRow {
   readonly refundReportedAt: Date | null;
   readonly currency: string;
   readonly createdAt: Date;
+  /** 006:T018: what the order pays for, an `instalment`'s month, automatic, and why it failed. */
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  readonly instalmentMonth: number | null;
+  readonly automatic: boolean;
+  readonly declineKind: 'soft' | 'hard' | null;
 }
 
 /** One signed event of an order, as received. */
@@ -73,7 +70,7 @@ export async function orderPage(
   tx: Pick<Transaction, 'payment'>,
   { status, after, limit, enrollmentId }: OrderPageQuery,
 ): Promise<MonitorOrderRow[]> {
-  const rows = await tx.payment.findMany({
+  return tx.payment.findMany({
     where: {
       ...(status === undefined ? {} : { status }),
       ...(enrollmentId === undefined ? {} : { enrollmentId }),
@@ -96,9 +93,12 @@ export async function orderPage(
       refundReportedAt: true,
       currency: true,
       createdAt: true,
+      kind: true,
+      instalmentMonth: true,
+      automatic: true,
+      declineKind: true,
     },
   });
-  return rows.map(withGatewayOrderId);
 }
 
 /** The order of that id, or null. */
@@ -106,7 +106,7 @@ export async function monitoredOrderOf(
   tx: Pick<Transaction, 'payment'>,
   paymentId: string,
 ): Promise<MonitorOrderRow | null> {
-  const row = await tx.payment.findUnique({
+  return tx.payment.findUnique({
     where: { id: paymentId },
     select: {
       id: true,
@@ -123,9 +123,12 @@ export async function monitoredOrderOf(
       refundReportedAt: true,
       currency: true,
       createdAt: true,
+      kind: true,
+      instalmentMonth: true,
+      automatic: true,
+      declineKind: true,
     },
   });
-  return row === null ? null : withGatewayOrderId(row);
 }
 
 /** The order's signed events, oldest first, the id breaking a tie. */
@@ -148,7 +151,7 @@ export async function paidOrdersOf(
   tx: Pick<Transaction, 'payment'>,
   enrollmentId: string,
 ): Promise<MonitorOrderRow[]> {
-  const rows = await tx.payment.findMany({
+  return tx.payment.findMany({
     where: { enrollmentId, status: { in: ['paid', 'refunded'] } },
     orderBy: { id: 'asc' },
     select: {
@@ -166,7 +169,45 @@ export async function paidOrdersOf(
       refundReportedAt: true,
       currency: true,
       createdAt: true,
+      kind: true,
+      instalmentMonth: true,
+      automatic: true,
+      declineKind: true,
     },
   });
-  return rows.map(withGatewayOrderId);
+}
+
+/**
+ * 006:T018 (admin-surface.md `programmes.get`, «its orders by kind»): every order of the enrollment,
+ * oldest first, by `payments_enrollment_id_idx`: a programme's are its assessment, the rest or its
+ * months, and each month's automatic attempts (at most five a month, R-508), so a few hundred at most.
+ */
+export async function enrollmentOrdersOf(
+  tx: Pick<Transaction, 'payment'>,
+  enrollmentId: string,
+): Promise<MonitorOrderRow[]> {
+  return tx.payment.findMany({
+    where: { enrollmentId },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      enrollmentId: true,
+      gatewayOrderId: true,
+      gatewayTransactionId: true,
+      status: true,
+      grossPiasters: true,
+      gatewayFeePiasters: true,
+      netPiasters: true,
+      teacherShareRatePercent: true,
+      teacherSharePiasters: true,
+      refundedPiasters: true,
+      refundReportedAt: true,
+      currency: true,
+      createdAt: true,
+      kind: true,
+      instalmentMonth: true,
+      automatic: true,
+      declineKind: true,
+    },
+  });
 }

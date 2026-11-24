@@ -1,7 +1,7 @@
 // 006:T008 of specs/006-programme (R-510; FR-706b; data-model.md «State transitions»; Q-2 (a)) — the
 // close hook: the programmes among the enrollments not yet closed set `closed` at the database's
 // instant, their open items `withdrawn` (a `pay_blocked` item among them, FR-706b), payments'
-// `deleteProgrammeCard` called for each (a stub until T013, its call asserted here), one line of ids
+// `deleteProgrammeCard` called for each (T013: the card deleted; asserted here), one line of ids
 // and the reason each; an enrollment that is no programme, or one already closed, touches nothing.
 // The rows over the real tables are `tests/db-integrity/programme-windows.spec.ts`'.
 import { describe, expect, it } from 'vitest';

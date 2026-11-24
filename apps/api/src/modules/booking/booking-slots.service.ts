@@ -80,6 +80,7 @@ import {
   createProgrammeServices,
   fitsSlot,
   type ProgrammeReader,
+  type ProgrammeReadPayments,
   type ProgrammeServiceDependencies,
   type ProgrammeServices,
   withProgrammeTimes,
@@ -274,6 +275,9 @@ export function createBookingServices({
   idempotency,
   log,
   programmeAmounts,
+  deleteProgrammeCard,
+  programmeOrders,
+  programmeReads,
   now = () => new Date(),
   store = bookingSlotsStore,
 }: {
@@ -292,6 +296,21 @@ export function createBookingServices({
   readonly idempotency: ProgrammeServiceDependencies['idempotency'];
   readonly log: ProgrammeServiceDependencies['log'];
   readonly programmeAmounts: ProgrammeServiceDependencies['amounts'];
+  /**
+   * 006:T013 (DEC-112 Q-B2 (a)): payments' `deleteProgrammeCard` for the close hook of
+   * `programme.cancel`, which `main.ts` hands in; none deleted where a caller binds none.
+   */
+  readonly deleteProgrammeCard?: ProgrammeServiceDependencies['deleteProgrammeCard'];
+  /**
+   * 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): payments' `checkoutOrdersAmong`, which
+   * `programme.cancel` reads to refuse `payment_processing`; `main.ts` hands it in.
+   */
+  readonly programmeOrders?: ProgrammeServiceDependencies['orders'];
+  /**
+   * 006:T018 (FR-726): `programme.get`'s payments reads (the payee, the month's orders, the student's
+   * card), which `main.ts` hands in; run on these services' transactions.
+   */
+  readonly programmeReads?: ProgrammeReadPayments;
   readonly now?: () => Date;
   readonly store?: BookingSlotsStore;
 }): BookingServices {
@@ -311,6 +330,16 @@ export function createBookingServices({
         bookingSlotsOf(tx, store, student, input, clock, () => programmeAvailabilityOf(settings)),
       );
     },
-    programme: createProgrammeServices({ idempotency, settings, amounts: programmeAmounts, log }),
+    programme: createProgrammeServices({
+      idempotency,
+      settings,
+      amounts: programmeAmounts,
+      log,
+      ...(deleteProgrammeCard === undefined ? {} : { deleteProgrammeCard }),
+      ...(programmeOrders === undefined ? {} : { orders: programmeOrders }),
+      ...(programmeReads === undefined
+        ? {}
+        : { reads: { transactions, payments: programmeReads } }),
+    }),
   };
 }

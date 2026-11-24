@@ -3,7 +3,7 @@
 // (7,000 EGP, 700,000 piasters, 700 EGP a session), the ijazah half at 25% (1,750 EGP), the dispute
 // window 72 hours.
 import { type Piasters, piasters, toPlainNumber } from '@ijazah/money';
-import { addDays, addHours } from '@ijazah/time';
+import { addDays, addHours, addMinutes } from '@ijazah/time';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -909,6 +909,70 @@ describe('006:T011 `ijazah_half` once the student continued (FR-728, DEC-94: 25 
       { milestone: 'ijazah_half', amount: 175_000, dueAt: windowAfter(21), due: false },
       { milestone: 'ijazah_end', due: false },
     ]);
+  });
+});
+
+// 006:T014 (#158 r1 FU4; B-P3's Q-5 (a)): the shares read only the orders the confirm step awaited,
+// walked as it walks them (`confirmed_at`, then id; the unprocessed after, in id order); a duplicate
+// and its refunds are the `duplicate_payment` case's. Month 1 paid twice, 1,000 EGP each: 350 + 700.
+describe('006:T014 a duplicate paid programme order is left out of the shares (Q-5 (a))', () => {
+  const at = (minute: number) => new Date(addMinutes(new Date('2026-10-06T10:00:00Z'), minute));
+  const [m1, m2] = months(2) as [ReleaseOrder, ReleaseOrder];
+  const duplicateOf1: ReleaseOrder = {
+    ...programmeOrder(20, 'instalment', 100_000, 70_000),
+    instalmentMonth: 1,
+  };
+  const stopped = (orders: readonly ReleaseOrder[]) =>
+    programmeFacts({
+      orders: [ASSESSMENT, ...orders],
+      status: 'cancelled',
+      cancellationReason: 'programme_stopped',
+      delivered: 4,
+      programme: { state: 'closed', closedAt: new Date('2026-10-20T08:00:00Z') },
+    });
+
+  it('month 1 paid twice: the stop releases 350 + 700 EGP, not 350 + 700 + 700', () => {
+    expect(
+      plan(
+        stopped([
+          { ...m1, processedAt: at(1) },
+          { ...duplicateOf1, processedAt: at(2) },
+        ]),
+      ),
+    ).toMatchObject([{ milestone: 'programme_stopped', amount: 105_000 }]);
+  });
+
+  it('walks by the instant the confirm step processed them: the later one is the duplicate', () => {
+    // The earlier-processed order carries a share of 600 EGP here, so which one counts shows.
+    const processedFirst = {
+      ...duplicateOf1,
+      share_piasters: piasters(60_000),
+      processedAt: at(2),
+    };
+    expect(plan(stopped([{ ...m1, processedAt: at(5) }, processedFirst]))).toMatchObject([
+      { milestone: 'programme_stopped', amount: 95_000 },
+    ]);
+  });
+
+  it('takes off no refund of the duplicate: its 500 EGP refund is the case’s', () => {
+    expect(
+      plan(
+        stopped([
+          { ...m1, processedAt: at(1) },
+          { ...duplicateOf1, processedAt: at(2), refunded_piasters: piasters(50_000) },
+        ]),
+      ),
+    ).toMatchObject([{ milestone: 'programme_stopped', amount: 105_000 }]);
+  });
+
+  it('counts the awaited month still unprocessed, and leaves out a rest in full after a month', () => {
+    const rest: ReleaseOrder = {
+      ...REST_IN_FULL,
+      paymentId: programmeOrder(30, 'rest_in_full', 0, 0).paymentId,
+    };
+    expect(
+      plan(stopped([{ ...m1, processedAt: at(1) }, m2, { ...rest, processedAt: at(3) }])),
+    ).toMatchObject([{ milestone: 'programme_stopped', amount: 175_000 }]);
   });
 });
 

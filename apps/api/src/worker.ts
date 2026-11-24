@@ -73,6 +73,8 @@ const [
   { sendReminder },
   // R1a (002:T176): the identity documents' retention sweep.
   { eraseIdentityDocuments },
+  // 006:T015 (R-508): the programmes' sweep and its composition.
+  programmeJobs,
 ] = await Promise.all([
   import('./platform/errors/reporting.js'),
   import('./platform/logging/logger.js'),
@@ -120,6 +122,8 @@ const [
   import('./jobs/send-reminder.js'),
   // R1a (002:T176).
   import('./jobs/erase-identity-documents.js'),
+  // 006:T015.
+  import('./jobs/advance-programmes.js'),
 ]);
 
 initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
@@ -228,7 +232,12 @@ const notificationWriter = notifications.createNotificationWriter({
 
 // Sessions' port to booking's enrollments (T008, the note under T015), bound once as main.ts binds
 // it, and T015's completion check over it, which every path that settles calls.
-const enrollmentSide = booking.createEnrollmentSide({ settings });
+// 006:T013 (R-510; SRS DEC-112, Q-B2 (a)): the close hook's card entry, payments', and the log, so a
+// programme the worker closes has its card deleted and writes its line as the API's does.
+const enrollmentSide = booking.createEnrollmentSide({
+  settings,
+  programmes: { deleteProgrammeCard: payments.deleteProgrammeCard, log },
+});
 const completion = sessions.createCompletion({ enrollments: enrollmentSide, settings });
 
 // Every job the worker runs, each handed what it reads. A job is added here by the task that writes it.
@@ -335,6 +344,36 @@ const jobs: readonly Job[] = [
     database,
     settings,
     held: (userIds) => booking.heldFileOwnersAmong(database, userIds),
+    log,
+  }),
+  // 006:T015 (FR-714, FR-717, FR-721; R-508, R-509; SRS DEC-110, DEC-113; Q-1 (a), Q-3 (a), Q-8 (a);
+  // the owner's Q-B3 (a), DEC-112), every minute ⚠️ automatic: the programmes' sweep. The windows'
+  // step (T008: the `no_offer` and `pay_blocked` items, the lapse), with payments' «unverified in
+  // live mode» over `PAYMENT_MODE`, its card entry and its orders (A-1, «pending»); the month steps
+  // (the due charge, the retries, the `charge_unknown` item, the pause), with payments' month reader
+  // and its automatic charge, whose answers are recorded through the webhook's own order branch (the
+  // same confirmations and pushes as the webhook's). A charge is sent after its step's commit, once.
+  programmeJobs.advanceProgrammes({
+    sweep: programmeJobs.programmeSweepOver({
+      database,
+      settings,
+      log,
+      payee: payments.createProgrammePayee({ paymentMode: config.PAYMENT_MODE, cipher }),
+      deleteProgrammeCard: payments.deleteProgrammeCard,
+      orders: payments.checkoutOrdersAmong,
+      monthOrders: payments.programmeMonthOrdersOf,
+      charges: payments.createProgrammeCharges({
+        database,
+        payment: ports.payment,
+        cipher,
+        gateway: config.PAYMENT_GATEWAY,
+        paymentMode: config.PAYMENT_MODE,
+        settings,
+        log,
+        confirmations,
+        notices: notificationWriter,
+      }),
+    }),
     log,
   }),
 ];

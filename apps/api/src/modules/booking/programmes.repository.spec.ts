@@ -15,12 +15,14 @@ import {
   programmeStateOf,
   programmeTermsOf,
   writeOffer,
+  withdrawOpenStop,
   writeProgrammePaid,
 } from './programmes.repository.js';
 
 const STUDENT = '0199d0a0-0000-7000-8000-0000000006d2';
 const ENROLLMENT = '0199d0a0-0000-7000-8000-0000000006e1';
 const SLOT = '0199d0a0-0000-7000-8000-0000000006f1';
+const REQUEST = '0199d0a0-0000-7000-8000-0000000006a1';
 
 function clientOf(rows: readonly unknown[]) {
   const calls: [string, unknown][] = [];
@@ -344,7 +346,74 @@ describe('the programme’s payment, written by the confirm step (006:T009, Q-C1
         where: { enrollmentId: ENROLLMENT, state: 'offered' },
         data: { state: 'active', paymentPlan: 'in_full' },
       },
+      // 006:T016: a paused programme resumed by the paid month (rule d: the list gained it).
+      {
+        where: { enrollmentId: ENROLLMENT, state: 'paused' },
+        data: { state: 'active', pausedAt: null },
+      },
       { where: { enrollmentId: ENROLLMENT }, data: { monthsPaid: 10 } },
     ]);
+  });
+
+  // 006:T016 (FR-722, B-P3’s conflict check): every paid month lands here, an automatic one after
+  // a pause included; the answer says whether it was resumed.
+  it('red first: answers whether a paused programme was resumed (paused_at cleared in the same update)', async () => {
+    for (const [count, resumed] of [
+      [1, true],
+      [0, false],
+    ] as const) {
+      const client = {
+        programme: {
+          updateMany: async (query: { where: { state?: string } }) => ({
+            count: query.where.state === 'paused' ? count : 1,
+          }),
+        },
+      } as unknown as Pick<Transaction, 'programme'>;
+      await expect(
+        writeProgrammePaid(client, ENROLLMENT, { plan: 'monthly', monthsPaid: 3 }),
+      ).resolves.toBe(resumed);
+    }
+  });
+});
+
+describe('the open stop request withdrawn by a paid month (006:T016; FR-724)', () => {
+  function requestsOf(open: { id: string } | null, count: number) {
+    const calls: [string, unknown][] = [];
+    const client = {
+      programmeRequest: {
+        findFirst: async (query: unknown) => {
+          calls.push(['findFirst', query]);
+          return open;
+        },
+        updateMany: async (query: unknown) => {
+          calls.push(['updateMany', query]);
+          return { count };
+        },
+      },
+    } as unknown as Pick<Transaction, 'programmeRequest'>;
+    return { client, calls };
+  }
+
+  it('red first: withdraws the open stop by its id, conditionally on it still open, and answers its id', async () => {
+    const { client, calls } = requestsOf({ id: REQUEST }, 1);
+    await expect(withdrawOpenStop(client, ENROLLMENT)).resolves.toBe(REQUEST);
+    expect(calls).toEqual([
+      [
+        'findFirst',
+        {
+          where: { enrollmentId: ENROLLMENT, kind: 'stop', status: 'open' },
+          select: { id: true },
+        },
+      ],
+      ['updateMany', { where: { id: REQUEST, status: 'open' }, data: { status: 'withdrawn' } }],
+    ]);
+  });
+
+  it('answers null with nothing written when no stop is open, and when another writer closed it first', async () => {
+    const none = requestsOf(null, 0);
+    await expect(withdrawOpenStop(none.client, ENROLLMENT)).resolves.toBeNull();
+    expect(none.calls.map(([name]) => name)).toEqual(['findFirst']);
+    const raced = requestsOf({ id: REQUEST }, 0);
+    await expect(withdrawOpenStop(raced.client, ENROLLMENT)).resolves.toBeNull();
   });
 });

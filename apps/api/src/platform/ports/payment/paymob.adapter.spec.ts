@@ -64,6 +64,8 @@ function adapter(
     /** 003:T109: the payment mode; test unless a case says live. */
     mode?: 'test' | 'live';
     log?: { warn(fields: object, message: string): void };
+    /** 006:T013: the saved-card integration; none (the token callback off) unless a case sets it. */
+    savedCardIntegrationId?: number;
   } = {},
 ): PaymobPaymentAdapter {
   return new PaymobPaymentAdapter({
@@ -81,6 +83,9 @@ function adapter(
     ...(options.splitIntegrationId === undefined
       ? {}
       : { splitIntegrationId: options.splitIntegrationId }),
+    ...(options.savedCardIntegrationId === undefined
+      ? {}
+      : { savedCardIntegrationId: options.savedCardIntegrationId }),
   });
 }
 
@@ -377,7 +382,9 @@ describe("mapping Paymob's transaction states to the port's events", () => {
   it('refuses, as a signed body it cannot read, an unknown type', async () => {
     const obj = transaction();
     const { query } = callback(obj);
-    const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));
+    // Since 006:T013 `TOKEN` is a type this port reads (its own eight signed fields); a type it does
+    // not read stands here instead (PR #160 r1 Minor 2 checks the token's signature first).
+    const rawBody = Buffer.from(JSON.stringify({ type: 'DELIVERY_STATUS', obj }));
     await expect(adapter().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
       MalformedEventError,
     );
@@ -410,6 +417,188 @@ describe("mapping Paymob's transaction states to the port's events", () => {
 
   it('refuses a signed amount that is not a whole number of piasters', async () => {
     await expect(eventOf(transaction({ amount_cents: 10.5 }))).rejects.toThrow(MalformedEventError);
+  });
+});
+
+// 006:T013 (R-510, FR-713, FR-719, SC-707): Paymob's token callback ("HMAC for Card Tokens",
+// `track2\b-p3\paymob-docs.md` §1): `type` `TOKEN`, the card under `obj`, signed with HMAC-SHA512
+// under the HMAC secret over eight fields in this order, the digest in the query's `hmac`.
+const SAVED_CARD_INTEGRATION_ID = 1_000_003;
+const TOKEN = 'placeholder-card-token';
+const HOLDER = 'PLACEHOLDER HOLDER';
+const TOKEN_FIELDS = [
+  'card_subtype',
+  'created_at',
+  'email',
+  'id',
+  'masked_pan',
+  'merchant_id',
+  'order_id',
+  'token',
+] as const;
+
+type Card = Record<string, unknown>;
+
+function card(overrides: Card = {}): Card {
+  return {
+    id: 3_115_421,
+    token: TOKEN,
+    masked_pan: 'xxxx-xxxx-xxxx-2346',
+    merchant_id: 302_852,
+    card_subtype: 'MasterCard',
+    created_at: '2026-11-24T10:00:00.123456',
+    email: BILLING_EMAIL,
+    order_id: '217503754',
+    user_added: false,
+    next_payment_intention: null,
+    cardholder_name: HOLDER,
+    expiry_month: '12',
+    expiry_year: '30',
+    ...overrides,
+  };
+}
+
+/** The token callback's message, written out from the documented order (not the adapter's). */
+function tokenMessage(obj: Card): string {
+  return TOKEN_FIELDS.map((field) => {
+    const value = obj[field];
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  }).join('');
+}
+
+function tokenCallback(
+  obj: Card,
+  secret = HMAC_SECRET,
+): { rawBody: Buffer; query: Record<string, string> } {
+  const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));
+  const hmac = createHmac('sha512', secret).update(tokenMessage(obj)).digest('hex');
+  return { rawBody, query: { hmac } };
+}
+
+const savingCards = (): PaymobPaymentAdapter =>
+  adapter({ savedCardIntegrationId: SAVED_CARD_INTEGRATION_ID });
+
+describe("Paymob's token callback (006:T013, R-510; the saved card)", () => {
+  it('takes a token callback whose hmac holds over its eight fields, the card read from them alone', async () => {
+    const { rawBody, query } = tokenCallback(card());
+
+    await expect(savingCards().verifyAndParseEvent(rawBody, {}, query)).resolves.toEqual({
+      type: 'card_saved',
+      providerEventId: 'paymob:3115421:token',
+      gatewayOrderId: '217503754',
+      token: TOKEN,
+      last4: '2346',
+      brand: 'MasterCard',
+    });
+  });
+
+  it('carries the same provider event id when Paymob sends the same token callback again (R-MONEY-8)', async () => {
+    const { rawBody, query } = tokenCallback(card());
+    const first = await savingCards().verifyAndParseEvent(rawBody, {}, query);
+    const again = await savingCards().verifyAndParseEvent(rawBody, {}, query);
+
+    expect(again.providerEventId).toBe(first.providerEventId);
+  });
+
+  // PR #160 r1 Minor 2: the signature is checked before «off», so an unsigned body is 401, never 400.
+  it('refuses every token callback while no saved-card integration is set (off): signed → malformed, unsigned → signature', async () => {
+    const signed = tokenCallback(card());
+    const unsigned = tokenCallback(card(), 'another-secret');
+
+    await expect(adapter().verifyAndParseEvent(signed.rawBody, {}, signed.query)).rejects.toThrow(
+      MalformedEventError,
+    );
+    await expect(
+      adapter().verifyAndParseEvent(unsigned.rawBody, {}, unsigned.query),
+    ).rejects.toThrow(EventSignatureError);
+  });
+
+  it('refuses a token callback signed under another secret, or with no hmac', async () => {
+    const { rawBody, query } = tokenCallback(card(), 'another-secret');
+
+    await expect(savingCards().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
+      EventSignatureError,
+    );
+    await expect(savingCards().verifyAndParseEvent(rawBody, {}, {})).rejects.toThrow(
+      EventSignatureError,
+    );
+  });
+
+  it.each(TOKEN_FIELDS.map((field) => [field] as const))(
+    'refuses a token callback whose %s changed after signing',
+    async (field) => {
+      const signed = card();
+      const { query } = tokenCallback(signed);
+      const changed = typeof signed[field] === 'number' ? 9 : 'changed@ijazah.invalid9';
+      const rawBody = Buffer.from(
+        JSON.stringify({ type: 'TOKEN', obj: card({ [field]: changed }) }),
+      );
+
+      await expect(savingCards().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
+        EventSignatureError,
+      );
+    },
+  );
+
+  it('refuses a token callback signed over the transaction’s fields instead of its own', async () => {
+    const obj = card();
+    const rawBody = Buffer.from(JSON.stringify({ type: 'TOKEN', obj }));
+    const hmac = createHmac('sha512', HMAC_SECRET).update(paymobHmacMessage(obj)).digest('hex');
+
+    await expect(savingCards().verifyAndParseEvent(rawBody, {}, { hmac })).rejects.toThrow(
+      EventSignatureError,
+    );
+  });
+
+  it('never reads the holder’s name or the expiry: changing them changes nothing, and no event carries them (SC-707)', async () => {
+    const plain = tokenCallback(card());
+    const other = tokenCallback(
+      card({ cardholder_name: 'ANOTHER NAME', expiry_month: '01', expiry_year: '29' }),
+    );
+    const event = await savingCards().verifyAndParseEvent(plain.rawBody, {}, plain.query);
+
+    await expect(
+      savingCards().verifyAndParseEvent(other.rawBody, {}, other.query),
+    ).resolves.toEqual(event);
+    const carried = JSON.stringify(event);
+    expect(carried).not.toContain(HOLDER);
+    expect(carried).not.toContain('expiry');
+    expect(carried).not.toContain('xxxx');
+  });
+
+  it.each([
+    ['a masked pan that does not end in four digits', { masked_pan: 'xxxx-xxxx-xxxx-23' }],
+    ['an order id that is not a whole number', { order_id: '2175x3754' }],
+    ['an empty token', { token: '' }],
+    ['no card brand', { card_subtype: '' }],
+    ['a transaction id that is not a whole number', { id: 'abc' }],
+  ])('refuses, as a signed body it cannot read, %s', async (_case, change) => {
+    const { rawBody, query } = tokenCallback(card(change));
+
+    await expect(savingCards().verifyAndParseEvent(rawBody, {}, query)).rejects.toThrow(
+      MalformedEventError,
+    );
+  });
+
+  it('never quotes the body, the token or the hmac in a refusal (R-SEC-2, SC-707)', async () => {
+    const unsigned = tokenCallback(card(), 'another-secret');
+    const unreadable = tokenCallback(card({ masked_pan: 'none' }));
+    const refusals = await Promise.all([
+      savingCards()
+        .verifyAndParseEvent(unsigned.rawBody, {}, unsigned.query)
+        .catch((error: unknown) => error),
+      savingCards()
+        .verifyAndParseEvent(unreadable.rawBody, {}, unreadable.query)
+        .catch((error: unknown) => error),
+    ]);
+
+    for (const refusal of refusals) {
+      expect(refusal).toBeInstanceOf(Error);
+      const text = `${String((refusal as Error).message)} ${String((refusal as Error).stack)}`;
+      expect(text).not.toContain(TOKEN);
+      expect(text).not.toContain(HOLDER);
+      expect(text).not.toContain(unsigned.query.hmac ?? '');
+    }
   });
 });
 

@@ -440,6 +440,12 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
   > not expired, and no retry is made, before the gateway is asked by the merchant reference (the payment's id): paid →
   > recorded paid, no new charge; no transaction → the soft decline above; no answer → no new charge, asked again later,
   > and still none → an Administrator item.
+  > **Amended by SRS DEC-110 and DEC-113 (PR #160 r1 Minor 6, 2026-11-24).** The gateway is asked about an automatic
+  > order by the order's own gateway id, never by the merchant reference the platform sends, which is never trusted. An
+  > automatic order whose intention went unanswered expires at once as a soft decline and sends no push; a charge whose
+  > answer is late keeps the month `charge_pending` until the gateway answers, and after
+  > `programme_charge_inquiry_tries` unanswered asks an Administrator item `charge_unknown` opens. The decline kind
+  > comes only from the inquiry's authenticated answer.
 - **FR-717**: A failed charge MUST be retried only on a soft decline, at most 4 times, 1, 3, 5 and 7 days after the
   failure (§3.14), then only by hand; a hard decline MUST never be retried (DEC-92).
 - **FR-718**: At most one paid order MUST cover a month. A second paid order for a month already paid MUST be treated as

@@ -64,17 +64,29 @@
 import type {
   ProgrammeActionInput,
   ProgrammeActionOutput,
+  ProgrammeAutoRenewOffRefusal,
   ProgrammeCancelRefusal,
   ProgrammeOfferInput,
   ProgrammeOfferOutput,
   ProgrammeOfferRefusal,
   ProgrammePayRefusal,
+  ProgrammeRenewRefusal,
+  ProgrammeGetInput,
+  ProgrammeGetOutput,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
 } from '@ijazah/contracts';
-import { MAX_PROGRAMME_SESSION_COUNT } from '@ijazah/contracts';
-import type { Piasters, ProgrammeOfferAmounts } from '@ijazah/money';
+import type {
+  ProgrammeOrderItem,
+  ProgrammeRequestItem,
+  ProgrammesGetOutput,
+  ProgrammesQueueInput,
+  ProgrammesQueueOutput,
+} from '@ijazah/contracts/admin';
+import { MAX_PROGRAMME_SESSION_COUNT, sessionLengthMinutes } from '@ijazah/contracts';
+import { type Piasters, perSession, type ProgrammeOfferAmounts } from '@ijazah/money';
 import {
+  addDays,
   addHours,
   calendarWeeksAfter,
   type DayOfWeek,
@@ -90,7 +102,11 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import type { IdempotencyService } from '../../platform/idempotency/idempotency.service.js';
 import { type LivePublisher, publisherOn } from '../../platform/live/live-publisher.js';
-import { positiveWhole } from '../../platform/settings/registry.js';
+import {
+  positiveWhole,
+  programmeChargeRetryDays,
+  wholeNonNegative,
+} from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { Transactions } from '../../platform/db/transaction.repository.js';
 import {
@@ -102,9 +118,14 @@ import {
   type SlotRow,
   teacherPackageOf,
 } from '../catalog/index.js';
-import { lockAccount, readStanding } from '../identity/index.js';
+import { displayNamesOf, lockAccount, readStanding } from '../identity/index.js';
 import { openCaseOf } from '../moderation/index.js';
-import { type AssessmentOutcome, assessmentOutcome, type HeldTime } from '../sessions/index.js';
+import {
+  type AssessmentOutcome,
+  assessmentOutcome,
+  type HeldTime,
+  sessionsOfEnrollments,
+} from '../sessions/index.js';
 import { ownActiveHold } from './checkout-holds.repository.js';
 import { type HeldOrders, previousCheckout } from './checkout-holds.service.js';
 import { recordEnrollmentEvents } from './enrollment-events.repository.js';
@@ -132,18 +153,49 @@ import {
   type FrozenOffer,
   insertAwaitingOffer,
   type OfferEnrollment,
+  openItemsPage,
+  type PausedProgramme,
+  pausedPage,
+  type ProgrammeRequestView,
+  programmeRequestsOf,
+  type ProgrammeView,
+  programmeViewOf,
+  type QueuedProgramme,
+  queuedProgrammesAmong,
   offerEnrollmentOf,
   type PayEnrollment,
   payEnrollmentOf,
   type ProgrammeFacts,
   programmeFactsOf,
+  type ProgrammeMonthRow,
+  programmeMonthOf,
   type ProgrammePayment,
   type ProgrammeState,
+  withdrawOpenItem,
+  writeAttempt,
+  writeFirstFailure,
+  writeNextDue,
   writeOffer,
   writeOfferDue,
+  writePaused,
+  withdrawOpenStop,
   writeProgrammePaid,
 } from './programmes.repository.js';
-import { noOfferStep, offerDueOf, payByPassed, payWindowStep } from './programmes.rules.js';
+import {
+  inquiryDue,
+  type MonthAction,
+  type MonthFacts,
+  type MonthOrders,
+  type MonthSession,
+  type MonthStepKind,
+  monthStepOf,
+  nextDueOf,
+  nextOccurrenceAt,
+  noOfferStep,
+  offerDueOf,
+  payByPassed,
+  payWindowStep,
+} from './programmes.rules.js';
 import type { SessionsBetween } from './session-overlap.service.js';
 
 /** The programme's availability now (catalog's `programmeAvailabilityOf`, bound to settings). */
@@ -320,15 +372,67 @@ export function withProgrammeTimes(
 }
 
 /**
- * 006:T009 (the owner's Q-C1 (a)): the programme's payment, recorded by the confirm step under the
- * programme's lock (`programmes.repository.ts`' `writeProgrammePaid`).
+ * 006:T016 (FR-722, FR-724; B-P3's conflict check; FU-A1 (a)): what the paid month's record reads
+ * and writes, over booking's rows; stood in by a spec.
  */
-export function recordProgrammePaid(
+export interface ProgrammePaidStore {
+  writeProgrammePaid(
+    tx: Transaction,
+    enrollmentId: string,
+    payment: ProgrammePayment,
+  ): Promise<boolean>;
+  withdrawOpenStop(tx: Transaction, enrollmentId: string): Promise<string | null>;
+  /** FU-A1 (a): the resume's `programme_resumed` row, on the paid month's transaction. */
+  recordResumed(tx: Transaction, enrollmentId: string, occurredAt: Date): Promise<void>;
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmePaidStore: ProgrammePaidStore = {
+  writeProgrammePaid,
+  withdrawOpenStop,
+  recordResumed: (tx, enrollmentId, occurredAt) =>
+    recordEnrollmentEvents(tx, [{ kind: 'programme_resumed', enrollmentId, occurredAt }]),
+  programmeFactsOf,
+  clock: clockTimestamp,
+};
+
+/**
+ * 006:T009 (the owner's Q-C1 (a)): the programme's payment, recorded by the confirm step under the
+ * programme's lock (`programmes.repository.ts`' `writeProgrammePaid`). 006:T016 (FR-722, FR-724;
+ * B-P3's conflict check; FU-A1 (a)): every paid month lands here, an automatic one after a pause
+ * included. A `paused` programme is resumed (`active`, `paused_at` cleared) with one
+ * `programme_resumed` enrollment event at the database's instant on the same transaction, one line
+ * and `enrollment` to both parties after the commit (the transaction's bound publisher: none in the
+ * worker, N-15); an open stop request is withdrawn with one line of ids and the reason. `log` is the
+ * confirm step's.
+ */
+export async function recordProgrammePaid(
   tx: Transaction,
   enrollmentId: string,
   payment: ProgrammePayment,
+  log?: ProgrammeLog,
+  store: ProgrammePaidStore = programmePaidStore,
 ): Promise<void> {
-  return writeProgrammePaid(tx, enrollmentId, payment);
+  const resumed = await store.writeProgrammePaid(tx, enrollmentId, payment);
+  const withdrawn = await store.withdrawOpenStop(tx, enrollmentId);
+  if (withdrawn !== null) {
+    log?.info(
+      { enrollmentId, requestId: withdrawn, reason: 'renewed' },
+      'A programme stop request was withdrawn by a paid month',
+    );
+  }
+  if (!resumed) return;
+  await store.recordResumed(tx, enrollmentId, await store.clock(tx));
+  log?.info({ enrollmentId, reason: 'resumed' }, 'A paused programme was resumed by a paid month');
+  const facts = await store.programmeFactsOf(tx, enrollmentId);
+  if (facts !== null) {
+    publisherOn(tx)?.afterCommit([facts.studentUserId, facts.teacherUserId], {
+      type: 'enrollment',
+      enrollmentId,
+    });
+  }
 }
 
 export type { ProgrammePayment };
@@ -422,8 +526,8 @@ export interface ProgrammeServiceDependencies {
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: ProgrammeOfferStore;
   /**
-   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard` for the close hook (a stub until T013); none
-   * deleted where the composition root binds none (no card exists before T013).
+   * 006:T008 (Q-2 (a)): payments' `deleteProgrammeCard` for the close hook (T013: the card
+   * deleted), bound by `main.ts` through `createBookingServices`; none where a caller binds none.
    */
   readonly deleteProgrammeCard?: DeleteProgrammeCard;
   /** 006:T008: the cancellation's reads and the programme's own end, stood in by a spec. */
@@ -431,6 +535,21 @@ export interface ProgrammeServiceDependencies {
   readonly end?: ProgrammeEndStore;
   /** 006:T008: the refusal request's reads and writes, stood in by a spec. */
   readonly requests?: ProgrammeRequestStore;
+  /**
+   * 006:T015 (PR #158 r2 Follow-up 1, Q-8 (a)): payments' `checkoutOrdersAmong`, which the
+   * cancellation reads under its locks to refuse `payment_processing`; a caller that binds none
+   * reads no order.
+   */
+  readonly orders?: CheckoutOrdersAmong;
+  /**
+   * 006:T018 (app-surface.md `programme.get`): the read's transactions and payments' reads (the
+   * payee, the month's orders, the student's card), bound by `createBookingServices` from what
+   * `main.ts` hands in; `programme.get` fails loudly where none is bound.
+   */
+  readonly reads?: {
+    readonly transactions: Transactions;
+    readonly payments: ProgrammeReadPayments;
+  };
 }
 
 /**
@@ -453,6 +572,14 @@ export interface ProgrammeServices {
     input: ProgrammeRequestInput,
     live: Pick<LivePublisher, 'afterCommit'>,
   ): Promise<ProgrammeRequestOutput>;
+  /** 006:T018 (FR-726): `programme.get`, either party's. */
+  get(userId: string, input: ProgrammeGetInput): Promise<ProgrammeGetOutput>;
+  /** 006:T016 (FR-713a, DEC-95): `programme.autoRenewOff`, the student's. */
+  autoRenewOff(
+    studentUserId: string,
+    input: ProgrammeActionInput,
+    live: Pick<LivePublisher, 'afterCommit'>,
+  ): Promise<ProgrammeActionOutput>;
 }
 
 /** The programme's services over `dependencies` (this file's head, THE OFFER; 006:T008 below). */
@@ -462,17 +589,33 @@ export function createProgrammeServices(
   const offers = new ProgrammeOffers(dependencies);
   const requestDependencies: ProgrammeRequestDependencies = {
     log: dependencies.log,
+    // 006:T017: the stop's `programme_stop_request_days`, on the database's clock.
+    settings: dependencies.settings,
+    ...(dependencies.clock === undefined ? {} : { clock: dependencies.clock }),
     ...(dependencies.requests === undefined ? {} : { store: dependencies.requests }),
   };
   return {
     offer: (teacherUserId, input, live) => offers.offer(teacherUserId, input, live),
     cancel: (studentUserId, input, live) =>
       cancelProgramme(studentUserId, input, live, dependencies),
-    request: (teacherUserId, { idempotencyKey, ...input }) =>
+    request: (teacherUserId, { idempotencyKey, ...input }, live) =>
       dependencies.idempotency.run(
         { scope: 'programme.request', key: idempotencyKey, actorId: teacherUserId, input },
-        (tx) => requestProgramme(tx, teacherUserId, input, requestDependencies),
+        (tx) => requestProgramme(tx, teacherUserId, input, live, requestDependencies),
       ),
+    autoRenewOff: (studentUserId, input, live) =>
+      turnAutoRenewOff(studentUserId, input, live, dependencies),
+    get: async (userId, { enrollmentId }) => {
+      const { reads } = dependencies;
+      if (reads === undefined) throw new Error('programme.get: its reads are not bound');
+      const earlyDays = await dependencies.settings.read(
+        PROGRAMME_RENEW_EARLY_DAYS_SETTING,
+        wholeNonNegative,
+      );
+      return reads.transactions.run((tx) =>
+        readProgramme(tx, userId, enrollmentId, { payments: reads.payments, earlyDays }),
+      );
+    },
   };
 }
 
@@ -643,19 +786,25 @@ function isActiveTeacher(standing: Awaited<ReturnType<typeof readStanding>>): bo
 // the enrollment no longer `confirmed`, and (PR #158 r1 Follow-up 1 (a), the owner, «صلح ومتابعة أ»;
 // FR-BOOK-15, «after the assessment») `assessment_not_settled` until session 1's outcome chain
 // (sessions' `assessmentOutcome`, read as the windows' step reads it) is consumed, `done` or
-// `student_no_show`: still to come, waiting for a make-up, or ended with no assessment held.
+// `student_no_show`: still to come, waiting for a make-up, or ended with no assessment held; and
+// (006:T015, PR #158 r2 Follow-up 1, Q-8 (a)) `payment_processing` while a programme order of the
+// enrollment is payable, or paid and not yet processed by the confirm step (payments'
+// `checkoutOrdersAmong`, handed in as `orders`, its rows locked after the enrollment's).
 // `enrollment` to both parties after the commit.
 //
 // THE WINDOWS' STEP (R-508's step 1, for T015's `advance-programmes`). One programme in a transaction
 // of its own, under its row lock: the teacher's `users` row key-shared first (an item's insert
 // key-shares it through its foreign key, and `programme.offer` and `programme.request` take that row
 // `FOR UPDATE` before the programme, kernel.md, 006:T008's row), then the programme's row, then the
-// enrollment's; read again under them, a programme whose enrollment is not `confirmed` is left alone.
+// enrollment's; read again under them, a programme whose enrollment is not `confirmed` is left alone,
+// and (006:T015, R-508, N-1) so is one with an open `teacher_suspended` or `student_suspended` case.
 // - `awaiting_offer`: the deadline derived from session 1's outcome chain and the latest extension
 //   (`noOfferStep`), written when it changed (Q-3 (a) amended); the `no_offer` item once per deadline.
 // - `offered`: past `pay_by_at` with no `pay_blocked` item open, payments' «unverified in live mode»
 //   read at that instant (FR-706b); the `pay_blocked` item once per deadline, or the lapse
-//   (`offer_lapsed`, through `endProgramme`) (`payWindowStep`).
+//   (`offer_lapsed`, through `endProgramme`) (`payWindowStep`). 006:T015 («pending», A-1; Q-8 (a)):
+//   neither while a programme order is payable, or paid and not yet processed by the confirm step
+//   (payments' `checkoutOrdersAmong`, `orders`, its rows locked after the enrollment's).
 // Each item and each lapse writes one info line of ids and the reason; `enrollment` to both parties
 // after the commit on the transaction's bound publisher (none in a worker until T015 binds one).
 // Double run (R-API-14): the second run reads the item open, or the programme closed, and does
@@ -678,6 +827,18 @@ export const programmeCancelStore: ProgrammeCancelStore = {
 
 /** The states the student may cancel in: before any payment of the rest. */
 const CANCELLABLE: ReadonlySet<ProgrammeState> = new Set(['awaiting_offer', 'offered']);
+
+/**
+ * 006:T015 («pending», A-1; PR #158 r2 Follow-up 1, Q-8 (a)): whether a programme order of the
+ * enrollment is payable, or paid and not yet processed by the confirm step, in payments' answer.
+ */
+function orderPending(
+  orders: ReadonlyMap<string, ProgrammePayOrders>,
+  { enrollmentId }: { readonly enrollmentId: string },
+): boolean {
+  const own = orders.get(enrollmentId);
+  return own !== undefined && (own.payable !== null || own.programmeProcessing);
+}
 
 /** `programme.cancel` (this section's head, THE CANCELLATION). */
 export function cancelProgramme(
@@ -707,6 +868,12 @@ export function cancelProgramme(
       if (!CANCELLABLE.has(facts.state)) throw refused('rest_paid');
       if ((await store.assessmentOutcome(tx, facts.enrollmentId)).kind !== 'delivered') {
         throw refused('assessment_not_settled');
+      }
+      if (dependencies.orders !== undefined) {
+        const at = await (dependencies.clock ?? clockTimestamp)(tx);
+        if (orderPending(await dependencies.orders(tx, [facts.enrollmentId], at), facts)) {
+          throw refused('payment_processing');
+        }
       }
       const ended = await endProgramme(tx, facts.enrollmentId, 'offer_declined', {
         deleteProgrammeCard: dependencies.deleteProgrammeCard ?? noProgrammeCardYet,
@@ -754,9 +921,12 @@ export interface ProgrammeWindowStore {
       readonly kind: ItemKind;
     },
   ): Promise<string>;
+  /** 006:T015 (R-508, N-1): moderation's open case of `reason`, read under the enrollment's lock. */
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
 }
 
 export const programmeWindowStore: ProgrammeWindowStore = {
+  openCaseOf,
   programmeFactsOf,
   keyShareTeacher: (tx, teacherUserId) => keyShareRows(tx, 'users', [teacherUserId]),
   lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
@@ -779,11 +949,31 @@ export interface ProgrammeWindowDependencies {
     unverifiedInLiveMode(tx: Transaction, teacherUserId: string): Promise<boolean>;
   };
   readonly deleteProgrammeCard: DeleteProgrammeCard;
+  /**
+   * 006:T015 («pending», A-1; Q-8 (a)): payments' `checkoutOrdersAmong`, read past `pay_by_at`
+   * under the enrollment's lock: a payable or paid, unconfirmed programme order holds the lapse.
+   */
+  readonly orders: CheckoutOrdersAmong;
   readonly log: ProgrammeLog;
   /** The database's clock on the transaction (`clock_timestamp()`). */
   readonly clock?: (tx: Transaction) => Promise<Date>;
   readonly store?: ProgrammeWindowStore;
   readonly end?: ProgrammeEndStore;
+}
+
+/** 006:T015 (R-508, analyze N-1; PR #153 r1 Minor 2): the cases a suspension pauses the sweep with. */
+export const SWEEP_SUSPENSIONS = ['teacher_suspended', 'student_suspended'] as const;
+
+/** Whether a suspension case is open on the enrollment, one query at a time on the transaction. */
+async function suspensionOpen(
+  tx: Transaction,
+  enrollmentId: string,
+  openCase: (tx: Transaction, enrollmentId: string, reason: string) => Promise<string | null>,
+): Promise<boolean> {
+  for (const reason of SWEEP_SUSPENSIONS) {
+    if ((await openCase(tx, enrollmentId, reason)) !== null) return true;
+  }
+  return false;
 }
 
 /** The windows' step over `dependencies` (this section's head, THE WINDOWS' STEP). */
@@ -823,6 +1013,10 @@ export function createProgrammeWindows(
     // `pay_by_at` is set with the offer (R-505; rule 76 sets `offered_at` in `offered`).
     if (facts.payByAt === null) throw new Error('advance-programmes: an offer without pay_by_at');
     if (!payByPassed(now, facts.payByAt)) return 'none';
+    // 006:T015 («pending», A-1; Q-8 (a)): a first payment under way, or paid and not yet processed.
+    if (orderPending(await dependencies.orders(tx, [facts.enrollmentId], now), facts)) {
+      return 'none';
+    }
     const openItem = await store.openRequestExists(tx, facts.enrollmentId, 'pay_blocked');
     const step = payWindowStep({
       now,
@@ -857,6 +1051,8 @@ export function createProgrammeWindows(
         await store.lockEnrollment(tx, enrollmentId);
         const facts = await store.programmeFactsOf(tx, enrollmentId);
         if (facts?.status !== 'confirmed') return 'none';
+        // 006:T015 (R-508, N-1): a suspension pauses; read again under the locks the sweep chose by.
+        if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) return 'none';
         const now = await clock(tx);
         let outcome: WindowStepOutcome = 'none';
         if (facts.state === 'awaiting_offer') outcome = await awaitingOffer(tx, facts, now);
@@ -931,7 +1127,7 @@ export const programmePayStore: ProgrammePayStore = {
 };
 
 /** The suspensions a first payment waits out (PR #153 r1 Minor 2): a suspension pauses. */
-const PAY_SUSPENSIONS = ['teacher_suspended', 'student_suspended'] as const;
+const PAY_SUSPENSIONS = SWEEP_SUSPENSIONS;
 
 /** `programme.pay`'s own refusals (contracts' `programmePayRefusal`), the check's part. */
 type PayRefusal = Extract<ProgrammePayRefusal, 'not_offered' | 'pay_by_passed' | 'party_suspended'>;
@@ -1029,7 +1225,7 @@ export async function checkedProgrammePay(
  */
 async function ownHeldEnrollment(
   tx: Transaction,
-  store: ProgrammePayStore,
+  store: Pick<ProgrammePayStore, 'ownActiveHold' | 'lockRows' | 'activeHoldsByIds'>,
   studentUserId: string,
   at: Date,
 ): Promise<string[]> {
@@ -1039,4 +1235,996 @@ async function ownHeldEnrollment(
   const [held] = await store.activeHoldsByIds(tx, [own.id]);
   if (held === undefined || held.expiresAt.getTime() <= at.getTime()) return [];
   return held.enrollmentId === null ? [] : [held.enrollmentId];
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T015 (FR-714, FR-717, FR-721; R-507, R-508, R-509; SRS DEC-110, DEC-113; B-P3's conflict
+// check, Q-1 (a), Q-3 (a); Q-10 (a) adjusted): THE MONTHS, the sweep's steps on a paid programme
+// (`active` or `paused`), for `advance-programmes`.
+//
+// THE SURVEY. One read with no lock (`survey`): the programme, its paid month's sessions, its weekly
+// time and payments' answer of the month's orders, decided by `programmes.rules.ts`' `monthStepOf`:
+// the steps that may act now (`item`, `retry`, `due`, `pause`, in that order; `due` also when the
+// derived due point moved), and the month's automatic order the gateway is asked about on this
+// minute (`inquiryDue`). The sweep asks (payments' `inquire`, never under a lock) before the steps.
+//
+// EACH STEP (`step`), a transaction of its own, in kernel.md's order: the teacher's `users` row
+// key-shared (an item's insert key-shares it, as the windows' step), the programme's row, the
+// enrollment's; read again under them; a programme whose enrollment is not `confirmed`, that is not
+// `active` or `paused`, or that has an open `teacher_suspended` or `student_suspended` case (a
+// suspension pauses, N-1) is left alone. Then the due point derived (Q-3 (a)) and written when it
+// moved, payments' answer of the month's orders read under the enrollment's lock (every order's move
+// takes it first), and the step's action decided again:
+// - `withdraw_item` / `raise_item`: the `charge_unknown` item withdrawn, or opened once (Q-1 (a));
+// - `failed`: the month's first failure written once (`first_failure_at`);
+// - `due` / `retry`: payments' `record` writes the month's automatic order on this transaction
+//   (`created`, no gateway id, expiring in `slot_hold_ttl_minutes`; or `failed`/`hard` with no payee
+//   in live mode), and the programme its attempt (0: the failure and the retries cleared; n:
+//   `retries_done` n); the gateway is called by the returned `charge`, which the sweep runs after the
+//   commit, once, never under a lock (R-509);
+// - `pause`: `paused` since the next occurrence's start, one `programme_paused` enrollment event on
+//   the same transaction (FU-A1 (a)), and `enrollment` to both parties after the commit on the
+//   transaction's bound publisher (N-15).
+// One info line per action, ids and a reason only; nothing for no action.
+// Double run (R-API-14): every step reads the state it moves from under the lock: a second run finds
+// the order recorded, the failure written, the item open or withdrawn, or the programme paused, and
+// does nothing; each write is a conditional update besides.
+
+/** §3.14: the days after a soft-declined automatic charge it is retried on ([1, 3, 5, 7]). */
+export const PROGRAMME_CHARGE_RETRY_DAYS_SETTING = 'programme_charge_retry_days';
+/** §3.14 (DEC-113): the unanswered asks before the `charge_unknown` item (6). */
+export const PROGRAMME_CHARGE_INQUIRY_TRIES_SETTING = 'programme_charge_inquiry_tries';
+/** §3.14: the checkout's lifetime, an automatic order's and the asks' interval (10 minutes). */
+const SLOT_HOLD_TTL_SETTING = 'slot_hold_ttl_minutes';
+
+/**
+ * Payments' answer of a programme's month `month` (its orders, and whether a card is saved), read
+ * with no lock on the caller's transaction; under the step's enrollment lock, which every order's
+ * move takes first, it cannot change before the commit. Handed in (booking imports no payments).
+ */
+export type MonthOrdersOf = (
+  tx: Transaction,
+  enrollmentId: string,
+  month: number,
+  at: Date,
+) => Promise<MonthOrders>;
+
+/** What the sweep hands payments for a month's automatic charge (payments' request's shape). */
+export interface ProgrammeChargeRequest {
+  readonly enrollmentId: string;
+  readonly teacherUserId: string;
+  readonly instalmentMonth: number;
+  readonly attempt: number;
+  readonly offerTotal_piasters: Piasters;
+  readonly offerSessionCount: number;
+}
+
+/** What payments' `record` wrote; `charge` is run once, after the step's commit. */
+export type RecordedProgrammeCharge =
+  | { readonly outcome: 'no_card' }
+  | { readonly outcome: 'refused'; readonly paymentId: string }
+  | {
+      readonly outcome: 'recorded';
+      readonly paymentId: string;
+      readonly charge: () => Promise<unknown>;
+    };
+
+/** Payments' automatic charge, as the sweep's steps record it (handed in). */
+export interface ProgrammeCharges {
+  record(tx: Transaction, request: ProgrammeChargeRequest): Promise<RecordedProgrammeCharge>;
+}
+
+/** What the month steps read and write, over booking's rows and the owners' entries. */
+export interface ProgrammeMonthStore {
+  programmeMonthOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeMonthRow | null>;
+  keyShareTeacher(tx: Transaction, teacherUserId: string): Promise<void>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+  /** Sessions' entry: the enrollment's sessions with their months. */
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  readSlot(tx: Transaction, slotId: string): Promise<SlotRow | null>;
+  openItemExists(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  lastItemAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  insertItem(
+    tx: Transaction,
+    item: { readonly enrollmentId: string; readonly teacherUserId: string },
+  ): Promise<string>;
+  withdrawItem(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  writeNextDue(tx: Transaction, enrollmentId: string, nextDueAt: Date | null): Promise<void>;
+  writeFirstFailure(tx: Transaction, enrollmentId: string, at: Date): Promise<boolean>;
+  writeAttempt(tx: Transaction, enrollmentId: string, attempt: number): Promise<boolean>;
+  writePaused(tx: Transaction, enrollmentId: string, pausedAt: Date): Promise<boolean>;
+  /** FU-A1 (a): the pause's `programme_paused` row, on the pause's transaction. */
+  recordPaused(tx: Transaction, enrollmentId: string, occurredAt: Date): Promise<void>;
+}
+
+export const programmeMonthStore: ProgrammeMonthStore = {
+  programmeMonthOf,
+  keyShareTeacher: (tx, teacherUserId) => keyShareRows(tx, 'users', [teacherUserId]),
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  openCaseOf,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+  readSlot,
+  openItemExists: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'charge_unknown'),
+  lastItemAt: (tx, enrollmentId) => lastRequestAt(tx, enrollmentId, 'charge_unknown'),
+  insertItem: (tx, { enrollmentId, teacherUserId }) =>
+    insertRequest(tx, { enrollmentId, teacherUserId, kind: 'charge_unknown' }),
+  withdrawItem: (tx, enrollmentId) => withdrawOpenItem(tx, enrollmentId, 'charge_unknown'),
+  writeNextDue,
+  writeFirstFailure,
+  writeAttempt,
+  writePaused,
+  recordPaused: (tx, enrollmentId, occurredAt) =>
+    recordEnrollmentEvents(tx, [{ kind: 'programme_paused', enrollmentId, occurredAt }]),
+};
+
+/** What the month steps are built over (`advance-programmes` in the worker). */
+export interface ProgrammeMonthDependencies {
+  readonly transactions: Transactions;
+  readonly settings: SettingsReader;
+  /** Payments' answer of the month's orders (handed in). */
+  readonly orders: MonthOrdersOf;
+  /** Payments' automatic charge's `record` (handed in). */
+  readonly charges: ProgrammeCharges;
+  readonly log: ProgrammeLog;
+  /** The database's clock on the transaction (`clock_timestamp()`). */
+  readonly clock?: (tx: Transaction) => Promise<Date>;
+  readonly store?: ProgrammeMonthStore;
+}
+
+/** The survey's answer (this section's head, THE SURVEY). */
+export interface MonthSurvey {
+  /** The month's automatic order the gateway is asked about on this minute; null for none. */
+  readonly ask: string | null;
+  /** The steps that may act now, in order. */
+  readonly steps: readonly MonthStepKind[];
+}
+
+/** What a step did: its action, and the gateway's call to run after its commit, once. */
+export interface MonthStepDone {
+  readonly action: MonthAction['kind'] | 'none';
+  readonly charge?: () => Promise<unknown>;
+}
+
+/** The month steps (this section's head). */
+export interface ProgrammeMonths {
+  survey(enrollmentId: string): Promise<MonthSurvey | null>;
+  step(
+    step: MonthStepKind,
+    enrollmentId: string,
+    context: { readonly askedNoAnswer: boolean },
+  ): Promise<MonthStepDone>;
+}
+
+const MONTH_STEPS: readonly MonthStepKind[] = ['item', 'retry', 'due', 'pause'];
+
+/** The settings the month steps read, once per step. */
+interface MonthTerms {
+  readonly retryDays: readonly number[];
+  readonly ttlMinutes: number;
+  readonly tries: number;
+}
+
+/** A programme the month steps act on: its enrollment `confirmed`, the programme paid. */
+type SweptMonthRow = ProgrammeMonthRow & { readonly state: 'active' | 'paused' };
+
+function swept(row: ProgrammeMonthRow): row is SweptMonthRow {
+  return row.status === 'confirmed' && (row.state === 'active' || row.state === 'paused');
+}
+
+function sameInstant(one: Date | null, other: Date | null): boolean {
+  return (one?.getTime() ?? null) === (other?.getTime() ?? null);
+}
+
+/** The month steps over `dependencies` (this section's head). */
+export function createProgrammeMonths(dependencies: ProgrammeMonthDependencies): ProgrammeMonths {
+  const store = dependencies.store ?? programmeMonthStore;
+  const clock = dependencies.clock ?? clockTimestamp;
+  const { settings, log } = dependencies;
+
+  const termsOf = async (): Promise<MonthTerms> => {
+    const [retryDays, ttlMinutes, tries] = await Promise.all([
+      settings.read(PROGRAMME_CHARGE_RETRY_DAYS_SETTING, programmeChargeRetryDays),
+      settings.read(SLOT_HOLD_TTL_SETTING, positiveWhole),
+      settings.read(PROGRAMME_CHARGE_INQUIRY_TRIES_SETTING, positiveWhole),
+    ]);
+    return { retryDays, ttlMinutes, tries };
+  };
+
+  /** The month's facts on `tx`, with or without the step's locks; one query at a time. */
+  const factsOf = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    terms: MonthTerms,
+    askedNoAnswer: boolean,
+  ): Promise<MonthFacts> => {
+    const now = await clock(tx);
+    const sessions = await store.sessionsOf(tx, row.enrollmentId);
+    const nextDueAt = nextDueOf({ ...row, sessions });
+    let nextOccurrence: Date | null = null;
+    if (nextDueAt !== null) {
+      const slot = await store.readSlot(tx, row.slotId);
+      // `enrollments.slot_id` is a foreign key to the slot (ERD `enrollments`).
+      if (slot === null) throw new Error('advance-programmes: an enrollment without its slot');
+      nextOccurrence = nextOccurrenceAt(slot, row.timezone, nextDueAt);
+    }
+    const orders = await dependencies.orders(tx, row.enrollmentId, row.monthsPaid + 1, now);
+    const open = await store.openItemExists(tx, row.enrollmentId);
+    const lastAt = await store.lastItemAt(tx, row.enrollmentId);
+    return {
+      now,
+      state: row.state,
+      nextDueAt,
+      nextOccurrenceAt: nextOccurrence,
+      firstFailureAt: row.firstFailureAt,
+      retriesDone: row.retriesDone,
+      retryDays: terms.retryDays,
+      orders,
+      item: { open, lastAt },
+      inquiry: { ttlMinutes: terms.ttlMinutes, tries: terms.tries },
+      askedNoAnswer,
+    };
+  };
+
+  /** The month's automatic charge recorded by payments, and its attempt on the programme. */
+  const recordCharge = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    attempt: number,
+  ): Promise<MonthStepDone['charge']> => {
+    const recorded = await dependencies.charges.record(tx, {
+      enrollmentId: row.enrollmentId,
+      teacherUserId: row.teacherUserId,
+      instalmentMonth: row.monthsPaid + 1,
+      attempt,
+      offerTotal_piasters: row.offerTotal_piasters,
+      offerSessionCount: row.offerSessionCount,
+    });
+    if (recorded.outcome === 'no_card') return undefined;
+    await store.writeAttempt(tx, row.enrollmentId, attempt);
+    return recorded.outcome === 'recorded' ? recorded.charge : undefined;
+  };
+
+  const apply = async (
+    tx: Transaction,
+    row: SweptMonthRow,
+    action: MonthAction,
+    now: Date,
+  ): Promise<MonthStepDone> => {
+    const { enrollmentId } = row;
+    switch (action.kind) {
+      case 'withdraw_item':
+        await store.withdrawItem(tx, enrollmentId);
+        return { action: action.kind };
+      case 'raise_item':
+        await store.insertItem(tx, row);
+        return { action: action.kind };
+      case 'failed':
+        await store.writeFirstFailure(tx, enrollmentId, now);
+        return { action: action.kind };
+      case 'due':
+      case 'retry': {
+        const call = await recordCharge(tx, row, action.kind === 'due' ? 0 : action.attempt);
+        return call === undefined ? { action: action.kind } : { action: action.kind, charge: call };
+      }
+      case 'pause':
+        if (await store.writePaused(tx, enrollmentId, action.pausedAt)) {
+          await store.recordPaused(tx, enrollmentId, action.pausedAt);
+          publisherOn(tx)?.afterCommit([row.studentUserId, row.teacherUserId], {
+            type: 'enrollment',
+            enrollmentId,
+          });
+        }
+        return { action: action.kind };
+    }
+  };
+
+  return {
+    survey: async (enrollmentId) => {
+      const terms = await termsOf();
+      return dependencies.transactions.run(async (tx): Promise<MonthSurvey | null> => {
+        const row = await store.programmeMonthOf(tx, enrollmentId);
+        if (row === null || !swept(row)) return null;
+        const facts = await factsOf(tx, row, terms, true);
+        const steps = MONTH_STEPS.filter(
+          (step) =>
+            monthStepOf(step, facts) !== null ||
+            (step === 'due' && !sameInstant(facts.nextDueAt, row.nextDueAt)),
+        );
+        const automatic = facts.orders.automatic;
+        const ask =
+          automatic !== null && inquiryDue(facts.now, automatic, terms.ttlMinutes, terms.tries)
+            ? automatic.paymentId
+            : null;
+        return { ask, steps };
+      });
+    },
+
+    step: async (step, enrollmentId, { askedNoAnswer }) => {
+      const terms = await termsOf();
+      return dependencies.transactions.run(async (tx): Promise<MonthStepDone> => {
+        const seen = await store.programmeMonthOf(tx, enrollmentId);
+        if (seen === null) return { action: 'none' };
+        await store.keyShareTeacher(tx, seen.teacherUserId);
+        await store.lockProgramme(tx, enrollmentId);
+        await store.lockEnrollment(tx, enrollmentId);
+        const row = await store.programmeMonthOf(tx, enrollmentId);
+        if (row === null || !swept(row)) return { action: 'none' };
+        if (await suspensionOpen(tx, enrollmentId, store.openCaseOf)) return { action: 'none' };
+        const facts = await factsOf(tx, row, terms, askedNoAnswer);
+        if (!sameInstant(facts.nextDueAt, row.nextDueAt)) {
+          await store.writeNextDue(tx, enrollmentId, facts.nextDueAt);
+        }
+        const action = monthStepOf(step, facts);
+        if (action === null) return { action: 'none' };
+        const done = await apply(tx, row, action, facts.now);
+        log.info(
+          {
+            enrollmentId,
+            instalmentMonth: row.monthsPaid + 1,
+            reason: action.kind,
+            ...(action.kind === 'retry' ? { attempt: action.attempt } : {}),
+          },
+          'A programme month step acted',
+        );
+        return done;
+      });
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T016 (FR-713a, FR-715, FR-716, FR-722, FR-724; R-508, R-509, R-510; SRS DEC-95, DEC-110,
+// DEC-113; B-P3's conflict check, the owner's «موافق على الكل (أ)»): the automatic renewal off.
+//
+// THE AUTOMATIC RENEWAL OFF (`programme.autoRenewOff`, the student, at any time; DEC-95). Keyed
+// (`programme.autoRenewOff`). The programme read once with no lock for its student, anyone else
+// NOT_FOUND as an unknown id; then the programme's row and the enrollment's (kernel.md's order, the
+// locks the sweep's due step reads the card under, 006:T015's row), read again under them; then
+// payments' `deleteProgrammeCard` deletes the saved card, if any, on this transaction. An «off» that
+// has answered is never followed by a new automatic order: a due step that took the programme first
+// has committed its order (a charge already `created` stays, the review session's reading of
+// DEC-95), and one that waits reads no card. Later months by hand (`programme.renew`). Refused
+// `CONFLICT` with the cause, nothing deleted, one line of ids and a reason: `closed` (the programme
+// closed or its enrollment no longer `confirmed`), `party_suspended` (an open `teacher_suspended` or
+// `student_suspended` case; PR #153 r1 Minor 2). One info line of ids and the reason; `enrollment`
+// to both parties after the commit.
+
+/** What the «off» reads and locks, over booking's rows and moderation's entry. */
+export interface AutoRenewOffStore {
+  programmeFactsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeFacts | null>;
+  lockProgramme(tx: Transaction, enrollmentId: string): Promise<void>;
+  lockEnrollment(tx: Transaction, enrollmentId: string): Promise<void>;
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+}
+
+export const autoRenewOffStore: AutoRenewOffStore = {
+  programmeFactsOf,
+  lockProgramme: (tx, enrollmentId) => lockRows(tx, 'programmes', [enrollmentId]),
+  lockEnrollment: (tx, enrollmentId) => lockRows(tx, 'enrollments', [enrollmentId]),
+  openCaseOf,
+};
+
+/** `programme.autoRenewOff` (this section's head, THE AUTOMATIC RENEWAL OFF). */
+export function turnAutoRenewOff(
+  studentUserId: string,
+  { idempotencyKey, ...input }: ProgrammeActionInput,
+  live: Pick<LivePublisher, 'afterCommit'>,
+  dependencies: ProgrammeServiceDependencies & { readonly offStore?: AutoRenewOffStore },
+): Promise<ProgrammeActionOutput> {
+  const store = dependencies.offStore ?? autoRenewOffStore;
+  const ids = { studentUserId, enrollmentId: input.enrollmentId };
+  const refused = (cause: ProgrammeAutoRenewOffRefusal): DomainError => {
+    dependencies.log.info({ ...ids, reason: cause }, 'The automatic renewal off was refused');
+    return markRefusalLogged(
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: cause }] }),
+    );
+  };
+  return dependencies.idempotency.run(
+    { scope: 'programme.autoRenewOff', key: idempotencyKey, actorId: studentUserId, input },
+    async (tx) => {
+      const seen = await store.programmeFactsOf(tx, input.enrollmentId);
+      if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+      await store.lockProgramme(tx, seen.enrollmentId);
+      await store.lockEnrollment(tx, seen.enrollmentId);
+      const facts = await store.programmeFactsOf(tx, seen.enrollmentId);
+      if (facts === null) throw new DomainError('NOT_FOUND');
+      if (facts.status !== 'confirmed' || facts.state === 'closed') throw refused('closed');
+      if (await suspensionOpen(tx, facts.enrollmentId, store.openCaseOf)) {
+        throw refused('party_suspended');
+      }
+      await (dependencies.deleteProgrammeCard ?? noProgrammeCardYet)(tx, facts.enrollmentId);
+      dependencies.log.info(
+        { ...ids, reason: 'auto_renew_off' },
+        'The automatic renewal was turned off',
+      );
+      live.afterCommit([facts.studentUserId, facts.teacherUserId], {
+        type: 'enrollment',
+        enrollmentId: facts.enrollmentId,
+      });
+      return { ok: true as const };
+    },
+  );
+}
+
+// THE RENEWAL'S CHECK (`programme.renew`, FR-715, FR-716, FR-720; R-509; FR-BOOK-12), run by
+// payments' checkout before the gateway and again on the record's transaction, as `programme.pay`'s
+// (006:T009). The programme read with no lock for its student (anyone else NOT_FOUND); then both
+// accounts, the student's unexpired own hold, the programme, the enrollments (the programme's and
+// the hold's), the instant the database's clock; then, under them, the month's orders (payments'
+// `monthOrders`, no lock: every order's move takes the enrollment first, held here) and FR-BOOK-12's
+// orders (payments' `orders`, their rows locked after the enrollments'). The month by hand is the
+// next one, `months_paid` + 1. Refused, with one line of ids and a reason: `closed` (closed, or the
+// enrollment no longer `confirmed`); `nothing_due` (not `active` or `paused`, in full, or every month
+// paid); `party_suspended` (a suspension case open); `charge_pending` (the month's automatic order
+// `created`, answered or not: the gateway may still take it, DEC-113 (1)); `not_due_yet` with no
+// failure of the month's automatic charge (failed, of either kind, or expired: «pay now» and «change
+// card», FR-716) while a card is saved (the month is charged by itself), or, with none, before the
+// due point (`lastToEnd`, derived from the sessions as the sweep derives it) less
+// `programme_renew_early_days` whole days on the instant (FR-715); and FR-BOOK-12's
+// `PREVIOUS_CHECKOUT` as `programme.pay`'s. A `no_payee` refusal is a hard failure, so once the
+// payout account is verified the month is taken by hand (PR #153 r4 Minor 1); `payee_unverified` is
+// the checkout's, before the gateway.
+
+/** §3.14: the days before the due point a student without a saved card may renew by hand (3). */
+export const PROGRAMME_RENEW_EARLY_DAYS_SETTING = 'programme_renew_early_days';
+
+/** What `programme.renew` creates its order from, read and checked under the locks (R-509). */
+export interface ProgrammeRenewTarget {
+  readonly enrollmentId: string;
+  readonly studentUserId: string;
+  readonly teacherUserId: string;
+  /** A programme is an `ijazah_track` enrollment (R-501). */
+  readonly track: 'ijazah_track';
+  /** The month by hand, `months_paid` + 1. */
+  readonly instalmentMonth: number;
+  /** The offer's count N, the assessment left out (R-501). */
+  readonly offerSessionCount: number;
+  /** The offer's frozen total (R-506). */
+  readonly total_piasters: Piasters;
+}
+
+/** What the renewal's check reads and locks, over booking's rows and the owners' entries. */
+export interface ProgrammeRenewStore extends Pick<
+  ProgrammePayStore,
+  'lockRows' | 'ownActiveHold' | 'activeHoldsByIds' | 'openCaseOf' | 'clock'
+> {
+  programmeMonthOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeMonthRow | null>;
+  /** Sessions' entry: the enrollment's sessions with their months. */
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+}
+
+export const programmeRenewStore: ProgrammeRenewStore = {
+  programmeMonthOf,
+  lockRows,
+  ownActiveHold,
+  activeHoldsByIds,
+  openCaseOf,
+  clock: clockTimestamp,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+};
+
+/** `programme.renew`'s own refusals (contracts' `programmeRenewRefusal`), the check's part. */
+type RenewRefusal = Exclude<ProgrammeRenewRefusal, 'payee_unverified'>;
+
+/** What a month by hand is decided on, each read only when the decision reaches it. */
+export interface RenewalReads {
+  /** A `teacher_suspended` or `student_suspended` case open. */
+  suspended(): Promise<boolean>;
+  /** The month's orders, `months_paid` + 1. */
+  month(): Promise<MonthOrders>;
+  /** The due point (`lastToEnd` over the paid month's sessions). */
+  due(): Promise<Date | null>;
+  readonly at: Date;
+  /** `programme_renew_early_days`. */
+  readonly earlyDays: number;
+}
+
+/**
+ * 006:T018 (Q-f3 (a), the owner, 2026-11-24): whether `programme.renew` takes the month now, and
+ * its refusal otherwise (this section's head): the renewal's check holds it under its locks, and
+ * `programme.get`'s `renewOpen` reads it with none, so the two never disagree.
+ */
+export async function renewalRefusalOf(
+  row: Pick<ProgrammeMonthRow, 'status' | 'state' | 'plan' | 'monthsPaid' | 'monthCount'>,
+  reads: RenewalReads,
+): Promise<RenewRefusal | null> {
+  if (row.status !== 'confirmed' || row.state === 'closed') return 'closed';
+  if (
+    (row.state !== 'active' && row.state !== 'paused') ||
+    row.plan !== 'monthly' ||
+    row.monthCount === null ||
+    row.monthsPaid >= row.monthCount
+  ) {
+    return 'nothing_due';
+  }
+  if (await reads.suspended()) return 'party_suspended';
+  const month = await reads.month();
+  const charge = month.automatic?.status;
+  if (charge === 'created') return 'charge_pending';
+  // «pay now» and «change card» after a failure of the month's charge (FR-716); otherwise «renew
+  // now» only without a card, from the early days before the due point (FR-715).
+  if (charge === 'failed' || charge === 'expired') return null;
+  if (month.cardSaved) return 'not_due_yet';
+  const due = await reads.due();
+  return due === null || reads.at < new Date(addDays(due, -reads.earlyDays)) ? 'not_due_yet' : null;
+}
+
+/** `programme.renew`'s check (this section's head, THE RENEWAL'S CHECK). */
+export async function checkedProgrammeRenew(
+  tx: Transaction,
+  {
+    studentUserId,
+    enrollmentId,
+  }: { readonly studentUserId: string; readonly enrollmentId: string },
+  dependencies: {
+    readonly orders: CheckoutOrdersAmong;
+    readonly monthOrders: MonthOrdersOf;
+    /** `programme_renew_early_days`, read before the transaction. */
+    readonly earlyDays: number;
+    readonly log: ProgrammeLog;
+    readonly store?: ProgrammeRenewStore;
+  },
+): Promise<ProgrammeRenewTarget> {
+  const store = dependencies.store ?? programmeRenewStore;
+  const refused = (reason: RenewRefusal | 'previous_checkout', error: DomainError): DomainError => {
+    dependencies.log.info(
+      { studentUserId, enrollmentId, reason },
+      'A programme renewal was refused',
+    );
+    return markRefusalLogged(error);
+  };
+  const cause = (reason: RenewRefusal) =>
+    refused(
+      reason,
+      new DomainError('CONFLICT', undefined, { details: [{ path: 'cause', code: reason }] }),
+    );
+  const seen = await store.programmeMonthOf(tx, enrollmentId);
+  if (seen === null || seen.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+  await store.lockRows(tx, 'users', [...new Set([studentUserId, seen.teacherUserId])].sort());
+  const at = await store.clock(tx);
+  const heldEnrollment = await ownHeldEnrollment(tx, store, studentUserId, at);
+  const enrollmentIds = [...new Set([enrollmentId, ...heldEnrollment])].sort();
+  await store.lockRows(tx, 'programmes', [enrollmentId]);
+  await store.lockRows(tx, 'enrollments', enrollmentIds);
+  const row = await store.programmeMonthOf(tx, enrollmentId);
+  if (row === null || row.studentUserId !== studentUserId) throw new DomainError('NOT_FOUND');
+  const refusal = await renewalRefusalOf(row, {
+    suspended: () => suspensionOpen(tx, enrollmentId, store.openCaseOf),
+    month: () => dependencies.monthOrders(tx, enrollmentId, row.monthsPaid + 1, at),
+    due: async () => nextDueOf({ ...row, sessions: await store.sessionsOf(tx, enrollmentId) }),
+    at,
+    earlyDays: dependencies.earlyDays,
+  });
+  if (refusal !== null) throw cause(refusal);
+  const orders = await dependencies.orders(tx, enrollmentIds, at);
+  for (const held of heldEnrollment) {
+    const standing = orders.get(held);
+    if (standing?.paid === true) {
+      throw refused('previous_checkout', previousCheckout(held, 'processing'));
+    }
+    if (standing?.payable) {
+      const { expiresAt } = standing.payable;
+      throw refused('previous_checkout', previousCheckout(held, 'payable', expiresAt));
+    }
+  }
+  const own = orders.get(enrollmentId);
+  if (own?.payable) {
+    const { expiresAt } = own.payable;
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'payable', expiresAt));
+  }
+  if (own?.programmeProcessing === true) {
+    throw refused('previous_checkout', previousCheckout(enrollmentId, 'processing'));
+  }
+  return {
+    enrollmentId,
+    studentUserId,
+    teacherUserId: row.teacherUserId,
+    track: 'ijazah_track',
+    instalmentMonth: row.monthsPaid + 1,
+    offerSessionCount: row.offerSessionCount,
+    total_piasters: row.offerTotal_piasters,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// 006:T018 (FR-726, FR-727; app-surface.md `programme.get`, admin-surface.md `programmes.queue`
+// and `programmes.get`; B-P3's conflict check, the owner's «موافق على الكل (أ) مع تحسين س٢»): the
+// reads. Each on one transaction with no lock: a read decides nothing.
+//
+// THE PROGRAMME (`programme.get`, either party). The programme read for its two parties only, anyone
+// else NOT_FOUND as an unknown id (R-GENDER-2's shape; the parties are of one gender, R-GENDER-4).
+// `card` (`last4`, brand) to the student alone, never its token (SC-707). `nextDueAt` derived from
+// the paid month's sessions (`nextDueOf`, as the sweep and the renewal derive it, Q-3 (a)).
+// `chargePending`: the month's automatic order `created`, until the gateway answers it, expired or
+// not (Q-f2 (a), the owner, 2026-11-24).
+// `payeePending`: payments' «unverified in live mode» (T008's entry), false in test mode.
+// `payBlocked`: a `pay_blocked` item open (FR-706b). `teacherUnavailable`: the teacher's account
+// gone, suspended or banned (FR-BOOK-19). `renewOpen` (Q-f3 (a), the owner, 2026-11-24): `programme.renew`
+// would take the month now, its check's own rule (`renewalRefusalOf`): with a card saved only after
+// the month's charge failed or expired («pay now», «change card»), with none «renew now» from
+// `programme_renew_early_days` before the due point; false while `payeePending` (the checkout's
+// `payee_unverified`), `chargePending` or a suspension holds.
+//
+// THE QUEUE (`programmes.queue`, an administrator). Oldest first in pages of `admin_list_page_size`
+// (one row more read, a cursor only while more follow): `paused`, the longest paused first; every
+// other filter, the open items of its kind by their time-ordered id (`refusal` has none since SRS
+// DEC-112). Each row names the two parties, the programme's state and pause, and its item: a
+// `no_offer` one with whether the assessment was held (PR #158 r1 Q-R1 (b)), a `pay_blocked` one
+// with whether the payout account is verified now (FR-706b).
+//
+// THE PROGRAMME'S PAGE (`programmes.get`, an administrator). The programme, its orders by kind
+// (payments', oldest first), its items with their reasons, `cardSaved` (a boolean, never a card
+// detail; Q-9 (a)), and, on a closed programme with no `assessment` release, whether the assessment
+// was held (PR #158 r2 Follow-up 2). An unknown or soft-deleted enrollment NOT_FOUND.
+
+/** The student's saved card as `programme.get` shows it: never its token (SC-707). */
+export interface ProgrammeCardView {
+  readonly last4: string;
+  readonly brand: string;
+}
+
+/** Payments' reads for `programme.get`, handed in by the composition root (R-208). */
+export interface ProgrammeReadPayments {
+  /** «Unverified in live mode» (T008's entry). */
+  readonly payee: {
+    unverifiedInLiveMode(tx: Transaction, teacherUserId: string): Promise<boolean>;
+  };
+  /** The month's orders and whether a card is saved, with no lock. */
+  readonly monthOrders: MonthOrdersOf;
+  /** The student's saved card, or null. */
+  readonly cardOf: (tx: Transaction, enrollmentId: string) => Promise<ProgrammeCardView | null>;
+}
+
+/** What `programme.get` reads of booking's rows and the owners' entries; stood in by a spec. */
+export interface ProgrammeReadStore {
+  viewOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeView | null>;
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  payBlockedOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+  standingOf(tx: Transaction, userId: string): ReturnType<typeof readStanding>;
+  clock(tx: Transaction): Promise<Date>;
+  /** Moderation's entry: the enrollment's open case of `reason`. */
+  openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+}
+
+export const programmeReadStore: ProgrammeReadStore = {
+  viewOf: programmeViewOf,
+  sessionsOf: async (tx, enrollmentId) =>
+    (await sessionsOfEnrollments(tx, [enrollmentId])).get(enrollmentId) ?? [],
+  payBlockedOpen: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'pay_blocked'),
+  standingOf: readStanding,
+  clock: clockTimestamp,
+  openCaseOf,
+};
+
+/** The account states in which the teacher is unavailable to the student (FR-BOOK-19). */
+const UNAVAILABLE_ACCOUNTS: ReadonlySet<string> = new Set(['suspended', 'banned']);
+
+/** The offer as both reads show it, the session's price `packages/money`'s (R-MONEY-5). */
+function offerOf(view: ProgrammeView): ProgrammeGetOutput['offer'] {
+  const { offer } = view;
+  if (offer === null) return null;
+  return {
+    level: offer.level,
+    readiness: offer.readiness,
+    expectedLength: offer.expectedLength,
+    durationMinutes: sessionLengthMinutes.parse(offer.durationMinutes),
+    sessionCount: offer.sessionCount,
+    total_piasters: offer.total_piasters,
+    sessionPrice_piasters: perSession(offer.total_piasters, offer.sessionCount),
+    offeredAt: offer.offeredAt.toISOString(),
+  };
+}
+
+/** No order read: a programme with no month to pay (`renewalRefusalOf` answers before it). */
+const NO_MONTH_ORDERS: MonthOrders = {
+  cardSaved: false,
+  payable: false,
+  processing: false,
+  automatic: null,
+};
+
+/** A month is still to pay on a monthly programme that runs (R-507). */
+function monthDue(view: ProgrammeView): boolean {
+  return (
+    view.status === 'confirmed' &&
+    (view.state === 'active' || view.state === 'paused') &&
+    view.plan === 'monthly' &&
+    view.monthCount !== null &&
+    view.monthsPaid < view.monthCount
+  );
+}
+
+const isoOrNull = (at: Date | null): string | null => (at === null ? null : at.toISOString());
+
+/** `programme.get` on `tx` for `userId` (this section's head, THE PROGRAMME). */
+export async function readProgramme(
+  tx: Transaction,
+  userId: string,
+  enrollmentId: string,
+  dependencies: {
+    readonly payments: ProgrammeReadPayments;
+    /** `programme_renew_early_days`, read before the transaction. */
+    readonly earlyDays: number;
+    readonly store?: ProgrammeReadStore;
+  },
+): Promise<ProgrammeGetOutput> {
+  const store = dependencies.store ?? programmeReadStore;
+  const { payments } = dependencies;
+  const view = await store.viewOf(tx, enrollmentId);
+  if (view === null || (userId !== view.studentUserId && userId !== view.teacherUserId)) {
+    throw new DomainError('NOT_FOUND');
+  }
+  const at = await store.clock(tx);
+  const due = monthDue(view)
+    ? nextDueOf({ ...view, sessions: await store.sessionsOf(tx, enrollmentId) })
+    : null;
+  const month = monthDue(view)
+    ? await payments.monthOrders(tx, enrollmentId, view.monthsPaid + 1, at)
+    : null;
+  // Q-f2 (a): pending until the gateway answers, expired or not.
+  const chargePending = month?.automatic?.status === 'created';
+  const payeePending = await payments.payee.unverifiedInLiveMode(tx, view.teacherUserId);
+  // Q-f3 (a): `programme.renew` would take the month now; the checkout refuses it while
+  // `payeePending` (`payee_unverified`).
+  const renewOpen =
+    !payeePending &&
+    (await renewalRefusalOf(view, {
+      suspended: () => suspensionOpen(tx, enrollmentId, store.openCaseOf),
+      month: async () => month ?? NO_MONTH_ORDERS,
+      due: async () => due,
+      at,
+      earlyDays: dependencies.earlyDays,
+    })) === null;
+  const payBlocked = await store.payBlockedOpen(tx, enrollmentId);
+  const teacher = await store.standingOf(tx, view.teacherUserId);
+  const card = userId === view.studentUserId ? await payments.cardOf(tx, enrollmentId) : null;
+  return {
+    state: view.state,
+    offerDueAt: isoOrNull(view.offerDueAt),
+    payBy: isoOrNull(view.payByAt),
+    offer: offerOf(view),
+    plan: view.plan,
+    monthsPaid: view.monthsPaid,
+    monthCount: view.monthCount,
+    nextDueAt: isoOrNull(due),
+    paused:
+      view.state === 'paused' && view.pausedAt !== null
+        ? { since: view.pausedAt.toISOString() }
+        : null,
+    renewOpen,
+    chargePending,
+    payeePending,
+    payBlocked,
+    teacherUnavailable: teacher === null || UNAVAILABLE_ACCOUNTS.has(teacher.accountStatus),
+    // The last four digits and the brand alone, to the student alone (SC-707).
+    card: card === null ? null : { last4: card.last4, brand: card.brand },
+  };
+}
+
+/** An order of the programme as payments answers it for the administrator's page. */
+export interface ProgrammeOrderRow {
+  readonly id: string;
+  readonly kind: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  readonly instalmentMonth: number | null;
+  readonly status: 'created' | 'paid' | 'failed' | 'expired' | 'refunded';
+  readonly automatic: boolean;
+  readonly declineKind: 'soft' | 'hard' | null;
+  readonly createdAt: Date;
+}
+
+/** Payments' reads for the administrator's two reads, handed in by the composition root. */
+export interface ProgrammeAdminReadPayments extends Pick<
+  ProgrammeReadPayments,
+  'payee' | 'monthOrders'
+> {
+  /** Every order of the enrollment, oldest first. */
+  readonly ordersOf: (
+    tx: Transaction,
+    enrollmentId: string,
+  ) => Promise<readonly ProgrammeOrderRow[]>;
+  /** Whether an `assessment` release is written for the enrollment. */
+  readonly assessmentReleased: (tx: Transaction, enrollmentId: string) => Promise<boolean>;
+}
+
+/** What the administrator's reads read of booking's rows and the owners' entries. */
+export interface ProgrammeAdminReadStore {
+  viewOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeView | null>;
+  sessionsOf(tx: Transaction, enrollmentId: string): Promise<readonly MonthSession[]>;
+  requestsOf(tx: Transaction, enrollmentId: string): Promise<readonly ProgrammeRequestView[]>;
+  openItemsPage(
+    tx: Transaction,
+    kind: ProgrammeRequestView['kind'],
+    after: string | undefined,
+    take: number,
+  ): Promise<readonly ProgrammeRequestView[]>;
+  pausedPage(
+    tx: Transaction,
+    after: string | undefined,
+    take: number,
+  ): Promise<readonly PausedProgramme[]>;
+  programmesAmong(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, QueuedProgramme>>;
+  /** Sessions' entry: where session 1's outcome chain stands. */
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
+  /** Identity's: display names by account. */
+  namesOf(tx: Transaction, userIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
+  clock(tx: Transaction): Promise<Date>;
+}
+
+export const programmeAdminReadStore: ProgrammeAdminReadStore = {
+  viewOf: programmeViewOf,
+  sessionsOf: programmeReadStore.sessionsOf,
+  requestsOf: programmeRequestsOf,
+  openItemsPage,
+  pausedPage,
+  programmesAmong: queuedProgrammesAmong,
+  assessmentOutcome,
+  namesOf: displayNamesOf,
+  clock: clockTimestamp,
+};
+
+/** The administrator's two reads on the call's transaction. */
+export interface ProgrammeAdminReads {
+  queue(tx: Transaction, input: ProgrammesQueueInput): Promise<ProgrammesQueueOutput>;
+  get(tx: Transaction, enrollmentId: string): Promise<ProgrammesGetOutput>;
+}
+
+/** The page size of every admin list (SRS §3.14, FR-412). */
+const LIST_PAGE_SIZE_SETTING = 'admin_list_page_size';
+
+/** An item as the administrator's reads show it; `assessmentHeld` on a `no_offer` one only. */
+function requestItemOf(
+  item: ProgrammeRequestView,
+  assessmentHeld: boolean | undefined,
+): ProgrammeRequestItem {
+  return {
+    requestId: item.id,
+    kind: item.kind,
+    ...(item.reason === null ? {} : { reason: item.reason }),
+    status: item.status,
+    createdAt: item.createdAt.toISOString(),
+    ...(item.decidedAt === null ? {} : { decidedAt: item.decidedAt.toISOString() }),
+    ...(item.kind === 'no_offer' && assessmentHeld !== undefined ? { assessmentHeld } : {}),
+  };
+}
+
+/** An order of the programme as its page shows it: a month and a decline only where set. */
+function orderItemOf(order: ProgrammeOrderRow): ProgrammeOrderItem {
+  return {
+    paymentId: order.id,
+    kind: order.kind,
+    ...(order.instalmentMonth === null ? {} : { instalmentMonth: order.instalmentMonth }),
+    status: order.status,
+    automatic: order.automatic,
+    ...(order.declineKind === null ? {} : { declineKind: order.declineKind }),
+    createdAt: order.createdAt.toISOString(),
+  };
+}
+
+/** The administrator's reads over `dependencies` (this section's head). */
+export function createProgrammeAdminReads(dependencies: {
+  readonly settings: SettingsReader;
+  readonly payments: ProgrammeAdminReadPayments;
+  readonly store?: ProgrammeAdminReadStore;
+}): ProgrammeAdminReads {
+  const store = dependencies.store ?? programmeAdminReadStore;
+  const { payments } = dependencies;
+  const held = async (tx: Transaction, enrollmentId: string): Promise<boolean> =>
+    (await store.assessmentOutcome(tx, enrollmentId)).kind === 'delivered';
+  const nameIn = (names: ReadonlyMap<string, string>, userId: string) => ({
+    displayName: names.get(userId) ?? '',
+  });
+
+  /** The queue's rows of a page: one per paused programme, or one per open item. */
+  const rowsOf = async (
+    tx: Transaction,
+    filter: ProgrammesQueueInput['filter'],
+    after: string | undefined,
+    take: number,
+  ): Promise<
+    readonly {
+      readonly cursor: string;
+      readonly enrollmentId: string;
+      readonly item?: ProgrammeRequestView;
+    }[]
+  > => {
+    if (filter === 'paused') {
+      return (await store.pausedPage(tx, after, take)).map(({ enrollmentId }) => ({
+        cursor: enrollmentId,
+        enrollmentId,
+      }));
+    }
+    return (await store.openItemsPage(tx, filter, after, take)).map((item) => ({
+      cursor: item.id,
+      enrollmentId: item.enrollmentId,
+      item,
+    }));
+  };
+
+  return {
+    queue: async (tx, { filter, cursor }) => {
+      const pageSize = await dependencies.settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
+      const rows = await rowsOf(tx, filter, cursor, pageSize + 1);
+      const page = rows.slice(0, pageSize);
+      const programmes = await store.programmesAmong(tx, [
+        ...new Set(page.map(({ enrollmentId }) => enrollmentId)),
+      ]);
+      const shown = page.flatMap((row) => {
+        const programme = programmes.get(row.enrollmentId);
+        return programme === undefined ? [] : [{ ...row, programme }];
+      });
+      const names = await store.namesOf(tx, [
+        ...new Set(
+          shown.flatMap(({ programme }) => [programme.studentUserId, programme.teacherUserId]),
+        ),
+      ]);
+      // Bounded by the page: one read each where the item's kind needs it.
+      const items: ProgrammesQueueOutput['items'] = [];
+      for (const { programme, item } of shown) {
+        const assessmentHeld =
+          item?.kind === 'no_offer' ? await held(tx, programme.enrollmentId) : undefined;
+        const payeeVerifiedNow =
+          item?.kind === 'pay_blocked'
+            ? !(await payments.payee.unverifiedInLiveMode(tx, programme.teacherUserId))
+            : null;
+        items.push({
+          enrollmentId: programme.enrollmentId,
+          teacher: nameIn(names, programme.teacherUserId),
+          student: nameIn(names, programme.studentUserId),
+          state: programme.state,
+          pausedSince: isoOrNull(programme.pausedAt),
+          request: item === undefined ? null : requestItemOf(item, assessmentHeld),
+          payeeVerifiedNow,
+        });
+      }
+      const last = page.at(-1);
+      return rows.length > pageSize && last !== undefined
+        ? { items, nextCursor: last.cursor }
+        : { items };
+    },
+
+    get: async (tx, enrollmentId) => {
+      const view = await store.viewOf(tx, enrollmentId);
+      if (view === null) throw new DomainError('NOT_FOUND');
+      const at = await store.clock(tx);
+      const sessions = monthDue(view) ? await store.sessionsOf(tx, enrollmentId) : [];
+      const requests = await store.requestsOf(tx, enrollmentId);
+      const orders = await payments.ordersOf(tx, enrollmentId);
+      const month = await payments.monthOrders(tx, enrollmentId, view.monthsPaid + 1, at);
+      const assessmentHeld =
+        requests.some(({ kind }) => kind === 'no_offer') || view.state === 'closed'
+          ? await held(tx, enrollmentId)
+          : undefined;
+      const unreleased =
+        view.state === 'closed' && !(await payments.assessmentReleased(tx, enrollmentId));
+      const names = await store.namesOf(tx, [view.studentUserId, view.teacherUserId]);
+      return {
+        enrollmentId,
+        teacher: nameIn(names, view.teacherUserId),
+        student: nameIn(names, view.studentUserId),
+        state: view.state,
+        offerDueAt: isoOrNull(view.offerDueAt),
+        payBy: isoOrNull(view.payByAt),
+        offer: offerOf(view),
+        plan: view.plan,
+        monthsPaid: view.monthsPaid,
+        monthCount: view.monthCount,
+        nextDueAt: isoOrNull(monthDue(view) ? nextDueOf({ ...view, sessions }) : null),
+        pausedAt: isoOrNull(view.pausedAt),
+        closedAt: isoOrNull(view.closedAt),
+        orders: orders.map(orderItemOf),
+        requests: requests.map((item) => requestItemOf(item, assessmentHeld)),
+        // Whether a card is saved, never a card detail (Q-9 (a), SC-707).
+        cardSaved: month.cardSaved === true,
+        ...(unreleased && assessmentHeld !== undefined ? { assessmentHeld } : {}),
+      };
+    },
+  };
 }
