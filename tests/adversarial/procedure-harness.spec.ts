@@ -78,6 +78,8 @@ import {
   type SessionProcedureAttacks,
   studentFacingProcedures,
 } from './procedure-harness.js';
+// 006:T022 (B-P4; SC-707): the suite-level card-detail check, run after the attacks below.
+import { describeProgrammeCardDetailCheck } from './programme.attacks.js';
 import { registeredAttacks } from './registered-attacks.js';
 
 const anyone = { key: 'rate_limit_search', subjectOf: () => 'anyone' } as const;
@@ -831,3 +833,6 @@ describe('an excluded teacher answers exactly as a nonexistent one: 404 and no f
 
 // The registered attacks, against the real router, both directions (T028, T043 register theirs).
 describeProcedureAttacks(registeredAttacks);
+// 006:T022 (B-P4; SC-707): after every registration's attacks, so it reads what the programme
+// attacks answered.
+describeProgrammeCardDetailCheck();

@@ -20,10 +20,25 @@
 //   tamperedToken         a tampered bearer token: 401 before anything is read.
 //   clientSuppliedGender  a `gender` field naming the other gender is ignored: the other gender's
 //                         programme stays hidden, the own one is offered.
-import { randomUUID } from 'node:crypto';
+//
+// 006:T022 (B-P4, the final reach; SC-707): `programme.get` is attacked on programmes that each hold
+// a saved card (`cardWorldFor`), so the student's read shows the card's last four and brand and
+// nothing else, the teacher's none, and every other party meets NOT_FOUND, both directions. Every
+// programme answer and refusal of the run is kept (`recorded`), and one suite-level check
+// (`describeProgrammeCardDetailCheck`, called by `procedure-harness.spec.ts` after the attacks)
+// finds no card detail in them nor in an audit entry naming the run's ids.
+import { randomBytes, randomUUID } from 'node:crypto';
 
-import { expect } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
+import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
+import {
+  closeDatabase,
+  type Database,
+  openDatabase,
+} from '../../apps/api/src/platform/db/prisma.repository.js';
+import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import { mapError } from '../../apps/api/src/platform/errors/error-filter.js';
 import { toErrorShape } from '../../apps/api/src/surfaces/procedures.js';
 import { expectUnauthenticated, neighbourOf, tamperedTokens } from './discovery.attacks.js';
 import {
@@ -38,6 +53,44 @@ import {
   type ProcedureAttacks,
 } from './procedure-harness.js';
 
+// ---------------------------------------------------------------------------------------------
+// 006:T022 (SC-707): what the run answered, kept for the suite-level check
+// ---------------------------------------------------------------------------------------------
+
+/** Every programme answer and refusal body of the run, as JSON, in the order they came. */
+const responses: string[] = [];
+/** The run's enrollments and parties: an audit entry naming one is read by the check. */
+const runIds = new Set<string>();
+
+/** A refusal as the client receives it: the surface's one formatter's body. */
+function refusalBodyOf(error: unknown): unknown {
+  return error instanceof Error && error.name === 'TRPCError'
+    ? toErrorShape(error as Parameters<typeof toErrorShape>[0]).body
+    : mapError(error).body;
+}
+
+/** The call's answer or refusal, kept as the client receives it; the call itself unchanged. */
+function recorded<T>(answer: Promise<T>): Promise<T> {
+  return answer.then(
+    (value) => {
+      responses.push(JSON.stringify(value));
+      return value;
+    },
+    (error: unknown) => {
+      responses.push(JSON.stringify(refusalBodyOf(error)));
+      throw error;
+    },
+  );
+}
+
+function remember(...pairs: readonly ProgrammePair[]): void {
+  for (const pair of pairs) {
+    runIds.add(pair.enrollmentId);
+    runIds.add(pair.student.userId);
+    runIds.add(pair.teacher.userId);
+  }
+}
+
 const HOLDS = 'R-GENDER-2, R-GENDER-4, FR-705, FR-410';
 
 /** The world's 45-minute programme price, 400 EGP: 40 sessions are 16,000 EGP in 10 months. */
@@ -46,16 +99,18 @@ const OFFERED = { total_piasters: 1_600_000, sessionPrice_piasters: 40_000, mont
 type OfferInput = Parameters<SessionParty['caller']['programme']['offer']>[0];
 
 function offer(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.offer({
-    enrollmentId,
-    level: 'يحفظ جزء عم',
-    readiness: 'جاهز',
-    expectedLength: 'عشرة أشهر',
-    durationMinutes: 45,
-    sessionCount: 40,
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as OfferInput);
+  return recorded(
+    party.caller.programme.offer({
+      enrollmentId,
+      level: 'يحفظ جزء عم',
+      readiness: 'جاهز',
+      expectedLength: 'عشرة أشهر',
+      durationMinutes: 45,
+      sessionCount: 40,
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as OfferInput),
+  );
 }
 
 /** The offer on `enrollmentId` answers exactly as one on an enrollment that never existed. */
@@ -74,6 +129,7 @@ async function worldFor(direction: Direction) {
     surface.programmePair(direction.other),
     surface.programmePair(direction.requester),
   ]);
+  remember(own, theirs, neighbour);
   return { surface, own, theirs, neighbour };
 }
 
@@ -172,21 +228,25 @@ type ActionInput = Parameters<SessionParty['caller']['programme']['cancel']>[0];
 type RequestInput = Parameters<SessionParty['caller']['programme']['request']>[0];
 
 function cancel(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.cancel({
-    enrollmentId,
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as ActionInput);
+  return recorded(
+    party.caller.programme.cancel({
+      enrollmentId,
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as ActionInput),
+  );
 }
 
 function request(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.request({
-    enrollmentId,
-    kind: 'stop',
-    reason: 'لا يناسبه البرنامج',
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as RequestInput);
+  return recorded(
+    party.caller.programme.request({
+      enrollmentId,
+      kind: 'stop',
+      reason: 'لا يناسبه البرنامج',
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as RequestInput),
+  );
 }
 
 type Call = (party: SessionParty, enrollmentId: string, extra?: object) => Promise<unknown>;
@@ -328,13 +388,15 @@ const PAY_HOLDS = 'R-GENDER-2, R-GENDER-4, FR-710, FR-410';
 type PayInput = Parameters<SessionParty['caller']['programme']['pay']>[0];
 
 function pay(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.pay({
-    enrollmentId,
-    plan: 'monthly',
-    saveCard: false,
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as PayInput);
+  return recorded(
+    party.caller.programme.pay({
+      enrollmentId,
+      plan: 'monthly',
+      saveCard: false,
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as PayInput),
+  );
 }
 
 /** The payment on `enrollmentId` answers exactly as one on an enrollment that never existed. */
@@ -359,6 +421,7 @@ async function offeredWorldFor(direction: Direction) {
     surface.offeredProgramme(direction.other),
     surface.offeredProgramme(direction.requester),
   ]);
+  remember(own, theirs, neighbour);
   return { surface, own, theirs, neighbour };
 }
 
@@ -436,11 +499,13 @@ const payAttacks: ProcedureAttacks = {
 // any time; on the pair's programme awaiting its offer it answers `{ ok: true }` (no card to delete),
 // so the attacks show the own student reaches the service and everyone else meets NOT_FOUND.
 function autoRenewOff(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.autoRenewOff({
-    enrollmentId,
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as ActionInput);
+  return recorded(
+    party.caller.programme.autoRenewOff({
+      enrollmentId,
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as ActionInput),
+  );
 }
 
 const autoRenewOffAttacks = partyAttacks(
@@ -461,12 +526,14 @@ const autoRenewOffAttacks = partyAttacks(
 type RenewInput = Parameters<SessionParty['caller']['programme']['renew']>[0];
 
 function renew(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.renew({
-    enrollmentId,
-    saveCard: false,
-    idempotencyKey: randomUUID(),
-    ...extra,
-  } as RenewInput);
+  return recorded(
+    party.caller.programme.renew({
+      enrollmentId,
+      saveCard: false,
+      idempotencyKey: randomUUID(),
+      ...extra,
+    } as RenewInput),
+  );
 }
 
 const renewAttacks = partyAttacks(
@@ -488,33 +555,92 @@ const renewAttacks = partyAttacks(
 );
 
 // 006:T018 (FR-726; contracts/app-surface.md `programme.get`): either party's read. Both the pair's
-// student and its teacher are answered (the programme awaiting its offer, no card); everyone else,
-// the other gender's parties above all, meets NOT_FOUND exactly as an unknown enrollment, both ways.
+// student and its teacher are answered; everyone else, the other gender's parties above all, meets
+// NOT_FOUND exactly as an unknown enrollment, both ways.
+//
+// 006:T022 (B-P4, (1); R-510, SC-707): every programme attacked here holds a saved card, written as
+// the DB specs write one (`programme-reads.spec.ts`): its token encrypted under
+// `programme_cards.token_encrypted`, the enrollment's id bound, through this module's own client. The
+// student's read answers the card's last four and brand and no other card field; the teacher's
+// `card: null`; every other party NOT_FOUND, whatever the card.
 type GetInput = Parameters<SessionParty['caller']['programme']['get']>[0];
 
 function get(party: SessionParty, enrollmentId: string, extra: object = {}) {
-  return party.caller.programme.get({ enrollmentId, ...extra } as GetInput);
+  return recorded(party.caller.programme.get({ enrollmentId, ...extra } as GetInput));
+}
+
+/** The saved card of every programme of `cardWorldFor`, as the gateway's `card_saved` reports one. */
+const CARD = { last4: '4821', brand: 'Mastercard' } as const;
+/** The card's token: card detail (SC-707), sent to the gateway alone, never answered. */
+const CARD_TOKEN = `adversarial-card-token-${randomUUID()}`;
+const CARD_TOKEN_COLUMN = 'programme_cards.token_encrypted';
+const cardCipher = new ColumnCipher(randomBytes(32).toString('base64'));
+
+/** This module's own client for the cards and the audit read; closed after the file's cases. */
+let cardsDatabase: Database | undefined;
+
+function cardsClient(): Database {
+  cardsDatabase ??= openDatabase(specDatabaseUrl('DATABASE_URL'), {
+    poolMax: 2,
+    statementTimeoutMs: 30_000,
+    idleInTransactionTimeoutMs: 30_000,
+  });
+  return cardsDatabase;
+}
+
+afterAll(async () => {
+  if (cardsDatabase !== undefined) await closeDatabase(cardsDatabase);
+});
+
+/** The programme's saved card, as `programme-reads.spec.ts` writes one. */
+async function withCard(pair: ProgrammePair): Promise<ProgrammePair> {
+  await cardsClient().programmeCard.create({
+    data: {
+      enrollmentId: pair.enrollmentId,
+      tokenEncrypted: Uint8Array.from(
+        cardCipher.encrypt(CARD_TOKEN, CARD_TOKEN_COLUMN, pair.enrollmentId),
+      ),
+      last4: CARD.last4,
+      brand: CARD.brand,
+      consentedAt: new Date(),
+    },
+    select: { enrollmentId: true },
+  });
+  return pair;
+}
+
+/** `worldFor`'s three programmes, each with a saved card. */
+async function cardWorldFor(direction: Direction) {
+  const world = await worldFor(direction);
+  await Promise.all([withCard(world.own), withCard(world.theirs), withCard(world.neighbour)]);
+  return world;
 }
 
 /**
- * The pair's two parties each read the programme, awaiting its offer; the teacher sees no card.
- * B-P4 (T022, the changed reads): the teacher-only fields go to the teacher alone: `offerTerms` (the
- * offer open to send: the world's three programme prices), `stopRequestOpen` false with none open,
- * `stopRequestFrom` null while not paused; the student is answered none of them.
+ * The pair's two parties each read the programme, awaiting its offer: the student its card's last
+ * four and brand, exactly; the teacher no card. B-P4 (T022, the changed reads): the teacher-only
+ * fields go to the teacher alone: `offerTerms` (the offer open to send: the world's three programme
+ * prices), `stopRequestOpen` false with none open, `stopRequestFrom` null while not paused; the
+ * student is answered none of them.
  */
 async function expectRead(pair: ProgrammePair, extra: object = {}): Promise<void> {
   for (const party of [pair.student, pair.teacher]) {
     expect(await get(party, pair.enrollmentId, extra)).toMatchObject({
       state: 'awaiting_offer',
       offer: null,
-      card: null,
       payeePending: false,
       stopRequestFrom: null,
       stopRequestOpen: false,
     });
   }
-  expect((await get(pair.student, pair.enrollmentId, extra)).offerTerms).toBeNull();
-  expect((await get(pair.teacher, pair.enrollmentId, extra)).offerTerms).toMatchObject({
+  const student = await get(pair.student, pair.enrollmentId, extra);
+  expect(student.card, 'the student: the last four and the brand, nothing else (SC-707)').toEqual(
+    CARD,
+  );
+  expect(student.offerTerms).toBeNull();
+  const teacher = await get(pair.teacher, pair.enrollmentId, extra);
+  expect(teacher.card, 'the teacher: no card (R-510)').toBeNull();
+  expect(teacher.offerTerms).toMatchObject({
     slotMinutes: expect.any(Number),
     prices: WORLD_PROGRAMME_PRICES,
   });
@@ -522,10 +648,10 @@ async function expectRead(pair: ProgrammePair, extra: object = {}): Promise<void
 
 const getAttacks: ProcedureAttacks = {
   path: 'programme.get',
-  holds: 'R-GENDER-2, R-GENDER-4, FR-726, FR-410, SC-707',
+  holds: 'R-GENDER-2, R-GENDER-4, FR-726, FR-410, R-510, SC-707',
   attacks: {
     directCall: async (direction) => {
-      const { own, theirs, neighbour } = await worldFor(direction);
+      const { own, theirs, neighbour } = await cardWorldFor(direction);
       for (const party of [own.student, own.teacher]) {
         await expectHiddenTo(get, party, theirs.enrollmentId);
       }
@@ -536,7 +662,7 @@ const getAttacks: ProcedureAttacks = {
       await expectRead(theirs);
     },
     forgedId: async (direction) => {
-      const { own, theirs, neighbour } = await worldFor(direction);
+      const { own, theirs, neighbour } = await cardWorldFor(direction);
       for (const forged of [
         theirs.enrollmentId,
         neighbour.enrollmentId,
@@ -551,7 +677,7 @@ const getAttacks: ProcedureAttacks = {
       await expectRead(own);
     },
     guessedId: async (direction) => {
-      const { own } = await worldFor(direction);
+      const { own } = await cardWorldFor(direction);
       for (const guessed of [
         randomUUID(),
         randomUUID(),
@@ -563,7 +689,7 @@ const getAttacks: ProcedureAttacks = {
       await expectRead(own);
     },
     tamperedToken: async (direction) => {
-      const { surface, own, theirs } = await worldFor(direction);
+      const { surface, own, theirs } = await cardWorldFor(direction);
       for (const token of tamperedTokens(
         direction,
         own.student.accessToken,
@@ -577,7 +703,7 @@ const getAttacks: ProcedureAttacks = {
       await expectRead(own);
     },
     clientSuppliedGender: async (direction) => {
-      const { own, theirs } = await worldFor(direction);
+      const { own, theirs } = await cardWorldFor(direction);
       await expectHiddenTo(get, own.student, theirs.enrollmentId, { gender: direction.other });
       await expectHiddenTo(get, own.teacher, theirs.enrollmentId, { gender: direction.other });
       await expectRead(own, { gender: direction.other });
@@ -598,3 +724,106 @@ export const programmeAttacks: readonly ProcedureAttacks[] = [
   // 006:T018.
   getAttacks,
 ];
+
+// ---------------------------------------------------------------------------------------------
+// 006:T022 (B-P4, (2); SC-707): the suite-level check
+// ---------------------------------------------------------------------------------------------
+
+/** A UUID, removed before the digit checks: its hex groups are ids, never card digits. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+/** A PAN-like run: 13 digits or more in one run (a card number is 13 to 19). */
+const PAN_RUN = /\d{13,}/;
+/** A PAN written in groups of four, as a card prints it (`4111 1111 1111 1111`). */
+const PAN_GROUPED = /(?<!\d)\d{4}(?:[ -]\d{4}){2}[ -]\d{1,7}(?!\d)/;
+/** An expiry, MM/YY or MM/YYYY, not part of a longer path of digits. */
+const EXPIRY = /(?<![\d/])(?:0[1-9]|1[0-2]) ?\/ ?(?:\d{2}|20\d{2})(?![\d/])/;
+/** A card field's name as a JSON key: none is in any contract of the programme. */
+const CARD_FIELD =
+  /"(?:token|cardToken|card_token|pan|cardNumber|card_number|expiry|expiryMonth|expiryYear|expMonth|expYear|exp_month|exp_year|holderName|cardholderName|cardHolder|holder_name)"\s*:/i;
+
+/** The card details SC-707 names that `text` carries: the token, a PAN, an expiry, a card field. */
+export function cardDetailsIn(text: string, tokens: readonly string[]): string[] {
+  const found: string[] = [];
+  if (tokens.some((token) => text.includes(token))) found.push('token');
+  const digits = text.replace(UUID, '<uuid>');
+  if (PAN_RUN.test(digits) || PAN_GROUPED.test(digits)) found.push('pan');
+  if (EXPIRY.test(digits)) found.push('expiry');
+  if (CARD_FIELD.test(text)) found.push('field');
+  return found;
+}
+
+/** The audit entries naming one of the run's enrollments or parties, whole, as JSON. */
+async function auditEntriesOfTheRun(): Promise<string[]> {
+  const rows = await cardsClient().auditLog.findMany({
+    where: { targetId: { in: [...runIds] } },
+    orderBy: { id: 'asc' },
+    select: {
+      action: true,
+      targetType: true,
+      targetId: true,
+      targetLabel: true,
+      reason: true,
+      before: true,
+      after: true,
+    },
+  });
+  return rows.map((row) => JSON.stringify(row));
+}
+
+/**
+ * 006:T022 (SC-707): run by `procedure-harness.spec.ts` after every registration's attacks, so it
+ * reads what the programme attacks answered. The check finds no card detail in any programme answer
+ * or refusal of the run, nor in an audit entry naming the run's enrollments or parties. A log line
+ * is not read here: the world's logger is silent (the question in the B-P4 lane i report).
+ */
+export function describeProgrammeCardDetailCheck(): void {
+  describe('SC-707: no card detail in what the programme attacks answered (006:T022)', () => {
+    it.each([
+      ['the token', '{"brand":"Visa fixture-token"}', 'token'],
+      ['a PAN in one run', '{"brand":"4111111111111111"}', 'pan'],
+      ['a PAN in groups of four', '{"brand":"4111 1111 1111 1111"}', 'pan'],
+      ['an expiry MM/YY', '{"brand":"Visa 12/29"}', 'expiry'],
+      ['an expiry MM/YYYY', '{"brand":"Visa 07/2031"}', 'expiry'],
+      ['a card field', '{"card":{"last4":"4242","expiry":"x"}}', 'field'],
+    ])('finds %s in a fixture', (_name, text, kind) => {
+      expect(cardDetailsIn(text, ['fixture-token'])).toEqual([kind]);
+    });
+
+    it('finds none in a clean answer: ids, a checkout address, an instant, the card shown, amounts', () => {
+      const token = 'fixture-token';
+      expect(
+        cardDetailsIn(
+          JSON.stringify({
+            enrollmentId: '0193a8f2-1234-5678-9012-345abcdef012',
+            checkoutUrl:
+              'http://127.0.0.1:61234/stand-in/checkout/fake_ord_0193a8f2-1234-5678-9012-345abcdef012',
+            payBy: '2026-11-25T18:00:00.000Z',
+            card: CARD,
+            total_piasters: 1_600_000,
+          }),
+          [token],
+        ),
+      ).toEqual([]);
+    });
+
+    it(
+      'finds none in the programme answers and the audit entries of the run',
+      { tags: ['database'] },
+      async () => {
+        expect(responses.length, 'the programme attacks ran first, in this file').toBeGreaterThan(
+          0,
+        );
+        expect(
+          responses.some((answer) => answer.includes(`"last4":"${CARD.last4}"`)),
+          'a saved card was read, so the check reads the card path',
+        ).toBe(true);
+        const leaks = responses.flatMap((answer) =>
+          cardDetailsIn(answer, [CARD_TOKEN]).map((kind) => `${kind}: ${answer.slice(0, 200)}`),
+        );
+        expect(leaks).toEqual([]);
+        const audits = await auditEntriesOfTheRun();
+        expect(audits.flatMap((entry) => cardDetailsIn(entry, [CARD_TOKEN]))).toEqual([]);
+      },
+    );
+  });
+}

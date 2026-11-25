@@ -15,7 +15,9 @@
 //     two Retries with one key at the same moment record one order, both answer its one address,
 //     and the extra order is cancelled at the gateway;
 //   - `checkout.current`'s first and last session (T085, FR-386): the booking sheet's previews of the
-//     held slot at the same instant, and the dates of a later read moving with its instant.
+//     held slot at the same instant, and the dates of a later read moving with its instant;
+//   - 006:T022 (PR #160 r2 nit 1): an automatic order with no gateway id, the enrollment's latest,
+//     is neither `checkout.status`'s last order nor a programme order `checkout.current` continues.
 //
 // HOW THE ROWS GO. The parents are committed as the application role through the API's client; the
 // suite removes every row it recorded creating through an OWNER connection afterwards, as
@@ -195,6 +197,8 @@ afterAll(async () => {
       users,
     ]);
     await owner.query(`DELETE FROM "payments" WHERE enrollment_id IN (${enrollments})`, [users]);
+    // 006:T022: the programme row of the automatic-order case.
+    await owner.query(`DELETE FROM "programmes" WHERE enrollment_id IN (${enrollments})`, [users]);
     await owner.query(
       'DELETE FROM "slot_holds" WHERE student_user_id = ANY($1) OR slot_id IN (SELECT id FROM "availability_slots" WHERE teacher_user_id = ANY($1))',
       [users],
@@ -785,5 +789,82 @@ describe('checkout.current: the first and last session if confirmed now (FR-386,
       localDate: '2026-12-10',
       startsAt: '2026-12-10T07:00:00Z',
     });
+  });
+});
+
+// 006:T022 (B-P4, Q-10 (a); PR #160 r2 nit 1; PR #160 r1 Minor 4): an automatic order under way is
+// no checkout. The student's active monthly programme has its assessment paid and month 2's
+// automatic order `created`, unexpired, with no gateway id yet (between its record and the gateway's
+// answer, R-509), the enrollment's latest order. `checkout.status` answers the last manual order
+// (`lastOrderOf`) and `checkout.current` offers no programme order to continue
+// (`payableProgrammeOrderAmong`); either read taking the automatic order would answer it, or fail
+// on its missing id.
+describe('an automatic order with no gateway id is no checkout to continue (006:T022, PR #160 r2 nit 1)', () => {
+  it('checkout.status answers the last manual order and checkout.current offers nothing, while the latest order is automatic with no gateway id', async () => {
+    const on = await offer();
+    const student = await person();
+    const { id: packageId } = await database.package.create({
+      data: {
+        teacherUserId: on.teacherId,
+        subjectId: on.subjectId,
+        track: 'ijazah_track',
+        isProgramme: true,
+        price30Piasters: 25_000n,
+        price45Piasters: 30_000n,
+        price60Piasters: 35_000n,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const { id: enrollmentId } = await database.enrollment.create({
+      data: {
+        studentUserId: student,
+        teacherUserId: on.teacherId,
+        packageId,
+        slotId: on.slotId,
+        snapshotPricePiasters: 1_025_000n,
+        snapshotSessionCount: 41,
+        snapshotDurationMinutes: 30,
+        snapshotSubjectId: on.subjectId,
+        snapshotSlotTimezone: CAIRO,
+        snapshotTrack: 'ijazah_track',
+        status: 'confirmed',
+        confirmedAt: new Date('2026-11-01T07:01:00Z'),
+        purchasedAt: new Date('2026-11-01T07:00:00Z'),
+        quotedFirstSessionLocalDate: new Date('2026-11-05T00:00:00Z'),
+      },
+      select: { id: true },
+    });
+    await database.programme.create({
+      data: {
+        enrollmentId,
+        state: 'active',
+        offeredAt: new Date('2026-11-02T07:00:00Z'),
+        monthCount: 10,
+        paymentPlan: 'monthly',
+        monthsPaid: 1,
+      },
+    });
+    const assessmentReference = `fake_ord_${randomUUID()}`;
+    // The assessment's order, paid, then month 2's automatic order, recorded and not yet sent; by
+    // SQL, as `automatic-charge.spec.ts` writes them.
+    await database.$executeRaw`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency, status,
+                            expires_at, kind, teacher_share_rate_percent, teacher_share_piasters,
+                            confirmed_at, updated_at)
+      VALUES (${enrollmentId}::uuid, 'fake', ${assessmentReference}, 25000, 'EGP', 'paid',
+              '2026-11-01T07:10:00Z', 'assessment', 70, 17500, '2026-11-01T07:01:00Z', now())`;
+    await database.$executeRaw`
+      INSERT INTO payments (enrollment_id, gateway, gross_piasters, currency, status, expires_at,
+                            kind, instalment_month, attempt, automatic,
+                            teacher_share_rate_percent, teacher_share_piasters, updated_at)
+      VALUES (${enrollmentId}::uuid, 'fake', 100000, 'EGP', 'created', now() + interval '10 minutes',
+              'instalment', 2, 0, true, 70, 70000, now())`;
+
+    expect(await checkout.status(studentOf(student), { enrollmentId })).toMatchObject({
+      status: 'confirmed',
+      lastOrder: { status: 'paid', reference: assessmentReference },
+    });
+    expect(await checkout.current(studentOf(student))).toEqual({});
   });
 });
