@@ -758,6 +758,12 @@ export interface DiscoverySurface {
   ): Promise<Response>;
   /** T038: the chat's in-memory storage, each operation recorded. */
   readonly chatStorage: ReturnType<typeof storageStub>;
+  /**
+   * 006:T022 (B-P4 update 2; Q-i1 (a), the owner, 2026-11-25; SC-707): every line the world's
+   * services logged, as the platform's logger writes it (redacted, JSON), from `debug` up, kept in
+   * memory only, so the suite-level card-detail check reads them; nothing reaches stdout.
+   */
+  readonly logLines: readonly string[];
   /** T038: removes a spec's chat documents, their rows by id and their files by their exact keys. */
   discardChatDocuments(messageIds: readonly string[]): Promise<void>;
   /**
@@ -891,7 +897,16 @@ async function build(): Promise<Built> {
     ...TIMEOUTS,
   });
   const created = { users: [] as string[], subjects: [] as string[], ijazahs: [] as string[] };
-  const log = createLogger({ level: 'fatal' });
+  // 006:T022 (B-P4 update 2; Q-i1 (a)): `logLines`, kept from `debug` up and written nowhere else.
+  const logLines: string[] = [];
+  const log = createLogger({
+    level: 'debug',
+    destination: {
+      write: (line: string) => {
+        logLines.push(line);
+      },
+    },
+  });
   const encryptionKey = randomBytes(32).toString('base64');
 
   // The webhook is bound once the origin is known: the stand-in's port is built from it.
@@ -950,7 +965,8 @@ async function build(): Promise<Built> {
   consequences.subscribe(
     terminationSubscriber({
       orders: orderStandingsOf,
-      log: { info: () => undefined, warn: () => undefined },
+      // 006:T022 (B-P4 update 2): the world's one logger, so its lines are read too.
+      log,
     }),
   );
   const identity: IdentityServices = {
@@ -965,7 +981,8 @@ async function build(): Promise<Built> {
       },
       email: { deliver: async () => undefined },
       storage,
-      log: { warn: () => undefined, info: () => undefined },
+      // 006:T022 (B-P4 update 2): the world's one logger.
+      log,
       payment: {
         async registerPayoutRecipient(teacherUserId, details) {
           const recipientRef = await payment.registerPayoutRecipient(teacherUserId, details);
@@ -989,7 +1006,8 @@ async function build(): Promise<Built> {
     // binds it until T006.
     certificateName: createCertificateNameService({
       idempotency,
-      log: { info: () => undefined },
+      // 006:T022 (B-P4 update 2): the world's one logger.
+      log,
       awaitingNameRelease: { release: async () => undefined },
     }),
   };
@@ -1371,6 +1389,8 @@ async function build(): Promise<Built> {
     server,
     created,
     world: { prefix, shared, teachers },
+    // 006:T022 (B-P4 update 2; Q-i1 (a)).
+    logLines,
     student(gender) {
       const student = students.get(gender);
       if (student === undefined) throw new Error(`no ${gender} student`);
