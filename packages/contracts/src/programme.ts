@@ -127,6 +127,29 @@ export const programmeGetOutput = z.object({
   payBlocked: z.boolean(),
   teacherUnavailable: z.boolean(),
   card: programmeCard.nullable(),
+  /**
+   * 006:T020 (B-P4's conflict check, Q-2 (a), the owner, 2026-11-25; SRS DEC-112): the instant the
+   * teacher's stop button shows from, `paused_at` + `programme_stop_request_days`, the rule of
+   * `programme.request`'s `too_early` (the server's guard). Null unless paused, and to the student.
+   */
+  stopRequestFrom: z.iso.datetime().nullable(),
+  /**
+   * 006:T019 (Q-5 (b), SRS DEC-114, FR-708): the instant the «pay before» line shows from,
+   * `payBy` − `programme_pay_reminder_hours`; null unless `offered`. The phone reads no setting.
+   */
+  payReminderFrom: z.iso.datetime().nullable(),
+});
+
+/**
+ * 006:T019, T020 (B-P4's conflict check, Q-3 (a), Q-5 (b), the owner, 2026-11-25): a programme's
+ * enrollment as the two parties' enrollment reads mark it, so the card and the detail know it and
+ * show «pay before» (`payBy`, `payReminderFrom` as `programme.get` answers them). Absent on an
+ * enrollment that is no programme. Additive (R-API-9).
+ */
+export const enrollmentProgramme = z.object({
+  state: programmeState,
+  payBy: z.iso.datetime().nullable(),
+  payReminderFrom: z.iso.datetime().nullable(),
 });
 
 /** `programme.offer`: the teacher's offer after the delivered assessment (FR-705, R-506). */
@@ -271,6 +294,7 @@ export type ProgrammeGetInput = z.infer<typeof programmeGetInput>;
 export type ProgrammeOffer = z.infer<typeof programmeOffer>;
 export type ProgrammeCard = z.infer<typeof programmeCard>;
 export type ProgrammeGetOutput = z.infer<typeof programmeGetOutput>;
+export type EnrollmentProgramme = z.infer<typeof enrollmentProgramme>;
 export type ProgrammeOfferInput = z.infer<typeof programmeOfferInput>;
 export type ProgrammeOfferOutput = z.infer<typeof programmeOfferOutput>;
 export type ProgrammeOfferRefusal = z.infer<typeof programmeOfferRefusal>;

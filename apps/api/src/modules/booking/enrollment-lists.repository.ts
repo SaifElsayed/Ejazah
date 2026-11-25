@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import type { EnrollmentCancellationReason } from './enrollment-events.repository.js';
+import type { ProgrammeState } from './programmes.repository.js';
 
 /**
  * One enrollment as the lists read it: its parties, its status and its snapshot's package line; and
@@ -241,6 +242,30 @@ export function listedEnrollmentOf(
       adminEndReason: true,
     },
   });
+}
+
+/** 006:T019, T020: a programme as the enrollment reads mark it: its state and the rest's deadline. */
+export interface ListedProgrammeRow {
+  readonly state: ProgrammeState;
+  readonly payByAt: Date | null;
+}
+
+/**
+ * 006:T019, T020 (B-P4's conflict check, Q-3 (a)): of `enrollmentIds`, those that are programmes,
+ * with their state and `pay_by_at`, in one statement over the primary key (`programmes.enrollment_id`),
+ * bounded by the read's enrollments. The ids come from the caller's own reads (each scoped to its
+ * party), so no other party's programme is read.
+ */
+export async function programmesAmong(
+  tx: Pick<Transaction, 'programme'>,
+  enrollmentIds: readonly string[],
+): Promise<ReadonlyMap<string, ListedProgrammeRow>> {
+  if (enrollmentIds.length === 0) return new Map();
+  const rows = await tx.programme.findMany({
+    where: { enrollmentId: { in: [...enrollmentIds] } },
+    select: { enrollmentId: true, state: true, payByAt: true },
+  });
+  return new Map(rows.map(({ enrollmentId, state, payByAt }) => [enrollmentId, { state, payByAt }]));
 }
 
 /** Of `enrollmentIds`, the teacher's own, for the sessions of the teacher's day. */

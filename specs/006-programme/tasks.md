@@ -980,6 +980,14 @@ No open question remains.
   > sends `saveCard: false`. The profile's programme card (range, fee), its booking bar and the booking sheet's length
   > per time replace today's narrowing (`ProfilePackage.tsx:35-36`, `TeacherProfile.tsx:100-101`,
   > `BookingSheet.tsx:221-222`). Every new Arabic string, the consent words first, goes to the owner before the commit.
+  > **Lane a's stop (the owner, 2026-11-25, «تمام موافق», typed in B-P4's review session).** The `payeePending` line
+  > reads «الدفع غير متاح مؤقتًا، وسيُتاح قريبًا.» / "Payment is temporarily unavailable and will open soon.", the
+  > owner's wording in place of this line's «payment opens once the teacher's payment details are verified»; the gate is
+  > unchanged (no «pay now» or «change card» while it shows). The cancellation is worded as declining the offer («رفض
+  > العرض»), and `programme.cancel`'s `payment_processing` refusal shows its own line («دفعتك قيد التأكيد، لا يمكن رفض
+  > العرض الآن.»). Q-A1 (a): after a programme payment the phone returns to the enrollment's page (a second
+  > `checkout/hosted.ts` entry), not the assessment's success screen; Q-A2 (a): `CheckoutPrevious.tsx` continues a
+  > payable programme order (`checkoutCurrentOutput.programmeOrder`). Both outside files approved.
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`

@@ -116,7 +116,9 @@ automatic renewal off (DEC-95), and at a teacher's suspension, ban or departure 
 
 ## Settings (R-515)
 
-Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
+Ten keys: the first eight with seed 95 → 103 (`programme_offer_hours` 24 among them); *(2026-11-24, B-P3, SRS
+DEC-113: + `programme_charge_inquiry_tries`, 108 → 109; 2026-11-25, B-P4, SRS DEC-114: + `programme_pay_reminder_hours`,
+109 → 110)*:
 - `programme_enabled` (off);
 - `assessment_price_piasters` (0) *(2026-11-22, B-P1 Q-B4 (a): named `_price_` because R-MONEY-6's lint refuses «fee» with an amount outside payments)*;
 - `assessment_duration_minutes` (30);
@@ -125,7 +127,8 @@ Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_stop_request_days` (7);
 - `programme_pay_reminder_hours` (12, 1 to 47; the student's reminder line before `payBy`, FR-708) *(2026-11-25, B-P4, SRS DEC-114)*;
 - `programme_renew_early_days` (3);
-- `programme_charge_retry_days` ([1,3,5,7]).
+- `programme_charge_retry_days` ([1,3,5,7]);
+- `programme_charge_inquiry_tries` (6; unanswered asks about an automatic charge before the `charge_unknown` item) *(2026-11-24, B-P3, SRS DEC-113; listed 2026-11-25, B-P4)*.
 
 A new registry unit `piasters`.
 

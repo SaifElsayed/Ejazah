@@ -2708,6 +2708,7 @@
         "programme_charge_retry_days": "Ijazah programme: retry days of a failed automatic charge",
         "programme_enabled": "Ijazah programme: turned on",
         "programme_offer_hours": "Ijazah programme: time to send the offer after the assessment",
+        "programme_pay_reminder_hours": "Ijazah programme: hours before the deadline to pay the rest that the payment reminder shows",
         "programme_pay_rest_hours": "Ijazah programme: time to pay the rest, from the offer",
         "programme_renew_early_days": "Ijazah programme: renewal by hand before a paid month ends",
         "programme_stop_request_days": "Ijazah programme: pause before a stop request",

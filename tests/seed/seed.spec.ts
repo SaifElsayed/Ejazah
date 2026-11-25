@@ -131,6 +131,8 @@ const SETTINGS: Record<string, unknown> = {
   programme_charge_retry_days: [1, 3, 5, 7],
   // 006:T014 (SRS DEC-113, research R-515 as amended): the unanswered asks before the item.
   programme_charge_inquiry_tries: 6,
+  // 006:T019 (SRS DEC-114, B-P4's conflict check Q-5 (b)): the reminder's hours before `payBy`.
+  programme_pay_reminder_hours: 12,
   // Phase 3 (T001): data-model.md §4 of specs/004-sessions, in its order; `teacher_no_show_threshold`
   // is no longer planted. The default's, the four administrator limits' and the live channel's two
   // are the rows T062's and T063's specs read.
@@ -396,7 +398,8 @@ describe('the seed (T074)', () => {
     // 002:T172 (SRS DEC-103): + the two limits per client address; 002:T173: + the failed codes' cap;
     // R1a (002:T176): + identity_document_retention_days; 006:T002: + the programme's eight (95 + 4 + 8).
     // 004:T084 (R1b, DEC-106): + rate_limit_encryption_failure (107 + 1). 006:T014 (SRS DEC-113):
-    // + programme_charge_inquiry_tries (108 + 1).
-    expect(counts).toEqual([{ subjects: '5', settings: '109', admins: '1' }]);
+    // + programme_charge_inquiry_tries (108 + 1). 006:T019 (SRS DEC-114): + programme_pay_reminder_hours
+    // (109 + 1).
+    expect(counts).toEqual([{ subjects: '5', settings: '110', admins: '1' }]);
   });
 });

@@ -103,6 +103,9 @@ const GET_ANSWER = {
   payBlocked: false,
   teacherUnavailable: false,
   card: { last4: '4242', brand: 'Visa' },
+  // 006:T019, T020 (B-P4, rule d): neither instant on an active programme.
+  stopRequestFrom: null,
+  payReminderFrom: null,
 } as const;
 
 const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));

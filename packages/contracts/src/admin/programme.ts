@@ -162,7 +162,10 @@ export const programmesDecideOutput = z.object({ status: programmeRequestStatus 
  * 006:T008 (SRS DEC-112): `reason_required`, a `no_offer` decision without the administrator's
  * reason; `makeup_pending`, approving a `no_offer` item while session 1's make-up is pending (Q-B5
  * (a)). 006:T017 (B-P3 lane e, Q-e4 (b), the owner, 2026-11-24): `sessions_pending`, approving a
- * stop while a session of the programme is still scheduled or a remedy of one is open.
+ * stop while a session of the programme is still scheduled or a remedy of one is open. 006:T021
+ * (B-P4's conflict check, Q-1 (a) amended, the owner, 2026-11-25; SRS DEC-113): `charge_answered`, a
+ * `charge_unknown` decision once the month's automatic order is no longer `created` (the gateway
+ * answered it; PR #160 r1 FU1). Additive.
  */
 export const programmesDecideRefusal = z.enum([
   'not_open',
@@ -172,6 +175,7 @@ export const programmesDecideRefusal = z.enum([
   'reason_required',
   'makeup_pending',
   'sessions_pending',
+  'charge_answered',
 ]);
 
 /** `programmes.reopen`: a `programme_stopped` programme, back to `paused` (R-513, FR-725). */

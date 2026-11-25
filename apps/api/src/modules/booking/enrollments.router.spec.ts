@@ -273,6 +273,28 @@ describe("'enrollments.get' (T049)", () => {
     expect(answer.teacher).toEqual(deleted);
   });
 
+  // 006:T019 (B-P4's conflict check, Q-4 (a), Q-3 (a), the owner, 2026-11-25): a programme of a
+  // 60-session offer holds 61 sessions with its assessment; the output schema's old cap of 52 failed
+  // the whole read. The marker passes the output schema to the phone.
+  it('answers a 60-session offer’s programme (61 sessions) with its programme marker (006, Q-4 (a))', async () => {
+    const programme = {
+      state: 'offered' as const,
+      payBy: '2026-11-25T16:00:00.000Z',
+      payReminderFrom: '2026-11-25T04:00:00.000Z',
+    };
+    enrollmentAnswer = {
+      ...item,
+      summary: { ...item.summary, track: 'ijazah_track', sessionCount: 61 },
+      programme,
+      sessions: [item.next],
+      complaintOpen: false,
+      ijazahRequest: null,
+    };
+    const answer = await calls$.get(callerAs(sessionOf('student')));
+    expect(answer.summary.sessionCount).toBe(61);
+    expect(answer.programme).toEqual(programme);
+  });
+
   it('sends another student’s enrollment NOT_FOUND with no field: the code and its message alone', async () => {
     const thrown: unknown = await callerAs(sessionOf('student'))
       .enrollments.get({ enrollmentId: OTHERS })

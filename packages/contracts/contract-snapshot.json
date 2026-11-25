@@ -4583,6 +4583,14 @@
           },
           "$.next.timezone": { "required": true, "type": "string" },
           "$.paused": { "required": true, "type": "boolean" },
+          "$.programme": { "type": "object" },
+          "$.programme.payBy": { "required": true, "type": "null|string" },
+          "$.programme.payReminderFrom": { "required": true, "type": "null|string" },
+          "$.programme.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
@@ -4775,6 +4783,14 @@
           },
           "$.items[].next.timezone": { "required": true, "type": "string" },
           "$.items[].paused": { "required": true, "type": "boolean" },
+          "$.items[].programme": { "type": "object" },
+          "$.items[].programme.payBy": { "required": true, "type": "null|string" },
+          "$.items[].programme.payReminderFrom": { "required": true, "type": "null|string" },
+          "$.items[].programme.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
           "$.items[].remaining": { "required": true, "type": "integer" },
           "$.items[].status": {
             "required": true,
@@ -4968,6 +4984,7 @@
           "$.paused.since": { "required": true, "type": "string" },
           "$.payBlocked": { "required": true, "type": "boolean" },
           "$.payBy": { "required": true, "type": "null|string" },
+          "$.payReminderFrom": { "required": true, "type": "null|string" },
           "$.payeePending": { "required": true, "type": "boolean" },
           "$.plan": { "required": true, "type": "null|string", "values": ["in_full", "monthly"] },
           "$.renewOpen": { "required": true, "type": "boolean" },
@@ -4976,6 +4993,7 @@
             "type": "string",
             "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
           },
+          "$.stopRequestFrom": { "required": true, "type": "null|string" },
           "$.teacherUnavailable": { "required": true, "type": "boolean" }
         }
       },
@@ -6142,6 +6160,14 @@
           },
           "$.next.timezone": { "required": true, "type": "string" },
           "$.paused": { "required": true, "type": "boolean" },
+          "$.programme": { "type": "object" },
+          "$.programme.payBy": { "required": true, "type": "null|string" },
+          "$.programme.payReminderFrom": { "required": true, "type": "null|string" },
+          "$.programme.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
           "$.remaining": { "required": true, "type": "integer" },
           "$.sessions": { "required": true, "type": "array" },
           "$.sessions[]": { "type": "object" },
@@ -6335,6 +6361,14 @@
           },
           "$.items[].next.timezone": { "required": true, "type": "string" },
           "$.items[].paused": { "required": true, "type": "boolean" },
+          "$.items[].programme": { "type": "object" },
+          "$.items[].programme.payBy": { "required": true, "type": "null|string" },
+          "$.items[].programme.payReminderFrom": { "required": true, "type": "null|string" },
+          "$.items[].programme.state": {
+            "required": true,
+            "type": "string",
+            "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
+          },
           "$.items[].remaining": { "required": true, "type": "integer" },
           "$.items[].status": {
             "required": true,
