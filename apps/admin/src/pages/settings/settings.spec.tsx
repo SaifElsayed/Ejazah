@@ -534,3 +534,82 @@ describe('the switch’s audit entry by name (006:T002, Q-3)', () => {
     );
   });
 });
+
+// 006:T021 (B-P4's conflict check, Q-7, the owner's design, 2026-11-25: «لكل الزراير»): beside each
+// setting's name an «i» button, named for its setting, whose hover hint says «اضغط للشرح»; a press
+// opens a dialog titled by the setting's name with its explanation (`admin.settings.explain.<key>`),
+// each line a paragraph. `programme_enabled`'s says what turning it on and off does, and that off
+// reactivates no package.
+const explainOf = (key: string) => `admin.settings.explain.${key}` as MessageKey;
+
+async function explanation(setting: { readonly key: string }, t: Translate = ar) {
+  const row = await rowOf(setting, t);
+  const button = row.getByRole('button', {
+    name: t('admin.settings.explainButton.a11y', { setting: t(labelOf(setting.key)) }),
+  });
+  fireEvent.click(button);
+  const dialog = await screen.findByRole('dialog', { name: t(labelOf(setting.key)) });
+  return { button, dialog: within(dialog) };
+}
+
+const paragraphsOf = (dialog: ReturnType<typeof within>) =>
+  dialog
+    .getAllByText((_content: string, element: Element | null) => element?.tagName === 'P')
+    .map((paragraph: HTMLElement) => paragraph.textContent);
+
+describe('the «i» beside each setting (006:T021, Q-7)', () => {
+  it('puts an «i» beside every setting’s name, its hint on hover, and opens its explanation, in both languages', async () => {
+    await inBothLocales(
+      () => open(),
+      async (t) => {
+        await screen.findByText(t(labelOf(attendance.key)));
+        for (const setting of ITEMS) {
+          const { button, dialog } = await explanation(setting, t);
+          expect(button.closest('td')?.textContent).toBe(t(labelOf(setting.key)));
+          expect(button.closest('[title]')?.getAttribute('title')).toBe(
+            t('admin.settings.explainButton.hint'),
+          );
+          expect(paragraphsOf(dialog)).toEqual(t(explainOf(setting.key)).split('\n'));
+          fireEvent.click(
+            dialog.getByRole('button', { name: t('admin.settings.explainButton.close') }),
+          );
+          await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        }
+      },
+    );
+  });
+
+  it('explains the programme’s switch: on, off, and that off reactivates no package', async () => {
+    const programmeEnabled = {
+      key: 'programme_enabled',
+      value: 0,
+      default: 0,
+      bounds: { shape: 'number', value: from(0, 1) },
+      unit: 'count',
+      group: 'booking',
+      srsRow: 'Programme: the programme turned on (off: ijazah-track Packages sold as before)',
+    } as const;
+    const api = fakeApi();
+    api.settings.list.query.mockResolvedValue({ items: [programmeEnabled] });
+    await inBothLocales(
+      () => open(api),
+      async (t) => {
+        const { dialog } = await explanation(programmeEnabled, t);
+        const paragraphs = paragraphsOf(dialog);
+        expect(paragraphs).toEqual(t(explainOf('programme_enabled')).split('\n'));
+        expect(paragraphs).toHaveLength(3);
+        expect(paragraphs[2]?.startsWith('⚠️')).toBe(true);
+        fireEvent.click(
+          dialog.getByRole('button', { name: t('admin.settings.explainButton.close') }),
+        );
+      },
+    );
+  });
+
+  it('changes nothing by a press: no setting is written', async () => {
+    const { api } = open();
+    const { dialog } = await explanation(attendance);
+    fireEvent.click(dialog.getByRole('button', { name: ar('admin.settings.explainButton.close') }));
+    expect(api.settings.update.mutate).not.toHaveBeenCalled();
+  });
+});
