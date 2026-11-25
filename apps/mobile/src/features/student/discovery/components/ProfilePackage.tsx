@@ -3,6 +3,7 @@
 // then the total and the price per session, both computed by the server in `packages/money` and
 // drawn here in pounds. The remedy line is the phone's copy by track; the answer carries none. T044:
 // the package the student chose is drawn selected, and a press chooses it (screens.md §4).
+// 006:T019 (FR-704): a programme package is drawn as the programme's card (`ProgrammePackage`).
 import type { DiscoveryTeacherPackage, PackageTrack } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { View } from 'react-native';
@@ -12,6 +13,7 @@ import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
 import { formatPounds } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
+import { ProgrammePackage } from '../../programme';
 import { TRACK_LABEL } from '../tracks';
 
 /** What a session that is not consumed becomes, by track (ADR 0018 D2). */
@@ -32,8 +34,9 @@ export function ProfilePackage({
   const t = useT();
   const locale = useLocale();
   const nameOf = useSubjectName();
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
-  if (item.isProgramme === true) return null;
+  if (item.isProgramme === true) {
+    return <ProgrammePackage item={item} selected={selected} onPress={onPress} />;
+  }
   return (
     <Card variant={selected ? 'selected' : 'compact'} onPress={onPress}>
       <View
