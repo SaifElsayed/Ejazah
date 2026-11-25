@@ -102,7 +102,7 @@ function Programme({
       )}
       {view.offerForm ? (
         <OfferForm
-          subjectId={enrollment.summary.subject.id}
+          terms={programme.offerTerms}
           offerDueAt={programme.offerDueAt}
           when={when}
           onSend={actions.offer}

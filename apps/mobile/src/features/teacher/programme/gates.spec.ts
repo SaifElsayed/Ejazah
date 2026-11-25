@@ -3,12 +3,20 @@
 // offer with the assessment delivered (its deadline known); the offer as sent once offered; the
 // administration's line while `payBlocked`; the months while it runs; «late since» while paused. The
 // stop request only from the server's `stopRequestFrom` on: never while it is null, never before it.
-// The offer's texts 1 to 500 characters once trimmed; the session price for a length from the
-// teacher's one programme package of the enrollment's subject.
-import type { ProgrammeGetOutput, TeacherPackage } from '@ijazah/contracts';
+// The offer's texts 1 to 500 characters once trimmed. B-P4 round 2 (Q-B2 (a), Q-B3 (a)): the form
+// only while the server answers its terms (`offerTerms`, null once the deadline passed); its lengths
+// those that fit the reserved weekly time (`slotMinutes`), its price the programme package's for the
+// length (`offerTerms.prices`); no stop button while a stop request is open (`stopRequestOpen`).
+import type { ProgrammeGetOutput } from '@ijazah/contracts';
 import { describe, expect, it } from '@jest/globals';
 
-import { offerTextOf, sessionPriceOf, stopRequestShown, teacherProgrammeViewOf } from './gates';
+import {
+  offerLengthsOf,
+  offerPriceOf,
+  offerTextOf,
+  stopRequestShown,
+  teacherProgrammeViewOf,
+} from './gates';
 
 const OFFER = {
   level: 'حافظ لعشرة أجزاء',
@@ -19,6 +27,12 @@ const OFFER = {
   total_piasters: 1_000_000,
   sessionPrice_piasters: 25_000,
   offeredAt: '2026-11-23T16:00:00.000Z',
+} as const;
+
+/** The terms the server answers while the offer is open to send: a 60-minute weekly time. */
+const TERMS = {
+  slotMinutes: 60,
+  prices: { m30_piasters: 15_000, m45_piasters: 20_000, m60_piasters: 25_000 },
 } as const;
 
 function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
@@ -40,6 +54,8 @@ function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
     card: null,
     stopRequestFrom: null,
     payReminderFrom: null,
+    offerTerms: TERMS,
+    stopRequestOpen: false,
     ...of,
   };
 }
@@ -53,6 +69,10 @@ describe('teacherProgrammeViewOf', () => {
 
   it('no offer form before the assessment is delivered (no deadline yet)', () => {
     expect(teacherProgrammeViewOf(programme({ offerDueAt: null })).offerForm).toBe(false);
+  });
+
+  it('no offer form while the server answers no terms (the deadline passed)', () => {
+    expect(teacherProgrammeViewOf(programme({ offerTerms: null })).offerForm).toBe(false);
   });
 
   it('no offer form when not awaiting_offer', () => {
@@ -99,16 +119,37 @@ describe('teacherProgrammeViewOf', () => {
 
 describe('stopRequestShown (SRS DEC-112, FR-723; Q-2 (a))', () => {
   it('shows the stop request from stopRequestFrom on', () => {
-    expect(stopRequestShown({ stopRequestFrom: '2026-12-28T18:00:00.000Z' }, NOW)).toBe(true);
-    expect(stopRequestShown({ stopRequestFrom: '2026-12-01T00:00:00.000Z' }, NOW)).toBe(true);
+    expect(
+      stopRequestShown(
+        { stopRequestFrom: '2026-12-28T18:00:00.000Z', stopRequestOpen: false },
+        NOW,
+      ),
+    ).toBe(true);
+    expect(
+      stopRequestShown(
+        { stopRequestFrom: '2026-12-01T00:00:00.000Z', stopRequestOpen: false },
+        NOW,
+      ),
+    ).toBe(true);
   });
 
   it('no stop button before stopRequestFrom', () => {
-    expect(stopRequestShown({ stopRequestFrom: '2026-12-28T18:00:01.000Z' }, NOW)).toBe(false);
+    expect(
+      stopRequestShown(
+        { stopRequestFrom: '2026-12-28T18:00:01.000Z', stopRequestOpen: false },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it('no stop button while a stop request is open (Q-B3 (a))', () => {
+    expect(
+      stopRequestShown({ stopRequestFrom: '2026-12-01T00:00:00.000Z', stopRequestOpen: true }, NOW),
+    ).toBe(false);
   });
 
   it('no stop button when stopRequestFrom is null', () => {
-    expect(stopRequestShown({ stopRequestFrom: null }, NOW)).toBe(false);
+    expect(stopRequestShown({ stopRequestFrom: null, stopRequestOpen: false }, NOW)).toBe(false);
   });
 });
 
@@ -124,65 +165,21 @@ describe('offerTextOf (FR-705; 1 to 500 characters)', () => {
   });
 });
 
-describe('sessionPriceOf (FR-705)', () => {
-  const QURAN = {
-    id: '0193a6f0-0000-7000-8000-0000000000a1',
-    nameAr: 'حفظ القرآن',
-    nameEn: 'Quran',
-  };
-  const TAJWEED = {
-    id: '0193a6f0-0000-7000-8000-0000000000a2',
-    nameAr: 'التجويد',
-    nameEn: 'Tajweed',
-  };
-  const programmePackage = (subject: typeof QURAN, id: string): TeacherPackage => ({
-    id,
-    subject,
-    track: 'ijazah_track',
-    isProgramme: true,
-    prices: { m30_piasters: 15_000, m45_piasters: 20_000, m60_piasters: 25_000 },
-    isActive: true,
-    activeEnrollmentCount: 1,
-    frozen: true,
-  });
-  const fixed: TeacherPackage = {
-    id: '0193a6f0-0000-7000-8000-0000000000b9',
-    subject: QURAN,
-    track: 'recitation',
-    sessionCount: 8,
-    sessionDurationMinutes: 60,
-    price_piasters: 99_900,
-    perSession_piasters: 12_487,
-    isActive: true,
-    activeEnrollmentCount: 0,
-    frozen: false,
-  };
-
-  it('reads the price for the length from the one programme package of the subject', () => {
-    const packages = [fixed, programmePackage(QURAN, '0193a6f0-0000-7000-8000-0000000000b1')];
-    expect(sessionPriceOf(packages, QURAN.id, 30)).toBe(15_000);
-    expect(sessionPriceOf(packages, QURAN.id, 45)).toBe(20_000);
-    expect(sessionPriceOf(packages, QURAN.id, 60)).toBe(25_000);
+describe('offerLengthsOf and offerPriceOf (FR-705; Q-B2 (a))', () => {
+  it('offers the lengths that fit the reserved weekly time', () => {
+    expect(offerLengthsOf({ ...TERMS, slotMinutes: 60 })).toEqual([30, 45, 60]);
+    expect(offerLengthsOf({ ...TERMS, slotMinutes: 45 })).toEqual([30, 45]);
+    expect(offerLengthsOf({ ...TERMS, slotMinutes: 30 })).toEqual([30]);
   });
 
-  it('none without one, or with two of the subject (the server prices the offer)', () => {
-    expect(sessionPriceOf([fixed], QURAN.id, 60)).toBeUndefined();
-    expect(
-      sessionPriceOf(
-        [programmePackage(TAJWEED, '0193a6f0-0000-7000-8000-0000000000b2')],
-        QURAN.id,
-        60,
-      ),
-    ).toBeUndefined();
-    expect(
-      sessionPriceOf(
-        [
-          programmePackage(QURAN, '0193a6f0-0000-7000-8000-0000000000b1'),
-          programmePackage(QURAN, '0193a6f0-0000-7000-8000-0000000000b3'),
-        ],
-        QURAN.id,
-        60,
-      ),
-    ).toBeUndefined();
+  it('no length longer than the reserved weekly time', () => {
+    expect(offerLengthsOf({ ...TERMS, slotMinutes: 45 })).not.toContain(60);
+    expect(offerLengthsOf({ ...TERMS, slotMinutes: 30 })).not.toContain(45);
+  });
+
+  it('prices the length from the programme package’s prices the server answers', () => {
+    expect(offerPriceOf(TERMS, 30)).toBe(15_000);
+    expect(offerPriceOf(TERMS, 45)).toBe(20_000);
+    expect(offerPriceOf(TERMS, 60)).toBe(25_000);
   });
 });

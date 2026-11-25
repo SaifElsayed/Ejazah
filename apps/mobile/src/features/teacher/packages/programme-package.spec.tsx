@@ -15,7 +15,7 @@ import type { ReactElement } from 'react';
 import { inBothDirections, renderIn } from '../../../design/primitives/__tests__/harness';
 import { type MessageKey, type MessageValues, translate } from '../../../i18n';
 import { formatNumber, formatPoundAmount, formatPounds } from '../../../lib/formatters';
-import { fakeApi } from '../../shared/__tests__/api-double';
+import { apiError, CHECKOUT_POLLING, fakeApi } from '../../shared/__tests__/api-double';
 import { PackageEditor, Packages } from './index';
 
 let mockApi = fakeApi();
@@ -249,5 +249,157 @@ describe('the programme package in the editor (FR-704, FR-704a)', () => {
     expect(save().props.accessibilityState).toMatchObject({ disabled: true });
     await typeIn('rtl', 45, '210');
     expect(save().props.accessibilityState).not.toMatchObject({ disabled: true });
+  });
+});
+
+// B-P4 round 2 (Q-B1 (a); FR-704, R-503): a new package on the ijazah track while the programme's
+// switch is on (`platform.publicConfig.programmeEnabled`) is a programme package: its three prices in
+// place of the count, the length and the total, each with its share and its own average, sent as
+// `prices`. While the switch is off, and on the recitation track, today's fields. The fee unset
+// (`assessment_fee_unset`) is said in its own words.
+describe('a new programme package while the programme is on (Q-B1 (a))', () => {
+  const switchTo = (programmeEnabled: boolean) =>
+    mockApi.value.client.publicConfig.mockResolvedValue({
+      supportEmail: 'support@ijazah.test',
+      termsVersion: '2026-10',
+      checkout: CHECKOUT_POLLING,
+      teacherSharePercent: 70,
+      paymentMode: 'test',
+      programmeEnabled,
+    });
+  const priceField = (direction: 'rtl' | 'ltr', minutes: number) =>
+    screen.queryByLabelText(said(direction, 'programme.teacher.package.price', { minutes }));
+  async function chooseSubjectAndTrack(
+    direction: 'rtl' | 'ltr',
+    track: 'common.track.ijazahTrack' | 'common.track.recitation',
+  ): Promise<void> {
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: said(direction, 'teacher.packages.editor.subject'),
+      }),
+    );
+    await fireEvent.press(await screen.findByText(named(direction)));
+    await fireEvent.press(
+      screen.getByRole('button', { name: said(direction, 'common.action.done') }),
+    );
+    await fireEvent.press(screen.getByRole('radio', { name: said(direction, track) }));
+  }
+
+  beforeEach(() => {
+    mockParams = { id: 'new' };
+    mockApi.api.teacher.credentials.list.query.mockResolvedValue([
+      {
+        credentialId: '0193a6f0-0000-7000-8000-0000000000d1',
+        subject: QURAN,
+        status: 'approved',
+        submittedAt: '2026-10-21T09:00:00.000Z',
+        document: {},
+      },
+    ]);
+    mockApi.api.teacher.packages.create.mutate.mockResolvedValue(programme);
+  });
+
+  it('shows the three prices on the ijazah track, each with its own average, and none of today’s fields', async () => {
+    switchTo(true);
+    await inBothDirections(
+      withQueries(() => <PackageEditor />),
+      async (_rendered, direction) => {
+        await chooseSubjectAndTrack(direction, 'common.track.ijazahTrack');
+        for (const minutes of [30, 45, 60]) {
+          expect(
+            await screen.findByLabelText(
+              said(direction, 'programme.teacher.package.price', { minutes }),
+            ),
+          ).toBeTruthy();
+          expect(
+            await screen.findByText(
+              said(direction, 'money.packageEditor.averagePrice', {
+                amount: amountOf(direction, minutes * 500),
+              }),
+            ),
+          ).toBeTruthy();
+        }
+        expect(
+          screen.queryByLabelText(said(direction, 'teacher.packages.editor.sessionCount')),
+        ).toBeNull();
+        expect(
+          screen.queryByLabelText(said(direction, 'teacher.packages.editor.totalPrice')),
+        ).toBeNull();
+        expect(
+          screen.queryByRole('radio', {
+            name: said(direction, 'teacher.packages.editor.durationOption', { minutes: 30 }),
+          }),
+        ).toBeNull();
+      },
+    );
+  });
+
+  it('creates it keyed with its three prices in piasters, active, then goes back', async () => {
+    switchTo(true);
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await chooseSubjectAndTrack('rtl', 'common.track.ijazahTrack');
+    await fireEvent.changeText(
+      await screen.findByLabelText(ar('programme.teacher.package.price', { minutes: 30 })),
+      '150',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText(ar('programme.teacher.package.price', { minutes: 45 })),
+      '٢٠٠',
+    );
+    await fireEvent.changeText(
+      screen.getByLabelText(ar('programme.teacher.package.price', { minutes: 60 })),
+      '250.5',
+    );
+    await fireEvent.press(screen.getByRole('button', { name: ar('teacher.packages.editor.save') }));
+    await waitFor(() =>
+      expect(mockApi.api.teacher.packages.create.mutate).toHaveBeenCalledWith({
+        subjectId: QURAN.id,
+        track: 'ijazah_track',
+        prices: { m30_piasters: 15_000, m45_piasters: 20_000, m60_piasters: 25_050 },
+        isActive: true,
+        idempotencyKey: 'package-key-0193a6f0-1',
+      }),
+    );
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('back'));
+  });
+
+  it('says the assessment fee is not set when the server refuses assessment_fee_unset', async () => {
+    switchTo(true);
+    mockApi.api.teacher.packages.create.mutate.mockRejectedValue(
+      apiError('CONFLICT', [{ path: 'isActive', code: 'assessment_fee_unset' }]),
+    );
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await chooseSubjectAndTrack('rtl', 'common.track.ijazahTrack');
+    for (const minutes of [30, 45, 60]) {
+      await fireEvent.changeText(
+        await screen.findByLabelText(ar('programme.teacher.package.price', { minutes })),
+        '100',
+      );
+    }
+    await fireEvent.press(screen.getByRole('button', { name: ar('teacher.packages.editor.save') }));
+    expect(await screen.findByText(ar('programme.teacher.package.feeUnset'))).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalledWith('back');
+  });
+
+  it('no programme prices while the programme is off: the ijazah track keeps today’s fields', async () => {
+    switchTo(false);
+    await inBothDirections(
+      withQueries(() => <PackageEditor />),
+      async (_rendered, direction) => {
+        await chooseSubjectAndTrack(direction, 'common.track.ijazahTrack');
+        expect(
+          await screen.findByLabelText(said(direction, 'teacher.packages.editor.sessionCount')),
+        ).toBeTruthy();
+        expect(priceField(direction, 30)).toBeNull();
+      },
+    );
+  });
+
+  it('no programme prices on the recitation track, the programme on', async () => {
+    switchTo(true);
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    await chooseSubjectAndTrack('rtl', 'common.track.recitation');
+    expect(await screen.findByLabelText(ar('teacher.packages.editor.sessionCount'))).toBeTruthy();
+    expect(priceField('rtl', 30)).toBeNull();
   });
 });

@@ -5,7 +5,10 @@
 // the teacher's zone. The total and the months as `packages/money` computes them from the teacher's
 // price for the length (`programmeOfferAmounts`), shown while that price is known; the server prices
 // the offer itself at sending. Each refusal of `programme.offer` is said in its own words.
-import type { SessionLengthMinutes } from '@ijazah/contracts';
+// B-P4 round 2 (Q-B2 (a)): the lengths are those that fit the reserved weekly time and the price is
+// the programme package's, both from the terms the server answers (`offerTerms`); the panel passes
+// the terms its gate checked, and with none nothing can be sent.
+import type { ProgrammeOfferTerms, SessionLengthMinutes } from '@ijazah/contracts';
 import {
   MAX_PROGRAMME_SESSION_COUNT,
   PROGRAMME_TEXT_MAX_LENGTH,
@@ -29,9 +32,9 @@ import { useLocale, useT } from '../../../../i18n';
 import { errorCodeOf, errorDetailsOf } from '../../../../lib/client';
 import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { formatPounds, useFormatters } from '../../../../lib/formatters';
-import { offerCountOf, usePackages } from '../../packages';
+import { offerCountOf } from '../../packages';
 import { type OfferTerms } from '../api';
-import { offerTextOf, sessionPriceOf } from '../gates';
+import { offerLengthsOf, offerPriceOf, offerTextOf } from '../gates';
 
 /** The fewest sessions an offer has (`programmeOfferInput.sessionCount`). */
 const MIN_OFFER_SESSIONS = 1;
@@ -82,13 +85,13 @@ function OfferText({
 }
 
 export function OfferForm({
-  subjectId,
+  terms,
   offerDueAt,
   when,
   onSend,
 }: {
-  /** The enrollment's subject, whose programme package prices the preview. */
-  readonly subjectId: string;
+  /** The offer's terms the server answers: the weekly time's length and the package's prices. */
+  readonly terms: ProgrammeOfferTerms | null;
   /** The offer's deadline (`offerDueAt`), drawn while the server answers one. */
   readonly offerDueAt: string | null;
   /** An instant as a date and a time in the teacher's zone. */
@@ -98,7 +101,6 @@ export function OfferForm({
   const t = useT();
   const locale = useLocale();
   const format = useFormatters();
-  const packages = usePackages();
   const [level, setLevel] = useState('');
   const [readiness, setReadiness] = useState('');
   const [expectedLength, setExpectedLength] = useState('');
@@ -110,12 +112,18 @@ export function OfferForm({
   const texts = [offerTextOf(level), offerTextOf(readiness), offerTextOf(expectedLength)] as const;
   const sessionCount = offerCountOf(countText);
   const countWrong = countText.trim() !== '' && sessionCount === null;
-  const price_piasters = sessionPriceOf(packages.data?.packages ?? [], subjectId, minutes);
+  const lengths = terms === null ? [] : offerLengthsOf(terms);
+  const price_piasters =
+    terms === null || !lengths.includes(minutes) ? undefined : offerPriceOf(terms, minutes);
   const amounts =
     price_piasters !== undefined && sessionCount !== null
       ? programmeOfferAmounts(price_piasters, sessionCount)
       : undefined;
-  const ready = texts.every((text) => text !== null) && sessionCount !== null && !sending;
+  const ready =
+    texts.every((text) => text !== null) &&
+    sessionCount !== null &&
+    lengths.includes(minutes) &&
+    !sending;
 
   async function send(): Promise<void> {
     const [levelText, readinessText, lengthText] = texts;
@@ -164,7 +172,7 @@ export function OfferForm({
       >
         <Segmented
           accessibilityLabel={t('programme.teacher.offer.duration')}
-          options={SESSION_LENGTHS_MINUTES.map((value) => ({
+          options={lengths.map((value) => ({
             value: String(value),
             label: t('teacher.packages.editor.durationOption', { minutes: value }),
           }))}

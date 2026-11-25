@@ -10,6 +10,10 @@
 // server's `stopRequestFrom` on (none while it is null, none before it, the button drawn when the
 // instant comes on an open screen): a reason form (1 to 500), `programme.request` kind `stop`, each
 // refusal in its own words. No refusal button and no hint anywhere (SRS DEC-112).
+// B-P4 round 2 (Q-B2 (a), Q-B3 (a)): the form only while the server answers its terms (`offerTerms`,
+// null once the deadline passed); only the lengths that fit the reserved weekly time (`slotMinutes`);
+// the total from the programme package's prices the server answers (`offerTerms.prices`), not the
+// teacher's package list; while a stop request is open, «طلبك بانتظار قرار الإدارة» and no button.
 import type {
   MeOutput,
   ProgrammeGetOutput,
@@ -107,6 +111,15 @@ const OFFER = {
   offeredAt: '2026-11-23T16:00:00.000Z',
 } as const;
 
+/**
+ * The terms the server answers while the offer is open: a 60-minute weekly time, and prices other
+ * than the package list's, so the total is seen to come from these.
+ */
+const TERMS = {
+  slotMinutes: 60,
+  prices: { m30_piasters: 16_000, m45_piasters: 21_000, m60_piasters: 26_000 },
+} as const;
+
 function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
   return {
     state: 'awaiting_offer',
@@ -126,11 +139,20 @@ function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
     card: null,
     stopRequestFrom: null,
     payReminderFrom: null,
+    offerTerms: TERMS,
+    stopRequestOpen: false,
     ...of,
   };
 }
 const offered = (of: Partial<ProgrammeGetOutput> = {}) =>
-  programme({ state: 'offered', offer: OFFER, payBy: PAY_BY, monthCount: 10, ...of });
+  programme({
+    state: 'offered',
+    offer: OFFER,
+    payBy: PAY_BY,
+    monthCount: 10,
+    offerTerms: null,
+    ...of,
+  });
 const paused = (of: Partial<ProgrammeGetOutput> = {}) =>
   programme({
     state: 'paused',
@@ -141,6 +163,7 @@ const paused = (of: Partial<ProgrammeGetOutput> = {}) =>
     monthCount: 10,
     nextDueAt: NEXT_DUE,
     paused: { since: SINCE },
+    offerTerms: null,
     ...of,
   });
 
@@ -270,7 +293,7 @@ describe('the offer (FR-705)', () => {
     });
   });
 
-  it('shows the total and the months as packages/money computes them, from the price for the length', async () => {
+  it('shows the total and the months as packages/money computes them, from the terms’ price for the length', async () => {
     get().mockResolvedValue(programme());
     await inBothDirections(ui, async (_rendered, direction) => {
       const locale = localeOf(direction);
@@ -281,14 +304,40 @@ describe('the offer (FR-705)', () => {
         }),
       );
       await typeIn(direction, 'programme.teacher.offer.sessionCount', '42');
-      expect(screen.getByText(formatPounds(piasters(1_050_000), locale))).toBeTruthy();
+      expect(screen.getByText(formatPounds(piasters(1_092_000), locale))).toBeTruthy();
       expect(screen.getByText(formatNumber(11, locale))).toBeTruthy();
       await fireEvent.press(
         screen.getByRole('radio', {
           name: said(direction, 'teacher.packages.editor.durationOption', { minutes: 30 }),
         }),
       );
-      expect(screen.getByText(formatPounds(piasters(630_000), locale))).toBeTruthy();
+      expect(screen.getByText(formatPounds(piasters(672_000), locale))).toBeTruthy();
+    });
+  });
+
+  it('offers only the lengths that fit the reserved weekly time', async () => {
+    get().mockResolvedValue(programme({ offerTerms: { ...TERMS, slotMinutes: 45 } }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      const option = (minutes: number) =>
+        screen.queryByRole('radio', {
+          name: said(direction, 'teacher.packages.editor.durationOption', { minutes }),
+        });
+      expect(option(30)).toBeTruthy();
+      expect(option(45)).toBeTruthy();
+      expect(option(60)).toBeNull();
+    });
+  });
+
+  it('no offer form while the server answers no terms (the deadline passed)', async () => {
+    get().mockResolvedValue(programme({ offerTerms: null }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(
+        screen.getByText(said(direction, 'programme.teacher.state.awaiting_offer')),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'programme.teacher.offer.title'))).toBeNull();
+      expect(button(direction, 'programme.teacher.offer.send')).toBeNull();
     });
   });
 
@@ -448,6 +497,23 @@ describe('a running programme (FR-726)', () => {
 });
 
 describe('the stop request (FR-723, SRS DEC-112, Q-2 (a))', () => {
+  it('no stop button while a stop request is open: the line that it awaits the administration', async () => {
+    get().mockResolvedValue(paused({ stopRequestFrom: PAST, stopRequestOpen: true }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(screen.getByText(said(direction, 'programme.teacher.stop.open'))).toBeTruthy();
+      expect(button(direction, 'programme.teacher.stop.action')).toBeNull();
+    });
+  });
+
+  it('no stop line while no stop request is open', async () => {
+    get().mockResolvedValue(paused({ stopRequestFrom: PAST }));
+    await renderIn('rtl', ui());
+    await shown('rtl');
+    expect(screen.queryByText(ar('programme.teacher.stop.open'))).toBeNull();
+    expect(button('rtl', 'programme.teacher.stop.action')).toBeTruthy();
+  });
+
   it('no stop button when stopRequestFrom is null', async () => {
     get().mockResolvedValue(paused({ stopRequestFrom: null }));
     await inBothDirections(ui, async (_rendered, direction) => {
@@ -531,6 +597,7 @@ describe('no refusal (SRS DEC-112)', () => {
       offered(),
       offered({ payBlocked: true }),
       paused({ stopRequestFrom: PAST }),
+      paused({ stopRequestFrom: PAST, stopRequestOpen: true }),
       paused({ state: 'active', paused: null }),
     ]) {
       get().mockResolvedValue(read);

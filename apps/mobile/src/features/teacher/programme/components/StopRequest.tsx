@@ -4,6 +4,8 @@
 // instant, cleared on unmount. It opens a sheet that says the administration decides, with the
 // reason form (1 to 500, `ReasonForm`); `programme.request` kind `stop`. Once sent, a line says so in
 // place of the button; each refusal (`too_early`, `request_open`, `not_paused`) in its own words.
+// B-P4 round 2 (Q-B3 (a)): while the server says a stop request is open (`stopRequestOpen`), the line
+// «طلبك بانتظار قرار الإدارة», and no button: the button is `stopRequestShown`'s alone.
 import type { ProgrammeGetOutput } from '@ijazah/contracts';
 import { secondsUntil } from '@ijazah/time/calendar';
 import { useEffect, useState } from 'react';
@@ -51,7 +53,7 @@ export function StopRequest({
   programme,
   onSend,
 }: {
-  readonly programme: Pick<ProgrammeGetOutput, 'stopRequestFrom'>;
+  readonly programme: Pick<ProgrammeGetOutput, 'stopRequestFrom' | 'stopRequestOpen'>;
   readonly onSend: (reason: string) => Promise<unknown>;
 }) {
   const t = useT();
@@ -60,14 +62,19 @@ export function StopRequest({
   const [sent, setSent] = useState(false);
   const [failure, setFailure] = useState<ErrorMessage | null>(null);
   useRedrawAt(programme.stopRequestFrom);
-  if (sent) {
+  const waiting = programme.stopRequestOpen ? (
+    <Banner icon={{ name: 'hourglass' }} tone="info">
+      {t('programme.teacher.stop.open')}
+    </Banner>
+  ) : null;
+  if (sent && !programme.stopRequestOpen) {
     return (
       <Banner icon={{ name: 'hourglass' }} tone="info">
         {t('programme.teacher.stop.sent')}
       </Banner>
     );
   }
-  if (!stopRequestShown(programme, new Date())) return null;
+  if (!stopRequestShown(programme, new Date())) return waiting;
 
   async function send(reason: string): Promise<void> {
     setBusy(true);
@@ -89,6 +96,7 @@ export function StopRequest({
 
   return (
     <>
+      {waiting}
       <Button
         label={t('programme.teacher.stop.action')}
         variant="secondary"

@@ -812,6 +812,7 @@
         "back": "Not now",
         "tooLong": "The reason is longer than allowed.",
         "sent": "The stop request was sent and awaits the administration's decision.",
+        "open": "Your request is waiting for the administration's decision",
         "refusal": {
           "too_early": "It is not yet time to ask to stop.",
           "request_open": "You already have an open stop request.",
@@ -822,7 +823,8 @@
         "line": "Session price by its length",
         "short": "{subject} · ijazah programme",
         "price": "Price of a {minutes}-minute session",
-        "editNote": "Price changes apply to new offers only."
+        "editNote": "Price changes apply to new offers only.",
+        "feeUnset": "The assessment session's fee is not set yet, so a programme package cannot be made active now."
       }
     }
   },
