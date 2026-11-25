@@ -1,5 +1,6 @@
 // 006:T018 (app-surface.md `programme.get`): the `programme` services' `get`, as `createBookingServices`
-// builds it: `programme_renew_early_days` read before the transaction, the read run on one
+// builds it: `programme_renew_early_days` read before the transaction (006:T019, T020: with
+// `programme_stop_request_days` and `programme_pay_reminder_hours`), the read run on one
 // transaction over payments' reads handed in, and a loud failure where nothing bound them (never a
 // silent «no card»). What the read answers is `programmes-reads.service.spec.ts`'.
 import { describe, expect, it } from 'vitest';
@@ -64,8 +65,11 @@ describe('programme.get through the programme services (006:T018)', () => {
     await expect(services.get(STRANGER, { enrollmentId: ENROLLMENT })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+    // 006:T019, T020 (B-P4): and the stop's days and the reminder's hours, read with it.
     expect(asked).toEqual([
       'setting programme_renew_early_days',
+      'setting programme_stop_request_days',
+      'setting programme_pay_reminder_hours',
       'transaction',
       'read the programme',
     ]);

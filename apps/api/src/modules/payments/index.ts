@@ -481,6 +481,11 @@ export {
   type ProgrammeMonthOrders,
   programmeMonthOrdersOf,
 } from './payments.repository.js';
+// 006:T021 (B-P4's conflict check, Q-1 (a) amended, the owner, 2026-11-25; SRS DEC-113; kernel.md,
+// 006:T021's row): an administrator's `charge_unknown` decision locks the month's automatic order
+// and reads its status under the lock; approving it writes a still-`created` order `expired` (a soft
+// decline, no gateway call). Bound by `main.ts` into booking's decisions (booking imports no payments).
+export { expireAutomaticOrder, lockedAutomaticOrderStatus } from './payments.repository.js';
 
 // 006:T009 (FR-BOOK-12, R-509): the orders a first payment's check and a new hold read, exported so
 // `tests/db-integrity/programme-months.spec.ts`' races reach them through the entry (R-API-3), as

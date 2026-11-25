@@ -70,6 +70,8 @@ const NOW = new Date('2026-11-10T12:00:00Z');
 const store: EnrollmentListsStore = {
   ...enrollmentListsStore,
   ijazahRequestsOf: async () => new Map(),
+  // 006:T019 (B-P4, rule d): no programme among these enrollments; the marker is programme-reads.spec.ts'.
+  programmesOf: async () => new Map(),
 };
 // 004:T074 (rule d): the restore windows the lists read for `paused`, the seed's 14 days.
 const WINDOWS: WindowDays = async () => 14;

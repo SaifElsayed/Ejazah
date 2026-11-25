@@ -668,10 +668,11 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
   });
 });
 
-// 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's `charge_unknown` item takes no decision
-// until T015/T021 build its approve and extend; each is refused and the item stays open.
-describe('the charge_unknown item takes no decision yet (006:T014, Q-b3 (a))', () => {
-  it.each(['approve', 'extend', 'decline'] as const)(
+// 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's `charge_unknown` item took no decision
+// until T021. 006:T021 (B-P4, Q-1 (a) amended; rule d): it takes approve and extend
+// (`programme-charge-unknown.spec.ts`), never a decline: refused, the item left open.
+describe('the charge_unknown item takes no decline (006:T014, Q-b3 (a); 006:T021)', () => {
+  it.each(['decline'] as const)(
     'refuses %s decision_not_allowed, the item left open',
     async (decision) => {
       const { teacherId, enrollmentId } = await offered();

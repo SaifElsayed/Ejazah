@@ -452,6 +452,10 @@ const SETTINGS: Readonly<Record<string, unknown>> = {
   programme_pay_rest_hours: 48,
   // 006:T016: the early-renewal days `programme.renew` reads before its check (the seed's).
   programme_renew_early_days: 3,
+  // 006:T019, T020 (B-P4, rule d): `programme.get` reads the stop's days and the reminder's hours
+  // (DEC-114) with them (the seed's).
+  programme_stop_request_days: 7,
+  programme_pay_reminder_hours: 12,
   // 003:T104 (ADR 0025 D1): the teacher's share setting, read when an order is created.
   teacher_share_percent: 70,
   // 004:T070: a closed enrollment's slot is held through its kind's window (the seed's values, T069).

@@ -46,6 +46,14 @@
 //   ends. No extension (rule 80's check refuses an `extended` stop). The weekly time is offered again
 //   at once (`programme_stopped` is not among the occupancy's held closings), and the release is
 //   payments' own `programme_stopped` branch (T011), reached by the enrollment's reason.
+// - `charge_unknown` (006:T021; SRS DEC-113; B-P4's conflict check, Q-1 (a) amended; kernel.md,
+//   006:T021's row): approve and extend only, no «confirm paid» (a payment is confirmed only by the
+//   gateway, R-HONEST-1, ADR 0026). Under the two locks, the month's automatic order (payments'
+//   entries, handed in) read, then its own lock taken and its status read again: no longer `created`
+//   (or none for the month, PR #160 r1 FU1) → `charge_answered`, nothing written. Approve → the order
+//   `expired` through payments' entry (a soft decline, no gateway call) and the month's first failure
+//   at the decision's instant, so the retries start from it; extend → the item `extended`, nothing
+//   else (the asking goes on; the sweep opens no new item for that order). Neither ends the programme.
 // The item's administrator and instant are set together (rule 81) by one conditional update `WHERE
 // status = 'open'`. The end goes through the close hook, which withdraws any other open item of the
 // programme. One info line of ids and the decision, never the reason's text; `enrollment` to both
@@ -117,11 +125,17 @@ import {
 import {
   type ProgrammeFacts,
   programmeFactsOf,
+  programmeMonthOf,
+  writeFirstFailure,
   writeOfferDue,
   writePayBy,
 } from './programmes.repository.js';
 import { offerDueOf } from './programmes.rules.js';
-import { type ProgrammeLog, withProgrammeTimes } from './programmes.service.js';
+import {
+  type MonthOrdersOf,
+  type ProgrammeLog,
+  withProgrammeTimes,
+} from './programmes.service.js';
 import { overlapsAny, partiesBusyBetween, windowOfRuns } from './session-overlap.service.js';
 import {
   SLOT_RELEASE_BUFFER_SETTING,
@@ -191,7 +205,16 @@ function refusal(
 }
 
 /** §3.14: the pause's days before a teacher may ask to stop (7). */
-const STOP_REQUEST_DAYS = 'programme_stop_request_days';
+export const STOP_REQUEST_DAYS = 'programme_stop_request_days';
+
+/**
+ * The instant from which a teacher may ask to stop: `paused_at` + `days` whole days of 24 hours on
+ * the instant (`packages/time`). One rule for `too_early` and for `programme.get`'s `stopRequestFrom`
+ * (006:T020, B-P4's conflict check, Q-2 (a)), so the button never shows before the server accepts.
+ */
+export function stopRequestFromOf(pausedAt: Date, days: number): Date {
+  return new Date(addDays(pausedAt, days));
+}
 
 /** `programme.request` on the keyed effect's transaction (this file's head, THE STOP). */
 export async function requestProgramme(
@@ -222,7 +245,7 @@ export async function requestProgramme(
   if (pausedAt === null) throw refused('not_paused');
   const days = await settings.read(STOP_REQUEST_DAYS, positiveWhole);
   const now = await clock(tx);
-  if (now.getTime() < new Date(addDays(pausedAt, days)).getTime()) throw refused('too_early');
+  if (now.getTime() < stopRequestFromOf(pausedAt, days).getTime()) throw refused('too_early');
   if (await store.openRequestExists(tx, facts.enrollmentId, 'stop')) {
     throw refused('request_open');
   }
@@ -325,7 +348,44 @@ export interface ProgrammeDecisionDependencies {
   readonly end?: ProgrammeEndStore;
   /** 006:T017: the reopen's locks, reads and writes, stood in by a spec. */
   readonly reopenStore?: ProgrammeReopenStore;
+  /**
+   * 006:T021 (Q-1 (a) amended): payments' entries a `charge_unknown` decision is handed, bound by
+   * `main.ts` (booking imports no payments); a decision on such an item fails loudly where none is
+   * bound, never a silent refusal.
+   */
+  readonly charges?: ProgrammeChargeDecisionPayments;
+  /** 006:T021: the programme's paid months and first failure, stood in by a spec. */
+  readonly chargeStore?: ProgrammeChargeDecisionStore;
 }
+
+/**
+ * 006:T021 (B-P4's conflict check, Q-1 (a) amended; SRS DEC-113; kernel.md, 006:T021's row):
+ * payments' entries for a `charge_unknown` decision: the month's orders (no lock: the enrollment's
+ * row, held, is the lock every order's move takes first), the order's lock with its status read
+ * under it, and a still-`created` automatic order written `expired` (no gateway call).
+ */
+export interface ProgrammeChargeDecisionPayments {
+  readonly monthOrders: MonthOrdersOf;
+  lockOrder(
+    tx: Transaction,
+    ref: { readonly paymentId: string; readonly enrollmentId: string },
+  ): Promise<string | null>;
+  expireOrder(tx: Transaction, paymentId: string): Promise<boolean>;
+}
+
+/** 006:T021: what a `charge_unknown` decision reads and writes of booking's `programmes` row. */
+export interface ProgrammeChargeDecisionStore {
+  /** The months paid, read under the programme's row lock; null for no programme. */
+  monthsPaidOf(tx: Transaction, enrollmentId: string): Promise<number | null>;
+  /** The month's first failure at `at`, unless one is set (one conditional update). */
+  writeFirstFailure(tx: Transaction, enrollmentId: string, at: Date): Promise<boolean>;
+}
+
+export const programmeChargeDecisionStore: ProgrammeChargeDecisionStore = {
+  monthsPaidOf: async (tx, enrollmentId) =>
+    (await programmeMonthOf(tx, enrollmentId))?.monthsPaid ?? null,
+  writeFirstFailure,
+};
 
 /** The decisions each kind takes (this file's head, THE DECISION). */
 const ALLOWED: Readonly<Record<ProgrammeRequestRow['kind'], readonly ProgrammesDecision[]>> = {
@@ -335,9 +395,10 @@ const ALLOWED: Readonly<Record<ProgrammeRequestRow['kind'], readonly ProgrammesD
   pay_blocked: ['approve', 'extend'],
   // 006:T017 (FR-725, R-513): approving a stop closes `programme_stopped`; no extension.
   stop: ['approve', 'decline'],
-  // 006:T014 (SRS DEC-113; lane b's Q-b3 (a)): the sweep's item for an unanswered automatic charge;
-  // its approve and extend are built with the sweep (T015) and the panel (T021), none before them.
-  charge_unknown: [],
+  // 006:T021 (B-P4, Q-1 (a) amended; SRS DEC-113): approve («no charge found in the gateway»: the
+  // order expired, a soft decline) and extend (keep asking) only; no «confirm paid»: a payment is
+  // confirmed only by the gateway (R-HONEST-1, ADR 0026).
+  charge_unknown: ['approve', 'extend'],
 };
 
 /** The state an approval ends from, and its refusal once the programme has left it. */
@@ -408,6 +469,48 @@ export function createProgrammeDecisions(
     return store.writePayBy(tx, enrollmentId, new Date(addHours(at, payRestHours)));
   };
 
+  const chargeStore = dependencies.chargeStore ?? programmeChargeDecisionStore;
+
+  /**
+   * 006:T021 (kernel.md, 006:T021's row): the month's automatic order still unanswered, its id, read
+   * under the programme's and the enrollment's locks held, then the order's own lock (payments'),
+   * its status read again under it; null once the gateway answered it (paid, failed or expired) or
+   * the month has none (PR #160 r1 FU1: the last month recorded paid).
+   */
+  const unansweredOrderOf = async (
+    tx: Transaction,
+    enrollmentId: string,
+    at: Date,
+  ): Promise<string | null> => {
+    const { charges } = dependencies;
+    if (charges === undefined) throw new Error('programmes.decide: the charge entries are not bound');
+    const monthsPaid = await chargeStore.monthsPaidOf(tx, enrollmentId);
+    if (monthsPaid === null) return null;
+    const { automatic } = await charges.monthOrders(tx, enrollmentId, monthsPaid + 1, at);
+    if (automatic?.status !== 'created') return null;
+    const locked = await charges.lockOrder(tx, { paymentId: automatic.paymentId, enrollmentId });
+    return locked === 'created' ? automatic.paymentId : null;
+  };
+
+  /**
+   * 006:T021: approving a `charge_unknown` item («no charge found in the gateway»): the order
+   * `expired` through payments' entry (a soft decline, no gateway call), and the month's first
+   * failure at the decision's instant, so the retries start from it (a failure already marked keeps
+   * its instant and its retries).
+   */
+  const expireCharge = async (
+    tx: Transaction,
+    enrollmentId: string,
+    paymentId: string,
+    at: Date,
+  ): Promise<void> => {
+    // `charges` was read by `unansweredOrderOf` on this transaction.
+    if (!(await dependencies.charges?.expireOrder(tx, paymentId))) {
+      throw new Error('programmes.decide: a created order read under its lock did not expire');
+    }
+    await chargeStore.writeFirstFailure(tx, enrollmentId, at);
+  };
+
   const decideLocked = async (
     tx: Transaction,
     adminId: string,
@@ -426,7 +529,9 @@ export function createProgrammeDecisions(
     // SRS DEC-112: a `no_offer` decision records what the teacher sent support.
     const noOffer = current.kind === 'no_offer';
     if (noOffer && reason === undefined) throw refused('reason_required');
-    const ending = decision === 'approve' ? endingOf(current.kind) : null;
+    // 006:T021: a `charge_unknown` decision ends nothing; its approval expires the month's order.
+    const charge = current.kind === 'charge_unknown';
+    const ending = decision === 'approve' && !charge ? endingOf(current.kind) : null;
     const from = ending?.from ?? (current.kind === 'pay_blocked' ? 'offered' : null);
     if (from !== null && (facts.state !== from || facts.status !== 'confirmed')) {
       throw refused(LEFT[from]);
@@ -448,16 +553,35 @@ export function createProgrammeDecisions(
       throw refused('sessions_pending');
     }
     const at = await clock(tx);
+    // 006:T021 (Q-1 (a) amended; PR #160 r1 FU1): the order read before anything is written.
+    const order = charge ? await unansweredOrderOf(tx, facts.enrollmentId, at) : null;
+    if (charge && order === null) throw refused('charge_answered');
     const status = STATUS_OF[decision];
     const written = noOffer && reason !== undefined ? { reason } : {};
     if (!(await store.decideRequest(tx, current.id, { status, adminId, at, ...written }))) {
       throw refused('not_open');
     }
     if (ending !== null) await end(tx, facts.enrollmentId, ending.reason);
-    if (decision === 'extend' && !(await extend(tx, current.kind, facts.enrollmentId, at))) {
+    if (order !== null && decision === 'approve') {
+      await expireCharge(tx, facts.enrollmentId, order, at);
+    }
+    // 006:T021: extending a `charge_unknown` item writes only the item (the asking goes on).
+    if (
+      decision === 'extend' &&
+      !charge &&
+      !(await extend(tx, current.kind, facts.enrollmentId, at))
+    ) {
       throw refused('not_offered');
     }
-    log.info({ ...ids, kind: current.kind, reason: status }, 'A programme item was decided');
+    log.info(
+      {
+        ...ids,
+        kind: current.kind,
+        ...(order === null ? {} : { paymentId: order }),
+        reason: status,
+      },
+      'A programme item was decided',
+    );
     publisherOn(tx)?.afterCommit([facts.studentUserId, facts.teacherUserId], {
       type: 'enrollment',
       enrollmentId: facts.enrollmentId,
