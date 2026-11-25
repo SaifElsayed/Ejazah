@@ -4,7 +4,8 @@
 // not started) in the student's zone and the teacher's, the upcoming, completed and remaining
 // sessions the server counted (FR-392), and the day it runs until. No price and no photo: the
 // summary carries neither (T049). 004:T083 (FR-514): one an administrator ended says so under the
-// teacher, followed by its reason (`EndedByAdmin`).
+// teacher, followed by its reason (`EndedByAdmin`). 006:T019 (FR-708, SRS DEC-114): a programme's
+// offer awaiting payment says «ادفع قبل {date} {time}» from the server's `payReminderFrom` on.
 import type { StudentEnrollmentItem } from '@ijazah/contracts';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
@@ -15,6 +16,7 @@ import { type MessageKey, useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { usePartyName } from '../../../../lib/party';
 import { useSubjectName } from '../../../../lib/subjects';
+import { PayReminder } from '../../programme';
 import { ENROLLMENT_STATUS, PAUSED_ENROLLMENT } from '../status';
 import { EndedByAdmin } from './EndedByAdmin';
 import { SessionWhen } from './SessionWhen';
@@ -133,6 +135,7 @@ export function EnrollmentCard({
         <EnrollmentStatusBadge status={item.status} paused={item.paused} pending={pendingBadge} />
       </View>
       <EndedByAdmin endedByAdmin={item.endedByAdmin} />
+      <PayReminder programme={item.programme} zone={zone} />
       {next === undefined ? null : (
         <View style={{ gap: tokens.space['1'] }}>
           <Text variant="callout" weight="medium">

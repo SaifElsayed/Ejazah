@@ -689,6 +689,80 @@
       "byTeacher": "Postponed by the teacher · Reason: {reason}"
     }
   },
+  "programme": {
+    "student": {
+      "autoRenew": {
+        "cardLine": "Automatic renewal is on, with the {brand} card ending in {last4}.",
+        "dialog": {
+          "confirm": "Turn it off",
+          "keep": "Keep it on",
+          "text": "Your saved card is removed, and from then on you renew each month yourself.",
+          "title": "Turn automatic renewal off?"
+        },
+        "off": "Turn automatic renewal off"
+      },
+      "booking": {
+        "assessmentAt": "Assessment session: {date} · {time}",
+        "packageLine": "{subject} · assessment session · {city} time",
+        "slot": "{slot} · {minutes} min",
+        "upTo": "The programme's sessions at this time last up to {minutes} minutes."
+      },
+      "cancel": {
+        "action": "Decline the offer",
+        "dialog": {
+          "confirm": "Yes, decline the offer",
+          "keep": "Keep it",
+          "text": "Your weekly time becomes free for others, and the assessment session's fee is not refunded.",
+          "title": "Decline the offer?"
+        },
+        "paymentProcessing": "Your payment is being confirmed; you can't decline the offer now."
+      },
+      "chargePending": "This month's charge is already under way.",
+      "consent": "I agree to my card being saved to pay the next months automatically; I can turn automatic renewal off at any time.",
+      "months": "Months paid: {paid} of {count}",
+      "nextDue": "Next month due: {when}",
+      "offer": {
+        "expectedLength": "Expected length",
+        "level": "Level",
+        "months": "Months",
+        "payBy": "Pay by",
+        "readiness": "Readiness",
+        "sessions": "Sessions",
+        "title": "The teacher's offer",
+        "total": "Total"
+      },
+      "paused": "The programme has been paused since {when}.",
+      "pay": {
+        "inFull": "Pay in full",
+        "monthly": "Pay monthly",
+        "plan": "How to pay",
+        "planInFull": "In full",
+        "planMonthly": "Monthly"
+      },
+      "payBlocked": "Payment is stopped until the administration decides.",
+      "payReminder": "Pay before {date} {time}",
+      "payeePending": "Payment is temporarily unavailable and will open soon.",
+      "profile": {
+        "chooseSlot": "Choose the assessment time · {subject}",
+        "fee": "Assessment session: {fee}",
+        "range": "{lowest} – {highest} a session"
+      },
+      "renew": {
+        "changeCard": "Change card",
+        "now": "Renew now",
+        "payNow": "Pay now"
+      },
+      "state": {
+        "active": "In progress",
+        "awaiting_offer": "Awaiting the offer",
+        "closed": "Closed",
+        "offered": "Offer awaiting payment",
+        "paused": "Programme paused"
+      },
+      "title": "Ijazah programme",
+      "unavailable": "The teacher is unavailable."
+    }
+  },
   "session": {
     "cancellation": {
       "accept": "Accept cancellation",

@@ -9,6 +9,10 @@
 // it open with the taken slot marked booked and disabled (`SlotTaken`); `PREVIOUS_CHECKOUT` goes to
 // `CheckoutPrevious` (FR-BOOK-12); any other refusal is the generic failure. The sheet is a window of
 // its own over every screen, so it closes before the next screen opens.
+// 006:T019 (FR-701, DEC-94): a programme package books its assessment: the line names it, each
+// weekly time `booking.slots` answers (at least the assessment's length, none overlapping the
+// student's own programme's time) is offered with its own length, and the time chosen says the
+// programme's sessions there last up to that length and when the assessment falls.
 import type { BookingSlot, DiscoveryTeacherPackage } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import * as Crypto from 'expo-crypto';
@@ -101,11 +105,16 @@ function Booking({
   const chosen = slots.find(({ slotId }) => slotId === choice?.slotId && !taken.includes(slotId));
   const otherZone =
     studentZone === undefined || studentZone === teacherZone ? undefined : studentZone;
-  const label = (slot: BookingSlot) =>
-    t('common.format.dateTime', {
+  const programme = item.isProgramme === true;
+  const label = (slot: BookingSlot) => {
+    const when = t('common.format.dateTime', {
       date: format.weekday(slot.dayOfWeek),
       time: format.wallClock(slot.startTimeLocal),
     });
+    return programme
+      ? t('programme.student.booking.slot', { slot: when, minutes: slot.durationMinutes })
+      : when;
+  };
 
   function choose(slotId: string): void {
     if (choice?.slotId === slotId) return;
@@ -185,7 +194,9 @@ function Booking({
               />
             ))}
           </View>
-          {chosen === undefined ? null : (
+          {chosen === undefined ? null : programme ? (
+            <AssessmentLines slot={chosen} teacherZone={teacherZone} />
+          ) : (
             <Text variant="callout" tone="muted">
               {t('student.booking.range', {
                 firstDate: format.date(chosen.firstSession.startsAt, teacherZone),
@@ -218,8 +229,7 @@ function PackageLine({
   const t = useT();
   const locale = useLocale();
   const nameOf = useSubjectName();
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
-  if (item.isProgramme === true) return null;
+  const city = cityOf(teacherZone, locale) ?? teacherZone;
   return (
     <View
       style={{
@@ -230,18 +240,48 @@ function PackageLine({
       }}
     >
       <Text variant="callout">
-        {t('student.booking.packageLine', {
-          subject: nameOf(item.subject),
-          sessions: item.sessionCount,
-          minutes: item.sessionDurationMinutes,
-          city: cityOf(teacherZone, locale) ?? teacherZone,
-        })}
+        {item.isProgramme === true
+          ? t('programme.student.booking.packageLine', { subject: nameOf(item.subject), city })
+          : t('student.booking.packageLine', {
+              subject: nameOf(item.subject),
+              sessions: item.sessionCount,
+              minutes: item.sessionDurationMinutes,
+              city,
+            })}
       </Text>
       <Badge
         label={t(TRACK_LABEL[item.track])}
         tone={item.track === 'ijazah_track' ? 'accent' : 'neutral'}
       />
     </View>
+  );
+}
+
+/**
+ * 006:T019: the weekly time chosen for an assessment: the programme's sessions there last up to its
+ * length (FR-705), and the one session it books, in the teacher's zone.
+ */
+function AssessmentLines({
+  slot,
+  teacherZone,
+}: {
+  readonly slot: BookingSlot;
+  readonly teacherZone: string;
+}) {
+  const t = useT();
+  const format = useFormatters();
+  return (
+    <>
+      <Text variant="callout">
+        {t('programme.student.booking.upTo', { minutes: slot.durationMinutes })}
+      </Text>
+      <Text variant="callout" tone="muted">
+        {t('programme.student.booking.assessmentAt', {
+          date: format.date(slot.firstSession.startsAt, teacherZone),
+          time: format.time(slot.firstSession.startsAt, teacherZone),
+        })}
+      </Text>
+    </>
   );
 }
 
