@@ -1084,7 +1084,7 @@ No open question remains.
   > one per key; five older strings say «التقييم»; `docs/design/components.md` lists `InfoButton`. Every string
   > approved by the owner (2026-11-25). Red first, named mutants, each restored and cmp-checked
   > (`track2\runs\b-p4\lane-s\`, `lane-c\`).
-- [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
+- [x] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
   > **B-P4's conflict check (the owner, 2026-11-25).** The reach is met on `76b2bd2d`
@@ -1096,7 +1096,19 @@ No open question remains.
   > r2: Minor 1, a DB case: `inquire` on a manual `instalment` order with a gateway id, past its expiry, throws, the order
   > stays `created`, no `payment_events` row (red under A1); nit 1, a DB case: `checkout.status` answers while the latest
   > order is automatic with no gateway id.
-- [ ] T023 The close:
+  > **Q-i1 (the owner, 2026-11-25, «Yes, (a)», typed in B-P4's review session).** The adversarial world's logger
+  > keeps every line (debug up) in memory, writes nothing to stdout, and the run-wide SC-707 check reads it.
+  > **Done (B-P4 lanes s and i, 2026-11-25).** Every `programme.get` attack runs on programmes holding a saved card,
+  > both directions (the student exactly the last four and the brand, the teacher `card: null`, everyone else
+  > NOT_FOUND), and re-reads `stopRequestFrom`, `payReminderFrom`, `offerTerms` and `stopRequestOpen` (the student
+  > never gets the teacher's fields). One check after the run scans every programme answer and refusal, every audit
+  > entry naming the run's ids and every log line for a token, a card number, an expiry or a card field
+  > (`programme.attacks.ts`, called from `procedure-harness.spec.ts`; `discovery-world.ts` captures the logs). No
+  > procedure unregistered; `test:adversarial` 732 passed, 6 todo. PR #160 r2: Minor 1 (`inquire` on a manual order
+  > throws, nothing written; red under A1) and nit 1 (`checkout.current` / `.status` with an automatic order and no
+  > gateway id; red under L and P). Red first, named mutants, each restored and cmp-checked
+  > (`track2\runs\b-p4\lane-i\`).
+- [x] T023 The close:
   - quickstart.md §1–§3 on the last batch's commit, each run's output in its own file;
   - SC-703 and SC-706 timed by hand;
   - `docs/ARCHITECTURE.md`'s module graph;
@@ -1106,6 +1118,13 @@ No open question remains.
   > with the stack running (`track2\b-p4\phones-day.md`). ARCHITECTURE gains «the graph the programme builds» from the
   > code; its header is untouched. The switch stays off. The constitution's 2.6.2 → 2.7.0 (ADR 0026) waits for the
   > integration's version pass (the owner, «Yes, keep 2.6.2»).
+  > **Done (B-P4 lane i, 2026-11-25).** §1 run on the batch's last lane commit, each output in its own file; §2 as its
+  > specs (`track2\b-p4\quickstart-s2-map.md`: each of the 14 steps to the specs that prove it; four missing steps
+  > got their DB cases, extend then pay, the `payment_failed` push, no session while paused, the time free after
+  > `offer_declined`); §3, SC-703 and SC-706 on the phones day (`track2\b-p4\phones-day.md`, steps 13, 26a, 27).
+  > ARCHITECTURE gains «The graph the programme builds» (no new module edge; the functions booking declares and
+  > where `main.ts` / `worker.ts` hand them in). The switch stays off: seed 0 (`prisma/seed.ts`), registry default
+  > 0, only `settings.update` writes it.
 
 ## Dependencies and Execution Order
 
