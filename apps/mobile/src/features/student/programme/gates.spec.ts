@@ -5,7 +5,8 @@
 // a running programme: «renew now» with no card, «pay now» and «change card» with one, only while
 // `renewOpen` and never while `payeePending` or `chargePending`; the automatic renewal's off row only
 // while a card is saved. The consent sends `saveCard` on «monthly» only; «change card» saves the
-// new card, «pay now» and «renew now» do not. 006:T019 (FR-708, SRS DEC-114): the reminder «pay before
+// new card with the same consent ticked only (PR #161 r1 Follow-up 1 (a)), «pay now» and «renew now»
+// never. 006:T019 (FR-708, SRS DEC-114): the reminder «pay before
 // {date} {time}» from the enrollment's `payReminderFrom`, the server's `payBy` − the setting, only while
 // `offered`; never with no instant or before it.
 import type { ProgrammeGetOutput } from '@ijazah/contracts';
@@ -167,10 +168,17 @@ describe('what the payments send (FR-713)', () => {
     expect(payInputOf('monthly', false)).toEqual({ plan: 'monthly', saveCard: false });
   });
 
-  it('«change card» saves the new card; «pay now» and «renew now» do not', () => {
-    expect(renewInputOf('changeCard')).toEqual({ saveCard: true });
-    expect(renewInputOf('payNow')).toEqual({ saveCard: false });
-    expect(renewInputOf('renewNow')).toEqual({ saveCard: false });
+  it('«change card» saves the new card with the consent ticked; «pay now» and «renew now» do not', () => {
+    expect(renewInputOf('changeCard', true)).toEqual({ saveCard: true });
+    expect(renewInputOf('payNow', true)).toEqual({ saveCard: false });
+    expect(renewInputOf('renewNow', true)).toEqual({ saveCard: false });
+    expect(renewInputOf('payNow', false)).toEqual({ saveCard: false });
+    expect(renewInputOf('renewNow', false)).toEqual({ saveCard: false });
+  });
+
+  // PR #161 r1 Follow-up 1 (a): FR-713's consent before the new card is saved.
+  it('«change card» with the consent unticked saves no card', () => {
+    expect(renewInputOf('changeCard', false)).toEqual({ saveCard: false });
   });
 });
 

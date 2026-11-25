@@ -4,7 +4,8 @@
 // the teacher's three texts, the sessions, the months, the deadline as a date and a time in the
 // student's zone and the total; «pay in full» or «pay monthly», the consent (FR-713) on «monthly»
 // only and unticked; the cancellation behind a dialog. A running programme: the months paid and the
-// next due; «renew now», «pay now», «change card»; the automatic renewal's off row behind a dialog.
+// next due; «renew now», «pay now», «change card», the last behind the same consent line, unticked
+// and required (PR #161 r1 Follow-up 1 (a)); the automatic renewal's off row behind a dialog.
 // The lines: paused since when, the teacher unavailable, `payBlocked`, `payeePending`,
 // `chargePending`. A payment opens the gateway's hosted page through the checkout's `hosted.ts`;
 // `PREVIOUS_CHECKOUT` goes to `CheckoutPrevious` as the booking sheet does (FR-BOOK-12); any other
@@ -182,8 +183,8 @@ function Programme({
           view={view.renewal}
           zone={zone}
           busy={busy}
-          onRenew={(button) =>
-            void checkout(button, () => actions.renew(renewInputOf(button).saveCard))
+          onRenew={(button, consent) =>
+            void checkout(button, () => actions.renew(renewInputOf(button, consent).saveCard))
           }
         />
       )}
@@ -375,10 +376,11 @@ function RenewalPart({
   readonly view: RenewalView;
   readonly zone: string;
   readonly busy: Busy;
-  readonly onRenew: (button: RenewalButton) => void;
+  readonly onRenew: (button: RenewalButton, consent: boolean) => void;
 }) {
   const t = useT();
   const when = useWhen(zone);
+  const [consent, setConsent] = useState(false);
   return (
     <View style={{ gap: tokens.space['3'] }}>
       {programme.monthCount === null ? null : (
@@ -405,14 +407,24 @@ function RenewalPart({
         </Banner>
       ) : null}
       {view.buttons.map((button) => (
-        <Button
-          key={button}
-          label={t(RENEWAL_BUTTON[button].label)}
-          variant={RENEWAL_BUTTON[button].variant}
-          layout="block"
-          loading={busy === button}
-          onPress={() => onRenew(button)}
-        />
+        <View key={button} style={{ gap: tokens.space['3'] }}>
+          {button === 'changeCard' ? (
+            <CheckRow
+              label={t('programme.student.consent')}
+              checked={consent}
+              onChange={setConsent}
+              top
+            />
+          ) : null}
+          <Button
+            label={t(RENEWAL_BUTTON[button].label)}
+            variant={RENEWAL_BUTTON[button].variant}
+            layout="block"
+            loading={busy === button}
+            disabled={button === 'changeCard' && !consent}
+            onPress={() => onRenew(button, consent)}
+          />
+        </View>
       ))}
     </View>
   );

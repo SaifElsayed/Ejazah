@@ -5,7 +5,8 @@
 // While the teacher's payment details are unverified (`payeePending`) the line and no pay button;
 // while an administrator decides (`payBlocked`) its line, no pay button, the cancellation kept. A
 // running programme: the months paid and the next due; «renew now» with no card, «pay now» and
-// «change card» with one, from `renewOpen`; none while `payeePending` or `chargePending`, each with
+// «change card» with one, from `renewOpen`, «change card» behind the same consent line, unticked and
+// required (PR #161 r1 Follow-up 1 (a)); none while `payeePending` or `chargePending`, each with
 // its line; the automatic renewal's off row only while a card is saved, behind a dialog. Paused
 // since when; the teacher unavailable. Each payment opens the gateway's hosted page through the
 // checkout's `hosted.ts`, and once it closes the student stays on the page, read again, never sent to
@@ -436,13 +437,41 @@ describe('a running programme (FR-713a, FR-715, FR-716, FR-726)', () => {
     });
     await renderIn('rtl', ui());
     await shown('rtl');
+    await fireEvent.press(screen.getByRole('checkbox'));
     await fireEvent.press(
       screen.getByRole('button', { name: ar('programme.student.renew.changeCard') }),
     );
-    await waitFor(() => expect(mockApi.api.programme.renew.mutate).toHaveBeenCalled());
-    expect(mockApi.api.programme.renew.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({ saveCard: true }),
+    await waitFor(() => expect(readAfterTheHostedPage()).toBe(true));
+    expect(mockApi.api.programme.renew.mutate).toHaveBeenCalledWith({
+      enrollmentId: ENROLLMENT_ID,
+      saveCard: true,
+      idempotencyKey: 'programme-key-1',
+    });
+  });
+
+  // PR #161 r1 Follow-up 1 (a): FR-713's consent line before the new card is saved.
+  it('«change card» shows the consent line unticked; unticked, it sends nothing, and «pay now» needs no tick', async () => {
+    get().mockResolvedValue(programme({ renewOpen: true, card: CARD }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(screen.getByText(said(direction, 'programme.student.consent'))).toBeTruthy();
+      expect(screen.getByRole('checkbox').props.accessibilityState).toMatchObject({
+        checked: false,
+      });
+    });
+    await renderIn('rtl', ui());
+    await shown('rtl');
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('programme.student.renew.changeCard') }),
     );
+    await fireEvent.press(screen.getByRole('button', { name: ar('programme.student.renew.payNow') }));
+    await waitFor(() => expect(readAfterTheHostedPage()).toBe(true));
+    expect(mockApi.api.programme.renew.mutate).toHaveBeenCalledTimes(1);
+    expect(mockApi.api.programme.renew.mutate).toHaveBeenCalledWith({
+      enrollmentId: ENROLLMENT_ID,
+      saveCard: false,
+      idempotencyKey: 'programme-key-1',
+    });
   });
 
   it('no pay now or change card while payeePending: the line instead', async () => {

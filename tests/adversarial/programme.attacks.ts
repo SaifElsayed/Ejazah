@@ -26,20 +26,45 @@
 // nothing else, the teacher's none, and every other party meets NOT_FOUND, both directions. Every
 // programme answer and refusal of the run is kept (`recorded`), and one suite-level check
 // (`describeProgrammeCardDetailCheck`, called by `procedure-harness.spec.ts` after the attacks)
-// finds no card detail in them nor in an audit entry naming the run's ids.
+// finds no card detail in them nor in an audit entry naming the run's ids (PR #161 r1 Minor 1: an
+// administrator's `programmes.get` of a carded programme writes one, so that part reads an entry).
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import {
+  createProgrammeAdminReads,
+  programmesAdminRouter,
+} from '../../apps/api/src/modules/booking/index.js';
+import {
+  createProgrammePayee,
+  enrollmentOrdersOf,
+  programmeMonthOrdersOf,
+  releasesOf,
+} from '../../apps/api/src/modules/payments/index.js';
+import type { AuditRecord } from '../../apps/api/src/platform/audit/audit-writer.js';
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption.js';
 import {
   closeDatabase,
   type Database,
   openDatabase,
+  type Transaction,
 } from '../../apps/api/src/platform/db/prisma.repository.js';
 import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fixtures.js';
+import { transactionsOver } from '../../apps/api/src/platform/db/transaction.repository.js';
 import { mapError } from '../../apps/api/src/platform/errors/error-filter.js';
-import { toErrorShape } from '../../apps/api/src/surfaces/procedures.js';
+import type { RateLimiter } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
+import { createLogger } from '../../apps/api/src/platform/logging/logger.js';
+import {
+  type AdminSurfaceServices,
+  createAdminContext,
+} from '../../apps/api/src/surfaces/context.js';
+import {
+  createAdminCallerFactory,
+  createAdminRouter,
+  toErrorShape,
+} from '../../apps/api/src/surfaces/procedures.js';
+import { unusedAdminServices } from '../../apps/api/src/surfaces/services.fixtures.js';
 import { expectUnauthenticated, neighbourOf, tamperedTokens } from './discovery.attacks.js';
 import {
   discoverySurface,
@@ -592,6 +617,9 @@ afterAll(async () => {
   if (cardsDatabase !== undefined) await closeDatabase(cardsDatabase);
 });
 
+/** The run's programmes that hold a saved card, in the order they were given one. */
+const carded: string[] = [];
+
 /** The programme's saved card, as `programme-reads.spec.ts` writes one. */
 async function withCard(pair: ProgrammePair): Promise<ProgrammePair> {
   await cardsClient().programmeCard.create({
@@ -606,6 +634,7 @@ async function withCard(pair: ProgrammePair): Promise<ProgrammePair> {
     },
     select: { enrollmentId: true },
   });
+  carded.push(pair.enrollmentId);
   return pair;
 }
 
@@ -752,6 +781,81 @@ export function cardDetailsIn(text: string, tokens: readonly string[]): string[]
   return found;
 }
 
+const adminCallerFor = createAdminCallerFactory(
+  createAdminRouter({ programmes: programmesAdminRouter }),
+);
+
+/**
+ * The call's entry persisted field for field as the admin module's `AuditRepository.write` does
+ * (that module may not be imported here, R-API-4), as `account-deletion.spec.ts` persists one.
+ */
+async function persistAsTheAdminModule(tx: Transaction, record: AuditRecord): Promise<void> {
+  await tx.auditLog.create({
+    data: {
+      adminId: record.adminId,
+      action: record.action,
+      targetType: record.targetType,
+      targetId: record.targetId,
+      targetLabel: `probe ${record.targetType}`,
+      reason: record.reason ?? null,
+      ...(record.before === undefined ? {} : { before: record.before }),
+      ...(record.after === undefined ? {} : { after: record.after }),
+    },
+  });
+}
+
+/**
+ * PR #161 r1 Minor 1: an administrator's `programmes.get` of one of the run's carded programmes, as
+ * `admin.router.ts` mounts it and `main.ts` composes its reads, through the administrator kind, its
+ * entry persisted as the admin module persists one, so its `programmes.viewed` entry on the
+ * enrollment is in `audit_logs` for the check to read; its answer is kept with the run's others.
+ */
+async function anAdministratorViews(enrollmentId: string): Promise<void> {
+  const database = cardsClient();
+  const { id: adminId } = await database.adminUser.create({
+    data: {
+      email: `adversarial-${randomUUID()}@example.invalid`,
+      mfaSecretEncrypted: Buffer.from('spec'),
+      displayName: 'Adversarial administrator',
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const programmes = createProgrammeAdminReads({
+    settings: {
+      read: async (key) => {
+        throw new Error(`unexpected setting ${key}`);
+      },
+    },
+    payments: {
+      payee: createProgrammePayee({ paymentMode: 'test', cipher: cardCipher }),
+      monthOrders: programmeMonthOrdersOf,
+      ordersOf: enrollmentOrdersOf,
+      assessmentReleased: async (tx, id) =>
+        (await releasesOf(tx, [id])).some(({ milestone }) => milestone === 'assessment'),
+    },
+  });
+  const services = new Proxy(unusedAdminServices, {
+    get: (target, name, receiver) =>
+      name === 'programmes' ? programmes : Reflect.get(target, name, receiver),
+  }) as AdminSurfaceServices;
+  const caller = adminCallerFor(
+    createAdminContext({
+      session: { adminId, sessionId: adminId, mfaVerified: true },
+      log: createLogger({ level: 'info', destination: { write: () => undefined } }),
+      administration: {
+        transactions: transactionsOver(database),
+        auditWriter: { write: persistAsTheAdminModule },
+      },
+      services,
+      // Every administrator call is counted by the signed-in default since T062 (FR-470).
+      rateLimiter: { check: async () => undefined } as unknown as RateLimiter,
+      clientAddress: '203.0.113.9',
+    }),
+  );
+  await recorded(caller.programmes.get({ enrollmentId }));
+}
+
 /** The audit entries naming one of the run's enrollments or parties, whole, as JSON. */
 async function auditEntriesOfTheRun(): Promise<string[]> {
   const rows = await cardsClient().auditLog.findMany({
@@ -814,6 +918,10 @@ export function describeProgrammeCardDetailCheck(): void {
         expect(responses.length, 'the programme attacks ran first, in this file').toBeGreaterThan(
           0,
         );
+        const [viewed] = carded;
+        expect(viewed, 'the attacks gave a programme its saved card').toBeDefined();
+        // PR #161 r1 Minor 1: an administrator's read writes `programmes.viewed` on the enrollment.
+        await anAdministratorViews(viewed as string);
         expect(
           responses.some((answer) => answer.includes(`"last4":"${CARD.last4}"`)),
           'a saved card was read, so the check reads the card path',
@@ -823,6 +931,8 @@ export function describeProgrammeCardDetailCheck(): void {
         );
         expect(leaks).toEqual([]);
         const audits = await auditEntriesOfTheRun();
+        expect(audits.length, 'the run wrote an audit entry naming its ids').toBeGreaterThan(0);
+        expect(audits.some((entry) => entry.includes('"action":"programmes.viewed"'))).toBe(true);
         expect(audits.flatMap((entry) => cardDetailsIn(entry, [CARD_TOKEN]))).toEqual([]);
         // B-P4 update 2 (Q-i1 (a)): the run's log lines, the programme's refusals among them.
         const { logLines } = await discoverySurface();

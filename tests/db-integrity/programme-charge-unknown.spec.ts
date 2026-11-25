@@ -4,7 +4,8 @@
 // `programmeMonthOrdersOf`, `lockedAutomaticOrderStatus` and `expireAutomaticOrder` handed in):
 // - approve, the month's automatic order still `created`: the order `expired` (a soft decline, no
 //   gateway call, no `payment_events` row), the item `approved` with its administrator, the month's
-//   first failure at the decision's instant (the retries start from it);
+//   first failure at the decision's instant (the retries start from it), or kept as it is when an
+//   earlier failure set it (PR #161 r1 Minor 2);
 // - extend: the item `extended`, the order still `created`, no first failure;
 // - the order already answered (the inquiry recorded it paid): refused `charge_answered`, the item
 //   still open, nothing written;
@@ -319,6 +320,25 @@ describe('programmes.decide on a charge_unknown item over the real tables (006:T
     const rows = await rowsOf(world);
     expect(rows).toMatchObject({ order: 'expired', item: 'approved', decidedBy: adminId, events: [] });
     expect(rows.firstFailureAt?.toISOString()).toBe(rows.decidedAt?.toISOString());
+  });
+
+  // PR #161 r1 Minor 2 (the owner's reading in lane s's stop): the first failure is written only
+  // when none is set. Month 2 soft-declined Mon 23 Nov 10:00 Cairo, retry 1 (Tue 10:00) unanswered;
+  // the approval keeps Mon 10:00, so retry 2 stays due Thu 26 Nov 10:00 (days 1, 3, 5, 7).
+  it('approve after an earlier failure: the first failure kept, the order expired, the item approved', async () => {
+    const world = await unknownChargeWorld();
+    const monday = new Date('2026-11-23T08:00:00Z');
+    await database.programme.update({
+      where: { enrollmentId: world.enrollmentId },
+      data: { firstFailureAt: monday, retriesDone: 1 },
+    });
+    const adminId = await admin();
+    await expect(decide(adminId, world.requestId, 'approve')).resolves.toMatchObject({
+      answer: { status: 'approved' },
+    });
+    const rows = await rowsOf(world);
+    expect(rows).toMatchObject({ order: 'expired', item: 'approved', decidedBy: adminId, events: [] });
+    expect(rows.firstFailureAt?.toISOString()).toBe(monday.toISOString());
   });
 
   it('extend: the item extended, the order still created, no first failure', async () => {

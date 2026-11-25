@@ -6,7 +6,8 @@
 // running programme (`active`, `paused`): «renew now» with no card saved, «pay now» and «change
 // card» with one, only while `renewOpen` and never while `payeePending` or `chargePending`, each
 // with its line; the automatic renewal's off row only while a card is saved (FR-713a). The consent
-// (FR-713) saves the card on «monthly» only: in full has no later month to charge. The reminder
+// (FR-713) saves the card on «monthly» only: in full has no later month to charge; «change card»
+// saves the new card with the same consent ticked only (PR #161 r1 Follow-up 1 (a)). The reminder
 // (FR-708, SRS DEC-114): «pay before» while `offered`, from the server's `payReminderFrom` on.
 import { secondsUntil } from '@ijazah/time/calendar';
 
@@ -86,9 +87,15 @@ export function payInputOf(
   return { plan, saveCard: plan === 'monthly' && consent };
 }
 
-/** `programme.renew`'s `saveCard`: «change card» pays with a new card that replaces the saved one. */
-export function renewInputOf(button: RenewalButton): { readonly saveCard: boolean } {
-  return { saveCard: button === 'changeCard' };
+/**
+ * `programme.renew`'s `saveCard`: «change card» pays with a new card that replaces the saved one,
+ * saved only with FR-713's consent ticked (PR #161 r1 Follow-up 1 (a)).
+ */
+export function renewInputOf(
+  button: RenewalButton,
+  consent: boolean,
+): { readonly saveCard: boolean } {
+  return { saveCard: button === 'changeCard' && consent };
 }
 
 /**
