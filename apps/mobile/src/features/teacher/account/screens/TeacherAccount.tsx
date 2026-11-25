@@ -13,7 +13,11 @@
 // directly under «حساب الاستلام», to the teacher's own share held, due and paid.
 // 005:T019 (FR-601): «صورة التوقيع», for an approved teacher (the one `teacher.signature.get`
 // admits), after the payout row, to the signature screen.
+// 006:T020 (SRS DEC-112; B-P4's conflict check, Q-6 (a)): «تواصل مع الدعم», after the settings, a
+// mail to the support address the public configuration serves, as the restricted screens write to it
+// (`features/shared/account/components/Restricted.tsx` `useWriteToSupport`); its failure says so.
 import type { PayoutState } from '@ijazah/contracts';
+import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -22,6 +26,7 @@ import {
   AppHeader,
   Avatar,
   Badge,
+  Banner,
   Card,
   Icon,
   IconButton,
@@ -32,6 +37,8 @@ import {
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useT } from '../../../../i18n';
 import { useMe } from '../../../../lib/account';
+import { useApi } from '../../../../lib/api';
+import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { AccountLoading, AccountSettings, initialsOf, SignOutSheet } from '../../../shared/account';
 import { TabScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
@@ -66,6 +73,41 @@ function PayoutRow() {
         : { trailing: <Badge label={t(badge.label)} tone={badge.tone} /> })}
       onPress={() => router.push(PAYOUT_ROUTE)}
     />
+  );
+}
+
+/**
+ * «تواصل مع الدعم»: a mail to the support address `platform.publicConfig` serves (FR-145), as the
+ * restricted screens' `useWriteToSupport` writes it; a failure to read the address says so.
+ */
+function SupportRow() {
+  const t = useT();
+  const { client } = useApi();
+  const [failure, setFailure] = useState<ErrorMessage | null>(null);
+  async function write(): Promise<void> {
+    setFailure(null);
+    try {
+      const { supportEmail } = await client.publicConfig();
+      await Linking.openURL(`mailto:${supportEmail}`);
+    } catch (caught: unknown) {
+      setFailure(genericErrorKey(caught, 'common.state.actionError'));
+    }
+  }
+  return (
+    <>
+      <List>
+        <ListRow
+          label={t('account.restricted.contactSupport')}
+          leading={<Icon name="mail" />}
+          onPress={() => void write()}
+        />
+      </List>
+      {failure === null ? null : (
+        <Banner icon={{ name: 'alert-circle' }} tone="danger">
+          {t(failure.key, failure.values)}
+        </Banner>
+      )}
+    </>
   );
 }
 
@@ -156,6 +198,7 @@ export function TeacherAccount() {
             ) : null}
           </List>
           <AccountSettings me={account} />
+          <SupportRow />
           <List>
             <ListRow
               label={t('teacher.account.deleteAccount')}

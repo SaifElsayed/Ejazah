@@ -22,6 +22,9 @@
 // 003:T112 (SRS FR-POSTPONE-1 to FR-POSTPONE-5, DEC-90): on a confirmed enrollment, the postponement
 // of the teacher's coming week (`PostponePanel`); a postponed session says who postponed it and why
 // on its row (`PostponementLine`).
+// 006:T020 (FR-705, FR-706b, FR-723, FR-726; B-P4's conflict check, Q-3 (a)): an enrollment the
+// read marks as a programme draws its panel beside the ijazah's (`TeacherProgrammePanel`): the offer
+// after the delivered assessment, the months paid, «late since» and the stop request.
 import type { ListedSession, TeacherStudentsGetOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -48,6 +51,7 @@ import { PostponePanel, PostponementLine } from '../../../shared/postponement';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { ChatEntry } from '../../chat';
+import { TeacherProgrammePanel } from '../../programme';
 import { readSinceMount } from '../../read-since-mount';
 import { TeacherRemedyStatusLine } from '../../sessions';
 import { TEACHER_PRE_SESSION_ROUTE } from '../../sessions/api';
@@ -135,6 +139,7 @@ function EnrollmentBody({ enrollment }: { readonly enrollment: TeacherStudentsGe
         <Schedule enrollment={enrollment} />
       </Card>
       <ChatEntry enrollmentId={enrollment.enrollmentId} status={enrollment.status} />
+      <TeacherProgrammePanel enrollment={enrollment} />
       <IjazahRequestCard enrollment={enrollment} />
       <PostponePanel enrollment={enrollment} />
       {rows.length === 0 ? null : (

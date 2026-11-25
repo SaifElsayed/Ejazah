@@ -761,6 +761,71 @@
       },
       "title": "Ijazah programme",
       "unavailable": "The teacher is unavailable."
+    },
+    "teacher": {
+      "title": "Ijazah programme",
+      "state": {
+        "awaiting_offer": "Awaiting your offer",
+        "offered": "Offer awaiting the student's payment",
+        "active": "In progress",
+        "paused": "Programme paused",
+        "closed": "Closed"
+      },
+      "offer": {
+        "title": "The programme offer",
+        "lede": "Write the student's level, readiness and the expected length, and choose the session length and the number of sessions.",
+        "dueBy": "Send the offer by {when}",
+        "level": "Level",
+        "readiness": "Readiness",
+        "expectedLength": "Expected length of the programme",
+        "textError": "Write between 1 and {max} characters.",
+        "duration": "Session length",
+        "durationHint": "No longer than the reserved weekly time.",
+        "sessionCount": "Number of sessions",
+        "countError": "Enter a number of sessions from {min} to {max}.",
+        "total": "Total",
+        "months": "Months",
+        "send": "Send the offer",
+        "refusal": {
+          "assessment_not_delivered": "The assessment session has not been held yet, so the offer cannot be sent now.",
+          "not_awaiting_offer": "This programme is no longer awaiting an offer.",
+          "offer_due_passed": "The time to send the offer has ended.",
+          "length_exceeds_slot": "The session length is longer than the reserved weekly time; choose a shorter one.",
+          "teacher_not_active": "Your account is not active now, so the offer cannot be sent."
+        }
+      },
+      "sent": {
+        "title": "The offer sent",
+        "sessions": "Sessions",
+        "payBy": "The student pays by"
+      },
+      "payBlocked": "The offer is with the administration because your payout account was not verified.",
+      "months": "Months paid: {paid} of {count}",
+      "nextDue": "Next month due: {when}",
+      "lateSince": "The student has been late paying since {when}.",
+      "stop": {
+        "action": "Ask to stop the programme",
+        "text": "Your request reaches the administration with its reason, and the administration decides.",
+        "reason": "Reason for the request",
+        "hint": "Write why you are asking to stop the programme.",
+        "send": "Send the request",
+        "back": "Not now",
+        "tooLong": "The reason is longer than allowed.",
+        "sent": "The stop request was sent and awaits the administration's decision.",
+        "open": "Your request is waiting for the administration's decision",
+        "refusal": {
+          "too_early": "It is not yet time to ask to stop.",
+          "request_open": "You already have an open stop request.",
+          "not_paused": "The programme is no longer paused."
+        }
+      },
+      "package": {
+        "line": "Session price by its length",
+        "short": "{subject} · ijazah programme",
+        "price": "Price of a {minutes}-minute session",
+        "editNote": "Price changes apply to new offers only.",
+        "feeUnset": "The assessment session's fee is not set yet, so a programme package cannot be made active now."
+      }
     }
   },
   "session": {

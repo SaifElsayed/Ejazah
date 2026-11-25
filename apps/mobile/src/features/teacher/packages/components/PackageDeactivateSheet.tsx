@@ -3,6 +3,8 @@
 // profile while its ongoing enrollments continue (with none, that line is left out: the owner's
 // decision of 2026-11-02, B26), and that it can be activated again. «إيقاف الباقة»
 // sends `isActive: false`; a failure says so in the sheet and keeps it open.
+// 006:T020 (B-P4's conflict check): a programme package, with no count, is named «{subject} · برنامج
+// الإجازة».
 import type { TeacherPackage } from '@ijazah/contracts';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -50,15 +52,17 @@ export function PackageDeactivateSheet({
     <Sheet
       open={item !== undefined}
       onClose={close}
-      // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's.
-      {...(item === undefined || item.isProgramme === true
+      {...(item === undefined
         ? {}
         : {
             title: t('teacher.packages.deactivateSheet.title', {
-              package: t('common.format.packageShort', {
-                subject: nameOf(item.subject),
-                count: item.sessionCount,
-              }),
+              package:
+                item.isProgramme === true
+                  ? t('programme.teacher.package.short', { subject: nameOf(item.subject) })
+                  : t('common.format.packageShort', {
+                      subject: nameOf(item.subject),
+                      count: item.sessionCount,
+                    }),
             }),
           })}
     >

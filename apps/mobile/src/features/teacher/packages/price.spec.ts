@@ -3,7 +3,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { piasters } from '@ijazah/money';
 
-import { piastersOfPounds, poundsOf, sessionCountOf } from './price';
+import { offerCountOf, piastersOfPounds, poundsOf, sessionCountOf } from './price';
 
 describe('piastersOfPounds', () => {
   it('reads pounds with up to two decimals as whole piasters', () => {
@@ -34,6 +34,18 @@ describe('sessionCountOf', () => {
     expect(sessionCountOf('٥٢')).toBe(52);
     for (const text of ['', '0', '53', '8.5', '-1', 'ثمانية']) {
       expect(sessionCountOf(text)).toBeNull();
+    }
+  });
+});
+
+// 006:T020 (FR-705, R-506): the offer's count, one to 200, as the editor reads its own count.
+describe('offerCountOf', () => {
+  it('reads a whole count of one to 200, Arabic digits too', () => {
+    expect(offerCountOf('1')).toBe(1);
+    expect(offerCountOf('60')).toBe(60);
+    expect(offerCountOf('٢٠٠')).toBe(200);
+    for (const text of ['', '0', '201', '8.5', '-1', 'ستون']) {
+      expect(offerCountOf(text)).toBeNull();
     }
   });
 });

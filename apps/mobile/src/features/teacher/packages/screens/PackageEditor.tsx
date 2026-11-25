@@ -8,6 +8,12 @@
 // plainly, the second reading the package again, after which the fixed track and length drawn are
 // the package's own, never the choice the editor did not send (T069; PR #116's review). Not drawn on the board and left out: the weekly
 // slots hint and the «الباقة فعّالة» check (a new package is active; pausing is the list's).
+// 006:T020 (FR-704, FR-704a; B-P4's conflict check): a programme package of the list opens its own
+// form, its three prices (`ProgrammePackageForm`). B-P4 round 2 (Q-B1 (a); R-503): while the
+// programme's switch is on (`platform.publicConfig.programmeEnabled`), a new package on the ijazah track
+// is a programme package: its three prices (`ProgrammePriceFields`) in place of the count, the length
+// and the total, sent as `prices`; `assessment_fee_unset` said in its words. Off, or on the recitation
+// track, today's fields.
 import type {
   PackageTrack,
   SessionLengthMinutes,
@@ -40,9 +46,23 @@ import { formatPoundAmount } from '../../../../lib/formatters';
 import { useSubjectName } from '../../../../lib/subjects';
 import { StackScreen } from '../../../shared/screen';
 import { NotLoaded } from '../../../shared/states';
-import { useAveragePrice, usePackageActions, usePackages, useTeacherShareRate } from '../api';
+import {
+  useAveragePrice,
+  usePackageActions,
+  usePackages,
+  useProgrammeEnabled,
+  useTeacherShareRate,
+} from '../api';
 import { TRACK_LABEL } from '../components/PackageCard';
 import { PackageSubjectPicker } from '../components/PackageSubjectPicker';
+import {
+  EMPTY_PRICES_TEXT,
+  type PricesText,
+  ProgrammePackageForm,
+  programmePackageRefusalOf,
+  ProgrammePriceFields,
+  programmePricesOf,
+} from '../components/ProgrammePackageForm';
 import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
 
 const NEW = 'new';
@@ -55,11 +75,8 @@ export function PackageEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const list = usePackages();
   if (id === NEW) return <PackageForm />;
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's editor is B-P4's (T020).
-  const item = list.data?.packages.find(
-    (candidate): candidate is TeacherFixedPackage =>
-      candidate.id === id && candidate.isProgramme !== true,
-  );
+  const item = list.data?.packages.find((candidate) => candidate.id === id);
+  if (item?.isProgramme === true) return <ProgrammePackageForm key={item.id} item={item} />;
   if (item !== undefined) return <PackageForm key={item.id} item={item} />;
   return (
     <StackScreen header={<EditorHeader title={t('teacher.packages.editor.title')} />}>
@@ -95,6 +112,8 @@ function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
   const [picking, setPicking] = useState(false);
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | undefined>(undefined);
+  const programmeOn = useProgrammeEnabled();
+  const [pricesText, setPricesText] = useState<PricesText>(EMPTY_PRICES_TEXT);
 
   // The package as read once it is frozen: what the fixed fields draw, read again after
   // `PACKAGE_FROZEN`, so an unsent track or length never shows as the package's.
@@ -113,10 +132,43 @@ function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
       : undefined;
   const countWrong = countText.trim() !== '' && sessionCount === null;
   const priceWrong = priceText.trim() !== '' && price_piasters === null;
+  // B-P4 round 2 (Q-B1 (a)): a new package on the ijazah track while the switch is on.
+  const asProgramme = item === undefined && programmeOn && track === 'ijazah_track';
+  const prices = programmePricesOf(pricesText);
   const ready =
-    subject !== undefined && sessionCount !== null && price_piasters !== null && !sending;
+    subject !== undefined &&
+    !sending &&
+    (asProgramme ? prices !== null : sessionCount !== null && price_piasters !== null);
+
+  async function createProgramme(): Promise<void> {
+    if (subject === undefined || prices === null) return;
+    setSending(true);
+    setRefusal(undefined);
+    try {
+      await actions.create({
+        subjectId: subject.id,
+        track: 'ijazah_track',
+        prices,
+        isActive: true,
+        idempotencyKey,
+      });
+      router.back();
+    } catch (caught) {
+      setRefusal(
+        errorCodeOf(caught) === 'SUBJECT_NOT_APPROVED'
+          ? 'subject'
+          : programmePackageRefusalOf(caught),
+      );
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function save(): Promise<void> {
+    if (asProgramme) {
+      await createProgramme();
+      return;
+    }
     if (subject === undefined || sessionCount === null || price_piasters === null) return;
     setSending(true);
     setRefusal(undefined);
@@ -214,88 +266,94 @@ function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
         </Field>
       )}
 
-      <Field
-        label={t('teacher.packages.editor.sessionCount')}
-        {...(countWrong
-          ? {
-              error: t('teacher.packages.editor.error.sessionCount', {
-                min: 1,
-                max: MAX_SESSION_COUNT,
-              }),
-            }
-          : {})}
-      >
-        <Input value={countText} onChangeText={setCountText} keyboard="numeric" />
-      </Field>
-
-      {fixed !== undefined ? (
-        <Field label={t('teacher.packages.editor.duration')}>
-          <Text variant="body-lg">
-            {t('common.format.duration', { minutes: fixed.sessionDurationMinutes })}
-          </Text>
-        </Field>
+      {asProgramme ? (
+        <ProgrammePriceFields texts={pricesText} onChange={setPricesText} />
       ) : (
-        <Field label={t('teacher.packages.editor.duration')}>
-          <Segmented
-            accessibilityLabel={t('teacher.packages.editor.duration')}
-            options={SESSION_LENGTHS_MINUTES.map((value) => ({
-              value: String(value),
-              label: t('teacher.packages.editor.durationOption', { minutes: value }),
-            }))}
-            value={String(minutes)}
-            onChange={(value) => setMinutes(Number(value) as SessionLengthMinutes)}
-          />
-        </Field>
+        <>
+          <Field
+            label={t('teacher.packages.editor.sessionCount')}
+            {...(countWrong
+              ? {
+                  error: t('teacher.packages.editor.error.sessionCount', {
+                    min: 1,
+                    max: MAX_SESSION_COUNT,
+                  }),
+                }
+              : {})}
+          >
+            <Input value={countText} onChangeText={setCountText} keyboard="numeric" />
+          </Field>
+
+          {fixed !== undefined ? (
+            <Field label={t('teacher.packages.editor.duration')}>
+              <Text variant="body-lg">
+                {t('common.format.duration', { minutes: fixed.sessionDurationMinutes })}
+              </Text>
+            </Field>
+          ) : (
+            <Field label={t('teacher.packages.editor.duration')}>
+              <Segmented
+                accessibilityLabel={t('teacher.packages.editor.duration')}
+                options={SESSION_LENGTHS_MINUTES.map((value) => ({
+                  value: String(value),
+                  label: t('teacher.packages.editor.durationOption', { minutes: value }),
+                }))}
+                value={String(minutes)}
+                onChange={(value) => setMinutes(Number(value) as SessionLengthMinutes)}
+              />
+            </Field>
+          )}
+
+          {frozen ? (
+            <Banner icon={{ name: 'lock' }} tone="neutral">
+              {t('teacher.packages.editor.frozenHint')}
+            </Banner>
+          ) : null}
+
+          <Field
+            label={t('teacher.packages.editor.totalPrice')}
+            {...(priceWrong ? { error: t('teacher.packages.editor.error.price') } : {})}
+            {...(price_piasters !== null && sessionCount !== null
+              ? {
+                  hint: t('teacher.packages.editor.perSessionHint', {
+                    amount: formatPoundAmount(perSession(price_piasters, sessionCount), locale),
+                  }),
+                }
+              : {})}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['3'] }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Input value={priceText} onChangeText={setPriceText} keyboard="numeric" />
+              </View>
+              <Text tone="muted">{t('teacher.packages.editor.currency')}</Text>
+            </View>
+          </Field>
+
+          {/* 003:T104 (ADR 0025 D1, Q-A3 (a)): the price guide. The teacher's share of the price as it
+              is typed, at the rate the platform answers, rounded up as the order will be; nothing while
+              the rate is unread. 003:T113 (SRS DEC-88): beside it, the other teachers' average price
+              per session on the same track and length; nothing when fewer than three have one. */}
+          {share_piasters !== undefined || average_piasters !== undefined ? (
+            <View style={{ gap: tokens.space['1'] }}>
+              {share_piasters !== undefined && shareRate !== undefined ? (
+                <Text tone="muted">
+                  {t('money.packageEditor.teacherShare', {
+                    amount: formatPoundAmount(share_piasters, locale),
+                    percent: shareRate,
+                  })}
+                </Text>
+              ) : null}
+              {average_piasters !== undefined ? (
+                <Text tone="muted">
+                  {t('money.packageEditor.averagePrice', {
+                    amount: formatPoundAmount(piasters(average_piasters), locale),
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </>
       )}
-
-      {frozen ? (
-        <Banner icon={{ name: 'lock' }} tone="neutral">
-          {t('teacher.packages.editor.frozenHint')}
-        </Banner>
-      ) : null}
-
-      <Field
-        label={t('teacher.packages.editor.totalPrice')}
-        {...(priceWrong ? { error: t('teacher.packages.editor.error.price') } : {})}
-        {...(price_piasters !== null && sessionCount !== null
-          ? {
-              hint: t('teacher.packages.editor.perSessionHint', {
-                amount: formatPoundAmount(perSession(price_piasters, sessionCount), locale),
-              }),
-            }
-          : {})}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: tokens.space['3'] }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Input value={priceText} onChangeText={setPriceText} keyboard="numeric" />
-          </View>
-          <Text tone="muted">{t('teacher.packages.editor.currency')}</Text>
-        </View>
-      </Field>
-
-      {/* 003:T104 (ADR 0025 D1, Q-A3 (a)): the price guide. The teacher's share of the price as it
-          is typed, at the rate the platform answers, rounded up as the order will be; nothing while
-          the rate is unread. 003:T113 (SRS DEC-88): beside it, the other teachers' average price
-          per session on the same track and length; nothing when fewer than three have one. */}
-      {share_piasters !== undefined || average_piasters !== undefined ? (
-        <View style={{ gap: tokens.space['1'] }}>
-          {share_piasters !== undefined && shareRate !== undefined ? (
-            <Text tone="muted">
-              {t('money.packageEditor.teacherShare', {
-                amount: formatPoundAmount(share_piasters, locale),
-                percent: shareRate,
-              })}
-            </Text>
-          ) : null}
-          {average_piasters !== undefined ? (
-            <Text tone="muted">
-              {t('money.packageEditor.averagePrice', {
-                amount: formatPoundAmount(piasters(average_piasters), locale),
-              })}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
 
       {item === undefined ? null : (
         <Banner icon={{ name: 'info' }} tone="info">
