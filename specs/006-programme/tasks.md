@@ -1015,7 +1015,7 @@ No open question remains.
   > no word about refusing. The editor, the card, the groups' counts and the deactivate sheet stop narrowing to the fixed
   > package (`PackageEditor.tsx:58-62`, `PackageCard.tsx:46-47`, `PackageGroups.tsx:26-27`,
   > `PackageDeactivateSheet.tsx:53-63`). The offer form hangs on `TeacherEnrollment.tsx`.
-- [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
+- [x] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
     now, and what each decision does (approve: the offer lapses, the fee kept; extend: 48 hours more from now);
@@ -1056,6 +1056,20 @@ No open question remains.
   > the student's, beside «the assessment was not held; the fee is unreleased»; the button reads «افتح قضية تعويض
   > للطالب»; no case opens by itself. The monitor's four columns in the payments list and panel; the stale comment
   > `admin/payments.ts:58-60` and the labels of `programmes.listed` / `.viewed` (T018's follow-up).
+  > **Done (B-P4 lanes s and c, 2026-11-25; merged at `1fdf7fad` and `0f162878`).** Lane s: `programmes.decide` takes
+  > `charge_unknown`'s approve and extend only, under the programme's, the enrollment's and the order's locks
+  > (kernel.md `006:T021`); approve writes a still-`created` automatic order `expired` (no gateway call;
+  > `first_failure_at` = the decision's instant only when none is set), an answered order is refused `charge_answered`;
+  > the race against the inquiry's answer both ways (`tests/db-integrity/programme-charge-unknown.spec.ts`); bound in
+  > `main.ts`'s `006:T021` block (`programme-decisions-binds.spec.ts`). Lane c: `pages/programmes/` (the queue without a
+  > `refusal` tab, each tab and decision explained, the no_offer reason 1–500, «مد» with the owner's line on
+  > `charge_unknown`, «رسوم جلسة التقييم {amount} من حق الطالب» read through `payments.get` and «افتح قضية تعويض
+  > للطالب» on `ManualCaseDialog`'s locked student preset, the reopen); the monitor's four columns; the audit labels of
+  > `programmes.listed` / `.viewed`; the stale `admin/payments.ts` comment; Q-7: `InfoButton` and an explanation for
+  > each of the 110 settings (`programme_enabled`: on, off, ⚠️ off reactivates no package), the labels spec requiring
+  > one per key; five older strings say «التقييم»; `docs/design/components.md` lists `InfoButton`. Every string
+  > approved by the owner (2026-11-25). Red first, named mutants, each restored and cmp-checked
+  > (`track2\runs\b-p4\lane-s\`, `lane-c\`).
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
