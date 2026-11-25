@@ -270,6 +270,26 @@ describe('the programme’s eight settings (006:T002, R-515)', () => {
     expect(settingRefusal('programme_charge_inquiry_tries', 1.5)).toBe('invalid');
   });
 
+  // 006:T019 (B-P4's conflict check, Q-5 (b), the owner, 2026-11-25; SRS DEC-114, §3.14): the hours
+  // before `payBy` the student's «pay before» line shows from, 12 by default, 1 to 47 (below the 48
+  // hours to pay the rest), on the panel's booking page, bound to its own §3.14 row.
+  it('takes the reminder’s hours as a whole number from 1 to 47, defaulting to 12 (DEC-114)', () => {
+    expect(at('programme_pay_reminder_hours')).toMatchObject({
+      unit: 'hours',
+      bounds: { shape: 'number', value: atLeast(1, 47) },
+      group: 'booking',
+      default: 12,
+      srsRow:
+        "Programme: hours before the deadline to pay the rest that the Student's reminder line shows (hours, 1 to 47)",
+    });
+    expect(seeded.get('programme_pay_reminder_hours')).toBe(12);
+    expect(settingRefusal('programme_pay_reminder_hours', 1)).toBeUndefined();
+    expect(settingRefusal('programme_pay_reminder_hours', 47)).toBeUndefined();
+    expect(settingRefusal('programme_pay_reminder_hours', 0)).not.toBeUndefined();
+    expect(settingRefusal('programme_pay_reminder_hours', 48)).not.toBeUndefined();
+    expect(settingRefusal('programme_pay_reminder_hours', 1.5)).toBe('invalid');
+  });
+
   it('takes the switch as 0 or 1 only: 1 admitted, 2 refused by the read site’s schema', () => {
     expect(settingRefusal('programme_enabled', 1)).toBeUndefined();
     expect(settingRefusal('programme_enabled', 2)).toBe('invalid');

@@ -199,6 +199,9 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 006:T014 (SRS §3.14, DEC-113; research R-515 as amended): the unanswered asks about an automatic
   // charge before the `charge_unknown` Administrator item.
   ['programme_charge_inquiry_tries', 6],
+  // 006:T019 (SRS §3.14, DEC-114; B-P4's conflict check, Q-5 (b)): the hours before `pay_by_at` the
+  // student's «pay before» line shows from.
+  ['programme_pay_reminder_hours', 12],
   // T001 (Phase 3, specs/004-sessions/data-model.md §4).
   ['session_evaluation_delay_minutes', 2],
   ['rate_limit_chat_message', { limit: 30, window_seconds: 60 }],
