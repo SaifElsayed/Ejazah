@@ -1084,6 +1084,11 @@ No open question remains.
   > one per key; five older strings say «التقييم»; `docs/design/components.md` lists `InfoButton`. Every string
   > approved by the owner (2026-11-25). Red first, named mutants, each restored and cmp-checked
   > (`track2\runs\b-p4\lane-s\`, `lane-c\`).
+  > **Follow-up (PR #161 r1, 2026-11-25, Follow-up 2, nit 3; the owner kept it a follow-up).** The panel shows the
+  > reopen on any closed programme with an approved `stop` in its history (`apps/admin/src/pages/programmes/
+  > ProgrammePanel.tsx:126`, `stoppedByItsStop`), so a programme stopped, reopened, then closed again by something
+  > else still shows it; the server refuses `not_stopped` in its own words and writes nothing. Rare (rule 6). Fix:
+  > show the reopen only when the latest approved stop's `decidedAt` is at or after `closedAt`.
 - [x] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
