@@ -10,7 +10,7 @@
 // assessment was not held: the fee unreleased, the fee the student's, and the button that opens a
 // compensation case for the student, which never opens by itself. Each refusal in its own words.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type MessageKey, setLocale, translate } from '../../i18n';
 import { inBothLocales, refusal } from '../../test/app-harness';
@@ -28,6 +28,23 @@ import {
 } from './programmes-fixtures';
 
 afterEach(() => setLocale('ar'));
+
+/**
+ * The owner's review of part (A) (Reading 1 changed): the assessment fee's amount comes from the
+ * monitor's `usePaidAmountText` (`pages/payments`, where the gateway's amounts are named, R-MONEY-6;
+ * its own read of `payments.get` is the monitor's spec's). Here it answers what the case sets.
+ */
+const paid = vi.hoisted(() => ({ text: vi.fn<(paymentId: string) => string | undefined>() }));
+vi.mock('../payments/PaymentPanel', async (original) => ({
+  ...(await original<typeof import('../payments/PaymentPanel')>()),
+  usePaidAmountText: (paymentId: string) => paid.text(paymentId),
+}));
+/** The fee as the monitor's hook writes it. */
+const FEE = '500.00';
+beforeEach(() => {
+  paid.text.mockReset();
+  paid.text.mockReturnValue(FEE);
+});
 
 const ar = (key: MessageKey, values?: Record<string, string | number>) =>
   translate('ar', key, values);
@@ -302,14 +319,14 @@ describe('the assessment not held (FR-ADMIN-20 (c); Q-8 (b))', () => {
     ).toBeNull();
     expect(box.queryByLabelText(ar('admin.shared.manualCase.enrollmentLabel'))).toBeNull();
     fireEvent.change(box.getByLabelText(ar('admin.shared.manualCase.reasonLabel')), {
-      target: { value: 'جلسة الاختبار لم تُعقد' },
+      target: { value: 'جلسة التقييم لم تُعقد' },
     });
     fireEvent.click(box.getByRole('button', { name: ar('admin.shared.manualCase.confirm') }));
     await waitFor(() => expect(api.cases.openManual.mutate).toHaveBeenCalledTimes(1));
     expect(api.cases.openManual.mutate.mock.calls[0]?.[0]).toEqual({
       enrollmentId: E1,
       party: 'student',
-      reason: 'جلسة الاختبار لم تُعقد',
+      reason: 'جلسة التقييم لم تُعقد',
       idempotencyKey: expect.stringMatching(KEY),
     });
   });
@@ -352,6 +369,50 @@ describe('the assessment not held (FR-ADMIN-20 (c); Q-8 (b))', () => {
     ).toContain(`/payments?payment=${O_ASSESSMENT}`);
   });
 
+  // The owner's review of part (A), 2026-11-25 (Reading 1 changed): the fee's amount, read from the
+  // assessment's order through the monitor's `usePaidAmountText` (`payments.get`); the name and the
+  // link when that read fails.
+  it('names the fee’s amount from its order, the student’s, with the link, in both languages', async () => {
+    const api = withItem('no_offer', { assessmentHeld: false }, { state: 'awaiting_offer' });
+    await inBothLocales(
+      () => ({ view: openPage(api, `/programmes?programme=${E1}`).view }),
+      async (t) => {
+        const panel = within(
+          await screen.findByRole('complementary', { name: t('admin.programme.detail.a11y') }),
+        );
+        expect(
+          await panel.findByText(t('admin.programme.compensation.feeAmount', { amount: FEE })),
+        ).toBeTruthy();
+        expect(
+          panel
+            .getAllByRole('link', { name: t('admin.common.action.openInPayments') })
+            .map((link) => link.getAttribute('href')),
+        ).toContain(`/payments?payment=${O_ASSESSMENT}`);
+      },
+    );
+    expect(paid.text).toHaveBeenCalledWith(O_ASSESSMENT);
+  });
+
+  it('keeps the fee’s name and its link when its order cannot be read', async () => {
+    const api = withItem('no_offer', { assessmentHeld: false }, { state: 'awaiting_offer' });
+    paid.text.mockReturnValue(undefined);
+    openPage(api, `/programmes?programme=${E1}`);
+    const panel = within(
+      await screen.findByRole('complementary', { name: ar('admin.programme.detail.a11y') }),
+    );
+    expect(await panel.findByText(ar('admin.programme.compensation.feeIsStudents'))).toBeTruthy();
+    expect(paid.text).toHaveBeenCalledWith(O_ASSESSMENT);
+    await settle();
+    expect(
+      panel.queryByText(ar('admin.programme.compensation.feeAmount', { amount: FEE })),
+    ).toBeNull();
+    expect(
+      panel
+        .getAllByRole('link', { name: ar('admin.common.action.openInPayments') })
+        .map((link) => link.getAttribute('href')),
+    ).toContain(`/payments?payment=${O_ASSESSMENT}`);
+  });
+
   it('says nothing of it where the assessment was held', async () => {
     const api = fakeApi();
     api.programmes.get.query.mockResolvedValue(
@@ -363,6 +424,7 @@ describe('the assessment not held (FR-ADMIN-20 (c); Q-8 (b))', () => {
     );
     await panel.findByText(ar('admin.programme.state.closed'));
     expect(panel.queryByText(ar('admin.programme.compensation.notHeld'))).toBeNull();
+    expect(paid.text).not.toHaveBeenCalled();
     expect(
       panel.queryByRole('button', { name: ar('admin.programme.compensation.open') }),
     ).toBeNull();

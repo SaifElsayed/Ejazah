@@ -31,6 +31,20 @@ import { panelTimeZone } from '../../lib/zone';
 import { amountOrDash, HOLD_RELEASE_REASONS, orderHistory } from './history';
 import { type PaymentDetail, type PaymentStatus, usePayment } from './queries';
 
+/**
+ * 006:T021 (the owner's review of B-P4 part (A), 2026-11-25, Reading 1 changed): an order's amount as
+ * the gateway reported it, in pounds, for another page's sentence (the programme's assessment fee);
+ * undefined while it is read or when the read fails. Read here, through the monitor's audited
+ * `payments.get`, because the gateway's amounts are named only in this folder (R-MONEY-6).
+ */
+export function usePaidAmountText(paymentId: string): string | undefined {
+  const locale = useLocale();
+  const read = usePayment(paymentId);
+  return read.data === undefined
+    ? undefined
+    : formatPounds(piasters(read.data.gross_piasters), locale);
+}
+
 /** Each status's word and tone, as the table and the panel draw it. */
 export const PAYMENT_STATUS: Readonly<
   Record<PaymentStatus, { readonly label: MessageKey; readonly tone: StatusTone }>

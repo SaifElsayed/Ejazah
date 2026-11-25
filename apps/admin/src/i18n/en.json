@@ -2350,6 +2350,7 @@
         "state": "State"
       },
       "compensation": {
+        "feeAmount": "The assessment fee of {amount} is the student's",
         "feeIsStudents": "The assessment fee was paid by the student and is theirs while the session was not held. The administration decides its return in a compensation case; no case opens by itself.",
         "notHeld": "The assessment was not held; its fee is unreleased.",
         "open": "Open a compensation case for the student"

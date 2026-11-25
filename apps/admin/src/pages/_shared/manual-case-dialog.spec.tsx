@@ -294,12 +294,12 @@ describe('the student preset (006:T021, Q-8 (b))', () => {
   it('sends the student as the party, with no remedy, once the reason is written', async () => {
     const { api } = open({ enrollmentId: ENROLLMENT, party: 'student' });
     api.cases.openManual.mutate.mockResolvedValue(answerOf());
-    await openCase(null, '  جلسة الاختبار لم تُعقد  ');
+    await openCase(null, '  جلسة التقييم لم تُعقد  ');
     await waitFor(() => expect(api.cases.openManual.mutate).toHaveBeenCalledTimes(1));
     expect(sent(api)).toEqual({
       enrollmentId: ENROLLMENT,
       party: 'student',
-      reason: 'جلسة الاختبار لم تُعقد',
+      reason: 'جلسة التقييم لم تُعقد',
       idempotencyKey: expect.stringMatching(KEY),
     });
   });

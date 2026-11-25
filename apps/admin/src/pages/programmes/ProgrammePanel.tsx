@@ -12,7 +12,11 @@
 // setting, or the setting named when they cannot be read). Where the assessment was not held (an
 // open `no_offer` item's, or a closed programme's with no `assessment` release): the fee unreleased,
 // the fee the student's, the fee's order, and the button that opens a compensation case for the
-// student, the party locked (Q-8 (b)); no case opens by itself, a decision included. A programme
+// student, the party locked (Q-8 (b)); no case opens by itself, a decision included. The owner's
+// review of part (A) (2026-11-25, Reading 1 changed): the fee's amount, read from the assessment's
+// order through the monitor's audited `payments.get` (`usePaidAmountText`, the monitor's, where
+// the gateway's amounts are named, R-MONEY-6), «رسوم جلسة التقييم 500.00 ج.م من حق الطالب»; when that
+// read fails, the fee's name and its link alone. A programme
 // an approved stop closed can be reopened (FR-727), with a mandatory reason.
 import { piasters } from '@ijazah/money';
 import { useState } from 'react';
@@ -34,7 +38,7 @@ import { dayMonthYear, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { ManualCaseDialog } from '../_shared';
 import { DecisionDialog } from '../gender/DecisionDialog';
-import { orderTerms, PAYMENT_STATUS } from '../payments/PaymentPanel';
+import { orderTerms, PAYMENT_STATUS, usePaidAmountText } from '../payments/PaymentPanel';
 import { labelKey } from '../settings/words';
 import { DecideDialog } from './DecideDialog';
 import {
@@ -208,6 +212,9 @@ function ProgrammeRecord({
             <Banner icon={{ name: 'triangle-alert' }} tone="warning">
               {t('admin.programme.compensation.notHeld')}
             </Banner>
+            {assessmentOrder === undefined ? null : (
+              <AssessmentFee paymentId={assessmentOrder.paymentId} />
+            )}
             <p className="text-callout">{t('admin.programme.compensation.feeIsStudents')}</p>
             <span className="row wrap gap-2">
               {assessmentOrder === undefined ? null : (
@@ -338,6 +345,18 @@ function ProgrammeRecord({
         />
       ) : null}
     </>
+  );
+}
+
+/** The assessment fee's amount, as its order holds it; nothing while unread or when the read fails. */
+function AssessmentFee({ paymentId }: { readonly paymentId: string }) {
+  const t = useT();
+  const amount = usePaidAmountText(paymentId);
+  if (amount === undefined) return null;
+  return (
+    <p className="text-callout text-medium">
+      {t('admin.programme.compensation.feeAmount', { amount })}
+    </p>
   );
 }
 

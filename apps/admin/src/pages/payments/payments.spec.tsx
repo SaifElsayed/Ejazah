@@ -6,13 +6,16 @@
 // the references, the enrollment's package and progress, every paid order of the enrollment, and the
 // order's history as a timeline; nothing on the page writes (FR-401); the page behind the second
 // factor as every console page (FR-402); `?payment=` opening one order.
+import { piasters } from '@ijazah/money';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { setLocale, translate, type MessageKey } from '../../i18n';
-import { dayMonth, timeOfDay } from '../../lib/format';
+import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { currentPath, inBothLocales, query, refusal, renderApp } from '../../test/app-harness';
+import { renderPiece } from '../_shared/piece-harness';
+import { usePaidAmountText } from './PaymentPanel';
 
 afterEach(() => {
   setLocale('ar');
@@ -831,5 +834,38 @@ describe('the programme’s order terms (006:T021)', () => {
         expect(aside.getByText(t('admin.payments.columns.automatic'))).toBeTruthy();
       },
     );
+  });
+});
+
+// 006:T021 (the owner's review of B-P4 part (A), 2026-11-25, Reading 1 changed): an order's amount
+// as the gateway reported it, in pounds, for the programme's page («رسوم جلسة التقييم 500.00 ج.م من
+// حق الطالب»), read through the audited `payments.get`; nothing while it is read or when it fails.
+describe('an order’s amount for another page (006:T021)', () => {
+  function Probe({ paymentId }: { readonly paymentId: string }) {
+    return <output>{usePaidAmountText(paymentId)}</output>;
+  }
+
+  it('reads the order and writes its amount in pounds, in both languages', async () => {
+    for (const locale of ['ar', 'en'] as const) {
+      setLocale(locale);
+      const api = fakeApi();
+      const { view } = renderPiece(() => <Probe paymentId={P3} />, api);
+      await waitFor(() =>
+        expect(view.container.querySelector('output')?.textContent).toBe(
+          formatPounds(piasters(detail.gross_piasters), locale),
+        ),
+      );
+      expect(api.payments.get.query).toHaveBeenCalledWith({ paymentId: P3 });
+      view.unmount();
+    }
+  });
+
+  it('writes nothing when the order cannot be read', async () => {
+    const api = fakeApi();
+    api.payments.get.query.mockRejectedValue(refusal('INTERNAL_SERVER_ERROR'));
+    const { view } = renderPiece(() => <Probe paymentId={P3} />, api);
+    await waitFor(() => expect(api.payments.get.query).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(view.container.querySelector('output')?.textContent).toBe('');
   });
 });
