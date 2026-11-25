@@ -5,11 +5,13 @@
 // a running programme: «renew now» with no card, «pay now» and «change card» with one, only while
 // `renewOpen` and never while `payeePending` or `chargePending`; the automatic renewal's off row only
 // while a card is saved. The consent sends `saveCard` on «monthly» only; «change card» saves the
-// new card, «pay now» and «renew now» do not.
+// new card, «pay now» and «renew now» do not. 006:T019 (FR-708, SRS DEC-114): the reminder «pay before
+// {date} {time}» from the enrollment's `payReminderFrom`, the server's `payBy` − the setting, only while
+// `offered`; never with no instant or before it.
 import type { ProgrammeGetOutput } from '@ijazah/contracts';
 import { describe, expect, it } from '@jest/globals';
 
-import { payInputOf, programmeViewOf, renewInputOf } from './gates';
+import { payInputOf, payReminderOf, programmeViewOf, renewInputOf } from './gates';
 
 const OFFER = {
   level: 'حافظ لعشرة أجزاء',
@@ -41,6 +43,8 @@ function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
     payBlocked: false,
     teacherUnavailable: false,
     card: null,
+    stopRequestFrom: null,
+    payReminderFrom: null,
     ...of,
   };
 }
@@ -164,5 +168,33 @@ describe('what the payments send (FR-713)', () => {
     expect(renewInputOf('changeCard')).toEqual({ saveCard: true });
     expect(renewInputOf('payNow')).toEqual({ saveCard: false });
     expect(renewInputOf('renewNow')).toEqual({ saveCard: false });
+  });
+});
+
+describe('the reminder before the 48 hours end (FR-708, SRS DEC-114)', () => {
+  // The offer Mon 23 Nov 18:00 Cairo, `payBy` Wed 25 Nov 18:00, the line from Wed 06:00 (12 h before).
+  const PAY_BY = '2026-11-25T16:00:00.000Z';
+  const FROM = '2026-11-25T04:00:00.000Z';
+  const marker = { state: 'offered', payBy: PAY_BY, payReminderFrom: FROM } as const;
+
+  it('from payReminderFrom on, the line names payBy', () => {
+    expect(payReminderOf(marker, new Date('2026-11-25T04:00:00.000Z'))).toBe(PAY_BY);
+    expect(payReminderOf(marker, new Date('2026-11-25T15:59:00.000Z'))).toBe(PAY_BY);
+  });
+
+  it('no line before payReminderFrom', () => {
+    expect(payReminderOf(marker, new Date('2026-11-25T03:59:59.000Z'))).toBeNull();
+  });
+
+  it('no line when payReminderFrom is null', () => {
+    expect(
+      payReminderOf({ ...marker, payReminderFrom: null }, new Date('2026-11-25T10:00:00.000Z')),
+    ).toBeNull();
+  });
+
+  it('no line once the offer is not awaiting payment, nor on an enrollment that is no programme', () => {
+    const later = new Date('2026-11-25T10:00:00.000Z');
+    expect(payReminderOf({ ...marker, state: 'active' }, later)).toBeNull();
+    expect(payReminderOf(undefined, later)).toBeNull();
   });
 });

@@ -6,8 +6,16 @@
 // running programme (`active`, `paused`): «renew now» with no card saved, «pay now» and «change
 // card» with one, only while `renewOpen` and never while `payeePending` or `chargePending`, each
 // with its line; the automatic renewal's off row only while a card is saved (FR-713a). The consent
-// (FR-713) saves the card on «monthly» only: in full has no later month to charge.
-import type { ProgrammeGetOutput, ProgrammePlan, ProgrammeState } from '@ijazah/contracts';
+// (FR-713) saves the card on «monthly» only: in full has no later month to charge. The reminder
+// (FR-708, SRS DEC-114): «pay before» while `offered`, from the server's `payReminderFrom` on.
+import { secondsUntil } from '@ijazah/time/calendar';
+
+import type {
+  EnrollmentProgramme,
+  ProgrammeGetOutput,
+  ProgrammePlan,
+  ProgrammeState,
+} from '@ijazah/contracts';
 
 export type RenewalButton = 'renewNow' | 'payNow' | 'changeCard';
 export type OfferLine = 'payBlocked' | 'payeePending';
@@ -81,4 +89,19 @@ export function payInputOf(
 /** `programme.renew`'s `saveCard`: «change card» pays with a new card that replaces the saved one. */
 export function renewInputOf(button: RenewalButton): { readonly saveCard: boolean } {
   return { saveCard: button === 'changeCard' };
+}
+
+/**
+ * The reminder's deadline (FR-708, SRS DEC-114): `payBy` while the offer awaits payment and `now` has
+ * reached the server's `payReminderFrom` (`payBy` − `programme_pay_reminder_hours`); else null. The
+ * instant is read on the phone's clock by `secondsUntil` (R-TIME-1); the phone reads no setting.
+ */
+export function payReminderOf(
+  programme: EnrollmentProgramme | undefined,
+  now: Date,
+): string | null {
+  if (programme?.state !== 'offered') return null;
+  const { payBy, payReminderFrom } = programme;
+  if (payBy === null || payReminderFrom === null) return null;
+  return secondsUntil(payReminderFrom, now) === 0 ? payBy : null;
 }

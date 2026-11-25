@@ -11,12 +11,16 @@
 // checkout's `hosted.ts`, and once it closes the student stays on the page, read again, never sent to
 // `processing` or its «payment success» (Q-A1 (a), R-HONEST-1). The cancellation is worded as declining
 // the offer; refused `payment_processing`, it says so. An enrollment that is no programme (NOT_FOUND)
-// shows none of it.
-import type {
-  EnrollmentsGetOutput,
-  ListedSession,
-  MeOutput,
-  ProgrammeGetOutput,
+// shows none of it. After lane s's contract (B-P4, Q-3 (a), Q-5 (b), Q-4 (a)): the panel hangs on the
+// enrollment's `programme` marker, and an enrollment without one reads no `programme.get`; the
+// reminder «ادفع قبل {date} {time}» shows from the marker's `payReminderFrom` while `offered`, never
+// with no instant or before it; a programme of more than 51 sessions is drawn.
+import {
+  enrollmentsGetOutput,
+  type EnrollmentsGetOutput,
+  type ListedSession,
+  type MeOutput,
+  type ProgrammeGetOutput,
 } from '@ijazah/contracts';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { piasters } from '@ijazah/money';
@@ -88,7 +92,11 @@ const detail: EnrollmentsGetOutput = {
   sessions: [assessment],
   complaintOpen: false,
   ijazahRequest: null,
+  programme: { state: 'active', payBy: null, payReminderFrom: null },
 };
+
+/** An ijazah-track enrollment that is no programme: no marker (a pre-switch package). */
+const { programme: _marker, ...notAProgramme } = detail;
 
 const OFFER = {
   level: 'حافظ لعشرة أجزاء',
@@ -123,6 +131,8 @@ function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
     payBlocked: false,
     teacherUnavailable: false,
     card: null,
+    stopRequestFrom: null,
+    payReminderFrom: null,
     ...of,
   };
 }
@@ -515,11 +525,82 @@ describe('a running programme (FR-713a, FR-715, FR-716, FR-726)', () => {
 });
 
 describe('an enrollment that is not a programme', () => {
-  it('NOT_FOUND: no programme part', async () => {
+  it('no programme panel on a non-programme enrollment: no marker, programme.get never read', async () => {
+    mockApi.api.enrollments.get.query.mockResolvedValue(notAProgramme);
+    get().mockResolvedValue(programme());
     await inBothDirections(ui, async (_rendered, direction) => {
       expect(await screen.findByText(TEACHER)).toBeTruthy();
-      await waitFor(() => expect(get()).toHaveBeenCalled());
       expect(screen.queryByText(said(direction, 'programme.student.title'))).toBeNull();
+    });
+    expect(get()).not.toHaveBeenCalled();
+  });
+});
+
+describe('the reminder before the 48 hours end (FR-708, SRS DEC-114)', () => {
+  /** The phone's clock is real here: an instant long past, and one far ahead. */
+  const PAST = '2026-01-01T00:00:00.000Z';
+  const FUTURE = '2099-01-01T00:00:00.000Z';
+  const reminder = (direction: Direction) =>
+    said(direction, 'programme.student.payReminder', {
+      date: formatDate(PAY_BY, CAIRO, localeOf(direction)),
+      time: formatTime(PAY_BY, CAIRO, localeOf(direction)),
+    });
+  const withMarker = (payReminderFrom: string | null, state: 'offered' | 'active' = 'offered') =>
+    mockApi.api.enrollments.get.query.mockResolvedValue({
+      ...detail,
+      programme: { state, payBy: PAY_BY, payReminderFrom },
+    });
+
+  it('from payReminderFrom on: «pay before» with payBy as a date and a time', async () => {
+    withMarker(PAST);
+    get().mockResolvedValue(offered({ payReminderFrom: PAST }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(screen.getByText(reminder(direction))).toBeTruthy();
+    });
+  });
+
+  it('no line when payReminderFrom is null', async () => {
+    withMarker(null);
+    get().mockResolvedValue(offered());
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(screen.queryByText(reminder(direction))).toBeNull();
+    });
+  });
+
+  it('no line when payReminderFrom is in the future', async () => {
+    withMarker(FUTURE);
+    get().mockResolvedValue(offered({ payReminderFrom: FUTURE }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(screen.queryByText(reminder(direction))).toBeNull();
+    });
+  });
+});
+
+describe('a programme of more than 51 sessions (Q-4 (a))', () => {
+  it('an answer with 61 sessions is a valid enrollment, drawn with its count and its programme', async () => {
+    const long = enrollmentsGetOutput.parse({
+      ...detail,
+      summary: { ...detail.summary, sessionCount: 61, sessionDurationMinutes: 60 },
+    });
+    mockApi.api.enrollments.get.query.mockResolvedValue(long);
+    get().mockResolvedValue(programme({ offer: { ...OFFER, sessionCount: 60 }, monthCount: 15 }));
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      expect(
+        screen.getByText(
+          said(direction, 'common.format.packageFull', {
+            subject: direction === 'rtl' ? QURAN.nameAr : QURAN.nameEn,
+            count: 61,
+            minutes: 60,
+          }),
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(said(direction, 'programme.student.months', { paid: 2, count: 15 })),
+      ).toBeTruthy();
     });
   });
 });

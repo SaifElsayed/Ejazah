@@ -740,6 +740,7 @@
         "planMonthly": "شهريًا"
       },
       "payBlocked": "الدفع موقوف حتى تقرر الإدارة.",
+      "payReminder": "ادفع قبل {date} {time}",
       "payeePending": "الدفع غير متاح مؤقتًا، وسيُتاح قريبًا.",
       "profile": {
         "chooseSlot": "اختيار موعد جلسة التقييم · {subject}",

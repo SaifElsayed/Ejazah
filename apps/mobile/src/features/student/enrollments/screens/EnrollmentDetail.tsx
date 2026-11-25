@@ -22,8 +22,9 @@
 // 003:T112 (SRS FR-POSTPONE-1 to FR-POSTPONE-5, DEC-90): on a confirmed enrollment, the postponement
 // of the student's coming week (`PostponePanel`); a postponed session says who postponed it and why
 // under its time (`PostponementLine`).
-// 006:T019 (FR-706 to FR-726): an ijazah-track enrollment's programme, read from `programme.get`
-// (`ProgrammePanel`); NOT_FOUND, no programme, draws nothing.
+// 006:T019 (FR-706 to FR-726): a programme's enrollment, marked by the server (`programme`), shows
+// its programme read from `programme.get` (`ProgrammePanel`), and from `payReminderFrom` the reminder
+// «ادفع قبل {date} {time}» under the teacher (`PayReminder`, FR-708).
 import type { EnrollmentsGetOutput, ListedSession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -50,7 +51,7 @@ import { useAskForPush } from '../../../shared/push';
 import { StackScreen } from '../../../shared/screen';
 import { LoadError, NotLoaded, OfflineNotice } from '../../../shared/states';
 import { ChatEntry } from '../../chat';
-import { ProgrammePanel } from '../../programme';
+import { PayReminder, ProgrammePanel } from '../../programme';
 import { RemedyStatusLine } from '../../remedies';
 import { STUDENT_PRE_SESSION_ROUTE } from '../../sessions/api';
 import { useOnline } from '../../../../lib/online';
@@ -139,7 +140,7 @@ export function EnrollmentDetail() {
       ) : null}
       <ProgrammePanel
         enrollmentId={shown.enrollmentId}
-        track={shown.summary.track}
+        programme={shown.programme}
         zone={zone}
       />
       <IjazahRequestPanel enrollment={shown} />
@@ -189,6 +190,7 @@ function Overview({
         />
       </View>
       <EndedByAdmin endedByAdmin={enrollment.endedByAdmin} />
+      <PayReminder programme={enrollment.programme} zone={zone} />
       <PackageLine summary={enrollment.summary} />
       {weekly === undefined ? null : (
         <View style={{ gap: tokens.space['1'] }}>

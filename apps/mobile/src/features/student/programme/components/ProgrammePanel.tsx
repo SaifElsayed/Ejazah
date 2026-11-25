@@ -10,9 +10,11 @@
 // `PREVIOUS_CHECKOUT` goes to `CheckoutPrevious` as the booking sheet does (FR-BOOK-12); any other
 // refusal is said in place, and the panel is read again. Q-A1 (a) (the owner, 2026-11-25): once a
 // payment's hosted page closes the student stays here (`openProgrammeCheckout`), never `processing`.
-// The cancellation is worded as declining the offer; refused `payment_processing`, it says so. A read refused NOT_FOUND is no programme:
-// nothing is drawn.
+// The cancellation is worded as declining the offer; refused `payment_processing`, it says so.
+// After lane s's contract (Q-3 (a)): the panel hangs on the enrollment's `programme` marker; an
+// enrollment without one reads no `programme.get`, and a failed read says so.
 import type {
+  EnrollmentProgramme,
   ProgrammeCard,
   ProgrammeGetOutput,
   ProgrammeOffer,
@@ -78,21 +80,21 @@ type Busy = 'pay' | RenewalButton | 'cancel' | 'autoRenewOff' | null;
 
 export function ProgrammePanel({
   enrollmentId,
-  track,
+  programme,
   zone,
 }: {
   readonly enrollmentId: string;
-  readonly track: string;
+  /** The enrollment's marker (Q-3 (a)); absent on an enrollment that is no programme. */
+  readonly programme: EnrollmentProgramme | undefined;
   /** The student's zone, every date and time is shown in. */
   readonly zone: string;
 }) {
-  const read = useProgramme(enrollmentId, track === 'ijazah_track');
+  const read = useProgramme(enrollmentId, programme !== undefined);
+  if (programme === undefined) return null;
   if (read.data !== undefined) {
     return <Programme enrollmentId={enrollmentId} programme={read.data} zone={zone} />;
   }
-  if (read.isError && errorCodeOf(read.error) !== 'NOT_FOUND') {
-    return <LoadError error={read.error} onRetry={() => void read.refetch()} />;
-  }
+  if (read.isError) return <LoadError error={read.error} onRetry={() => void read.refetch()} />;
   return null;
 }
 
