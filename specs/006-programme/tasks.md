@@ -946,7 +946,7 @@ No open question remains.
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
-- [ ] T019 [US1] [US2] [US3] The student's phone, `apps/mobile/src/features/student/programme/`:
+- [x] T019 [US1] [US2] [US3] The student's phone, `apps/mobile/src/features/student/programme/`:
   - the range and the fee on the profile;
   - the assessment's booking (each time's length, «sessions up to this long»);
   - the offer with its total, its months and the 48 h deadline (a reminder before it, FR-708);
@@ -988,6 +988,16 @@ No open question remains.
   > العرض الآن.»). Q-A1 (a): after a programme payment the phone returns to the enrollment's page (a second
   > `checkout/hosted.ts` entry), not the assessment's success screen; Q-A2 (a): `CheckoutPrevious.tsx` continues a
   > payable programme order (`checkoutCurrentOutput.programmeOrder`). Both outside files approved.
+  > **Done (B-P4 lane a, 2026-11-25; lane head `845b2540`, merged at `487dd3f6`).** `features/student/programme/`: the
+  > profile's programme card (range, fee) and its booking bar; the booking sheet's length per time; the enrollment's
+  > panel, shown only on the `programme` marker (the offer with its deadline as date and time, in full or monthly with
+  > the consent on monthly only, «رفض العرض» behind a dialog, months paid and next due, «renew now» / «pay now» /
+  > «change card» from `renewOpen` and the card, the off row only with a card, the `payeePending`, `payBlocked`,
+  > `chargePending`, paused and unavailable lines); «ادفع قبل {date} {time}» from `payReminderFrom` on the card and
+  > the page; a programme of 61 sessions drawn. Q-A1 (a): a programme payment returns to the enrollment's page
+  > (`checkout/hosted.ts`); Q-A2 (a): `CheckoutPrevious.tsx` continues a payable programme order. 49 strings approved
+  > by the owner (2026-11-25), `programme.student.payReminder` with them. Red first, named mutants, each restored and
+  > cmp-checked (`track2\runs\b-p4\lane-a\`).
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
