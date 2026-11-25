@@ -4,7 +4,7 @@
 // digits and decimal mark an Arabic keyboard types are read as the Western ones. 006:T002 (B-P1
 // Q-B1 (a)): the pounds' reading and writing are `packages/money`'s (`piastersOfPoundsText`,
 // `poundsText`), shared with the panel; the price's «above zero» stays here.
-import { MAX_SESSION_COUNT } from '@ijazah/contracts';
+import { MAX_PROGRAMME_SESSION_COUNT, MAX_SESSION_COUNT } from '@ijazah/contracts';
 import { type Piasters, piastersOfPoundsText, poundsText, toPlainNumber } from '@ijazah/money';
 
 const WHOLE = /^\d+$/;
@@ -29,10 +29,23 @@ export function poundsOf(amount_piasters: Piasters): string {
   return poundsText(amount_piasters);
 }
 
-/** The count typed, or null while it is not a whole number of one to 52 (FR-311). */
-export function sessionCountOf(text: string): number | null {
+/** The whole number typed, or null while it is not one of one to `max`. */
+function wholeCountOf(text: string, max: number): number | null {
   const typed = western(text);
   if (!WHOLE.test(typed)) return null;
   const count = Number(typed);
-  return count >= 1 && count <= MAX_SESSION_COUNT ? count : null;
+  return count >= 1 && count <= max ? count : null;
+}
+
+/** The count typed, or null while it is not a whole number of one to 52 (FR-311). */
+export function sessionCountOf(text: string): number | null {
+  return wholeCountOf(text, MAX_SESSION_COUNT);
+}
+
+/**
+ * 006:T020 (FR-705, R-506): the offer's count typed, or null while it is not a whole number of one to
+ * `MAX_PROGRAMME_SESSION_COUNT` (200).
+ */
+export function offerCountOf(text: string): number | null {
+  return wholeCountOf(text, MAX_PROGRAMME_SESSION_COUNT);
 }

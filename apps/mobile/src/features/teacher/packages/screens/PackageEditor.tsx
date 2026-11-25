@@ -8,6 +8,8 @@
 // plainly, the second reading the package again, after which the fixed track and length drawn are
 // the package's own, never the choice the editor did not send (T069; PR #116's review). Not drawn on the board and left out: the weekly
 // slots hint and the «الباقة فعّالة» check (a new package is active; pausing is the list's).
+// 006:T020 (FR-704, FR-704a; B-P4's conflict check): a programme package of the list opens its own
+// form, its three prices (`ProgrammePackageForm`).
 import type {
   PackageTrack,
   SessionLengthMinutes,
@@ -43,6 +45,7 @@ import { NotLoaded } from '../../../shared/states';
 import { useAveragePrice, usePackageActions, usePackages, useTeacherShareRate } from '../api';
 import { TRACK_LABEL } from '../components/PackageCard';
 import { PackageSubjectPicker } from '../components/PackageSubjectPicker';
+import { ProgrammePackageForm } from '../components/ProgrammePackageForm';
 import { piastersOfPounds, poundsOf, sessionCountOf } from '../price';
 
 const NEW = 'new';
@@ -55,11 +58,8 @@ export function PackageEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const list = usePackages();
   if (id === NEW) return <PackageForm />;
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's editor is B-P4's (T020).
-  const item = list.data?.packages.find(
-    (candidate): candidate is TeacherFixedPackage =>
-      candidate.id === id && candidate.isProgramme !== true,
-  );
+  const item = list.data?.packages.find((candidate) => candidate.id === id);
+  if (item?.isProgramme === true) return <ProgrammePackageForm key={item.id} item={item} />;
   if (item !== undefined) return <PackageForm key={item.id} item={item} />;
   return (
     <StackScreen header={<EditorHeader title={t('teacher.packages.editor.title')} />}>

@@ -88,6 +88,9 @@ export function fakeProcedures() {
       renew: { mutate: procedure() },
       autoRenewOff: { mutate: procedure() },
       cancel: { mutate: procedure() },
+      // 006:T020 (B-P4 lane b): the teacher's offer and stop request.
+      offer: { mutate: procedure() },
+      request: { mutate: procedure() },
     },
     teacher: {
       application: {
