@@ -117,6 +117,7 @@ pieces only a desktop needs:
 | **QueueCard**                   | a queue and how many items wait in it (count in the display size, Latin face)                                                      | `.queue-card`                                                     |
 | **Pager**                       | pages with previous and next                                                                                                       | `.pager`, `.pager__page--current`                                 |
 | **AuthCard**                    | the sign-in and MFA card, `layout.dialog` wide, centred                                                                            | `.auth-card`                                                      |
+| **InfoButton**                  | the «i» beside a name (Q-7): muted IconButton, `hint` on hover; a press opens a Dialog of `title`, `text`, `closeLabel`            | `.icon-btn--muted`, `.dialog`                                     |
 
 Dialogs that need a reason (decision, suspend, revoke, require ID, confirm a binding action) are
 the Dialog primitive with a Field, Choices and the actions at the end.
