@@ -35,7 +35,11 @@ function fakeApi() {
 }
 
 function open(
-  props: { readonly enrollmentId?: string; readonly remedyId?: string } = {
+  props: {
+    readonly enrollmentId?: string;
+    readonly remedyId?: string;
+    readonly party?: 'student';
+  } = {
     enrollmentId: ENROLLMENT,
   },
   api = fakeApi(),
@@ -263,6 +267,50 @@ describe('a manual compensation case (FR-493)', () => {
     expect(onClose).toHaveBeenCalled();
     await settle();
     expect(api.cases.openManual.mutate).not.toHaveBeenCalled();
+  });
+});
+
+// 006:T021 (B-P4's conflict check, Q-8 (b), the owner, 2026-11-25): the programme's page opens the
+// dialog for the student of an assessment never held; the preset fixes the party to the student and
+// locks it, as a remedy does, and sends no remedy.
+describe('the student preset (006:T021, Q-8 (b))', () => {
+  it('fixes the party to the student and offers no choice, in both languages', async () => {
+    await inBothLocales(
+      () => open({ enrollmentId: ENROLLMENT, party: 'student' }),
+      async (t) => {
+        const box = await dialog(t('admin.shared.manualCase.title'));
+        expect(box.getByText(t('admin.shared.manualCase.studentParty'))).toBeTruthy();
+        expect(
+          box.queryByRole('radio', { name: t('admin.shared.manualCase.partyTeacher') }),
+        ).toBeNull();
+        expect(
+          box.queryByRole('radio', { name: t('admin.shared.manualCase.partyStudent') }),
+        ).toBeNull();
+        expect(box.queryByText(t('admin.shared.manualCase.effectRemedy'))).toBeNull();
+      },
+    );
+  });
+
+  it('sends the student as the party, with no remedy, once the reason is written', async () => {
+    const { api } = open({ enrollmentId: ENROLLMENT, party: 'student' });
+    api.cases.openManual.mutate.mockResolvedValue(answerOf());
+    await openCase(null, '  جلسة الاختبار لم تُعقد  ');
+    await waitFor(() => expect(api.cases.openManual.mutate).toHaveBeenCalledTimes(1));
+    expect(sent(api)).toEqual({
+      enrollmentId: ENROLLMENT,
+      party: 'student',
+      reason: 'جلسة الاختبار لم تُعقد',
+      idempotencyKey: expect.stringMatching(KEY),
+    });
+  });
+
+  it('leaves the choice to the administrator without the preset', async () => {
+    open();
+    const box = await dialog();
+    expect(box.queryByText(ar('admin.shared.manualCase.studentParty'))).toBeNull();
+    expect(
+      box.getByRole('radio', { name: ar('admin.shared.manualCase.partyTeacher') }),
+    ).toBeTruthy();
   });
 });
 

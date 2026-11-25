@@ -13,6 +13,7 @@
 // 005:T022 (B49, Q-X2 (a)): `/ijazah-requests` (`?request=` opens one) and `/ijazahs` (`?ijazah=`).
 // 005:T023 (B49): `/reports` (`?report=` opens one) and `/gender` (`?flag=`).
 // 005:T024 (B49, Q-X2 (a)): `/settings`, every setting by group, beside `/settings/admins`.
+// 006:T021 (B-P4): `/programmes`, the ijazah programmes' queue (`?programme=` opens one).
 //
 // T071: the pages read through TanStack Query over the client (research R-113). One cache per App;
 // a session that ends empties it, so what one administrator read is never shown to the next.
@@ -47,6 +48,7 @@ import { AdminMfaSetup } from './pages/mfa/AdminMfaSetup';
 import { AdminOutages } from './pages/outages/AdminOutages';
 import { AdminPayments } from './pages/payments/AdminPayments';
 import { AdminPayouts } from './pages/payouts/AdminPayouts';
+import { AdminProgrammes } from './pages/programmes/AdminProgrammes';
 import { AdminReports } from './pages/reports/AdminReports';
 import { AdminReview } from './pages/review/AdminReview';
 import { AdminSessions } from './pages/sessions/AdminSessions';
@@ -111,6 +113,8 @@ export function App({ client, sessions, queries: given }: AppProps) {
               {/* 005:T022 (B49): the ijazah requests and the ijazahs. */}
               <Route path="/ijazah-requests" element={<AdminIjazahRequests />} />
               <Route path="/ijazahs" element={<AdminIjazahs />} />
+              {/* 006:T021 (B-P4): the ijazah programmes' queue. */}
+              <Route path="/programmes" element={<AdminProgrammes />} />
               <Route path="/payments" element={<AdminPayments />} />
               <Route path="/payouts" element={<AdminPayouts />} />
               <Route path="/sessions" element={<AdminSessions />} />

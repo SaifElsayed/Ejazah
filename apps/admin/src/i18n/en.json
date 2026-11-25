@@ -217,6 +217,8 @@
         "programmeRequestApproved": "Programme request approved",
         "programmeRequestDeclined": "Programme request declined",
         "programmeRequestExtended": "Programme deadline extended",
+        "programmesListed": "View the ijazah programmes queue",
+        "programmesViewed": "View an ijazah programme",
         "providerOutageRecorded": "Record a video outage",
         "providerOutagesListed": "View video outages",
         "recordVerificationCall": "Record verification call",
@@ -2219,8 +2221,12 @@
     "payments": {
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
       "columns": {
+        "automatic": "Automatic",
+        "declineKind": "Decline",
         "fee": "Fee",
         "gross": "Gross",
+        "kind": "Kind",
+        "month": "Month",
         "net": "Net",
         "order": "Order",
         "status": "Status",
@@ -2270,6 +2276,7 @@
         "paidOrdersTitle": "Paid orders of this enrollment",
         "referencesTitle": "References",
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
+        "termsTitle": "What the order pays for",
         "transactionNo": "Transaction number",
         "holdsTitle": "Slot holds",
         "holdsEmpty": "This enrollment has no hold.",
@@ -2292,6 +2299,17 @@
       "search": {
         "label": "Search",
         "placeholder": "Order number or student name"
+      },
+      "terms": {
+        "declineHard": "Hard, never retried",
+        "declineSoft": "Soft, retried",
+        "kind": {
+          "assessment": "Assessment",
+          "instalment": "Monthly instalment",
+          "package": "Package",
+          "restInFull": "Programme rest in full"
+        },
+        "month": "Month {month}"
       },
       "title": "Payments",
       "emptyAll": {
@@ -2323,6 +2341,217 @@
         "accountDeleted": "Account deleted"
       },
       "teacherShare": "{amount} at {percent}%"
+    },
+    "programme": {
+      "columns": {
+        "item": "Item",
+        "programme": "Programme",
+        "since": "Since",
+        "state": "State"
+      },
+      "compensation": {
+        "feeIsStudents": "The assessment fee was paid by the student and is theirs while the session was not held. The administration decides its return in a compensation case; no case opens by itself.",
+        "notHeld": "The assessment was not held; its fee is unreleased.",
+        "open": "Open a compensation case for the student"
+      },
+      "decide": {
+        "confirm": "Confirm the decision",
+        "reasonHint": "Required, 1 to {max} characters. Kept on the item; shown on the queue and the programme’s page.",
+        "reasonLabel": "What the teacher sent to support",
+        "reasonRequired": "Write what the teacher sent to support; a decision without it is not sent.",
+        "reasonTooLong": "The text is longer than {max} characters.",
+        "refused": {
+          "chargeAnswered": "Paymob answered this charge after the item opened, so no decision is needed. Nothing changed.",
+          "decisionNotAllowed": "This decision does not apply to this kind of item. Nothing changed.",
+          "makeupPending": "A make-up of the assessment is still pending, so the refusal cannot be approved now. Nothing changed.",
+          "notFound": "This item was not found. Nothing changed.",
+          "notOffered": "The programme is no longer waiting for the offer's payment. Nothing changed.",
+          "notOpen": "This item was decided, withdrawn or is gone. Nothing changed.",
+          "offerSent": "The teacher sent the offer after the item opened, so the refusal cannot be approved. Nothing changed.",
+          "reasonRequired": "A decision on this item needs what the teacher sent to support. Nothing changed.",
+          "sessionsPending": "A session of the programme is still scheduled or a remedy is open, so the stop cannot be approved now. Nothing changed."
+        },
+        "title": "{decision}?"
+      },
+      "decision": {
+        "chargeUnknown": {
+          "approve": "No charge in Paymob",
+          "extend": "Extend"
+        },
+        "noOffer": {
+          "approve": "Approve the refusal",
+          "extend": "Extend the offer time"
+        },
+        "payBlocked": {
+          "approve": "Let the offer lapse",
+          "extend": "Extend the time to pay"
+        },
+        "stop": {
+          "approve": "Approve the stop",
+          "decline": "Decline the stop"
+        }
+      },
+      "detail": {
+        "a11y": "Programme details",
+        "cardSaved": "Card saved for the automatic charge",
+        "closedAt": "Closed on",
+        "decidedAt": "Decided {date}",
+        "decisionsTitle": "What each decision does",
+        "months": "Months paid",
+        "monthsOf": "{paid} of {count}",
+        "nextDueAt": "Next month due",
+        "noOfferReason": "What the teacher sent to support, as recorded",
+        "offer": "Offer",
+        "offerDueAt": "Offer due by",
+        "offerExpectedLength": "Expected length",
+        "offerLevel": "Student's level",
+        "offerReadiness": "Readiness for the ijazah",
+        "offerTerms": "{sessions} · {minutes} · total {total}",
+        "ordersEmpty": "No payment order yet.",
+        "ordersNote": "Amounts and references are on the payments monitor.",
+        "ordersTitle": "Payment orders by kind",
+        "pausedAt": "Paused since",
+        "payBy": "Rest due by",
+        "plan": "How the rest is paid",
+        "planInFull": "In full",
+        "planMonthly": "Monthly",
+        "planNone": "Not paid yet",
+        "requestsEmpty": "No item on this programme.",
+        "requestsTitle": "Items and requests",
+        "stopReason": "The teacher's reason",
+        "student": "Student",
+        "teacher": "Teacher"
+      },
+      "effects": {
+        "chargeUnknown": {
+          "approve": {
+            "expired": "The month's order is recorded expired with no charge, a soft decline.",
+            "retries": "The automatic retries start from the decision, and the student can pay by hand at once."
+          },
+          "extend": {
+            "asking": "Paymob keeps being asked about this charge, and the month is recorded paid by itself if Paymob confirms it."
+          },
+          "paidInPaymob": "If you find the payment paid in Paymob, choose Extend; the confirmation comes from Paymob by itself."
+        },
+        "noOffer": {
+          "approve": {
+            "close": "The programme closes as refused after the assessment.",
+            "fee": "The assessment fee is kept; nothing is refunded automatically.",
+            "time": "The weekly time is freed at once."
+          },
+          "extend": {
+            "more": "The teacher gets a new {window} from now to send the offer.",
+            "time": "The weekly time stays reserved."
+          }
+        },
+        "payBlocked": {
+          "approve": {
+            "fee": "The assessment fee is kept.",
+            "lapse": "The offer lapses unpaid and the weekly time is freed at once."
+          },
+          "extend": {
+            "more": "The student gets a new {window} from now to pay the rest.",
+            "time": "The weekly time stays reserved."
+          }
+        },
+        "stop": {
+          "approve": {
+            "card": "The student's saved card is deleted.",
+            "close": "The programme closes and its weekly time is freed at once."
+          },
+          "decline": {
+            "stays": "The request closes; the programme stays paused until the student pays."
+          }
+        },
+        "window": "{hours, plural, one {# hour} other {# hours}}",
+        "windowOfSetting": "the time set in “{setting}”"
+      },
+      "empty": {
+        "text": "Nothing in this tab waits for your decision.",
+        "title": "Nothing here"
+      },
+      "explain": {
+        "chargeUnknown": "An automatic charge of a month from the saved card that Paymob has not answered after several inquiries. A payment is recorded only when Paymob confirms it.",
+        "noOffer": "The time to send the offer after the assessment passed with no offer. The weekly time is still reserved; the item closes only by your decision, recording what the teacher sent to support.",
+        "paused": "Programmes paused because a month was not paid on time, the longest paused first. A programme resumes when the student pays; the teacher may ask to stop it after a while paused.",
+        "payBlocked": "The time to pay the rest passed while the teacher's payout account was not verified, so the student could not pay. The offer does not lapse on its own; the item closes only by your decision.",
+        "stop": "Teachers' requests to stop a paused programme, with the teacher's reason. Approving closes the programme; declining keeps it paused."
+      },
+      "kind": {
+        "chargeUnknown": "Charge unanswered",
+        "noOffer": "No offer sent",
+        "payBlocked": "Payment blocked",
+        "refusal": "Refusal request (no longer used)",
+        "stop": "Stop request"
+      },
+      "lede": "What waits for the administration's decision in ijazah programmes, oldest first. Every decision is recorded under your name in the audit log.",
+      "nav": "Ijazah programmes",
+      "pagerPage": "Page {page} · oldest first",
+      "payeeNow": {
+        "unverified": "The teacher's payout account is still not verified.",
+        "verified": "The teacher's payout account is verified now."
+      },
+      "reopen": {
+        "action": "Reopen the programme",
+        "confirm": "Reopen",
+        "effects": {
+          "paused": "The programme returns paused, awaiting the student's payment by hand.",
+          "time": "Its weekly time is reserved for it again."
+        },
+        "explain": "The programme closed by an approved stop. It can be reopened, paused and awaiting the student's payment by hand, while its weekly time is free.",
+        "reasonLabel": "Reason for reopening",
+        "refused": {
+          "genderMismatch": "The two parties are no longer of one gender. Nothing changed.",
+          "notFound": "This programme was not found. Nothing changed.",
+          "notStopped": "This programme was not closed by an approved stop, so it cannot be reopened. Nothing changed.",
+          "partyRestricted": "One party's account is not active, or the teacher is no longer approved. Nothing changed.",
+          "slotInactive": "The teacher deactivated or removed this weekly time. Nothing changed.",
+          "slotTaken": "The weekly time is now taken by another enrollment. Nothing changed.",
+          "timeTaken": "One party has another session or booking at this time in the coming weeks. Nothing changed."
+        },
+        "title": "Reopen the programme?"
+      },
+      "requestStatus": {
+        "approved": "Approved",
+        "declined": "Declined",
+        "extended": "Extended",
+        "open": "Open",
+        "withdrawn": "Withdrawn"
+      },
+      "row": {
+        "assessmentNotHeld": "Assessment not held",
+        "late": "{days, plural, =0 {Under a day} one {# day} other {# days}}",
+        "noReasonYet": "No reason recorded yet; it is recorded at the decision.",
+        "openedAt": "Opened {date}",
+        "pausedSince": "Paused since {date}",
+        "payeeUnverified": "Payout account not verified",
+        "payeeVerified": "Payout account verified now",
+        "recordedReason": "Recorded reason: {reason}",
+        "stopReason": "Teacher's reason: {reason}",
+        "student": "Student: {name}",
+        "teacher": "Teacher: {name}"
+      },
+      "state": {
+        "active": "Active",
+        "awaitingOffer": "Awaiting the offer",
+        "closed": "Closed",
+        "offered": "Offer awaiting payment",
+        "paused": "Paused"
+      },
+      "tabs": {
+        "chargeUnknown": "Charge unanswered",
+        "noOffer": "No offer sent",
+        "paused": "Paused for non-payment",
+        "payBlocked": "Payment blocked",
+        "stop": "Stop requests"
+      },
+      "title": "Ijazah programmes",
+      "why": {
+        "chargeUnknown": "The month was charged automatically from the saved card and Paymob has not answered after several inquiries. The month is pending: the student cannot pay by hand.",
+        "noOffer": "The time to send the offer passed and the teacher sent none. A late offer is refused until you decide.",
+        "payBlocked": "The time to pay the rest passed while the teacher's payout account was not verified, so the student could not pay. While the item is open the offer does not lapse and the student cannot pay, even once the account is verified.",
+        "stop": "The teacher asked to stop the programme after it paused for non-payment."
+      }
     },
     "reports": {
       "chat": {
@@ -2891,6 +3120,7 @@
           "remedyNotOpen": "This remedy is no longer open: its session was booked, it was handed to a case, or it lapsed. Nothing was opened."
         },
         "remedyParty": "The remedy is owed to the student, so the case is the student's.",
+        "studentParty": "The case is the student's.",
         "title": "Open a compensation case",
         "viewCase": "View the case"
       },

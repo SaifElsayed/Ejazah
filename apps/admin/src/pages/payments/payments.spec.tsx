@@ -216,8 +216,9 @@ describe('AdminPayments (FR-400)', () => {
     open();
     const row = within(await rowOf(unreported.gatewayOrderId));
     // The fee, the net, (003:T104) the teacher's share of an order created before the commission,
-    // and (003:T102) a refunded total of 0.
-    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(4);
+    // (003:T102) a refunded total of 0, and (006:T021) the four programme terms this order's fixture
+    // does not carry.
+    expect(row.getAllByText(ar('admin.payments.dash'))).toHaveLength(8);
     expect(row.queryByText(ar('admin.common.amount', { amount: '0.00' }))).toBeNull();
     expect(row.getByText(ar('admin.common.amount', { amount: '950.00' }))).toBeTruthy();
     expect(row.getByText(ar('admin.status.payment.paid'))).toBeTruthy();
@@ -753,5 +754,82 @@ describe('an order with no Paymob number (006:T018)', () => {
     // The header, the order number in the references, and the first paid order.
     expect(aside.getAllByText(ar('admin.payments.noOrderNo'))).toHaveLength(3);
     expect(aside.getByText('paymob_order_4')).toBeTruthy();
+  });
+});
+
+// 006:T021 (B-P4; admin-surface.md `payments.monitor`; T018 answers the four terms): what each order
+// pays for, its month (an instalment's), whether it is an automatic charge of a saved card, and why
+// an automatic one failed, as four columns of the list and a section of the panel; a dash where the
+// order has none. Example: month 3 of a programme, 1,000 EGP, charged automatically and softly
+// declined, beside a package order paid by hand.
+describe('the programme’s order terms (006:T021)', () => {
+  const P6 = '0193a6f0-0000-7000-8000-0000000000f6';
+  const instalment = {
+    ...created,
+    paymentId: P6,
+    gatewayOrderId: 'paymob_order_6',
+    gross_piasters: 100_000,
+    status: 'failed',
+    kind: 'instalment',
+    instalmentMonth: 3,
+    automatic: true,
+    declineKind: 'soft',
+  } as const;
+  const packageOrder = { ...reported, kind: 'package', automatic: false } as const;
+  const instalmentDetail = {
+    ...detail,
+    paymentId: P6,
+    gatewayOrderId: 'paymob_order_6',
+    status: 'failed',
+    kind: 'instalment',
+    instalmentMonth: 3,
+    automatic: true,
+    declineKind: 'hard',
+  } as const;
+
+  function termsApi() {
+    const api = fakeApi();
+    api.payments.list.query.mockResolvedValue({ items: [instalment, packageOrder] });
+    api.payments.get.query.mockResolvedValue(instalmentDetail);
+    return api;
+  }
+
+  it('draws the four columns and each order’s terms, a dash where it has none, in both languages', async () => {
+    await inBothLocales(
+      () => open(termsApi()),
+      async (t) => {
+        await rowOf('paymob_order_6');
+        for (const column of ['kind', 'month', 'automatic', 'declineKind'] as const) {
+          expect(
+            screen.getByRole('columnheader', { name: t(`admin.payments.columns.${column}`) }),
+          ).toBeTruthy();
+        }
+        const month = within(await rowOf('paymob_order_6'));
+        expect(month.getByText(t('admin.payments.terms.kind.instalment'))).toBeTruthy();
+        expect(month.getByText(t('admin.payments.terms.month', { month: 3 }))).toBeTruthy();
+        expect(month.getByText(t('admin.common.yes'))).toBeTruthy();
+        expect(month.getByText(t('admin.payments.terms.declineSoft'))).toBeTruthy();
+        const paidByHand = within(await rowOf(reported.gatewayOrderId));
+        expect(paidByHand.getByText(t('admin.payments.terms.kind.package'))).toBeTruthy();
+        expect(paidByHand.getByText(t('admin.common.no'))).toBeTruthy();
+        expect(paidByHand.getAllByText(t('admin.payments.dash'))).toHaveLength(2);
+      },
+    );
+  });
+
+  it('shows the order’s terms in its panel', async () => {
+    await inBothLocales(
+      () => open(termsApi(), `/payments?payment=${P6}`),
+      async (t) => {
+        const aside = within(
+          await screen.findByRole('complementary', { name: t('admin.payments.detail.a11y') }),
+        );
+        expect(await aside.findByText(t('admin.payments.detail.termsTitle'))).toBeTruthy();
+        expect(aside.getByText(t('admin.payments.terms.kind.instalment'))).toBeTruthy();
+        expect(aside.getByText(t('admin.payments.terms.month', { month: 3 }))).toBeTruthy();
+        expect(aside.getByText(t('admin.payments.terms.declineHard'))).toBeTruthy();
+        expect(aside.getByText(t('admin.payments.columns.automatic'))).toBeTruthy();
+      },
+    );
   });
 });
