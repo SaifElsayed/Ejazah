@@ -10,6 +10,9 @@
 // 006:T018 (the follow-up carried from T014, option (d)): an automatic order with no Paymob number
 // arrives with an empty reference; the header, the references and the paid orders show «—» with a
 // line saying why (refused before it was sent, or Paymob gave none).
+// 006:T021 (B-P4; admin-surface.md `payments.monitor`): what the order pays for, its month (an
+// instalment's), whether it is an automatic charge of a saved card, and why an automatic one failed,
+// in the panel's own section (`orderTerms`, the list's four columns too); a dash where it has none.
 import { piasters } from '@ijazah/money';
 
 import {
@@ -28,6 +31,20 @@ import { panelTimeZone } from '../../lib/zone';
 import { amountOrDash, HOLD_RELEASE_REASONS, orderHistory } from './history';
 import { type PaymentDetail, type PaymentStatus, usePayment } from './queries';
 
+/**
+ * 006:T021 (the owner's review of B-P4 part (A), 2026-11-25, Reading 1 changed): an order's amount as
+ * the gateway reported it, in pounds, for another page's sentence (the programme's assessment fee);
+ * undefined while it is read or when the read fails. Read here, through the monitor's audited
+ * `payments.get`, because the gateway's amounts are named only in this folder (R-MONEY-6).
+ */
+export function usePaidAmountText(paymentId: string): string | undefined {
+  const locale = useLocale();
+  const read = usePayment(paymentId);
+  return read.data === undefined
+    ? undefined
+    : formatPounds(piasters(read.data.gross_piasters), locale);
+}
+
 /** Each status's word and tone, as the table and the panel draw it. */
 export const PAYMENT_STATUS: Readonly<
   Record<PaymentStatus, { readonly label: MessageKey; readonly tone: StatusTone }>
@@ -40,6 +57,53 @@ export const PAYMENT_STATUS: Readonly<
 };
 
 type EnrollmentStatus = NonNullable<PaymentDetail['enrollment']>['status'];
+
+/** 006:T021: an order's four programme terms, as T018 answers them (absent on none). */
+interface OrderTermsOf {
+  readonly kind?: 'package' | 'assessment' | 'rest_in_full' | 'instalment';
+  readonly instalmentMonth?: number;
+  readonly automatic?: boolean;
+  readonly declineKind?: 'soft' | 'hard';
+}
+
+const ORDER_KIND: Readonly<Record<NonNullable<OrderTermsOf['kind']>, MessageKey>> = {
+  package: 'admin.payments.terms.kind.package',
+  assessment: 'admin.payments.terms.kind.assessment',
+  rest_in_full: 'admin.payments.terms.kind.restInFull',
+  instalment: 'admin.payments.terms.kind.instalment',
+};
+
+/** 006:T021: an order's kind, month, automatic and decline kind in words, a dash for one absent. */
+export function orderTerms(
+  order: OrderTermsOf,
+  t: (key: MessageKey, values?: Record<string, string | number>) => string,
+): {
+  readonly kind: string;
+  readonly month: string;
+  readonly automatic: string;
+  readonly declineKind: string;
+} {
+  const dash = t('admin.payments.dash');
+  return {
+    kind: order.kind === undefined ? dash : t(ORDER_KIND[order.kind]),
+    month:
+      order.instalmentMonth === undefined
+        ? dash
+        : t('admin.payments.terms.month', { month: order.instalmentMonth }),
+    automatic:
+      order.automatic === undefined
+        ? dash
+        : t(order.automatic ? 'admin.common.yes' : 'admin.common.no'),
+    declineKind:
+      order.declineKind === undefined
+        ? dash
+        : t(
+            order.declineKind === 'soft'
+              ? 'admin.payments.terms.declineSoft'
+              : 'admin.payments.terms.declineHard',
+          ),
+  };
+}
 
 /** 006:T018 (option (d)): an order's Paymob number, or «—» and the line saying it has none. */
 export function OrderReference({ value }: { readonly value: string }) {
@@ -86,6 +150,7 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
   const subjectName = (subject: { readonly nameAr: string; readonly nameEn: string }) =>
     locale === 'ar' ? subject.nameAr : subject.nameEn;
   const status = PAYMENT_STATUS[detail.status];
+  const terms = orderTerms(detail, t);
   const at = (value: string) =>
     t('admin.common.dateTime', {
       date: dayMonth(value, locale, zone),
@@ -176,6 +241,19 @@ function PaymentDetailPanel({ detail }: { readonly detail: PaymentDetail }) {
           </Banner>
         )}
       </section>
+      {detail.kind === undefined ? null : (
+        <section className="section">
+          <h2 className="group-label">{t('admin.payments.detail.termsTitle')}</h2>
+          <KeyValue
+            items={[
+              { label: t('admin.payments.columns.kind'), value: terms.kind },
+              { label: t('admin.payments.columns.month'), value: terms.month },
+              { label: t('admin.payments.columns.automatic'), value: terms.automatic },
+              { label: t('admin.payments.columns.declineKind'), value: terms.declineKind },
+            ]}
+          />
+        </section>
+      )}
       <section className="section">
         <h2 className="group-label">{t('admin.payments.detail.referencesTitle')}</h2>
         <KeyValue

@@ -46,6 +46,8 @@ export const NAV_GROUPS: readonly {
       },
       // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
       { path: '/ijazah-requests', label: 'admin.nav.items.ijazahRequests', icon: 'book' },
+      // 006:T021 (B-P4): the ijazah programmes' queue, beside the ijazah requests.
+      { path: '/programmes', label: 'admin.programme.nav', icon: 'layers' },
       // B42 (the notes under T048, T049 and T050, Q4): Phase 3's three queues.
       { path: '/review', label: 'admin.nav.items.sessionReview', icon: 'activity' },
       { path: '/disputes', label: 'admin.nav.items.disputes', icon: 'flag' },

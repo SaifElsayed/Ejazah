@@ -217,6 +217,8 @@
         "programmeRequestApproved": "Programme request approved",
         "programmeRequestDeclined": "Programme request declined",
         "programmeRequestExtended": "Programme deadline extended",
+        "programmesListed": "View the ijazah programmes queue",
+        "programmesViewed": "View an ijazah programme",
         "providerOutageRecorded": "Record a video outage",
         "providerOutagesListed": "View video outages",
         "recordVerificationCall": "Record verification call",
@@ -2219,8 +2221,12 @@
     "payments": {
       "banner": "View only. No action on this page moves, holds or refunds money. Any compensation is executed outside the platform, and appears here when the gateway reports it.",
       "columns": {
+        "automatic": "Automatic",
+        "declineKind": "Decline",
         "fee": "Fee",
         "gross": "Gross",
+        "kind": "Kind",
+        "month": "Month",
         "net": "Net",
         "order": "Order",
         "status": "Status",
@@ -2270,6 +2276,7 @@
         "paidOrdersTitle": "Paid orders of this enrollment",
         "referencesTitle": "References",
         "subtitle": "{student} · {subject} · {sessions} with {teacher}",
+        "termsTitle": "What the order pays for",
         "transactionNo": "Transaction number",
         "holdsTitle": "Slot holds",
         "holdsEmpty": "This enrollment has no hold.",
@@ -2292,6 +2299,17 @@
       "search": {
         "label": "Search",
         "placeholder": "Order number or student name"
+      },
+      "terms": {
+        "declineHard": "Hard, never retried",
+        "declineSoft": "Soft, retried",
+        "kind": {
+          "assessment": "Assessment",
+          "instalment": "Monthly instalment",
+          "package": "Package",
+          "restInFull": "Programme rest in full"
+        },
+        "month": "Month {month}"
       },
       "title": "Payments",
       "emptyAll": {
@@ -2323,6 +2341,218 @@
         "accountDeleted": "Account deleted"
       },
       "teacherShare": "{amount} at {percent}%"
+    },
+    "programme": {
+      "columns": {
+        "item": "Item",
+        "programme": "Programme",
+        "since": "Since",
+        "state": "State"
+      },
+      "compensation": {
+        "feeAmount": "The assessment fee of {amount} is the student's",
+        "feeIsStudents": "The assessment fee was paid by the student and is theirs while the session was not held. The administration decides its return in a compensation case; no case opens by itself.",
+        "notHeld": "The assessment was not held; its fee is unreleased.",
+        "open": "Open a compensation case for the student"
+      },
+      "decide": {
+        "confirm": "Confirm the decision",
+        "reasonHint": "Required, 1 to {max} characters. Kept on the item; shown on the queue and the programme’s page.",
+        "reasonLabel": "What the teacher sent to support",
+        "reasonRequired": "Write what the teacher sent to support; a decision without it is not sent.",
+        "reasonTooLong": "The text is longer than {max} characters.",
+        "refused": {
+          "chargeAnswered": "Paymob answered this charge after the item opened, so no decision is needed. Nothing changed.",
+          "decisionNotAllowed": "This decision does not apply to this kind of item. Nothing changed.",
+          "makeupPending": "A make-up of the assessment is still pending, so the refusal cannot be approved now. Nothing changed.",
+          "notFound": "This item was not found. Nothing changed.",
+          "notOffered": "The programme is no longer waiting for the offer's payment. Nothing changed.",
+          "notOpen": "This item was decided, withdrawn or is gone. Nothing changed.",
+          "offerSent": "The teacher sent the offer after the item opened, so the refusal cannot be approved. Nothing changed.",
+          "reasonRequired": "A decision on this item needs what the teacher sent to support. Nothing changed.",
+          "sessionsPending": "A session of the programme is still scheduled or a remedy is open, so the stop cannot be approved now. Nothing changed."
+        },
+        "title": "{decision}?"
+      },
+      "decision": {
+        "chargeUnknown": {
+          "approve": "No charge in Paymob",
+          "extend": "Extend"
+        },
+        "noOffer": {
+          "approve": "Approve the refusal",
+          "extend": "Extend the offer time"
+        },
+        "payBlocked": {
+          "approve": "Let the offer lapse",
+          "extend": "Extend the time to pay"
+        },
+        "stop": {
+          "approve": "Approve the stop",
+          "decline": "Decline the stop"
+        }
+      },
+      "detail": {
+        "a11y": "Programme details",
+        "cardSaved": "Card saved for the automatic charge",
+        "closedAt": "Closed on",
+        "decidedAt": "Decided {date}",
+        "decisionsTitle": "What each decision does",
+        "months": "Months paid",
+        "monthsOf": "{paid} of {count}",
+        "nextDueAt": "Next month due",
+        "noOfferReason": "What the teacher sent to support, as recorded",
+        "offer": "Offer",
+        "offerDueAt": "Offer due by",
+        "offerExpectedLength": "Expected length",
+        "offerLevel": "Student's level",
+        "offerReadiness": "Readiness for the ijazah",
+        "offerTerms": "{sessions} · {minutes} · total {total}",
+        "ordersEmpty": "No payment order yet.",
+        "ordersNote": "Amounts and references are on the payments monitor.",
+        "ordersTitle": "Payment orders by kind",
+        "pausedAt": "Paused since",
+        "payBy": "Rest due by",
+        "plan": "How the rest is paid",
+        "planInFull": "In full",
+        "planMonthly": "Monthly",
+        "planNone": "Not paid yet",
+        "requestsEmpty": "No item on this programme.",
+        "requestsTitle": "Items and requests",
+        "stopReason": "The teacher's reason",
+        "student": "Student",
+        "teacher": "Teacher"
+      },
+      "effects": {
+        "chargeUnknown": {
+          "approve": {
+            "expired": "The month's order is recorded expired with no charge, a soft decline.",
+            "retries": "The automatic retries start from the decision, and the student can pay by hand at once."
+          },
+          "extend": {
+            "asking": "Paymob keeps being asked about this charge, and the month is recorded paid by itself if Paymob confirms it."
+          },
+          "paidInPaymob": "If you find the payment paid in Paymob, choose Extend; the confirmation comes from Paymob by itself."
+        },
+        "noOffer": {
+          "approve": {
+            "close": "The programme closes as refused after the assessment.",
+            "fee": "The assessment fee is kept; nothing is refunded automatically.",
+            "time": "The weekly time is freed at once."
+          },
+          "extend": {
+            "more": "The teacher gets a new {window} from now to send the offer.",
+            "time": "The weekly time stays reserved."
+          }
+        },
+        "payBlocked": {
+          "approve": {
+            "fee": "The assessment fee is kept.",
+            "lapse": "The offer lapses unpaid and the weekly time is freed at once."
+          },
+          "extend": {
+            "more": "The student gets a new {window} from now to pay the rest.",
+            "time": "The weekly time stays reserved."
+          }
+        },
+        "stop": {
+          "approve": {
+            "card": "The student's saved card is deleted.",
+            "close": "The programme closes and its weekly time is freed at once."
+          },
+          "decline": {
+            "stays": "The request closes; the programme stays paused until the student pays."
+          }
+        },
+        "window": "{hours, plural, one {# hour} other {# hours}}",
+        "windowOfSetting": "the time set in “{setting}”"
+      },
+      "empty": {
+        "text": "Nothing in this tab waits for your decision.",
+        "title": "Nothing here"
+      },
+      "explain": {
+        "chargeUnknown": "An automatic charge of a month from the saved card that Paymob has not answered after several inquiries. A payment is recorded only when Paymob confirms it.",
+        "noOffer": "The time to send the offer after the assessment passed with no offer. The weekly time is still reserved; the item closes only by your decision, recording what the teacher sent to support.",
+        "paused": "Programmes paused because a month was not paid on time, the longest paused first. A programme resumes when the student pays; the teacher may ask to stop it after a while paused.",
+        "payBlocked": "The time to pay the rest passed while the teacher's payout account was not verified, so the student could not pay. The offer does not lapse on its own; the item closes only by your decision.",
+        "stop": "Teachers' requests to stop a paused programme, with the teacher's reason. Approving closes the programme; declining keeps it paused."
+      },
+      "kind": {
+        "chargeUnknown": "Charge unanswered",
+        "noOffer": "No offer sent",
+        "payBlocked": "Payment blocked",
+        "refusal": "Refusal request (no longer used)",
+        "stop": "Stop request"
+      },
+      "lede": "What waits for the administration's decision in ijazah programmes, oldest first. Every decision is recorded under your name in the audit log.",
+      "nav": "Ijazah programmes",
+      "pagerPage": "Page {page} · oldest first",
+      "payeeNow": {
+        "unverified": "The teacher's payout account is still not verified.",
+        "verified": "The teacher's payout account is verified now."
+      },
+      "reopen": {
+        "action": "Reopen the programme",
+        "confirm": "Reopen",
+        "effects": {
+          "paused": "The programme returns paused, awaiting the student's payment by hand.",
+          "time": "Its weekly time is reserved for it again."
+        },
+        "explain": "The programme closed by an approved stop. It can be reopened, paused and awaiting the student's payment by hand, while its weekly time is free.",
+        "reasonLabel": "Reason for reopening",
+        "refused": {
+          "genderMismatch": "The two parties are no longer of one gender. Nothing changed.",
+          "notFound": "This programme was not found. Nothing changed.",
+          "notStopped": "This programme was not closed by an approved stop, so it cannot be reopened. Nothing changed.",
+          "partyRestricted": "One party's account is not active, or the teacher is no longer approved. Nothing changed.",
+          "slotInactive": "The teacher deactivated or removed this weekly time. Nothing changed.",
+          "slotTaken": "The weekly time is now taken by another enrollment. Nothing changed.",
+          "timeTaken": "One party has another session or booking at this time in the coming weeks. Nothing changed."
+        },
+        "title": "Reopen the programme?"
+      },
+      "requestStatus": {
+        "approved": "Approved",
+        "declined": "Declined",
+        "extended": "Extended",
+        "open": "Open",
+        "withdrawn": "Withdrawn"
+      },
+      "row": {
+        "assessmentNotHeld": "Assessment not held",
+        "late": "{days, plural, =0 {Under a day} one {# day} other {# days}}",
+        "noReasonYet": "No reason recorded yet; it is recorded at the decision.",
+        "openedAt": "Opened {date}",
+        "pausedSince": "Paused since {date}",
+        "payeeUnverified": "Payout account not verified",
+        "payeeVerified": "Payout account verified now",
+        "recordedReason": "Recorded reason: {reason}",
+        "stopReason": "Teacher's reason: {reason}",
+        "student": "Student: {name}",
+        "teacher": "Teacher: {name}"
+      },
+      "state": {
+        "active": "Active",
+        "awaitingOffer": "Awaiting the offer",
+        "closed": "Closed",
+        "offered": "Offer awaiting payment",
+        "paused": "Paused"
+      },
+      "tabs": {
+        "chargeUnknown": "Charge unanswered",
+        "noOffer": "No offer sent",
+        "paused": "Paused for non-payment",
+        "payBlocked": "Payment blocked",
+        "stop": "Stop requests"
+      },
+      "title": "Ijazah programmes",
+      "why": {
+        "chargeUnknown": "The month was charged automatically from the saved card and Paymob has not answered after several inquiries. The month is pending: the student cannot pay by hand.",
+        "noOffer": "The time to send the offer passed and the teacher sent none. A late offer is refused until you decide.",
+        "payBlocked": "The time to pay the rest passed while the teacher's payout account was not verified, so the student could not pay. While the item is open the offer does not lapse and the student cannot pay, even once the account is verified.",
+        "stop": "The teacher asked to stop the programme after it paused for non-payment."
+      }
     },
     "reports": {
       "chat": {
@@ -2635,6 +2865,123 @@
         "label": "Early join",
         "unit": "minutes"
       },
+      "explain": {
+        "admin_home_latest_actions": "The number of latest audit-log actions shown on the panel’s home.",
+        "admin_invite_ttl_hours": "The hours a new administrator’s invite link works to set the password.",
+        "admin_list_page_size": "The number of rows on each page of the panel’s lists.",
+        "admin_lockout_attempts": "The number of failed sign-in attempts after which an administrator’s account is locked for a while. The attempts left are not shown.",
+        "admin_lockout_minutes": "The minutes an administrator’s account stays locked after too many failed attempts.",
+        "admin_recovery_code_count": "The number of recovery codes issued to an administrator when setting up two-step verification, each usable once.",
+        "admin_session_idle_minutes": "The minutes of inactivity after which an administrator’s panel session ends.",
+        "admin_session_max_hours": "The longest an administrator’s session lasts, in hours, whatever the activity; then they sign in again.",
+        "assessment_duration_minutes": "The assessment session’s length in minutes: 30, 45 or 60.",
+        "assessment_price_piasters": "The assessment’s fee, one amount for every ijazah-track teacher. While it is zero no programme package is published and no assessment is booked.",
+        "attendance_threshold_pct": "The share of the scheduled session time both parties must be connected together for the session to count as done. Below it, the session is judged by the attendance rules.",
+        "ban_restore_window_days": "The days the weekly times stay held after enrollments end by a ban or a revocation, so a restore finds them free.",
+        "cancellation_requests_recent_days": "The recent period, in days, over which a user’s cancellation requests are counted on their record in the panel, as a sign of repetition.",
+        "chat_page_size": "The number of messages in each page of a chat that is loaded.",
+        "chat_retention_days": "The days a chat is kept after the enrollment ends and its dispute window closes, then it is deleted. It stays longer while a dispute or report is open.",
+        "checkout_confirmation_timeout_seconds": "The seconds the app waits for the payment’s confirmation before showing the student «payment received, finalising your sessions» and finishing the confirmation in the background.",
+        "checkout_confirming_poll_seconds": "How often, in seconds, the app reads a payment still being confirmed after the student has left the processing screen.",
+        "checkout_confirming_poll_window_minutes": "The minutes the app keeps reading a payment being confirmed, from the moment the processing screen is left.",
+        "checkout_processing_poll_seconds": "How often, in seconds, the app reads the payment’s status on the processing screen.",
+        "discovery_page_size": "The number of teachers on each page of the teacher search.",
+        "dispute_window_hours": "The hours after a session’s scheduled end during which either party may dispute it. No dispute is accepted after them.",
+        "document_link_ttl_seconds": "The seconds a link to open an uploaded document works before it expires. A week at most.",
+        "document_unreferenced_max_per_user": "The most unused uploaded documents one person may have. Beyond it a new upload is refused until earlier ones are used or deleted.",
+        "document_unreferenced_purge_after_hours": "The hours after which an uploaded document that no request uses is deleted.",
+        "early_join_lead_minutes": "How many minutes before the session starts the parties may enter the room, at most.",
+        "enrollment_restore_window_days": "The days a weekly time stays held after the administration ends an enrollment that can be restored, so nobody else books it and a restore finds it free.",
+        "first_session_lead_hours": "The fewest hours between the payment’s confirmation and an enrollment’s first generated session.",
+        "idempotency_key_ttl_hours": "The hours a request’s key is kept, so a repeated request with the same key gets the first answer instead of running twice.",
+        "identity_document_retention_days": "The days an identity document on a live account is kept after its decision, then erased. It does not apply to a teacher once approved.",
+        "ijazah_half_release_percent": "The part of the teacher’s share on the ijazah track released at half the sessions. Fixed for a programme at its first order.",
+        "join_window_minutes": "The minutes after the session starts within which a party’s joining counts. A party who has not joined within them counts as absent.",
+        "live_channel_max_connections_per_user": "The most live-update connections one user may have open. When one more opens, the oldest is closed.",
+        "makeup_choice_window_days": "The days the student has, from the remedy’s offer, to accept the proposed make-up time or counter-propose. When they pass with no answer and no counter-proposal pending, the proposed time is booked.",
+        "makeup_counter_answer_hours": "The hours the teacher has to answer a make-up time the student counter-proposed.",
+        "minimum_connection_seconds": "The shortest connection, in seconds, for a party to count as having joined within the join window.",
+        "notification_requeue_after_minutes": "The minutes a notification that never reached the sending queue waits before it is queued again.",
+        "notification_requeue_max_age_minutes": "The age, in minutes, after which a lost notification is no longer queued again, since it is no longer useful.",
+        "onboarding_token_ttl_minutes": "The minutes a new user has, after their identity is verified, to complete sign-up.",
+        "otp_code_ttl_minutes": "The minutes an e-mailed one-time code works before it expires.",
+        "otp_max_attempts": "The number of wrong attempts after which a one-time code is void.",
+        "otp_purge_after_hours": "The hours after which old one-time codes are deleted from the database.",
+        "postponement_interval_weeks": "The weeks that must pass from a party’s last postponement request on an enrollment before another from them is accepted.",
+        "postponement_notice_hours": "The fewest hours before a session that it can be postponed. A nearer session stands.",
+        "price_average_min_teachers": "The fewest other teachers needed for the package editor to show the average price per session. Below it no average is shown, so no single teacher’s price is revealed.",
+        "programme_charge_inquiry_tries": "How many times Paymob is asked about an automatic charge it has not answered, once per checkout lifetime, before a «charge unanswered» item opens for the administration.",
+        "programme_charge_retry_days": "The days after a failed automatic charge on which the saved card is charged again, at most four times, only on a soft decline. A hard decline is never retried.",
+        "programme_enabled": "On: the old-style ijazah-track packages are deactivated, with one audit entry recording their count, and programme packages and assessments open.\nOff: no new programme package or assessment; running programmes go on.\n⚠️ Turning it off reactivates no package deactivated when it was turned on.",
+        "programme_offer_hours": "The hours the teacher has after the assessment to send the offer. If none is sent an administration item opens and the programme does not end by itself. Also the length of an administrator’s extension of this time.",
+        "programme_pay_reminder_hours": "The hours before the deadline to pay the rest from which the student sees the «pay before…» line on the enrollment’s card and page. 1 to 47.",
+        "programme_pay_rest_hours": "The hours the student has, from the offer, to pay the rest. After them the offer lapses and the assessment fee is kept. Also the length of an administrator’s extension of this time.",
+        "programme_renew_early_days": "The days before a paid month ends during which a student with no saved card may renew the next month by hand.",
+        "programme_stop_request_days": "The days a programme must stay paused for non-payment before the teacher may ask the administration to stop it.",
+        "provider_nonce_ttl_minutes": "The minutes the one-time value for signing in with Google or Apple works.",
+        "push_token_stale_days": "The days after which a device’s unused notification token is deleted.",
+        "rate_limit_absence_complaint": "Complaints of a teacher’s absence one student makes within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_address_authentication": "Sign-in requests from one address, before signing in, within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_address_one_time_code": "One-time code requests from one address within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_admin_authentication": "Administrator sign-in attempts per account within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_admin_authentication_budget": "Administrator sign-in attempts across the whole platform within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_admin_user_delete": "Accounts an administrator deletes within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_authentication": "Sign-in attempts per account or e-mail within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_authentication_budget": "Sign-in attempts across the whole platform within the window, against wide attacks. Anything over the limit is refused until the window passes.",
+        "rate_limit_ban_lift": "Ban lifts per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_chat_message": "Chat messages one user sends within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_dispute_revision": "Dispute ruling revisions per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_encryption_failure": "Reports from a user’s phone that a session could not be encrypted, within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_enrollment_end": "Enrollments an administrator ends within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_enrollment_restore": "Enrollment restores per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_failed_one_time_code": "Failed one-time codes per e-mail address and purpose within the window, after which no new code is sent to that address until the window passes.",
+        "rate_limit_gender_decision": "Gender-flag decisions per administrator within the window, each kind counted on its own: raise, dismiss, correct and fraud ban. Anything over the limit is refused until the window passes.",
+        "rate_limit_gender_flag": "Gender flags one user raises within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_ijazah_decision": "Ijazah decisions per administrator within the window, each kind counted on its own: approve, reject, sign off, re-render, revoke, bar and the certificate name’s change. Anything over the limit is refused until the window passes.",
+        "rate_limit_ijazah_request": "Ijazah requests one teacher sends within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_kept_data_erase_date": "Changes of a kept record’s erasure date per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_kept_data_erase_now": "Immediate erasures of kept data per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_kept_document_link": "Links to open a kept document per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_live_channel": "Openings of the live-update channel per user within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_manual_compensation_case": "Compensation cases an administrator opens by hand within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_one_time_code": "One-time code requests per e-mail within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_one_time_code_budget": "One-time codes the whole platform sends within the window, against flooding. Anything over the limit is refused until the window passes.",
+        "rate_limit_outcome_correction": "Corrections of undisputed session outcomes per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_payment_initiation": "Payment starts per student within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_payout_mark": "Marks and unmarks of a teacher payout as paid, per administrator, within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_provider_nonce": "Google or Apple sign-in starts from one address within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_provider_nonce_budget": "Google or Apple sign-in starts across the whole platform within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_public_page": "Requests to the public pages (such as the ijazah check page) from one address within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_search": "Teacher searches per user within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_settings_update": "Settings changes per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_signed_in_default": "The general limit on a signed-in user’s or administrator’s calls that have no limit of their own. Anything over the limit is refused until the window passes. 200 at most; a change applies within a minute.",
+        "rate_limit_slot_release": "Early releases of a held weekly time per administrator within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_token_refresh": "Sign-in renewals per token within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_upload": "Files one user uploads within the window. Anything over the limit is refused until the window passes.",
+        "rate_limit_user_report": "Reports one user makes about others within the window. Anything over the limit is refused until the window passes.",
+        "reminder_offsets_minutes": "When both parties are reminded before each session, in minutes before it starts; one value per reminder.",
+        "repeated_absence_flag_count": "The number of teacher no-shows in one enrollment after which the enrollment shows the «repeated absence» mark, to administrators only. No number ends an enrollment by itself.",
+        "room_close_grace_minutes": "The minutes after a session’s scheduled end after which its video room is closed, whatever the session’s status. Zero closes it at the end.",
+        "room_close_retry_minutes": "The period after the end plus the grace during which the video provider is asked each minute to close the room, until it reports the room ended.",
+        "session_access_ttl_minutes": "The minutes an access token works before the app renews it by itself.",
+        "session_evaluation_delay_minutes": "The minutes after a session’s scheduled end before its outcome is evaluated from the attendance record.",
+        "session_purge_after_days": "The days after which ended sign-in sessions are deleted from the database.",
+        "session_refresh_grace_seconds": "The seconds during which a replaced refresh token is accepted once more, for a device that lost the answer. Any other use of a replaced token ends the session.",
+        "session_refresh_ttl_days": "The longest a sign-in session on a device lasts, in days from its start. After it the user signs in again.",
+        "slot_hold_grace_minutes": "Extra minutes the time stays held after the payment order expires, so a payment started at the last moment is still confirmed.",
+        "slot_hold_ttl_minutes": "The minutes the student has to pay: the Paymob order expires after them, and the time stays held for the student during them plus the grace.",
+        "slot_release_buffer_weeks": "Extra weeks after an enrollment’s last session before its weekly time can be booked again. Zero opens it from the week after the last session.",
+        "teacher_share_percent": "The teacher’s share of each payment order, set when the order is created. A change reaches new orders only.",
+        "terms_version": "The terms of service version in force, whose acceptance is recorded at sign-up.",
+        "upload_max_bytes": "The largest file that can be uploaded, in bytes. A larger one is refused.",
+        "video_departure_timeout_seconds": "The seconds the video provider keeps a room open after the last party leaves, so a dropped party can return. Applies to rooms created after the change.",
+        "video_empty_timeout_seconds": "The seconds the video provider keeps open a room nobody is in before closing it. Applies to rooms created after the change."
+      },
+      "explainButton": {
+        "a11y": "Explain “{setting}”",
+        "close": "Close",
+        "hint": "Click for the explanation"
+      },
       "groups": {
         "accounts": "Accounts and sign-in",
         "admin": "Administrator accounts",
@@ -2891,6 +3238,7 @@
           "remedyNotOpen": "This remedy is no longer open: its session was booked, it was handed to a case, or it lapsed. Nothing was opened."
         },
         "remedyParty": "The remedy is owed to the student, so the case is the student's.",
+        "studentParty": "The case is the student's.",
         "title": "Open a compensation case",
         "viewCase": "View the case"
       },

@@ -9,6 +9,9 @@
 // with the case's link; `REMEDY_NOT_OPEN`, `NOT_FOUND`, `RATE_LIMITED` and `CONFLICT` in plain
 // words, and any other failure the generic `admin.dialogs.submitError`. `onDone` hands the answer
 // to the page, which reads again what it shows.
+// 006:T021 (B-P4's conflict check, Q-8 (b), the owner, 2026-11-25): an optional student preset (the
+// programme's page, for an assessment never held) fixes the party to the student and locks it, as a
+// remedy does, with its own line; it sends no remedy.
 import { casesOpenManualInput, type CasesOpenManualOutput } from '@ijazah/contracts/admin';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -62,6 +65,8 @@ export interface ManualCaseDialogProps {
   readonly enrollmentId?: string;
   /** An open remedy to hand to the student's case; the party is then the student. */
   readonly remedyId?: string;
+  /** 006:T021 (Q-8 (b)): the party fixed to the student and locked, with no remedy. */
+  readonly party?: 'student';
   /** The server's answer, once the case is opened or joined: the page reads again. */
   readonly onDone?: (answer: CasesOpenManualOutput) => void;
   /** Cancel, close after the answer, or the case's link followed. */
@@ -71,6 +76,7 @@ export interface ManualCaseDialogProps {
 export function ManualCaseDialog({
   enrollmentId: given,
   remedyId,
+  party: preset,
   onDone,
   onClose,
 }: ManualCaseDialogProps) {
@@ -80,9 +86,9 @@ export function ManualCaseDialog({
   const [idempotencyKey] = useState(mintIdempotencyKey);
   const [entered, setEntered] = useState('');
   const [enrollmentInvalid, setEnrollmentInvalid] = useState(false);
-  const [party, setParty] = useState<Party | undefined>(
-    remedyId === undefined ? undefined : 'student',
-  );
+  // A remedy or the preset fixes the party to the student; otherwise the administrator picks it.
+  const locked = remedyId !== undefined || preset !== undefined;
+  const [party, setParty] = useState<Party | undefined>(locked ? 'student' : undefined);
   const [reason, setReason] = useState('');
   const [failure, setFailure] = useState<ErrorMessage | undefined>(undefined);
   const [answer, setAnswer] = useState<CasesOpenManualOutput | undefined>(undefined);
@@ -179,7 +185,7 @@ export function ManualCaseDialog({
           />
         </Field>
       ) : null}
-      {remedyId === undefined ? (
+      {!locked ? (
         <ChoiceGroup legend={t('admin.shared.manualCase.partyLegend')}>
           <Choice
             label={t('admin.shared.manualCase.partyStudent')}
@@ -193,7 +199,13 @@ export function ManualCaseDialog({
           />
         </ChoiceGroup>
       ) : (
-        <p className="text-callout">{t('admin.shared.manualCase.remedyParty')}</p>
+        <p className="text-callout">
+          {t(
+            remedyId === undefined
+              ? 'admin.shared.manualCase.studentParty'
+              : 'admin.shared.manualCase.remedyParty',
+          )}
+        </p>
       )}
       <Field
         label={t('admin.shared.manualCase.reasonLabel')}
