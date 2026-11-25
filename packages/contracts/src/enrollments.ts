@@ -15,7 +15,8 @@ import { z } from 'zod';
 import { subjectSummary } from './catalog.js';
 import { enrollmentIjazahRequest } from './ijazah-requests.js';
 import { enrollmentSession, enrollmentStatus } from './checkout.js';
-import { MAX_SESSION_COUNT, packageTrack, sessionLengthMinutes } from './packages.js';
+import { packageTrack, sessionLengthMinutes } from './packages.js';
+import { enrollmentProgramme, MAX_PROGRAMME_SESSION_COUNT } from './programme.js';
 
 /** The two tabs of «اشتراكاتي» and «طلابي» (FR-390, FR-391). */
 export const enrollmentListTab = z.enum(['active', 'ended']);
@@ -83,11 +84,20 @@ export const listedSession = enrollmentSession.extend({
   postponement: sessionPostponement.optional(),
 });
 
+/**
+ * The most sessions an enrollment holds: a programme's offer and its assessment (006, B-P4's
+ * conflict check, Q-4 (a), the owner, 2026-11-25). A fixed package's count stays bounded by
+ * `MAX_SESSION_COUNT` where it is written; the outputs only read the snapshot.
+ */
+export const MAX_ENROLLMENT_SESSION_COUNT = MAX_PROGRAMME_SESSION_COUNT + 1;
+
 /** The package line an enrollment shows, from its snapshot: subject, track, sessions, minutes. */
 export const enrollmentTerms = z.object({
   subject: subjectSummary,
   track: packageTrack,
-  sessionCount: z.int().min(1).max(MAX_SESSION_COUNT),
+  // 006 (Q-4 (a)): was `MAX_SESSION_COUNT` (52), which refused a programme of more than 51 offered
+  // sessions on every read that answers it (the enrollment reads, the admin payment detail).
+  sessionCount: z.int().min(1).max(MAX_ENROLLMENT_SESSION_COUNT),
   sessionDurationMinutes: sessionLengthMinutes,
 });
 
@@ -156,6 +166,12 @@ export const studentEnrollmentItem = z.object({
    * directly, with the reason both parties are shown; never the internal note. Additive (R-API-9).
    */
   endedByAdmin: z.object({ reason: z.string() }).optional(),
+  /**
+   * 006:T019 (B-P4's conflict check, Q-3 (a), Q-5 (b), the owner, 2026-11-25): present on a
+   * programme's enrollment, its state, `payBy` and the reminder's instant, so the card and the detail
+   * know it and read `programme.get`. Additive (R-API-9).
+   */
+  programme: enrollmentProgramme.optional(),
 });
 
 /** The tab's items, active ones by next session; a cursor while more ended ones remain. */

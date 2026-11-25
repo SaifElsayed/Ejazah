@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   programmeRequestItem,
+  programmesDecideRefusal,
   programmesGetOutput,
   programmesQueueFilter,
   programmesQueueInput,
@@ -94,5 +95,23 @@ describe('programmes.get (006:T018)', () => {
       assessmentHeld: false,
     });
     expect(programmesGetOutput.parse(PROGRAMME)).not.toHaveProperty('assessmentHeld');
+  });
+});
+
+// 006:T021 (B-P4's conflict check, the owner, 2026-11-25, Q-1 (a) amended; SRS DEC-113): a
+// `charge_unknown` decision on an order the gateway has already answered is refused `charge_answered`
+// (PR #160 r1 FU1). Additive: every earlier cause kept, in its order (R-API-9).
+describe('programmes.decide (006:T021)', () => {
+  it('adds charge_answered after the causes it had', () => {
+    expect(programmesDecideRefusal.options).toEqual([
+      'not_open',
+      'decision_not_allowed',
+      'not_offered',
+      'offer_sent',
+      'reason_required',
+      'makeup_pending',
+      'sessions_pending',
+      'charge_answered',
+    ]);
   });
 });

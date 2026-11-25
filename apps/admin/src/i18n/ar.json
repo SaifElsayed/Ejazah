@@ -2708,6 +2708,7 @@
         "programme_charge_retry_days": "برنامج الإجازة: أيام إعادة محاولة الخصم التلقائي",
         "programme_enabled": "برنامج الإجازة: التشغيل",
         "programme_offer_hours": "برنامج الإجازة: مهلة إرسال العرض بعد الاختبار",
+        "programme_pay_reminder_hours": "برنامج الإجازة: ساعات التذكير بالدفع قبل نهاية مهلة دفع الباقي",
         "programme_pay_rest_hours": "برنامج الإجازة: مهلة دفع الباقي من العرض",
         "programme_renew_early_days": "برنامج الإجازة: التجديد اليدوي قبل نهاية الشهر المدفوع",
         "programme_stop_request_days": "برنامج الإجازة: مدة الإيقاف قبل طلب الإنهاء",

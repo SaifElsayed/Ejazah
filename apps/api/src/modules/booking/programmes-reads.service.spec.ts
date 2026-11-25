@@ -42,6 +42,9 @@ const NOW = new Date('2026-12-10T10:00:00Z');
 /** Month 2's last session ends on 2026-12-12 at 18:00: the due point. */
 const DUE = new Date('2026-12-12T18:00:00Z');
 const EARLY_DAYS = 3;
+/** §3.14: `programme_stop_request_days` (7) and `programme_pay_reminder_hours` (12, DEC-114). */
+const STOP_DAYS = 7;
+const REMINDER_HOURS = 12;
 
 const VIEW: ProgrammeView = {
   enrollmentId: ENROLLMENT,
@@ -150,7 +153,14 @@ const read = (
     payments = paymentsOf(),
     enrollmentId = ENROLLMENT,
   }: { store?: ProgrammeReadStore; payments?: ProgrammeReadPayments; enrollmentId?: string } = {},
-) => readProgramme(tx, userId, enrollmentId, { payments, earlyDays: EARLY_DAYS, store });
+) =>
+  readProgramme(tx, userId, enrollmentId, {
+    payments,
+    earlyDays: EARLY_DAYS,
+    stopDays: STOP_DAYS,
+    reminderHours: REMINDER_HOURS,
+    store,
+  });
 
 describe('programme.get (006:T018, FR-726)', () => {
   it('answers the student the programme, the offer, the months and the saved card', async () => {
@@ -179,6 +189,65 @@ describe('programme.get (006:T018, FR-726)', () => {
       payBlocked: false,
       teacherUnavailable: false,
       card: { last4: '4242', brand: 'Visa' },
+      // 006:T019, T020 (B-P4): neither instant on an active programme.
+      stopRequestFrom: null,
+      payReminderFrom: null,
+    });
+  });
+
+  // 006:T020 (B-P4's conflict check, Q-2 (a), the owner, 2026-11-25; SRS DEC-112): the teacher's stop
+  // button shows from `paused_at` + `programme_stop_request_days` (7), `too_early`'s own rule; null
+  // unless paused, and to the student. Example: paused Mon 23 Nov 18:00 Cairo → Mon 30 Nov 18:00.
+  describe('stopRequestFrom (006:T020, Q-2 (a))', () => {
+    const pausedAt = new Date('2026-11-23T16:00:00Z');
+    const paused: ProgrammeView = { ...VIEW, state: 'paused', pausedAt };
+    const store = readStoreOf({ viewOf: async () => paused });
+
+    it('answers the teacher paused_at + 7 days on a paused programme', async () => {
+      expect((await read(TEACHER, { store })).stopRequestFrom).toBe('2026-11-30T16:00:00.000Z');
+    });
+
+    it('answers the student null on the same programme', async () => {
+      expect((await read(STUDENT, { store })).stopRequestFrom).toBeNull();
+    });
+
+    it('answers the teacher null on a programme not paused', async () => {
+      expect((await read(TEACHER)).stopRequestFrom).toBeNull();
+    });
+  });
+
+  // 006:T019 (Q-5 (b), SRS DEC-114, FR-708): the «pay before» line shows from `payBy` −
+  // `programme_pay_reminder_hours` (12) while `offered`, to both parties; null otherwise. The
+  // example: offer Mon 18:00, `payBy` Wed 25 Nov 18:00 Cairo, the line from Wed 06:00.
+  describe('payReminderFrom (006:T019, Q-5 (b))', () => {
+    const offered: ProgrammeView = {
+      ...VIEW,
+      state: 'offered',
+      payByAt: new Date('2026-11-25T16:00:00Z'),
+      plan: null,
+      monthsPaid: 0,
+    };
+    const store = readStoreOf({ viewOf: async () => offered });
+
+    it('answers payBy − 12 hours on an offered programme, to both parties', async () => {
+      expect((await read(STUDENT, { store })).payReminderFrom).toBe('2026-11-25T04:00:00.000Z');
+      expect((await read(TEACHER, { store })).payReminderFrom).toBe('2026-11-25T04:00:00.000Z');
+    });
+
+    it('takes the hours the setting holds, 47 its most', async () => {
+      const answer = await readProgramme(tx, STUDENT, ENROLLMENT, {
+        payments: paymentsOf(),
+        earlyDays: EARLY_DAYS,
+        stopDays: STOP_DAYS,
+        reminderHours: 47,
+        store,
+      });
+      expect(answer.payReminderFrom).toBe('2026-11-23T17:00:00.000Z');
+    });
+
+    it('answers null once the programme left offered, its payBy kept', async () => {
+      expect(VIEW.payByAt).not.toBeNull();
+      expect((await read(STUDENT)).payReminderFrom).toBeNull();
     });
   });
 

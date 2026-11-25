@@ -330,6 +330,22 @@ describe("'teacher.students.list' and 'teacher.students.get' (T049)", () => {
     ]);
   });
 
+  // 006:T020 (B-P4's conflict check, Q-4 (a), Q-3 (a), the owner, 2026-11-25): a 60-session offer's
+  // programme (61 sessions) passes the list's output schema, which capped the count at 52, with its
+  // programme marker.
+  it('answers a 60-session offer’s programme (61 sessions) with its programme marker (006, Q-4 (a))', async () => {
+    const programme = { state: 'paused' as const, payBy: null, payReminderFrom: null };
+    const answer = await callerAs(sessionOf('approved'), {
+      ...booking,
+      students: async () => ({
+        items: [{ ...item, summary: { ...summary, sessionCount: 61 }, programme }],
+      }),
+    }).teacher.students.list({ tab: 'active' });
+    expect(answer.items.map((one) => [one.summary.sessionCount, one.programme])).toEqual([
+      [61, programme],
+    ]);
+  });
+
   it('answers a deleted student deleted, with no name, the deprecated name empty (T007, FR-426)', async () => {
     const deleted = { studentId: STUDENT, displayName: '', displayNameOrNull: null, deleted: true };
     const answer = await callerAs(sessionOf('approved'), {

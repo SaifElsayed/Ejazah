@@ -495,6 +495,8 @@ export {
 export { programmesToSweep, type SweptProgramme } from './programmes.repository.js';
 export {
   createProgrammeDecisions,
+  // 006:T021 (B-P4, Q-1 (a) amended): payments' entries a `charge_unknown` decision is handed.
+  type ProgrammeChargeDecisionPayments,
   type ProgrammeDecision,
   type ProgrammeDecisionDependencies,
   type ProgrammeDecisions,

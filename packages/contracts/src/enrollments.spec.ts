@@ -307,3 +307,40 @@ describe('what the student is answered (FR-390, FR-392, FR-395)', () => {
     ).toEqual({ status: 'rejected' });
   });
 });
+
+// 006:T019 (B-P4's conflict check, the owner, 2026-11-25; Q-3 (a), Q-4 (a), Q-5 (b), SRS DEC-114): a
+// programme's enrollment carries an optional `programme` marker (its state, `payBy` and the reminder's
+// instant), so the card and the detail know it; and a programme's count (the offer's up to 200 + the
+// assessment) parses: the old cap of 52 refused a 60-session offer's 61. Additive (R-API-9).
+describe('006:T019: a programme’s enrollment (Q-3 (a), Q-4 (a))', () => {
+  const programme = {
+    state: 'offered',
+    payBy: '2026-11-25T16:00:00.000Z',
+    payReminderFrom: '2026-11-25T04:00:00.000Z',
+  } as const;
+  const ijazah = { ...item, summary: { ...summary, track: 'ijazah_track', sessionCount: 61 } };
+
+  it('parses a 60-session offer’s enrollment (61 with the assessment), and the most, 201', () => {
+    expect(studentEnrollmentItem.parse(ijazah)).toEqual(ijazah);
+    expect(enrollmentTerms.parse({ ...summary, sessionCount: 201 }).sessionCount).toBe(201);
+    expect(enrollmentTerms.safeParse({ ...summary, sessionCount: 202 }).success).toBe(false);
+  });
+
+  it('carries the programme marker, optional: its state, payBy and payReminderFrom', () => {
+    expect(studentEnrollmentItem.parse({ ...ijazah, programme })).toEqual({ ...ijazah, programme });
+    expect(studentEnrollmentItem.parse(ijazah)).not.toHaveProperty('programme');
+    const active = { state: 'active', payBy: null, payReminderFrom: null } as const;
+    const detail = { ...ijazah, programme: active, sessions: [], complaintOpen: false };
+    expect(enrollmentsGetOutput.parse({ ...detail, ijazahRequest: null }).programme).toEqual(active);
+  });
+
+  it('refuses a marker with an unknown state, a missing payBy or a reminder not an instant', () => {
+    for (const marker of [
+      { ...programme, state: 'lapsed' },
+      { state: 'offered', payReminderFrom: null },
+      { ...programme, payReminderFrom: 'Wednesday 06:00' },
+    ]) {
+      expect(studentEnrollmentItem.safeParse({ ...ijazah, programme: marker }).success).toBe(false);
+    }
+  });
+});
