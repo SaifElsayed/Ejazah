@@ -824,7 +824,7 @@
         "short": "{subject} · ijazah programme",
         "price": "Price of a {minutes}-minute session",
         "editNote": "Price changes apply to new offers only.",
-        "feeUnset": "The assessment session's fee is not set yet, so a programme package cannot be made active now."
+        "feeUnset": "The administration has not set the assessment fee yet, so the programme package cannot be activated now."
       }
     }
   },

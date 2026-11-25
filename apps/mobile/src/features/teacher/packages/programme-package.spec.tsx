@@ -403,3 +403,60 @@ describe('a new programme package while the programme is on (Q-B1 (a))', () => {
     expect(priceField('rtl', 30)).toBeNull();
   });
 });
+
+// B-P4 reading 1 (the owner, «د», 2026-11-25): while the programme's switch is on, editing an existing
+// unfrozen recitation package offers no ijazah-track option: its track is shown fixed, as a frozen
+// package's is (a programme is made as a new package). No error line, no new string. Off, today's
+// choice of track stays.
+describe('an existing recitation package while the programme is on (reading 1, «د»)', () => {
+  const open: TeacherPackage = {
+    ...recitation,
+    id: '0193a6f0-0000-7000-8000-0000000000b4',
+    frozen: false,
+  };
+  const switchTo = (programmeEnabled: boolean) =>
+    mockApi.value.client.publicConfig.mockResolvedValue({
+      supportEmail: 'support@ijazah.test',
+      termsVersion: '2026-10',
+      checkout: CHECKOUT_POLLING,
+      teacherSharePercent: 70,
+      paymentMode: 'test',
+      programmeEnabled,
+    });
+  const ijazahOption = (direction: 'rtl' | 'ltr') =>
+    screen.queryByRole('radio', { name: said(direction, 'common.track.ijazahTrack') });
+
+  beforeEach(() => {
+    mockParams = { id: open.id };
+    mockApi.api.teacher.packages.list.query.mockResolvedValue({
+      published: true,
+      packages: [open, programme],
+    });
+  });
+
+  it('no ijazah-track option on editing while the programme is on: the track shown fixed, the length still chosen', async () => {
+    switchTo(true);
+    await inBothDirections(
+      withQueries(() => <PackageEditor />),
+      async (_rendered, direction) => {
+        expect(await screen.findByDisplayValue('8')).toBeTruthy();
+        await waitFor(() => expect(mockApi.value.client.publicConfig).toHaveBeenCalled());
+        await waitFor(() => expect(ijazahOption(direction)).toBeNull());
+        expect(screen.getByText(said(direction, 'common.track.recitation'))).toBeTruthy();
+        expect(
+          screen.getByRole('radio', {
+            name: said(direction, 'teacher.packages.editor.durationOption', { minutes: 45 }),
+          }),
+        ).toBeTruthy();
+      },
+    );
+  });
+
+  it('the track can still be changed while the programme is off', async () => {
+    switchTo(false);
+    await renderIn('rtl', withQueries(() => <PackageEditor />)());
+    expect(await screen.findByDisplayValue('8')).toBeTruthy();
+    await waitFor(() => expect(mockApi.value.client.publicConfig).toHaveBeenCalled());
+    expect(ijazahOption('rtl')).toBeTruthy();
+  });
+});
