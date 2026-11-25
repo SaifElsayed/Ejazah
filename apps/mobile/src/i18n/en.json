@@ -708,13 +708,14 @@
         "upTo": "The programme's sessions at this time last up to {minutes} minutes."
       },
       "cancel": {
-        "action": "Cancel the programme",
+        "action": "Decline the offer",
         "dialog": {
-          "confirm": "Yes, cancel it",
+          "confirm": "Yes, decline the offer",
           "keep": "Keep it",
-          "text": "The programme is cancelled and your weekly time is freed for others; the assessment fee is not refunded.",
-          "title": "Cancel the programme?"
-        }
+          "text": "Your weekly time becomes free for others, and the assessment session's fee is not refunded.",
+          "title": "Decline the offer?"
+        },
+        "paymentProcessing": "Your payment is being confirmed; you can't decline the offer now."
       },
       "chargePending": "This month's charge is already under way.",
       "consent": "I agree to my card being saved to pay the next months automatically; I can turn automatic renewal off at any time.",
@@ -739,7 +740,7 @@
         "planMonthly": "Monthly"
       },
       "payBlocked": "Payment is stopped until the administration decides.",
-      "payeePending": "Payment opens once the teacher's payment details are verified.",
+      "payeePending": "Payment is temporarily unavailable and will open soon.",
       "profile": {
         "chooseSlot": "Choose the assessment time · {subject}",
         "fee": "Assessment session: {fee}",

@@ -609,6 +609,84 @@ describe('CheckoutPrevious (FR-BOOK-12 (c))', () => {
   });
 });
 
+// 006:T019 (Q-A2 (a), the owner, 2026-11-25; FR-BOOK-12, T009): the programme's own payable order,
+// `checkout.current.programmeOrder` (`programme.pay`'s or `programme.renew`'s, which has no hold). The
+// screen shows the time left on it and continues it (`checkout.continue` with its enrollment); once
+// the hosted page closes the student goes back to the programme's page, never to `processing`
+// (Q-A1 (a)).
+// One that can no longer be continued goes back too.
+describe('CheckoutPrevious: the programme’s own order (Q-A2 (a))', () => {
+  const programmeOrder = (canContinue: boolean, expiresAt = '2026-11-09T10:06:40.000Z') => ({
+    programmeOrder: { enrollmentId: ENROLLMENT_ID, expiresAt, canContinue },
+  });
+
+  it('shows the time left on it, with continue and wait', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(programmeOrder(true));
+    await inBothDirections(
+      withQueries(() => <CheckoutPrevious />),
+      async (_rendered, direction) => {
+        expect(
+          await screen.findByText(said(direction, 'student.checkoutPrevious.title')),
+        ).toBeTruthy();
+        expect(
+          screen.getByText(said(direction, 'student.checkoutPrevious.payWithin')),
+        ).toBeTruthy();
+        expect(screen.getByText(ltr('6:40'))).toBeTruthy();
+        expect(
+          screen.getByRole('button', {
+            name: said(direction, 'student.checkoutPrevious.continuePrevious'),
+          }),
+        ).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: said(direction, 'student.checkoutPrevious.wait') }),
+        ).toBeTruthy();
+      },
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('continues it, then goes back to the programme’s page and never to processing', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(programmeOrder(true));
+    mockApi.api.checkout.continue.query.mockResolvedValue({
+      checkoutUrl: CHECKOUT_URL,
+      orderExpiresAt: '2026-11-09T10:06:40.000Z',
+    });
+    await renderAr(<CheckoutPrevious />);
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: said('rtl', 'student.checkoutPrevious.continuePrevious'),
+      }),
+    );
+    await advance(0);
+    expect(mockApi.api.checkout.continue.query).toHaveBeenCalledWith({
+      enrollmentId: ENROLLMENT_ID,
+    });
+    expect(mockOpenAuthSession).toHaveBeenCalledWith(CHECKOUT_URL, 'ijazah://checkout/return');
+    expect(mockNavigate).toHaveBeenCalledWith('back');
+    expect(mockNavigate).not.toHaveBeenCalledWith('replace', expect.anything());
+  });
+
+  it('one that can no longer be continued goes back, never to processing', async () => {
+    mockApi.api.checkout.current.query.mockResolvedValue(programmeOrder(false));
+    await renderAr(<CheckoutPrevious />);
+    await advance(0);
+    expect(mockNavigate).toHaveBeenCalledWith('back');
+    expect(mockNavigate).not.toHaveBeenCalledWith('replace', expect.anything());
+  });
+
+  it('at zero it reads the order again, and goes back once none is left', async () => {
+    mockApi.api.checkout.current.query
+      .mockResolvedValueOnce(programmeOrder(true, '2026-11-09T10:00:02.000Z'))
+      .mockResolvedValue({});
+    await renderAr(<CheckoutPrevious />);
+    expect(await screen.findByText(ltr('0:02'))).toBeTruthy();
+    await advance(2_000);
+    await advance(0);
+    expect(mockApi.api.checkout.current.query).toHaveBeenCalledTimes(2);
+    expect(mockNavigate).toHaveBeenCalledWith('back');
+  });
+});
+
 // PR #121's review, round 1, Major (the note under T045): `Checkout` and `CheckoutPrevious` share
 // `checkout.current`'s cache, so each mount below shares the test's one `QueryClient`, a minute
 // apart, as the phone does when the student books again.

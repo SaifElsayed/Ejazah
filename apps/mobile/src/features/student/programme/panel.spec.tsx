@@ -8,7 +8,10 @@
 // «change card» with one, from `renewOpen`; none while `payeePending` or `chargePending`, each with
 // its line; the automatic renewal's off row only while a card is saved, behind a dialog. Paused
 // since when; the teacher unavailable. Each payment opens the gateway's hosted page through the
-// checkout's `hosted.ts`. An enrollment that is no programme (NOT_FOUND) shows none of it.
+// checkout's `hosted.ts`, and once it closes the student stays on the page, read again, never sent to
+// `processing` or its «payment success» (Q-A1 (a), R-HONEST-1). The cancellation is worded as declining
+// the offer; refused `payment_processing`, it says so. An enrollment that is no programme (NOT_FOUND)
+// shows none of it.
 import type {
   EnrollmentsGetOutput,
   ListedSession,
@@ -52,10 +55,6 @@ const CAIRO = 'Africa/Cairo';
 const TEACHER = 'الشيخ أحمد المصري';
 const QURAN = { id: '0193a6f0-0000-7000-8000-0000000000a1', nameAr: 'حفظ القرآن', nameEn: 'Quran' };
 const CHECKOUT_URL = 'https://pay.ijazah.test/checkout/p1';
-const PROCESSING = {
-  pathname: '/(student)/checkout/processing',
-  params: { enrollmentId: ENROLLMENT_ID },
-};
 
 const assessment: ListedSession = {
   sessionId: '0193a6f0-0000-7000-8000-000000000501',
@@ -143,6 +142,12 @@ const when = (direction: Direction, instant: string) =>
 const button = (direction: Direction, key: MessageKey) =>
   screen.queryByRole('button', { name: said(direction, key) });
 const get = () => mockApi.api.programme.get.query;
+/** The hosted page opened, and `programme.get` was read after it closed. */
+const readAfterTheHostedPage = () => {
+  const opened = mockOpenAuth.mock.invocationCallOrder.at(-1);
+  const read = get().mock.invocationCallOrder.at(-1);
+  return opened !== undefined && read !== undefined && read > opened;
+};
 
 let queries: QueryClient;
 const ui = () => (
@@ -220,14 +225,14 @@ describe('the offer (FR-706, FR-710, FR-713)', () => {
     });
   });
 
-  it('pays monthly with the consent given, then opens the hosted page and goes to processing', async () => {
+  it('pays monthly with the consent given, opens the hosted page, then stays here and reads again', async () => {
     get().mockResolvedValue(offered());
     await renderIn('rtl', ui());
     await shown('rtl');
     await fireEvent.press(screen.getByRole('radio', { name: ar('programme.student.pay.planMonthly') }));
     await fireEvent.press(screen.getByRole('checkbox'));
     await fireEvent.press(screen.getByRole('button', { name: ar('programme.student.pay.monthly') }));
-    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(PROCESSING));
+    await waitFor(() => expect(readAfterTheHostedPage()).toBe(true));
     expect(mockApi.api.programme.pay.mutate).toHaveBeenCalledWith({
       enrollmentId: ENROLLMENT_ID,
       plan: 'monthly',
@@ -235,6 +240,8 @@ describe('the offer (FR-706, FR-710, FR-713)', () => {
       idempotencyKey: 'programme-key-1',
     });
     expect(mockOpenAuth).toHaveBeenCalledWith(CHECKOUT_URL, 'ijazah://checkout/return');
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(mockRouter.push).not.toHaveBeenCalled();
   });
 
   it('monthly with the box left unticked sends saveCard: false (renewed by hand)', async () => {
@@ -307,6 +314,43 @@ describe('the offer (FR-706, FR-710, FR-713)', () => {
     });
   });
 
+  it('a declining refused payment_processing says the payment is being confirmed, not the generic error', async () => {
+    get().mockResolvedValue(offered());
+    mockApi.api.programme.cancel.mutate.mockRejectedValue(
+      apiError('CONFLICT', [{ path: 'cause', code: 'payment_processing' }]),
+    );
+    await inBothDirections(ui, async (_rendered, direction) => {
+      await shown(direction);
+      await fireEvent.press(
+        screen.getByRole('button', { name: said(direction, 'programme.student.cancel.action') }),
+      );
+      await fireEvent.press(
+        screen.getByRole('button', {
+          name: said(direction, 'programme.student.cancel.dialog.confirm'),
+        }),
+      );
+      expect(
+        await screen.findByText(said(direction, 'programme.student.cancel.paymentProcessing')),
+      ).toBeTruthy();
+      expect(screen.queryByText(said(direction, 'common.state.actionError'))).toBeNull();
+    });
+  });
+
+  it('another refusal of the declining is the generic error', async () => {
+    get().mockResolvedValue(offered());
+    mockApi.api.programme.cancel.mutate.mockRejectedValue(
+      apiError('CONFLICT', [{ path: 'cause', code: 'assessment_not_settled' }]),
+    );
+    await renderIn('rtl', ui());
+    await shown('rtl');
+    await fireEvent.press(screen.getByRole('button', { name: ar('programme.student.cancel.action') }));
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('programme.student.cancel.dialog.confirm') }),
+    );
+    expect(await screen.findByText(ar('common.state.actionError'))).toBeTruthy();
+    expect(screen.queryByText(ar('programme.student.cancel.paymentProcessing'))).toBeNull();
+  });
+
   it('PREVIOUS_CHECKOUT goes to the previous checkout; another refusal is said in place', async () => {
     get().mockResolvedValue(offered());
     mockApi.api.programme.pay.mutate.mockRejectedValueOnce(apiError('PREVIOUS_CHECKOUT'));
@@ -358,13 +402,15 @@ describe('a running programme (FR-713a, FR-715, FR-716, FR-726)', () => {
     await renderIn('rtl', ui());
     await shown('rtl');
     await fireEvent.press(screen.getByRole('button', { name: ar('programme.student.renew.now') }));
-    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(PROCESSING));
+    await waitFor(() => expect(readAfterTheHostedPage()).toBe(true));
     expect(mockApi.api.programme.renew.mutate).toHaveBeenCalledWith({
       enrollmentId: ENROLLMENT_ID,
       saveCard: false,
       idempotencyKey: 'programme-key-1',
     });
     expect(mockOpenAuth).toHaveBeenCalledWith(CHECKOUT_URL, 'ijazah://checkout/return');
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(mockRouter.push).not.toHaveBeenCalled();
   });
 
   it('«pay now» and «change card» with a card saved; change card saves the new one', async () => {

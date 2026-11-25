@@ -37,6 +37,8 @@ export interface ProgrammeActions {
   renew(saveCard: boolean): Promise<ProgrammeCheckoutOutput>;
   autoRenewOff(): Promise<ProgrammeActionOutput>;
   cancel(): Promise<ProgrammeActionOutput>;
+  /** The enrollment's screens read again (after the hosted page closes). */
+  readAgain(): Promise<void>;
 }
 
 /** The student's four actions on the programme of `enrollmentId`. */
@@ -80,6 +82,7 @@ export function useProgrammeActions(enrollmentId: string): ProgrammeActions {
         run({ action: 'cancel' }, (idempotencyKey) =>
           client.api.programme.cancel.mutate({ enrollmentId, idempotencyKey }),
         ),
+      readAgain,
     };
   }, [client, queries, enrollmentId]);
 }

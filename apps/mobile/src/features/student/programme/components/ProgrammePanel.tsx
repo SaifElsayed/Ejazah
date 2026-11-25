@@ -8,7 +8,9 @@
 // The lines: paused since when, the teacher unavailable, `payBlocked`, `payeePending`,
 // `chargePending`. A payment opens the gateway's hosted page through the checkout's `hosted.ts`;
 // `PREVIOUS_CHECKOUT` goes to `CheckoutPrevious` as the booking sheet does (FR-BOOK-12); any other
-// refusal is said in place, and the panel is read again. A read refused NOT_FOUND is no programme:
+// refusal is said in place, and the panel is read again. Q-A1 (a) (the owner, 2026-11-25): once a
+// payment's hosted page closes the student stays here (`openProgrammeCheckout`), never `processing`.
+// The cancellation is worded as declining the offer; refused `payment_processing`, it says so. A read refused NOT_FOUND is no programme:
 // nothing is drawn.
 import type {
   ProgrammeCard,
@@ -36,11 +38,11 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
-import { errorCodeOf } from '../../../../lib/client';
+import { errorCodeOf, errorDetailsOf } from '../../../../lib/client';
 import { type ErrorMessage, genericErrorKey } from '../../../../lib/error-message';
 import { formatPounds, useFormatters } from '../../../../lib/formatters';
 import { LoadError } from '../../../shared/states';
-import { openHostedCheckout } from '../../checkout/hosted';
+import { openProgrammeCheckout } from '../../checkout/hosted';
 import { useProgramme, useProgrammeActions } from '../api';
 import {
   type OfferView,
@@ -118,16 +120,20 @@ function Programme({
       await send();
     } catch (caught: unknown) {
       if (errorCodeOf(caught) === 'PREVIOUS_CHECKOUT') router.push(CHECKOUT_PREVIOUS_ROUTE);
-      else setFailure(genericErrorKey(caught, 'common.state.actionError'));
+      else setFailure(refusalOf(what, caught));
     } finally {
       setBusy(null);
     }
   }
-  /** A payment: the hosted page of the order the server made, then `processing`. */
+  /**
+   * A payment: the hosted page of the order the server made; once it closes the student stays here
+   * and the panel is read again, the server alone saying the month is paid (Q-A1 (a), R-HONEST-1).
+   */
   const checkout = (what: Exclude<Busy, null>, order: () => Promise<{ checkoutUrl: string }>) =>
     act(what, async () => {
       const { checkoutUrl } = await order();
-      await openHostedCheckout(checkoutUrl, enrollmentId);
+      await openProgrammeCheckout(checkoutUrl);
+      await actions.readAgain();
     });
 
   return (
@@ -193,6 +199,18 @@ function Programme({
       )}
     </Card>
   );
+}
+
+/**
+ * The words for a refused action (the owner, 2026-11-25): the declining refused `payment_processing`
+ * says the payment is being confirmed; every other refusal is the generic error.
+ */
+function refusalOf(what: Exclude<Busy, null>, caught: unknown): ErrorMessage {
+  const cause = errorDetailsOf(caught).find(({ path }) => path === 'cause')?.code;
+  if (what === 'cancel' && errorCodeOf(caught) === 'CONFLICT' && cause === 'payment_processing') {
+    return { key: 'programme.student.cancel.paymentProcessing' };
+  }
+  return genericErrorKey(caught, 'common.state.actionError');
 }
 
 /** An instant as a date and a time in `zone` (`common.format.dateTime`). */
