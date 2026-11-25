@@ -22,6 +22,10 @@
 //
 // 003:T109 (SRS DEC-87): it answers the payment mode the server runs in, so every app shows
 // «نسخة تجريبية» in test mode. A surface that wired no mode fails closed rather than answer one.
+//
+// B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B1 (a)): it answers
+// whether the programme is turned on, `programme_enabled` read on every call (0 off, 1 on), so the
+// phone shows the programme's entries only while it is on; a missing or invalid row fails closed.
 import {
   checkoutPolling,
   publicConfigOutput,
@@ -29,8 +33,10 @@ import {
   termsVersion,
 } from '@ijazah/contracts';
 import { z } from 'zod';
+import { PROGRAMME_ENABLED_SETTING } from '../modules/catalog/index.js';
 import { TEACHER_SHARE_SETTING } from '../modules/payments/index.js';
 import { TERMS_VERSION_SETTING } from '../platform/settings/keys.js';
+import { programmeEnabled } from '../platform/settings/registry.js';
 import { PUBLIC_PAGE_RATE_LIMIT } from '../platform/web/route.js';
 import { createAppRouter, publicProcedure } from './procedures.js';
 
@@ -41,6 +47,9 @@ const CHECKOUT_SETTINGS = {
   confirmingPollSeconds: 'checkout_confirming_poll_seconds',
   confirmingPollWindowMinutes: 'checkout_confirming_poll_window_minutes',
 } as const;
+
+/** `programme_enabled`'s value while the programme is on (SRS §3.14, DEC-94: 0 off, 1 on). */
+const PROGRAMME_ON = 1;
 
 export const platformRouter = createAppRouter({
   publicConfig: publicProcedure({
@@ -58,6 +67,7 @@ export const platformRouter = createAppRouter({
       confirmingPollSeconds,
       confirmingPollWindowMinutes,
       sharePercent,
+      programmeSwitch,
     ] = await Promise.all([
       settings.read(TERMS_VERSION_SETTING, termsVersion),
       read('confirmationTimeoutSeconds'),
@@ -65,6 +75,8 @@ export const platformRouter = createAppRouter({
       read('confirmingPollSeconds'),
       read('confirmingPollWindowMinutes'),
       settings.read(TEACHER_SHARE_SETTING, teacherSharePercent),
+      // B-P4 round 2 (Q-B1 (a)): the programme's switch, 0 or 1 (the registry's read-site schema).
+      settings.read(PROGRAMME_ENABLED_SETTING, programmeEnabled),
     ]);
     const { paymentMode } = ctx.services.publicConfig;
     if (paymentMode === undefined) {
@@ -81,6 +93,7 @@ export const platformRouter = createAppRouter({
       },
       teacherSharePercent: sharePercent,
       paymentMode,
+      programmeEnabled: programmeSwitch === PROGRAMME_ON,
     };
   }),
 });

@@ -40,6 +40,8 @@ const STORED: Readonly<Record<string, unknown>> = {
   checkout_confirming_poll_window_minutes: 12,
   // 003:T104 (Q-A3 (a)): not the seed's 70, so the answer can only come from the row.
   teacher_share_percent: 65,
+  // B-P4 round 2 (Q-B1 (a)): on, not the seed's 0, so the answer can only come from the row.
+  programme_enabled: 1,
 };
 
 const CHECKOUT_KEYS = [
@@ -119,7 +121,29 @@ describe('platform.publicConfig (T038, FR-145)', () => {
       },
       teacherSharePercent: 65,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a)): the programme's switch, from its row.
+      programmeEnabled: true,
     });
+  });
+
+  // B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B1 (a); SRS §3.14,
+  // DEC-94): whether the programme is turned on, read on every call from `programme_enabled` (1 on,
+  // 0 off), so the phone shows the programme's entries only while it is on.
+  it('answers programmeEnabled from the programme_enabled setting: 1 on, 0 off (B-P4, Q-B1 (a))', async () => {
+    await expect(fixture().caller.platform.publicConfig()).resolves.toMatchObject({
+      programmeEnabled: true,
+    });
+    await expect(
+      fixture({ programme_enabled: 0 }).caller.platform.publicConfig(),
+    ).resolves.toMatchObject({ programmeEnabled: false });
+  });
+
+  it('fails closed when programme_enabled is not stored or is not 0 or 1 (B-P4, Q-B1 (a))', async () => {
+    for (const value of [undefined, 2, true, '1']) {
+      await expect(
+        fixture({ programme_enabled: value }).caller.platform.publicConfig(),
+      ).rejects.toMatchObject({ cause: expect.any(SettingError) });
+    }
   });
 
   it('answers the payment mode the server runs in, so every app shows «نسخة تجريبية» in test mode (003:T109)', async () => {
