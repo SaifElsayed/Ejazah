@@ -13,7 +13,9 @@
 // programme's switch is on (`platform.publicConfig.programmeEnabled`), a new package on the ijazah track
 // is a programme package: its three prices (`ProgrammePriceFields`) in place of the count, the length
 // and the total, sent as `prices`; `assessment_fee_unset` said in its words. Off, or on the recitation
-// track, today's fields.
+// track, today's fields. Reading 1 (the owner, «د», 2026-11-25): while it is on, an existing unfrozen
+// recitation package's track is shown fixed, as a frozen package's is, with no ijazah-track option; a
+// programme is made as a new package. Off, today's choice stays.
 import type {
   PackageTrack,
   SessionLengthMinutes,
@@ -134,6 +136,10 @@ function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
   const priceWrong = priceText.trim() !== '' && price_piasters === null;
   // B-P4 round 2 (Q-B1 (a)): a new package on the ijazah track while the switch is on.
   const asProgramme = item === undefined && programmeOn && track === 'ijazah_track';
+  // Reading 1 («د»): the track a package of the list shows fixed, a frozen one's or, while the switch is
+  // on, a recitation one's.
+  const trackLocked = item !== undefined && programmeOn && item.track === 'recitation';
+  const shownTrack = fixed?.track ?? (trackLocked ? item.track : undefined);
   const prices = programmePricesOf(pricesText);
   const ready =
     subject !== undefined &&
@@ -248,9 +254,9 @@ function PackageForm({ item }: { readonly item?: TeacherFixedPackage }) {
         )}
       </Field>
 
-      {fixed !== undefined ? (
+      {shownTrack !== undefined ? (
         <Field label={t('teacher.packages.editor.track')}>
-          <Text variant="body-lg">{t(TRACK_LABEL[fixed.track])}</Text>
+          <Text variant="body-lg">{t(TRACK_LABEL[shownTrack])}</Text>
         </Field>
       ) : (
         <Field
