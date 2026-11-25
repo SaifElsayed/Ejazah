@@ -46,3 +46,10 @@ pause, request, decision, close, reopen); no new member.
 > `programme: { state, payBy, payReminderFrom }` on a programme's enrollment (Q-3 (a)), and the enrollment outputs'
 > session count is widened to `MAX_PROGRAMME_SESSION_COUNT + 1` (Q-4 (a); the admin payment detail's
 > `paymentEnrollment.summary` with it). No new procedure.
+> *B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; additive).* `programme.get` also gains,
+> for the teacher alone, `offerTerms: { slotMinutes, prices: { m30_piasters, m45_piasters, m60_piasters } } | null`
+> (the reserved weekly time's length and the programme package's three prices, while the offer is open to send:
+> `awaiting_offer`, the enrollment `confirmed`, the assessment delivered, not past `programme.offer`'s deadline; null
+> otherwise and to the student; Q-B2 (a)) and `stopRequestOpen: boolean` (a `stop` request is open; false to the
+> student; Q-B3 (a)). `platform.publicConfig` gains `programmeEnabled: boolean` (`programme_enabled` = 1, read on
+> every call; Q-B1 (a)).

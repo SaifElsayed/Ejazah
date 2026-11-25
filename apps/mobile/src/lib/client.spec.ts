@@ -358,6 +358,8 @@ describe('the API client', () => {
       termsVersion: '2026-10-01',
       teacherSharePercent: 70,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+      programmeEnabled: false,
       checkout: {
         confirmationTimeoutSeconds: 15,
         processingPollSeconds: 2,
@@ -384,6 +386,8 @@ describe('the API client', () => {
       termsVersion: '2026-10-01',
       teacherSharePercent: 70,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+      programmeEnabled: false,
       checkout: {
         confirmationTimeoutSeconds: 15,
         processingPollSeconds: 2,

@@ -456,6 +456,8 @@ describe('PackageEditor and PackageSubjectPicker', () => {
       checkout: CHECKOUT_POLLING,
       teacherSharePercent: 65,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+      programmeEnabled: false,
     });
     mockParams = { id: 'new' };
     await renderIn('ltr', withQueries(() => <PackageEditor />)());

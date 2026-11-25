@@ -946,7 +946,7 @@ No open question remains.
 
 ## Phase 4: Screens and proofs (B-P4, on today's design; amended 2026-11-21)
 
-- [ ] T019 [US1] [US2] [US3] The student's phone, `apps/mobile/src/features/student/programme/`:
+- [x] T019 [US1] [US2] [US3] The student's phone, `apps/mobile/src/features/student/programme/`:
   - the range and the fee on the profile;
   - the assessment's booking (each time's length, «sessions up to this long»);
   - the offer with its total, its months and the 48 h deadline (a reminder before it, FR-708);
@@ -988,6 +988,16 @@ No open question remains.
   > العرض الآن.»). Q-A1 (a): after a programme payment the phone returns to the enrollment's page (a second
   > `checkout/hosted.ts` entry), not the assessment's success screen; Q-A2 (a): `CheckoutPrevious.tsx` continues a
   > payable programme order (`checkoutCurrentOutput.programmeOrder`). Both outside files approved.
+  > **Done (B-P4 lane a, 2026-11-25; lane head `845b2540`, merged at `487dd3f6`).** `features/student/programme/`: the
+  > profile's programme card (range, fee) and its booking bar; the booking sheet's length per time; the enrollment's
+  > panel, shown only on the `programme` marker (the offer with its deadline as date and time, in full or monthly with
+  > the consent on monthly only, «رفض العرض» behind a dialog, months paid and next due, «renew now» / «pay now» /
+  > «change card» from `renewOpen` and the card, the off row only with a card, the `payeePending`, `payBlocked`,
+  > `chargePending`, paused and unavailable lines); «ادفع قبل {date} {time}» from `payReminderFrom` on the card and
+  > the page; a programme of 61 sessions drawn. Q-A1 (a): a programme payment returns to the enrollment's page
+  > (`checkout/hosted.ts`); Q-A2 (a): `CheckoutPrevious.tsx` continues a payable programme order. 49 strings approved
+  > by the owner (2026-11-25), `programme.student.payReminder` with them. Red first, named mutants, each restored and
+  > cmp-checked (`track2\runs\b-p4\lane-a\`).
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
@@ -1005,7 +1015,7 @@ No open question remains.
   > no word about refusing. The editor, the card, the groups' counts and the deactivate sheet stop narrowing to the fixed
   > package (`PackageEditor.tsx:58-62`, `PackageCard.tsx:46-47`, `PackageGroups.tsx:26-27`,
   > `PackageDeactivateSheet.tsx:53-63`). The offer form hangs on `TeacherEnrollment.tsx`.
-- [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
+- [x] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
     now, and what each decision does (approve: the offer lapses, the fee kept; extend: 48 hours more from now);
@@ -1046,6 +1056,20 @@ No open question remains.
   > the student's, beside «the assessment was not held; the fee is unreleased»; the button reads «افتح قضية تعويض
   > للطالب»; no case opens by itself. The monitor's four columns in the payments list and panel; the stale comment
   > `admin/payments.ts:58-60` and the labels of `programmes.listed` / `.viewed` (T018's follow-up).
+  > **Done (B-P4 lanes s and c, 2026-11-25; merged at `1fdf7fad` and `0f162878`).** Lane s: `programmes.decide` takes
+  > `charge_unknown`'s approve and extend only, under the programme's, the enrollment's and the order's locks
+  > (kernel.md `006:T021`); approve writes a still-`created` automatic order `expired` (no gateway call;
+  > `first_failure_at` = the decision's instant only when none is set), an answered order is refused `charge_answered`;
+  > the race against the inquiry's answer both ways (`tests/db-integrity/programme-charge-unknown.spec.ts`); bound in
+  > `main.ts`'s `006:T021` block (`programme-decisions-binds.spec.ts`). Lane c: `pages/programmes/` (the queue without a
+  > `refusal` tab, each tab and decision explained, the no_offer reason 1–500, «مد» with the owner's line on
+  > `charge_unknown`, «رسوم جلسة التقييم {amount} من حق الطالب» read through `payments.get` and «افتح قضية تعويض
+  > للطالب» on `ManualCaseDialog`'s locked student preset, the reopen); the monitor's four columns; the audit labels of
+  > `programmes.listed` / `.viewed`; the stale `admin/payments.ts` comment; Q-7: `InfoButton` and an explanation for
+  > each of the 110 settings (`programme_enabled`: on, off, ⚠️ off reactivates no package), the labels spec requiring
+  > one per key; five older strings say «التقييم»; `docs/design/components.md` lists `InfoButton`. Every string
+  > approved by the owner (2026-11-25). Red first, named mutants, each restored and cmp-checked
+  > (`track2\runs\b-p4\lane-s\`, `lane-c\`).
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.

@@ -244,6 +244,8 @@ describe('Processing', () => {
       checkout: { ...CHECKOUT_POLLING, processingPollSeconds: 5, confirmationTimeoutSeconds: 20 },
       teacherSharePercent: 70,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+      programmeEnabled: false,
     });
     mockApi.api.checkout.status.query.mockResolvedValue(pending);
     await renderIn('rtl', within(<Processing />)());

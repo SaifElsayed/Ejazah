@@ -55,6 +55,8 @@ const VALUES: Record<string, unknown> = {
   // 006:T019, T020 (B-P4): the stop's 7 days and the reminder's 12 hours (DEC-114), as seeded.
   programme_stop_request_days: 7,
   programme_pay_reminder_hours: 12,
+  // B-P4 round 2 (Q-B2 (a)): the offer's 24 hours, the window `programme.get`'s terms follow.
+  programme_offer_hours: 24,
   // The lists' page size (`LIST_PAGE_SIZE_SETTING`), read by the enrollment lists.
   discovery_page_size: 20,
   admin_list_page_size: 100,
@@ -446,5 +448,62 @@ describe('programme.get’s instants and the enrollment reads’ marker over the
       enrollmentId: w.enrollmentId,
     });
     expect(detail).not.toHaveProperty('programme');
+  });
+});
+
+// B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B2 (a), Q-B3 (a)): the
+// teacher's two fields over the real rows: the offer's terms (the weekly time's 60 minutes and the
+// programme package's three prices) while the offer is open to send, and an open stop request; the
+// student is answered neither.
+describe('programme.get’s teacher-only fields over the real tables (B-P4 round 2)', () => {
+  it('answers the teacher the offer terms while awaiting the offer, the assessment delivered; the student null', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: {
+        state: 'awaiting_offer',
+        offeredAt: null,
+        level: null,
+        readiness: null,
+        expectedLength: null,
+        payByAt: null,
+        monthCount: null,
+        paymentPlan: null,
+        monthsPaid: 0,
+      },
+    });
+    const reads = programmeGet('test');
+    const teacher = await reads.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    expect(teacher.offerTerms).toEqual({
+      slotMinutes: 60,
+      prices: { m30_piasters: 25_000, m45_piasters: 30_000, m60_piasters: 35_000 },
+    });
+    const student = await reads.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(student.offerTerms).toBeNull();
+  });
+
+  it('answers the teacher stopRequestOpen while a stop is open; the student false', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: { state: 'paused', pausedAt: new Date('2026-11-01T16:00:00Z') },
+    });
+    const reads = programmeGet('test');
+    expect(
+      (await reads.get(w.teacherId, { enrollmentId: w.enrollmentId })).stopRequestOpen,
+    ).toBe(false);
+    await database.programmeRequest.create({
+      data: {
+        enrollmentId: w.enrollmentId,
+        teacherUserId: w.teacherId,
+        kind: 'stop',
+        status: 'open',
+        reason: 'الطالب متأخر عن السداد',
+      },
+    });
+    const teacher = await reads.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    const student = await reads.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(teacher).toMatchObject({ stopRequestOpen: true, offerTerms: null });
+    expect(student.stopRequestOpen).toBe(false);
   });
 });

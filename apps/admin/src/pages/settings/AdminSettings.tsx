@@ -8,6 +8,11 @@
 // (`/settings/admins`), the settings section's other page.
 //
 // The columns are one list (`COLUMNS`), so a further field of a row is one entry.
+//
+// 006:T021 (B-P4's conflict check, Q-7, the owner's design, 2026-11-25: «لكل الزراير»): beside each
+// setting's name, the design system's «i» button (`InfoButton`): its hover hint «اضغط للشرح», a press
+// opens the setting's explanation, `admin.settings.explain.<key>` (one per registry key, both
+// catalogues, `tests/admin-i18n/settings-labels.spec.ts`). It writes nothing.
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -18,6 +23,7 @@ import {
   type Content,
   DataTable,
   type DataTableColumn,
+  InfoButton,
   Page,
   Skeleton,
   TextLink,
@@ -37,6 +43,9 @@ import {
 
 const ADMINS_PATH = '/settings/admins';
 
+/** A key's explanation: every registry key has one (the labels spec). */
+const explainKey = (key: string) => `admin.settings.explain.${key}` as MessageKey;
+
 type Translate = (key: MessageKey, values?: MessageValues) => string;
 
 interface Column {
@@ -52,7 +61,21 @@ const COLUMNS: readonly Column[] = [
   {
     table: { key: 'setting', wrap: true },
     header: 'admin.settings.columns.setting',
-    cell: (setting, { t }) => t(labelKey(setting.key)),
+    cell: (setting, { t }) => {
+      const label = t(labelKey(setting.key));
+      return (
+        <span className="row gap-1">
+          <span>{label}</span>
+          <InfoButton
+            hint={t('admin.settings.explainButton.hint')}
+            accessibilityLabel={t('admin.settings.explainButton.a11y', { setting: label })}
+            title={label}
+            text={t(explainKey(setting.key))}
+            closeLabel={t('admin.settings.explainButton.close')}
+          />
+        </span>
+      );
+    },
   },
   {
     table: { key: 'value' },

@@ -106,6 +106,9 @@ const GET_ANSWER = {
   // 006:T019, T020 (B-P4, rule d): neither instant on an active programme.
   stopRequestFrom: null,
   payReminderFrom: null,
+  // B-P4 round 2 (rule d): the teacher's two fields, none to the student.
+  offerTerms: null,
+  stopRequestOpen: false,
 } as const;
 
 const unreached = (name: string) => () => Promise.reject(new Error(`${name} is not reached here`));

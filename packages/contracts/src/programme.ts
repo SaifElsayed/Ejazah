@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 import { checkoutUrl } from './checkout.js';
 import { idempotencyKey } from './idempotency-key.js';
-import { sessionLengthMinutes } from './packages.js';
+import { programmePrices, sessionLengthMinutes } from './packages.js';
 
 /**
  * The most offer sessions a programme may have (R-506, analyze U-6): a definition of the contract,
@@ -93,6 +93,16 @@ export const programmeCard = z.object({
 });
 
 /**
+ * B-P4 round 2 (Q-B2 (a)): the offer form's terms: the reserved weekly time's length in minutes (the
+ * offer's length is at most it, `length_exceeds_slot`) and the programme package's three session
+ * prices (the offer's total is the count × the chosen length's price).
+ */
+export const programmeOfferTerms = z.object({
+  slotMinutes: z.int().positive(),
+  prices: programmePrices,
+});
+
+/**
  * `programme.get`'s answer (FR-726). `card` is the student's alone, null to the teacher;
  * `payeePending` is true only in live mode with the teacher's payout account unverified (FR-716);
  * `payBlocked` while a `pay_blocked` item is open (FR-706b); `teacherUnavailable` as FR-BOOK-19.
@@ -138,6 +148,14 @@ export const programmeGetOutput = z.object({
    * `payBy` − `programme_pay_reminder_hours`; null unless `offered`. The phone reads no setting.
    */
   payReminderFrom: z.iso.datetime().nullable(),
+  /**
+   * B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B2 (a)): what the
+   * teacher's offer form needs, the teacher's alone, while the offer is open to send (`awaiting_offer`,
+   * the assessment delivered, before `programme.offer`'s deadline); null otherwise and to the student.
+   */
+  offerTerms: programmeOfferTerms.nullable(),
+  /** B-P4 round 2 (Q-B3 (a)): a `stop` request is open; the teacher's, false to the student. */
+  stopRequestOpen: z.boolean(),
 });
 
 /**
@@ -295,6 +313,7 @@ export type ProgrammeOffer = z.infer<typeof programmeOffer>;
 export type ProgrammeCard = z.infer<typeof programmeCard>;
 export type ProgrammeGetOutput = z.infer<typeof programmeGetOutput>;
 export type EnrollmentProgramme = z.infer<typeof enrollmentProgramme>;
+export type ProgrammeOfferTerms = z.infer<typeof programmeOfferTerms>;
 export type ProgrammeOfferInput = z.infer<typeof programmeOfferInput>;
 export type ProgrammeOfferOutput = z.infer<typeof programmeOfferOutput>;
 export type ProgrammeOfferRefusal = z.infer<typeof programmeOfferRefusal>;

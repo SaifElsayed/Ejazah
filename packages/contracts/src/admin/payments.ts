@@ -56,9 +56,11 @@ export const orderKind = z.enum(['package', 'assessment', 'rest_in_full', 'insta
 export const declineKind = z.enum(['soft', 'hard']);
 
 /**
- * 006:T003 (admin-surface.md, `payments.monitor`): what each order adds for the programme, absent
- * until T018 answers them: its kind, its month (an `instalment` only), whether it is an automatic
- * charge of a saved card, and why an automatic one failed. Additive (R-API-9).
+ * 006:T003 (admin-surface.md, `payments.monitor`): what each order adds for the programme: its kind,
+ * its month (an `instalment` only), whether it is an automatic charge of a saved card, and why an
+ * automatic one failed. 006:T021 (T018's follow-up (1)): T018 answers them, `kind` and `automatic`
+ * on every order, the month on an `instalment`, the decline kind on a failed automatic order with
+ * one; optional in the schema all the same, as published (R-API-9). Additive (R-API-9).
  */
 const programmeOrderTerms = {
   kind: orderKind.optional(),

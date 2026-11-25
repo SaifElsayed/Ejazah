@@ -70,6 +70,8 @@ describe('programme.get through the programme services (006:T018)', () => {
       'setting programme_renew_early_days',
       'setting programme_stop_request_days',
       'setting programme_pay_reminder_hours',
+      // B-P4 round 2 (Q-B2 (a)): the offer's window, as `programme.offer` reads it.
+      'setting programme_offer_hours',
       'transaction',
       'read the programme',
     ]);

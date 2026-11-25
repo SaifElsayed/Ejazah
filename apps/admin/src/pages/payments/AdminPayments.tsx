@@ -10,6 +10,9 @@
 // `?payment=` opens one at once (the audit log's link). B42, T047 (the note under T047, Q6 (a)):
 // `?enrollment=` lists that enrollment's orders alone, the filter shown as a removable chip. No control writes (FR-401); the page is a
 // console page behind the second factor (FR-402).
+// 006:T021 (B-P4; admin-surface.md `payments.monitor`): four more columns, as T018 answers them:
+// what the order pays for, its month (an instalment's), whether it is an automatic charge of a saved
+// card, and why an automatic one failed (`orderTerms`); a dash where the order has none.
 //
 // Left out, as the board draws them with no requirement behind them this phase: the filter panel
 // behind the filter icon, the student's link to `AdminUsers` and the cancelled enrollment's link to
@@ -38,7 +41,7 @@ import { dayMonth, formatPounds, timeOfDay } from '../../lib/format';
 import { panelTimeZone } from '../../lib/zone';
 import { useSettled } from '../applications/queries';
 import { amountOrDash } from './history';
-import { OrderReference, PAYMENT_STATUS, PaymentPanel } from './PaymentPanel';
+import { OrderReference, orderTerms, PAYMENT_STATUS, PaymentPanel } from './PaymentPanel';
 import { type PaymentsFilter, type PaymentStatus, usePaymentsPage } from './queries';
 
 /** The tab with no status filter. */
@@ -138,11 +141,17 @@ export function AdminPayments() {
           { key: 'teacherShare', header: t('admin.payments.columns.teacherShare'), numeric: true },
           // 003:T102 (DEC-82): the refunded total; a dash while nothing is refunded.
           { key: 'refunded', header: t('admin.payments.columns.refunded'), numeric: true },
+          // 006:T021: the programme's four terms.
+          { key: 'kind', header: t('admin.payments.columns.kind') },
+          { key: 'month', header: t('admin.payments.columns.month') },
+          { key: 'automatic', header: t('admin.payments.columns.automatic') },
+          { key: 'declineKind', header: t('admin.payments.columns.declineKind') },
           { key: 'status', header: t('admin.payments.columns.status'), end: true },
         ]}
         rows={listed.items.map((row) => ({
           key: row.paymentId,
           cells: {
+            ...orderTerms(row, t),
             order: (
               <span className="stack">
                 <span className="text-medium">
