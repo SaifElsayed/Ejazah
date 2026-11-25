@@ -22,6 +22,7 @@ import {
   listedSession,
 } from './enrollments.js';
 import { calendarDate, timeZone } from './onboarding.js';
+import { enrollmentProgramme } from './programme.js';
 
 /**
  * The student as the teacher's screens draw them: a name, its initial the avatar; a deleted
@@ -53,6 +54,11 @@ export const teacherStudentItem = z.object({
    * reads: the reason both parties are shown, never the internal note. Additive (R-API-9).
    */
   endedByAdmin: z.object({ reason: z.string() }).optional(),
+  /**
+   * 006:T020 (B-P4's conflict check, Q-3 (a), the owner, 2026-11-25): a programme's enrollment, as
+   * `studentEnrollmentItem`'s `programme` reads. Additive (R-API-9).
+   */
+  programme: enrollmentProgramme.optional(),
 });
 
 export const teacherStudentsListOutput = z.object({

@@ -6,7 +6,7 @@
 // three causes stay covered in `apps/api/src/modules/payments/payments-admin.contract.spec.ts`.
 import { describe, expect, it } from 'vitest';
 
-import { paymentsCaseAmountOutput } from './payments.js';
+import { paymentEnrollment, paymentsCaseAmountOutput } from './payments.js';
 
 // The task's example: 8 sessions of 1,000 EGP (125 each), 3 delivered, 1 missed by the student,
 // 1 by the teacher, 3 cancelled by the close, a 70 % share: owed 125 EGP, the decision 375 EGP,
@@ -64,5 +64,31 @@ describe('payments.caseAmount: an end by the administration (003:T125)', () => {
     const answered = paymentsCaseAmountOutput.safeParse({ amount: DIRECT });
     expect(answered.success).toBe(true);
     expect(answered.data).toEqual({ amount: DIRECT });
+  });
+});
+
+// 006:T021 (B-P4's conflict check, the owner, 2026-11-25; Q-4 (a)): the payment detail's enrollment
+// summary takes a programme's count (a 60-session offer's 61), which the old cap of 52 refused.
+describe('payments.get: a programme’s enrollment summary (006, Q-4 (a))', () => {
+  it('parses a summary of 61 sessions', () => {
+    const enrollment = {
+      enrollmentId: '0199d0a0-0000-7000-8000-0000000000e1',
+      summary: {
+        subject: {
+          id: '0199d0a0-0000-7000-8000-000000000051',
+          nameAr: 'حفظ القرآن',
+          nameEn: 'Quran memorisation',
+        },
+        track: 'ijazah_track',
+        sessionCount: 61,
+        sessionDurationMinutes: 45,
+      },
+      teacher: { displayName: 'أحمد سالم' },
+      status: 'confirmed',
+      completed: 1,
+      total: 61,
+      holds: [],
+    };
+    expect(paymentEnrollment.parse(enrollment)).toEqual(enrollment);
   });
 });
