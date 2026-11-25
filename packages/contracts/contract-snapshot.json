@@ -4919,6 +4919,7 @@
           "$.checkout.confirmingPollWindowMinutes": { "required": true, "type": "integer" },
           "$.checkout.processingPollSeconds": { "required": true, "type": "integer" },
           "$.paymentMode": { "required": true, "type": "string", "values": ["live", "test"] },
+          "$.programmeEnabled": { "required": true, "type": "boolean" },
           "$.supportEmail": { "required": true, "type": "string" },
           "$.teacherSharePercent": { "required": true, "type": "integer" },
           "$.termsVersion": { "required": true, "type": "string" }
@@ -4980,6 +4981,12 @@
           "$.offer.sessionPrice_piasters": { "required": true, "type": "integer" },
           "$.offer.total_piasters": { "required": true, "type": "integer" },
           "$.offerDueAt": { "required": true, "type": "null|string" },
+          "$.offerTerms": { "required": true, "type": "null|object" },
+          "$.offerTerms.prices": { "required": true, "type": "object" },
+          "$.offerTerms.prices.m30_piasters": { "required": true, "type": "integer" },
+          "$.offerTerms.prices.m45_piasters": { "required": true, "type": "integer" },
+          "$.offerTerms.prices.m60_piasters": { "required": true, "type": "integer" },
+          "$.offerTerms.slotMinutes": { "required": true, "type": "integer" },
           "$.paused": { "required": true, "type": "null|object" },
           "$.paused.since": { "required": true, "type": "string" },
           "$.payBlocked": { "required": true, "type": "boolean" },
@@ -4994,6 +5001,7 @@
             "values": ["active", "awaiting_offer", "closed", "offered", "paused"]
           },
           "$.stopRequestFrom": { "required": true, "type": "null|string" },
+          "$.stopRequestOpen": { "required": true, "type": "boolean" },
           "$.teacherUnavailable": { "required": true, "type": "boolean" }
         }
       },

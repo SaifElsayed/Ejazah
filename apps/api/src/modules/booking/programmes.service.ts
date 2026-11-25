@@ -73,6 +73,7 @@ import type {
   ProgrammeRenewRefusal,
   ProgrammeGetInput,
   ProgrammeGetOutput,
+  ProgrammeOfferTerms,
   ProgrammeRequestInput,
   ProgrammeRequestOutput,
 } from '@ijazah/contracts';
@@ -613,10 +614,12 @@ export function createProgrammeServices(
       if (reads === undefined) throw new Error('programme.get: its reads are not bound');
       const { settings } = dependencies;
       // 006:T019, T020 (B-P4): with the stop's days and the reminder's hours, read together.
-      const [earlyDays, stopDays, reminderHours] = await Promise.all([
+      // B-P4 round 2 (Q-B2 (a)): and the offer's hours, the window `programme.offer` reads.
+      const [earlyDays, stopDays, reminderHours, offerHours] = await Promise.all([
         settings.read(PROGRAMME_RENEW_EARLY_DAYS_SETTING, wholeNonNegative),
         settings.read(STOP_REQUEST_DAYS, positiveWhole),
         settings.read(PROGRAMME_PAY_REMINDER_HOURS_SETTING, programmePayReminderHours),
+        settings.read(PROGRAMME_OFFER_HOURS_SETTING, positiveWhole),
       ]);
       return reads.transactions.run((tx) =>
         readProgramme(tx, userId, enrollmentId, {
@@ -624,6 +627,7 @@ export function createProgrammeServices(
           earlyDays,
           stopDays,
           reminderHours,
+          offerHours,
         }),
       );
     },
@@ -1900,6 +1904,35 @@ export interface ProgrammeReadStore {
   clock(tx: Transaction): Promise<Date>;
   /** Moderation's entry: the enrollment's open case of `reason`. */
   openCaseOf(tx: Transaction, enrollmentId: string, reason: string): Promise<string | null>;
+  /** B-P4 round 2 (Q-B2 (a)): sessions' entry: session 1's outcome chain, as the offer reads it. */
+  assessmentOutcome(tx: Transaction, enrollmentId: string): Promise<AssessmentOutcome>;
+  /** B-P4 round 2 (Q-B2 (a)): the latest `no_offer` extension's instant, as the offer reads it. */
+  lastExtendedAt(tx: Transaction, enrollmentId: string): Promise<Date | null>;
+  /** B-P4 round 2 (Q-B2 (a)): the reserved weekly time's length and the package's three prices. */
+  offerTermsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeOfferTerms>;
+  /** B-P4 round 2 (Q-B3 (a)): whether a `stop` request is open (rule 79: at most one). */
+  stopRequestOpen(tx: Transaction, enrollmentId: string): Promise<boolean>;
+}
+
+/**
+ * B-P4 round 2 (Q-B2 (a)): the offer form's terms over the owners' entries, no lock: the enrollment's
+ * weekly time (catalog's `readSlot`) and its programme package's prices (catalog's
+ * `teacherPackageOf`), the reads `programme.offer` decides on under its locks.
+ */
+async function offerTermsOf(tx: Transaction, enrollmentId: string): Promise<ProgrammeOfferTerms> {
+  const enrollment = await offerEnrollmentOf(tx, enrollmentId);
+  if (enrollment === null) throw new Error('programme.get: a programme without its enrollment');
+  const [slot, pkg] = await Promise.all([
+    readSlot(tx, enrollment.slotId),
+    teacherPackageOf(tx, enrollment.teacherUserId, enrollment.packageId),
+  ]);
+  // `enrollments.slot_id` is a foreign key to the slot; a programme was booked on a programme
+  // package (R-504), never edited back (R-503).
+  if (slot === null) throw new Error('programme.get: an enrollment without its slot');
+  if (pkg === null || !pkg.isProgramme) {
+    throw new Error('programme.get: a programme whose package has no programme prices');
+  }
+  return { slotMinutes: slot.durationMinutes, prices: pkg.prices };
 }
 
 export const programmeReadStore: ProgrammeReadStore = {
@@ -1910,6 +1943,10 @@ export const programmeReadStore: ProgrammeReadStore = {
   standingOf: readStanding,
   clock: clockTimestamp,
   openCaseOf,
+  assessmentOutcome,
+  lastExtendedAt: (tx, enrollmentId) => lastExtendedAt(tx, enrollmentId, 'no_offer'),
+  offerTermsOf,
+  stopRequestOpen: (tx, enrollmentId) => openRequestExists(tx, enrollmentId, 'stop'),
 };
 
 /** The account states in which the teacher is unavailable to the student (FR-BOOK-19). */
@@ -1982,6 +2019,8 @@ export async function readProgramme(
     readonly stopDays: number;
     /** 006:T019: `programme_pay_reminder_hours` (12, DEC-114), read before the transaction. */
     readonly reminderHours: number;
+    /** B-P4 round 2 (Q-B2 (a)): `programme_offer_hours` (24), read before the transaction. */
+    readonly offerHours: number;
     readonly store?: ProgrammeReadStore;
   },
 ): Promise<ProgrammeGetOutput> {
@@ -2016,6 +2055,13 @@ export async function readProgramme(
   const teacher = await store.standingOf(tx, view.teacherUserId);
   const card = userId === view.studentUserId ? await payments.cardOf(tx, enrollmentId) : null;
   const pausedAt = view.state === 'paused' ? view.pausedAt : null;
+  // B-P4 round 2 (Q-B2 (a), Q-B3 (a)): the teacher's two fields, never read for the student.
+  const isTeacher = userId === view.teacherUserId;
+  const offerTerms =
+    isTeacher && (await offerOpen(tx, view, at, dependencies.offerHours, store))
+      ? await store.offerTermsOf(tx, enrollmentId)
+      : null;
+  const stopRequestOpen = isTeacher && (await store.stopRequestOpen(tx, enrollmentId));
   return {
     state: view.state,
     offerDueAt: isoOrNull(view.offerDueAt),
@@ -2040,7 +2086,31 @@ export async function readProgramme(
         : stopRequestFromOf(pausedAt, dependencies.stopDays).toISOString(),
     // 006:T019 (Q-5 (b), DEC-114): both parties'.
     payReminderFrom: isoOrNull(payReminderFromOf(view, dependencies.reminderHours)),
+    offerTerms,
+    stopRequestOpen,
   };
+}
+
+/**
+ * B-P4 round 2 (Q-B2 (a)): whether the offer is open to send now, `programme.offer`'s own window:
+ * `awaiting_offer`, the enrollment `confirmed`, session 1's outcome chain delivered, and `at` not past
+ * the deadline (`offerWindowOf`: the assessment's end + `programme_offer_hours`, or a later `no_offer`
+ * extension's). The offer itself decides again under its locks.
+ */
+async function offerOpen(
+  tx: Transaction,
+  view: ProgrammeView,
+  at: Date,
+  offerHours: number,
+  store: ProgrammeReadStore,
+): Promise<boolean> {
+  if (view.state !== 'awaiting_offer' || view.status !== 'confirmed') return false;
+  const window = offerWindowOf(
+    await store.assessmentOutcome(tx, view.enrollmentId),
+    await store.lastExtendedAt(tx, view.enrollmentId),
+    offerHours,
+  );
+  return window.delivered && at.getTime() <= window.offerDueAt.getTime();
 }
 
 /** An order of the programme as payments answers it for the administrator's page. */

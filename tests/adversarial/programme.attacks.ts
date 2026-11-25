@@ -26,7 +26,12 @@ import { expect } from 'vitest';
 
 import { toErrorShape } from '../../apps/api/src/surfaces/procedures.js';
 import { expectUnauthenticated, neighbourOf, tamperedTokens } from './discovery.attacks.js';
-import { discoverySurface, type ProgrammePair, type SessionParty } from './discovery-world.js';
+import {
+  discoverySurface,
+  type ProgrammePair,
+  type SessionParty,
+  WORLD_PROGRAMME_PRICES,
+} from './discovery-world.js';
 import {
   type Direction,
   expectAnswersAsNonexistent,
@@ -491,7 +496,12 @@ function get(party: SessionParty, enrollmentId: string, extra: object = {}) {
   return party.caller.programme.get({ enrollmentId, ...extra } as GetInput);
 }
 
-/** The pair's two parties each read the programme, awaiting its offer; the teacher sees no card. */
+/**
+ * The pair's two parties each read the programme, awaiting its offer; the teacher sees no card.
+ * B-P4 (T022, the changed reads): the teacher-only fields go to the teacher alone: `offerTerms` (the
+ * offer open to send: the world's three programme prices), `stopRequestOpen` false with none open,
+ * `stopRequestFrom` null while not paused; the student is answered none of them.
+ */
 async function expectRead(pair: ProgrammePair, extra: object = {}): Promise<void> {
   for (const party of [pair.student, pair.teacher]) {
     expect(await get(party, pair.enrollmentId, extra)).toMatchObject({
@@ -499,8 +509,15 @@ async function expectRead(pair: ProgrammePair, extra: object = {}): Promise<void
       offer: null,
       card: null,
       payeePending: false,
+      stopRequestFrom: null,
+      stopRequestOpen: false,
     });
   }
+  expect((await get(pair.student, pair.enrollmentId, extra)).offerTerms).toBeNull();
+  expect((await get(pair.teacher, pair.enrollmentId, extra)).offerTerms).toMatchObject({
+    slotMinutes: expect.any(Number),
+    prices: WORLD_PROGRAMME_PRICES,
+  });
 }
 
 const getAttacks: ProcedureAttacks = {

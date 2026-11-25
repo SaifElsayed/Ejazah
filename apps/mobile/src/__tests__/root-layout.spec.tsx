@@ -62,6 +62,8 @@ const publicConfigIn = (paymentMode: 'test' | 'live') => ({
   checkout: CHECKOUT_POLLING,
   teacherSharePercent: 70,
   paymentMode,
+  // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+  programmeEnabled: false,
 });
 let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
 // 003:T115: `publicConfig()` keeps its first answer for the launch, as lib/client.ts does (a

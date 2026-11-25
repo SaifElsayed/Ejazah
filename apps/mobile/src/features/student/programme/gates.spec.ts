@@ -45,6 +45,9 @@ function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
     card: null,
     stopRequestFrom: null,
     payReminderFrom: null,
+    // B-P4 round 2 (Q-B2 (a), Q-B3 (a); rule d): the teacher's two fields, none to the student.
+    offerTerms: null,
+    stopRequestOpen: false,
     ...of,
   };
 }
