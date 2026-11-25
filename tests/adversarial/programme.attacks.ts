@@ -773,8 +773,9 @@ async function auditEntriesOfTheRun(): Promise<string[]> {
 /**
  * 006:T022 (SC-707): run by `procedure-harness.spec.ts` after every registration's attacks, so it
  * reads what the programme attacks answered. The check finds no card detail in any programme answer
- * or refusal of the run, nor in an audit entry naming the run's enrollments or parties. A log line
- * is not read here: the world's logger is silent (the question in the B-P4 lane i report).
+ * or refusal of the run, nor in an audit entry naming the run's enrollments or parties, nor (B-P4
+ * update 2, Q-i1 (a), the owner, 2026-11-25) in any line the world's services logged during the
+ * file's run (`DiscoverySurface.logLines`: the platform's logger from `debug` up, kept in memory).
  */
 export function describeProgrammeCardDetailCheck(): void {
   describe('SC-707: no card detail in what the programme attacks answered (006:T022)', () => {
@@ -807,7 +808,7 @@ export function describeProgrammeCardDetailCheck(): void {
     });
 
     it(
-      'finds none in the programme answers and the audit entries of the run',
+      'finds none in the programme answers, the audit entries and the log lines of the run',
       { tags: ['database'] },
       async () => {
         expect(responses.length, 'the programme attacks ran first, in this file').toBeGreaterThan(
@@ -823,6 +824,16 @@ export function describeProgrammeCardDetailCheck(): void {
         expect(leaks).toEqual([]);
         const audits = await auditEntriesOfTheRun();
         expect(audits.flatMap((entry) => cardDetailsIn(entry, [CARD_TOKEN]))).toEqual([]);
+        // B-P4 update 2 (Q-i1 (a)): the run's log lines, the programme's refusals among them.
+        const { logLines } = await discoverySurface();
+        expect(
+          logLines.some((line) => [...runIds].some((id) => line.includes(id))),
+          'the programme services logged lines naming the run’s ids into the world’s logger',
+        ).toBe(true);
+        const logged = logLines.flatMap((line) =>
+          cardDetailsIn(line, [CARD_TOKEN]).map((kind) => `${kind}: ${line.slice(0, 300)}`),
+        );
+        expect(logged).toEqual([]);
       },
     );
   });
