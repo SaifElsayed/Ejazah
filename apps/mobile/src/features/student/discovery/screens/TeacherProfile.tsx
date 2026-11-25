@@ -8,6 +8,7 @@
 // pressed, and the action bar «اختيار الموعد · {package}» opens the booking sheet for it over the page.
 // 005:T021 (FR-611, FR-614; B47's Q-R4 (a)): «إبلاغ» opens the report and flag sheet on the teacher
 // the profile shows (`teacherId`), from the profile; an unknown teacher offers none.
+// 006:T019 (FR-701): a programme package's bar names its assessment's time.
 import type { DiscoveryTeacherOutput, DiscoveryTeacherPackage } from '@ijazah/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -97,17 +98,19 @@ function ChooseSlot({
 }) {
   const t = useT();
   const nameOf = useSubjectName();
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
-  if (item.isProgramme === true) return null;
   return (
     <ActionBar>
       <Button
-        label={t('student.teacherProfile.chooseSlot', {
-          package: t('common.format.packageShort', {
-            subject: nameOf(item.subject),
-            count: item.sessionCount,
-          }),
-        })}
+        label={
+          item.isProgramme === true
+            ? t('programme.student.profile.chooseSlot', { subject: nameOf(item.subject) })
+            : t('student.teacherProfile.chooseSlot', {
+                package: t('common.format.packageShort', {
+                  subject: nameOf(item.subject),
+                  count: item.sessionCount,
+                }),
+              })
+        }
         layout="block"
         onPress={onPress}
       />

@@ -6,6 +6,11 @@
 // `tests/seed/settings-registry.spec.ts` reads them. No label names a key the registry lacks (the
 // stale `noShowTermination` is gone), and `attendanceThreshold.error` states the registry's bound.
 // It lives under `tests/` because the panel's project cannot import the API.
+// 006:T021 (B-P4's conflict check, Q-7, the owner's design, 2026-11-25: «لكل الزراير»): every key also
+// has its explanation, the «i» button's dialog, at `admin.settings.explain.<key>`, its own leaves
+// beside `keys`, and no explanation names a key the registry lacks; `programme_enabled`'s says on,
+// off, and ⚠️ that off reactivates no package, one paragraph each. A setting another batch adds turns
+// this red until its explanation is written.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -33,6 +38,7 @@ describe.each(['ar', 'en'] as const)('the settings page labels in %s', (locale) 
   const settings = settingsCatalogue(locale);
   const keys = (settings['keys'] ?? {}) as Group;
   const groups = (settings['groups'] ?? {}) as Group;
+  const explanations = (settings['explain'] ?? {}) as Group;
 
   it('labels every key of the registry', () => {
     expect(registryKeys.filter((key) => !isLabel(keys[key]))).toEqual([]);
@@ -40,6 +46,20 @@ describe.each(['ar', 'en'] as const)('the settings page labels in %s', (locale) 
 
   it('labels no key the registry lacks', () => {
     expect(Object.keys(keys).filter((key) => !registryKeys.includes(key))).toEqual([]);
+  });
+
+  it('explains every key of the registry, one explanation each (006:T021, Q-7)', () => {
+    expect(registryKeys.filter((key) => !isLabel(explanations[key]))).toEqual([]);
+  });
+
+  it('explains no key the registry lacks (006:T021, Q-7)', () => {
+    expect(Object.keys(explanations).filter((key) => !registryKeys.includes(key))).toEqual([]);
+  });
+
+  it("explains the programme's switch on, off, and that off reactivates no package (006:T021)", () => {
+    const paragraphs = String(explanations['programme_enabled']).split('\n');
+    expect(paragraphs).toHaveLength(3);
+    expect(paragraphs[2]?.startsWith('⚠️')).toBe(true);
   });
 
   it('labels every group, the three added ones included', () => {

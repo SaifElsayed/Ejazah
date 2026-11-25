@@ -876,3 +876,20 @@ describe('006:T008: the programme decisions by name', () => {
     },
   );
 });
+
+// 006:T021 (B-P4; T018's follow-up (3); Q-f4 (a)): the programme queue's and page's reads, audited
+// `programmes.listed` (on the reader) and `programmes.viewed` (on the enrollment), by name.
+const T021_PROGRAMME_READS: readonly (readonly [string, string, string])[] = [
+  ['programmes.listed', 'عرض طابور برامج الإجازة', 'View the ijazah programmes queue'],
+  ['programmes.viewed', 'عرض برنامج إجازة', 'View an ijazah programme'],
+];
+
+describe('006:T021: the programme reads by name', () => {
+  it.each(T021_PROGRAMME_READS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});
