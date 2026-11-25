@@ -90,8 +90,9 @@ Run on `ijazah_integrity_b` only (`. ejazah-tools/test-env-b.sh`), with `PAYMENT
   - the stop request, its button shown after the 7 days (no refusal request: a refusal goes through support, SRS
     DEC-112).
 - **Panel:**
-  - the queue (paused, stop, no offer with its reason, pay blocked) oldest first;
+  - the queue (paused, stop, no offer with its reason, pay blocked, charge unknown) oldest first;
   - decide, extend, reopen;
   - the monitor's kinds;
-  - the eight settings, the switch's label explaining it.
+  - the ten settings, each with its «i» explanation, the switch's explaining what flipping it does (SRS DEC-114;
+    B-P4's conflict check, 2026-11-25).
 - SC-703 and SC-706 timed by hand.

@@ -123,6 +123,7 @@ Eight keys, seed 95 → 103 (`programme_offer_hours` 24 among them):
 - `programme_offer_hours` (24);
 - `programme_pay_rest_hours` (48, from the offer);
 - `programme_stop_request_days` (7);
+- `programme_pay_reminder_hours` (12, 1 to 47; the student's reminder line before `payBy`, FR-708) *(2026-11-25, B-P4, SRS DEC-114)*;
 - `programme_renew_early_days` (3);
 - `programme_charge_retry_days` ([1,3,5,7]).
 

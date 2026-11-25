@@ -388,6 +388,9 @@ The admin catalogues gain their labels. A boolean setting is new to the registry
 (`registry.ts:66-74`) refuse it, `programme_enabled` is a `count` 0/1 (decided in T002).
 
 - **Amended 2026-11-24 (B-P3, SRS DEC-113, the owner, 2026-11-24, «موافق على الكل (أ) مع تحسين س٢»).** A ninth key, `programme_charge_inquiry_tries` (6, ≥ 1, `count`, `booking`): the unanswered asks about an automatic charge before the `charge_unknown` item; the count 108 → 109.
+- **Amended 2026-11-25 (B-P4, SRS DEC-114, the owner, 2026-11-25, «س5 ب»).** A tenth key,
+  `programme_pay_reminder_hours` (12, 1 to 47, `hours`, `booking`): the hours before `payBy` from which the student's
+  reminder line shows (FR-708); the count 109 → 110.
 
 ## R-516 — The catalogue and the editor
 

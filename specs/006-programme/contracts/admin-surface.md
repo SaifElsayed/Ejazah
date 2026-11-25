@@ -22,3 +22,11 @@ an audit entry (the card's `last4` is the student's only).
 > ERD §15 rule 80), not in `note` (`adminReason`, 1–1000, `packages/contracts/src/admin/admins.ts:10`). A decision on a
 > `no_offer` item without it is refused with a cause of `programmesDecideRefusal`; «required» is the service's rule,
 > red first, not a database check (no migration). The queue and `programmes.get` read it.
+
+> **B-P4 (the owner's answers on B-P4's conflict check, 2026-11-25, Q-1 (a) amended; SRS DEC-113).**
+> `programmes.decide` takes `charge_unknown`'s approve and extend only; no «confirm paid» decision exists (a payment is
+> confirmed only by the gateway, R-HONEST-1, ADR 0026). Under the programme's row, the enrollment's, then the order's
+> (kernel.md `006:T021`): approve writes the month's still-`created` automatic order `expired` (a soft decline, the
+> retries from the decision); extend writes the item `extended` (the asking goes on; no new item for that order); an
+> order already answered is refused `charge_answered` (additive in `programmesDecideRefusal`), nothing written. Audited
+> as the other decisions.

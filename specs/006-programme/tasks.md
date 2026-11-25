@@ -642,6 +642,10 @@ No open question remains.
   > **Follow-up (PR #160 r1, 2026-11-24, Follow-up 5).** The stand-in's `inquireOrder` about an order it does not hold (a worker restarted
   > after the charge) rejects «unknown order»: the month stays `charge_pending`, the error is reported every 10 minutes
   > and no item opens. Development only; answering `no_answer` would follow DEC-110.
+  > **Follow-up (PR #160 r2, nit 6, 2026-11-24).** `tests/db-integrity/automatic-charge.spec.ts:349` («order before
+  > call») checks `expires_at − created_at` within ±1 s, but `expires_at` comes from `clock_timestamp()` inside the
+  > transaction and `created_at` from the transaction's start, so the case went red once under load
+  > (`track2\b-p3\review\r2-runs\m-M14b.txt`). Not B-P4's change; fix by reading both from one clock.
 - [x] T015 [US3] [US4] `advance-programmes` (FR-714, FR-717, FR-721; R-508), `jobs/advance-programmes.ts`:
   - only `confirmed` enrollments with no open `teacher_suspended` or `student_suspended` case (a suspension pauses;
     analyze N-1), red first;
@@ -961,6 +965,21 @@ No open question remains.
   - paused;
   - «the teacher is unavailable» (FR-BOOK-19).
   - i18n in a `programme` group.
+  > **B-P4's conflict check (the owner, 2026-11-25, «س5 ب»; «6أ»; «موافق على الكل زي ما اقترحت / بس الشرح يتعمل لكل
+  > الزراير مش للبرنامج بس», typed in B-P4's review session).** The screens hang on the enrollment detail
+  > (`EnrollmentDetail.tsx`, `IjazahRequestPanel`'s pattern) and read `programme.get`. Q-3 (a): the student's
+  > `enrollments.list`/`get` gain an optional `programme: { state, payBy, payReminderFrom }` (additive), so the card and
+  > the detail know a programme. Q-4 (a): the enrollment outputs' session count is widened to
+  > `MAX_PROGRAMME_SESSION_COUNT + 1` (a programme of more than 51 offered sessions failed the output parse of the
+  > student's and the teacher's enrollment reads and of the panel's payment detail, `admin/payments.ts:163`), red first
+  > on a 60-session offer. Q-5 (b) (FR-708, SRS DEC-114): a §3.14 setting `programme_pay_reminder_hours` (default 12,
+  > Admin range 1–47; settings 109 → 110); while `offered`, the card and the detail show «pay before {date} {time}» from
+  > `payBy` minus it; the server answers that instant as `payReminderFrom` on `programme.get` and on the enrollment's
+  > `programme` (the phone reads no setting); no job; the push stays v1.1. Example: offer Mon 18:00, `payBy` Wed 18:00,
+  > the line from Wed 06:00. The deadline shows as a date and time. The consent line (FR-713) is on «monthly»; «in full»
+  > sends `saveCard: false`. The profile's programme card (range, fee), its booking bar and the booking sheet's length
+  > per time replace today's narrowing (`ProfilePackage.tsx:35-36`, `TeacherProfile.tsx:100-101`,
+  > `BookingSheet.tsx:221-222`). Every new Arabic string, the consent words first, goes to the owner before the commit.
 - [ ] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
@@ -970,6 +989,14 @@ No open question remains.
   > teacher who wants to refuse contacts support from settings, and the app does not explain this (no line, no hint).
   > The stop request stays a button, shown only from `paused_at` + 7 days (`programme_stop_request_days`, §3.14); the
   > server's `too_early` stays the guard (FR-723).
+  > **B-P4's conflict check (the owner, 2026-11-25).** Q-2 (a): `programme.get` gains `stopRequestFrom` (datetime, null
+  > unless paused; the teacher's), the server's `paused_at` + `programme_stop_request_days` on the database's clock, so
+  > the button shows from that instant; `too_early` stays the guard. Red: «no stop button before it», «no refusal
+  > button», each under a named mutant. Q-3 (a) for the teacher's students list/get (`programme: { state, payBy,
+  > payReminderFrom }`). Q-6 (a): one «تواصل مع الدعم» row in the teacher's account (the existing support mailto), with
+  > no word about refusing. The editor, the card, the groups' counts and the deactivate sheet stop narrowing to the fixed
+  > package (`PackageEditor.tsx:58-62`, `PackageCard.tsx:46-47`, `PackageGroups.tsx:26-27`,
+  > `PackageDeactivateSheet.tsx:53-63`). The offer form hangs on `TeacherEnrollment.tsx`.
 - [ ] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
@@ -987,14 +1014,52 @@ No open question remains.
   > `assessment` release is owed, T011's note), the panel shows «the assessment was not held; the fee is unreleased» and
   > offers opening a compensation case for the student (FR-ADMIN-20 (c)); no case opens by itself. Example: fee 500 EGP,
   > the teacher absent and the remedy lapsed: the 500 goes back to the student by the Administrator's decision.
+  > **B-P4's conflict check (the owner, 2026-11-25; SRS DEC-113, B-P3 lane c's Q-4).** Q-1 (a), amended:
+  > `programmes.decide` takes `charge_unknown`'s approve and extend only, with no third «confirm paid» decision (a payment
+  > is confirmed only by the gateway: R-HONEST-1, ADR 0026). Under the programme's row, then the enrollment's, then the
+  > order's (kernel.md `006:T021`), the month's automatic order is read; still `created` → approve writes it `expired`
+  > through payments' entry (a soft decline: the retries start from the decision), extend writes the item `extended`
+  > (the asking goes on, and the gateway's answer confirms the month by itself; no new item for that order); an order
+  > already answered → refused `charge_answered` (additive), nothing written (PR #160 r1 FU1). A DB race spec against the
+  > sweep's inquiry, red first. The item's dialog says beside «extend»: «لو لقيت العملية مدفوعة في Paymob اختار مد،
+  > والتأكيد هييجي من Paymob لوحده». Example: month 3, 1,000 EGP, charged Thu 18:31, item 19:31; Fri 10:00 nothing in
+  > Paymob, approved → expired, retry 1 Sat 10:00, «pay now» shown at once; had Paymob shown it paid, extend, and the next
+  > ask records it paid. The queue offers a `charge_unknown` tab and no `refusal` tab.
+  > **Q-7, replaced by the owner's design (the owner, 2026-11-25, «لكل الزراير»).** The settings table shows an «i»
+  > button beside each setting's name (hover: «اضغط للشرح»); a press opens a dialog with that setting's explanation. A
+  > new piece of the admin design system. Every setting gets its explanation in B-P4 (110 with DEC-114's), each written
+  > from its SRS §3.14 / ERD row and the code, never new behaviour; `programme_enabled`'s says on (old-style ijazah
+  > packages deactivated, one audit entry), off (no new programme package or assessment; running programmes go on) and
+  > ⚠️ off reactivates no package. The texts sit under their own leaves (not `admin.settings.keys`), and
+  > `tests/admin-i18n/settings-labels.spec.ts` asserts one per registry key in both catalogues. All Arabic texts go to
+  > the owner in one file at the lane's end. A setting another batch adds needs its explanation too.
+  > **Q-8 (b) (the owner, 2026-11-25).** `ManualCaseDialog` gains an optional preset fixing the party to the student,
+  > locked (as `remedyId` does). On a `no_offer` item whose assessment was not held, the line names the fee and that it is
+  > the student's, beside «the assessment was not held; the fee is unreleased»; the button reads «افتح قضية تعويض
+  > للطالب»; no case opens by itself. The monitor's four columns in the payments list and panel; the stale comment
+  > `admin/payments.ts:58-60` and the labels of `programmes.listed` / `.viewed` (T018's follow-up).
 - [ ] T022 The final adversarial reach: no user procedure unregistered (`procedure-harness.spec.ts`, with `programme`
   in the both-directions reach and the never-exempt routers since T007, so teacher-kind procedures count), and the
   card-detail assertions across the suite.
+  > **B-P4's conflict check (the owner, 2026-11-25).** The reach is met on `76b2bd2d`
+  > (`procedure-harness.ts:286-301`, `procedure-harness.spec.ts:463-516`, the seven `programme.*` registrations). Added:
+  > (1) an adversarial read of a programme with a saved card, both directions (the student last4 + brand, the teacher
+  > `card: null`, everyone else NOT_FOUND); (2) one suite-level check that no programme response, log line or audit entry
+  > of the run carries a token, a PAN-like digit run or an expiry (SC-707); (3) the changed reads' registrations
+  > (`programme.get`'s `stopRequestFrom` and `payReminderFrom`, the enrollments' `programme`) re-read. Q-10 (a), PR #160
+  > r2: Minor 1, a DB case: `inquire` on a manual `instalment` order with a gateway id, past its expiry, throws, the order
+  > stays `created`, no `payment_events` row (red under A1); nit 1, a DB case: `checkout.status` answers while the latest
+  > order is automatic with no gateway id.
 - [ ] T023 The close:
   - quickstart.md §1–§3 on the last batch's commit, each run's output in its own file;
   - SC-703 and SC-706 timed by hand;
   - `docs/ARCHITECTURE.md`'s module graph;
   - the switch left off for the owner to flip (I-3).
+  > **B-P4's conflict check (the owner, 2026-11-25).** Q-9 (a): §1 run on the last commit; §2 as its specs (a table from
+  > each of the 14 steps to the spec that proves it, each output in its own file); §3, SC-703 and SC-706 on the phones day
+  > with the stack running (`track2\b-p4\phones-day.md`). ARCHITECTURE gains «the graph the programme builds» from the
+  > code; its header is untouched. The switch stays off. The constitution's 2.6.2 → 2.7.0 (ADR 0026) waits for the
+  > integration's version pass (the owner, «Yes, keep 2.6.2»).
 
 ## Dependencies and Execution Order
 

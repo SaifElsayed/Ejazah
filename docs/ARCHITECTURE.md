@@ -25,7 +25,7 @@ Modules are drawn where service boundaries would go if you ever split them out. 
 ### The ten principles
 
 1. **The server decides. The client displays.** Every rule is enforced server-side. A hidden button is a courtesy, never a control.
-2. **The platform never holds money. It routes it.** The student pays the gateway; the gateway settles the net straight to the teacher's payout account; the platform takes 0% and keeps only a record of what the gateway did. No wallet, no ledger, no balance, no escrow. A payment is "confirmed" only when the gateway's signed webhook says so — never from a client redirect, a toggle or an upload (R-HONEST-1, ADR 0007).
+2. **The platform never holds money. It routes it.** The student pays the gateway; the gateway settles the net straight to the teacher's payout account; the platform takes 0% and keeps only a record of what the gateway did. No wallet, no ledger, no balance, no escrow. A payment is "confirmed" only when the gateway's signed webhook says so, or, for an automatic charge only, the gateway's authenticated answer to the platform's own inquiry ([ADR 0026](adr/0026-inquiry-answer-confirms-an-automatic-charge.md)) — never from a client redirect, a toggle or an upload (R-HONEST-1, ADR 0007).
 3. **Store what happened, derive what is true.** Derived values that get stored will drift, and you won't notice until someone shouts.
 4. **Snapshot anything a parent can change.** If a mutable row could rewrite history, copy what you need at the time it mattered.
 5. **Every external call is idempotent and retryable.** Webhooks arrive twice. Networks time out after success. Users double-tap.

@@ -43,7 +43,8 @@ The answer is taken as a confirmation only when all of these hold:
 - **The channel is authenticated.** The request goes over TLS to the gateway's host, with an auth token made from the
   gateway's API key (`PAYMENT_GATEWAY_API_KEY`) for that inquiry. Without the key the live inquiry is off.
 - **Only a final state is read.** A transaction still pending, voided or refunded is not «paid». An authorisation alone
-  (`is_auth` without a capture) is ignored. Anything else, unreadable or unknown, is «no answer», and no answer means no
+  (`is_auth` without a capture) is ignored, and so is a child transaction (`has_parent_transaction`: a refund's or a
+  void's own row, PR #160 r2 nit 3). Anything else, unreadable or unknown, is «no answer», and no answer means no
   new charge (DEC-110 (4)).
 - **It is the order's own transaction.** It is on one of the adapter's own integrations, and its amount and currency
   are checked against the order.
