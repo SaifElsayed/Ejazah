@@ -998,7 +998,7 @@ No open question remains.
   > (`checkout/hosted.ts`); Q-A2 (a): `CheckoutPrevious.tsx` continues a payable programme order. 49 strings approved
   > by the owner (2026-11-25), `programme.student.payReminder` with them. Red first, named mutants, each restored and
   > cmp-checked (`track2\runs\b-p4\lane-a\`).
-- [ ] T020 [US2] [US4] The teacher's phone:
+- [x] T020 [US2] [US4] The teacher's phone:
   - `apps/mobile/src/features/teacher/packages/` (the three prices with the average per length);
   - `teacher/programme/` (the offer with the deadline, «late since», the stop and refusal requests; while `payBlocked`
     is true, a line that the offer is with the administration because the payout account was not verified, FR-706b).
@@ -1015,6 +1015,20 @@ No open question remains.
   > no word about refusing. The editor, the card, the groups' counts and the deactivate sheet stop narrowing to the fixed
   > package (`PackageEditor.tsx:58-62`, `PackageCard.tsx:46-47`, `PackageGroups.tsx:26-27`,
   > `PackageDeactivateSheet.tsx:53-63`). The offer form hangs on `TeacherEnrollment.tsx`.
+  > **Lane b's questions (the owner, 2026-11-25, typed in B-P4's review session).** Q-B1 (a): `platform.publicConfig`
+  > gains `programmeEnabled`, so a new ijazah-track package offers the three prices while the switch is on; Q-B2 (a):
+  > `programme.get` gains the teacher's `offerTerms: { slotMinutes, prices }` (lengths ≤ the weekly time, the total
+  > before sending); Q-B3 (a): the teacher's `stopRequestOpen`, «طلبك بانتظار قرار الإدارة» and no button while open.
+  > Reading 1, «د»: while the switch is on, editing an existing recitation package shows its track fixed (no
+  > ijazah-track option); a programme is made as a new package. Reading 2: no draft is offered.
+  > **Done (B-P4 lanes s and b, 2026-11-25; merged at `43b2c2a8` and the integration's last lane-b merge).**
+  > `features/teacher/packages/`: the programme package's card, groups and pause sheet, its editor with the three
+  > prices, each with its share line and average (three `averagePrice` calls), `assessment_fee_unset` in the owner's
+  > words; `features/teacher/programme/` on `TeacherEnrollment.tsx` (the `programme` marker only): the offer form from
+  > `offerTerms`, its deadline as date and time, each refusal worded, the offer as sent, the `payBlocked` line, months
+  > paid and next due, «late since», the stop button only from `stopRequestFrom` and «طلبك بانتظار قرار الإدارة»
+  > while open; no refusal button or hint; the account's «تواصل مع الدعم» row. Every string approved by the owner
+  > (2026-11-25). Red first, named mutants, each restored and cmp-checked (`track2\runs\b-p4\lane-b\`, `lane-s\`).
 - [x] T021 [US6] The panel, `apps/admin/src/pages/programmes/`:
   - the queue (paused, stop, refusal, no_offer, pay_blocked) oldest first, decide, extend, reopen;
   - each screen explains itself: a `pay_blocked` item says why it opened, whether the payout account is verified
