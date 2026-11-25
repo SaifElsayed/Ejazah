@@ -833,3 +833,41 @@ async function otherTeachersPackage(): Promise<{ packageId: string; slotId: stri
   });
   return { packageId, slotId };
 }
+
+// 006:T023 (B-P4 update 1; quickstart §2 step 7, «no session for month 4»; R-HONEST-1, no service
+// without payment). A programme paused with month 2 unpaid: its automatic order declined hard
+// (`failed`, `hard`, its gateway id recorded). The confirm step run for that order, as a re-run or
+// the sweep of T040 may run it, generates nothing: no session, no month counted, no marker, the
+// programme still paused.
+describe('a paused programme’s unpaid month generates no session (006:T023, R-HONEST-1)', () => {
+  it('the confirm step on the month’s failed automatic order writes nothing; the programme stays paused', async () => {
+    const { enrollmentId } = await activeProgramme();
+    const pausedAt = new Date('2026-11-05T07:00:00Z');
+    await database.programme.update({
+      where: { enrollmentId },
+      data: { state: 'paused', pausedAt },
+    });
+    const [failed] = await database.$queryRaw<{ id: string }[]>`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, updated_at, kind, instalment_month, attempt,
+                            automatic, decline_kind)
+      VALUES (${enrollmentId}::uuid, 'fake', ${`probe-order-${randomUUID()}`}, 140000, 'EGP',
+              'failed'::payment_status, ${LATER}, now(), 'instalment'::order_kind, 2, 0, true,
+              'hard'::decline_kind)
+      RETURNING id::text AS id`;
+    if (failed === undefined) throw new Error('no order written');
+    const sessionsBefore = await sessionsOf(enrollmentId);
+
+    await confirm(failed.id, LATER);
+
+    expect(await sessionsOf(enrollmentId)).toEqual(sessionsBefore);
+    expect(sessionsBefore).toHaveLength(5);
+    expect(await markerOf(failed.id)).toBeNull();
+    expect(
+      await database.programme.findUniqueOrThrow({
+        where: { enrollmentId },
+        select: { state: true, pausedAt: true, monthsPaid: true },
+      }),
+    ).toEqual({ state: 'paused', pausedAt, monthsPaid: 1 });
+  });
+});

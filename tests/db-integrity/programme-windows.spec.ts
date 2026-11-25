@@ -31,12 +31,14 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  checkedProgrammePay,
   createBookingServices,
   createProgrammeDecisions,
   createProgrammeServices,
   createProgrammeWindows,
   type ProgrammeDecisions,
   type ProgrammeServices,
+  slotInUse,
   terminationSubscriber,
 } from '../../apps/api/src/modules/booking/index';
 import { lockAccount } from '../../apps/api/src/modules/identity/index';
@@ -616,6 +618,34 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     expect(cardsDeleted).toContain(enrollmentId);
   });
 
+  // 006:T023 (B-P4 update 1; quickstart §2 step 11, «the weekly time free at once»): the teacher's
+  // side of the weekly time, catalog's `SLOT_IN_USE` (FR-318) over booking's `slotInUse`, as
+  // `createCatalogUse` binds it: reserved while the offer is open, free once the student declines it.
+  it('frees the weekly time for the teacher at once on offer_declined: in use before, free after', async () => {
+    const { studentId, enrollmentId } = await offered();
+    const { slotId } = await database.enrollment.findUniqueOrThrow({
+      where: { id: enrollmentId },
+      select: { slotId: true },
+    });
+    const inUse = () =>
+      database.$transaction((tx) =>
+        slotInUse(tx as Transaction, slotId, {
+          now: () => new Date(),
+          bufferWeeks: async () => 0,
+          windowDays: async () => 14,
+        }),
+      );
+    expect(await inUse()).toBe(true);
+    await expect(
+      services.cancel(studentId, { enrollmentId, idempotencyKey: randomUUID() }, noSignal),
+    ).resolves.toStrictEqual({ ok: true });
+    expect((await rowsOf(enrollmentId)).enrollment).toStrictEqual({
+      status: 'cancelled',
+      cancellationReason: 'offer_declined',
+    });
+    expect(await inUse()).toBe(false);
+  });
+
   it('the cancellation through the API’s booking services reaches the card entry they are handed (006:T013)', async () => {
     const booking = createBookingServices({
       database,
@@ -665,6 +695,55 @@ describe('past pay_by_at unpaid (006:T008, FR-706, FR-706b, DEC-101)', () => {
     );
     expect(items).toMatchObject([{ status: 'extended', decidedByAdminId: adminId }]);
     await expect(windowsIn('test').step(enrollmentId)).resolves.toBe('none');
+  });
+
+  // 006:T023 (B-P4 update 1; quickstart §2 step 3, FR-706b «extend, then pay»): past `pay_by_at`
+  // `programme.pay`'s check refuses `pay_by_passed`; the extension moves `pay_by_at`, the teacher's
+  // payout account is verified meanwhile, and the same check then answers the target with the new
+  // `pay_by_at`, the live payee read verified, so the student pays.
+  it('pays after the extension: refused pay_by_passed before it, then programme.pay’s check answers the new pay_by_at', async () => {
+    const { teacherId, studentId, enrollmentId } = await offered();
+    await windowsIn('live').step(enrollmentId);
+    const payCheck = () =>
+      database.$transaction((tx) =>
+        checkedProgrammePay(
+          tx as Transaction,
+          { studentUserId: studentId, enrollmentId },
+          { orders: checkoutOrdersAmong, log },
+        ),
+      );
+    expect(await causeOf(payCheck())).toBe('pay_by_passed');
+
+    const adminId = await admin();
+    const requestId = await openItemOf(enrollmentId, 'pay_blocked');
+    expect((await decide(adminId, requestId, 'extend')).answer).toStrictEqual({
+      status: 'extended',
+    });
+    await database.teacherProfile.update({
+      where: { userId: teacherId },
+      data: {
+        payoutVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+        payoutAccountRefEncrypted: Buffer.from('probe'),
+      },
+    });
+
+    const { programme } = await rowsOf(enrollmentId);
+    const target = await payCheck();
+    expect(target).toMatchObject({
+      enrollmentId,
+      studentUserId: studentId,
+      teacherUserId: teacherId,
+    });
+    expect(target.payByAt.getTime()).toBe(programme.payByAt!.getTime());
+    expect(target.payByAt.getTime()).toBeGreaterThan((await dbNow()).getTime());
+    await expect(
+      database.$transaction((tx) =>
+        createProgrammePayee({ paymentMode: 'live', cipher }).unverifiedInLiveMode(
+          tx as Transaction,
+          teacherId,
+        ),
+      ),
+    ).resolves.toBe(false);
   });
 });
 

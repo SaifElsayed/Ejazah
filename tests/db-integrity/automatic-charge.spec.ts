@@ -671,6 +671,22 @@ describe('the inquiry (006:T014, SRS DEC-110, DEC-113 (1))', () => {
     ]);
   });
 
+  // 006:T023 (B-P4 update 1; quickstart §2 step 6, «the student gets the `payment_failed` push»):
+  // a soft decline the inquiry finds is recorded through the webhook's order branch, which records
+  // the failed order's push to the programme's student on the same transaction (005:T016), once.
+  it('records the student’s payment_failed push once when the inquiry finds a soft decline', async () => {
+    const { studentId, enrollmentId, paymentId } = await sent('soft');
+    const before = pushes.length;
+
+    await expect(askLater(paymentId)).resolves.toBe('declined_soft');
+
+    const notices = pushes.slice(before).map((args) => (args as unknown[])[1]);
+    expect(notices).toEqual([
+      { userId: studentId, type: 'payment_failed', payload: { enrollmentId } },
+    ]);
+    expect(await eventsOf(paymentId)).toEqual(['failed']);
+  });
+
   it('changes nothing on no answer', async () => {
     const { enrollmentId, paymentId, gatewayOrderId } = await sent('paid');
     fake.onInquiry(gatewayOrderId, 'no_answer');
