@@ -22,8 +22,11 @@ import type { SettingsReader } from '../../platform/settings/settings-reader.js'
 import type { SessionPartyRecord } from '../identity/index.js';
 import type { ProgrammeEndStore } from './programme-close.service.js';
 import type { ProgrammeRequestRow } from './programme-requests.repository.js';
+import type { AutomaticOrderFacts } from './programmes.rules.js';
 import {
   createProgrammeDecisions,
+  type ProgrammeChargeDecisionPayments,
+  type ProgrammeChargeDecisionStore,
   type ProgrammeDecisionStore,
   type ProgrammeReopenStore,
   type ProgrammeRequestStore,
@@ -371,6 +374,219 @@ describe('programmes.decide on a stop (006:T017, FR-725, R-513)', () => {
     const { decide, decided } = decisionWorld('paused', { pending: true });
     await expect(decide('decline')).resolves.toMatchObject({ answer: { status: 'declined' } });
     expect(decided).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// 006:T021 (B-P4's conflict check, Q-1 (a) amended, the owner, 2026-11-25; SRS DEC-113; kernel.md,
+// 006:T021's row; PR #160 r1 FU1): the decision on a `charge_unknown` item. Approve and extend only
+// (no «confirm paid»: a payment is confirmed only by the gateway). Under the programme's row, then the
+// enrollment's, then the month's automatic order's (payments' entry), the order's status is read:
+// still `created` → approve writes it `expired` through payments' entry (a soft decline, no gateway
+// call) and marks the month's first failure at the decision's instant, so the retries start from it;
+// extend writes the item `extended` and nothing else. An order already answered (or none) → refused
+// `charge_answered`, nothing written, one line of ids and the cause. Example: month 3, 1,000 EGP,
+// charged Thu 18:31, the item at 19:31; Fri 10:00 the administrator finds nothing in Paymob and
+// approves: the order expired, retry 1 Sat 10:00.
+const PAYMENT = '0199d0a0-0000-7000-8000-0000000017b1';
+const FRIDAY_1000 = new Date('2026-11-27T08:00:00Z');
+/** The decision's idempotency key, a plain label (no secret). */
+const CHARGE_DECISION = 'charge-decision-0001';
+
+function chargeWorld({
+  seen = 'created',
+  locked = seen,
+  automatic = true,
+}: {
+  readonly seen?: AutomaticOrderFacts['status'];
+  readonly locked?: string | null;
+  readonly automatic?: boolean;
+} = {}) {
+  const calls: string[] = [];
+  const decided: unknown[] = [];
+  const lines: [Readonly<Record<string, unknown>>, string][] = [];
+  const item: ProgrammeRequestRow = {
+    id: REQUEST,
+    enrollmentId: ENROLLMENT,
+    teacherUserId: TEACHER,
+    kind: 'charge_unknown',
+    status: 'open',
+    reason: null,
+  };
+  const store: ProgrammeDecisionStore = {
+    requestById: async () => item,
+    lockProgramme: async (_tx, id) => {
+      calls.push(`lock programmes ${id}`);
+    },
+    lockEnrollment: async (_tx, id) => {
+      calls.push(`lock enrollments ${id}`);
+    },
+    programmeFactsOf: async () => factsOf('active'),
+    decideRequest: async (_tx, requestId, decision) => {
+      calls.push('decide item');
+      decided.push({ requestId, ...decision });
+      return true;
+    },
+    assessmentOutcome: async () => {
+      throw new Error('a charge decision reads no assessment');
+    },
+    writeOfferDue: async () => {
+      throw new Error('a charge decision writes no offer deadline');
+    },
+    writePayBy: async () => {
+      throw new Error('a charge decision writes no pay-by');
+    },
+    sessionsPending: async () => {
+      throw new Error('a charge decision reads no session');
+    },
+  };
+  const chargeStore: ProgrammeChargeDecisionStore = {
+    monthsPaidOf: async (_tx, id) => {
+      calls.push(`months paid ${id}`);
+      return 2;
+    },
+    writeFirstFailure: async (_tx, id, at) => {
+      calls.push(`first failure ${id} ${at.toISOString()}`);
+      return true;
+    },
+  };
+  const charges: ProgrammeChargeDecisionPayments = {
+    monthOrders: async (_tx, id, month) => {
+      calls.push(`month ${String(month)} of ${id}`);
+      return {
+        cardSaved: true,
+        payable: false,
+        processing: false,
+        automatic: automatic
+          ? {
+              paymentId: PAYMENT,
+              status: seen,
+              expiresAt: new Date('2026-11-26T16:41:00Z'),
+              declineKind: null,
+              attempt: 0,
+              failedAt: null,
+            }
+          : null,
+      };
+    },
+    lockOrder: async (_tx, ref) => {
+      calls.push(`lock payments ${ref.paymentId} of ${ref.enrollmentId}`);
+      return locked;
+    },
+    expireOrder: async (_tx, paymentId) => {
+      calls.push(`expire ${paymentId}`);
+      return true;
+    },
+  };
+  const decisions = createProgrammeDecisions({
+    idempotency: {
+      runOn: async (keyed, _request, effect) => ({ outcome: await effect(keyed), replayed: false }),
+    },
+    settings: settingsOf({}),
+    deleteProgrammeCard: async () => {
+      throw new Error('a charge decision deletes no card');
+    },
+    log: { info: (fields, message) => lines.push([fields, message]) },
+    clock: async () => FRIDAY_1000,
+    store,
+    chargeStore,
+    charges,
+  });
+  const decide = (decision: ProgrammesDecideInput['decision']) =>
+    decisions.decide(tx, ADMIN, {
+      requestId: REQUEST,
+      decision,
+      idempotencyKey: CHARGE_DECISION,
+    });
+  return { calls, decided, lines, decide };
+}
+
+describe('programmes.decide on a charge_unknown item (006:T021, Q-1 (a) amended)', () => {
+  it('approving it, the order still created: the locks in kernel.md’s order, the order expired, the first failure at the decision', async () => {
+    const { decide, decided, calls } = chargeWorld();
+    await expect(decide('approve')).resolves.toMatchObject({ answer: { status: 'approved' } });
+    expect(calls).toEqual([
+      `lock programmes ${ENROLLMENT}`,
+      `lock enrollments ${ENROLLMENT}`,
+      `months paid ${ENROLLMENT}`,
+      `month 3 of ${ENROLLMENT}`,
+      `lock payments ${PAYMENT} of ${ENROLLMENT}`,
+      'decide item',
+      `expire ${PAYMENT}`,
+      `first failure ${ENROLLMENT} ${FRIDAY_1000.toISOString()}`,
+    ]);
+    expect(decided).toEqual([
+      { requestId: REQUEST, status: 'approved', adminId: ADMIN, at: FRIDAY_1000 },
+    ]);
+  });
+
+  it('extending it, the order still created: the item extended, the order and the month untouched', async () => {
+    const { decide, decided, calls } = chargeWorld();
+    await expect(decide('extend')).resolves.toMatchObject({ answer: { status: 'extended' } });
+    expect(decided).toEqual([
+      { requestId: REQUEST, status: 'extended', adminId: ADMIN, at: FRIDAY_1000 },
+    ]);
+    expect(calls.filter((call) => /^(expire|first failure)/.test(call))).toEqual([]);
+  });
+
+  it('refuses a decline decision_not_allowed: approve and extend only, no «confirm paid»', async () => {
+    const { decide, decided, calls } = chargeWorld();
+    expect(await causeOf(decide('decline'))).toBe('decision_not_allowed');
+    expect(decided).toEqual([]);
+    expect(calls.filter((call) => /^(expire|first failure)/.test(call))).toEqual([]);
+  });
+
+  it.each([
+    ['paid', 'paid', 'approve'],
+    ['failed', 'failed', 'extend'],
+    ['expired', 'expired', 'approve'],
+  ] as const)(
+    'refuses charge_answered once the order is %s, writing nothing (%s, %s)',
+    async (seen, locked, decision) => {
+      const { decide, decided, calls, lines } = chargeWorld({ seen, locked });
+      expect(await causeOf(decide(decision))).toBe('charge_answered');
+      expect(decided).toEqual([]);
+      expect(calls.filter((call) => /^(expire|first failure|decide)/.test(call))).toEqual([]);
+      expect(lines).toEqual([
+        [
+          { adminId: ADMIN, requestId: REQUEST, enrollmentId: ENROLLMENT, reason: 'charge_answered' },
+          'A programme decision was refused',
+        ],
+      ]);
+    },
+  );
+
+  it('refuses charge_answered when the gateway answered between the read and the order’s lock', async () => {
+    const { decide, decided, calls } = chargeWorld({ seen: 'created', locked: 'paid' });
+    expect(await causeOf(decide('approve'))).toBe('charge_answered');
+    expect(decided).toEqual([]);
+    expect(calls).toContain(`lock payments ${PAYMENT} of ${ENROLLMENT}`);
+    expect(calls.filter((call) => /^(expire|first failure|decide)/.test(call))).toEqual([]);
+  });
+
+  // PR #160 r1 FU1: the last month recorded paid leaves the next month with no automatic order.
+  it('refuses charge_answered when the month has no automatic order any more', async () => {
+    const { decide, decided } = chargeWorld({ automatic: false });
+    expect(await causeOf(decide('extend'))).toBe('charge_answered');
+    expect(decided).toEqual([]);
+  });
+
+  it('logs one line of ids and the decision, never an amount or a card detail', async () => {
+    const { decide, lines } = chargeWorld();
+    await decide('approve');
+    expect(lines).toEqual([
+      [
+        {
+          adminId: ADMIN,
+          requestId: REQUEST,
+          enrollmentId: ENROLLMENT,
+          kind: 'charge_unknown',
+          paymentId: PAYMENT,
+          reason: 'approved',
+        },
+        'A programme item was decided',
+      ],
+    ]);
   });
 });
 

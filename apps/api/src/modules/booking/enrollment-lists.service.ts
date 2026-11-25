@@ -70,8 +70,17 @@
 // `EnrollmentIjazahRequests` (`of(tx, enrollmentIds)`), which `main.ts` binds to certification's
 // entry (`docs/ARCHITECTURE.md:195`'s pattern); booking reads no `ijazah_requests` row and imports
 // no certification. One call per read, with every enrollment it answers.
+//
+// THE PROGRAMME (006:T019, T020; B-P4's conflict check, Q-3 (a), Q-5 (b), the owner, 2026-11-25;
+// SRS DEC-114). An enrollment that is a programme answers `programme: { state, payBy,
+// payReminderFrom }` on the four reads (not on «اليوم»), so the card and the detail know it and show
+// «pay before» from `payReminderFrom`; one that is none answers no marker (a pre-switch ijazah-track
+// enrollment included: the track alone does not say). Booking's own `programmes` rows, one statement
+// per read for every enrollment it answers; the reminder's instant is `programme.get`'s rule
+// (`payReminderFromOf`), `programme_pay_reminder_hours` read only when an `offered` one is answered.
 import type {
   EnrollmentIjazahRequest,
+  EnrollmentProgramme,
   EnrollmentsGetInput,
   EnrollmentsGetOutput,
   EnrollmentsListInput,
@@ -96,6 +105,7 @@ import { idsWithFoldedNamePrefix } from '../../platform/db/folded-name.js';
 import type { Database, Transaction } from '../../platform/db/prisma.repository.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { programmePayReminderHours } from '../../platform/settings/registry.js';
 import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import { subjectSummariesOf } from '../catalog/index.js';
 import { accountTimezone, displayNamesOf } from '../identity/index.js';
@@ -128,11 +138,18 @@ import {
   endedStudentIdsOf,
   type ListedEnrollmentRow,
   listedEnrollmentOf,
+  type ListedProgrammeRow,
   type ListParty,
+  programmesAmong,
   teacherEnrollmentsAmong,
 } from './enrollment-lists.repository.js';
+import { PROGRAMME_PAY_REMINDER_HOURS_SETTING, payReminderFromOf } from './programmes.service.js';
 
-export type { ListedEnrollmentRow, ListParty } from './enrollment-lists.repository.js';
+export type {
+  ListedEnrollmentRow,
+  ListedProgrammeRow,
+  ListParty,
+} from './enrollment-lists.repository.js';
 
 /**
  * The ended tab's page size. The lists have no setting of their own (data-model §4); they read the
@@ -220,13 +237,25 @@ export interface EnrollmentListsStore {
   ): Promise<ReadonlyMap<string, readonly EnrollmentCase[]>>;
   /** 005:T006: each enrollment's latest ijazah request, through `EnrollmentIjazahRequests`. */
   ijazahRequestsOf: EnrollmentIjazahRequests['of'];
+  /**
+   * 006:T019, T020 (Q-3 (a)): of `enrollmentIds`, each programme's marker, absent for an enrollment
+   * that is no programme; composed by `createEnrollmentListServices` (`programmeMarkersOver`).
+   */
+  programmesOf(
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ): Promise<ReadonlyMap<string, EnrollmentProgramme>>;
 }
+
+/** The entries `createEnrollmentListServices` joins over its own bindings and settings. */
+type JoinedEntries = 'ijazahRequestsOf' | 'programmesOf';
 
 /**
  * The store over booking's own queries and the owners' entries (R-API-6); the ijazah requests are
- * the port's, joined by `createEnrollmentListServices` (005:T006).
+ * the port's, joined by `createEnrollmentListServices` (005:T006), and the programmes' markers are
+ * composed there over the reminder's setting (006:T019).
  */
-export const enrollmentListsStore: Omit<EnrollmentListsStore, 'ijazahRequestsOf'> = {
+export const enrollmentListsStore: Omit<EnrollmentListsStore, JoinedEntries> = {
   activeOfStudent: activeEnrollmentsOfStudent,
   activeOfTeacher: activeEnrollmentsOfTeacher,
   endedPage: endedEnrollmentPage,
@@ -374,6 +403,7 @@ type ItemCore = Pick<
   | 'remaining'
   | 'paused'
   | 'endedByAdmin'
+  | 'programme'
 >;
 
 /** What every item of some rows needs: their sessions, the other party's names, their subjects. */
@@ -390,6 +420,8 @@ interface ItemContext {
   readonly now: Date;
   /** 004:T074: the paused enrollments, answered with no session. */
   readonly paused: ReadonlySet<string>;
+  /** 006:T019, T020: the programmes' markers, absent for an enrollment that is no programme. */
+  readonly programmes: ReadonlyMap<string, EnrollmentProgramme>;
 }
 
 async function contextOf(
@@ -400,14 +432,14 @@ async function contextOf(
   now: Date,
   windowDays: WindowDays,
 ): Promise<ItemContext> {
-  const [sessions, names, subjects, paused] = await Promise.all([
-    store.sessionsOf(
-      tx,
-      rows.map(({ id }) => id),
-    ),
+  const enrollmentIds = rows.map(({ id }) => id);
+  const [sessions, names, subjects, paused, programmes] = await Promise.all([
+    store.sessionsOf(tx, enrollmentIds),
     store.namesOf(tx, [...new Set(rows.map(otherParty))]),
     store.subjectsOf(tx, [...new Set(rows.map(({ snapshotSubjectId }) => snapshotSubjectId))]),
     pausedAmong(tx, store, rows, now, windowDays),
+    // 006:T019, T020 (Q-3 (a)): one read for every enrollment answered.
+    store.programmesOf(tx, enrollmentIds),
   ]);
   const sessionIds = [...sessions.values()].flatMap((rows) => rows.map(({ id }) => id));
   const [pending, remedies, postponements] = await Promise.all([
@@ -415,7 +447,7 @@ async function contextOf(
     store.remedyStatusesOf(tx, sessionIds),
     store.postponementsOf(tx, sessionIds),
   ]);
-  return { sessions, names, subjects, pending, remedies, postponements, now, paused };
+  return { sessions, names, subjects, pending, remedies, postponements, now, paused, programmes };
 }
 
 function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
@@ -425,6 +457,7 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
   });
   // 004:T074: a paused enrollment shows no session (this file's head, «PAUSED»).
   const paused = context.paused.has(row.id);
+  const programme = context.programmes.get(row.id);
   return {
     enrollmentId: row.id,
     summary: termsOf(row, context.subjects),
@@ -455,6 +488,8 @@ function coreOf(row: ListedEnrollmentRow, context: ItemContext): ItemCore {
     paused,
     // 004:T082: a direct end's reason, never the internal note (this file's head, «A DIRECT END»).
     ...(row.adminEndReason === null ? {} : { endedByAdmin: { reason: row.adminEndReason } }),
+    // 006:T019, T020 (Q-3 (a)): a programme's marker (this file's head, «THE PROGRAMME»).
+    ...(programme === undefined ? {} : { programme }),
   };
 }
 
@@ -737,6 +772,41 @@ export async function teacherTodayOf(
   };
 }
 
+/**
+ * 006:T019, T020 (Q-3 (a), Q-5 (b), SRS DEC-114): the programmes' markers over booking's rows
+ * (`rowsAmong`, one statement for the read's enrollments): the state, `payBy`, and the reminder's
+ * instant by `programme.get`'s own rule (`payReminderFromOf`). `programme_pay_reminder_hours` is read
+ * only when an `offered` programme with a deadline is answered (R-MONEY-12's «when needed»).
+ */
+export function programmeMarkersOver(
+  rowsAmong: (
+    tx: Transaction,
+    enrollmentIds: readonly string[],
+  ) => Promise<ReadonlyMap<string, ListedProgrammeRow>>,
+  settings: SettingsReader,
+): EnrollmentListsStore['programmesOf'] {
+  return async (tx, enrollmentIds) => {
+    const rows = await rowsAmong(tx, enrollmentIds);
+    const reminded = [...rows.values()].some((row) => payReminderFromOf(row, 0) !== null);
+    const hours = reminded
+      ? await settings.read(PROGRAMME_PAY_REMINDER_HOURS_SETTING, programmePayReminderHours)
+      : 0;
+    return new Map(
+      [...rows].map(([enrollmentId, row]): [string, EnrollmentProgramme] => {
+        const reminder = reminded ? payReminderFromOf(row, hours) : null;
+        return [
+          enrollmentId,
+          {
+            state: row.state,
+            payBy: row.payByAt === null ? null : row.payByAt.toISOString(),
+            payReminderFrom: reminder === null ? null : reminder.toISOString(),
+          },
+        ];
+      }),
+    );
+  };
+}
+
 /** The lists' services over the process's client: each call one read transaction (this file's head). */
 export interface EnrollmentListServices {
   enrollments(studentUserId: string, input: EnrollmentsListInput): Promise<EnrollmentsListOutput>;
@@ -769,12 +839,15 @@ export function createEnrollmentListServices({
   readonly ijazahRequests: EnrollmentIjazahRequests;
   /** The read's instant on its transaction; the database's clock unless a spec sets one. */
   readonly clock?: (tx: Transaction) => Promise<Date>;
-  readonly store?: Omit<EnrollmentListsStore, 'ijazahRequestsOf'>;
+  /** 006:T019: a spec may stand in the programmes' markers; booking's rows otherwise. */
+  readonly store?: Omit<EnrollmentListsStore, JoinedEntries> &
+    Partial<Pick<EnrollmentListsStore, 'programmesOf'>>;
 }): EnrollmentListServices {
   const transactions = transactionsOver(database);
   const store: EnrollmentListsStore = {
     ...entries,
     ijazahRequestsOf: (tx, enrollmentIds) => ijazahRequests.of(tx, enrollmentIds),
+    programmesOf: entries.programmesOf ?? programmeMarkersOver(programmesAmong, settings),
   };
   const pageSize = () => settings.read(LIST_PAGE_SIZE_SETTING, positiveWhole);
   // 004:T074: the two restore windows, each read when a held closing needs it (R-MONEY-12).

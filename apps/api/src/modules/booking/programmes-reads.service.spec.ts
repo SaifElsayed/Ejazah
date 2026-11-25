@@ -42,6 +42,18 @@ const NOW = new Date('2026-12-10T10:00:00Z');
 /** Month 2's last session ends on 2026-12-12 at 18:00: the due point. */
 const DUE = new Date('2026-12-12T18:00:00Z');
 const EARLY_DAYS = 3;
+/** §3.14: `programme_stop_request_days` (7) and `programme_pay_reminder_hours` (12, DEC-114). */
+const STOP_DAYS = 7;
+const REMINDER_HOURS = 12;
+/** §3.14: `programme_offer_hours` (24). */
+const OFFER_HOURS = 24;
+/** The assessment ended 2026-12-09 18:00: the offer is open to send until 2026-12-10 18:00. */
+const ASSESSMENT_END = new Date('2026-12-09T18:00:00Z');
+/** The reserved weekly time's length and the programme package's three prices. */
+const OFFER_TERMS = {
+  slotMinutes: 60,
+  prices: { m30_piasters: piasters(25_000), m45_piasters: piasters(30_000), m60_piasters: piasters(35_000) },
+};
 
 const VIEW: ProgrammeView = {
   enrollmentId: ENROLLMENT,
@@ -125,6 +137,11 @@ function readStoreOf(overrides: Partial<ProgrammeReadStore> = {}): ProgrammeRead
     }),
     clock: async () => NOW,
     openCaseOf: async () => null,
+    // B-P4 round 2 (Q-B2 (a), Q-B3 (a)): the offer's window and terms, and an open stop.
+    assessmentOutcome: async () => ({ kind: 'delivered', endsAt: ASSESSMENT_END }),
+    lastExtendedAt: async () => null,
+    offerTermsOf: async () => OFFER_TERMS,
+    stopRequestOpen: async () => false,
     ...overrides,
   } as ProgrammeReadStore;
 }
@@ -150,7 +167,15 @@ const read = (
     payments = paymentsOf(),
     enrollmentId = ENROLLMENT,
   }: { store?: ProgrammeReadStore; payments?: ProgrammeReadPayments; enrollmentId?: string } = {},
-) => readProgramme(tx, userId, enrollmentId, { payments, earlyDays: EARLY_DAYS, store });
+) =>
+  readProgramme(tx, userId, enrollmentId, {
+    payments,
+    earlyDays: EARLY_DAYS,
+    stopDays: STOP_DAYS,
+    reminderHours: REMINDER_HOURS,
+    offerHours: OFFER_HOURS,
+    store,
+  });
 
 describe('programme.get (006:T018, FR-726)', () => {
   it('answers the student the programme, the offer, the months and the saved card', async () => {
@@ -179,6 +204,151 @@ describe('programme.get (006:T018, FR-726)', () => {
       payBlocked: false,
       teacherUnavailable: false,
       card: { last4: '4242', brand: 'Visa' },
+      // 006:T019, T020 (B-P4): neither instant on an active programme.
+      stopRequestFrom: null,
+      payReminderFrom: null,
+      // B-P4 round 2: the teacher's fields, never the student's.
+      offerTerms: null,
+      stopRequestOpen: false,
+    });
+  });
+
+  // B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B2 (a)): the teacher's
+  // offer form reads the reserved weekly time's length and the package's three prices from the
+  // server while the offer is open to send: `awaiting_offer`, the enrollment `confirmed`, the
+  // assessment delivered and the deadline not passed, `programme.offer`'s own window
+  // (`offerWindowOf`: the assessment's end + 24 hours, or a later extension's). Null otherwise, and
+  // always to the student. Example: the assessment ended Wed 9 Dec 18:00, the read Thu 10:00 → terms;
+  // Thu 18:00:01 → null.
+  describe('offerTerms (B-P4 round 2, Q-B2 (a))', () => {
+    const awaiting: ProgrammeView = {
+      ...VIEW,
+      state: 'awaiting_offer',
+      offer: null,
+      plan: null,
+      monthsPaid: 0,
+      monthCount: null,
+      payByAt: null,
+    };
+
+    it('answers the teacher the slot’s length and the three prices while the offer is open', async () => {
+      const store = readStoreOf({ viewOf: async () => awaiting });
+      expect((await read(TEACHER, { store })).offerTerms).toEqual(OFFER_TERMS);
+    });
+
+    it('answers the student null on the same programme', async () => {
+      const store = readStoreOf({ viewOf: async () => awaiting });
+      expect((await read(STUDENT, { store })).offerTerms).toBeNull();
+    });
+
+    it('answers null once the deadline passed, the last extension’s counted', async () => {
+      const late = new Date('2026-12-10T18:00:01Z');
+      const passed = readStoreOf({ viewOf: async () => awaiting, clock: async () => late });
+      expect((await read(TEACHER, { store: passed })).offerTerms).toBeNull();
+      const extended = readStoreOf({
+        viewOf: async () => awaiting,
+        clock: async () => late,
+        lastExtendedAt: async () => new Date('2026-12-10T12:00:00Z'),
+      });
+      expect((await read(TEACHER, { store: extended })).offerTerms).toEqual(OFFER_TERMS);
+    });
+
+    it('answers null while the assessment is not delivered', async () => {
+      for (const outcome of [
+        { kind: 'waiting' },
+        { kind: 'ended', endsAt: ASSESSMENT_END },
+      ] as const) {
+        const store = readStoreOf({
+          viewOf: async () => awaiting,
+          assessmentOutcome: async () => outcome,
+        });
+        expect((await read(TEACHER, { store })).offerTerms).toBeNull();
+      }
+    });
+
+    it('answers null once the programme left awaiting_offer, or its enrollment is not confirmed', async () => {
+      expect((await read(TEACHER)).offerTerms).toBeNull();
+      const cancelled = readStoreOf({
+        viewOf: async () => ({ ...awaiting, status: 'cancelled' }),
+      });
+      expect((await read(TEACHER, { store: cancelled })).offerTerms).toBeNull();
+    });
+  });
+
+  // B-P4 round 2 (Q-B3 (a)): the teacher's stop button gives way to «request sent» while a `stop`
+  // request is open; false to the student whatever is open.
+  describe('stopRequestOpen (B-P4 round 2, Q-B3 (a))', () => {
+    const paused: ProgrammeView = { ...VIEW, state: 'paused', pausedAt: new Date('2026-11-23T16:00:00Z') };
+    const open = readStoreOf({ viewOf: async () => paused, stopRequestOpen: async () => true });
+
+    it('answers the teacher true while a stop request is open', async () => {
+      expect((await read(TEACHER, { store: open })).stopRequestOpen).toBe(true);
+    });
+
+    it('answers the student false while one is open', async () => {
+      expect((await read(STUDENT, { store: open })).stopRequestOpen).toBe(false);
+    });
+
+    it('answers the teacher false with none open', async () => {
+      const none = readStoreOf({ viewOf: async () => paused });
+      expect((await read(TEACHER, { store: none })).stopRequestOpen).toBe(false);
+    });
+  });
+
+  // 006:T020 (B-P4's conflict check, Q-2 (a), the owner, 2026-11-25; SRS DEC-112): the teacher's stop
+  // button shows from `paused_at` + `programme_stop_request_days` (7), `too_early`'s own rule; null
+  // unless paused, and to the student. Example: paused Mon 23 Nov 18:00 Cairo → Mon 30 Nov 18:00.
+  describe('stopRequestFrom (006:T020, Q-2 (a))', () => {
+    const pausedAt = new Date('2026-11-23T16:00:00Z');
+    const paused: ProgrammeView = { ...VIEW, state: 'paused', pausedAt };
+    const store = readStoreOf({ viewOf: async () => paused });
+
+    it('answers the teacher paused_at + 7 days on a paused programme', async () => {
+      expect((await read(TEACHER, { store })).stopRequestFrom).toBe('2026-11-30T16:00:00.000Z');
+    });
+
+    it('answers the student null on the same programme', async () => {
+      expect((await read(STUDENT, { store })).stopRequestFrom).toBeNull();
+    });
+
+    it('answers the teacher null on a programme not paused', async () => {
+      expect((await read(TEACHER)).stopRequestFrom).toBeNull();
+    });
+  });
+
+  // 006:T019 (Q-5 (b), SRS DEC-114, FR-708): the «pay before» line shows from `payBy` −
+  // `programme_pay_reminder_hours` (12) while `offered`, to both parties; null otherwise. The
+  // example: offer Mon 18:00, `payBy` Wed 25 Nov 18:00 Cairo, the line from Wed 06:00.
+  describe('payReminderFrom (006:T019, Q-5 (b))', () => {
+    const offered: ProgrammeView = {
+      ...VIEW,
+      state: 'offered',
+      payByAt: new Date('2026-11-25T16:00:00Z'),
+      plan: null,
+      monthsPaid: 0,
+    };
+    const store = readStoreOf({ viewOf: async () => offered });
+
+    it('answers payBy − 12 hours on an offered programme, to both parties', async () => {
+      expect((await read(STUDENT, { store })).payReminderFrom).toBe('2026-11-25T04:00:00.000Z');
+      expect((await read(TEACHER, { store })).payReminderFrom).toBe('2026-11-25T04:00:00.000Z');
+    });
+
+    it('takes the hours the setting holds, 47 its most', async () => {
+      const answer = await readProgramme(tx, STUDENT, ENROLLMENT, {
+        payments: paymentsOf(),
+        earlyDays: EARLY_DAYS,
+        stopDays: STOP_DAYS,
+        reminderHours: 47,
+        offerHours: OFFER_HOURS,
+        store,
+      });
+      expect(answer.payReminderFrom).toBe('2026-11-23T17:00:00.000Z');
+    });
+
+    it('answers null once the programme left offered, its payBy kept', async () => {
+      expect(VIEW.payByAt).not.toBeNull();
+      expect((await read(STUDENT)).payReminderFrom).toBeNull();
     });
   });
 

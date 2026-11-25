@@ -241,3 +241,20 @@ describe('«اليوم» (FR-391, FR-393)', () => {
     ).toEqual(today);
   });
 });
+
+// 006:T020 (B-P4's conflict check, the owner, 2026-11-25; Q-3 (a), Q-4 (a)): the teacher's reads
+// carry the same optional `programme` marker, and a programme's count past the old cap of 52.
+describe('006:T020: a programme’s enrollment on the teacher’s reads (Q-3 (a), Q-4 (a))', () => {
+  const programme = { state: 'paused', payBy: null, payReminderFrom: null } as const;
+  const ijazah = { ...item, summary: { ...summary, sessionCount: 61 } };
+
+  it('parses a 60-session offer’s enrollment with its marker, list and detail', () => {
+    expect(teacherStudentItem.parse({ ...ijazah, programme })).toEqual({ ...ijazah, programme });
+    const detail = { ...ijazah, programme, sessions: [], ijazahRequest: null };
+    expect(teacherStudentsGetOutput.parse(detail)).toEqual(detail);
+  });
+
+  it('leaves the marker out of a non-programme enrollment', () => {
+    expect(teacherStudentItem.parse(item)).not.toHaveProperty('programme');
+  });
+});

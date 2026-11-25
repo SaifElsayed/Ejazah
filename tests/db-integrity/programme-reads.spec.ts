@@ -37,6 +37,12 @@ import { specDatabaseUrl } from '../../apps/api/src/platform/db/spec-database.fi
 import { IdempotencyRepository } from '../../apps/api/src/platform/idempotency/idempotency.repository';
 import { IdempotencyService } from '../../apps/api/src/platform/idempotency/idempotency.service';
 import type { SettingsReader } from '../../apps/api/src/platform/settings/settings-reader';
+import {
+  enrollmentsGetOutput,
+  enrollmentsListOutput,
+  teacherStudentsGetOutput,
+  teacherStudentsListOutput,
+} from '../../packages/contracts/src/index.js';
 import { addHours, addMinutes } from '../../packages/time/src/index.js';
 import { CAIRO, confirmationWorld, SETTINGS, THURSDAY_0900 } from './confirmation-world';
 
@@ -46,6 +52,13 @@ const TOKEN = 'placeholder-card-token';
 const VALUES: Record<string, unknown> = {
   ...SETTINGS,
   programme_renew_early_days: 3,
+  // 006:T019, T020 (B-P4): the stop's 7 days and the reminder's 12 hours (DEC-114), as seeded.
+  programme_stop_request_days: 7,
+  programme_pay_reminder_hours: 12,
+  // B-P4 round 2 (Q-B2 (a)): the offer's 24 hours, the window `programme.get`'s terms follow.
+  programme_offer_hours: 24,
+  // The lists' page size (`LIST_PAGE_SIZE_SETTING`), read by the enrollment lists.
+  discovery_page_size: 20,
   admin_list_page_size: 100,
   idempotency_key_ttl_hours: 24,
 };
@@ -74,6 +87,11 @@ async function dbNow(): Promise<Date> {
 
 /** `programme.get` composed as `main.ts` composes it, in `mode`. */
 function programmeGet(mode: 'test' | 'live') {
+  return bookingServices(mode).programme;
+}
+
+/** Booking's services composed as `main.ts` composes them, in `mode` (006:T019: the enrollment reads). */
+function bookingServices(mode: 'test' | 'live') {
   return createBookingServices({
     database,
     settings,
@@ -89,7 +107,7 @@ function programmeGet(mode: 'test' | 'live') {
       monthOrders: programmeMonthOrdersOf,
       cardOf: programmeCardOf,
     },
-  }).programme;
+  });
 }
 
 /** The administrator's reads composed as `main.ts` composes them. */
@@ -356,5 +374,136 @@ describe('the administrator’s reads over the real tables (006:T018, FR-727)', 
     });
     expect(found?.teacher.displayName).not.toBe('');
     expect(found?.student.displayName).not.toBe('');
+  });
+});
+
+// 006:T019, T020 (B-P4's conflict check, the owner, 2026-11-25; Q-2 (a), Q-3 (a), Q-4 (a), Q-5 (b),
+// SRS DEC-114): the two instants of `programme.get` and the enrollment reads' marker over the real
+// rows, composed as `main.ts` composes them; a 60-session offer's 61 sessions pass the outputs.
+describe('programme.get’s instants and the enrollment reads’ marker over the real tables (006, B-P4)', () => {
+  it('answers the teacher stopRequestFrom = paused_at + 7 days, the student null', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    const pausedAt = new Date('2026-11-23T16:00:00Z');
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: { state: 'paused', pausedAt },
+    });
+    const reads = programmeGet('test');
+    const teacher = await reads.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    const student = await reads.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(teacher).toMatchObject({
+      paused: { since: pausedAt.toISOString() },
+      stopRequestFrom: '2026-11-30T16:00:00.000Z',
+      payReminderFrom: null,
+    });
+    expect(student.stopRequestFrom).toBeNull();
+  });
+
+  it('answers an offered programme payReminderFrom = payBy − 12 hours, and marks the four reads', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    const payByAt = new Date('2026-11-25T16:00:00Z');
+    await database.enrollment.update({
+      where: { id: w.enrollmentId },
+      data: { snapshotSessionCount: 61 },
+    });
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: { state: 'offered', payByAt, paymentPlan: null, monthsPaid: 0, monthCount: 15 },
+    });
+    const marker = {
+      state: 'offered',
+      payBy: '2026-11-25T16:00:00.000Z',
+      payReminderFrom: '2026-11-25T04:00:00.000Z',
+    };
+    const services = bookingServices('test');
+    const got = await services.programme.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(got.payReminderFrom).toBe(marker.payReminderFrom);
+    const detail = enrollmentsGetOutput.parse(
+      await services.enrollment(w.studentId, { enrollmentId: w.enrollmentId }),
+    );
+    expect(detail.programme).toEqual(marker);
+    expect(detail.summary.sessionCount).toBe(61);
+    const teacherDetail = teacherStudentsGetOutput.parse(
+      await services.student(w.teacherId, { enrollmentId: w.enrollmentId }),
+    );
+    expect(teacherDetail.programme).toEqual(marker);
+    const list = enrollmentsListOutput.parse(
+      await services.enrollments(w.studentId, { tab: 'active' }),
+    );
+    expect(list.items.find(({ enrollmentId }) => enrollmentId === w.enrollmentId)?.programme).toEqual(
+      marker,
+    );
+    const teacherList = teacherStudentsListOutput.parse(
+      await services.students(w.teacherId, { tab: 'active' }),
+    );
+    expect(
+      teacherList.items.find(({ enrollmentId }) => enrollmentId === w.enrollmentId)?.programme,
+    ).toEqual(marker);
+  });
+
+  it('answers an enrollment that is no programme with no marker', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    await database.programme.delete({ where: { enrollmentId: w.enrollmentId } });
+    const detail = await bookingServices('test').enrollment(w.studentId, {
+      enrollmentId: w.enrollmentId,
+    });
+    expect(detail).not.toHaveProperty('programme');
+  });
+});
+
+// B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B2 (a), Q-B3 (a)): the
+// teacher's two fields over the real rows: the offer's terms (the weekly time's 60 minutes and the
+// programme package's three prices) while the offer is open to send, and an open stop request; the
+// student is answered neither.
+describe('programme.get’s teacher-only fields over the real tables (B-P4 round 2)', () => {
+  it('answers the teacher the offer terms while awaiting the offer, the assessment delivered; the student null', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: {
+        state: 'awaiting_offer',
+        offeredAt: null,
+        level: null,
+        readiness: null,
+        expectedLength: null,
+        payByAt: null,
+        monthCount: null,
+        paymentPlan: null,
+        monthsPaid: 0,
+      },
+    });
+    const reads = programmeGet('test');
+    const teacher = await reads.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    expect(teacher.offerTerms).toEqual({
+      slotMinutes: 60,
+      prices: { m30_piasters: 25_000, m45_piasters: 30_000, m60_piasters: 35_000 },
+    });
+    const student = await reads.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(student.offerTerms).toBeNull();
+  });
+
+  it('answers the teacher stopRequestOpen while a stop is open; the student false', async () => {
+    const w = await monthlyWorld({ card: false, endedAgoHours: 1 });
+    await database.programme.update({
+      where: { enrollmentId: w.enrollmentId },
+      data: { state: 'paused', pausedAt: new Date('2026-11-01T16:00:00Z') },
+    });
+    const reads = programmeGet('test');
+    expect(
+      (await reads.get(w.teacherId, { enrollmentId: w.enrollmentId })).stopRequestOpen,
+    ).toBe(false);
+    await database.programmeRequest.create({
+      data: {
+        enrollmentId: w.enrollmentId,
+        teacherUserId: w.teacherId,
+        kind: 'stop',
+        status: 'open',
+        reason: 'الطالب متأخر عن السداد',
+      },
+    });
+    const teacher = await reads.get(w.teacherId, { enrollmentId: w.enrollmentId });
+    const student = await reads.get(w.studentId, { enrollmentId: w.enrollmentId });
+    expect(teacher).toMatchObject({ stopRequestOpen: true, offerTerms: null });
+    expect(student.stopRequestOpen).toBe(false);
   });
 });

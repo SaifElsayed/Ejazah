@@ -77,6 +77,8 @@ const NO_PUSH = { record: async () => undefined };
 const listsStore: EnrollmentListsStore = {
   ...enrollmentListsStore,
   ijazahRequestsOf: async () => new Map(),
+  // 006:T019 (B-P4, rule d): no programme among these enrollments; the marker is programme-reads.spec.ts'.
+  programmesOf: async () => new Map(),
 };
 
 const SETTINGS: Record<string, number> = {

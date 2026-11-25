@@ -28,8 +28,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { Transaction } from '../../platform/db/prisma.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import type { EnrollmentIjazahRequest, ListedSession } from '@ijazah/contracts';
+import type {
+  EnrollmentIjazahRequest,
+  EnrollmentProgramme,
+  ListedSession,
+} from '@ijazah/contracts';
 
+import type { SettingsReader } from '../../platform/settings/settings-reader.js';
 import type { EnrollmentCase } from '../moderation/index.js';
 import type { DaySession, EnrollmentSessionRow, WindowDays } from '../sessions/index.js';
 import {
@@ -37,6 +42,7 @@ import {
   type EnrollmentListsStore,
   type ListedEnrollmentRow,
   type ListParty,
+  programmeMarkersOver,
   studentEnrollmentOf,
   studentEnrollmentsOf,
   teacherStudentOf,
@@ -139,6 +145,8 @@ interface Asked {
   readonly cases: (readonly string[])[];
   /** 005:T006: each read of the ijazah requests, by the enrollments asked. */
   readonly ijazahRequests: (readonly string[])[];
+  /** 006:T019, T020: each read of the programmes' markers, by the enrollments asked. */
+  readonly programmes: (readonly string[])[];
 }
 
 function storeOf(
@@ -164,6 +172,8 @@ function storeOf(
     cases?: Record<string, readonly EnrollmentCase[]>;
     /** 005:T006: each enrollment's latest ijazah request (certification's, through the port). */
     ijazahRequests?: Record<string, EnrollmentIjazahRequest>;
+    /** 006:T019, T020: each programme's marker, as booking's composed entry answers it. */
+    programmes?: Record<string, EnrollmentProgramme>;
   } = {},
 ): { store: EnrollmentListsStore; asked: Asked } {
   const asked: Asked = {
@@ -174,6 +184,7 @@ function storeOf(
     pending: [],
     cases: [],
     ijazahRequests: [],
+    programmes: [],
   };
   const store: EnrollmentListsStore = {
     activeOfStudent: async () => data.active ?? [],
@@ -240,6 +251,16 @@ function storeOf(
         enrollmentIds.flatMap((id) => {
           const request = data.ijazahRequests?.[id];
           return request === undefined ? [] : [[id, request] as const];
+        }),
+      );
+    },
+    // 006:T019, T020.
+    programmesOf: async (_tx, enrollmentIds) => {
+      asked.programmes.push(enrollmentIds);
+      return new Map(
+        enrollmentIds.flatMap((id) => {
+          const marker = data.programmes?.[id];
+          return marker === undefined ? [] : [[id, marker] as const];
         }),
       );
     },
@@ -1355,5 +1376,103 @@ describe("the details' ijazah request (005:T006)", () => {
       (await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS))
         .ijazahRequest,
     ).toEqual(REVOKED);
+  });
+});
+
+// 006:T019, T020 (B-P4's conflict check, Q-3 (a), Q-5 (b), the owner, 2026-11-25; SRS DEC-114): a
+// programme's enrollment carries `programme: { state, payBy, payReminderFrom }` on the four reads,
+// read once per read for every enrollment it answers (no read per item); an enrollment that is no
+// programme carries none. Example: offer Mon 23 Nov 18:00 Cairo, `payBy` Wed 25 Nov 18:00, the line
+// from Wed 06:00 (12 hours before).
+describe('006:T019, T020: the programme marker on the enrollment reads (Q-3 (a))', () => {
+  const OFFERED: EnrollmentProgramme = {
+    state: 'offered',
+    payBy: '2026-11-25T16:00:00.000Z',
+    payReminderFrom: '2026-11-25T04:00:00.000Z',
+  };
+  const programmeRow = row(E1, { snapshotTrack: 'ijazah_track', snapshotSessionCount: 61 });
+
+  it('marks the programme on the student’s list, once for every item, and leaves the other bare', async () => {
+    const { store, asked } = storeOf({
+      active: [programmeRow, row(E2)],
+      programmes: { [E1]: OFFERED },
+      names: { [TEACHER]: 'أحمد سالم' },
+    });
+    const { items } = await studentEnrollmentsOf(
+      tx,
+      store,
+      STUDENT,
+      { tab: 'active' },
+      CLOCK,
+      WINDOWS,
+    );
+    const byId = new Map(items.map((item) => [item.enrollmentId, item]));
+    expect(byId.get(E1)?.programme).toEqual(OFFERED);
+    expect(byId.get(E1)?.summary.sessionCount).toBe(61);
+    expect(byId.get(E2)).not.toHaveProperty('programme');
+    expect(asked.programmes).toEqual([[E1, E2]]);
+  });
+
+  it('marks it on the student’s detail, the teacher’s list and the teacher’s detail', async () => {
+    const { store } = storeOf({
+      listed: programmeRow,
+      active: [programmeRow],
+      programmes: { [E1]: OFFERED },
+    });
+    const student = await studentEnrollmentOf(tx, store, STUDENT, { enrollmentId: E1 }, NOW, WINDOWS);
+    const list = await teacherStudentsOf(tx, store, TEACHER, { tab: 'active' }, CLOCK, WINDOWS);
+    const teacher = await teacherStudentOf(tx, store, TEACHER, { enrollmentId: E1 }, NOW, WINDOWS);
+    expect(student.programme).toEqual(OFFERED);
+    expect(list.items[0]?.programme).toEqual(OFFERED);
+    expect(teacher.programme).toEqual(OFFERED);
+  });
+});
+
+// 006:T019 (Q-5 (b), SRS DEC-114): the marker composed over booking's `programmes` rows and
+// `programme_pay_reminder_hours`, read only when an `offered` programme with a `payBy` is answered.
+describe('006:T019: programmeMarkersOver (Q-5 (b), DEC-114)', () => {
+  const payByAt = new Date('2026-11-25T16:00:00Z');
+
+  function settingsOf(hours: number, read: string[]): SettingsReader {
+    return {
+      read: async (key, schema) => {
+        read.push(key);
+        return schema.parse(hours);
+      },
+    };
+  }
+
+  it('answers payBy − the hours on an offered programme, null on the others, the setting read once', async () => {
+    const read: string[] = [];
+    const markersOf = programmeMarkersOver(
+      async () =>
+        new Map([
+          [E1, { state: 'offered', payByAt }],
+          [E2, { state: 'active', payByAt }],
+          [E3, { state: 'awaiting_offer', payByAt: null }],
+        ] as const),
+      settingsOf(12, read),
+    );
+    const markers = await markersOf(tx, [E1, E2, E3, E4]);
+    expect(Object.fromEntries(markers)).toEqual({
+      [E1]: {
+        state: 'offered',
+        payBy: '2026-11-25T16:00:00.000Z',
+        payReminderFrom: '2026-11-25T04:00:00.000Z',
+      },
+      [E2]: { state: 'active', payBy: '2026-11-25T16:00:00.000Z', payReminderFrom: null },
+      [E3]: { state: 'awaiting_offer', payBy: null, payReminderFrom: null },
+    });
+    expect(read).toEqual(['programme_pay_reminder_hours']);
+  });
+
+  it('reads no setting when no programme is offered', async () => {
+    const read: string[] = [];
+    const markersOf = programmeMarkersOver(
+      async () => new Map([[E2, { state: 'paused', payByAt: null }]] as const),
+      settingsOf(12, read),
+    );
+    expect((await markersOf(tx, [E2])).get(E2)?.payReminderFrom).toBeNull();
+    expect(read).toEqual([]);
   });
 });

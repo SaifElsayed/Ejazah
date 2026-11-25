@@ -1,6 +1,8 @@
 // T021: the teacher's packages: the tab with its states (the list, none yet, not published) and the
 // editor of a new package or one of the list (FR-311, FR-312, FR-315).
 export { PACKAGES_QUERY_KEY, usePackages } from './api';
+/** 006:T020: the offer's count, one to 200, read as the editor reads its own (T020's offer form). */
+export { offerCountOf } from './price';
 /** A track's badge, which the teacher's students draw too (T051). */
 export { TrackBadge } from './components/PackageCard';
 export { PackageDeactivateSheet } from './components/PackageDeactivateSheet';

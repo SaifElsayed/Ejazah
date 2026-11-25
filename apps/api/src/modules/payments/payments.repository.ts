@@ -257,8 +257,30 @@ export async function closeUnsentAutomaticOrder(
 }
 
 /**
+ * 006:T021 (B-P4's conflict check, Q-1 (a) amended, the owner, 2026-11-25; SRS DEC-113;
+ * kernel.md, 006:T021's row): an administrator's `charge_unknown` decision locks the month's
+ * automatic order (`lockOrder`: the enrollment, already held by the decision, then the order) and
+ * reads its status under the lock, so the gateway's answer (the inquiry's or the late callback's,
+ * both under the same locks) lands wholly before or wholly after the decision. Null for an id that
+ * is no automatic order of the enrollment.
+ */
+export async function lockedAutomaticOrderStatus(
+  tx: Transaction,
+  ref: OrderRef,
+): Promise<OrderStatus | null> {
+  await lockOrder(tx, ref);
+  const row = await tx.payment.findFirst({
+    where: { id: ref.paymentId, enrollmentId: ref.enrollmentId, automatic: true },
+    select: { status: true },
+  });
+  return row?.status ?? null;
+}
+
+/**
  * 006:T014 (SRS DEC-110 (3)): an automatic order the gateway says has no transaction, `expired`
- * (a soft decline), under `lockOrder`; whether it moved.
+ * (a soft decline), under `lockOrder`; whether it moved. 006:T021 (Q-1 (a) amended): also an
+ * administrator's approval of a `charge_unknown` item («no charge found in the gateway»), under the
+ * lock `lockedAutomaticOrderStatus` took; no gateway call.
  */
 export async function expireAutomaticOrder(
   tx: Pick<Transaction, 'payment'>,

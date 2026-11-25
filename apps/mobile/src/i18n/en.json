@@ -689,6 +689,145 @@
       "byTeacher": "Postponed by the teacher · Reason: {reason}"
     }
   },
+  "programme": {
+    "student": {
+      "autoRenew": {
+        "cardLine": "Automatic renewal is on, with the {brand} card ending in {last4}.",
+        "dialog": {
+          "confirm": "Turn it off",
+          "keep": "Keep it on",
+          "text": "Your saved card is removed, and from then on you renew each month yourself.",
+          "title": "Turn automatic renewal off?"
+        },
+        "off": "Turn automatic renewal off"
+      },
+      "booking": {
+        "assessmentAt": "Assessment session: {date} · {time}",
+        "packageLine": "{subject} · assessment session · {city} time",
+        "slot": "{slot} · {minutes} min",
+        "upTo": "The programme's sessions at this time last up to {minutes} minutes."
+      },
+      "cancel": {
+        "action": "Decline the offer",
+        "dialog": {
+          "confirm": "Yes, decline the offer",
+          "keep": "Keep it",
+          "text": "Your weekly time becomes free for others, and the assessment session's fee is not refunded.",
+          "title": "Decline the offer?"
+        },
+        "paymentProcessing": "Your payment is being confirmed; you can't decline the offer now."
+      },
+      "chargePending": "This month's charge is already under way.",
+      "consent": "I agree to my card being saved to pay the next months automatically; I can turn automatic renewal off at any time.",
+      "months": "Months paid: {paid} of {count}",
+      "nextDue": "Next month due: {when}",
+      "offer": {
+        "expectedLength": "Expected length",
+        "level": "Level",
+        "months": "Months",
+        "payBy": "Pay by",
+        "readiness": "Readiness",
+        "sessions": "Sessions",
+        "title": "The teacher's offer",
+        "total": "Total"
+      },
+      "paused": "The programme has been paused since {when}.",
+      "pay": {
+        "inFull": "Pay in full",
+        "monthly": "Pay monthly",
+        "plan": "How to pay",
+        "planInFull": "In full",
+        "planMonthly": "Monthly"
+      },
+      "payBlocked": "Payment is stopped until the administration decides.",
+      "payReminder": "Pay before {date} {time}",
+      "payeePending": "Payment is temporarily unavailable and will open soon.",
+      "profile": {
+        "chooseSlot": "Choose the assessment time · {subject}",
+        "fee": "Assessment session: {fee}",
+        "range": "{lowest} – {highest} a session"
+      },
+      "renew": {
+        "changeCard": "Change card",
+        "now": "Renew now",
+        "payNow": "Pay now"
+      },
+      "state": {
+        "active": "In progress",
+        "awaiting_offer": "Awaiting the offer",
+        "closed": "Closed",
+        "offered": "Offer awaiting payment",
+        "paused": "Programme paused"
+      },
+      "title": "Ijazah programme",
+      "unavailable": "The teacher is unavailable."
+    },
+    "teacher": {
+      "title": "Ijazah programme",
+      "state": {
+        "awaiting_offer": "Awaiting your offer",
+        "offered": "Offer awaiting the student's payment",
+        "active": "In progress",
+        "paused": "Programme paused",
+        "closed": "Closed"
+      },
+      "offer": {
+        "title": "The programme offer",
+        "lede": "Write the student's level, readiness and the expected length, and choose the session length and the number of sessions.",
+        "dueBy": "Send the offer by {when}",
+        "level": "Level",
+        "readiness": "Readiness",
+        "expectedLength": "Expected length of the programme",
+        "textError": "Write between 1 and {max} characters.",
+        "duration": "Session length",
+        "durationHint": "No longer than the reserved weekly time.",
+        "sessionCount": "Number of sessions",
+        "countError": "Enter a number of sessions from {min} to {max}.",
+        "total": "Total",
+        "months": "Months",
+        "send": "Send the offer",
+        "refusal": {
+          "assessment_not_delivered": "The assessment session has not been held yet, so the offer cannot be sent now.",
+          "not_awaiting_offer": "This programme is no longer awaiting an offer.",
+          "offer_due_passed": "The time to send the offer has ended.",
+          "length_exceeds_slot": "The session length is longer than the reserved weekly time; choose a shorter one.",
+          "teacher_not_active": "Your account is not active now, so the offer cannot be sent."
+        }
+      },
+      "sent": {
+        "title": "The offer sent",
+        "sessions": "Sessions",
+        "payBy": "The student pays by"
+      },
+      "payBlocked": "The offer is with the administration because your payout account was not verified.",
+      "months": "Months paid: {paid} of {count}",
+      "nextDue": "Next month due: {when}",
+      "lateSince": "The student has been late paying since {when}.",
+      "stop": {
+        "action": "Ask to stop the programme",
+        "text": "Your request reaches the administration with its reason, and the administration decides.",
+        "reason": "Reason for the request",
+        "hint": "Write why you are asking to stop the programme.",
+        "send": "Send the request",
+        "back": "Not now",
+        "tooLong": "The reason is longer than allowed.",
+        "sent": "The stop request was sent and awaits the administration's decision.",
+        "open": "Your request is waiting for the administration's decision",
+        "refusal": {
+          "too_early": "It is not yet time to ask to stop.",
+          "request_open": "You already have an open stop request.",
+          "not_paused": "The programme is no longer paused."
+        }
+      },
+      "package": {
+        "line": "Session price by its length",
+        "short": "{subject} · ijazah programme",
+        "price": "Price of a {minutes}-minute session",
+        "editNote": "Price changes apply to new offers only.",
+        "feeUnset": "The administration has not set the assessment fee yet, so the programme package cannot be activated now."
+      }
+    }
+  },
   "session": {
     "cancellation": {
       "accept": "Accept cancellation",

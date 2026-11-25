@@ -13,6 +13,12 @@ export type Procedure = jest.Mock<(input?: unknown) => Promise<unknown>>;
 
 const procedure = (): Procedure => jest.fn(async () => undefined);
 
+/** A read refused NOT_FOUND unless a case plants an answer (006:T019). */
+const notFound = (): Procedure =>
+  jest.fn(async (): Promise<unknown> => {
+    throw apiError('NOT_FOUND');
+  });
+
 /** A subscription's mock: the stream it opens never says anything (T065). */
 export type Subscription = jest.Mock<
   (input: unknown, handlers: unknown) => { unsubscribe: jest.Mock<() => void> }
@@ -73,6 +79,18 @@ export function fakeProcedures() {
     enrollments: {
       list: { query: procedure() },
       get: { query: procedure() },
+    },
+    // 006:T019 (B-P4 lane a): the programme. `get` answers NOT_FOUND, the server's answer for an
+    // enrollment that is not a programme, unless a case plants one.
+    programme: {
+      get: { query: notFound() },
+      pay: { mutate: procedure() },
+      renew: { mutate: procedure() },
+      autoRenewOff: { mutate: procedure() },
+      cancel: { mutate: procedure() },
+      // 006:T020 (B-P4 lane b): the teacher's offer and stop request.
+      offer: { mutate: procedure() },
+      request: { mutate: procedure() },
     },
     teacher: {
       application: {
@@ -181,6 +199,8 @@ export function fakeApi(termsVersion = '2026-10'): FakeApi {
     checkout: CHECKOUT_POLLING,
     teacherSharePercent: 70,
     paymentMode: 'test',
+    // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+    programmeEnabled: false,
   }));
   let uploaded = 0;
   const uploadDocument = jest.fn(

@@ -47,6 +47,12 @@ export const publicConfigOutput = z.object({
   teacherSharePercent,
   /** 003:T109: the payment mode, so every app shows «نسخة تجريبية» in test mode. */
   paymentMode,
+  /**
+   * B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B1 (a); SRS §3.14,
+   * DEC-94): the programme's switch, `programme_enabled` 1, so the phone shows the programme's
+   * entries only while it is on. Additive (R-API-9).
+   */
+  programmeEnabled: z.boolean(),
 });
 
 export type PublicConfig = z.infer<typeof publicConfigOutput>;

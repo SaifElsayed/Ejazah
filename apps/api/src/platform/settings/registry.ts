@@ -158,6 +158,19 @@ export const programmeChargeRetryDays = z
     message: 'The retry days must increase',
   });
 
+/**
+ * The reminder's most hours (006:T019; SRS §3.14, DEC-114: «hours, 1 to 47»): below the 48 hours to
+ * pay the rest by default, so the line never shows from the offer's own instant.
+ */
+const PROGRAMME_PAY_REMINDER_HOURS_MAX = 47;
+
+/**
+ * `programme_pay_reminder_hours` (006:T019; SRS §3.14, DEC-114; B-P4's conflict check, Q-5 (b)): the
+ * hours before `payBy` from which the student's «pay before» line shows, a whole number from 1 to 47.
+ * The read site's schema: booking's `programme.get` and enrollment reads import it from here.
+ */
+export const programmePayReminderHours = z.int().min(1).max(PROGRAMME_PAY_REMINDER_HOURS_MAX);
+
 /** The assessment's shortest and longest lengths, the contract's 30, 45 or 60 (006:T002, DEC-93). */
 const ASSESSMENT_LENGTH_MIN = 30;
 const ASSESSMENT_LENGTH_MAX = 60;
@@ -662,6 +675,16 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
     'booking',
     'Programme: unanswered asks about an automatic charge before an Administrator item (count; asked every checkout lifetime)',
     6,
+  ),
+  // 006:T019 (SRS §3.14, DEC-114; B-P4's conflict check, Q-5 (b)): the hours before `payBy` the
+  // student's reminder line shows from; the server answers the instant, the phone reads no setting.
+  programme_pay_reminder_hours: whole(
+    programmePayReminderHours,
+    'hours',
+    'booking',
+    "Programme: hours before the deadline to pay the rest that the Student's reminder line shows (hours, 1 to 47)",
+    12,
+    { min: 1, max: PROGRAMME_PAY_REMINDER_HOURS_MAX },
   ),
   session_evaluation_delay_minutes: whole(
     wholeNonNegative,

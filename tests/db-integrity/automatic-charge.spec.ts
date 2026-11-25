@@ -13,7 +13,8 @@
 // - the inquiry: nothing asked before the expiry; a crash between the commit and the call expired
 //   with no question; paid recorded through the webhook's branch (the confirm step enqueued, the late
 //   callback a replay); a failed callback then the inquiry's kind written; no answer changes nothing;
-//   no transaction expires the order;
+//   no transaction expires the order; a manual order with a gateway id past its expiry refused before
+//   any question (006:T022, PR #160 r2 Minor 1, ADR 0026);
 // - `expire-pending-payments` leaves automatic orders to the inquiry;
 // - SC-707: no token in a log line, a result or an enqueued payload.
 //
@@ -670,6 +671,22 @@ describe('the inquiry (006:T014, SRS DEC-110, DEC-113 (1))', () => {
     ]);
   });
 
+  // 006:T023 (B-P4 update 1; quickstart §2 step 6, «the student gets the `payment_failed` push»):
+  // a soft decline the inquiry finds is recorded through the webhook's order branch, which records
+  // the failed order's push to the programme's student on the same transaction (005:T016), once.
+  it('records the student’s payment_failed push once when the inquiry finds a soft decline', async () => {
+    const { studentId, enrollmentId, paymentId } = await sent('soft');
+    const before = pushes.length;
+
+    await expect(askLater(paymentId)).resolves.toBe('declined_soft');
+
+    const notices = pushes.slice(before).map((args) => (args as unknown[])[1]);
+    expect(notices).toEqual([
+      { userId: studentId, type: 'payment_failed', payload: { enrollmentId } },
+    ]);
+    expect(await eventsOf(paymentId)).toEqual(['failed']);
+  });
+
   it('changes nothing on no answer', async () => {
     const { enrollmentId, paymentId, gatewayOrderId } = await sent('paid');
     fake.onInquiry(gatewayOrderId, 'no_answer');
@@ -686,6 +703,43 @@ describe('the inquiry (006:T014, SRS DEC-110, DEC-113 (1))', () => {
     await expect(askLater(paymentId)).resolves.toBe('none');
 
     expect(await automaticOrdersOf(enrollmentId)).toMatchObject([{ status: 'expired' }]);
+  });
+
+  // 006:T022 (B-P4, Q-10 (a); PR #160 r2 Minor 1; ADR 0026: the inquiry's answer stands for the
+  // signed webhook for an automatic charge only). A manual `instalment` order of month 2, its gateway
+  // id one under which the stand-in holds a paid transaction, past its expiry: the inquiry refuses
+  // it before asking, so nothing records the payment but the signed webhook.
+  it('refuses a manual instalment order with a gateway id past its expiry: it stays created, no payment_events row (ADR 0026)', async () => {
+    const world = await programmeWorld({ card: false });
+    fake.onCharge('paid');
+    const charged = await fake.chargeSavedCard(
+      randomUUID(),
+      piasters(100_000),
+      'EGP',
+      new Date(addMinutes(new Date(), TEN_MINUTES)),
+      'unused-token',
+      undefined,
+      async () => true,
+    );
+    if (charged.step !== 'payment_sent') throw new Error('the stand-in made no transaction');
+    const [{ id: paymentId }] = await database.$queryRaw<[{ id: string }]>`
+      INSERT INTO payments (enrollment_id, gateway, gateway_order_id, gross_piasters, currency,
+                            status, expires_at, kind, instalment_month,
+                            teacher_share_rate_percent, teacher_share_piasters, updated_at)
+      VALUES (${world.enrollmentId}::uuid, 'fake', ${charged.gatewayOrderId}, 100000, 'EGP',
+              'created', now() + interval '10 minutes', 'instalment', 2, 70, 70000, now())
+      RETURNING id::text`;
+    const asked = fake.calls.filter(({ operation }) => operation === 'inquireOrder').length;
+
+    await expect(askLater(paymentId)).rejects.toThrow(/not an automatic charge/);
+
+    const { rows } = await observer.query<{ status: string; automatic: boolean }>(
+      'SELECT status::text, automatic FROM payments WHERE id = $1',
+      [paymentId],
+    );
+    expect(rows).toEqual([{ status: 'created', automatic: false }]);
+    expect(await eventsOf(paymentId)).toEqual([]);
+    expect(fake.calls.filter(({ operation }) => operation === 'inquireOrder').length).toBe(asked);
   });
 });
 

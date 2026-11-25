@@ -3,11 +3,16 @@
 // price per session and the ongoing enrollments as tiles; active while the teacher is not published
 // (`PackagesLocked`), one line with the price and «غير منشورة» under the track (FR-315); paused, the
 // same line and «تفعيل» in place of «إيقاف».
+// 006:T020 (FR-704; ADR 0024, R-503; B-P4's conflict check): a programme package has no count, length
+// or total until an offer (R-506): its card says its session price goes by length and shows its three
+// prices, for 30, 45 and 60 minutes, as tiles in every state, with its ongoing enrollments beside
+// them while it is active and published; the teacher sees no share per order (owner, 2026-11-17).
 import type { PackageTrack, TeacherPackage } from '@ijazah/contracts';
+import { SESSION_LENGTHS_MINUTES } from '@ijazah/contracts';
 import { piasters } from '@ijazah/money';
 import { View } from 'react-native';
 
-import { Badge, Button, Card, Stats, Text } from '../../../../design/primitives';
+import { Badge, Button, Card, Stats, type StatsProps, Text } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { type MessageKey, useLocale, useT } from '../../../../i18n';
 import { formatPoundAmount, formatPounds, useFormatters } from '../../../../lib/formatters';
@@ -43,20 +48,50 @@ export function PackageCard({
   const locale = useLocale();
   const format = useFormatters();
   const nameOf = useSubjectName();
-  // 006:T003 (Q-4 (a)): today's package only; a programme package's screens are B-P4's (T019, T020).
-  if (item.isProgramme === true) return null;
-  const price_piasters = piasters(item.price_piasters);
   const tiles = item.isActive && published;
-  const line = tiles
-    ? t('common.format.packageLine', {
-        count: item.sessionCount,
-        minutes: item.sessionDurationMinutes,
-      })
-    : t('common.format.packageLineWithPrice', {
-        count: item.sessionCount,
-        minutes: item.sessionDurationMinutes,
-        amount: formatPoundAmount(price_piasters, locale),
-      });
+  const enrollments = {
+    label: t('teacher.packages.activeEnrollments'),
+    value: format.number(item.activeEnrollmentCount),
+  };
+  let line: string;
+  let stats: StatsProps['items'] | null;
+  if (item.isProgramme === true) {
+    const prices = {
+      30: item.prices.m30_piasters,
+      45: item.prices.m45_piasters,
+      60: item.prices.m60_piasters,
+    } as const;
+    line = t('programme.teacher.package.line');
+    stats = [
+      ...SESSION_LENGTHS_MINUTES.map((minutes) => ({
+        label: t('common.format.duration', { minutes }),
+        value: formatPounds(piasters(prices[minutes]), locale),
+      })),
+      ...(tiles ? [enrollments] : []),
+    ];
+  } else {
+    const price_piasters = piasters(item.price_piasters);
+    line = tiles
+      ? t('common.format.packageLine', {
+          count: item.sessionCount,
+          minutes: item.sessionDurationMinutes,
+        })
+      : t('common.format.packageLineWithPrice', {
+          count: item.sessionCount,
+          minutes: item.sessionDurationMinutes,
+          amount: formatPoundAmount(price_piasters, locale),
+        });
+    stats = tiles
+      ? [
+          { label: t('teacher.packages.price'), value: formatPounds(price_piasters, locale) },
+          {
+            label: t('teacher.packages.perSession'),
+            value: formatPounds(piasters(item.perSession_piasters), locale),
+          },
+          enrollments,
+        ]
+      : null;
+  }
   return (
     <Card variant={item.isActive ? 'default' : 'surface'}>
       <View
@@ -80,22 +115,7 @@ export function PackageCard({
           ) : null}
         </View>
       </View>
-      {tiles ? (
-        <Stats
-          tile
-          items={[
-            { label: t('teacher.packages.price'), value: formatPounds(price_piasters, locale) },
-            {
-              label: t('teacher.packages.perSession'),
-              value: formatPounds(piasters(item.perSession_piasters), locale),
-            },
-            {
-              label: t('teacher.packages.activeEnrollments'),
-              value: format.number(item.activeEnrollmentCount),
-            },
-          ]}
-        />
-      ) : null}
+      {stats === null ? null : <Stats tile items={stats} />}
       <View style={{ flexDirection: 'row', gap: tokens.space['2'] }}>
         <Button
           label={t('common.action.edit')}

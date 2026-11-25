@@ -365,6 +365,8 @@ describe('Enrollments', () => {
       checkout: { ...CHECKOUT_POLLING, confirmingPollSeconds: 5, confirmingPollWindowMinutes: 1 },
       teacherSharePercent: 70,
       paymentMode: 'test',
+      // B-P4 round 2 (Q-B1 (a); rule d): the programme's switch, off as seeded.
+      programmeEnabled: false,
     });
     mockApi.api.enrollments.list.query.mockResolvedValue(list(confirming));
     await renderIn('rtl', within(<Enrollments />)());

@@ -131,6 +131,8 @@ describe('AdminNav', () => {
       [translate('ar', 'admin.nav.items.credentials'), '/credentials'],
       // 005:T022 (B49, Q-X2 (a)): the ijazah requests, a queue.
       [translate('ar', 'admin.nav.items.ijazahRequests'), '/ijazah-requests'],
+      // 006:T021 (B-P4): the ijazah programmes' queue, beside the ijazah requests.
+      [translate('ar', 'admin.programme.nav'), '/programmes'],
       // B42 (the note under T048, T049 and T050, Q4): Phase 3's three queues.
       [translate('ar', 'admin.nav.items.sessionReview'), '/review'],
       [translate('ar', 'admin.nav.items.disputes'), '/disputes'],

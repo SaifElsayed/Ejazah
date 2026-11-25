@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 import { checkoutUrl } from './checkout.js';
 import { idempotencyKey } from './idempotency-key.js';
-import { sessionLengthMinutes } from './packages.js';
+import { programmePrices, sessionLengthMinutes } from './packages.js';
 
 /**
  * The most offer sessions a programme may have (R-506, analyze U-6): a definition of the contract,
@@ -93,6 +93,16 @@ export const programmeCard = z.object({
 });
 
 /**
+ * B-P4 round 2 (Q-B2 (a)): the offer form's terms: the reserved weekly time's length in minutes (the
+ * offer's length is at most it, `length_exceeds_slot`) and the programme package's three session
+ * prices (the offer's total is the count × the chosen length's price).
+ */
+export const programmeOfferTerms = z.object({
+  slotMinutes: z.int().positive(),
+  prices: programmePrices,
+});
+
+/**
  * `programme.get`'s answer (FR-726). `card` is the student's alone, null to the teacher;
  * `payeePending` is true only in live mode with the teacher's payout account unverified (FR-716);
  * `payBlocked` while a `pay_blocked` item is open (FR-706b); `teacherUnavailable` as FR-BOOK-19.
@@ -127,6 +137,37 @@ export const programmeGetOutput = z.object({
   payBlocked: z.boolean(),
   teacherUnavailable: z.boolean(),
   card: programmeCard.nullable(),
+  /**
+   * 006:T020 (B-P4's conflict check, Q-2 (a), the owner, 2026-11-25; SRS DEC-112): the instant the
+   * teacher's stop button shows from, `paused_at` + `programme_stop_request_days`, the rule of
+   * `programme.request`'s `too_early` (the server's guard). Null unless paused, and to the student.
+   */
+  stopRequestFrom: z.iso.datetime().nullable(),
+  /**
+   * 006:T019 (Q-5 (b), SRS DEC-114, FR-708): the instant the «pay before» line shows from,
+   * `payBy` − `programme_pay_reminder_hours`; null unless `offered`. The phone reads no setting.
+   */
+  payReminderFrom: z.iso.datetime().nullable(),
+  /**
+   * B-P4 round 2 (the owner's delegation to the review session, 2026-11-25; Q-B2 (a)): what the
+   * teacher's offer form needs, the teacher's alone, while the offer is open to send (`awaiting_offer`,
+   * the assessment delivered, before `programme.offer`'s deadline); null otherwise and to the student.
+   */
+  offerTerms: programmeOfferTerms.nullable(),
+  /** B-P4 round 2 (Q-B3 (a)): a `stop` request is open; the teacher's, false to the student. */
+  stopRequestOpen: z.boolean(),
+});
+
+/**
+ * 006:T019, T020 (B-P4's conflict check, Q-3 (a), Q-5 (b), the owner, 2026-11-25): a programme's
+ * enrollment as the two parties' enrollment reads mark it, so the card and the detail know it and
+ * show «pay before» (`payBy`, `payReminderFrom` as `programme.get` answers them). Absent on an
+ * enrollment that is no programme. Additive (R-API-9).
+ */
+export const enrollmentProgramme = z.object({
+  state: programmeState,
+  payBy: z.iso.datetime().nullable(),
+  payReminderFrom: z.iso.datetime().nullable(),
 });
 
 /** `programme.offer`: the teacher's offer after the delivered assessment (FR-705, R-506). */
@@ -271,6 +312,8 @@ export type ProgrammeGetInput = z.infer<typeof programmeGetInput>;
 export type ProgrammeOffer = z.infer<typeof programmeOffer>;
 export type ProgrammeCard = z.infer<typeof programmeCard>;
 export type ProgrammeGetOutput = z.infer<typeof programmeGetOutput>;
+export type EnrollmentProgramme = z.infer<typeof enrollmentProgramme>;
+export type ProgrammeOfferTerms = z.infer<typeof programmeOfferTerms>;
 export type ProgrammeOfferInput = z.infer<typeof programmeOfferInput>;
 export type ProgrammeOfferOutput = z.infer<typeof programmeOfferOutput>;
 export type ProgrammeOfferRefusal = z.infer<typeof programmeOfferRefusal>;

@@ -79,3 +79,19 @@ export function usePackageActions() {
     };
   }, [client, queries]);
 }
+
+/**
+ * B-P4 round 2 (Q-B1 (a); SRS §3.14, DEC-94): whether the programme's switch is on, as
+ * `platform.publicConfig` answers it: a new ijazah-track package is then a programme package. False
+ * until it is read, and while it cannot be: the editor then draws today's fields.
+ */
+export function useProgrammeEnabled(): boolean {
+  const { client } = useApi();
+  return (
+    useQuery({
+      queryKey: PUBLIC_CONFIG_QUERY_KEY,
+      queryFn: () => client.publicConfig(),
+      select: (config) => config.programmeEnabled,
+    }).data === true
+  );
+}

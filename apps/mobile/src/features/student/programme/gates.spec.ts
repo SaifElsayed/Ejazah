@@ -1,0 +1,211 @@
+// 006:T019 (FR-706b, FR-710, FR-713, FR-713a, FR-715, FR-716, FR-726, FR-BOOK-19): what the
+// student's programme panel offers, read from `programme.get` alone. On the offer: «pay in full» and
+// «pay monthly» unless the teacher's payment details are unverified (`payeePending`) or an
+// administrator is deciding (`payBlocked`), each with its line, the cancellation always offered. On
+// a running programme: «renew now» with no card, «pay now» and «change card» with one, only while
+// `renewOpen` and never while `payeePending` or `chargePending`; the automatic renewal's off row only
+// while a card is saved. The consent sends `saveCard` on «monthly» only; «change card» saves the
+// new card with the same consent ticked only (PR #161 r1 Follow-up 1 (a)), «pay now» and «renew now»
+// never. 006:T019 (FR-708, SRS DEC-114): the reminder «pay before
+// {date} {time}» from the enrollment's `payReminderFrom`, the server's `payBy` − the setting, only while
+// `offered`; never with no instant or before it.
+import type { ProgrammeGetOutput } from '@ijazah/contracts';
+import { describe, expect, it } from '@jest/globals';
+
+import { payInputOf, payReminderOf, programmeViewOf, renewInputOf } from './gates';
+
+const OFFER = {
+  level: 'حافظ لعشرة أجزاء',
+  readiness: 'جاهز للإجازة بعد المراجعة',
+  expectedLength: 'سنة تقريبًا',
+  durationMinutes: 60,
+  sessionCount: 40,
+  total_piasters: 1_000_000,
+  sessionPrice_piasters: 25_000,
+  offeredAt: '2026-11-23T16:00:00.000Z',
+} as const;
+
+const CARD = { last4: '4242', brand: 'Visa' } as const;
+
+function programme(of: Partial<ProgrammeGetOutput> = {}): ProgrammeGetOutput {
+  return {
+    state: 'active',
+    offerDueAt: '2026-11-23T18:00:00.000Z',
+    payBy: '2026-11-25T16:00:00.000Z',
+    offer: OFFER,
+    plan: 'monthly',
+    monthsPaid: 2,
+    monthCount: 10,
+    nextDueAt: '2026-12-21T18:00:00.000Z',
+    paused: null,
+    renewOpen: false,
+    chargePending: false,
+    payeePending: false,
+    payBlocked: false,
+    teacherUnavailable: false,
+    card: null,
+    stopRequestFrom: null,
+    payReminderFrom: null,
+    // B-P4 round 2 (Q-B2 (a), Q-B3 (a); rule d): the teacher's two fields, none to the student.
+    offerTerms: null,
+    stopRequestOpen: false,
+    ...of,
+  };
+}
+
+const offered = (of: Partial<ProgrammeGetOutput> = {}) =>
+  programme({ state: 'offered', plan: null, monthsPaid: 0, nextDueAt: null, ...of });
+
+describe('the offer (FR-706b, FR-710, FR-716)', () => {
+  it('offers both payments and the cancellation, with no line', () => {
+    const view = programmeViewOf(offered());
+    expect(view.offer).toEqual({ pay: true, line: null, cancel: true });
+    expect(view.renewal).toBeNull();
+  });
+
+  it('no pay button while payeePending: the line, the cancellation kept', () => {
+    expect(programmeViewOf(offered({ payeePending: true })).offer).toEqual({
+      pay: false,
+      line: 'payeePending',
+      cancel: true,
+    });
+  });
+
+  it('no pay button while payBlocked: the administration’s line, the cancellation kept', () => {
+    expect(programmeViewOf(offered({ payBlocked: true })).offer).toEqual({
+      pay: false,
+      line: 'payBlocked',
+      cancel: true,
+    });
+    // An administrator deciding says so even where the payee is also unverified.
+    expect(programmeViewOf(offered({ payBlocked: true, payeePending: true })).offer).toEqual({
+      pay: false,
+      line: 'payBlocked',
+      cancel: true,
+    });
+  });
+
+  it('no offer part before the offer or once it is paid', () => {
+    expect(programmeViewOf(programme({ state: 'awaiting_offer', offer: null })).offer).toBeNull();
+    expect(programmeViewOf(programme()).offer).toBeNull();
+  });
+});
+
+describe('the renewal (FR-713a, FR-715, FR-716)', () => {
+  it('«renew now» with no card saved, while renewOpen', () => {
+    expect(programmeViewOf(programme({ renewOpen: true })).renewal).toEqual({
+      buttons: ['renewNow'],
+      payeeLine: false,
+      chargeLine: false,
+    });
+  });
+
+  it('«pay now» and «change card» with a card saved, while renewOpen', () => {
+    expect(programmeViewOf(programme({ renewOpen: true, card: CARD })).renewal?.buttons).toEqual([
+      'payNow',
+      'changeCard',
+    ]);
+  });
+
+  it('paused: the renewal stays, and the line says since when', () => {
+    const view = programmeViewOf(
+      programme({ state: 'paused', renewOpen: true, paused: { since: '2026-12-21T18:00:00.000Z' } }),
+    );
+    expect(view.renewal?.buttons).toEqual(['renewNow']);
+    expect(view.pausedSince).toBe('2026-12-21T18:00:00.000Z');
+    expect(programmeViewOf(programme()).pausedSince).toBeNull();
+  });
+
+  it('nothing to press while renewOpen is false', () => {
+    expect(programmeViewOf(programme({ card: CARD })).renewal?.buttons).toEqual([]);
+  });
+
+  it('no pay now or change card while payeePending, even were renewOpen true: the line instead', () => {
+    expect(
+      programmeViewOf(programme({ renewOpen: true, card: CARD, payeePending: true })).renewal,
+    ).toEqual({ buttons: [], payeeLine: true, chargeLine: false });
+  });
+
+  it('no renewal while chargePending: the line that the charge is under way', () => {
+    expect(
+      programmeViewOf(programme({ renewOpen: true, card: CARD, chargePending: true })).renewal,
+    ).toEqual({ buttons: [], payeeLine: false, chargeLine: true });
+  });
+
+  it('no renewal part on the offer or once closed', () => {
+    expect(programmeViewOf(offered()).renewal).toBeNull();
+    expect(programmeViewOf(programme({ state: 'closed', renewOpen: true })).renewal).toBeNull();
+  });
+});
+
+describe('the automatic renewal’s off row (FR-713a)', () => {
+  it('shown while a card is saved on a running programme', () => {
+    expect(programmeViewOf(programme({ card: CARD })).autoRenewOff).toBe(true);
+    expect(programmeViewOf(programme({ state: 'paused', card: CARD })).autoRenewOff).toBe(true);
+  });
+
+  it('no off row without a card', () => {
+    expect(programmeViewOf(programme({ card: null })).autoRenewOff).toBe(false);
+  });
+
+  it('no off row once closed', () => {
+    expect(programmeViewOf(programme({ state: 'closed', card: CARD })).autoRenewOff).toBe(false);
+  });
+});
+
+describe('the teacher unavailable (FR-BOOK-19)', () => {
+  it('passes through', () => {
+    expect(programmeViewOf(programme({ teacherUnavailable: true })).unavailable).toBe(true);
+    expect(programmeViewOf(programme()).unavailable).toBe(false);
+  });
+});
+
+describe('what the payments send (FR-713)', () => {
+  it('the consent saves the card on «monthly» only; in full sends saveCard: false', () => {
+    expect(payInputOf('in_full', true)).toEqual({ plan: 'in_full', saveCard: false });
+    expect(payInputOf('in_full', false)).toEqual({ plan: 'in_full', saveCard: false });
+    expect(payInputOf('monthly', true)).toEqual({ plan: 'monthly', saveCard: true });
+    expect(payInputOf('monthly', false)).toEqual({ plan: 'monthly', saveCard: false });
+  });
+
+  it('«change card» saves the new card with the consent ticked; «pay now» and «renew now» do not', () => {
+    expect(renewInputOf('changeCard', true)).toEqual({ saveCard: true });
+    expect(renewInputOf('payNow', true)).toEqual({ saveCard: false });
+    expect(renewInputOf('renewNow', true)).toEqual({ saveCard: false });
+    expect(renewInputOf('payNow', false)).toEqual({ saveCard: false });
+    expect(renewInputOf('renewNow', false)).toEqual({ saveCard: false });
+  });
+
+  // PR #161 r1 Follow-up 1 (a): FR-713's consent before the new card is saved.
+  it('«change card» with the consent unticked saves no card', () => {
+    expect(renewInputOf('changeCard', false)).toEqual({ saveCard: false });
+  });
+});
+
+describe('the reminder before the 48 hours end (FR-708, SRS DEC-114)', () => {
+  // The offer Mon 23 Nov 18:00 Cairo, `payBy` Wed 25 Nov 18:00, the line from Wed 06:00 (12 h before).
+  const PAY_BY = '2026-11-25T16:00:00.000Z';
+  const FROM = '2026-11-25T04:00:00.000Z';
+  const marker = { state: 'offered', payBy: PAY_BY, payReminderFrom: FROM } as const;
+
+  it('from payReminderFrom on, the line names payBy', () => {
+    expect(payReminderOf(marker, new Date('2026-11-25T04:00:00.000Z'))).toBe(PAY_BY);
+    expect(payReminderOf(marker, new Date('2026-11-25T15:59:00.000Z'))).toBe(PAY_BY);
+  });
+
+  it('no line before payReminderFrom', () => {
+    expect(payReminderOf(marker, new Date('2026-11-25T03:59:59.000Z'))).toBeNull();
+  });
+
+  it('no line when payReminderFrom is null', () => {
+    expect(
+      payReminderOf({ ...marker, payReminderFrom: null }, new Date('2026-11-25T10:00:00.000Z')),
+    ).toBeNull();
+  });
+
+  it('no line once the offer is not awaiting payment, nor on an enrollment that is no programme', () => {
+    const later = new Date('2026-11-25T10:00:00.000Z');
+    expect(payReminderOf({ ...marker, state: 'active' }, later)).toBeNull();
+    expect(payReminderOf(undefined, later)).toBeNull();
+  });
+});

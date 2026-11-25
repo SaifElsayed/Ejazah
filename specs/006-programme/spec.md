@@ -385,6 +385,10 @@ declining keeps the pause; a reopen restores the package as paused, awaiting pay
 - **FR-707**: The first regular session MUST be the first weekly occurrence of the package's time after the 48 hours end,
   even when the student pays on the first day (FR-BOOK-15).
 - **FR-708**: The student MUST be reminded on screen before the 48 hours end (rule 17; push for it is v1.1, DEC-70).
+  > *(Amended 2026-11-25, SRS DEC-114, the owner's answer on B-P4's conflict check: «س5 ب».)* The reminder is a line
+  > on the enrollment's card and page while the offer is unpaid, from `payBy` minus `programme_pay_reminder_hours`
+  > (§3.14, default 12, 1 to 47); the server answers the instant (`payReminderFrom`). Example: the offer Monday 18:00,
+  > `payBy` Wednesday 18:00, the line from Wednesday 06:00.
 - **FR-709**: A teacher MUST NOT refuse a student on their own after the assessment; they MAY send an administrator a
   refusal request with a mandatory reason, and the administrator decides; an approved refusal ends the programme before
   any offer, freeing the time. The assessment fee is kept, and its teacher share is released at the decision, once

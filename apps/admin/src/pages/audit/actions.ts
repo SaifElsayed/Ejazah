@@ -135,6 +135,10 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   // 006:T017 (B-P3 lane e, Q-e5 (a), the owner's labels, 2026-11-24): `programmes.reopen`'s entry,
   // on the enrollment.
   'programme.reopened': 'admin.audit.actions.programmeReopened',
+  // 006:T021 (T018's follow-up (3); Q-f4 (a)): the queue's and the programme's reads, on the reader
+  // and on the enrollment.
+  'programmes.listed': 'admin.audit.actions.programmesListed',
+  'programmes.viewed': 'admin.audit.actions.programmesViewed',
 };
 
 const TARGET_TEXT: Readonly<Record<AuditRow['targetType'], MessageKey>> = {

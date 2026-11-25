@@ -141,7 +141,8 @@ gateway, the gateway settles the net directly to the teacher, and the platform
 takes 0% and keeps a record of what the gateway did. There is no wallet, ledger,
 balance or escrow. Money values are integer piasters typed so a plain number
 cannot reach them, and a payment is confirmed only by the gateway's signed
-webhook. Rules 3, 4, 7, 10 and 11 were written for a managed ledger that no
+webhook, or, for an automatic charge only, the gateway's authenticated answer to
+the platform's own inquiry (ADR 0026). Rules 3, 4, 7, 10 and 11 were written for a managed ledger that no
 longer exists; their ids are retained as superseded so old citations resolve.
 Rules 8 and 9 are reinstated for gateway events.
 

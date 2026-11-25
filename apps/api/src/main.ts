@@ -667,6 +667,13 @@ const adminServices = {
       settings,
       deleteProgrammeCard: payments.deleteProgrammeCard,
       log,
+      // 006:T021 (SRS DEC-113; B-P4, Q-1 (a) amended; kernel.md 006:T021): a `charge_unknown`
+      // decision's payments entries: the month's orders, the order's lock and status, the expiry.
+      charges: {
+        monthOrders: payments.programmeMonthOrdersOf,
+        lockOrder: payments.lockedAutomaticOrderStatus,
+        expireOrder: payments.expireAutomaticOrder,
+      },
     }),
     ...booking.createProgrammeAdminReads({
       settings,

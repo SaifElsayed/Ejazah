@@ -80,6 +80,8 @@ export {
   type TimelineProps,
 } from './Progress';
 export { Dialog, type DialogProps } from './Dialog';
+// 006:T021 (B-P4, Q-7, the owner's design): the «i» button and its explanation.
+export { InfoButton, type InfoButtonProps } from './InfoButton';
 export {
   AuthCard,
   type AuthCardProps,
