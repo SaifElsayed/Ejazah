@@ -903,6 +903,18 @@ environment exists yet; until it does, "install" means a developer's `.env`.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
   provider. Links already signed with the old pair stop working when it is
   deleted; they are short-lived anyway.
+- **`BACKUP_S3_ACCESS_KEY_ID`** / **`BACKUP_S3_SECRET_ACCESS_KEY`** and
+  **`DOCUMENTS_S3_ACCESS_KEY_ID`** / **`DOCUMENTS_S3_SECRET_ACCESS_KEY`** (the
+  backup script's, `deploy/backup.env.example`, 002:T179; the API never reads
+  them). Two tokens of the storage provider: the backup bucket's read-write,
+  the documents' read-only. Make a new token, put it in the script's
+  environment on the server, run `dump` (or `copy-documents`) once, then
+  delete the old token.
+- **The backup passphrase** (the file `BACKUP_PASSPHRASE_FILE` names). Whoever
+  holds it opens every dump made under it. Make a new one, write it to the file
+  and to the owner's password manager (by place, never by value), run `dump`
+  once; keep the old one in the password manager until the last dump made under
+  it is past the 14 days («Backups and restore»), then remove it.
 - **`SENTRY_DSN`**. Not a password, but it lets anyone send events into the
   project. Create a new client key in the Sentry project's settings, install it,
   then disable the old one.

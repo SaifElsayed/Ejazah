@@ -18,7 +18,9 @@ Phase 1 adds the sign-in port and the email port (`specs/002-identity/contracts/
 for storage, payment, messaging, video, sign-in and email, and `selectPushPort` for the worker's notification delivery
 job only (R-API-15). `inbound-event.ts` holds the two refusals of an inbound provider event, `EventSignatureError` and
 `MalformedEventError`, shared by the payment and video ports (T118), and the derivation of a stand-in's webhook
-secret from `ENCRYPTION_KEY` when none is configured (T121).
+secret from `ENCRYPTION_KEY` when none is configured (T121). `storage/backup-objects.ts` is not an adapter and no
+port selects it: it holds the S3 calls of the nightly backup script (`scripts/ops/backup.ts`, 002:T179), built from the
+values the script is given.
 
 Rules: modules depend on the port, never a concrete adapter (R-API-4); only a port's own folder names its adapters.
 Selection is configuration, never a code change (FR-056). A stand-in records what it was asked and can be told to
