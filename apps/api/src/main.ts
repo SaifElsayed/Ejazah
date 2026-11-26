@@ -716,7 +716,11 @@ const application = await createApplication({
   // unset before a host is chosen.
   ...trustedProxy,
 });
-await application.listen(config.PORT);
+// 002:T181 (Q-7 (a)): on API_BIND_ADDRESS when set (127.0.0.1 behind a proxy on the same host),
+// else on every interface, which the phone on the same network needs in development.
+await (config.API_BIND_ADDRESS === undefined
+  ? application.listen(config.PORT)
+  : application.listen(config.PORT, config.API_BIND_ADDRESS));
 log.info({ port: config.PORT }, 'Listening');
 
 // Once, however many signals arrive: every live stream ended first (T063, FR-429, the owner's

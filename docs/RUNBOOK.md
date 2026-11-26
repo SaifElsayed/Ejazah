@@ -124,6 +124,8 @@ one-time codes and invite links included, as a text file under
 `<STORAGE_LOCAL_ROOT>/mail/` (`platform/ports/email/index.ts`). The path is
 relative to the API's working directory: under `pnpm dev`, with the default
 `.storage`, that is `apps/api/.storage/mail/`. A test run writes no mail.
+The live sender is `EMAIL_PROVIDER=resend` (Resend, 002:T177), which a hosted
+server runs as «Hosted deploy», «E-mail», says.
 
 ## Reset the local database
 
@@ -462,6 +464,17 @@ proxy's header was set aside for the socket's peer», with `reason`
 `TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
 the address the proxy connects from), or the port is open to others.
 
+**E-mail** — the live sender is Resend (002:T177, SRS DEC-108), from the
+sending domain `send.ijazahapp.com`, verified in Resend on 2026-11-26. Set
+`EMAIL_PROVIDER=resend`, `EMAIL_FROM=no-reply@send.ijazahapp.com`,
+`EMAIL_FROM_NAME=إجازة` and `SUPPORT_EMAIL=support@ijazahapp.com`, where
+replies go; and `EMAIL_PROVIDER_KEY`, which the owner makes in Resend's
+dashboard and sets on the server, never written anywhere by value. The API
+refuses `resend` without the key, and a hosted server refuses the stand-in.
+Resend's free tier sends 100 mails a day (3,000 a month); past it, a one-time
+code is not delivered, the API logs one warn line, and no mail goes until the
+quota resets at midnight UTC, so a launch needs the paid tier.
+
 **The panel's host** — `deploy/Caddyfile` is the panel's site block (research
 R-18): Caddy serves the panel's build as static files with the browser
 security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
@@ -610,6 +623,12 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   nothing is re-encrypted.
 - **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
   (not chosen yet) and in the Expo account's access tokens.
+- **`EMAIL_PROVIDER_KEY`**, Resend's API key (002:T177), read only while
+  `EMAIL_PROVIDER=resend`. Issued in Resend's dashboard (API Keys): create a
+  new key, install it, restart the API and the worker, then revoke the old one.
+  Mails sent with the old key are not affected; until the restart, a code mail
+  or an invitation sent with a revoked key fails, and the invitation's job
+  retries.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
   provider. Links already signed with the old pair stop working when it is
   deleted; they are short-lived anyway.

@@ -75,6 +75,16 @@ function isEncryptionKey(value: unknown): value is string {
   return encryptionKey.safeParse(value).success;
 }
 
+// 002:T177 (Q-2 (a)): the name the inbox shows beside EMAIL_FROM, which the live sender joins into
+// `<name> <address>`. One line of at most 64 characters, with nothing that would end the name or
+// the header: no `<`, `>`, `"` and no line break. The message never echoes the value.
+const senderName = z
+  .string()
+  .max(64, { error: 'must be at most 64 characters' })
+  .refine((value) => !/[<>"\r\n]/.test(value), {
+    error: 'must be one line without <, > or "',
+  });
+
 // Scheme and host only, no path, no trailing slash: the value is joined to webhook routes.
 // Checks keep running after the URL check fails, so the refine must not throw on garbage.
 const origin = httpUrl.refine((value) => URL.canParse(value) && new URL(value).origin === value, {
@@ -102,12 +112,13 @@ const allowedOrigins = z
 
 // T001 adds the sign-in port's and the email port's selectors (contracts/ports.md): each stand-in is
 // refused outside development and test as the three Phase 0 ones are, until its live adapter's task
-// adds one (T148 adds `live` to `SIGN_IN_PROVIDER`). T009 adds LiveKit to `VIDEO_PROVIDER`; its
-// stand-in stays refused.
+// adds one (T148 adds `live` to `SIGN_IN_PROVIDER`, 002:T177 `resend` to `EMAIL_PROVIDER`). T009 adds
+// LiveKit to `VIDEO_PROVIDER`; its stand-in stays refused. 002:T177 takes `SMS_PROVIDER` out: no
+// module calls the messaging port (phone sign-up is deferred, ADR 0012), so its stand-in sends
+// nothing a hosted server needs.
 const standInProviderKeys = [
   'VIDEO_PROVIDER',
   'PUSH_PROVIDER',
-  'SMS_PROVIDER',
   'SIGN_IN_PROVIDER',
   'EMAIL_PROVIDER',
 ] as const;
@@ -152,6 +163,10 @@ const envObject = z.object({
   // where every stand-in is accepted; now it is refused naming the key (FR-039, R-HONEST-1).
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  // 002:T181 (Q-7 (a)): the address the API listens on, one IP address. Unset, every interface,
+  // which the phone on the same network needs in development; `127.0.0.1` on a host whose proxy
+  // runs beside the API (docs/RUNBOOK.md, «Hosted deploy»).
+  API_BIND_ADDRESS: ipAddress.optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
   // T150 (FR-077): the largest request body either tRPC surface reads; a larger one answers 413.
@@ -229,10 +244,14 @@ const envObject = z.object({
   // of each until the live adapter's task adds it. `EMAIL_FROM` is the sender the stand-in records: a
   // reserved address by default (RFC 2606); the live sender arrives with the provider chosen at launch.
   // 002:T148 (B50): `live` verifies Google's token against Google's published keys, and requires
-  // GOOGLE_CLIENT_IDS; Apple waits for iOS (Q-T4 (a)).
+  // GOOGLE_CLIENT_IDS; Apple waits for iOS (Q-T4 (a)). 002:T177 (SRS DEC-108): `resend` sends through
+  // Resend with EMAIL_PROVIDER_KEY, from EMAIL_FROM under EMAIL_FROM_NAME, replies to SUPPORT_EMAIL.
   SIGN_IN_PROVIDER: z.enum(['fake', 'live']).default('fake'),
-  EMAIL_PROVIDER: z.enum(['fake']).default('fake'),
+  EMAIL_PROVIDER: z.enum(['fake', 'resend']).default('fake'),
   EMAIL_FROM: emailAddress.default('no-reply@ijazah.invalid'),
+  EMAIL_FROM_NAME: senderName.default('إجازة'),
+  // 002:T177: Resend's API key, made on the server by the owner; required with `resend` (below).
+  EMAIL_PROVIDER_KEY: nonEmpty.optional(),
 
   // T001 (FR-145, ADR 0021 D4): the support address four screens show, served by the public
   // configuration query. Required in every mode, a valid address, no default, never an admin setting.
@@ -293,6 +312,8 @@ export const envKeys: readonly string[] = Object.keys(envObject.shape);
 const envKeyKinds = {
   NODE_ENV: 'platform',
   PORT: 'platform',
+  // 002:T181: the process's own listening address, as its port is.
+  API_BIND_ADDRESS: 'platform',
   LOG_LEVEL: 'platform',
   MAX_REQUEST_BODY_BYTES: 'platform',
   DATABASE_URL_OWNER: 'platform',
@@ -329,6 +350,9 @@ const envKeyKinds = {
   SIGN_IN_PROVIDER: 'platform',
   EMAIL_PROVIDER: 'platform',
   EMAIL_FROM: 'platform',
+  // 002:T177: the sender's name is the platform's own; Resend's key is a third party's credential.
+  EMAIL_FROM_NAME: 'platform',
+  EMAIL_PROVIDER_KEY: 'provider',
   SUPPORT_EMAIL: 'platform',
   TRUSTED_PROXY: 'platform',
   TRUSTED_PROXY_ADDRESS: 'platform',
@@ -493,6 +517,16 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     });
   }
 
+  // 002:T177 (SRS DEC-108): Resend refuses a request without its key, so the sender cannot start
+  // without it, in every mode. The key is named, never its value (R-SEC-2).
+  if (env.EMAIL_PROVIDER === 'resend' && env.EMAIL_PROVIDER_KEY === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['EMAIL_PROVIDER_KEY'],
+      message: 'required when EMAIL_PROVIDER=resend (002:T177)',
+    });
+  }
+
   // T009: LiveKit cannot start without its address, its key and its secret. The key is named, never
   // its value (R-SEC-2).
   if (env.VIDEO_PROVIDER === 'livekit') {
@@ -507,9 +541,10 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     }
   }
 
-  // The same for the video, push and messaging stand-ins (T153, FR-056): each answers without
+  // The same for the video, push, sign-in and email stand-ins (T153, FR-056): each answers without
   // reaching anyone, so a deployment would hold no lesson, send no notification and deliver no
-  // one-time code while reporting success. Each is refused on its own key.
+  // one-time code while reporting success. Each is refused on its own key. The messaging port's is
+  // not among them since 002:T177: nothing sends through it.
   if (!standInsAllowed) {
     for (const key of standInProviderKeys) {
       if (env[key] === 'fake') {
@@ -569,6 +604,35 @@ export const envSchema = envObject.superRefine((env, ctx) => {
       message:
         'required outside development and test: the session media keys are keyed under it (T084)',
     });
+  }
+
+  // 002:T177 (PR #159's review, round 1, follow-up 4): «never the provider's own secret» holds only
+  // while the operator copies no other secret into it, so a hosted server refuses the column key's
+  // 32 bytes, however spelled, and LiveKit's secret as text. Compared only when well formed, as the
+  // key-id check above is; the format checks report the rest. No value is named (R-SEC-2).
+  if (!standInsAllowed && env.VIDEO_MEDIA_KEY_SECRET !== undefined) {
+    if (
+      isEncryptionKey(env.VIDEO_MEDIA_KEY_SECRET) &&
+      isEncryptionKey(env.ENCRYPTION_KEY) &&
+      Buffer.from(env.VIDEO_MEDIA_KEY_SECRET, 'base64').equals(
+        Buffer.from(env.ENCRYPTION_KEY, 'base64'),
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['VIDEO_MEDIA_KEY_SECRET'],
+        message:
+          "holds ENCRYPTION_KEY's bytes; generate its own (openssl rand -base64 32) (002:T177, PR #159 FU4)",
+      });
+    }
+    if (env.VIDEO_MEDIA_KEY_SECRET === env.LIVEKIT_API_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['VIDEO_MEDIA_KEY_SECRET'],
+        message:
+          'equals LIVEKIT_API_SECRET; generate its own (openssl rand -base64 32) (002:T177, PR #159 FU4)',
+      });
+    }
   }
 
   // T023: a reserved address is for development and test only; the key is named, never the value.
