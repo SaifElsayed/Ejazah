@@ -753,7 +753,7 @@ days, and an erased person's rows leave the dumps within 14 (ADR 0015: within
   credential») read only under the key they were written with.
 
 The second copy of each is kept in the owner's password manager, under the
-deployment's entry beside `VIDEO_MEDIA_KEY_SECRET`'s, never written here or
+deployment's entry (with `ENCRYPTION_KEY`'s and `VIDEO_MEDIA_KEY_SECRET`'s), never written here or
 anywhere else by value. After a rotation of either, the old value stays in that
 entry until the last dump made under it is past 14 days.
 

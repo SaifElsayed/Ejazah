@@ -20,14 +20,26 @@ import { stat } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-// A nightly job, not a request someone waits on: longer bounds than the API's, still bounded.
-/** How long the connection to the service may take before the attempt is abandoned. */
+// A nightly job, not a request someone waits on: longer bounds than the API's, still bounded. Each is
+// named in R-MONEY-12's exception (amended 2026-11-27, PR #162 r1 Major 1): a transport number of the
+// backup script, not a setting, since its expiry only fails that night's run, which the timer reports;
+// none is a window or limit of the work.
+/**
+ * How long the connection to the service may take before the attempt is abandoned (transport: a stuck
+ * connect fails the night).
+ */
 export const BACKUP_CONNECTION_TIMEOUT_MS = 10_000;
-/** How long one listing, read, copy or delete may take, from its start to the answer's headers. */
+/**
+ * How long one listing, read, copy or delete may take, from its start to the answer's headers
+ * (transport: one call).
+ */
 export const BACKUP_REQUEST_TIMEOUT_MS = 60_000;
-/** How long a dump's upload or download may take: the request timer covers the whole body. */
+/**
+ * How long a dump's upload or download may take: the request timer covers the whole body (transport:
+ * one dump's transfer).
+ */
 export const BACKUP_TRANSFER_TIMEOUT_MS = 3_600_000;
-/** How many attempts one call makes at most. */
+/** How many attempts one call makes at most (transport: a passing fault retried, a lasting one fails the night). */
 export const BACKUP_MAX_ATTEMPTS = 3;
 
 /** Only the owner reads or writes a downloaded dump. */
