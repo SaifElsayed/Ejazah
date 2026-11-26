@@ -85,7 +85,8 @@ export class AdminsService {
 
   /**
    * `admins.add`: the new administrator's id; the invite is queued. `scripts/dev/admin-invite.ts`
-   * (T097) writes the same row with SQL, so a change made here is made there too.
+   * (T097) and `scripts/ops/first-admin.ts` (R2 T178) write the same row with SQL, so a change made
+   * here is made in both.
    */
   async add(
     tx: Tx,

@@ -163,7 +163,9 @@
       },
       "actions": {
         "adminAdd": "إضافة مشرف",
+        "adminBootstrap": "إنشاء أول مشرف من الخادم",
         "adminDisable": "تعطيل مشرف",
+        "adminRecover": "استعادة مشرف من الخادم",
         "adminRegenerateRecoveryCodes": "إعادة توليد رموز الاسترداد",
         "adminResetMfa": "إعادة ضبط التحقق بخطوتين",
         "adminSignOut": "تسجيل الخروج",
