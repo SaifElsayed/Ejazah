@@ -24,9 +24,10 @@ const headerName = z
   .regex(/^[A-Za-z0-9-]+$/, { error: 'must be one HTTP header name, such as X-Forwarded-For' });
 
 // 002:T147 (W8; contracts/kernel.md): the proxy's own address as the API's socket sees it, the one
-// peer whose `TRUSTED_PROXY` header is read. One IP address, v4 or v6, and nothing else.
+// peer whose `TRUSTED_PROXY` header is read; 002:T181 (R2): also the address the API binds to. One IP
+// address, v4 or v6, and nothing else.
 const ipAddress = z.string().refine((value) => isIP(value) !== 0, {
-  error: "must be one IP address, the proxy's own, such as 10.0.0.2",
+  error: 'must be one IP address, such as 10.0.0.2',
 });
 
 // T001 (contracts/ports.md): the audiences a Google identity token may name, comma-separated.
