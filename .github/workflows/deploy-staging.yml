@@ -1,4 +1,6 @@
 # Deploy on merge to main. DEFERRED to Phase 6 by the owner, 2026-10-13 (T092): no staging during development.
+# When it is built (002:T180, Q-3 (a)), a deploy runs `pnpm db:migrate` (the owner role) and then
+# `pnpm db:seed` (the application role; it inserts only absent rows) before the API and the worker restart.
 name: deploy-staging
 
 # The token gets read access only (GitHub Actions hardening guide, OpenSSF Scorecard Token-Permissions).
