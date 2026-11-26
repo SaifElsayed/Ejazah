@@ -362,6 +362,9 @@ When nobody knows an existing administrator's password, invite a new one the
 same way (T097): `pnpm exec tsx scripts/dev/admin-invite.ts --email <x> --name <y>`
 writes the row `admins.add` writes, with SQL, invited by nobody and with no audit
 entry, refuses an address another administrator holds, and queues the invite.
+A hosted server uses neither: its owner runs `scripts/ops/first-admin.ts`
+(«The first administrator» and «When no administrator can sign in», under
+«Hosted deploy»).
 The panel calls the API at `VITE_API_URL` (in `apps/admin/.env`), and the API
 answers it only when `ADMIN_ALLOWED_ORIGINS` lists `http://localhost:5173`.
 
@@ -494,6 +497,51 @@ needs no change to it. The steps of 12/1, on the host:
 The API's own site block (its `reverse_proxy` and the live channel's notes
 under «Capacity») joins this file when the API's host is set up; it is not
 part of T147.
+
+**The first administrator** — after «migrate, then seed», with the worker
+running and the live e-mail sender set, the server's owner runs, on the
+server:
+
+```bash
+pnpm exec tsx scripts/ops/first-admin.ts --email <x> --name <y>
+```
+
+It is refused while any active administrator who can sign in exists (a
+password set; a temporary lock still counts; the seeded `admin@ijazah.invalid`
+never does), without the seeded administrator (run `pnpm db:seed` first), and
+without `ADMIN_PANEL_ORIGIN`, which the invitation's link is built from. It
+writes the administrator as "Add admin" does, invited by nobody, records one
+audit entry, `admin.bootstrap`, under the seeded administrator, which stands
+for the platform, and queues the invitation; it prints the administrator's id,
+never the address. The worker sends the mail. Its link opens the panel's
+`/set-password` for `admin_invite_ttl_hours` (48 h): set the password, then the
+second factor (scan the code into an authenticator app), and keep the recovery
+codes it shows once in the password manager. Then add a second administrator
+from the panel (Settings → Admins, "Add admin"), so that each can reset the
+other's second factor («Reset an administrator's second factor»). If it
+answers `invitation_not_queued`, the administrator is written and audited
+but the queue did not answer: once Redis does, run `--recover` (below) for
+that address.
+
+**When no administrator can sign in** — when the last administrator who could
+sign in has lost the password, the second factor, or both, the server's
+owner runs, on the server, with the worker running:
+
+```bash
+pnpm exec tsx scripts/ops/first-admin.ts --recover --email <x> --reason <r>
+```
+
+In one transaction it clears that administrator's password and its date, the
+second factor's enrolment (with a new secret), the recovery codes, the lock
+and its count, and ends every open session; then it queues a new invitation,
+and the next sign-in repeats the whole setup from its link. There is no way
+back: the old password, second factor and codes are gone. It refuses an
+unknown or a disabled administrator. The audit log records one entry,
+`admin.recover`, under the seeded administrator, with the reason as typed
+(the panel shows «استعادة مشرف من الخادم»): name the cause, never a password
+or a code. A lost second factor alone, while another administrator can sign
+in, is reset from the panel instead; a lost password has no panel path
+(`specs/003-booking/tasks.md` T098, item 1).
 
 ## Leaked credential
 

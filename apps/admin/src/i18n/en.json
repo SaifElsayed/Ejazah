@@ -163,7 +163,9 @@
       },
       "actions": {
         "adminAdd": "Add an administrator",
+        "adminBootstrap": "First administrator created on the server",
         "adminDisable": "Disable an administrator",
+        "adminRecover": "Administrator recovered on the server",
         "adminRegenerateRecoveryCodes": "Regenerate recovery codes",
         "adminResetMfa": "Reset two-step verification",
         "adminSignOut": "Sign out",
