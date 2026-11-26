@@ -47,6 +47,13 @@ export class SettingsRepository implements StoredSettings {
     return new Map(rows.map(({ key, value }) => [key, value]));
   }
 
+  /** Every stored key, in one statement selecting the key alone (002:T180's start-up report). */
+  async storedKeys(): Promise<readonly string[]> {
+    // Bounded by the seed: rows enter `settings` only through it (`update` never inserts).
+    const rows = await this.#database.setting.findMany({ select: { key: true } });
+    return rows.map(({ key }) => key);
+  }
+
   /**
    * Replaces the value stored under `key` by `adminId`'s change and answers the value it replaced,
    * read under the row's lock (the head). Refused with `SettingError` (the key, never the value)

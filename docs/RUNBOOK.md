@@ -233,6 +233,21 @@ the same file at the same time: R-PROC-9 governs the generated client, which
 `pnpm db:generate` rebuilds and nobody edits or commits, and R-DB-1 governs the
 migration.
 
+**A hosted deploy: migrate, then seed** (R2 T180). Before the API and the
+worker restart on a new release, a hosted deploy runs `pnpm db:migrate` (the
+owner role, `DATABASE_URL_OWNER`) and then `pnpm db:seed` (the application
+role, `DATABASE_URL`), in that order: a release's new settings reach the
+database only through the seed, and a key no row holds throws at its first
+read (FR-034). The seed inserts only the rows that are absent
+(`ON CONFLICT DO NOTHING`, `prisma/seed.ts:315-322`), so a value an
+administrator changed in the panel is never rewritten
+(`tests/seed/seed.spec.ts:378-390`), and it is safe on every deploy. At
+start-up the API and the worker each read the stored keys once against the
+settings registry: a warn line with `reason` `settings_missing` names every
+key no row holds, which means the seed was skipped: run it.
+`settings_report_failed` means the keys could not be read. Neither line stops
+the process.
+
 ## Add a module
 
 A backend module arrives with two things before any code: its **ownership
@@ -579,6 +594,19 @@ client's address would otherwise count the proxy.
   `LIVE_PING_INTERVAL_MS`), inside Cloudflare's 100 s idle timeout, so a quiet
   stream is not cut (see «Reverse proxy and the live channel» under
   «Capacity»).
+
+**Each deploy** (R2 T180) — migrate, then seed, then restart the API and the
+worker, on the server, in this order:
+
+```bash
+pnpm db:migrate   # the owner role (DATABASE_URL_OWNER)
+pnpm db:seed      # the application role (DATABASE_URL); inserts only absent rows
+```
+
+The seed never rewrites a setting an administrator changed («A hosted deploy:
+migrate, then seed» under «Migration workflow»). After the restart, neither
+process's log may hold a warn line with `reason` `settings_missing`: one names
+the keys no row holds, so the seed did not run on this database; run it.
 
 **The first administrator** — after «migrate, then seed», with the worker
 running and the live e-mail sender set, the server's owner runs, on the

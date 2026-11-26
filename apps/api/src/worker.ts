@@ -135,8 +135,12 @@ const database = openDatabase(config.DATABASE_URL, {
 });
 
 // Every operational number a job reads comes through this reader (FR-034); the worker refuses to
-// start without one. No key is read here: the store is empty until the seed (T074).
+// start without one. No value is read here: the store is filled by the seed (T074), and an empty
+// store still boots; it is reported instead, just below.
 const settings = requireSettingsReader(admin.createSettingsReader(database));
+// 002:T180: one warn line `settings_missing` names every registry key no row holds (a deploy that
+// skipped `pnpm db:seed`), or `settings_report_failed` the failed read; it never stops the boot.
+await admin.reportMissingSettings(database, log);
 
 // Each port's provider is chosen here, once, from the configuration (T121, FR-056), and handed to
 // each job as it arrives. Push is the notification delivery job's alone (R-API-15).

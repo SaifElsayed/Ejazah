@@ -26,7 +26,14 @@ const [
   { createRateLimiter },
   { transactionsOver },
   { requireAuditWriter },
-  { createAdminServices, createAuditWriter, createSettingsReader, resolveAdminSession },
+  {
+    createAdminServices,
+    createAuditWriter,
+    createSettingsReader,
+    // 002:T180: the start-up report of missing settings.
+    reportMissingSettings,
+    resolveAdminSession,
+  },
   catalog,
   booking,
   identity,
@@ -107,9 +114,13 @@ const database = openDatabase(config.DATABASE_URL, {
 
 // Every operational number is read through this reader (FR-034); the process refuses to start
 // without one. It is handed to each kernel part that reads settings as that part arrives (T103's
-// rate limits, the idempotent procedures of the surfaces). No key is read here: the store is empty
-// until the seed (T074), and an empty store must not stop the process booting.
+// rate limits, the idempotent procedures of the surfaces). No value is read here: the store is
+// filled by the seed (T074), and an empty store must not stop the process booting; it is reported
+// instead, just below.
 const settings = requireSettingsReader(createSettingsReader(database));
+// 002:T180: one warn line `settings_missing` names every registry key no row holds (a deploy that
+// skipped `pnpm db:seed`), or `settings_report_failed` the failed read; it never stops the boot.
+await reportMissingSettings(database, log);
 
 // The live channel (T063 of specs/004-sessions, R-324): one in-process bus and the registry of
 // this process's open streams. Every request's context carries a publisher over the bus,
