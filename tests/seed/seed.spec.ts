@@ -186,6 +186,8 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_failed_one_time_code: { limit: 10, window_seconds: 86400 },
   // 004:T084 (SRS DEC-106, §3.14): a participant's reports that their phone could not encrypt.
   rate_limit_encryption_failure: { limit: 5, window_seconds: 60 },
+  // 002:T184 (R3): no floor until an administrator raises it.
+  min_app_build: 0,
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
