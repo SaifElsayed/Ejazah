@@ -66,3 +66,25 @@ export function createSessionStore(store: SecureStoreLike = SecureStore): Sessio
     clear: () => serial(clearNow),
   };
 }
+
+// R3 (specs/005-certification T020's follow-up, the owner's (a), 2026-11-28; FR-623): the device's
+// push token is kept beside the session, so a sign-out in a later process can still remove it from
+// the account. Written by the push binding when it reads the token, cleared at sign-out.
+
+/** Where the device's last push token lives. */
+export interface PushTokenStore {
+  read(): Promise<string | null>;
+  write(token: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
+const PUSH_TOKEN_KEY = 'ijazah.push.token';
+
+/** The push token's store over the device's secure store (`store` is injectable for tests). */
+export function createPushTokenStore(store: SecureStoreLike = SecureStore): PushTokenStore {
+  return {
+    read: () => store.getItemAsync(PUSH_TOKEN_KEY),
+    write: (token) => store.setItemAsync(PUSH_TOKEN_KEY, token, writeOptions),
+    clear: () => store.deleteItemAsync(PUSH_TOKEN_KEY),
+  };
+}

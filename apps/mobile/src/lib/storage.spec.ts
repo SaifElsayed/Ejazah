@@ -3,7 +3,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY } from 'expo-secure-store';
 
-import { createSessionStore, type SecureStoreLike } from './storage';
+import { createPushTokenStore, createSessionStore, type SecureStoreLike } from './storage';
 
 /** An in-memory secure store that records the options each write was given. */
 function fakeSecureStore() {
@@ -69,5 +69,29 @@ describe('the session store', () => {
     await sessions.clear();
     expect(items.size).toBe(0);
     expect(await sessions.read()).toBeNull();
+  });
+});
+
+// R3 (005:T020's follow-up, the owner's (a)): the push token kept for a later sign-out.
+describe('the push token store', () => {
+  it('writes, reads and clears the token, on this device only', async () => {
+    const { store, items, options } = fakeSecureStore();
+    const pushTokens = createPushTokenStore(store);
+    expect(await pushTokens.read()).toBeNull();
+    await pushTokens.write('ExponentPushToken[device-1]');
+    expect(await pushTokens.read()).toBe('ExponentPushToken[device-1]');
+    expect(options).toEqual([{ keychainAccessible: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY }]);
+    await pushTokens.clear();
+    expect(items.size).toBe(0);
+    expect(await pushTokens.read()).toBeNull();
+  });
+
+  it('is kept apart from the session', async () => {
+    const { store } = fakeSecureStore();
+    await createPushTokenStore(store).write('ExponentPushToken[device-1]');
+    const sessions = createSessionStore(store);
+    await sessions.write(tokens);
+    await sessions.clear();
+    expect(await createPushTokenStore(store).read()).toBe('ExponentPushToken[device-1]');
   });
 });

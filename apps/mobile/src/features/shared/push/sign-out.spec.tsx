@@ -1,7 +1,8 @@
 // R3 (specs/005-certification T020's follow-up Q-T3; FR-623, «a signed-out user's tokens are
 // removed»): the sign-out removes the device's push token held by the binding, with the session
 // still open, before it revokes the session. Best effort: a failed removal never holds the sign-out,
-// and with no token held nothing is sent.
+// and with no token held nothing is sent. The token tried is then forgotten (kept in the secure store
+// since the owner's (a), 2026-11-28, so a token read by an earlier process is removed too).
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react-native';
@@ -16,9 +17,12 @@ jest.mock('../../../lib/api', () => ({ useApi: () => mockApi.value }));
 jest.mock('../auth/providers', () => ({ signOutProviders: async () => undefined }));
 
 let mockHeld: string | null = null;
+const mockForget = jest.fn(async () => {
+  mockHeld = null;
+});
 jest.mock('./binding', () => {
   const actual = jest.requireActual<typeof import('./binding')>('./binding');
-  return { ...actual, heldPushToken: () => mockHeld };
+  return { ...actual, heldPushToken: async () => mockHeld, forgetPushToken: () => mockForget() };
 });
 
 const TOKEN = 'ExponentPushToken[device-1]';
@@ -49,6 +53,7 @@ beforeEach(async () => {
     order.push('signOut');
   });
   mockHeld = TOKEN;
+  mockForget.mockClear();
 });
 
 afterEach(() => {
@@ -61,6 +66,7 @@ describe('the sign-out and the push token (FR-623)', () => {
     expect(remove).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledWith({ token: TOKEN });
     expect(order).toEqual(['remove', 'signOut']);
+    expect(mockForget).toHaveBeenCalledTimes(1);
     expect(mockApi.sessions.current()).toBeNull();
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
@@ -69,6 +75,7 @@ describe('the sign-out and the push token (FR-623)', () => {
     remove.mockRejectedValue(apiError('INTERNAL'));
     await signOut();
     expect(mockApi.api.auth.signOut.mutate).toHaveBeenCalledTimes(1);
+    expect(mockForget).toHaveBeenCalledTimes(1);
     expect(mockApi.sessions.current()).toBeNull();
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
@@ -77,6 +84,7 @@ describe('the sign-out and the push token (FR-623)', () => {
     mockHeld = null;
     await signOut();
     expect(remove).not.toHaveBeenCalled();
+    expect(mockForget).not.toHaveBeenCalled();
     expect(mockApi.sessions.current()).toBeNull();
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
