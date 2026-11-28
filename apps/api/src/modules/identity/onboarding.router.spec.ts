@@ -9,7 +9,7 @@
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { hashLookupToken } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildIdentity,
   codeMailedTo,
@@ -109,6 +109,43 @@ describe('onboarding.complete', () => {
     ]);
     const user = await rowsOf(database).userByEmail(email);
     expect(user?.preferredLanguage).toBe('ar');
+  });
+
+  // R3 T189 (FR-AUTH-4 as amended by DEC-109): the spec's clock is 2026-10-20, so 2008-10-21 is 17.
+  it("refuses a minor without the guardian's tick, the request's log handed to the service", async () => {
+    const complete = vi.spyOn(identity.onboarding, 'complete');
+    const onboardingToken = await providerToken(uniqueEmail(), true);
+    await expect(
+      surface
+        .anonymous()
+        .onboarding.complete({ onboardingToken, ...profile, dateOfBirth: '2008-10-21' }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: 'VALIDATION_FAILED',
+        details: [{ path: 'guardianAgreed', code: 'required' }],
+      },
+    });
+    expect(complete).toHaveBeenCalledWith(
+      expect.objectContaining({ dateOfBirth: '2008-10-21' }),
+      'ar',
+      expect.objectContaining({ info: expect.any(Function) }),
+    );
+  });
+
+  it("takes a minor's tick through the contract and records its time on the Terms' acceptance", async () => {
+    const email = uniqueEmail();
+    const onboardingToken = await providerToken(email, true);
+    await surface.anonymous().onboarding.complete({
+      onboardingToken,
+      ...profile,
+      dateOfBirth: '2008-10-21',
+      guardianAgreed: true,
+    });
+    const user = await rowsOf(database).userByEmail(email);
+    const terms = await rowsOf(database).terms(user?.id ?? '');
+    expect(terms.map((row) => row.guardianAgreedAt?.toISOString())).toEqual([
+      '2026-10-20T08:00:00.000Z',
+    ]);
   });
 
   it('lands a teacher on the application, and refuses the same token a second time', async () => {

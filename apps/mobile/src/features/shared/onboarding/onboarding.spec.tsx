@@ -9,7 +9,9 @@
 //
 // R3 T185: the Terms sentence names the privacy policy too, each a link in one template (ق3 (a″)),
 // and the privacy policy is served content as the Terms are.
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+//
+// R3 T189: a minor's guardian agreement, one more checkbox under the Terms, asked under 18 only.
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { timeZoneCities } from '@ijazah/time/cities';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -443,6 +445,125 @@ describe('OnboardProfile', () => {
     expect(getSession()).toEqual({ kind: 'signed-out' });
     expect(mockApi.sessions.current()).toBeNull();
     expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
+    expect(getDraft()).not.toBeNull();
+  });
+});
+
+// R3 T189 (SRS FR-AUTH-4 as amended by DEC-109): a person under 18 today, in the zone the step
+// holds, ticks that a parent or guardian agrees. The clock is 2026-10-20 08:00 UTC, 11:00 in Cairo:
+// a person born on 2008-10-21 is 17, one born on 2008-10-20 is 18 that day.
+describe('OnboardProfile, a minor’s guardian agreement (T189)', () => {
+  const MINOR = '2008-10-21';
+  const EIGHTEEN_TODAY = '2008-10-20';
+  const guardian = (direction: 'rtl' | 'ltr' = 'rtl') =>
+    screen.queryByRole('checkbox', { name: said(direction, 'onboarding.profile.guardianAgree') });
+  const continueState = () =>
+    screen.getByRole('button', { name: ar('common.action.continue') }).props['accessibilityState'];
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-20T08:00:00.000Z'), advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('asks a minor under the Terms, unticked, and holds «متابعة» until it is ticked', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    await inBothDirections(
+      () => <OnboardProfile />,
+      (_rendered, direction) => {
+        const checkboxes = screen.getAllByRole('checkbox');
+        expect(checkboxes).toHaveLength(2);
+        expect(checkboxes[1]).toBe(guardian(direction));
+        expect(guardian(direction)?.props['accessibilityState']).toMatchObject({ checked: false });
+      },
+    );
+    await renderIn('rtl', <OnboardProfile />);
+    expect(continueState()).toMatchObject({ disabled: true });
+    await fireEvent.press(guardian() as never);
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: true });
+    expect(continueState()).toMatchObject({ disabled: false });
+  });
+
+  it('never asks a person who is 18 on the birthday itself', async () => {
+    updateDraft({
+      role: 'student',
+      gender: 'female',
+      dateOfBirth: EIGHTEEN_TODAY,
+      termsAccepted: true,
+    });
+    await renderIn('rtl', <OnboardProfile />);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(guardian()).toBeNull();
+    expect(continueState()).toMatchObject({ disabled: false });
+  });
+
+  it('hides it and clears the tick when the date becomes an adult’s', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(guardian() as never);
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    await pickDate(['12', 'مارس', '2004'], ar('common.action.done'));
+    expect(guardian()).toBeNull();
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    await pickDate(['21', 'أكتوبر', '2008'], ar('common.action.done'));
+    expect(getDraft()?.dateOfBirth).toBe(MINOR);
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: false });
+    expect(continueState()).toMatchObject({ disabled: true });
+  });
+
+  it('sends `guardianAgreed: true` with the ticked agreement', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    mockApi.api.onboarding.complete.mutate.mockResolvedValue({
+      ...tokens,
+      landing: 'student_home',
+    });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(guardian() as never);
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'restoring' }));
+    expect(mockApi.api.onboarding.complete.mutate).toHaveBeenCalledWith({
+      onboardingToken: 'onboarding-1',
+      role: 'student',
+      displayName: 'أمل',
+      gender: 'female',
+      dateOfBirth: MINOR,
+      timezone: 'Africa/Cairo',
+      termsVersion: '2026-10',
+      guardianAgreed: true,
+    });
+  });
+
+  it('shows a refusal for want of it on the checkbox, unticked, with the form’s error', async () => {
+    updateDraft({
+      role: 'student',
+      gender: 'female',
+      dateOfBirth: EIGHTEEN_TODAY,
+      termsAccepted: true,
+    });
+    mockApi.api.onboarding.complete.mutate.mockRejectedValue(
+      apiError('VALIDATION_FAILED', [{ path: 'guardianAgreed', code: 'required' }]),
+    );
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    expect(await screen.findByText(ar('onboarding.profile.guardianRequired'))).toBeTruthy();
+    expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+    expect(screen.queryByText(ar('onboarding.confirm.title'))).toBeNull();
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: false });
+    expect(continueState()).toMatchObject({ disabled: true });
+    await fireEvent.press(guardian() as never);
+    expect(screen.queryByText(ar('onboarding.profile.guardianRequired'))).toBeNull();
+    expect(continueState()).toMatchObject({ disabled: false });
     expect(getDraft()).not.toBeNull();
   });
 });

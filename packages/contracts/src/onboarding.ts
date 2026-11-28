@@ -42,6 +42,11 @@ export const onboardingCompleteInput = z.object({
   /** Both required exactly when the token's identity has no verified email. */
   email: emailAddress.optional(),
   emailCode: oneTimeCode.optional(),
+  /**
+   * R3 T189 (FR-AUTH-4 as amended by DEC-109): a minor's parent or guardian agrees to the sign-up.
+   * Required exactly when the date of birth makes the person under 18; ignored for an adult.
+   */
+  guardianAgreed: z.literal(true).optional(),
 });
 
 export const onboardingCompleteOutput = sessionOutput;

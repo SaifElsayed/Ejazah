@@ -235,6 +235,7 @@ FR-AUTH-11 — versioned, because Terms will change and re-acceptance must be pr
 | user_id | FK → users | |
 | terms_version | text | |
 | accepted_at | timestamptz | |
+| guardian_agreed_at | timestamptz, nullable | The time a minor ticked «وليّ أمري موافق على تسجيلي» at sign-up, equal to `accepted_at`; NULL for an adult (FR-AUTH-4 as amended by DEC-109; changelog row 81) |
 
 ## 3. Verification
 
@@ -1658,3 +1659,9 @@ Amended on 2026-11-24 for T014 of `specs/006-programme/tasks.md` (B-P3), on the 
 | # | Change | Migration |
 |---|---|---|
 | 80 | §5 enum `programme_request_kind` gains `charge_unknown`, at its end, committed before use: the sweep's Administrator item for an automatic charge the gateway has not answered after `programme_charge_inquiry_tries` asks (one open per enrollment and kind, the existing partial unique index); approved = no charge found, extended = keep asking; §15 rule 80's `programme_requests_extended_check` admits `extended` on it, replaced after a `COMMIT` that commits the value first (55P04) | `20261124105820_programme_charge_unknown` (B-P3) |
+
+Amended on 2026-11-28 for T189 of `specs/002-identity/tasks.md` (R3), on the owner's answer of 2026-11-28 on R3's conflict check («علامة ولي الأمر أ», typed in R3's review session; SRS FR-AUTH-4 as amended by DEC-109).
+
+| # | Change | Migration |
+|---|---|---|
+| 81 | §2 `terms_acceptances.guardian_agreed_at` (timestamptz, nullable; NULL for an adult and on every existing row): the time a minor ticked «وليّ أمري موافق على تسجيلي» at sign-up, written in the same row as the Terms' acceptance; the onboarding refuses a minor without it | `20261128093614_terms_acceptance_guardian_agreed` (R3) |

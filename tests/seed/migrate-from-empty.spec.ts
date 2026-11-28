@@ -96,4 +96,20 @@ describe('the migration history applied to an empty database (T073)', () => {
     expect(modelTables()).toHaveLength(53);
     expect(tables).toEqual(modelTables());
   });
+
+  // R3 T189 (ERD changelog row 81): a minor's guardian tick, beside the Terms' acceptance.
+  it('lands `terms_acceptances.guardian_agreed_at`, a nullable timestamptz with no default', async () => {
+    const { rows } = await owner.query<{
+      data_type: string;
+      is_nullable: string;
+      column_default: string | null;
+    }>(
+      `SELECT data_type, is_nullable, column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'terms_acceptances'
+          AND column_name = 'guardian_agreed_at'`,
+    );
+    expect(rows).toEqual([
+      { data_type: 'timestamp with time zone', is_nullable: 'YES', column_default: null },
+    ]);
+  });
 });
