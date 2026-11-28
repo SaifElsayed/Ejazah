@@ -1045,7 +1045,7 @@ message):
   build, `find apps/admin/build -name '*.map'` must list nothing.
 - **The server**: `SENTRY_DSN` (the `ijazah-api` DSN), `SENTRY_ENVIRONMENT`
   and `SENTRY_RELEASE` (the deploy's git SHA, `git rev-parse HEAD`). The worker
-  takes the DSN only: its reports carry `NODE_ENV`'s environment and no
+  reads the same three keys, so its reports carry the same environment and
   release.
 
 **From crash to fix:**
