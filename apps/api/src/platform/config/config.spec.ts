@@ -1338,6 +1338,62 @@ describe('the bind address (002:T181)', () => {
   });
 });
 
+describe('the crash reports’ environment and release (R3 T183, Q-5 (a))', () => {
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('leaves both unset by default, an empty value included', () => {
+    const config = loadConfig({ ...validEnv, SENTRY_ENVIRONMENT: '', SENTRY_RELEASE: '' });
+    expect(config.SENTRY_ENVIRONMENT).toBeUndefined();
+    expect(config.SENTRY_RELEASE).toBeUndefined();
+    expect(loadConfig(validEnv).SENTRY_ENVIRONMENT).toBeUndefined();
+  });
+
+  it('takes the three environments Sentry is told apart by', () => {
+    for (const environment of ['development', 'closed-test', 'production']) {
+      expect(loadConfig({ ...validEnv, SENTRY_ENVIRONMENT: environment }).SENTRY_ENVIRONMENT).toBe(
+        environment,
+      );
+    }
+  });
+
+  it('refuses any other environment, naming the key and never the value', () => {
+    for (const value of ['staging', 'qa', 'Production']) {
+      const failure = refusal({ ...validEnv, SENTRY_ENVIRONMENT: value });
+      expect(failure.offendingKeys).toEqual(['SENTRY_ENVIRONMENT']);
+      expect(failure.message).not.toContain(value);
+    }
+  });
+
+  it('takes a git SHA as the release, short or whole', () => {
+    for (const sha of ['deb6b02', 'deb6b02b4c1f5e6a7b8c9d0e1f2a3b4c5d6e7f80']) {
+      expect(loadConfig({ ...validEnv, SENTRY_RELEASE: sha }).SENTRY_RELEASE).toBe(sha);
+    }
+  });
+
+  it('refuses a release that is not 7 to 40 hex characters, naming the key and never the value', () => {
+    for (const value of ['not-a-sha', 'deb6b0', 'a'.repeat(41), 'v1.0.0', 'deb6b02 ']) {
+      const failure = refusal({ ...validEnv, SENTRY_RELEASE: value });
+      expect(failure.offendingKeys).toEqual(['SENTRY_RELEASE']);
+      expect(failure.message).not.toContain(value);
+    }
+  });
+
+  it('classifies both as the platform’s own keys', () => {
+    for (const key of ['SENTRY_ENVIRONMENT', 'SENTRY_RELEASE']) {
+      expect(platformKeys).toContain(key);
+      expect(providerKeys).not.toContain(key);
+    }
+  });
+});
+
 describe('loadConfigOrExit (T015, FR-039)', () => {
   afterEach(() => {
     vi.restoreAllMocks();

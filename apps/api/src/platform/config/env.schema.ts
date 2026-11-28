@@ -300,6 +300,13 @@ const envObject = z.object({
   ADMIN_PANEL_ORIGIN: origin.optional(),
 
   SENTRY_DSN: httpUrl.optional(),
+  // R3 T183 (Q-5 (a)): the environment the API's crash reports go to (in place of NODE_ENV's, which
+  // has no closed test), and the deploy's release, its git SHA. Unset, NODE_ENV's and none.
+  SENTRY_ENVIRONMENT: z.enum(['development', 'closed-test', 'production']).optional(),
+  SENTRY_RELEASE: z
+    .string()
+    .regex(/^[0-9a-f]{7,40}$/i, { error: 'must be a git SHA, 7 to 40 hex characters' })
+    .optional(),
 });
 
 export const envKeys: readonly string[] = Object.keys(envObject.shape);
@@ -375,6 +382,8 @@ const envKeyKinds = {
   ADMIN_ALLOWED_ORIGINS: 'platform',
   ADMIN_PANEL_ORIGIN: 'platform',
   SENTRY_DSN: 'provider',
+  SENTRY_ENVIRONMENT: 'platform',
+  SENTRY_RELEASE: 'platform',
 } as const satisfies Record<keyof typeof envObject.shape, 'provider' | 'platform'>;
 
 type EnvKey = keyof typeof envKeyKinds;

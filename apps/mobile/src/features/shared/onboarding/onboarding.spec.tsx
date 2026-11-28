@@ -6,7 +6,12 @@
 //
 // T097 (FR-155): `complete` refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned person's
 // deleted account) lands on the signed-out banned state and forgets the draft, storing no session.
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+//
+// R3 T185: the Terms sentence names the privacy policy too, each a link in one template (ق3 (a″)),
+// and the privacy policy is served content as the Terms are.
+//
+// R3 T189: a minor's guardian agreement, one more checkbox under the Terms, asked under 18 only.
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { timeZoneCities } from '@ijazah/time/cities';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
@@ -24,7 +29,8 @@ import { getSession, setSession } from '../../../lib/session';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { BirthDateSheet } from './components/BirthDateSheet';
 import { clearDraft, getDraft, startOnboarding, updateDraft } from './draft';
-import { OnboardProfile, Role, Terms, TimeZonePicker } from './index';
+import { OnboardProfile, Privacy, Role, Terms, TimeZonePicker } from './index';
+import { isMinorToday } from './screens/OnboardProfile';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({
@@ -235,6 +241,39 @@ describe('OnboardProfile', () => {
     expect(screen.queryByText('\u2069')).toBeNull();
   });
 
+  it('names the Terms and the privacy policy in the one box, each a link (R3 T185, \u06423 (a\u2033))', async () => {
+    updateDraft({ role: 'student' });
+    await inBothDirections(
+      () => <OnboardProfile />,
+      (_rendered, direction) => {
+        expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+        expect(
+          screen.getByRole('link', { name: said(direction, 'onboarding.profile.termsLink') }),
+        ).toBeTruthy();
+        expect(
+          screen.getByRole('link', { name: said(direction, 'onboarding.profile.privacyLink') }),
+        ).toBeTruthy();
+        // The pieces between the links, whole and with no mark: one template, two places.
+        expect(
+          screen.getByText(
+            direction === 'rtl'
+              ? '\u0623\u0648\u0627\u0641\u0642 \u0639\u0644\u0649'
+              : 'I agree to the',
+          ),
+        ).toBeTruthy();
+        expect(screen.getByText(direction === 'rtl' ? '\u0648' : 'and the')).toBeTruthy();
+        expect(screen.queryByText('\u2069')).toBeNull();
+      },
+    );
+  });
+
+  it('opens the privacy policy from the same sentence (R3 T185)', async () => {
+    updateDraft({ role: 'student' });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(screen.getByRole('link', { name: ar('onboarding.profile.privacyLink') }));
+    expect(mockNavigate.mock.calls).toEqual([['/privacy']]);
+  });
+
   it('confirms the student and creates the account in one call, then lands it', async () => {
     updateDraft({ role: 'student' });
     mockApi.api.onboarding.complete.mutate.mockResolvedValue({
@@ -411,6 +450,136 @@ describe('OnboardProfile', () => {
     expect(getSession()).toEqual({ kind: 'signed-out' });
     expect(mockApi.sessions.current()).toBeNull();
     expect(mockNavigate).not.toHaveBeenCalledWith('/(auth)/banned');
+    expect(getDraft()).not.toBeNull();
+  });
+});
+
+// R3 T189 (SRS FR-AUTH-4 as amended by DEC-109): a person under 18 today, in the zone the step
+// holds, ticks that a parent or guardian agrees. The clock is 2026-10-20 08:00 UTC, 11:00 in Cairo:
+// a person born on 2008-10-21 is 17, one born on 2008-10-20 is 18 that day.
+describe('OnboardProfile, a minor’s guardian agreement (T189)', () => {
+  // PR #163 r1 Minor 2: the age is read during render; a failure of the time library (a zone it
+  // cannot resolve, a clock that is no instant) answers «not a minor», so the step draws and the
+  // server's refusal shows the checkbox, never the crash screen.
+  it('reads no minor when the time cannot be read', () => {
+    const minor = { dateOfBirth: '2010-01-01' };
+    const now = new Date('2026-10-20T08:00:00.000Z');
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Cairo' }, now)).toBe(true);
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Not_A_City' }, now)).toBe(false);
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Cairo' }, new Date(Number.NaN))).toBe(false);
+  });
+
+  const MINOR = '2008-10-21';
+  const EIGHTEEN_TODAY = '2008-10-20';
+  const guardian = (direction: 'rtl' | 'ltr' = 'rtl') =>
+    screen.queryByRole('checkbox', { name: said(direction, 'onboarding.profile.guardianAgree') });
+  const continueState = () =>
+    screen.getByRole('button', { name: ar('common.action.continue') }).props['accessibilityState'];
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-20T08:00:00.000Z'), advanceTimers: true });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('asks a minor under the Terms, unticked, and holds «متابعة» until it is ticked', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    await inBothDirections(
+      () => <OnboardProfile />,
+      (_rendered, direction) => {
+        const checkboxes = screen.getAllByRole('checkbox');
+        expect(checkboxes).toHaveLength(2);
+        expect(checkboxes[1]).toBe(guardian(direction));
+        expect(guardian(direction)?.props['accessibilityState']).toMatchObject({ checked: false });
+      },
+    );
+    await renderIn('rtl', <OnboardProfile />);
+    expect(continueState()).toMatchObject({ disabled: true });
+    await fireEvent.press(guardian() as never);
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: true });
+    expect(continueState()).toMatchObject({ disabled: false });
+  });
+
+  it('never asks a person who is 18 on the birthday itself', async () => {
+    updateDraft({
+      role: 'student',
+      gender: 'female',
+      dateOfBirth: EIGHTEEN_TODAY,
+      termsAccepted: true,
+    });
+    await renderIn('rtl', <OnboardProfile />);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(guardian()).toBeNull();
+    expect(continueState()).toMatchObject({ disabled: false });
+  });
+
+  it('hides it and clears the tick when the date becomes an adult’s', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(guardian() as never);
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    await pickDate(['12', 'مارس', '2004'], ar('common.action.done'));
+    expect(guardian()).toBeNull();
+    await fireEvent.press(
+      screen.getByRole('button', { name: ar('onboarding.profile.dateOfBirth') }),
+    );
+    await pickDate(['21', 'أكتوبر', '2008'], ar('common.action.done'));
+    expect(getDraft()?.dateOfBirth).toBe(MINOR);
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: false });
+    expect(continueState()).toMatchObject({ disabled: true });
+  });
+
+  it('sends `guardianAgreed: true` with the ticked agreement', async () => {
+    updateDraft({ role: 'student', gender: 'female', dateOfBirth: MINOR, termsAccepted: true });
+    mockApi.api.onboarding.complete.mutate.mockResolvedValue({
+      ...tokens,
+      landing: 'student_home',
+    });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(guardian() as never);
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    await waitFor(() => expect(getSession()).toEqual({ kind: 'restoring' }));
+    expect(mockApi.api.onboarding.complete.mutate).toHaveBeenCalledWith({
+      onboardingToken: 'onboarding-1',
+      role: 'student',
+      displayName: 'أمل',
+      gender: 'female',
+      dateOfBirth: MINOR,
+      timezone: 'Africa/Cairo',
+      termsVersion: '2026-10',
+      guardianAgreed: true,
+    });
+  });
+
+  it('shows a refusal for want of it on the checkbox, unticked, with the form’s error', async () => {
+    updateDraft({
+      role: 'student',
+      gender: 'female',
+      dateOfBirth: EIGHTEEN_TODAY,
+      termsAccepted: true,
+    });
+    mockApi.api.onboarding.complete.mutate.mockRejectedValue(
+      apiError('VALIDATION_FAILED', [{ path: 'guardianAgreed', code: 'required' }]),
+    );
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.continue') }));
+    await fireEvent.press(
+      await screen.findByRole('button', { name: ar('onboarding.confirm.confirmStudent') }),
+    );
+    expect(await screen.findByText(ar('onboarding.profile.guardianRequired'))).toBeTruthy();
+    expect(screen.queryByText(ar('common.state.actionError'))).toBeNull();
+    expect(screen.queryByText(ar('onboarding.confirm.title'))).toBeNull();
+    expect(guardian()?.props['accessibilityState']).toMatchObject({ checked: false });
+    expect(continueState()).toMatchObject({ disabled: true });
+    await fireEvent.press(guardian() as never);
+    expect(screen.queryByText(ar('onboarding.profile.guardianRequired'))).toBeNull();
+    expect(continueState()).toMatchObject({ disabled: false });
     expect(getDraft()).not.toBeNull();
   });
 });
@@ -595,5 +764,41 @@ describe('Terms', () => {
     expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
     expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+  });
+});
+
+// R3 T185: the privacy policy, served as the Terms are (`GET /privacy?lang=&theme=`).
+describe('Privacy', () => {
+  beforeEach(() => {
+    process.env['EXPO_PUBLIC_API_URL'] = 'https://api.test/';
+  });
+
+  it("shows the served privacy policy in the person's language", async () => {
+    await renderIn('rtl', <Privacy />);
+    expect(screen.getByText(ar('onboarding.privacy.title'))).toBeTruthy();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=light');
+    await renderIn('ltr', <Privacy />);
+    expect(screen.getByText(translate('en', 'onboarding.privacy.title'))).toBeTruthy();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=en&theme=light');
+    setLocale('ar');
+  });
+
+  it("asks for the served privacy policy in the app's scheme", async () => {
+    await renderIn('rtl', <Privacy />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=dark');
+    await renderIn('ltr', <Privacy />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=en&theme=dark');
+    setLocale('ar');
+  });
+
+  it('says a failed load with a retry, and goes back from its header', async () => {
+    await renderIn('rtl', <Privacy />);
+    await act(async () => mockWebView?.onError?.());
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
+    expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=light');
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
+    expect(mockNavigate).toHaveBeenCalledWith('back');
   });
 });

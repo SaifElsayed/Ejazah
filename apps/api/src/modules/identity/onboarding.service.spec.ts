@@ -4,7 +4,8 @@
 // the one role and the terms acceptance and a session in one transaction, and only then; a failure
 // mid-way leaves no row; the token's `jti` is claimed once in Redis; nothing of the person is stored
 // before `complete` commits, so an abandoned flow leaves no row anywhere. Over the real database,
-// the stand-ins and in-memory marks.
+// the stand-ins and in-memory marks. R3 T189: a minor (under 18 today in the person's zone) is
+// refused without the guardian's tick; with it, the tick's time is the Terms' acceptance's.
 // @module-tag database (T124: skipped unless IJAZAH_DB_SPECS=1)
 import { createHmac } from 'node:crypto';
 
@@ -18,6 +19,7 @@ import {
 } from '../../platform/crypto/encryption.js';
 import { verifyPassword } from '../../platform/crypto/hashing.js';
 import { closeDatabase } from '../../platform/db/prisma.repository.js';
+import { isRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import {
   buildIdentity,
   codeMailedTo,
@@ -270,6 +272,105 @@ describe('complete', () => {
     await expect(
       identity.onboarding.complete({ ...answers, onboardingToken }),
     ).rejects.toMatchObject({ code: 'EMAIL_IN_USE_BY_OTHER_METHOD' });
+  });
+});
+
+// R3 T189 (SRS FR-AUTH-4 as amended by DEC-109; ERD changelog row 81): a minor signs up with a
+// parent's or guardian's agreement. The spec's clock is 2026-10-20 08:00 UTC, 11:00 in Cairo, so a
+// person born on 2008-10-21 is 17 there and one born on 2008-10-20 is 18 that day.
+describe('a minor’s guardian agreement (T189)', () => {
+  const MINOR = '2008-10-21';
+  const EIGHTEEN_TODAY = '2008-10-20';
+
+  function infoLog() {
+    const lines: { entry: unknown; message: string }[] = [];
+    return {
+      lines,
+      log: {
+        info: ((entry: object, message: string) => {
+          lines.push({ entry, message });
+        }) as never,
+      },
+    };
+  }
+
+  it('refuses a minor without it, logs one line with its reason only, and keeps the token good', async () => {
+    const { onboardingToken, subject, email } = await providerToken('google');
+    const { lines, log } = infoLog();
+    const refusal = await identity.onboarding
+      .complete({ ...answers, dateOfBirth: MINOR, onboardingToken }, 'ar', log)
+      .catch((error: unknown) => error);
+    expect(refusal).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: [{ path: 'guardianAgreed', code: 'required' }],
+    });
+    expect(isRefusalLogged(refusal)).toBe(true);
+    expect(lines).toEqual([
+      { entry: { reason: 'guardian_agreement_missing' }, message: expect.any(String) },
+    ]);
+    await expect(rowsNaming([subject, email ?? ''])).resolves.toEqual([]);
+    await expect(
+      identity.onboarding.complete({
+        ...answers,
+        dateOfBirth: MINOR,
+        onboardingToken,
+        guardianAgreed: true,
+      }),
+    ).resolves.toMatchObject({ landing: 'student_home' });
+  });
+
+  it('writes the tick’s time on the Terms’ acceptance, the acceptance’s own instant', async () => {
+    const { onboardingToken } = await providerToken('google');
+    const answer = await identity.onboarding.complete({
+      ...answers,
+      dateOfBirth: MINOR,
+      onboardingToken,
+      guardianAgreed: true,
+    });
+    const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId ?? '';
+    const terms = await rowsOf(database).terms(userId);
+    expect(terms).toHaveLength(1);
+    expect(terms[0]?.guardianAgreedAt?.toISOString()).toBe('2026-10-20T08:00:00.000Z');
+    expect(terms[0]?.guardianAgreedAt).toEqual(terms[0]?.acceptedAt);
+  });
+
+  it('takes an adult on the eighteenth birthday without it, and writes NULL', async () => {
+    const { onboardingToken } = await providerToken('google');
+    const answer = await identity.onboarding.complete({
+      ...answers,
+      dateOfBirth: EIGHTEEN_TODAY,
+      onboardingToken,
+    });
+    const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId ?? '';
+    const terms = await rowsOf(database).terms(userId);
+    expect(terms.map((row) => row.guardianAgreedAt)).toEqual([null]);
+  });
+
+  it('ignores an adult’s tick: NULL is written', async () => {
+    const { onboardingToken } = await providerToken('google');
+    const answer = await identity.onboarding.complete({
+      ...answers,
+      onboardingToken,
+      guardianAgreed: true,
+    });
+    const userId = (await identity.sessions.resolveUserSession(answer.accessToken))?.userId ?? '';
+    const terms = await rowsOf(database).terms(userId);
+    expect(terms.map((row) => row.guardianAgreedAt)).toEqual([null]);
+  });
+
+  it('reads today in the person’s zone: in Honolulu it is still 19 October', async () => {
+    const { onboardingToken } = await providerToken('google');
+    await expect(
+      identity.onboarding.complete({
+        ...answers,
+        dateOfBirth: EIGHTEEN_TODAY,
+        timezone: 'Pacific/Honolulu',
+        onboardingToken,
+      }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: [{ path: 'guardianAgreed', code: 'required' }],
+    });
   });
 });
 

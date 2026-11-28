@@ -33,11 +33,14 @@ import {
 } from './services.fixtures.js';
 
 const LIMIT_BYTES = 4096;
+const BUILD_FLOOR = 100;
 
 const settings: SettingsReader = {
   read: async (key, schema) => {
     if (key === 'upload_max_bytes') return schema.parse(LIMIT_BYTES);
     if (key === UPLOAD_RATE_LIMIT) return schema.parse({ limit: 3, window_seconds: 60 });
+    // 002:T184 (R3): the build floor, read only when an upload carries `x-app-build`.
+    if (key === 'min_app_build') return schema.parse(BUILD_FLOOR);
     throw new SettingError(key, 'missing');
   },
 };
@@ -68,6 +71,9 @@ const sessionsByBearer: Readonly<Record<string, UserSession>> = {
   't-fresh': session('u-fresh', 'active'),
   't-conflict': session('u-conflict', 'active'),
   't-live': session('u-live', 'active'),
+  // 002:T184 (R3): the build floor's uploads.
+  't-build': session('u-build', 'active'),
+  't-build-ok': session('u-build-ok', 'active'),
   // T038 of specs/004-sessions: the fields and the refusal hook.
   't-fields': session('u-fields', 'active'),
   't-hooked': session('u-hooked', 'active'),
@@ -311,6 +317,49 @@ async function loggedSoon(text: string): Promise<void> {
   }
   throw new Error(`nothing logged containing "${text}"`);
 }
+
+// R3 (002:T184; SRS DEC-99): the upload route applies the app kinds' own check, `admitAppBuild`, on
+// the same header, before the session and before a byte of the upload is read, and answers the same
+// body; an upload with no header is admitted as before.
+describe('the build floor on an upload route (002:T184)', () => {
+  // Each case its own uploader, so one case's uploads never count against another's limit.
+  function postWithBuild(build: string | undefined, bearer = 't-build'): Promise<Response> {
+    const payload = identityPdf();
+    return fetch(`${origin}/uploads/probe`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${bearer}`,
+        'content-type': payload.contentType,
+        ...(build === undefined ? {} : { 'x-app-build': build }),
+      },
+      body: new Uint8Array(payload.body),
+    });
+  }
+
+  it('refuses an upload from a build below the floor 426 UPDATE_REQUIRED', async () => {
+    const response = await postWithBuild(String(BUILD_FLOOR - 1));
+    expect(response.status).toBe(426);
+    expect(await response.json()).toEqual({
+      error: { code: 'UPDATE_REQUIRED', message: 'Update the app to continue.' },
+    });
+  });
+
+  it('refuses an unreadable header 400 VALIDATION_FAILED', async () => {
+    const response = await postWithBuild('abc');
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { code: 'VALIDATION_FAILED', message: 'The request is not valid.' },
+    });
+  });
+
+  it('admits an upload with no header, and one from a build at the floor', async () => {
+    for (const build of [undefined, String(BUILD_FLOOR)]) {
+      const response = await postWithBuild(build, 't-build-ok');
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ userId: 'u-build-ok', kind: 'identity' });
+    }
+  });
+});
 
 describe('the upload route’s after-commit point (T063)', () => {
   it('sends what the handler added once it resolved, and nothing when it threw', async () => {

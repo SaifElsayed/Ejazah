@@ -4879,6 +4879,7 @@
           "$.email": { "type": "string" },
           "$.emailCode": { "type": "string" },
           "$.gender": { "required": true, "type": "string", "values": ["female", "male"] },
+          "$.guardianAgreed": { "type": "boolean", "values": ["true"] },
           "$.onboardingToken": { "required": true, "type": "string" },
           "$.password": { "type": "string" },
           "$.role": { "required": true, "type": "string", "values": ["student", "teacher"] },

@@ -11,8 +11,13 @@
 // reconnect by itself: an answer that is not a stream, a failed transport or a body that ends
 // closes it and says so once (`error`, with `readyState` CLOSED, which tRPC's link reads as the
 // subscription's end), and the channel reopens it, so a reopening always reads the current token.
+//
+// R3 T184 (SRS DEC-99): each opening carries the build number in `x-app-build` (none without one),
+// and an opening refused `UPDATE_REQUIRED`, which tRPC writes as the stream's `serialized-error`
+// frame, calls `onUpdateRequired` once before the frame goes to tRPC's listener as any refusal does.
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 
+import { UPDATE_REQUIRED, withAppBuild } from './app-build';
 import type { SessionStore } from './storage';
 
 /** What the EventSource sends a request with: the platform's `fetch`, or a test's. */
@@ -21,6 +26,10 @@ export type LiveTransport = (url: string, init: RequestInit) => Promise<Response
 export interface LiveEventSourceOptions {
   readonly sessions: Pick<SessionStore, 'read'>;
   readonly fetch: LiveTransport;
+  /** The running build's number, sent in `x-app-build` (R3 T184). */
+  readonly appBuild?: number | null;
+  /** Called once when an opening is refused `UPDATE_REQUIRED` (R3 T184). */
+  readonly onUpdateRequired?: () => void;
 }
 
 /** An event as tRPC's link reads it: the `data` of a message, and its id when it has one. */
@@ -49,10 +58,13 @@ const CONNECTING = 0;
 const OPEN = 1;
 const CLOSED = 2;
 const EVENT_STREAM = 'text/event-stream';
+/** The event tRPC writes a refusal in, its data the API's error shape (`{ code, message }`). */
+const SERIALIZED_ERROR = 'serialized-error';
 
 /** The EventSource class tRPC's `httpSubscriptionLink` constructs for each open. */
 export function liveEventSource(options: LiveEventSourceOptions): LiveEventSourceConstructor {
-  const { sessions, fetch: transport } = options;
+  const { sessions, fetch: transport, onUpdateRequired } = options;
+  const appBuild = options.appBuild ?? null;
 
   return class LiveEventSource implements LiveEventSourceInstance {
     readonly CONNECTING = CONNECTING;
@@ -87,7 +99,10 @@ export function liveEventSource(options: LiveEventSourceOptions): LiveEventSourc
       try {
         const session = await sessions.read();
         if (this.readyState === CLOSED) return;
-        const headers = new Headers({ accept: EVENT_STREAM, 'cache-control': 'no-cache' });
+        const headers = withAppBuild(
+          { accept: EVENT_STREAM, 'cache-control': 'no-cache' },
+          appBuild,
+        );
         if (session !== null) headers.set('authorization', `Bearer ${session.accessToken}`);
         const response = await transport(url, {
           method: 'GET',
@@ -118,7 +133,10 @@ export function liveEventSource(options: LiveEventSourceOptions): LiveEventSourc
     async #follow(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
       const decoder = new TextDecoder();
       const parser = createParser({
-        onEvent: (message: EventSourceMessage) => this.#dispatch(eventOf(message)),
+        onEvent: (message: EventSourceMessage) => {
+          if (refusesThisBuild(message)) onUpdateRequired?.();
+          this.#dispatch(eventOf(message));
+        },
       });
       const stop = () => void reader.cancel().catch(() => undefined);
       this.#abort.signal.addEventListener('abort', stop);
@@ -149,6 +167,22 @@ export function liveEventSource(options: LiveEventSourceOptions): LiveEventSourc
       }
     }
   };
+}
+
+/** True when the message is tRPC's refusal of the opening with `UPDATE_REQUIRED` (R3 T184). */
+function refusesThisBuild(message: EventSourceMessage): boolean {
+  if (message.event !== SERIALIZED_ERROR) return false;
+  try {
+    const refusal: unknown = JSON.parse(message.data);
+    return (
+      typeof refusal === 'object' &&
+      refusal !== null &&
+      'code' in refusal &&
+      refusal.code === UPDATE_REQUIRED
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** A parsed message as tRPC's listeners read it: `message` when the stream names no event. */

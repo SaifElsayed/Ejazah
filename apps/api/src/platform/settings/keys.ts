@@ -20,3 +20,12 @@ export const LIVE_MAX_CONNECTIONS_SETTING = 'live_channel_max_connections_per_us
 
 /** Its schema: a whole number of streams, at least one. */
 export const liveMaxConnections = z.int().positive();
+
+/**
+ * The build floor (002:T184; SRS §3.14 «Minimum app build admitted», DEC-99): a phone sending a
+ * build number below it is refused `UPDATE_REQUIRED`; seeded 0, no floor.
+ */
+export const MIN_APP_BUILD_SETTING = 'min_app_build';
+
+/** Its schema: a whole build number, 0 included (Play's version code; DEC-109). */
+export const minAppBuild = z.int().min(0);

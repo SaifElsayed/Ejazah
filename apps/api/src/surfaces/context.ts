@@ -204,6 +204,8 @@ import type { z } from 'zod';
 import type { AuditSnapshot, AuditWriter } from '../platform/audit/audit-writer.js';
 import type { Transaction } from '../platform/db/prisma.repository.js';
 import type { Transactions } from '../platform/db/transaction.repository.js';
+// 002:T184 (R3): the build the phone sent, which the app kinds admit first.
+import type { AppBuild } from '../platform/guards/app-build.guard.js';
 import type { RateLimiter } from '../platform/guards/rate-limit.guard.js';
 import { DEFAULT_LOCALE, type Locale } from '../platform/http/locale.js';
 import type { Gender, RequesterGender } from '../platform/guards/requester-gender.js';
@@ -406,6 +408,11 @@ export interface AppContext {
   readonly live: RequestLive;
   /** The process's open streams, which `live.events` opens one in; null without a channel (T063). */
   readonly liveStreams: LiveRegistry | null;
+  /**
+   * 002:T184 (R3, DEC-99): the build number of `x-app-build` as `readAppBuild` read it; null with no
+   * header. Only this surface reads it: the administrator surface never does.
+   */
+  readonly appBuild: AppBuild;
 }
 
 /** The process's live channel (T063): the bus a request's events go out on, and its streams. */
@@ -1099,6 +1106,8 @@ function correlated(log: Logger, clientAddress: string): { correlationId: string
 
 export interface AppContextSource extends ContextSource<UserSession> {
   readonly services: AppServices;
+  /** 002:T184 (R3): the request's `x-app-build`, read by `readAppBuild`; absent, no header (null). */
+  readonly appBuild?: AppBuild;
 }
 
 /** The user surface's context for one request. */
@@ -1109,6 +1118,7 @@ export function createAppContext({
   clientAddress,
   services,
   live,
+  appBuild = null,
 }: AppContextSource): AppContext {
   const caller: UserCaller | null =
     session === null
@@ -1136,6 +1146,7 @@ export function createAppContext({
     services,
     live: new RequestLive(live?.bus ?? unboundBus, request.log),
     liveStreams: live?.registry ?? null,
+    appBuild,
   };
 }
 

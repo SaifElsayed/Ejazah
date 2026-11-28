@@ -55,6 +55,7 @@
     "notifications": "الإشعارات",
     "notificationsOff": "متوقفة · من إعدادات الجهاز",
     "notificationsOn": "مفعّلة · من إعدادات الجهاز",
+    "privacy": "سياسة الخصوصية",
     "profile": "الملف الشخصي",
     "profileValue": "الاسم والصورة",
     "providers": {
@@ -294,6 +295,10 @@
       "mark": "إ",
       "name": "إجازة"
     },
+    "crash": {
+      "body": "حدث خطأ غير متوقع.",
+      "title": "حدث خطأ"
+    },
     "currency": "{amount} ج.م",
     "day": {
       "friday": "الجمعة",
@@ -412,6 +417,11 @@
       "kilobytes": "{size} ك.ب",
       "minutes": "{count, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
       "sessions": "{count, plural, zero {لا جلسات} one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}"
+    },
+    "update": {
+      "action": "حدّث التطبيق",
+      "body": "هذه النسخة من التطبيق لم تعد مدعومة. حدّثها من Google Play لتكمل.",
+      "title": "حدّث التطبيق"
     }
   },
   "money": {
@@ -485,6 +495,9 @@
   "notifications": {
     "a11y": {
       "unread": "غير مقروء"
+    },
+    "channel": {
+      "default": "التنبيهات"
     },
     "empty": {
       "text": "نخبرك هنا بكل جديد في جلساتك.",
@@ -620,8 +633,11 @@
       },
       "title": "لا تفوّتك جلسة"
     },
+    "privacy": {
+      "title": "سياسة الخصوصية"
+    },
     "profile": {
-      "agreeTerms": "أوافق على {terms}",
+      "agreeTerms": "أوافق على {terms} و{privacy}",
       "birthDay": "اليوم",
       "birthMonth": "الشهر",
       "birthYear": "السنة",
@@ -631,6 +647,9 @@
       "displayName": "الاسم الظاهر",
       "gender": "الجنس",
       "genderHint": "لا يمكن تغييره لاحقًا.",
+      "guardianAgree": "وليّ أمري موافق على تسجيلي",
+      "guardianRequired": "يلزم أن يوافق وليّ أمرك على تسجيلك لتتابع.",
+      "privacyLink": "سياسة الخصوصية",
       "termsLink": "الشروط والأحكام",
       "timeZone": "المنطقة الزمنية",
       "timeZoneFromDevice": "{city} · من الجهاز",

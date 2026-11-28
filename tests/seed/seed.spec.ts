@@ -186,6 +186,8 @@ const SETTINGS: Record<string, unknown> = {
   rate_limit_failed_one_time_code: { limit: 10, window_seconds: 86400 },
   // 004:T084 (SRS DEC-106, §3.14): a participant's reports that their phone could not encrypt.
   rate_limit_encryption_failure: { limit: 5, window_seconds: 60 },
+  // 002:T184 (R3): no floor until an administrator raises it.
+  min_app_build: 0,
 };
 
 /** T069: the six limits' keys, and the two windows (the restore window's default moved to 14). */
@@ -399,7 +401,7 @@ describe('the seed (T074)', () => {
     // R1a (002:T176): + identity_document_retention_days; 006:T002: + the programme's eight (95 + 4 + 8).
     // 004:T084 (R1b, DEC-106): + rate_limit_encryption_failure (107 + 1). 006:T014 (SRS DEC-113):
     // + programme_charge_inquiry_tries (108 + 1). 006:T019 (SRS DEC-114): + programme_pay_reminder_hours
-    // (109 + 1).
-    expect(counts).toEqual([{ subjects: '5', settings: '110', admins: '1' }]);
+    // (109 + 1). 002:T184 (R3, DEC-99): + min_app_build (110 + 1).
+    expect(counts).toEqual([{ subjects: '5', settings: '111', admins: '1' }]);
   });
 });

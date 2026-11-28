@@ -55,6 +55,7 @@
     "notifications": "Notifications",
     "notificationsOff": "Off · from the device settings",
     "notificationsOn": "On · from the device settings",
+    "privacy": "Privacy policy",
     "profile": "Profile",
     "profileValue": "Name and photo",
     "providers": {
@@ -294,6 +295,10 @@
       "mark": "I",
       "name": "Ijazah"
     },
+    "crash": {
+      "body": "An unexpected error occurred.",
+      "title": "Something went wrong"
+    },
     "currency": "EGP {amount}",
     "day": {
       "friday": "Friday",
@@ -412,6 +417,11 @@
       "kilobytes": "{size} KB",
       "minutes": "{count, plural, one {# minute} other {# minutes}}",
       "sessions": "{count, plural, =0 {No sessions} one {# session} other {# sessions}}"
+    },
+    "update": {
+      "action": "Update",
+      "body": "This version is no longer supported. Update it from Google Play to continue.",
+      "title": "Update the app"
     }
   },
   "money": {
@@ -485,6 +495,9 @@
   "notifications": {
     "a11y": {
       "unread": "Unread"
+    },
+    "channel": {
+      "default": "Notifications"
     },
     "empty": {
       "text": "Anything new about your sessions shows up here.",
@@ -620,8 +633,11 @@
       },
       "title": "Never miss a session"
     },
+    "privacy": {
+      "title": "Privacy Policy"
+    },
     "profile": {
-      "agreeTerms": "I agree to the {terms}",
+      "agreeTerms": "I agree to the {terms} and the {privacy}",
       "birthDay": "Day",
       "birthMonth": "Month",
       "birthYear": "Year",
@@ -631,6 +647,9 @@
       "displayName": "Display name",
       "gender": "Gender",
       "genderHint": "It cannot be changed later.",
+      "guardianAgree": "My parent or guardian agrees to my registration",
+      "guardianRequired": "Your parent's or guardian's agreement is needed to continue.",
+      "privacyLink": "Privacy Policy",
       "termsLink": "Terms and Conditions",
       "timeZone": "Time zone",
       "timeZoneFromDevice": "{city} · from the device",

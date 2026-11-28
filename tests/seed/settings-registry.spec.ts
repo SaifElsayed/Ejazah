@@ -20,7 +20,12 @@ import {
 } from '../../apps/api/src/modules/sessions/index.js';
 import { rateLimitSetting } from '../../apps/api/src/platform/guards/rate-limit.guard.js';
 import { uploadMaxBytes } from '../../apps/api/src/platform/guards/upload.middleware.js';
-import { documentLinkTtl, liveMaxConnections } from '../../apps/api/src/platform/settings/keys.js';
+import {
+  documentLinkTtl,
+  liveMaxConnections,
+  MIN_APP_BUILD_SETTING,
+  minAppBuild,
+} from '../../apps/api/src/platform/settings/keys.js';
 import {
   OPERATIONAL_SETTINGS_ROW,
   registryMismatch,
@@ -318,5 +323,30 @@ describe('the programme’s eight settings (006:T002, R-515)', () => {
   it('refuses retries that do not increase', () => {
     expect(settingRefusal('programme_charge_retry_days', [3, 1])).toBe('invalid');
     expect(settingRefusal('programme_charge_retry_days', [3, 3])).toBe('invalid');
+  });
+});
+
+// 002:T184 (R3; SRS §3.14 «Minimum app build admitted», DEC-99, DEC-109): the build floor, a build
+// number shown bare as `terms_version` is, on the panel's general page; seeded 0, no floor.
+describe('the build floor’s setting (002:T184)', () => {
+  it('is `min_app_build`: unit version, group general, from 0, default 0, its own §3.14 row', () => {
+    expect(MIN_APP_BUILD_SETTING).toBe('min_app_build');
+    expect(SETTINGS_REGISTRY[MIN_APP_BUILD_SETTING]).toStrictEqual({
+      schema: minAppBuild,
+      bounds: { shape: 'number', value: { min: 0, minExclusive: false, max: null } },
+      unit: 'version',
+      group: 'general',
+      srsRow: 'Minimum app build admitted (build number)',
+      default: 0,
+    });
+    expect(seeded.get(MIN_APP_BUILD_SETTING)).toBe(0);
+  });
+
+  it('takes a whole build number, 0 included: a negative or a fraction refused', () => {
+    expect(settingRefusal(MIN_APP_BUILD_SETTING, 0)).toBeUndefined();
+    expect(settingRefusal(MIN_APP_BUILD_SETTING, 42)).toBeUndefined();
+    expect(settingRefusal(MIN_APP_BUILD_SETTING, -1)).toBe('invalid');
+    expect(settingRefusal(MIN_APP_BUILD_SETTING, 1.5)).toBe('invalid');
+    expect(settingRefusal(MIN_APP_BUILD_SETTING, '3')).toBe('invalid');
   });
 });

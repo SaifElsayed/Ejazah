@@ -91,6 +91,24 @@ describe('with a SENTRY_DSN (FR-051)', () => {
     expect(initOptions()).toMatchObject({ dsn, environment: 'production' });
   });
 
+  // R3 T183 (Q-5 (a)): the two optional keys of env.schema.ts.
+  const lastInit = (): SentryModule.NodeOptions =>
+    vi.mocked(Sentry.init).mock.calls.at(-1)?.[0] ?? {};
+
+  it('sends to SENTRY_ENVIRONMENT’s environment when it is set, else to NODE_ENV’s', () => {
+    reporting.initReporting({ dsn, environment: 'production', sentryEnvironment: 'closed-test' });
+    expect(lastInit().environment).toBe('closed-test');
+    reporting.initReporting({ dsn, environment: 'production', sentryEnvironment: undefined });
+    expect(lastInit().environment).toBe('production');
+  });
+
+  it('names the deploy’s release when SENTRY_RELEASE is set, and none otherwise', () => {
+    reporting.initReporting({ dsn, environment: 'production', release: 'deb6b02' });
+    expect(lastInit().release).toBe('deb6b02');
+    reporting.initReporting({ dsn, environment: 'production' });
+    expect(lastInit()).not.toHaveProperty('release');
+  });
+
   it('turns off every collector of a value R-SEC-2 keeps out', () => {
     reporting.initReporting({ dsn, environment: 'production' });
     expect(initOptions().dataCollection).toEqual({

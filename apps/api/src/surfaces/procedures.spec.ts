@@ -838,3 +838,100 @@ describe('every kind reads its input through the guard, immediately before the s
     expect(((thrown as TRPCError).cause as DomainError).cause).toBeUndefined();
   });
 });
+
+// R3 (002:T184; SRS DEC-99; the note under T184): the build floor is the first middleware of every
+// user-surface kind, so an old build is told to update before anything else is asked of it, even
+// signed out; no header is admitted and reads no floor; a header that is not a whole number is 400.
+// `live.events` is a user kind's subscription and goes through it too. The administrator surface's
+// kinds never read a build (`app.module.spec.ts`, over HTTP).
+describe('the build floor on every user-surface kind (002:T184)', () => {
+  const ok = { input: z.void(), output: z.string() } as const;
+  const gated = createAppRouter({
+    public: publicProcedure({ ...ok, rateLimit: unlimitedInTest }).query(() => 'ok'),
+    student: studentProcedure(ok).query(() => 'ok'),
+    user: userProcedure(ok).query(() => 'ok'),
+    participant: participantProcedure(ok).query(() => 'ok'),
+    teacher: teacherProcedure({ ...ok, admits: 'applicant' }).query(() => 'ok'),
+  });
+  const kinds = [
+    ['public', null],
+    ['student', student],
+    ['user', student],
+    ['participant', student],
+    ['teacher', applicant],
+  ] as const;
+
+  /** A settings reader holding the floor at `floor`; with none, any read fails the spec. */
+  function floorSettings(floor?: number): SettingsReader {
+    return {
+      read: async (key, schema) => {
+        if (key !== 'min_app_build' || floor === undefined) throw new Error(`read ${key}`);
+        return schema.parse(floor);
+      },
+    };
+  }
+
+  function gatedContext(
+    session: UserSession | null,
+    appBuild: number | null | 'invalid',
+    settings: SettingsReader,
+  ) {
+    return createAppContext({
+      session,
+      log,
+      rateLimiter,
+      clientAddress,
+      services: { ...services, settings },
+      appBuild,
+    });
+  }
+
+  it.each(kinds)('%s admits a call with no header, reading no floor', async (kind, session) => {
+    const caller = createAppCallerFactory(gated)(gatedContext(session, null, floorSettings()));
+    expect(await caller[kind]()).toBe('ok');
+  });
+
+  it.each(kinds)('%s admits a build equal to the floor', async (kind, session) => {
+    const caller = createAppCallerFactory(gated)(gatedContext(session, 100, floorSettings(100)));
+    expect(await caller[kind]()).toBe('ok');
+  });
+
+  it.each(kinds)(
+    '%s refuses a build below the floor 426 UPDATE_REQUIRED',
+    async (kind, session) => {
+      const caller = createAppCallerFactory(gated)(gatedContext(session, 99, floorSettings(100)));
+      expect(await refusal(() => caller[kind]())).toEqual({
+        status: 426,
+        code: 'UPDATE_REQUIRED',
+        details: undefined,
+        unexpected: false,
+      });
+    },
+  );
+
+  it.each(kinds)('%s refuses an invalid header 400 VALIDATION_FAILED', async (kind, session) => {
+    const caller = createAppCallerFactory(gated)(
+      gatedContext(session, 'invalid', floorSettings(100)),
+    );
+    expect(await refusal(() => caller[kind]())).toEqual({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: undefined,
+      unexpected: false,
+    });
+  });
+
+  it('refuses an old build before the sign-in check: signed out, a signed-in kind answers 426', async () => {
+    const caller = createAppCallerFactory(gated)(gatedContext(null, 1, floorSettings(100)));
+    expect(await refusal(() => caller.student())).toMatchObject({ code: 'UPDATE_REQUIRED' });
+    expect(await refusal(() => caller.teacher())).toMatchObject({ code: 'UPDATE_REQUIRED' });
+  });
+
+  it('refuses the live channel’s opening, `live.events`, below the floor', async () => {
+    const caller = createAppCallerFactory(appRouter)(gatedContext(student, 99, floorSettings(100)));
+    expect(await refusal(() => caller.live.events())).toMatchObject({
+      status: 426,
+      code: 'UPDATE_REQUIRED',
+    });
+  });
+});

@@ -11,9 +11,13 @@
 // - A relative `./x.js` inside a workspace package's TypeScript source resolves to `./x.ts`: the
 //   packages are written for Node's module resolution (NodeNext), which names the emitted file, and
 //   Metro reads the source. Only files under this repository's `packages/*/src` are rewritten.
+//
+// R3 T183 (Q-5 (a)): the base is Sentry's, Expo's defaults with debug ids written into the bundle
+// and its map, so the maps an EAS release build uploads resolve a crash report's stack; the
+// resolver rules and NativeWind go on top of it, as on Expo's own before.
 const path = require('node:path');
 
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { withNativeWind } = require('nativewind/metro');
 
 const nativewind = path.dirname(require.resolve('nativewind/package.json'));
@@ -21,7 +25,7 @@ const cssInterop = path.dirname(
   require.resolve('react-native-css-interop/package.json', { paths: [nativewind] }),
 );
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 config.resolver.unstable_conditionNames = [
   '@ijazah/source',
   ...(config.resolver.unstable_conditionNames ?? []),

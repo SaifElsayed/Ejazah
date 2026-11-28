@@ -149,6 +149,15 @@ describe('allows', () => {
     expect(allows(applicant, ['terms'])).toBe(true);
   });
 
+  // R3 T185: the privacy policy is reached as the Terms are, before and after sign-in.
+  it('lets the privacy policy be opened signed out, and by every signed-in landing the Terms reach', () => {
+    expect(allows({ kind: 'signed-out' }, ['privacy'])).toBe(true);
+    expect(allows(student, ['privacy'])).toBe(true);
+    expect(allows({ kind: 'signed-in', landing: 'teacher_home' }, ['privacy'])).toBe(true);
+    expect(allows(applicant, ['privacy'])).toBe(true);
+    expect(allows({ kind: 'unknown' }, ['privacy'])).toBe(false);
+  });
+
   it('keeps a restricted account on the restricted screen', () => {
     for (const restricted of [restrictedStudent, restrictedTeacher]) {
       expect(allows(restricted, ['restricted'])).toBe(true);

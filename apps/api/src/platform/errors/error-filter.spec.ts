@@ -273,3 +273,19 @@ describe('the Phase 3 codes (T002; specs/004-sessions/contracts/README.md "Error
     expectOneShape(notOpen.body);
   });
 });
+
+// R3 (002:T184, SRS DEC-99; specs/002-identity/contracts/README.md "Errors"): a build below
+// `min_app_build` is told to update, 426 Upgrade Required, appended (R-API-9).
+describe('the build floor’s code (002:T184, DEC-99)', () => {
+  it('UPDATE_REQUIRED is a stable code with one message, answered 426', () => {
+    const mapped = mapError(new DomainError('UPDATE_REQUIRED'));
+    expect(mapped.status).toBe(426);
+    expect(mapped.body).toEqual({
+      code: 'UPDATE_REQUIRED',
+      message: 'Update the app to continue.',
+    });
+    expect(mapped.unexpected).toBe(false);
+    expectOneShape(mapped.body);
+    expectNoInternals(mapped.body);
+  });
+});

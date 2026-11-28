@@ -37,7 +37,7 @@ import { z } from 'zod';
 import { rateLimitSetting } from '../guards/rate-limit.guard.js';
 import { uploadMaxBytes } from '../guards/upload.middleware.js';
 import { MAX_LINK_SECONDS } from '../ports/storage/storage.port.js';
-import { documentLinkTtl, liveMaxConnections } from './keys.js';
+import { documentLinkTtl, liveMaxConnections, minAppBuild } from './keys.js';
 
 export type SettingUnit =
   | 'percent'
@@ -890,6 +890,17 @@ export const SETTINGS_REGISTRY: Readonly<Record<string, SettingEntry>> = {
   rate_limit_encryption_failure: rateLimit(
     'Encryption failure report rate limit (per User, per window)',
     { limit: 5, window_seconds: 60 },
+  ),
+  // 002:T184 (R3; SRS DEC-99, DEC-109, §3.14): the build floor the app kinds and the upload route
+  // admit from (`platform/guards/app-build.guard.ts`); a build number, shown bare as
+  // `terms_version` is; 0 = no floor.
+  min_app_build: whole(
+    minAppBuild,
+    'version',
+    'general',
+    'Minimum app build admitted (build number)',
+    0,
+    { min: 0 },
   ),
 };
 

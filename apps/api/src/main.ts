@@ -44,6 +44,8 @@ const [
   { createRedisSingleUseMarks },
   { selectPorts },
   { TERMS_PATH, termsRoute },
+  // R3 T185: the privacy policy's page, beside the Terms.
+  { PRIVACY_PATH, privacyRoute },
   { createApplication },
   { addOrRetry, connectionFor, openQueue },
   { DELIVER_ADMIN_INVITE },
@@ -87,6 +89,7 @@ const [
   import('./platform/redis/single-use-marks.js'),
   import('./platform/ports/ports.module.js'),
   import('./platform/web/terms/terms.controller.js'),
+  import('./platform/web/privacy/privacy.controller.js'),
   import('./app.module.js'),
   import('./jobs/queue.js'),
   import('./jobs/deliver-admin-invite.js'),
@@ -104,7 +107,13 @@ const [
   import('./jobs/deliver-notification.js'),
 ]);
 
-initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
+// R3 T183: the crash reports' environment and release (`SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`).
+initReporting({
+  dsn: config.SENTRY_DSN,
+  environment: config.NODE_ENV,
+  sentryEnvironment: config.SENTRY_ENVIRONMENT,
+  release: config.SENTRY_RELEASE,
+});
 const log = createLogger({ level: config.LOG_LEVEL });
 const database = openDatabase(config.DATABASE_URL, {
   poolMax: config.DATABASE_POOL_MAX,
@@ -713,9 +722,11 @@ const application = await createApplication({
   sessions,
   services,
   adminServices,
-  // The public pages (T019, ADR 0021 D5): the Terms (T039) and the web deletion pages (T083).
+  // The public pages (T019, ADR 0021 D5): the Terms (T039), the privacy policy (R3 T185) and the
+  // web deletion pages (T083).
   webRoutes: {
     [TERMS_PATH]: termsRoute({ settings }),
+    [PRIVACY_PATH]: privacyRoute(),
     ...identity.deleteAccountRoutes({
       deletion: services.identity.deletion,
       supportEmail: config.SUPPORT_EMAIL,

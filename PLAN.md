@@ -68,7 +68,7 @@ Nothing of the programme or of T104 may slide past 11/19 into the design week or
 | 11/30–12/1 | The programme's own money review, and its fixes | The before-launch tasks, batch 1 | The design week, days 1 and 2; the owner: the logo, the testers |
 | 12/2–12/3 | `specs/003-booking/tasks.md` T128, once the contract is signed | The before-launch tasks, batch 2 | The design week, days 3 and 4; the store's listing and declarations, the privacy policy and the terms hosted, with the Terms' text (T151, T117) |
 | 12/4 | free | free | The design week, day 5: its last code |
-| 12/5 | R3's build (`specs/002-identity/tasks.md` T182) with the logo and the design; the phone run; the upload | | |
+| 12/5 | R3's build (`specs/002-identity/tasks.md` T182) with the logo and the design; the phone run; the upload *(the «R3 close»: the icon, the EAS build, its manifest, the SHA-1, the run; Play's foreground-service declaration and Data safety; R3's code merged first; R3's Q-1 (a))* | | |
 | **12/6 Sun** | **The closed test starts** | | |
 
 - The batches: `specs/006-programme/tasks.md`, «Batches»; `specs/002-identity/tasks.md`, «The full-codebase review's batches».

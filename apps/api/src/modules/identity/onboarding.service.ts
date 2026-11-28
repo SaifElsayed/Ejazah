@@ -19,9 +19,14 @@
 // the person, the identity or the password hash, the one role, the terms acceptance and the session
 // are written in one transaction. A transaction that fails releases the claim, so the person can try
 // again with the same token; one that commits keeps it, so a second presentation is refused.
+//
+// R3 T189 (FR-AUTH-4 as amended by DEC-109; ERD changelog row 81): among the answers, a person
+// under 18 today in the zone they gave (`isMinorOn`) needs `guardianAgreed`, else VALIDATION_FAILED
+// on that path, logged once by the request's log with its reason only; the tick's time is written on
+// the Terms' acceptance (`guardian_agreed_at`, equal to `accepted_at`), NULL for an adult.
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
-import { addMinutes, assertTimeZone, TimeError } from '@ijazah/time';
+import { addMinutes, assertTimeZone, isMinorOn, localDateIn, TimeError } from '@ijazah/time';
 import { z } from 'zod';
 
 import { isBreached } from '../../platform/crypto/breached-passwords/index.js';
@@ -33,7 +38,9 @@ import {
 import { hashPassword } from '../../platform/crypto/hashing.js';
 import { transactionsOver } from '../../platform/db/transaction.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { markRefusalLogged } from '../../platform/errors/logged-refusal.js';
 import { generateSecretToken } from '../../platform/guards/identifiers.js';
+import type { Logger } from '../../platform/logging/logger.js';
 import type { SingleUseMarks } from '../../platform/redis/single-use-marks.js';
 import { TERMS_VERSION_SETTING } from '../../platform/settings/keys.js';
 import { BannedIdentifiers } from './banned-identifiers.js';
@@ -92,6 +99,8 @@ export interface CompleteInput {
   readonly password?: string | undefined;
   readonly email?: string | undefined;
   readonly emailCode?: string | undefined;
+  /** R3 T189: a minor's parent or guardian agrees; required for a minor, ignored for an adult. */
+  readonly guardianAgreed?: true | undefined;
 }
 
 export interface OnboardingDependencies extends IdentityDependencies {
@@ -161,6 +170,7 @@ export class OnboardingService {
   async complete(
     input: CompleteInput,
     preferredLanguage: 'ar' | 'en' = 'ar',
+    log?: Pick<Logger, 'info'>,
   ): Promise<SessionTokens & { readonly landing: Landing }> {
     const { jti, expiresAt, identity } = this.#read(input.onboardingToken);
     if (await this.#dependencies.marks.has('onboarding', jti)) throw invalidToken();
@@ -172,6 +182,8 @@ export class OnboardingService {
       if (error instanceof TimeError) throw invalidField('timezone', 'unknown');
       throw error;
     }
+    const acceptedAt = this.#now();
+    const guardianAgreedAt = this.#guardianAgreedAt(input, acceptedAt, log);
     const passwordHash = await this.#passwordHash(identity, input.password);
     const email = await this.#email(identity, input);
     await this.#banned.refuse({
@@ -207,7 +219,8 @@ export class OnboardingService {
           preferredLanguage,
           role: input.role,
           termsVersion: input.termsVersion,
-          acceptedAt: this.#now(),
+          acceptedAt,
+          guardianAgreedAt,
           ...(identity.kind === 'provider'
             ? {
                 identity: {
@@ -230,6 +243,22 @@ export class OnboardingService {
       await this.#dependencies.marks.take('onboarding', jti);
       throw error;
     }
+  }
+
+  /**
+   * R3 T189 (FR-AUTH-4 as amended by DEC-109): a person under 18 today in their own zone signs up
+   * with the guardian's tick, whose time is the Terms' acceptance's; an adult's is NULL, a tick sent
+   * or not. A minor without it is refused, logged once with its reason only.
+   */
+  #guardianAgreedAt(
+    input: CompleteInput,
+    acceptedAt: Date,
+    log: Pick<Logger, 'info'> | undefined,
+  ): Date | null {
+    if (!isMinorOn(input.dateOfBirth, localDateIn(acceptedAt, input.timezone))) return null;
+    if (input.guardianAgreed === true) return acceptedAt;
+    log?.info({ reason: 'guardian_agreement_missing' }, 'An onboarding was refused');
+    throw markRefusalLogged(invalidField('guardianAgreed', 'required'));
   }
 
   async #passwordHash(identity: OnboardingIdentity, password: string | undefined) {

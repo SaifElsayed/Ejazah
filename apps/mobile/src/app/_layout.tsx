@@ -37,6 +37,18 @@
 //
 // 003:T109 (SRS DEC-87; Q-B3 (a)): «نسخة تجريبية» over every screen, the launch's included, while
 // the server's payment mode is `test` (features/shared/test-mode).
+//
+// R3 T183 (Q-5 (a)): crash reports start first, off unless the build carries a DSN
+// (lib/reporting.ts); Sentry wraps the root, and a render error below the theme and the direction
+// shows the crash screen (features/shared/crash). A report carries the account's id only and the
+// route's name, each following the session and the route. The touch boundary `Sentry.wrap` adds
+// reads no text from the touched element (PR #163 r1 Major 2: a name, an e-mail or a chat line on
+// screen would ride in its breadcrumb; `lib/reporting.ts` rebuilds a tap's breadcrumb as well).
+//
+// R3 T184 (SRS DEC-99, DEC-109): once any answer refuses this build `UPDATE_REQUIRED` (lib/api.tsx),
+// the update screen (features/shared/update) is drawn inside the crash boundary and the providers
+// in place of the session guard: no route, tab or back is left to reach, signed in or not.
+import * as Sentry from '@sentry/react-native';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   ThemeProvider as NavigationThemeProvider,
@@ -53,18 +65,21 @@ import { DirectionProvider, navigationTheme, ThemeProvider, useTheme } from '../
 import { tokens } from '../design/tokens';
 import { clearPendingEmail } from '../features/shared/auth/pending';
 import { signOutOfProviders } from '../features/shared/account/hooks';
+import { CrashBoundary } from '../features/shared/crash';
 import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
 import { TestModeStrip } from '../features/shared/test-mode';
+import { UpdateRequired } from '../features/shared/update';
 import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
-import { ApiProvider, useApi } from '../lib/api';
+import { ApiProvider, useApi, useUpdateRequired } from '../lib/api';
 import { retryNetworkFailure } from '../lib/client';
 import { genericErrorKey } from '../lib/error-message';
 import { followAppState } from '../lib/focus';
 import { useLiveChannel } from '../lib/live-channel';
 import { registerVideoGlobals } from '../lib/livekit';
 import { followNetInfo } from '../lib/online';
+import { initReporting, setReportingRoute, setReportingUser } from '../lib/reporting';
 import {
   allows,
   destinationFor,
@@ -76,26 +91,38 @@ import {
 } from '../lib/session';
 import { deviceTimeZone } from '../lib/time-zone';
 
+initReporting();
 followNetInfo();
 followAppState();
 registerVideoGlobals();
 
-export default function RootLayout() {
+export default Sentry.wrap(RootLayout, {
+  touchEventBoundaryProps: { extractTextFromChildren: false },
+});
+
+function RootLayout() {
   const [queries] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: retryNetworkFailure } } }),
   );
   return (
     <ThemeProvider>
       <DirectionProvider>
-        <QueryClientProvider client={queries}>
-          <ApiProvider onSignedOut={signOutOfProviders}>
-            <SessionGuard queries={queries} />
-            <TestModeStrip />
-          </ApiProvider>
-        </QueryClientProvider>
+        <CrashBoundary>
+          <QueryClientProvider client={queries}>
+            <ApiProvider onSignedOut={signOutOfProviders}>
+              <BuildGate queries={queries} />
+              <TestModeStrip />
+            </ApiProvider>
+          </QueryClientProvider>
+        </CrashBoundary>
       </DirectionProvider>
     </ThemeProvider>
   );
+}
+
+/** The update screen in place of every route once this build is refused, else the session guard. */
+function BuildGate({ queries }: { readonly queries: QueryClient }) {
+  return useUpdateRequired() ? <UpdateRequired /> : <SessionGuard queries={queries} />;
 }
 
 function SessionGuard({ queries }: { readonly queries: QueryClient }) {
@@ -105,10 +132,12 @@ function SessionGuard({ queries }: { readonly queries: QueryClient }) {
   const me = useLanding();
   const { client } = useApi();
   useLiveChannel(client, queries);
+  useEffect(() => setReportingRoute(segments), [segments]);
   // What one account read is never shown to the next on a shared device (review of B6, finding 4),
   // nor what one person typed: every draft, and the pending address with its password (T136).
   useEffect(() => {
     if (session.kind !== 'signed-out') return;
+    setReportingUser(null);
     queries.clear();
     clearApplication();
     clearOnboardingDraft();
@@ -153,6 +182,7 @@ function Routes() {
         <Stack.Screen name="verify-identity" options={framed} />
         <Stack.Screen name="time-zone" options={modal} />
         <Stack.Screen name="terms" options={modal} />
+        <Stack.Screen name="privacy" options={modal} />
       </Stack>
     </NavigationThemeProvider>
   );
@@ -188,6 +218,7 @@ function useLanding() {
   useEffect(() => {
     if (account === undefined) return;
     if (session.kind !== 'restoring' && session.kind !== 'signed-in') return;
+    setReportingUser(account.userId);
     const next = signedInAs(account);
     if (!sameState(getSession(), next)) setSession(next);
   }, [account, session.kind]);

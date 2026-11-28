@@ -170,6 +170,8 @@ export interface NewAccount {
   readonly role: 'student' | 'teacher';
   readonly termsVersion: string;
   readonly acceptedAt: Date;
+  /** R3 T189: a minor's guardian tick, the acceptance's own instant; null for an adult. */
+  readonly guardianAgreedAt: Date | null;
   /** The provider identity, with Apple's grant already encrypted to `id`, its row. */
   readonly identity?: {
     readonly id: string;
@@ -275,7 +277,12 @@ export class AccountsRepository {
       select: { id: true },
     });
     await tx.termsAcceptance.create({
-      data: { userId, termsVersion: account.termsVersion, acceptedAt: account.acceptedAt },
+      data: {
+        userId,
+        termsVersion: account.termsVersion,
+        acceptedAt: account.acceptedAt,
+        guardianAgreedAt: account.guardianAgreedAt,
+      },
       select: { id: true },
     });
     return userId;

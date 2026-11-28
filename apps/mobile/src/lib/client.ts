@@ -52,6 +52,13 @@
 //
 // THE PUBLIC CONFIGURATION. `platform.publicConfig` (`supportEmail`, `termsVersion`) is read once
 // per launch and cached; a failed read is not cached, so the next screen tries again.
+//
+// THE BUILD FLOOR (R3 T184; SRS DEC-99, DEC-109). The build number (`appBuild`, lib/app-build.ts)
+// travels in `x-app-build` on every request: the session's transport (queries, mutations, the four
+// uploads, the retry after a refresh), the refresh and the live channel's opening; with no number,
+// no header at all. An answer refused `UPDATE_REQUIRED` (426), or the live channel's opening refused
+// with it, calls `onUpdateRequired` once for that answer and nothing else: it is no sign-out, and
+// the query cache never retries it, since it carries a code.
 import {
   type ChatUploadOutput,
   chatUploadOutput,
@@ -73,6 +80,7 @@ import {
 import { File } from 'expo-file-system';
 
 import type { AppRouter } from '../../../api/src/surfaces/app.router';
+import { UPDATE_REQUIRED, withAppBuild } from './app-build';
 import { liveEventSource } from './live';
 import type { SessionStore } from './storage';
 
@@ -90,6 +98,10 @@ export interface ApiClientOptions {
   readonly signatureUploadUrl?: string;
   /** Called once when the server refuses the session's refresh. */
   readonly onSignedOut: () => void;
+  /** The running build's number, sent in `x-app-build`; none sends no header (R3 T184). */
+  readonly appBuild?: number | null;
+  /** Called once for each answer refusing this build `UPDATE_REQUIRED` (R3 T184). */
+  readonly onUpdateRequired?: () => void;
   /** The transport; the platform's own unless a test hands one in. */
   readonly fetch?: typeof fetch;
 }
@@ -148,6 +160,7 @@ export class ApiRefusal extends Error {
 
 const UNAUTHENTICATED = 'UNAUTHENTICATED';
 const STATUS_UNAUTHORIZED = 401;
+const STATUS_UPGRADE_REQUIRED = 426;
 
 /** How long a call, the refresh among them, waits for its answer before it fails (T146). */
 export const CALL_TIMEOUT_MS = 30_000;
@@ -160,10 +173,24 @@ const refreshesInFlight = new Map<string, Promise<boolean>>();
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const { url, sessions, onSignedOut } = options;
   const transport = options.fetch ?? fetch;
+  const appBuild = options.appBuild ?? null;
+  const onUpdateRequired = options.onUpdateRequired ?? (() => undefined);
+
+  /** `next` with the build's header on each request, noticing an answer refusing the build (T184). */
+  const gated =
+    (next: Transport): Transport =>
+    async (input, init) => {
+      const response = await next(input, {
+        ...init,
+        headers: withAppBuild(init?.headers, appBuild),
+      });
+      if (await isUpdateRequired(response)) onUpdateRequired();
+      return response;
+    };
 
   // The refresh goes without a bearer and without the retry below, and within its timeout (T146).
   const refresher = createTRPCUntypedClient({
-    links: [httpLink({ url, fetch: asFetchEsque(timed(transport, CALL_TIMEOUT_MS)) })],
+    links: [httpLink({ url, fetch: asFetchEsque(gated(timed(transport, CALL_TIMEOUT_MS))) })],
   });
   async function refreshOnce(presented: string): Promise<boolean> {
     try {
@@ -200,7 +227,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
   /** The session's transport: each send, the retry after a refresh among them, within `timeoutMs`. */
   function sessionFetchWithin(timeoutMs: number): Transport {
-    const sendTimed = timed(transport, timeoutMs);
+    const sendTimed = gated(timed(transport, timeoutMs));
     async function send(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const session = await sessions.read();
       const headers = new Headers(init?.headers);
@@ -226,6 +253,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           url,
           EventSource: liveEventSource({
             sessions,
+            appBuild,
+            onUpdateRequired,
             fetch: (target, init) => transport(target, init),
           }),
         }),
@@ -480,6 +509,17 @@ async function isUnauthenticated(response: Response): Promise<boolean> {
   try {
     const body: unknown = await response.clone().json();
     return codeOf(body) === UNAUTHENTICATED;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the answer refuses this build: 426 with the `UPDATE_REQUIRED` code (R3 T184). */
+async function isUpdateRequired(response: Response): Promise<boolean> {
+  if (response.status !== STATUS_UPGRADE_REQUIRED) return false;
+  try {
+    const body: unknown = await response.clone().json();
+    return codeOf(body) === UPDATE_REQUIRED;
   } catch {
     return false;
   }

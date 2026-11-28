@@ -15,11 +15,20 @@
 // is `test`, none in `live`. 003:T115: the strip reads the mode again when the app comes back to
 // the foreground and on reconnect, so a server moved to `live` takes it away from a running app.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import * as Sentry from '@sentry/react-native';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { focusManager, onlineManager, useQueryClient } from '@tanstack/react-query';
 import { DefaultTheme, router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
-import { AppState, type AppStateStatus, BackHandler, StyleSheet, Text, View } from 'react-native';
+import {
+  AppState,
+  type AppStateStatus,
+  BackHandler,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
@@ -44,14 +53,31 @@ import {
   updateApplication,
 } from '../features/teacher/application/draft';
 import { type MessageKey, setLocale, translate } from '../i18n';
+import { setReportingRoute, setReportingUser } from '../lib/reporting';
 import { setSession } from '../lib/session';
 import RootLayout from '../app/_layout';
+
+/** PR #163 r1 Major 2: how the root was wrapped, read once, when the layout was imported. */
+const wrapOptions = jest.mocked(Sentry.wrap).mock.calls[0]?.[1];
 
 // The native layout direction is the device's; a test renders Arabic on a left-to-right runtime and
 // must not reload it (the sync itself is lib/direction.spec.ts's).
 jest.mock('../lib/direction', () => ({
   ...jest.requireActual<typeof import('../lib/direction')>('../lib/direction'),
   syncNativeDirection: () => false,
+}));
+
+// R3 T183 (rule d): the root is wrapped by Sentry, whose package ships ES modules the test run does
+// not compile; the stand-in wraps nothing. The reporting module is observed, not run (its own spec,
+// lib/reporting.spec.ts).
+jest.mock('@sentry/react-native', () => ({
+  wrap: jest.fn(<T,>(root: T, _options?: unknown) => root),
+}));
+jest.mock('../lib/reporting', () => ({
+  initReporting: jest.fn(() => false),
+  reportCrash: jest.fn(),
+  setReportingRoute: jest.fn(),
+  setReportingUser: jest.fn(),
 }));
 
 let mockApi = fakeProcedures();
@@ -70,10 +96,16 @@ let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
 // failure is not kept), while `platform.publicConfig` asks the server each time; both answer
 // with `mockPublicConfig`.
 // 002:T148 (B50): the options the root's client was built with, so a refused refresh can be played.
-let mockClientOptions: { readonly onSignedOut?: () => void } = {};
+// R3 T184: and a build refused UPDATE_REQUIRED, with the build number the client was given.
+interface MockClientOptions {
+  readonly onSignedOut?: () => void;
+  readonly onUpdateRequired?: () => void;
+  readonly appBuild?: number | null;
+}
+let mockClientOptions: MockClientOptions = {};
 jest.mock('../lib/client', () => ({
   ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
-  createApiClient: (options: { readonly onSignedOut?: () => void }) => {
+  createApiClient: (options: MockClientOptions) => {
     mockClientOptions = options;
     let kept: ReturnType<typeof mockPublicConfig> | null = null;
     return {
@@ -86,6 +118,9 @@ jest.mock('../lib/client', () => ({
     };
   },
 }));
+
+// R3 T184: the binary's version code, as `expo-application` reads it on a store build.
+jest.mock('expo-application', () => ({ nativeBuildVersion: '41' }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
@@ -448,6 +483,20 @@ describe('the root layout', () => {
     setSession({ kind: 'restoring' });
     await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
     expect(await screen.findByText('application status')).toBeTruthy();
+  });
+
+  it("gives crash reports the account's id and the route's name, and clears the id at sign-out (R3 T183)", async () => {
+    jest.mocked(setReportingUser).mockClear();
+    jest.mocked(setReportingRoute).mockClear();
+    mockApi.account.me.query.mockResolvedValue(account('student_home'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    await waitFor(() =>
+      expect(setReportingUser).toHaveBeenLastCalledWith('0193a6f0-0000-7000-8000-000000000001'),
+    );
+    expect(jest.mocked(setReportingRoute).mock.calls.at(-1)?.[0][0]).toBe('(student)');
+    await act(async () => setSession({ kind: 'signed-out' }));
+    await waitFor(() => expect(setReportingUser).toHaveBeenLastCalledWith(null));
   });
 
   it('says a launch whose account cannot be read, and retries it', async () => {
@@ -970,5 +1019,65 @@ describe('signing out or deleting the account leaves no draft behind (T136)', ()
     expect(await screen.findByText('welcome')).toBeTruthy();
     expect(mockApi.account.delete.mutate).toHaveBeenCalledTimes(1);
     expectNothingLeft();
+  });
+});
+
+// R3 T184 (SRS DEC-99, DEC-109; the note under T184): the root gives the client the binary's build
+// number, and once any answer refuses this build UPDATE_REQUIRED the one «حدّث التطبيق» screen is
+// drawn in place of every route: no tab, no screen behind it, signed in or not (the server checks
+// the build before the session). Nothing keeps it: a relaunch asks the server again.
+// PR #163 r1 Major 2: the touch boundary `Sentry.wrap` adds reads no text from what is touched.
+describe('crash reports and taps (R3 T183)', () => {
+  it('wraps the root with a touch boundary that reads no text on screen', () => {
+    expect(wrapOptions).toEqual({ touchEventBoundaryProps: { extractTextFromChildren: false } });
+  });
+});
+
+describe('a build below the floor (R3 T184)', () => {
+  const en = (key: MessageKey) => translate('en', key);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("gives the client the binary's build number", async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expect(mockClientOptions.appBuild).toBe(41);
+  });
+
+  it('draws the update screen in place of the routes, the tabs among them, once a call is refused', async () => {
+    setSession({ kind: 'signed-in', landing: 'student_home' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(ar('common.update.body'))).toBeTruthy();
+    expect(screen.queryByText('اختر معلمًا وباقة تناسبك')).toBeNull();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
+
+  it('draws it for a signed-out person too, in place of the welcome screen', async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(ar('common.update.body'))).toBeTruthy();
+    expect(screen.queryByText('welcome')).toBeNull();
+  });
+
+  // The button's link is the screen's own spec's (features/shared/update/update.spec.tsx): expo-router's
+  // test library replaces expo-linking with its own stand-in here.
+  it('draws it in English, with its one button', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    setLocale('en');
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(en('common.update.title'))).toBeTruthy();
+    expect(screen.getByText(en('common.update.body'))).toBeTruthy();
+    expect(screen.getByRole('button', { name: en('common.update.action') })).toBeTruthy();
+    expect(screen.queryByText('welcome')).toBeNull();
   });
 });

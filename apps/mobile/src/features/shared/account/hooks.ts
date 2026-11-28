@@ -5,6 +5,10 @@
 //
 // B50 T148: the sign-out signs the device out of the Google SDK too (`signOutProviders`), loaded
 // only then, so this folder's entry still loads no provider's native module (deletion/api.ts).
+//
+// R3 (005:T020's follow-up Q-T3; FR-623): before the session is revoked, the device's push token
+// held by the push binding is removed from the account (`account.pushToken.remove`), best effort:
+// a failed removal never holds the sign-out.
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -12,6 +16,7 @@ import { type Locale, setLocale } from '../../../i18n';
 import { ME_QUERY_KEY } from '../../../lib/account';
 import { useApi } from '../../../lib/api';
 import { setSession } from '../../../lib/session';
+import { removeHeldPushToken } from '../push';
 
 /**
  * Signs the device out of the sign-in provider in the background: never waited on, so a provider
@@ -51,6 +56,7 @@ export function useAccountActions() {
 
       async signOut(): Promise<void> {
         signOutOfProviders();
+        await removeHeldPushToken((input) => client.api.account.pushToken.remove.mutate(input));
         await client.api.auth.signOut.mutate({}).catch(() => undefined);
         await sessions.clear();
         setSession({ kind: 'signed-out' });

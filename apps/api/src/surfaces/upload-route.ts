@@ -30,11 +30,18 @@
 // teacher standing it admits, `admits`, as the teacher kind's declaration does, read in the kind's
 // order before a byte of the body: a caller without the teacher role `FORBIDDEN`, then the
 // restricted standings the route refuses, then a standing below the declared one `FORBIDDEN`.
+//
+// R3 (002:T184, SRS DEC-99): after the method and before the bearer, the route applies the app
+// kinds' own build check (`admitAppBuild`, the same gate of the same settings reader) to
+// `x-app-build`: a build below `min_app_build` is `UPDATE_REQUIRED` (426), a header that is not a
+// whole number 400, no header admitted; the refusal is answered before a byte of the body is read.
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DomainError } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import { reportError } from '../platform/errors/reporting.js';
+// 002:T184 (R3, DEC-99): the app kinds' own build check, on the same header.
+import { admitAppBuild, readAppBuild } from '../platform/guards/app-build.guard.js';
 import {
   type AcceptedType,
   acceptUploadOfKind,
@@ -224,6 +231,12 @@ export function uploadRoute<TKind extends UploadKind>(
           );
           return;
         }
+        // 002:T184: the build floor, before the session and before a byte of the upload is read.
+        await admitAppBuild(readAppBuild(request.headers), {
+          settings: guard.settings,
+          log: requestLog,
+          clientAddress,
+        });
         const bearer = bearerOf(request.headers);
         const session = bearer === null ? null : await sessions(bearer);
         if (session === null) throw new DomainError('UNAUTHENTICATED');

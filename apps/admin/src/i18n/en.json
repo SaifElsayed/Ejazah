@@ -592,6 +592,10 @@
         "viewOnly": "View only"
       },
       "amount": "EGP {amount}",
+      "crash": {
+        "body": "An unexpected error occurred.",
+        "title": "Something went wrong"
+      },
       "currency": "EGP",
       "dateTime": "{date} · {time}",
       "documentType": {
@@ -2902,6 +2906,7 @@
         "live_channel_max_connections_per_user": "The most live-update connections one user may have open. When one more opens, the oldest is closed.",
         "makeup_choice_window_days": "The days the student has, from the remedy’s offer, to accept the proposed make-up time or counter-propose. When they pass with no answer and no counter-proposal pending, the proposed time is booked.",
         "makeup_counter_answer_hours": "The hours the teacher has to answer a make-up time the student counter-proposed.",
+        "min_app_build": "The app's build number (its version code on Google Play) below which a phone is refused and shown “Update the app”. 0 means no floor.\nRaise it only for a security, money or contract reason, only once the new build is at 100% on every Google Play track in use, only after checking release health in Sentry, and never together with a minSdk change.\n⚠️ A raise is final for every older phone: each stays blocked until it is updated.",
         "minimum_connection_seconds": "The shortest connection, in seconds, for a party to count as having joined within the join window.",
         "notification_requeue_after_minutes": "The minutes a notification that never reached the sending queue waits before it is queued again.",
         "notification_requeue_max_age_minutes": "The age, in minutes, after which a lost notification is no longer queued again, since it is no longer useful.",
@@ -3043,6 +3048,7 @@
         "live_channel_max_connections_per_user": "Live channel connections per user",
         "makeup_choice_window_days": "Make-up choice window",
         "makeup_counter_answer_hours": "Make-up counter-proposal answer window",
+        "min_app_build": "Minimum app build admitted",
         "minimum_connection_seconds": "Minimum connection",
         "notification_requeue_after_minutes": "Wait before a lost notification is queued again",
         "notification_requeue_max_age_minutes": "Age after which a lost notification is no longer sent",

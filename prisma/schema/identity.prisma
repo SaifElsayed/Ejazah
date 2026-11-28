@@ -351,6 +351,10 @@ model TermsAcceptance {
   acceptedAt   DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  // R3 T189 (FR-AUTH-4 as amended by DEC-109; ERD changelog row 81): when a minor ticked «وليّ أمري
+  // موافق على تسجيلي», the acceptance's own instant; NULL for an adult.
+  guardianAgreedAt DateTime? @map("guardian_agreed_at") @db.Timestamptz(6)
+
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])

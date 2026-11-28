@@ -3,7 +3,7 @@
     "name": "Ijazah",
     "slug": "ijazah",
     "scheme": "ijazah",
-    "version": "0.0.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "extra": {
@@ -17,6 +17,7 @@
       "expo-localization",
       "expo-status-bar",
       "expo-secure-store",
+      "expo-notifications",
       "@react-native-google-signin/google-signin",
       [
         "@livekit/react-native-expo-plugin",
@@ -26,10 +27,18 @@
           }
         }
       ],
-      "@config-plugins/react-native-webrtc"
+      "@config-plugins/react-native-webrtc",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://de.sentry.io/",
+          "project": "ijazah-mobile"
+        }
+      ]
     ],
     "android": {
       "package": "com.ijazah.app",
+      "versionCode": 1,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
@@ -37,6 +46,11 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "ios": {
