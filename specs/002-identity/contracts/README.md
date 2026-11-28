@@ -35,7 +35,8 @@ happened to return (R-HONEST-4).
   `MFA_SETUP_REQUIRED`, `INVITE_INVALID` (an administrator's password-set link
   altered, expired, used, or for a disabled account; T066), `APPROVAL_BLOCKED` (with the blocking reasons in details:
   `call_not_recorded`, `credential_undecided`, `no_approved_credential`),
-  `APPLICATION_INCOMPLETE`, `DOCUMENT_NOT_OWNED`, `CONFLICT`.
+  `APPLICATION_INCOMPLETE`, `DOCUMENT_NOT_OWNED`, `CONFLICT`,
+  `UPDATE_REQUIRED` (a build below the floor; T184).
 - **Dates.** Instants cross the wire as ISO-8601 strings in UTC; a date of birth
   as a calendar date `YYYY-MM-DD`; nothing client-supplied is a timestamp
   (R-TIME-6).

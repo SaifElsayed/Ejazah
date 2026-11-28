@@ -132,6 +132,8 @@ export const errorCodes = {
   // `cause` in details: not_restorable, window_closed, case_closed, party_restricted,
   // slot_inactive, slot_changed, slot_taken, time_taken.
   RESTORE_REFUSED: { status: 409, message: 'This enrollment cannot be restored.' },
+  // R3 (002:T184, DEC-99): a build below min_app_build.
+  UPDATE_REQUIRED: { status: 426, message: 'Update the app to continue.' },
 } as const satisfies Record<string, { status: number; message: string }>;
 
 export type ErrorCode = keyof typeof errorCodes;
