@@ -21,7 +21,10 @@
 //
 // RESTORE. Downloads the object, `gpg --decrypt`, `pg_restore` into the NAMED target only: there is
 // no default target, and a target whose database is the one `DATABASE_URL_OWNER` or `DATABASE_URL`
-// names, on any host, is refused (a restore goes into a new database, which is then switched to).
+// names, on any host, is refused (a restore goes into a new database, which is then switched to),
+// and so is a target URL carrying a password or a query string. `pg_restore` is given
+// `DATABASE_URL_OWNER`'s password only when the target names its user, host and port; any other
+// target has none, so libpq reads `~/.pgpass`.
 //
 // The environment is `deploy/backup.env.example`'s, never the API's schema. The three programs
 // come from `BACKUP_PG_DUMP`, `BACKUP_PG_RESTORE` and `BACKUP_GPG` (default `pg_dump`,
@@ -277,16 +280,39 @@ function connectionOf(url: string): { readonly dbname: string; readonly password
     : { dbname: parsed.toString(), password };
 }
 
-/** The database a Postgres URL names, or undefined for anything that is not one. */
-function databaseOf(url: string): string | undefined {
+/** A Postgres URL parsed, or undefined for anything that is not one. */
+function postgresUrlOf(url: string): URL | undefined {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'postgresql:' && parsed.protocol !== 'postgres:') return undefined;
-    const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-    return name === '' ? undefined : name;
+    return parsed.protocol === 'postgresql:' || parsed.protocol === 'postgres:'
+      ? parsed
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+/** The database a Postgres URL names, or undefined for anything that is not one. */
+function databaseOf(url: string): string | undefined {
+  const parsed = postgresUrlOf(url);
+  if (parsed === undefined) return undefined;
+  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  return name === '' ? undefined : name;
+}
+
+/**
+ * The owner's password for a target with the owner's user, host and port as `DATABASE_URL_OWNER`
+ * writes them (the owner's decision of 2026-11-28); for any other target none, so libpq reads
+ * `~/.pgpass`. The target itself never carries one (`target_has_password`).
+ */
+function inheritedPassword(env: Env, targetUrl: string): string | undefined {
+  const owner = postgresUrlOf(env['DATABASE_URL_OWNER'] ?? '');
+  const target = postgresUrlOf(targetUrl);
+  if (owner === undefined || target === undefined || target.username === '') return undefined;
+  const sameUser = decodeURIComponent(target.username) === decodeURIComponent(owner.username);
+  const sameServer =
+    target.hostname.toLowerCase() === owner.hostname.toLowerCase() && target.port === owner.port;
+  return sameUser && sameServer ? connectionOf(owner.toString()).password : undefined;
 }
 
 // What never reaches a program's environment: the bucket keys and the database URLs.
@@ -354,7 +380,8 @@ function gpgDecryptStep(env: Env): Step {
 
 function pgRestoreStep(env: Env, targetUrl: string): Step {
   const { program, leading } = programOf(env['BACKUP_PG_RESTORE'], 'pg_restore');
-  const { dbname, password } = connectionOf(targetUrl);
+  const { dbname } = connectionOf(targetUrl);
+  const password = inheritedPassword(env, targetUrl);
   return {
     name: 'pg_restore',
     program,
@@ -423,12 +450,17 @@ async function restore(
 ): Promise<string> {
   const { targetUrl, object } = command;
   if (targetUrl === undefined || targetUrl.trim() === '') throw new Refused('target_missing');
+  const parsed = postgresUrlOf(targetUrl);
   const target = databaseOf(targetUrl);
-  if (target === undefined) throw new Refused('target_invalid');
+  if (parsed === undefined || target === undefined) throw new Refused('target_invalid');
   const runtime = [deps.env['DATABASE_URL_OWNER'], deps.env['DATABASE_URL']].map((url) =>
     databaseOf(url ?? ''),
   );
   if (runtime.includes(target)) throw new Refused('target_is_runtime');
+  // A password in the URL sits in this process's arguments; a query string can name libpq another
+  // database or host than the path does (PR #162's review, round 1, Minor 2).
+  if (parsed.password !== '') throw new Refused('target_has_password');
+  if (parsed.search !== '') throw new Refused('target_has_query');
   if (!isDumpKey(object)) throw new Refused('object_not_a_dump');
   await withTempDir(deps.tempRoot, async (dir) => {
     const file = join(dir, 'restore.gpg');

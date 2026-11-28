@@ -618,9 +618,10 @@ pnpm exec tsx scripts/ops/first-admin.ts --email <x> --name <y>
 
 It is refused while any active administrator who can sign in exists (a
 password set; a temporary lock still counts; the seeded `admin@ijazah.invalid`
-never does), without the seeded administrator (run `pnpm db:seed` first), and
-without `ADMIN_PANEL_ORIGIN`, which the invitation's link is built from. It
-writes the administrator as "Add admin" does, invited by nobody, records one
+never does), without the seeded administrator (run `pnpm db:seed` first),
+without `ADMIN_PANEL_ORIGIN`, which the invitation's link is built from, and
+without `REDIS_URL`, `DATABASE_URL` or `ENCRYPTION_KEY` (`redis_url_missing`,
+`database_url_missing`, `encryption_key_missing`). It writes the administrator as "Add admin" does, invited by nobody, records one
 audit entry, `admin.bootstrap`, under the seeded administrator, which stands
 for the platform, and queues the invitation; it prints the administrator's id,
 never the address. The worker sends the mail. Its link opens the panel's
@@ -630,8 +631,8 @@ codes it shows once in the password manager. Then add a second administrator
 from the panel (Settings → Admins, "Add admin"), so that each can reset the
 other's second factor («Reset an administrator's second factor»). If it
 answers `invitation_not_queued`, the administrator is written and audited
-but the queue did not answer: once Redis does, run `--recover` (below) for
-that address.
+but the queue failed or did not answer within 5 seconds: once Redis does, run
+`--recover` (below) for that address.
 
 **When no administrator can sign in** — when the last administrator who could
 sign in has lost the password, the second factor, or both, the server's
@@ -766,8 +767,11 @@ entry until the last dump made under it is past 14 days.
    ijazah_restored OWNER ijazah_owner;` as a role allowed to create databases
    (the roles exist as «Provision the database roles in production» made
    them).
-3. Run, with that database's URL (its password in the URL or in root's
-   `~/.pgpass`):
+3. Run, with that database's URL, never with a password in it: the
+   password comes from root's `~/.pgpass`, or, when the URL names the owner's
+   user, host and port as `DATABASE_URL_OWNER` writes them, from
+   `DATABASE_URL_OWNER` itself, which the script gives `pg_restore` as
+   `PGPASSWORD` only:
 
    ```bash
    pnpm exec tsx scripts/ops/backup.ts restore \
@@ -776,8 +780,9 @@ entry until the last dump made under it is past 14 days.
    ```
 
    It refuses without `--target-url`, a target whose database is the one
-   `DATABASE_URL_OWNER` or `DATABASE_URL` names (on any host), and an object
-   outside `db/`. It downloads the dump into a temporary file only root reads,
+   `DATABASE_URL_OWNER` or `DATABASE_URL` names (on any host), a target URL
+   carrying a password (`target_has_password`) or a query string
+   (`target_has_query`), and an object outside `db/`. It downloads the dump into a temporary file only root reads,
    decrypts it and restores it in one transaction (`pg_restore
    --single-transaction --exit-on-error`), so a failure leaves the target
    empty.

@@ -37,8 +37,9 @@
 //
 // THE INVITATION is only queued (`deliver-admin-invite { adminId }`), after the commit, so the job
 // never runs before the row exists; the worker prepares the link from `ADMIN_PANEL_ORIGIN` and sends
-// it through the email port's live sender. A queue that fails after the commit is said so, with the
-// administrator's id: `--recover` on that address queues it again.
+// it through the email port's live sender. A queue that fails after the commit, or does not answer
+// within QUEUE_TIMEOUT_MILLISECONDS, is said so, with the administrator's id: `--recover` on that
+// address queues it again. The queue is closed in every case, so the run ends.
 //
 // It runs on the hosted server, so there is no `NODE_ENV` or `EMAIL_PROVIDER` guard. It reads the
 // environment over `.env` as `scripts/dev/admin-invite.ts` does, writes through the application
@@ -70,6 +71,12 @@ const UNIQUE_VIOLATION = '23505';
 
 const CONNECT_TIMEOUT_MILLISECONDS = 5_000;
 
+/**
+ * How long the queue may take to accept the invitation: BullMQ waits for Redis for ever
+ * (`maxRetriesPerRequest: null`), so past this the run says `invitation_not_queued`.
+ */
+const QUEUE_TIMEOUT_MILLISECONDS = 5_000;
+
 /** The reason the first administrator's entry carries (no one typed one). */
 const BOOTSTRAP_REASON = 'first-admin script';
 
@@ -86,6 +93,9 @@ export type Command =
 
 export type Refusal =
   | 'panel_origin_missing'
+  | 'redis_url_missing'
+  | 'database_url_missing'
+  | 'encryption_key_missing'
   | 'seed_missing'
   | 'administrator_can_sign_in'
   | 'email_taken'
@@ -95,6 +105,11 @@ export type Refusal =
 const REFUSAL_TEXT: Readonly<Record<Refusal, string>> = {
   panel_origin_missing:
     'ADMIN_PANEL_ORIGIN is not set, so the worker has nowhere to point the invitation’s link',
+  redis_url_missing: 'REDIS_URL is not set, so the invitation has no queue to go through',
+  database_url_missing:
+    'DATABASE_URL is not set, so there is no database to write the administrator to',
+  encryption_key_missing:
+    'ENCRYPTION_KEY is not set, so the second factor’s secret cannot be encrypted',
   seed_missing:
     'the seeded administrator, the audit entry’s actor, is missing: run `pnpm db:seed` first',
   administrator_can_sign_in:
@@ -143,9 +158,12 @@ export function commandOf(args: readonly string[]): Command | null {
 
 /** Why the script will not run here, or null when it may. */
 export function refusalOf(env: Env): Refusal | null {
-  return env['ADMIN_PANEL_ORIGIN'] === undefined || env['ADMIN_PANEL_ORIGIN'] === ''
-    ? 'panel_origin_missing'
-    : null;
+  const unset = (name: string): boolean => env[name] === undefined || env[name] === '';
+  if (unset('ADMIN_PANEL_ORIGIN')) return 'panel_origin_missing';
+  if (unset('REDIS_URL')) return 'redis_url_missing';
+  if (unset('DATABASE_URL')) return 'database_url_missing';
+  if (unset('ENCRYPTION_KEY')) return 'encryption_key_missing';
+  return null;
 }
 
 /** The one method of the queue the invitation needs. */
@@ -159,6 +177,8 @@ export interface Dependencies {
   readonly queue: InviteQueue;
   /** The audit entry's actor: the seeded administrator unless a spec names an absent one. */
   readonly actorId?: string;
+  /** How long the queue may take: QUEUE_TIMEOUT_MILLISECONDS unless a spec names a short one. */
+  readonly queueTimeoutMilliseconds?: number;
 }
 
 export type Outcome =
@@ -213,19 +233,37 @@ async function audit(
   );
 }
 
-/** Queues the invitation once the row is committed; false when the queue failed. */
-async function queueInvitation(queue: InviteQueue, adminId: string): Promise<boolean> {
+/** Queues the invitation once the row is committed; false when the queue failed or took too long. */
+async function queueInvitation(
+  queue: InviteQueue,
+  adminId: string,
+  timeoutMilliseconds: number,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMilliseconds);
+  });
   try {
-    await queue.add(DELIVER_ADMIN_INVITE, { adminId });
-    return true;
+    return await Promise.race([
+      queue.add(DELIVER_ADMIN_INVITE, { adminId }).then(() => true),
+      expired,
+    ]);
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 /** The first administrator: written, audited, and its invitation queued after the commit. */
 export async function bootstrap(
-  { db, cipher, queue, actorId = ADMINISTRATOR.id }: Dependencies,
+  {
+    db,
+    cipher,
+    queue,
+    actorId = ADMINISTRATOR.id,
+    queueTimeoutMilliseconds = QUEUE_TIMEOUT_MILLISECONDS,
+  }: Dependencies,
   { email, displayName }: { readonly email: string; readonly displayName: string },
 ): Promise<Outcome> {
   const adminId = randomUUID();
@@ -256,12 +294,22 @@ export async function bootstrap(
     return adminId;
   });
   if (typeof written === 'string') return refused(written);
-  return { ok: true, adminId, queued: await queueInvitation(queue, adminId) };
+  return {
+    ok: true,
+    adminId,
+    queued: await queueInvitation(queue, adminId, queueTimeoutMilliseconds),
+  };
 }
 
 /** An administrator who can no longer sign in, invited again: cleared, audited, queued. */
 export async function recover(
-  { db, cipher, queue, actorId = ADMINISTRATOR.id }: Dependencies,
+  {
+    db,
+    cipher,
+    queue,
+    actorId = ADMINISTRATOR.id,
+    queueTimeoutMilliseconds = QUEUE_TIMEOUT_MILLISECONDS,
+  }: Dependencies,
   { email, reason }: { readonly email: string; readonly reason: string },
 ): Promise<Outcome> {
   const written = await inTransaction(db, async () => {
@@ -294,7 +342,7 @@ export async function recover(
   return {
     ok: true,
     adminId: written.adminId,
-    queued: await queueInvitation(queue, written.adminId),
+    queued: await queueInvitation(queue, written.adminId, queueTimeoutMilliseconds),
   };
 }
 

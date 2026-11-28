@@ -72,8 +72,8 @@ const ENV: Readonly<Record<string, string>> = {
   PATH: '/usr/bin',
 };
 
-const RESTORE_TARGET =
-  'postgresql://ijazah_owner:target-pass-in-spec@db.internal:5432/ijazah_restored';
+/** The owner's user, host and port, a new database, and no password: it is the owner's. */
+const RESTORE_TARGET = 'postgresql://ijazah_owner@db.internal:5432/ijazah_restored';
 
 interface Stored {
   readonly body: Uint8Array;
@@ -584,11 +584,59 @@ describe('restore', () => {
       '--no-password',
       '--dbname=postgresql://ijazah_owner@db.internal:5432/ijazah_restored',
     ]);
-    expect(restoreStep?.env['PGPASSWORD']).toBe('target-pass-in-spec');
+    expect(restoreStep?.env['PGPASSWORD']).toBe(OWNER_PASSWORD);
     expect(lines).toEqual([
       'out: backup restore: ok object=db/20261125T220000Z.dump.gpg restored into the named target',
     ]);
     expect(await readdir(tempRoot)).toEqual([]);
+  });
+
+  // PR #162's review, round 1, Minor 2: a password in the URL sits in the process's arguments; a
+  // query string can name another database or host to libpq.
+  it('refuses a target carrying a password, and downloads and runs nothing', async () => {
+    expect(
+      await run(restore('postgresql://ijazah_owner:typed@db.internal:5432/ijazah_restored')),
+    ).toBe(1);
+    expect(lines).toEqual(['err: backup restore: refused (target_has_password)']);
+    expect(runner.runs).toEqual([]);
+    expect(s3.sent).toEqual([]);
+  });
+
+  it('refuses a target carrying a query string, and downloads and runs nothing', async () => {
+    for (const target of [
+      'postgresql://ijazah_owner@db.internal:5432/scratch?dbname=ijazah',
+      'postgresql://ijazah_owner@db.internal:5432/ijazah_restored?host=elsewhere',
+    ]) {
+      lines = [];
+      expect(await run(restore(target))).toBe(1);
+      expect(lines).toEqual(['err: backup restore: refused (target_has_query)']);
+    }
+    expect(runner.runs).toEqual([]);
+    expect(s3.sent).toEqual([]);
+  });
+
+  it('gives pg_restore the owner’s password for the owner’s user, host and port, as PGPASSWORD only', async () => {
+    expect(await run(restore(RESTORE_TARGET))).toBe(0);
+    const steps = runner.runs[0]?.steps ?? [];
+    expect(steps.map((step) => step.env['PGPASSWORD'])).toEqual([undefined, OWNER_PASSWORD]);
+    for (const step of steps) expect(step.args.join(' ')).not.toContain(OWNER_PASSWORD);
+    for (const line of lines) expect(line).not.toContain(OWNER_PASSWORD);
+  });
+
+  it('gives no password for the owner’s user on another host or port (libpq’s ~/.pgpass then)', async () => {
+    for (const target of [
+      'postgresql://ijazah_owner@elsewhere.internal:5432/ijazah_restored',
+      'postgresql://ijazah_owner@db.internal:5433/ijazah_restored',
+    ]) {
+      runner.runs.length = 0;
+      expect(await run(restore(target))).toBe(0);
+      expect(runner.runs[0]?.steps[1]?.env['PGPASSWORD']).toBeUndefined();
+    }
+  });
+
+  it('gives no password for another user on the owner’s host and port', async () => {
+    expect(await run(restore('postgresql://restorer@db.internal:5432/ijazah_restored'))).toBe(0);
+    expect(runner.runs[0]?.steps[1]?.env['PGPASSWORD']).toBeUndefined();
   });
 
   it('removes the temporary file when pg_restore fails', async () => {

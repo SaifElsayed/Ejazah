@@ -67,16 +67,39 @@ describe('the arguments', () => {
   });
 });
 
+/** The four values the script needs, each set; no real value. */
+const HOSTED = {
+  ADMIN_PANEL_ORIGIN: 'https://admin.ijazah.test',
+  REDIS_URL: 'redis://redis.internal:6379',
+  DATABASE_URL: 'postgresql://ijazah_app@db.internal:5432/ijazah',
+  ENCRYPTION_KEY: 'a-key-in-spec',
+} as const;
+
 describe('the environment', () => {
   it('refuses without the panel’s origin, which the worker builds the link from', () => {
     expect(refusalOf({})).toBe('panel_origin_missing');
     expect(refusalOf({ ADMIN_PANEL_ORIGIN: '' })).toBe('panel_origin_missing');
   });
 
+  it('refuses without REDIS_URL, which the invitation is queued through', () => {
+    expect(refusalOf({ ...HOSTED, REDIS_URL: undefined })).toBe('redis_url_missing');
+    expect(refusalOf({ ...HOSTED, REDIS_URL: '' })).toBe('redis_url_missing');
+  });
+
+  it('refuses without DATABASE_URL, which the administrator is written through', () => {
+    expect(refusalOf({ ...HOSTED, DATABASE_URL: undefined })).toBe('database_url_missing');
+    expect(refusalOf({ ...HOSTED, DATABASE_URL: '' })).toBe('database_url_missing');
+  });
+
+  it('refuses without ENCRYPTION_KEY, which the second factor’s secret is encrypted under', () => {
+    expect(refusalOf({ ...HOSTED, ENCRYPTION_KEY: undefined })).toBe('encryption_key_missing');
+    expect(refusalOf({ ...HOSTED, ENCRYPTION_KEY: '' })).toBe('encryption_key_missing');
+  });
+
   it('runs on a hosted server: no NODE_ENV or EMAIL_PROVIDER guard', () => {
     expect(
       refusalOf({
-        ADMIN_PANEL_ORIGIN: 'https://admin.ijazah.test',
+        ...HOSTED,
         NODE_ENV: 'production',
         EMAIL_PROVIDER: 'resend',
       }),
@@ -634,6 +657,36 @@ describe('the output', { tags: ['database'] }, () => {
       expect(failed.err[0]).toContain('invitation_not_queued');
       expect(failed.err[0]).toContain('--recover');
       expect(failed.err[0]?.toLowerCase()).not.toContain(email);
+    });
+  });
+
+  // BullMQ with `maxRetriesPerRequest: null` neither resolves nor rejects `add` while Redis does not
+  // answer (PR #162's review, round 1, Minor 1): the bound ends the wait.
+  it('says so, exit 1, within the bound, when the queue never answers', async () => {
+    const email = unique();
+    await inRollback(db, async () => {
+      await plantSeededAdministrator(db);
+      await disableEveryoneWhoCanSignIn(db);
+      const { deps } = recorded(db);
+      const failed = lines();
+      const started = performance.now();
+      expect(
+        await execute(
+          { kind: 'bootstrap', email, displayName: 'First Admin' },
+          {
+            ...deps,
+            queue: { add: () => new Promise<never>(() => undefined) },
+            queueTimeoutMilliseconds: 50,
+          },
+          failed.output,
+        ),
+      ).toBe(1);
+      expect(performance.now() - started).toBeLessThan(2_000);
+      expect(await countWithEmail(db, email)).toBe(1);
+      expect(failed.out).toEqual([]);
+      expect(failed.err).toHaveLength(1);
+      expect(failed.err[0]).toContain('invitation_not_queued');
+      expect(failed.err[0]).toContain('--recover');
     });
   });
 });
