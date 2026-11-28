@@ -51,6 +51,8 @@ interface Call {
   readonly path: string;
   readonly bearer: string | null;
   readonly input: unknown;
+  /** R3 T184: the `x-app-build` header the call carried, or null without one. */
+  readonly build: string | null;
 }
 
 type Handler = (call: Call) => { status: number; body: unknown };
@@ -69,6 +71,7 @@ function fakeServer(handler: Handler) {
       path,
       bearer: authorization === null ? null : authorization.replace(/^Bearer /, ''),
       input: typeof raw === 'string' ? JSON.parse(raw) : undefined,
+      build: headers.get('x-app-build'),
     };
     calls.push(call);
     const { status, body } = handler(call);
@@ -1248,5 +1251,214 @@ describe('the query cache’s retry rule (T065, R-325 item 3)', () => {
       expect(errorCodeOf(error)).toBe(code);
       expect(retryNetworkFailure(0, error)).toBe(false);
     }
+  });
+});
+
+// R3 T184 (SRS DEC-99, DEC-109; the note under T184): the build number travels in `x-app-build` on
+// every call, the session's transport (a query, a mutation, an upload, the retry after a refresh),
+// the refresh and the live channel's opening alike, and in none when the build has no number (never
+// an empty one). A build below the server's floor is answered `UPDATE_REQUIRED` (426; on the live
+// channel, the code in its refused opening's frame): any such answer calls `onUpdateRequired` once,
+// signs no one out, and is never retried by the query cache, since it carries a code.
+describe('the build number on every call, and a build below the floor (R3 T184)', () => {
+  const BUILD = 3;
+  const uploadsUrl = 'https://api.test/uploads/documents';
+  const file = { uri: 'file:///cache/ijazah.pdf', name: 'ijazah.pdf' };
+  const encoder = new TextEncoder();
+  const updateRequired = { code: 'UPDATE_REQUIRED', message: 'Update the app to continue.' };
+  const tooOld = { status: 426, body: { error: updateRequired } };
+
+  /**
+   * The tRPC server `handler` answers, the documents upload route `upload` answers, and the live
+   * channel, whose openings answer the frames `frames` writes; every request's `x-app-build` kept.
+   */
+  function server({
+    handler = () => ok(subjects),
+    upload = () => ({ status: 201, body: { documentId: 'd-1' } }),
+    frames = 'event: connected\ndata: {}\n\n',
+  }: {
+    readonly handler?: Handler;
+    readonly upload?: () => { status: number; body: unknown };
+    readonly frames?: string;
+  } = {}) {
+    const trpc = fakeServer(handler);
+    const uploads: (string | null)[] = [];
+    const opens: (string | null)[] = [];
+    const fetchImpl = jest.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const target = typeof input === 'string' ? input : input.toString();
+      const build = new Headers(init?.headers).get('x-app-build');
+      if (target === uploadsUrl) {
+        uploads.push(build);
+        const { status, body } = upload();
+        return new Response(JSON.stringify(body), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (target.includes('live.events')) {
+        opens.push(build);
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(frames));
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      }
+      return trpc.fetch(input, init);
+    });
+    return { trpc, uploads, opens, fetch: fetchImpl as unknown as typeof fetch };
+  }
+
+  /** A client sending `appBuild`; `'omitted'` gives it no `appBuild` at all. */
+  function clientOver(fetchImpl: typeof fetch, appBuild: number | null | 'omitted' = BUILD) {
+    const sessions = memorySessions({ accessToken: 'a1', refreshToken: 'r1' });
+    const onSignedOut = jest.fn();
+    const onUpdateRequired = jest.fn();
+    const client = createApiClient({
+      url,
+      sessions: sessions.store,
+      documentsUploadUrl: uploadsUrl,
+      onSignedOut,
+      onUpdateRequired,
+      ...(appBuild === 'omitted' ? {} : { appBuild }),
+      fetch: fetchImpl,
+    });
+    return { client, sessions, onSignedOut, onUpdateRequired };
+  }
+
+  /** Opens `live.events`: undefined once it has started, or its first error. */
+  function openLive(client: ReturnType<typeof clientOver>['client']): Promise<unknown> {
+    return new Promise<unknown>((resolve) => {
+      const subscription = client.api.live.events.subscribe(undefined, {
+        onStarted: () => {
+          subscription.unsubscribe();
+          resolve(undefined);
+        },
+        onError: resolve,
+      });
+    });
+  }
+
+  /** A server refusing the old token UNAUTHENTICATED, and answering the refresh `refresh`. */
+  const refreshing =
+    (refresh: { status: number; body: unknown }): Handler =>
+    (call) => {
+      if (call.path === 'auth.refresh') return refresh;
+      return call.bearer === 'a2' ? ok(subjects) : refused('UNAUTHENTICATED');
+    };
+
+  it('sends x-app-build on a query and on a mutation', async () => {
+    const fake = server();
+    const { client } = clientOver(fake.fetch);
+    await client.api.catalog.subjects.list.query();
+    await client.api.account.reportDeviceTimezone.mutate({ timezone: 'Africa/Cairo' });
+    expect(fake.trpc.calls.map(({ path, build }) => [path, build])).toEqual([
+      ['catalog.subjects.list', '3'],
+      ['account.reportDeviceTimezone', '3'],
+    ]);
+  });
+
+  it('sends it on an upload', async () => {
+    const fake = server();
+    const { client } = clientOver(fake.fetch);
+    await expect(client.uploadDocument('credential', file)).resolves.toBe('d-1');
+    expect(fake.uploads).toEqual(['3']);
+  });
+
+  it('sends it on the refresh and on the retry after it', async () => {
+    const fake = server({ handler: refreshing(ok({ accessToken: 'a2', refreshToken: 'r2' })) });
+    const { client } = clientOver(fake.fetch);
+    await expect(client.api.catalog.subjects.list.query()).resolves.toEqual(subjects);
+    expect(fake.trpc.calls.map(({ path, bearer, build }) => [path, bearer, build])).toEqual([
+      ['catalog.subjects.list', 'a1', '3'],
+      ['auth.refresh', null, '3'],
+      ['catalog.subjects.list', 'a2', '3'],
+    ]);
+  });
+
+  it('sends it on the live channel’s opening', async () => {
+    const fake = server();
+    const { client } = clientOver(fake.fetch);
+    await expect(openLive(client)).resolves.toBeUndefined();
+    expect(fake.opens).toEqual(['3']);
+  });
+
+  it.each<[string, null | 'omitted']>([
+    ['null', null],
+    ['not given', 'omitted'],
+  ])('sends no header at all when the build number is %s, never an empty one', async (_, build) => {
+    const fake = server({ handler: refreshing(ok({ accessToken: 'a2', refreshToken: 'r2' })) });
+    const { client } = clientOver(fake.fetch, build);
+    await client.api.catalog.subjects.list.query();
+    await client.uploadDocument('identity', file);
+    await openLive(client);
+    expect(fake.trpc.calls.map(({ path, build: sent }) => [path, sent])).toEqual([
+      ['catalog.subjects.list', null],
+      ['auth.refresh', null],
+      ['catalog.subjects.list', null],
+    ]);
+    expect(fake.uploads).toEqual([null]);
+    expect(fake.opens).toEqual([null]);
+  });
+
+  it('calls onUpdateRequired once on a query refused UPDATE_REQUIRED, signs no one out and never retries it', async () => {
+    const fake = server({ handler: () => tooOld });
+    const { client, sessions, onSignedOut, onUpdateRequired } = clientOver(fake.fetch);
+    const error = await client.api.catalog.subjects.list.query().catch((caught) => caught);
+    expect(errorCodeOf(error)).toBe('UPDATE_REQUIRED');
+    expect(onUpdateRequired).toHaveBeenCalledTimes(1);
+    expect(fake.trpc.calls.map(({ path }) => path)).toEqual(['catalog.subjects.list']);
+    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(sessions.current()).toEqual({ accessToken: 'a1', refreshToken: 'r1' });
+    expect(retryNetworkFailure(0, error)).toBe(false);
+  });
+
+  it('calls it once on a refresh refused UPDATE_REQUIRED, keeping the session', async () => {
+    const fake = server({ handler: refreshing(tooOld) });
+    const { client, sessions, onSignedOut, onUpdateRequired } = clientOver(fake.fetch);
+    await expect(client.api.catalog.subjects.list.query()).rejects.toBeDefined();
+    expect(fake.trpc.calls.map(({ path }) => path)).toEqual([
+      'catalog.subjects.list',
+      'auth.refresh',
+    ]);
+    expect(onUpdateRequired).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(sessions.current()).toEqual({ accessToken: 'a1', refreshToken: 'r1' });
+  });
+
+  it('calls it once on an upload refused UPDATE_REQUIRED, signing no one out', async () => {
+    const fake = server({ upload: () => tooOld });
+    const { client, sessions, onSignedOut, onUpdateRequired } = clientOver(fake.fetch);
+    expect(await codeOfRejection(client.uploadDocument('credential', file))).toBe(
+      'UPDATE_REQUIRED',
+    );
+    expect(onUpdateRequired).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(sessions.current()).toEqual({ accessToken: 'a1', refreshToken: 'r1' });
+  });
+
+  it('calls it once on the live channel’s opening refused UPDATE_REQUIRED, signing no one out', async () => {
+    const refusal = JSON.stringify(updateRequired);
+    const fake = server({
+      frames: `event: connected\ndata: {}\n\nevent: serialized-error\ndata: ${refusal}\n\n`,
+    });
+    const { client, sessions, onSignedOut, onUpdateRequired } = clientOver(fake.fetch);
+    const error = await new Promise<unknown>((resolve) => {
+      client.api.live.events.subscribe(undefined, { onError: resolve });
+    });
+    expect(errorCodeOf(error)).toBe('UPDATE_REQUIRED');
+    expect(onUpdateRequired).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).not.toHaveBeenCalled();
+    expect(sessions.current()).toEqual({ accessToken: 'a1', refreshToken: 'r1' });
+  });
+
+  it('calls it for no other refusal', async () => {
+    const fake = server({ handler: () => refused('RATE_LIMITED', 429) });
+    const { client, onUpdateRequired } = clientOver(fake.fetch);
+    await expect(client.api.catalog.subjects.list.query()).rejects.toBeDefined();
+    expect(onUpdateRequired).not.toHaveBeenCalled();
   });
 });
