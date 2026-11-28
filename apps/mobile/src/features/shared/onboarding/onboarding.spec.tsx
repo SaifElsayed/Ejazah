@@ -6,6 +6,9 @@
 //
 // T097 (FR-155): `complete` refused with `ACCOUNT_RESTRICTED` (the identifiers of a banned person's
 // deleted account) lands on the signed-out banned state and forgets the draft, storing no session.
+//
+// R3 T185: the Terms sentence names the privacy policy too, each a link in one template (ق3 (a″)),
+// and the privacy policy is served content as the Terms are.
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { timeZoneCities } from '@ijazah/time/cities';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -24,7 +27,7 @@ import { getSession, setSession } from '../../../lib/session';
 import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { BirthDateSheet } from './components/BirthDateSheet';
 import { clearDraft, getDraft, startOnboarding, updateDraft } from './draft';
-import { OnboardProfile, Role, Terms, TimeZonePicker } from './index';
+import { OnboardProfile, Privacy, Role, Terms, TimeZonePicker } from './index';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({
@@ -233,6 +236,35 @@ describe('OnboardProfile', () => {
     // The piece before the link, whole and with no mark; the one after it, empty and not drawn.
     expect(screen.getByText('I agree to the')).toBeTruthy();
     expect(screen.queryByText('\u2069')).toBeNull();
+  });
+
+  it('names the Terms and the privacy policy in the one box, each a link (R3 T185, \u06423 (a\u2033))', async () => {
+    updateDraft({ role: 'student' });
+    await inBothDirections(
+      () => <OnboardProfile />,
+      (_rendered, direction) => {
+        expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+        expect(
+          screen.getByRole('link', { name: said(direction, 'onboarding.profile.termsLink') }),
+        ).toBeTruthy();
+        expect(
+          screen.getByRole('link', { name: said(direction, 'onboarding.profile.privacyLink') }),
+        ).toBeTruthy();
+        // The pieces between the links, whole and with no mark: one template, two places.
+        expect(screen.getByText(direction === 'rtl' ? '\u0623\u0648\u0627\u0641\u0642 \u0639\u0644\u0649' : 'I agree to the')).toBeTruthy();
+        expect(screen.getByText(direction === 'rtl' ? '\u0648' : 'and the')).toBeTruthy();
+        expect(screen.queryByText('\u2069')).toBeNull();
+      },
+    );
+  });
+
+  it('opens the privacy policy from the same sentence (R3 T185)', async () => {
+    updateDraft({ role: 'student' });
+    await renderIn('rtl', <OnboardProfile />);
+    await fireEvent.press(
+      screen.getByRole('link', { name: ar('onboarding.profile.privacyLink') }),
+    );
+    expect(mockNavigate.mock.calls).toEqual([['/privacy']]);
   });
 
   it('confirms the student and creates the account in one call, then lands it', async () => {
@@ -595,5 +627,41 @@ describe('Terms', () => {
     expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
     expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+  });
+});
+
+// R3 T185: the privacy policy, served as the Terms are (`GET /privacy?lang=&theme=`).
+describe('Privacy', () => {
+  beforeEach(() => {
+    process.env['EXPO_PUBLIC_API_URL'] = 'https://api.test/';
+  });
+
+  it("shows the served privacy policy in the person's language", async () => {
+    await renderIn('rtl', <Privacy />);
+    expect(screen.getByText(ar('onboarding.privacy.title'))).toBeTruthy();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=light');
+    await renderIn('ltr', <Privacy />);
+    expect(screen.getByText(translate('en', 'onboarding.privacy.title'))).toBeTruthy();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=en&theme=light');
+    setLocale('ar');
+  });
+
+  it("asks for the served privacy policy in the app's scheme", async () => {
+    await renderIn('rtl', <Privacy />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=dark');
+    await renderIn('ltr', <Privacy />, 'dark');
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=en&theme=dark');
+    setLocale('ar');
+  });
+
+  it('says a failed load with a retry, and goes back from its header', async () => {
+    await renderIn('rtl', <Privacy />);
+    await act(async () => mockWebView?.onError?.());
+    expect(await screen.findByText(ar('common.state.loadError'))).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.action.retry') }));
+    expect(screen.queryByText(ar('common.state.loadError'))).toBeNull();
+    expect(mockWebView?.uri).toBe('https://api.test/privacy?lang=ar&theme=light');
+    await fireEvent.press(screen.getByRole('button', { name: ar('common.a11y.back') }));
+    expect(mockNavigate).toHaveBeenCalledWith('back');
   });
 });

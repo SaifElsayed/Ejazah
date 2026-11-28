@@ -4,6 +4,7 @@
 // read only; the Terms. Also the loading shapes of a tab that reads `account.me` (T138: its failed
 // and offline states are the shared ones, `features/shared/states`).
 // T084: a role may lead the first list with its own row (the student's «الملف الشخصي»).
+// R3 T185: the privacy policy's row, right after the Terms'.
 import type { MeOutput } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { router } from 'expo-router';
@@ -73,6 +74,11 @@ export function AccountSettings({
           label={t('account.terms')}
           trailing={chevron}
           onPress={() => router.push('/terms')}
+        />
+        <ListRow
+          label={t('account.privacy')}
+          trailing={chevron}
+          onPress={() => router.push('/privacy')}
         />
       </List>
     </>

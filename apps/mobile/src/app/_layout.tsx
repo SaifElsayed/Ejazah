@@ -168,6 +168,7 @@ function Routes() {
         <Stack.Screen name="verify-identity" options={framed} />
         <Stack.Screen name="time-zone" options={modal} />
         <Stack.Screen name="terms" options={modal} />
+        <Stack.Screen name="privacy" options={modal} />
       </Stack>
     </NavigationThemeProvider>
   );

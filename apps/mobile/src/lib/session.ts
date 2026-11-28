@@ -94,8 +94,11 @@ export function signedInAs(
   };
 }
 
-/** The routes a signed-out person reaches: sign-in and onboarding, and their two modals (T051). */
-const SIGNED_OUT = new Set(['(auth)', 'terms', 'time-zone']);
+/**
+ * The routes a signed-out person reaches: sign-in and onboarding, and their modals (T051; the
+ * privacy policy since R3 T185).
+ */
+const SIGNED_OUT = new Set(['(auth)', 'terms', 'privacy', 'time-zone']);
 
 /** The routes outside the role groups every signed-in person reaches (screens.md "Routes"). */
 const SHARED = new Set([
@@ -104,6 +107,7 @@ const SHARED = new Set([
   'notifications',
   'time-zone',
   'terms',
+  'privacy',
   'verify-identity',
 ]);
 
