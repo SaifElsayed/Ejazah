@@ -59,8 +59,14 @@ const CODE_LENGTH = 6;
 const EARLIEST_BIRTH = '1900-01-01';
 /** Where the picker opens before a date is chosen. */
 const PICKER_START = '2000-01-01';
-/** Marks the link's place in the Terms sentence, which is one template (R-MOBILE-8). */
-const LINK = '\u0000';
+/**
+ * Mark the two links' places in the Terms sentence, which is one template (R-MOBILE-8): the Terms
+ * and, since R3 T185, the privacy policy (ق3 (a″)).
+ */
+const TERMS_LINK = '\u0000';
+const PRIVACY_LINK = '\u0001';
+/** The marks as `translate` puts them in the sentence: each value between isolates (T109). */
+const LINK_MARKS = new RegExp(`(${isolate(TERMS_LINK)}|${isolate(PRIVACY_LINK)})`);
 
 /** The draft when it can create the account; null while something is missing. */
 export function readyDraft(draft: OnboardingDraft): ReadyDraft | null {
@@ -150,10 +156,12 @@ export function OnboardProfile() {
       : zone === deviceTimeZone()
         ? t('onboarding.profile.timeZoneFromDevice', { city })
         : city;
-  // `translate` isolates the value (T109), so the split takes the isolates with the placeholder.
-  const [beforeLink = '', afterLink = ''] = t('onboarding.profile.agreeTerms', {
-    terms: LINK,
-  }).split(isolate(LINK));
+  // `translate` isolates each value (T109), so the split takes the isolates with the placeholders;
+  // the pieces alternate text and a link's mark, in the order the language puts them.
+  const sentence = t('onboarding.profile.agreeTerms', {
+    terms: TERMS_LINK,
+    privacy: PRIVACY_LINK,
+  }).split(LINK_MARKS);
 
   return (
     <StackScreen
@@ -255,15 +263,27 @@ export function OnboardProfile() {
         checked={draft.termsAccepted}
         onChange={(termsAccepted) => updateDraft({ termsAccepted })}
         label={
-          // The sentence is one template; the link sits where its `{terms}` is (R-MOBILE-8).
+          // The sentence is one template; each link sits where its placeholder is (R-MOBILE-8).
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-            {beforeLink === '' ? null : <Text>{beforeLink}</Text>}
-            <TextLink
-              label={t('onboarding.profile.termsLink')}
-              variant="strong"
-              onPress={() => router.push('/terms')}
-            />
-            {afterLink === '' ? null : <Text>{afterLink}</Text>}
+            {sentence.map((piece, at) =>
+              piece === isolate(TERMS_LINK) ? (
+                <TextLink
+                  key={at}
+                  label={t('onboarding.profile.termsLink')}
+                  variant="strong"
+                  onPress={() => router.push('/terms')}
+                />
+              ) : piece === isolate(PRIVACY_LINK) ? (
+                <TextLink
+                  key={at}
+                  label={t('onboarding.profile.privacyLink')}
+                  variant="strong"
+                  onPress={() => router.push('/privacy')}
+                />
+              ) : piece === '' ? null : (
+                <Text key={at}>{piece}</Text>
+              ),
+            )}
           </View>
         }
       />

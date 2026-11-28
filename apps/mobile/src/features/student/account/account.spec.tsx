@@ -95,6 +95,15 @@ describe('StudentAccount', () => {
       expect(screen.getByText(said(direction, 'account.providers.google'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.genders.female'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.terms'))).toBeTruthy();
+      // R3 T185: the privacy policy's row, right after the Terms'.
+      expect(screen.getByText(said(direction, 'account.privacy'))).toBeTruthy();
+      const drawn = JSON.stringify(screen.toJSON());
+      expect(drawn.indexOf(said(direction, 'account.terms'))).toBeLessThan(
+        drawn.indexOf(said(direction, 'account.privacy')),
+      );
+      expect(drawn.indexOf(said(direction, 'account.privacy'))).toBeLessThan(
+        drawn.indexOf(said(direction, 'account.signOut')),
+      );
       expect(screen.getByText(said(direction, 'account.signOut'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.profile'))).toBeTruthy();
       expect(screen.getByText(said(direction, 'account.profileValue'))).toBeTruthy();
@@ -137,6 +146,12 @@ describe('StudentAccount', () => {
     await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar('account.timeZone')) }));
     await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar('account.terms')) }));
     expect(mockNavigate.mock.calls).toEqual([['/time-zone'], ['/terms']]);
+  });
+
+  it('opens the privacy policy from its row (R3 T185)', async () => {
+    await renderIn('rtl', withAccount()());
+    await fireEvent.press(screen.getByRole('button', { name: new RegExp(ar('account.privacy')) }));
+    expect(mockNavigate.mock.calls).toEqual([['/privacy']]);
   });
 
   it('asks before signing out, then revokes the session and lands on the welcome screen', async () => {

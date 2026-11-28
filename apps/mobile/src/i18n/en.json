@@ -55,6 +55,7 @@
     "notifications": "Notifications",
     "notificationsOff": "Off · from the device settings",
     "notificationsOn": "On · from the device settings",
+    "privacy": "Privacy policy",
     "profile": "Profile",
     "profileValue": "Name and photo",
     "providers": {
@@ -624,8 +625,11 @@
       },
       "title": "Never miss a session"
     },
+    "privacy": {
+      "title": "Privacy Policy"
+    },
     "profile": {
-      "agreeTerms": "I agree to the {terms}",
+      "agreeTerms": "I agree to the {terms} and the {privacy}",
       "birthDay": "Day",
       "birthMonth": "Month",
       "birthYear": "Year",
@@ -635,6 +639,7 @@
       "displayName": "Display name",
       "gender": "Gender",
       "genderHint": "It cannot be changed later.",
+      "privacyLink": "Privacy Policy",
       "termsLink": "Terms and Conditions",
       "timeZone": "Time zone",
       "timeZoneFromDevice": "{city} · from the device",

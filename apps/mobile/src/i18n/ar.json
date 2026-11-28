@@ -55,6 +55,7 @@
     "notifications": "الإشعارات",
     "notificationsOff": "متوقفة · من إعدادات الجهاز",
     "notificationsOn": "مفعّلة · من إعدادات الجهاز",
+    "privacy": "سياسة الخصوصية",
     "profile": "الملف الشخصي",
     "profileValue": "الاسم والصورة",
     "providers": {
@@ -624,8 +625,11 @@
       },
       "title": "لا تفوّتك جلسة"
     },
+    "privacy": {
+      "title": "سياسة الخصوصية"
+    },
     "profile": {
-      "agreeTerms": "أوافق على {terms}",
+      "agreeTerms": "أوافق على {terms} و{privacy}",
       "birthDay": "اليوم",
       "birthMonth": "الشهر",
       "birthYear": "السنة",
@@ -635,6 +639,7 @@
       "displayName": "الاسم الظاهر",
       "gender": "الجنس",
       "genderHint": "لا يمكن تغييره لاحقًا.",
+      "privacyLink": "سياسة الخصوصية",
       "termsLink": "الشروط والأحكام",
       "timeZone": "المنطقة الزمنية",
       "timeZoneFromDevice": "{city} · من الجهاز",
