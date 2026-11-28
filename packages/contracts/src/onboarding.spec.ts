@@ -96,6 +96,25 @@ describe('the onboarding inputs', () => {
     }
   });
 
+  // R3 T189 (SRS FR-AUTH-4 as amended by DEC-109): a minor's guardian tick, optional and only `true`.
+  it('take `complete` with the guardian’s agreement as `true`, and without it', () => {
+    expect(
+      onboarding.onboardingCompleteInput.safeParse({ ...complete, guardianAgreed: true }).data,
+    ).toMatchObject({ guardianAgreed: true });
+    const absent = onboarding.onboardingCompleteInput.safeParse(complete);
+    expect(absent.success).toBe(true);
+    expect(absent.data).not.toHaveProperty('guardianAgreed');
+  });
+
+  it('refuse the guardian’s agreement as anything but `true`', () => {
+    for (const guardianAgreed of [false, 'true', 1, null]) {
+      expect(
+        onboarding.onboardingCompleteInput.safeParse({ ...complete, guardianAgreed }).success,
+        String(guardianAgreed),
+      ).toBe(false);
+    }
+  });
+
   it('take a display name of two to eighty characters, trimmed', () => {
     expect(
       onboarding.onboardingCompleteInput.safeParse({ ...complete, displayName: ' س ' }).success,

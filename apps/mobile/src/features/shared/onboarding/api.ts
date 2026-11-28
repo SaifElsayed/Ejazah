@@ -21,6 +21,8 @@ import { clearDraft, type OnboardingDraft } from './draft';
 export type ReadyDraft = OnboardingDraft &
   Required<Pick<OnboardingDraft, 'role' | 'gender' | 'dateOfBirth'>> & {
     readonly timezone: string;
+    /** R3 T189: set exactly when the step asked a minor for the guardian's tick and it is ticked. */
+    readonly guardianAgreed?: true;
   };
 
 /** `onboarding.complete`'s input from the draft, with only the fields its identity needs. */
@@ -37,6 +39,7 @@ export function completeInput(draft: ReadyDraft, termsVersion: string): Onboardi
       ? { password: draft.password }
       : {}),
     ...(draft.emailVerified ? {} : { email: draft.email.trim(), emailCode: draft.emailCode }),
+    ...(draft.guardianAgreed === true ? { guardianAgreed: true } : {}),
   };
 }
 

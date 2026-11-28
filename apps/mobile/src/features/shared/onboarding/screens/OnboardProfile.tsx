@@ -8,7 +8,12 @@
 // banned state. T109: the date of birth is picked in the app's own sheet (`BirthDateSheet`), since
 // Android's picker takes no locale. T137: the sign-up step checks the password first; a creation
 // still refused as `PASSWORD_WEAK` forgets the draft and leads back to that step's password field.
+// R3 T189 (FR-AUTH-4 as amended by DEC-109): when the date of birth makes the person under 18 today
+// in the step's zone (`isMinorOn`, the server's day), one more checkbox under the Terms, unticked,
+// «وليّ أمري موافق على تسجيلي», holds «متابعة» until ticked and sends `guardianAgreed: true`; a date
+// that makes an adult hides and clears it, and a refusal for want of it shows it with its error.
 import { displayName as displayNameSchema, emailAddress, type Gender } from '@ijazah/contracts';
+import { isMinorOn, localDateIn } from '@ijazah/time';
 import { calendarDateOfPicked } from '@ijazah/time/calendar';
 import { cityOf } from '@ijazah/time/cities';
 import { Redirect, router } from 'expo-router';
@@ -33,7 +38,7 @@ import {
 } from '../../../../design/primitives';
 import { tokens } from '../../../../design/tokens';
 import { isolate, useLocale, useT } from '../../../../i18n';
-import { errorCodeOf } from '../../../../lib/client';
+import { errorCodeOf, errorDetailsOf } from '../../../../lib/client';
 import { genericErrorKey } from '../../../../lib/error-message';
 import { useFormatters } from '../../../../lib/formatters';
 import { deviceTimeZone } from '../../../../lib/time-zone';
@@ -68,17 +73,52 @@ const PRIVACY_LINK = '\u0001';
 /** The marks as `translate` puts them in the sentence: each value between isolates (T109). */
 const LINK_MARKS = new RegExp(`(${isolate(TERMS_LINK)}|${isolate(PRIVACY_LINK)})`);
 
+/**
+ * R3 T189: whether the date of birth makes the person under 18 today in the zone the step holds,
+ * the day the server reads (`onboarding.complete`); unknown, and so not asked, before both are set.
+ */
+export function isMinorToday(
+  draft: Pick<OnboardingDraft, 'dateOfBirth' | 'timezone'>,
+  now: Date,
+): boolean {
+  const { dateOfBirth, timezone } = draft;
+  if (dateOfBirth === undefined || timezone === null) return false;
+  return isMinorOn(dateOfBirth, localDateIn(now, timezone));
+}
+
+/** R3 T189: the guardian's checkbox, whether it is asked and whether it is ticked. */
+export interface GuardianAgreement {
+  readonly asked: boolean;
+  readonly ticked: boolean;
+}
+
+/** R3 T189: a creation refused for want of the guardian's tick. */
+function isGuardianRefusal(error: unknown): boolean {
+  return (
+    errorCodeOf(error) === 'VALIDATION_FAILED' &&
+    errorDetailsOf(error).some((detail) => detail.path === 'guardianAgreed')
+  );
+}
+
 /** The draft when it can create the account; null while something is missing. */
-export function readyDraft(draft: OnboardingDraft): ReadyDraft | null {
+export function readyDraft(draft: OnboardingDraft, guardian: GuardianAgreement): ReadyDraft | null {
   const { role, gender, dateOfBirth, timezone } = draft;
   if (role === undefined || gender === undefined || dateOfBirth === undefined) return null;
   if (timezone === null || !draft.termsAccepted) return null;
+  if (guardian.asked && !guardian.ticked) return null;
   if (!displayNameSchema.safeParse(draft.displayName).success) return null;
   if (!draft.emailVerified) {
     if (!emailAddress.safeParse(draft.email.trim()).success) return null;
     if (draft.emailCode.length !== CODE_LENGTH) return null;
   }
-  return { ...draft, role, gender, dateOfBirth, timezone };
+  return {
+    ...draft,
+    role,
+    gender,
+    dateOfBirth,
+    timezone,
+    ...(guardian.asked ? { guardianAgreed: true } : {}),
+  };
 }
 
 export function OnboardProfile() {
@@ -95,9 +135,14 @@ export function OnboardProfile() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<SignInConflict | null>(null);
+  // R3 T189: the guardian's tick, and whether the server refused the creation for want of it.
+  const [guardianTicked, setGuardianTicked] = useState(false);
+  const [guardianRefused, setGuardianRefused] = useState(false);
 
   if (draft === null || draft.role === undefined) return <Redirect href="/(auth)/welcome" />;
-  const ready = readyDraft(draft);
+  // A refusal shows the checkbox even where the phone's clock read an adult, until the date changes.
+  const guardianAsked = guardianRefused || isMinorToday(draft, new Date());
+  const ready = readyDraft(draft, { asked: guardianAsked, ticked: guardianTicked });
   const textOf = (caught: unknown) => {
     const { key, values } = genericErrorKey(caught, 'common.state.actionError');
     return t(key, values);
@@ -132,6 +177,10 @@ export function OnboardProfile() {
       } else if (code === 'CODE_INVALID') {
         setConfirming(false);
         setCodeError(true);
+      } else if (isGuardianRefusal(caught)) {
+        setConfirming(false);
+        setGuardianTicked(false);
+        setGuardianRefused(true);
       } else if (code === 'ONBOARDING_TOKEN_INVALID') {
         // The token lapsed or was spent: the sign-in starts again.
         clearDraft();
@@ -287,6 +336,20 @@ export function OnboardProfile() {
           </View>
         }
       />
+      {guardianAsked ? (
+        <View style={{ gap: tokens.space['1'] }}>
+          <CheckRow
+            checked={guardianTicked}
+            onChange={setGuardianTicked}
+            label={t('onboarding.profile.guardianAgree')}
+          />
+          {guardianRefused && !guardianTicked ? (
+            <Text tone="danger" variant="callout">
+              {t('onboarding.profile.guardianRequired')}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
       {error !== null && !confirming ? (
         <Text tone="danger" variant="callout">
           {error}
@@ -300,6 +363,9 @@ export function OnboardProfile() {
           onDone={(dateOfBirth) => {
             setPicking(false);
             updateDraft({ dateOfBirth });
+            // R3 T189: a date that makes an adult hides the guardian's checkbox and clears its tick.
+            setGuardianRefused(false);
+            if (!isMinorToday({ ...draft, dateOfBirth }, new Date())) setGuardianTicked(false);
           }}
           onClose={() => setPicking(false)}
         />

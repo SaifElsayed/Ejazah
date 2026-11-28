@@ -647,6 +647,8 @@
       "displayName": "Display name",
       "gender": "Gender",
       "genderHint": "It cannot be changed later.",
+      "guardianAgree": "My parent or guardian agrees to my registration",
+      "guardianRequired": "Your parent's or guardian's agreement is needed to continue.",
       "privacyLink": "Privacy Policy",
       "termsLink": "Terms and Conditions",
       "timeZone": "Time zone",

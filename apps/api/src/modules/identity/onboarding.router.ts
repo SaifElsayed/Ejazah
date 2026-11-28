@@ -43,5 +43,8 @@ export const onboardingRouter = createAppRouter({
       key: authentication,
       subjectOf: ({ input }) => hashLookupToken(input.onboardingToken),
     },
-  }).mutation(({ ctx, input }) => ctx.services.identity.onboarding.complete(input, ctx.locale)),
+  }).mutation(({ ctx, input }) =>
+    // R3 T189: the request's log, for a minor's refusal without the guardian's tick.
+    ctx.services.identity.onboarding.complete(input, ctx.locale, ctx.log),
+  ),
 });
