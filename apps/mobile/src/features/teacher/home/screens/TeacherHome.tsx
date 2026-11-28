@@ -4,6 +4,10 @@
 // (`read-since-mount.ts`): before that the shared states (002:T138), a failed read the retry state
 // whatever is cached, and with no connection the cached day under the offline banner. The route
 // hands it the identity request's card (T074), drawn first.
+// R3 (005:T020's follow-up of #148 Saif r1; Q-4′ (b); FR-619, FR-623): the home is the teacher's
+// only once approved (`teacher_home`, the server's landing), so each time it opens it asks for
+// pushes and registers the device's token (`useAskForPush`; the system answers without a prompt
+// once the teacher has decided). No in-app sheet before the system's prompt in v1 (Q-D2).
 import type { SessionStatus, TeacherTodayOutput } from '@ijazah/contracts';
 import type { ReactNode } from 'react';
 
@@ -11,6 +15,7 @@ import { AppHeader, Card, List, Stats } from '../../../../design/primitives';
 import { useT } from '../../../../i18n';
 import { useFormatters } from '../../../../lib/formatters';
 import { useOnline } from '../../../../lib/online';
+import { useAskForPush } from '../../../shared/push';
 import { TabScreen } from '../../../shared/screen';
 import { NotLoaded, OfflineNotice } from '../../../shared/states';
 import { readSinceMount } from '../../read-since-mount';
@@ -23,6 +28,7 @@ export function TeacherHome({ notice }: { readonly notice?: ReactNode }) {
   const t = useT();
   const online = useOnline();
   const today = useTeacherToday();
+  useAskForPush(true);
   const read = readSinceMount(today);
   const retry = () => void today.refetch();
   const offlineCached = read.state === 'waiting' && !online ? read.cached : undefined;

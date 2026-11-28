@@ -1,7 +1,7 @@
 // T020 of specs/005-certification (FR-623; Q-T2 (a)): the push permission and the token. Pushes
 // allowed and a token held, `account.pushToken.register` takes the token once, with the device's
-// platform; refused, or with no token, nothing is registered. The stand-in, the one binding of this
-// build, asks nothing and yields no token, so it never registers.
+// platform; refused, or with no token, nothing is registered. The stand-in asks nothing and yields
+// no token, so it never registers; the screens' binding is expo-notifications' (R3, binding.spec.ts).
 import type { PushTokenRegisterInput } from '@ijazah/contracts';
 import { describe, expect, it, jest } from '@jest/globals';
 
@@ -9,7 +9,6 @@ import {
   askAndRegister,
   devicePlatformOf,
   type PushBinding,
-  pushBinding,
   standInPush,
 } from './index';
 
@@ -62,10 +61,6 @@ describe('askAndRegister', () => {
     expect(await askAndRegister(standInPush, 'android', registered)).toBe(false);
     expect(await standInPush.token()).toBeNull();
     expect(registered).not.toHaveBeenCalled();
-  });
-
-  it('binds the stand-in in this build (Q-T2 (a))', () => {
-    expect(pushBinding).toBe(standInPush);
   });
 });
 

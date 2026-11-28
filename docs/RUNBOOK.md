@@ -115,8 +115,109 @@ steps, once:
    module means a new development build» above) and install it.
 6. Start the API with `SIGN_IN_PROVIDER=live` to try it.
 
-The store key's SHA-1 is added to the Android client later, with the
-production profile (`eas.json` has only `development` today).
+**The store build (002:T182, R3).** The store's bundle is made on EAS from
+`eas.json`'s `production` profile: an Android App Bundle
+(`android.buildType: app-bundle`), `distribution: store`, the EAS environment
+`production`, and no `autoIncrement` (`appVersionSource` stays `local`, so the
+repository holds the number). The command, once the steps below are done:
+`npx eas-cli build -p android --profile production`. The `development`
+profile is unchanged.
+
+The EAS environment `production` holds these variables, set by the owner on
+expo.dev (values there only, never in a file or a message):
+
+- `EXPO_PUBLIC_API_URL`, the hosted API's origin (the app stops at launch
+  without it);
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, the Web OAuth client's ID;
+- `EXPO_PUBLIC_SENTRY_DSN` and `EXPO_PUBLIC_SENTRY_ENVIRONMENT`, and the
+  secrets `SENTRY_AUTH_TOKEN` and `SENTRY_ORG` («Errors: from crash to fix»);
+- the **file** variable `GOOGLE_SERVICES_JSON`, push's Firebase file (below).
+
+`EXPO_PUBLIC_DEV_SIGN_IN` is never set there. `apps/mobile/.env` is not
+uploaded to EAS (it is ignored), so a value missing from the environment is
+missing from the build.
+
+**The version code.** `app.json`'s `version` is the name people see, semantic
+(`1.0.0`; `1.0.x` a fix, `1.x.0` features). `android.versionCode` is the number
+Play compares, and the one the minimum-build gate (T184) and Sentry's
+`app.build` read from the binary:
+
+1. Before each build that will be uploaded to Play, raise `versionCode` by
+   exactly one, in a commit of its own that changes nothing else.
+2. Never reuse or lower a number. A number uploaded to Play is spent, even if
+   that release never rolls out. A build that failed on EAS uploaded nothing,
+   so the next attempt keeps the same number.
+3. After the upload, tag that commit `android-vc-N` (N the version code) and
+   add a row below.
+
+| N | Version | Tag | Date | Track |
+|---|---|---|---|---|
+| 1 | 1.0.0 | | | |
+
+**Push's set-up (`expo-notifications`; the owner's steps, once).**
+
+1. Make the owner's Firebase project and, in it, an Android app for
+   `com.ijazah.app`. Download its `google-services.json`. The file is never
+   committed (`.gitignore`).
+2. Upload it to EAS as the file variable `GOOGLE_SERVICES_JSON` in the
+   `production` and `development` environments. `apps/mobile/app.config.js`
+   names it as `android.googleServicesFile` only when the variable is set, so a
+   local run without it needs nothing.
+3. In the Firebase project, make the service account key for FCM V1 and upload
+   it to EAS's credentials (`npx eas-cli credentials`, Android, Google Service
+   Account Key for push notifications). Expo's push service sends with it.
+4. Make a new development build and check on the phones that a push arrives
+   (the phones day). With the file present, the Google sign-in plugin also
+   applies Google's services plugin to the build: check sign-in on that build
+   too.
+
+A build without the file has no push token: the app asks nothing more of the
+person and registers nothing, and never shows an error. Without an icon of its
+own, `expo-notifications` writes no notification icon, so Android draws the
+app's launcher icon, as a plain silhouette, as the push's small icon; the 12/5
+icon work gives the plugin a white-on-transparent 96×96 icon.
+
+**The store key's SHA-1.** Google matches the Android OAuth client by the
+package and the SHA-1 of the key that signs the installed app. For the store,
+that is Play's app signing key: once the Play app exists (after T148), copy its
+SHA-1 from Play Console (App integrity, App signing) and add
+it to the Android client for `com.ijazah.app`, beside the debug and EAS keys of
+step 3 above.
+
+**The 12/5 «R3 close».** T182 stays open until each is done and noted in the
+close's commit:
+
+1. The icon and the adaptive icon in `app.json`, and the notification icon
+   (above).
+2. `npx expo-doctor` (it downloads itself: the owner's word), with no finding
+   left unexplained.
+3. The EAS `production` build.
+4. The built bundle's merged manifest listed in the close's pull request
+   (`bundletool dump manifest --bundle <file>.aab`): `SYSTEM_ALERT_WINDOW`,
+   `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE` must be absent. The
+   release manifest is the proof: a development build's debug manifest keeps
+   `SYSTEM_ALERT_WINDOW` for React Native's own overlays.
+5. The Play signing key's SHA-1 on the Google Android client (above).
+6. The source maps: the first event of that build in Sentry reads at the source
+   line.
+7. One device run on that build.
+8. Play Console, App content, Foreground service: a declaration for
+   `mediaProjection` (a teacher sharing the screen) and for `microphone` (the
+   keep-alive while sharing), each with a link to a short video of the steps
+   in the app, filmed on the phones day.
+9. Play Console, Data safety: «Crash logs» and «Diagnostics» collected (Sentry,
+   tied to the account's id), and «encrypted in transit: yes».
+10. If the target audience includes ages under 13: Sentry's and Firebase's
+    SDKs checked against the Families policy's self-certified SDKs first.
+11. The version code's row above, and the tag `android-vc-1` after the
+    upload.
+
+**Raising the floor.** The minimum build admitted (`min_app_build`, T184)
+blocks every older build until it is updated from Play, so it is raised only
+by its rule, the one the setting's «i» in the panel states: for a security,
+money or contract reason only; only once the new build is at 100% on every
+Play track in use; only after its release health in Sentry is checked; and
+never together with a change of the lowest Android version the app runs on.
 
 **Where the mails land.** With `NODE_ENV=development` and
 `EMAIL_PROVIDER=fake`, the email stand-in sends nothing and writes each mail,
@@ -956,6 +1057,18 @@ environment exists yet; until it does, "install" means a developer's `.env`.
 - **`SENTRY_DSN`**. Not a password, but it lets anyone send events into the
   project. Create a new client key in the Sentry project's settings, install it,
   then disable the old one.
+- **`SENTRY_AUTH_TOKEN`** (002:T182, T183), the token the phone's EAS build and
+  the panel's build upload their source maps with. Whoever holds it can write
+  releases and maps into the organization. Revoke it in Sentry's settings
+  (Auth Tokens), make a new one with the same scope, and replace it in EAS's
+  environments and on the panel's build host; until then a build uploads no
+  maps.
+- **The FCM key** (002:T182), the Firebase service account key EAS's
+  credentials hold for push. Whoever holds it can send pushes to the app's
+  devices. Revoke it in the Google Cloud console (IAM, Service accounts, the
+  key), make a new one, upload it to EAS's credentials
+  (`npx eas-cli credentials`, Android, the push key), then remove the old one
+  there. Until the new key is uploaded, pushes are not delivered.
 - **`REDIS_URL`**, when it carries a password. Changed at the Redis host (R-18).
 - **GitHub tokens.** A personal access token or a `gh` login token is revoked
   in the owner's GitHub settings and replaced. The workflows hold one stored

@@ -6,11 +6,14 @@
 // with the same date and line. The screen decides only on what it read since it opened (the owner's
 // decision of 2026-11-04; T086): a failed read on opening is the retry state, never the earlier
 // answer cached; offline, the cached day stays under the offline banner (002:T138).
+// R3 (005:T020's follow-up of #148 Saif r1; Q-4′ (b)): the home is reached only once the teacher is
+// approved, and each time it opens it asks for pushes (the system answers without a prompt once
+// the teacher has decided) and registers the device's token.
 import type { TeacherTodayOutput, TeacherTodaySession } from '@ijazah/contracts';
 import { cityOf } from '@ijazah/time/cities';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Text } from 'react-native';
 
@@ -24,6 +27,7 @@ import {
   formatTime,
 } from '../../../lib/formatters';
 import { apiError, fakeApi } from '../../shared/__tests__/api-double';
+import type { PushBinding } from '../../shared/push';
 import { TEACHER_TODAY_QUERY_KEY, TeacherHome } from './index';
 
 let mockApi = fakeApi();
@@ -37,6 +41,18 @@ jest.mock('expo-router', () => ({
     navigate: (route: unknown) => mockNavigate(route),
   },
 }));
+
+const TOKEN = 'ExponentPushToken[device-1]';
+const mockAsk = jest.fn(async () => false);
+const mockToken = jest.fn(async (): Promise<string | null> => TOKEN);
+/** The bound binding: a fake whose answer each case sets (refused unless a case allows it). */
+jest.mock('../../shared/push/binding', () => {
+  const actual = jest.requireActual<typeof import('../../shared/push/binding')>(
+    '../../shared/push/binding',
+  );
+  const bound: PushBinding = { ask: () => mockAsk(), token: () => mockToken() };
+  return { ...actual, pushBinding: bound };
+});
 
 const CAIRO = 'Africa/Cairo';
 const DUBAI = 'Asia/Dubai';
@@ -128,6 +144,9 @@ const today = () => mockApi.api.teacher.today.query;
 
 beforeEach(() => {
   mockApi = fakeApi();
+  mockAsk.mockReset();
+  mockAsk.mockResolvedValue(false);
+  mockToken.mockClear();
   mockPush.mockReset();
   mockNavigate.mockReset();
   queries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -263,5 +282,36 @@ describe('TeacherHome reads since it opened (the owner’s decision of 2026-11-0
     await renderIn('rtl', home());
     expect(screen.getByText(ar('common.state.offline'))).toBeTruthy();
     expect(screen.getByText(NEXT.student.displayName)).toBeTruthy();
+  });
+});
+
+describe('TeacherHome asks for pushes (Q-4′ (b); FR-623)', () => {
+  const register = jest.fn(async (_input: unknown) => undefined);
+
+  beforeEach(() => {
+    register.mockReset();
+    Object.assign(mockApi.api.account, { pushToken: { register: { mutate: register } } });
+    mockAsk.mockResolvedValue(true);
+  });
+
+  it('asks once the home opens, and registers the device’s token', async () => {
+    today().mockResolvedValue(day([NEXT]));
+    await renderIn('rtl', home());
+    expect(await screen.findByText(NEXT.student.displayName)).toBeTruthy();
+    await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledWith({ token: TOKEN, platform: 'ios' });
+  });
+
+  it('asks on a day without sessions too, and once for the opening, however often it redraws', async () => {
+    today().mockResolvedValue(day([]));
+    await renderIn('rtl', home());
+    expect(await screen.findByText(ar('teacher.today.empty.title'))).toBeTruthy();
+    await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+    today().mockResolvedValue(day([NEXT]));
+    await act(() => queries.invalidateQueries({ queryKey: TEACHER_TODAY_QUERY_KEY }));
+    expect(await screen.findByText(NEXT.student.displayName)).toBeTruthy();
+    expect(mockAsk).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledTimes(1);
   });
 });
