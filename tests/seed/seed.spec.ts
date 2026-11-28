@@ -399,7 +399,7 @@ describe('the seed (T074)', () => {
     // R1a (002:T176): + identity_document_retention_days; 006:T002: + the programme's eight (95 + 4 + 8).
     // 004:T084 (R1b, DEC-106): + rate_limit_encryption_failure (107 + 1). 006:T014 (SRS DEC-113):
     // + programme_charge_inquiry_tries (108 + 1). 006:T019 (SRS DEC-114): + programme_pay_reminder_hours
-    // (109 + 1).
-    expect(counts).toEqual([{ subjects: '5', settings: '110', admins: '1' }]);
+    // (109 + 1). 002:T184 (R3, DEC-99): + min_app_build (110 + 1).
+    expect(counts).toEqual([{ subjects: '5', settings: '111', admins: '1' }]);
   });
 });
