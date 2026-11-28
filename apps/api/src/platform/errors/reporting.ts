@@ -23,6 +23,10 @@ export interface ReportingOptions {
   /** `SENTRY_DSN`; reporting is off when absent. */
   readonly dsn: string | undefined;
   readonly environment: 'development' | 'test' | 'production';
+  /** R3 T183: `SENTRY_ENVIRONMENT`, the events' environment in place of `environment` when set. */
+  readonly sentryEnvironment?: 'development' | 'closed-test' | 'production' | undefined;
+  /** R3 T183: `SENTRY_RELEASE`, the deploy's git SHA; the events name no release without it. */
+  readonly release?: string | undefined;
 }
 
 let enabled = false;
@@ -42,7 +46,8 @@ export function initReporting(options: ReportingOptions): boolean {
   if (options.dsn === undefined) return false;
   Sentry.init({
     dsn: options.dsn,
-    environment: options.environment,
+    environment: options.sentryEnvironment ?? options.environment,
+    ...(options.release === undefined ? {} : { release: options.release }),
     // Sentry 11 collects bodies, query data, queue arguments, GraphQL and AI payloads and local
     // variables by default; each is a place an R-SEC-2 value lives, so each is off, and what remains
     // is scrubbed below. Kept on purpose: the source lines around each stack frame
