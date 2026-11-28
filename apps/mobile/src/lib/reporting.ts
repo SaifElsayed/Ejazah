@@ -203,7 +203,45 @@ function scrubEvent(event: SentEvent): SentEvent {
   return debugMeta === undefined ? scrubbed : { ...scrubbed, debug_meta: debugMeta };
 }
 
+// PR #163 r1 Major 2: the categories of a tap's breadcrumb (`Sentry.wrap`'s touch boundary and its
+// rage-tap detector, @sentry/react-native 8.28.0). Their `message`, each `path` entry's `label` and
+// the rage tap's `node` and `route` carry the text on screen (a name, often a minor's, an e-mail, a
+// chat line), so a tap's breadcrumb is rebuilt from what names a component only.
+const TAP_CATEGORIES: ReadonlySet<string> = new Set(['touch', 'ui.multiClick']);
+const COMPONENT_FIELDS = ['name', 'element', 'file'] as const;
+
+/** A touched component's names, with no text from the screen. */
+function componentOf(entry: unknown): Record<string, string> {
+  const component: Record<string, string> = {};
+  if (typeof entry !== 'object' || entry === null) return component;
+  for (const field of COMPONENT_FIELDS) {
+    const value = (entry as Record<string, unknown>)[field];
+    if (typeof value === 'string') component[field] = value;
+  }
+  return component;
+}
+
+/** A tap's breadcrumb as it may leave: its kind, its time, the components touched, the tap count. */
+function tapBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
+  const { category, type, level, timestamp, data } = breadcrumb;
+  const path = data?.['path'];
+  const clickCount = data?.['clickCount'];
+  const kept: Record<string, unknown> = {};
+  if (Array.isArray(path)) kept['path'] = path.map(componentOf);
+  if (typeof clickCount === 'number') kept['clickCount'] = clickCount;
+  return {
+    ...(category === undefined ? {} : { category }),
+    ...(type === undefined ? {} : { type }),
+    ...(level === undefined ? {} : { level }),
+    ...(timestamp === undefined ? {} : { timestamp }),
+    data: kept,
+  };
+}
+
 function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
+  if (breadcrumb.category !== undefined && TAP_CATEGORIES.has(breadcrumb.category)) {
+    return redact(tapBreadcrumb(breadcrumb)) as Breadcrumb;
+  }
   const scrubbed = redact(breadcrumb) as Breadcrumb;
   const url = scrubbed.data?.['url'];
   if (scrubbed.data !== undefined && typeof url === 'string') {

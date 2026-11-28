@@ -72,11 +72,12 @@ export const expoPush: PushBinding = {
 
 /**
  * The token the sign-out removes: the one this process last read, else the one kept from an earlier
- * process; null when none was read or the store cannot be read.
+ * process; null when none was read or the store cannot be read (PR #163 r1 Major 1: a store that
+ * answers `undefined` holds nothing either).
  */
 export async function heldPushToken(): Promise<string | null> {
   if (held !== null) return held;
-  return kept.read().catch(() => null);
+  return (await kept.read().catch(() => null)) ?? null;
 }
 
 /** Forgets the token, here and in the store, once the sign-out has tried to remove it. */

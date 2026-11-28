@@ -30,6 +30,7 @@ import { apiError, fakeApi, tokens } from '../__tests__/api-double';
 import { BirthDateSheet } from './components/BirthDateSheet';
 import { clearDraft, getDraft, startOnboarding, updateDraft } from './draft';
 import { OnboardProfile, Privacy, Role, Terms, TimeZonePicker } from './index';
+import { isMinorToday } from './screens/OnboardProfile';
 
 let mockApi = fakeApi();
 jest.mock('../../../lib/api', () => ({
@@ -253,7 +254,13 @@ describe('OnboardProfile', () => {
           screen.getByRole('link', { name: said(direction, 'onboarding.profile.privacyLink') }),
         ).toBeTruthy();
         // The pieces between the links, whole and with no mark: one template, two places.
-        expect(screen.getByText(direction === 'rtl' ? '\u0623\u0648\u0627\u0641\u0642 \u0639\u0644\u0649' : 'I agree to the')).toBeTruthy();
+        expect(
+          screen.getByText(
+            direction === 'rtl'
+              ? '\u0623\u0648\u0627\u0641\u0642 \u0639\u0644\u0649'
+              : 'I agree to the',
+          ),
+        ).toBeTruthy();
         expect(screen.getByText(direction === 'rtl' ? '\u0648' : 'and the')).toBeTruthy();
         expect(screen.queryByText('\u2069')).toBeNull();
       },
@@ -263,9 +270,7 @@ describe('OnboardProfile', () => {
   it('opens the privacy policy from the same sentence (R3 T185)', async () => {
     updateDraft({ role: 'student' });
     await renderIn('rtl', <OnboardProfile />);
-    await fireEvent.press(
-      screen.getByRole('link', { name: ar('onboarding.profile.privacyLink') }),
-    );
+    await fireEvent.press(screen.getByRole('link', { name: ar('onboarding.profile.privacyLink') }));
     expect(mockNavigate.mock.calls).toEqual([['/privacy']]);
   });
 
@@ -453,6 +458,17 @@ describe('OnboardProfile', () => {
 // holds, ticks that a parent or guardian agrees. The clock is 2026-10-20 08:00 UTC, 11:00 in Cairo:
 // a person born on 2008-10-21 is 17, one born on 2008-10-20 is 18 that day.
 describe('OnboardProfile, a minor’s guardian agreement (T189)', () => {
+  // PR #163 r1 Minor 2: the age is read during render; a failure of the time library (a zone it
+  // cannot resolve, a clock that is no instant) answers «not a minor», so the step draws and the
+  // server's refusal shows the checkbox, never the crash screen.
+  it('reads no minor when the time cannot be read', () => {
+    const minor = { dateOfBirth: '2010-01-01' };
+    const now = new Date('2026-10-20T08:00:00.000Z');
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Cairo' }, now)).toBe(true);
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Not_A_City' }, now)).toBe(false);
+    expect(isMinorToday({ ...minor, timezone: 'Africa/Cairo' }, new Date(Number.NaN))).toBe(false);
+  });
+
   const MINOR = '2008-10-21';
   const EIGHTEEN_TODAY = '2008-10-20';
   const guardian = (direction: 'rtl' | 'ltr' = 'rtl') =>

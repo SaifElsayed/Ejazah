@@ -39,15 +39,17 @@ export async function askAndRegister(
 /**
  * The sign-out's half (R3; T020's follow-up Q-T3; FR-623): the token held (read by this process,
  * or kept from an earlier one), removed from the caller's account while the session still holds,
- * then forgotten. Best effort: a failed removal never holds the sign-out, and with no token held
- * nothing is sent.
+ * then forgotten. Best effort: a failed removal never holds the sign-out, even one that throws
+ * before it returns a promise (PR #163 r1 Major 1), and with no token held nothing is sent.
  */
 export async function removeHeldPushToken(
   remove: (input: PushTokenRemoveInput) => Promise<unknown>,
 ): Promise<void> {
   const token = await heldPushToken();
   if (token === null) return;
-  await remove({ token }).catch(() => undefined);
+  await Promise.resolve()
+    .then(() => remove({ token }))
+    .catch(() => undefined);
   await forgetPushToken();
 }
 

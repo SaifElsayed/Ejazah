@@ -76,6 +76,8 @@ const LINK_MARKS = new RegExp(`(${isolate(TERMS_LINK)}|${isolate(PRIVACY_LINK)})
 /**
  * R3 T189: whether the date of birth makes the person under 18 today in the zone the step holds,
  * the day the server reads (`onboarding.complete`); unknown, and so not asked, before both are set.
+ * Read during render, so a failure of the time library answers false (PR #163 r1 Minor 2): the step
+ * still draws, and the server's refusal shows the checkbox (`guardianRefused`).
  */
 export function isMinorToday(
   draft: Pick<OnboardingDraft, 'dateOfBirth' | 'timezone'>,
@@ -83,7 +85,11 @@ export function isMinorToday(
 ): boolean {
   const { dateOfBirth, timezone } = draft;
   if (dateOfBirth === undefined || timezone === null) return false;
-  return isMinorOn(dateOfBirth, localDateIn(now, timezone));
+  try {
+    return isMinorOn(dateOfBirth, localDateIn(now, timezone));
+  } catch {
+    return false;
+  }
 }
 
 /** R3 T189: the guardian's checkbox, whether it is asked and whether it is ticked. */

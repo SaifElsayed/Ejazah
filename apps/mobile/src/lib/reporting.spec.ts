@@ -224,6 +224,59 @@ describe('beforeBreadcrumb', () => {
     expect(breadcrumb?.data?.['url']).toBe('https://api.example.invalid/trpc/x');
     expect(JSON.stringify(breadcrumb)).not.toContain(planted);
   });
+
+  // PR #163 r1 Major 2: a tap's breadcrumb, as `Sentry.wrap`'s touch boundary and its rage-tap
+  // detector write it (8.28.0 `touchevents.js`, `ragetap.js`), carries the text on screen: a name, an
+  // e-mail, a chat line. Only the component names leave.
+  it('keeps a tap’s component names and drops the text on screen', () => {
+    const name = 'أمل عادل';
+    const email = 'amal@example.com';
+    const path = [
+      { name: 'TeacherCard', label: name, file: 'TeacherCard.tsx', element: 'RCTView' },
+      { name: 'Pressable', label: email },
+    ];
+    const touch = started().beforeBreadcrumb?.(
+      {
+        category: 'touch',
+        type: 'user',
+        level: 'info',
+        message: `Touch event within element: ${name}`,
+        data: { path },
+      },
+      {},
+    );
+    const rage = started().beforeBreadcrumb?.(
+      {
+        category: 'ui.multiClick',
+        type: 'default',
+        message: email,
+        data: {
+          clickCount: 3,
+          metric: true,
+          route: 'teacher/students/[id]',
+          node: {
+            id: 0,
+            tagName: 'RCTView',
+            textContent: '',
+            attributes: { 'sentry-label': name },
+          },
+          path,
+        },
+      },
+      {},
+    );
+    for (const breadcrumb of [touch, rage]) {
+      expect(JSON.stringify(breadcrumb)).not.toContain(name);
+      expect(JSON.stringify(breadcrumb)).not.toContain(email);
+      expect(breadcrumb?.message).toBeUndefined();
+      expect(breadcrumb?.data?.['path']).toEqual([
+        { name: 'TeacherCard', file: 'TeacherCard.tsx', element: 'RCTView' },
+        { name: 'Pressable' },
+      ]);
+    }
+    expect(touch).toMatchObject({ category: 'touch', type: 'user', level: 'info' });
+    expect(rage).toMatchObject({ category: 'ui.multiClick', data: { clickCount: 3 } });
+  });
 });
 
 describe('the scope', () => {

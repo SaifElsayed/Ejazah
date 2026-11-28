@@ -3,6 +3,11 @@
 // `redactedKeys`), since neither app can import the API's code; this spec keeps the three lists
 // equal as sets, so a key added to or removed from one fails here until the others follow.
 //
+// It holds `redactedKeys` only (PR #163 r1 nit 2). The API's redaction also has `redactedLastWords`,
+// the address keys and the mail fields, which the copies do not carry: none of them occurs on a
+// client. How each copy matches a key (its last words, its case) is its own spec's
+// (`lib/reporting.spec.ts` in each app), which catches a matcher's drift that this one cannot.
+//
 // The two copies are read from their source, not imported: the modules load the Sentry SDKs, which
 // only their apps' own runners can load. The list's initializer is plain JavaScript (strings,
 // spreads, `map`), evaluated here as `build-tokens.spec.ts` evaluates a token's value.

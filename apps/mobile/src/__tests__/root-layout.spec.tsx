@@ -15,6 +15,7 @@
 // is `test`, none in `live`. 003:T115: the strip reads the mode again when the app comes back to
 // the foreground and on reconnect, so a server moved to `live` takes it away from a running app.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import * as Sentry from '@sentry/react-native';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { focusManager, onlineManager, useQueryClient } from '@tanstack/react-query';
 import { DefaultTheme, router } from 'expo-router';
@@ -56,6 +57,9 @@ import { setReportingRoute, setReportingUser } from '../lib/reporting';
 import { setSession } from '../lib/session';
 import RootLayout from '../app/_layout';
 
+/** PR #163 r1 Major 2: how the root was wrapped, read once, when the layout was imported. */
+const wrapOptions = jest.mocked(Sentry.wrap).mock.calls[0]?.[1];
+
 // The native layout direction is the device's; a test renders Arabic on a left-to-right runtime and
 // must not reload it (the sync itself is lib/direction.spec.ts's).
 jest.mock('../lib/direction', () => ({
@@ -66,7 +70,9 @@ jest.mock('../lib/direction', () => ({
 // R3 T183 (rule d): the root is wrapped by Sentry, whose package ships ES modules the test run does
 // not compile; the stand-in wraps nothing. The reporting module is observed, not run (its own spec,
 // lib/reporting.spec.ts).
-jest.mock('@sentry/react-native', () => ({ wrap: <T,>(root: T) => root }));
+jest.mock('@sentry/react-native', () => ({
+  wrap: jest.fn(<T,>(root: T, _options?: unknown) => root),
+}));
 jest.mock('../lib/reporting', () => ({
   initReporting: jest.fn(() => false),
   reportCrash: jest.fn(),
@@ -1020,6 +1026,13 @@ describe('signing out or deleting the account leaves no draft behind (T136)', ()
 // number, and once any answer refuses this build UPDATE_REQUIRED the one «حدّث التطبيق» screen is
 // drawn in place of every route: no tab, no screen behind it, signed in or not (the server checks
 // the build before the session). Nothing keeps it: a relaunch asks the server again.
+// PR #163 r1 Major 2: the touch boundary `Sentry.wrap` adds reads no text from what is touched.
+describe('crash reports and taps (R3 T183)', () => {
+  it('wraps the root with a touch boundary that reads no text on screen', () => {
+    expect(wrapOptions).toEqual({ touchEventBoundaryProps: { extractTextFromChildren: false } });
+  });
+});
+
 describe('a build below the floor (R3 T184)', () => {
   const en = (key: MessageKey) => translate('en', key);
 

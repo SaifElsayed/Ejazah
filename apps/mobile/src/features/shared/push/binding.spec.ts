@@ -33,10 +33,13 @@ jest.mock('expo-notifications', () => ({
 const PUSH_TOKEN_KEY = 'ijazah.push.token';
 const mockKept = new Map<string, string>();
 let mockReadFails = false;
+/** PR #163 r1 Major 1: jest-expo's own secure-store mock resolves `undefined`, not `null`. */
+let mockReadsUndefined = false;
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 0,
   getItemAsync: async (key: string) => {
     if (mockReadFails) throw new Error('the keystore cannot be read');
+    if (mockReadsUndefined) return undefined;
     return mockKept.get(key) ?? null;
   },
   setItemAsync: async (key: string, value: string) => {
@@ -68,6 +71,7 @@ beforeEach(() => {
   mockExpoToken.mockClear();
   mockKept.clear();
   mockReadFails = false;
+  mockReadsUndefined = false;
 });
 
 describe('the push binding on expo-notifications', () => {
@@ -126,6 +130,12 @@ describe('the push binding on expo-notifications', () => {
   it('holds nothing when the store cannot be read', async () => {
     mockKept.set(PUSH_TOKEN_KEY, 'ExponentPushToken[device-1]');
     mockReadFails = true;
+    expect(await load().heldPushToken()).toBeNull();
+  });
+
+  // PR #163 r1 Major 1: a store that answers `undefined` (jest-expo's mock) holds nothing.
+  it('holds nothing when the store answers undefined', async () => {
+    mockReadsUndefined = true;
     expect(await load().heldPushToken()).toBeNull();
   });
 });

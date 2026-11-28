@@ -6,8 +6,10 @@
 // hands it the identity request's card (T074), drawn first.
 // R3 (005:T020's follow-up of #148 Saif r1; Q-4′ (b); FR-619, FR-623): the home is the teacher's
 // only once approved (`teacher_home`, the server's landing), so each time it opens it asks for
-// pushes and registers the device's token (`useAskForPush`; the system answers without a prompt
-// once the teacher has decided). No in-app sheet before the system's prompt in v1 (Q-D2).
+// pushes and registers the device's token (`useAskForPush`). The system decides whether a prompt
+// shows: on Android 11 and later it shows again after one denial and stops after a second, so a
+// teacher may be asked twice, as a student is (PR #163 r1 nit 1). No in-app sheet before the
+// system's prompt in v1 (Q-D2).
 import type { SessionStatus, TeacherTodayOutput } from '@ijazah/contracts';
 import type { ReactNode } from 'react';
 

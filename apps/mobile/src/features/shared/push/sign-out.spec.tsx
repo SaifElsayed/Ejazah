@@ -80,6 +80,25 @@ describe('the sign-out and the push token (FR-623)', () => {
     expect(getSession()).toEqual({ kind: 'signed-out' });
   });
 
+  // PR #163 r1 Major 1: a removal that throws before it returns a promise (an account API with no
+  // `pushToken`, as the screens' doubles have) is still best effort.
+  it('still signs out when the removal throws at once, and forgets the token', async () => {
+    Object.assign(mockApi.api.account, {
+      pushToken: {
+        remove: {
+          mutate: () => {
+            throw new TypeError("Cannot read properties of undefined (reading 'remove')");
+          },
+        },
+      },
+    });
+    await signOut();
+    expect(mockApi.api.auth.signOut.mutate).toHaveBeenCalledTimes(1);
+    expect(mockForget).toHaveBeenCalledTimes(1);
+    expect(mockApi.sessions.current()).toBeNull();
+    expect(getSession()).toEqual({ kind: 'signed-out' });
+  });
+
   it('sends nothing to remove when no token is held, and signs out', async () => {
     mockHeld = null;
     await signOut();

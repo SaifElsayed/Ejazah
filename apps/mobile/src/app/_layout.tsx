@@ -41,7 +41,9 @@
 // R3 T183 (Q-5 (a)): crash reports start first, off unless the build carries a DSN
 // (lib/reporting.ts); Sentry wraps the root, and a render error below the theme and the direction
 // shows the crash screen (features/shared/crash). A report carries the account's id only and the
-// route's name, each following the session and the route.
+// route's name, each following the session and the route. The touch boundary `Sentry.wrap` adds
+// reads no text from the touched element (PR #163 r1 Major 2: a name, an e-mail or a chat line on
+// screen would ride in its breadcrumb; `lib/reporting.ts` rebuilds a tap's breadcrumb as well).
 //
 // R3 T184 (SRS DEC-99, DEC-109): once any answer refuses this build `UPDATE_REQUIRED` (lib/api.tsx),
 // the update screen (features/shared/update) is drawn inside the crash boundary and the providers
@@ -94,7 +96,9 @@ followNetInfo();
 followAppState();
 registerVideoGlobals();
 
-export default Sentry.wrap(RootLayout);
+export default Sentry.wrap(RootLayout, {
+  touchEventBoundaryProps: { extractTextFromChildren: false },
+});
 
 function RootLayout() {
   const [queries] = useState(
