@@ -77,6 +77,11 @@
 // immediately before its schema, and answers a failure of that read `VALIDATION_FAILED`: decided by
 // where it failed, never by the error's type, so a SyntaxError of ours stays the internal error.
 // `inputsReadUnguarded` names a procedure built without it.
+//
+// THE BUILD FLOOR COMES FIRST ON THE USER SURFACE (R3, 002:T184; SRS DEC-99): every user-surface
+// kind runs `requireAdmittedBuild` (`platform/guards/app-build.guard.ts`) before anything else, so a
+// phone below `min_app_build` is told `UPDATE_REQUIRED` (426) signed in or out, and a header that is
+// not a whole number is 400. No header is admitted. The administrator surface's kinds never run it.
 import {
   type AnyTRPCProcedure,
   type AnyTRPCRouter,
@@ -96,6 +101,8 @@ import {
 import { DomainError, type ErrorCode } from '../platform/errors/domain-error.js';
 import { mapError, type MappedError } from '../platform/errors/error-filter.js';
 import { isRefusalLogged, markRefusalLogged } from '../platform/errors/logged-refusal.js';
+// 002:T184 (R3, DEC-99): the build floor, first in every user-surface kind.
+import { requireAdmittedBuild } from '../platform/guards/app-build.guard.js';
 import {
   type CallerSubject,
   type IdentifierRateLimit,
@@ -567,6 +574,7 @@ export function publicProcedure<TIn, TInOut, TOutIn, TOutOut>({
   }
   return app.procedure
     .meta(appMeta('public', rateLimit, output))
+    .use(requireAdmittedBuild)
     .use(readAppInput)
     .input(input)
     .output(output)
@@ -586,6 +594,7 @@ function signedIn<TIn, TInOut, TOutIn, TOutOut>(
 ): CallerKind<AppContext, AppMeta, { caller: UserCaller }, TIn, TInOut, TOutIn, TOutOut> {
   const builder = app.procedure
     .meta(appMeta(kind, rateLimit, output))
+    .use(requireAdmittedBuild)
     .use(flushLiveAfterHandler)
     .use(requireUser({ role, admitsRestricted }))
     .use(readAppInput)
@@ -646,6 +655,7 @@ export function teacherProcedure<TIn, TInOut, TOutIn, TOutOut>({
   const { input, output, rateLimit, admitsRestricted = false } = declaration;
   const builder = app.procedure
     .meta(appMeta('teacher', rateLimit, output))
+    .use(requireAdmittedBuild)
     .use(flushLiveAfterHandler)
     .use(requireUser({ role: 'teacher', admitsRestricted }))
     .use(requireStanding(admits))
