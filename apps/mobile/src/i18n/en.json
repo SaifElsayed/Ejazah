@@ -491,6 +491,9 @@
     "a11y": {
       "unread": "Unread"
     },
+    "channel": {
+      "default": "Notifications"
+    },
     "empty": {
       "text": "Anything new about your sessions shows up here.",
       "title": "No notifications yet"

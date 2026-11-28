@@ -4,12 +4,17 @@
 // a token held, `account.pushToken.register` takes it with the device's platform (an upsert by the
 // token's hash on the server). Best effort, as the device's time zone is reported (`app/_layout.tsx`):
 // a failed registration changes nothing on the screen and is tried again the next time one opens.
-import type { DevicePlatform, PushTokenRegisterInput } from '@ijazah/contracts';
+// R3 (T020's follow-ups; Q-4′ (b)): the teacher's home asks too, and the sign-out removes the token.
+import type {
+  DevicePlatform,
+  PushTokenRegisterInput,
+  PushTokenRemoveInput,
+} from '@ijazah/contracts';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
 import { useApi } from '../../../lib/api';
-import { type PushBinding, pushBinding } from './binding';
+import { heldPushToken, type PushBinding, pushBinding } from './binding';
 
 /** The contract's platform for the system's name, or null for one that takes no push. */
 export function devicePlatformOf(os: string): DevicePlatform | null {
@@ -29,6 +34,19 @@ export async function askAndRegister(
   if (token === null) return false;
   await register({ token, platform });
   return true;
+}
+
+/**
+ * The sign-out's half (R3; T020's follow-up Q-T3; FR-623): the token this process read, removed
+ * from the caller's account while the session still holds. Best effort: a failed removal never
+ * holds the sign-out, and with no token held nothing is sent.
+ */
+export async function removeHeldPushToken(
+  remove: (input: PushTokenRemoveInput) => Promise<unknown>,
+): Promise<void> {
+  const token = heldPushToken();
+  if (token === null) return;
+  await remove({ token }).catch(() => undefined);
 }
 
 /** Asks for pushes once `when` holds, once per screen opened. */

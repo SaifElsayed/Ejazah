@@ -41,6 +41,8 @@ apps/mobile/ios/
 *.keystore
 *.mobileprovision
 gitleaks-report.json
+# The Firebase file of the push set-up: given to EAS as the file variable GOOGLE_SERVICES_JSON (R3 T182).
+apps/mobile/google-services.json
 
 # Local runtime state
 .storage/
