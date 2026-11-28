@@ -621,8 +621,9 @@ password set; a temporary lock still counts; the seeded `admin@ijazah.invalid`
 never does), without the seeded administrator (run `pnpm db:seed` first),
 without `ADMIN_PANEL_ORIGIN`, which the invitation's link is built from, and
 without `REDIS_URL`, `DATABASE_URL` or `ENCRYPTION_KEY` (`redis_url_missing`,
-`database_url_missing`, `encryption_key_missing`). It writes the administrator as "Add admin" does, invited by nobody, records one
-audit entry, `admin.bootstrap`, under the seeded administrator, which stands
+`database_url_missing`, `encryption_key_missing`). It writes the administrator
+as "Add admin" does, invited by nobody, records one audit entry,
+`admin.bootstrap`, under the seeded administrator, which stands
 for the platform, and queues the invitation; it prints the administrator's id,
 never the address. The worker sends the mail. Its link opens the panel's
 `/set-password` for `admin_invite_ttl_hours` (48 h): set the password, then the
@@ -782,8 +783,9 @@ entry until the last dump made under it is past 14 days.
    It refuses without `--target-url`, a target whose database is the one
    `DATABASE_URL_OWNER` or `DATABASE_URL` names (on any host), a target URL
    carrying a password (`target_has_password`) or a query string
-   (`target_has_query`), and an object outside `db/`. It downloads the dump into a temporary file only root reads,
-   decrypts it and restores it in one transaction (`pg_restore
+   (`target_has_query`), and an object outside `db/`. It downloads the dump
+   into a temporary file only root reads, decrypts it and restores it in one
+   transaction (`pg_restore
    --single-transaction --exit-on-error`), so a failure leaves the target
    empty.
 4. Check it: the tables' row counts look like the day's, and the panel's
