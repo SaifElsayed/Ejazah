@@ -48,6 +48,7 @@ const services = {
 import { createLogger } from './platform/logging/logger.js';
 import {
   adminProcedure,
+  adminPublicProcedure,
   createAdminRouter,
   createAppRouter,
   publicProcedure,
@@ -672,5 +673,119 @@ describe('a refusal the module logged is logged once (PR #130, Minor 4)', () => 
     const written = refusalLines(from);
     expect(written.map((record) => record['msg'])).toEqual(['Outage window refused']);
     expect(written[0]).toMatchObject({ adminId: ADMIN_ID, reason: 'end_not_after_start' });
+  });
+});
+
+// R3 (002:T184; SRS DEC-99; the note under T184): the user surface reads `x-app-build` into its
+// context, and its kinds answer a build below `min_app_build` 426 `UPDATE_REQUIRED` in the one shape
+// on the wire; a header that is not a whole number is 400, logged as every `VALIDATION_FAILED` is.
+// The panel's surface never reads it: a low or unreadable header there is admitted. A refusal's
+// first line per client address per hold is the gate's own; `onError` writes none for it.
+describe('the build floor over HTTP (002:T184)', () => {
+  const FLOOR = 100;
+  const lines: string[] = [];
+  let gated: INestApplication;
+  let gatedOrigin: string;
+
+  const app = createAppRouter({
+    ping: publicProcedure({ input: z.void(), output: z.string(), rateLimit: anyone }).query(
+      () => 'pong',
+    ),
+  });
+  const panel = createAdminRouter({
+    signIn: adminPublicProcedure({
+      input: z.object({ email: z.string() }),
+      output: z.string(),
+      rateLimit: { key: 'rate_limit_admin_authentication', subjectOf: ({ input }) => input.email },
+    }).mutation(() => 'signed in'),
+  });
+
+  beforeAll(async () => {
+    gated = await createApplication({
+      log: createLogger({ level: 'info', destination: { write: (line) => lines.push(line) } }),
+      readiness: { databaseReachable: async () => {} },
+      securityHeaders: { allowedOrigins: [], mode: 'test' },
+      maxRequestBodyBytes: BODY_LIMIT,
+      administration,
+      rateLimiter,
+      sessions,
+      services: {
+        ...services,
+        settings: {
+          read: async (key, schema) => {
+            if (key !== 'min_app_build') throw new Error(`read ${key}`);
+            return schema.parse(FLOOR);
+          },
+        },
+      },
+      adminServices: unusedAdminServices,
+      surfaces: { app, admin: panel },
+    });
+    await gated.listen(0, '127.0.0.1');
+    gatedOrigin = (await gated.getUrl()).replace('[::1]', '127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await gated?.close();
+  });
+
+  async function ping(build?: string): Promise<{ status: number; body: unknown }> {
+    const response = await fetch(`${gatedOrigin}${surfacePaths.app}/ping`, {
+      headers: build === undefined ? {} : { 'x-app-build': build },
+    });
+    return { status: response.status, body: await response.json() };
+  }
+
+  const records = () => lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+
+  it('answers a build below the floor 426 UPDATE_REQUIRED, in the one shape on the wire', async () => {
+    expect(await ping(String(FLOOR - 1))).toEqual({
+      status: 426,
+      body: { error: { code: 'UPDATE_REQUIRED', message: 'Update the app to continue.' } },
+    });
+  });
+
+  it('admits no header, and a build equal to the floor', async () => {
+    expect(await ping()).toEqual({ status: 200, body: { result: { data: 'pong' } } });
+    expect(await ping(String(FLOOR))).toEqual({ status: 200, body: { result: { data: 'pong' } } });
+  });
+
+  it('answers an unreadable header 400, logged as every VALIDATION_FAILED is', async () => {
+    const from = lines.length;
+    expect(await ping('1.5')).toEqual({
+      status: 400,
+      body: { error: { code: 'VALIDATION_FAILED', message: 'The request is not valid.' } },
+    });
+    const written = records()
+      .slice(from)
+      .filter((record) => record['msg'] === 'A procedure call was refused');
+    expect(written).toEqual([
+      expect.objectContaining({ procedure: 'ping', errorCode: 'VALIDATION_FAILED' }),
+    ]);
+  });
+
+  it('logs the refusal once per address per hold, the gate’s line only', async () => {
+    for (let call = 0; call < 3; call += 1) expect((await ping('7')).status).toBe(426);
+    const refused = records().filter(
+      (record) => record['msg'] === 'A build below the floor was refused',
+    );
+    expect(refused).toEqual([
+      expect.objectContaining({ build: FLOOR - 1, floor: FLOOR, reason: 'build_below_floor' }),
+    ]);
+    expect(records().filter((record) => record['errorCode'] === 'UPDATE_REQUIRED')).toEqual([]);
+  });
+
+  it('never checks the panel: a low or unreadable header on /admin/trpc is admitted', async () => {
+    for (const build of ['1', 'abc']) {
+      const response = await fetch(`${gatedOrigin}${surfacePaths.admin}/signIn`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-app-build': build },
+        body: JSON.stringify({ email: 'admin@ijazah.invalid' }),
+      });
+      expect({ status: response.status, body: await response.json() }).toEqual({
+        status: 200,
+        body: { result: { data: 'signed in' } },
+      });
+    }
   });
 });

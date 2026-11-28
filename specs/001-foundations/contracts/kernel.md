@@ -28,6 +28,14 @@ sanitise.
 "forbidden" and "absent" must be indistinguishable from outside — and a single
 handler that returns 403 by hand undoes the property for the whole surface.
 
+**The build floor** *(R3, `specs/002-identity/tasks.md` T184; SRS DEC-99)*: the
+phone sends its build number (Play's version code) in the `x-app-build` header
+on every user-surface call and upload; a call without it is admitted (the panel
+never sends it, and its surface never reads it); a value that is not 1 to 10
+digits answers 400 `VALIDATION_FAILED`; a number below `min_app_build` (§3.14,
+seed 0 = no floor; the floor held 60 s in the process) answers 426
+`UPDATE_REQUIRED` in this shape, before any other check.
+
 ---
 
 ## Request context

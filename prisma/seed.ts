@@ -269,6 +269,8 @@ const SETTINGS: readonly (readonly [string, unknown])[] = [
   // 004:T084 (R1b; SRS DEC-106, §3.14): a participant's reports that their phone could not encrypt a
   // session, `sessions.encryptionFailed`, the user as subject; each writes a record never deleted.
   ['rate_limit_encryption_failure', { limit: 5, window_seconds: 60 }],
+  // 002:T184 (R3): no floor until an administrator raises it.
+  ['min_app_build', 0],
 ];
 
 const MFA_SECRET_COLUMN = 'admin_users.mfa_secret_encrypted';

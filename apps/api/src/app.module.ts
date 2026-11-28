@@ -92,6 +92,8 @@ import { createHTTPHandler } from '@trpc/server/adapters/standalone';
 import { DomainError, type ErrorCode } from './platform/errors/domain-error.js';
 import { mapError, type MappedError } from './platform/errors/error-filter.js';
 import { reportError } from './platform/errors/reporting.js';
+// 002:T184 (R3, DEC-99): the user surface's `x-app-build`, read into its context.
+import { readAppBuild } from './platform/guards/app-build.guard.js';
 import type { RateLimiter } from './platform/guards/rate-limit.guard.js';
 import {
   applySecurityHeaders,
@@ -491,6 +493,8 @@ export async function createApplication({
           rateLimiter,
           clientAddress: address,
           services,
+          // 002:T184: the user surface only; the panel's context never reads it.
+          appBuild: readAppBuild(request.headers),
           ...channel,
         });
         logProxyFallback(context.log, fallback);

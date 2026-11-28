@@ -62,6 +62,19 @@ describe.each(['ar', 'en'] as const)('the settings page labels in %s', (locale) 
     expect(paragraphs[2]?.startsWith('⚠️')).toBe(true);
   });
 
+  // 002:T184 (R3; the owner's «Forced update» answer; DEC-109): what the floor is, 0 = none, the
+  // rule for raising it (a security, money or contract reason; 100% on every Play track; release
+  // health in Sentry; never with a minSdk change), and ⚠️ that a raise is final for older phones.
+  it('explains the build floor, 0 as none, the rule for raising it, and ⚠️ that a raise is final (002:T184)', () => {
+    const paragraphs = String(explanations['min_app_build']).split('\n');
+    expect(paragraphs).toHaveLength(3);
+    expect(paragraphs[0]).toContain('0');
+    expect(paragraphs[1]).toContain('100%');
+    expect(paragraphs[1]).toContain('Sentry');
+    expect(paragraphs[1]).toContain('minSdk');
+    expect(paragraphs[2]?.startsWith('⚠️')).toBe(true);
+  });
+
   it('labels every group, the three added ones included', () => {
     expect(registryGroups).toEqual(expect.arrayContaining(['accounts', 'admin', 'rateLimits']));
     expect(registryGroups.filter((group) => !isLabel(groups[group]))).toEqual([]);
