@@ -294,6 +294,10 @@
       "mark": "I",
       "name": "Ijazah"
     },
+    "crash": {
+      "body": "An unexpected error occurred.",
+      "title": "Something went wrong"
+    },
     "currency": "EGP {amount}",
     "day": {
       "friday": "Friday",

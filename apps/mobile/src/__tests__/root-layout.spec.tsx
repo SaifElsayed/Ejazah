@@ -44,6 +44,7 @@ import {
   updateApplication,
 } from '../features/teacher/application/draft';
 import { type MessageKey, setLocale, translate } from '../i18n';
+import { setReportingRoute, setReportingUser } from '../lib/reporting';
 import { setSession } from '../lib/session';
 import RootLayout from '../app/_layout';
 
@@ -52,6 +53,17 @@ import RootLayout from '../app/_layout';
 jest.mock('../lib/direction', () => ({
   ...jest.requireActual<typeof import('../lib/direction')>('../lib/direction'),
   syncNativeDirection: () => false,
+}));
+
+// R3 T183 (rule d): the root is wrapped by Sentry, whose package ships ES modules the test run does
+// not compile; the stand-in wraps nothing. The reporting module is observed, not run (its own spec,
+// lib/reporting.spec.ts).
+jest.mock('@sentry/react-native', () => ({ wrap: <T,>(root: T) => root }));
+jest.mock('../lib/reporting', () => ({
+  initReporting: jest.fn(() => false),
+  reportCrash: jest.fn(),
+  setReportingRoute: jest.fn(),
+  setReportingUser: jest.fn(),
 }));
 
 let mockApi = fakeProcedures();
@@ -448,6 +460,20 @@ describe('the root layout', () => {
     setSession({ kind: 'restoring' });
     await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
     expect(await screen.findByText('application status')).toBeTruthy();
+  });
+
+  it("gives crash reports the account's id and the route's name, and clears the id at sign-out (R3 T183)", async () => {
+    jest.mocked(setReportingUser).mockClear();
+    jest.mocked(setReportingRoute).mockClear();
+    mockApi.account.me.query.mockResolvedValue(account('student_home'));
+    setSession({ kind: 'restoring' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    await waitFor(() =>
+      expect(setReportingUser).toHaveBeenLastCalledWith('0193a6f0-0000-7000-8000-000000000001'),
+    );
+    expect(jest.mocked(setReportingRoute).mock.calls.at(-1)?.[0][0]).toBe('(student)');
+    await act(async () => setSession({ kind: 'signed-out' }));
+    await waitFor(() => expect(setReportingUser).toHaveBeenLastCalledWith(null));
   });
 
   it('says a launch whose account cannot be read, and retries it', async () => {
