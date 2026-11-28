@@ -1,8 +1,11 @@
 // T019 of specs/004-sessions (the owner's conditions of 2026-11-09): the service that keeps the JS
 // timers alive while the screen is shared. Starting waits until the headless task runs; ending
 // finishes the task and stops the service; a build without the module does nothing.
+// T068 (the note under it; R3's Q-7 (a)): on Android the microphone permission is read before the
+// service is asked to start (a service of type microphone is refused without it); refused, no
+// service starts and the start rejects, which the room turns into the share given up.
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AppRegistry } from 'react-native';
+import { AppRegistry, PermissionsAndroid, Platform } from 'react-native';
 
 const mockNative = { start: jest.fn(), stop: jest.fn() };
 let mockAvailable = true;
@@ -114,6 +117,47 @@ describe('the room keep-alive', () => {
     await expect(starting).resolves.toBeUndefined();
     await expect(runTask()).resolves.toBeUndefined();
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  describe('the microphone permission (T068)', () => {
+    function onAndroid(granted: boolean) {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      return jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(granted);
+    }
+
+    it('refuses with the microphone refused, and starts no service', async () => {
+      onAndroid(false);
+      const { keepAlive } = load();
+      const starting = keepAlive.startRoomKeepAlive('title', 'text');
+      const outcome = expect(starting).rejects.toBeInstanceOf(keepAlive.MicrophoneNotGrantedError);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockNative.start).not.toHaveBeenCalled();
+      await outcome;
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('reads the microphone permission, then starts the service, once granted', async () => {
+      const check = onAndroid(true);
+      const { keepAlive, runTask } = load();
+      const starting = keepAlive.startRoomKeepAlive('title', 'text');
+      await jest.advanceTimersByTimeAsync(0);
+      expect(check).toHaveBeenCalledWith(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      expect(mockNative.start).toHaveBeenCalledWith('title', 'text');
+      void runTask();
+      await expect(starting).resolves.toBeUndefined();
+    });
+
+    it('reads no permission on another system', async () => {
+      jest.replaceProperty(Platform, 'OS', 'ios');
+      const check = jest.spyOn(PermissionsAndroid, 'check');
+      const { keepAlive, runTask } = load();
+      const starting = keepAlive.startRoomKeepAlive('title', 'text');
+      await jest.advanceTimersByTimeAsync(0);
+      expect(check).not.toHaveBeenCalled();
+      expect(mockNative.start).toHaveBeenCalledWith('title', 'text');
+      void runTask();
+      await expect(starting).resolves.toBeUndefined();
+    });
   });
 
   it('does nothing in a build without the module', async () => {
