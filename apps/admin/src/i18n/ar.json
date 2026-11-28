@@ -592,6 +592,10 @@
         "viewOnly": "عرض فقط"
       },
       "amount": "{amount} ج.م",
+      "crash": {
+        "body": "حدث خطأ غير متوقع.",
+        "title": "حدث خطأ"
+      },
       "currency": "ج.م",
       "dateTime": "{date} · {time}",
       "documentType": {
