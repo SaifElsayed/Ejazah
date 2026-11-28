@@ -1,8 +1,14 @@
 // T034: the one API client of the app, created once at the root and read through `useApi()`
 // (R-MOBILE-11). Its endpoint is the build's `EXPO_PUBLIC_API_URL` (the API's origin; the user
 // surface is mounted at `/trpc`); a build without it stops at launch rather than calling nowhere.
+//
+// R3 T184 (SRS DEC-99): the client sends the binary's build number (lib/app-build.ts), and the first
+// answer refusing it `UPDATE_REQUIRED` sets `updateRequired`, read through `useUpdateRequired()`;
+// the root then draws the update screen in place of every route. The flag lives in this provider's
+// state only, never stored: a relaunch asks the server again.
 import { createContext, type ReactNode, useContext, useState } from 'react';
 
+import { appBuild } from './app-build';
 import { type ApiClient, createApiClient } from './client';
 import { setSession } from './session';
 import { createSessionStore, type SessionStore } from './storage';
@@ -11,6 +17,9 @@ const ApiContext = createContext<{
   readonly client: ApiClient;
   readonly sessions: SessionStore;
 } | null>(null);
+
+/** Whether an answer has refused this build `UPDATE_REQUIRED` since the launch (R3 T184). */
+const UpdateRequiredContext = createContext(false);
 
 /** The API's origin from the build's environment (its pages too: the Terms, T051). */
 export function apiOrigin(origin: string | undefined = process.env['EXPO_PUBLIC_API_URL']): string {
@@ -36,9 +45,12 @@ export function ApiProvider({
   readonly children: ReactNode;
   readonly onSignedOut?: () => void;
 }) {
+  const [updateRequired, setUpdateRequired] = useState(false);
   const [value] = useState(() => {
     const sessions = createSessionStore();
     const client = createApiClient({
+      appBuild: appBuild(),
+      onUpdateRequired: () => setUpdateRequired(true),
       url: apiUrl(),
       documentsUploadUrl: `${apiOrigin()}/uploads/documents`,
       photosUploadUrl: `${apiOrigin()}/uploads/photos`,
@@ -54,7 +66,18 @@ export function ApiProvider({
     });
     return { client, sessions };
   });
-  return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
+  return (
+    <ApiContext.Provider value={value}>
+      <UpdateRequiredContext.Provider value={updateRequired}>
+        {children}
+      </UpdateRequiredContext.Provider>
+    </ApiContext.Provider>
+  );
+}
+
+/** True once an answer has refused this build `UPDATE_REQUIRED`; never stored (R3 T184). */
+export function useUpdateRequired(): boolean {
+  return useContext(UpdateRequiredContext);
 }
 
 /** The API client and the session store. */
