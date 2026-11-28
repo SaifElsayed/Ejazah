@@ -19,7 +19,15 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { focusManager, onlineManager, useQueryClient } from '@tanstack/react-query';
 import { DefaultTheme, router } from 'expo-router';
 import { renderRouter, type RenderRouterResult } from 'expo-router/testing-library';
-import { AppState, type AppStateStatus, BackHandler, StyleSheet, Text, View } from 'react-native';
+import {
+  AppState,
+  type AppStateStatus,
+  BackHandler,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import type { TestInstance } from 'test-renderer';
 
 import { Button } from '../design/primitives';
@@ -82,10 +90,16 @@ let mockPublicConfig = jest.fn(async () => publicConfigIn('live'));
 // failure is not kept), while `platform.publicConfig` asks the server each time; both answer
 // with `mockPublicConfig`.
 // 002:T148 (B50): the options the root's client was built with, so a refused refresh can be played.
-let mockClientOptions: { readonly onSignedOut?: () => void } = {};
+// R3 T184: and a build refused UPDATE_REQUIRED, with the build number the client was given.
+interface MockClientOptions {
+  readonly onSignedOut?: () => void;
+  readonly onUpdateRequired?: () => void;
+  readonly appBuild?: number | null;
+}
+let mockClientOptions: MockClientOptions = {};
 jest.mock('../lib/client', () => ({
   ...jest.requireActual<typeof import('../lib/client')>('../lib/client'),
-  createApiClient: (options: { readonly onSignedOut?: () => void }) => {
+  createApiClient: (options: MockClientOptions) => {
     mockClientOptions = options;
     let kept: ReturnType<typeof mockPublicConfig> | null = null;
     return {
@@ -98,6 +112,9 @@ jest.mock('../lib/client', () => ({
     };
   },
 }));
+
+// R3 T184: the binary's version code, as `expo-application` reads it on a store build.
+jest.mock('expo-application', () => ({ nativeBuildVersion: '41' }));
 
 let mockDeviceZone: string | null = 'Africa/Cairo';
 jest.mock('../lib/time-zone', () => ({ deviceTimeZone: () => mockDeviceZone }));
@@ -996,5 +1013,58 @@ describe('signing out or deleting the account leaves no draft behind (T136)', ()
     expect(await screen.findByText('welcome')).toBeTruthy();
     expect(mockApi.account.delete.mutate).toHaveBeenCalledTimes(1);
     expectNothingLeft();
+  });
+});
+
+// R3 T184 (SRS DEC-99, DEC-109; the note under T184): the root gives the client the binary's build
+// number, and once any answer refuses this build UPDATE_REQUIRED the one «حدّث التطبيق» screen is
+// drawn in place of every route: no tab, no screen behind it, signed in or not (the server checks
+// the build before the session). Nothing keeps it: a relaunch asks the server again.
+describe('a build below the floor (R3 T184)', () => {
+  const en = (key: MessageKey) => translate('en', key);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("gives the client the binary's build number", async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    expect(mockClientOptions.appBuild).toBe(41);
+  });
+
+  it('draws the update screen in place of the routes, the tabs among them, once a call is refused', async () => {
+    setSession({ kind: 'signed-in', landing: 'student_home' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('اختر معلمًا وباقة تناسبك')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(ar('common.update.body'))).toBeTruthy();
+    expect(screen.queryByText('اختر معلمًا وباقة تناسبك')).toBeNull();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
+
+  it('draws it for a signed-out person too, in place of the welcome screen', async () => {
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(ar('common.update.body'))).toBeTruthy();
+    expect(screen.queryByText('welcome')).toBeNull();
+  });
+
+  // The button's link is the screen's own spec's (features/shared/update/update.spec.tsx): expo-router's
+  // test library replaces expo-linking with its own stand-in here.
+  it('draws it in English, with its one button', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    setLocale('en');
+    setSession({ kind: 'signed-out' });
+    await renderRouter(routes, { initialUrl: '/(auth)/welcome' });
+    expect(await screen.findByText('welcome')).toBeTruthy();
+    await act(async () => mockClientOptions.onUpdateRequired?.());
+    expect(await screen.findByText(en('common.update.title'))).toBeTruthy();
+    expect(screen.getByText(en('common.update.body'))).toBeTruthy();
+    expect(screen.getByRole('button', { name: en('common.update.action') })).toBeTruthy();
+    expect(screen.queryByText('welcome')).toBeNull();
   });
 });

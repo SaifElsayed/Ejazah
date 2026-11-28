@@ -417,6 +417,11 @@
       "kilobytes": "{size} ك.ب",
       "minutes": "{count, plural, one {دقيقة واحدة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
       "sessions": "{count, plural, zero {لا جلسات} one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}}"
+    },
+    "update": {
+      "action": "حدّث التطبيق",
+      "body": "هذه النسخة من التطبيق لم تعد مدعومة. حدّثها من Google Play لتكمل.",
+      "title": "حدّث التطبيق"
     }
   },
   "money": {

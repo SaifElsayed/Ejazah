@@ -42,6 +42,10 @@
 // (lib/reporting.ts); Sentry wraps the root, and a render error below the theme and the direction
 // shows the crash screen (features/shared/crash). A report carries the account's id only and the
 // route's name, each following the session and the route.
+//
+// R3 T184 (SRS DEC-99, DEC-109): once any answer refuses this build `UPDATE_REQUIRED` (lib/api.tsx),
+// the update screen (features/shared/update) is drawn inside the crash boundary and the providers
+// in place of the session guard: no route, tab or back is left to reach, signed in or not.
 import * as Sentry from '@sentry/react-native';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
@@ -62,10 +66,11 @@ import { signOutOfProviders } from '../features/shared/account/hooks';
 import { CrashBoundary } from '../features/shared/crash';
 import { clearDraft as clearOnboardingDraft } from '../features/shared/onboarding/draft';
 import { TestModeStrip } from '../features/shared/test-mode';
+import { UpdateRequired } from '../features/shared/update';
 import { clearApplication } from '../features/teacher/application/draft';
 import { useT } from '../i18n';
 import { ME_QUERY_KEY, useMe } from '../lib/account';
-import { ApiProvider, useApi } from '../lib/api';
+import { ApiProvider, useApi, useUpdateRequired } from '../lib/api';
 import { retryNetworkFailure } from '../lib/client';
 import { genericErrorKey } from '../lib/error-message';
 import { followAppState } from '../lib/focus';
@@ -101,7 +106,7 @@ function RootLayout() {
         <CrashBoundary>
           <QueryClientProvider client={queries}>
             <ApiProvider onSignedOut={signOutOfProviders}>
-              <SessionGuard queries={queries} />
+              <BuildGate queries={queries} />
               <TestModeStrip />
             </ApiProvider>
           </QueryClientProvider>
@@ -109,6 +114,11 @@ function RootLayout() {
       </DirectionProvider>
     </ThemeProvider>
   );
+}
+
+/** The update screen in place of every route once this build is refused, else the session guard. */
+function BuildGate({ queries }: { readonly queries: QueryClient }) {
+  return useUpdateRequired() ? <UpdateRequired /> : <SessionGuard queries={queries} />;
 }
 
 function SessionGuard({ queries }: { readonly queries: QueryClient }) {
