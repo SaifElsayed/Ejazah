@@ -53,7 +53,7 @@ specs/004-sessions T078's line. No script, no style attribute: the page's policy
       The app's build number on your device, and crash reports when the app fails (without your name
       or e-mail; they carry your account ID only).
     </li>
-    <li>Technical connection data, including the IP address, to protect the service from abuse.</li>
+    <li>Technical connection data, including the IP address, to protect the service from abuse. The server's logs keep only the IP address's network, not the full address, for 90 days.</li>
   </ul>
   <p><strong>From a student:</strong></p>
   <ul>
@@ -315,6 +315,10 @@ specs/004-sessions T078's line. No script, no style attribute: the page's policy
         <tr>
           <td class="table__wrap">Crash reports (Sentry)</td>
           <td class="table__wrap">30 days</td>
+        </tr>
+        <tr>
+          <td class="table__wrap">Server logs (the IP address's network only)</td>
+          <td class="table__wrap">90 days</td>
         </tr>
         <tr>
           <td class="table__wrap">E-mail logs (Resend)</td>

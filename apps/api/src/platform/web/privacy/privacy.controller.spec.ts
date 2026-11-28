@@ -168,6 +168,25 @@ describe('GET /privacy (R3 T185)', () => {
     expect(plain(english)).not.toMatch(/تشفير|مشفر|شفر/);
   });
 
+  // R3 (the owner's «موافق على كله», 2026-11-28, relayed by the review session): the server's logs
+  // kept 90 days, with the address's network only (`logger.ts`'s `addressKeys`, T017).
+  it('states the server logs’ 90 days and the address’s network only, in both languages', async () => {
+    const arabic = await page();
+    expect(arabic).toContain(
+      'تحفظ سجلات الخادم جزء الشبكة من عنوان IP فقط، لا العنوان كاملًا، لمدة 90 يومًا.',
+    );
+    expect(arabic).toMatch(
+      /سجلات الخادم \(جزء الشبكة من عنوان IP فقط\)<\/td>\s*<td class="table__wrap">90 يومًا<\/td>/,
+    );
+    const english = await page('?lang=en');
+    expect(english).toContain(
+      "The server's logs keep only the IP address's network, not the full address, for 90 days.",
+    );
+    expect(english).toMatch(
+      /Server logs \(the IP address's network only\)<\/td>\s*<td class="table__wrap">90 days<\/td>/,
+    );
+  });
+
   it('carries T078’s line with the five years of DEC-109, in both languages', async () => {
     const arabic = await page();
     expect(arabic).toContain('إذا حذف معلّمٌ سبق اعتماده حسابه');
@@ -184,7 +203,9 @@ describe('GET /privacy (R3 T185)', () => {
   it('states the owner’s decisions of 2026-11-28 as the app works, in both languages', async () => {
     const arabic = await page();
     // ق1 (a′): the guardian's agreement (T189).
-    expect(arabic).toContain('إذا كان عمرك أقل من 18 سنة، فاستخدامك للتطبيق يكون بموافقة وليّ أمرك');
+    expect(arabic).toContain(
+      'إذا كان عمرك أقل من 18 سنة، فاستخدامك للتطبيق يكون بموافقة وليّ أمرك',
+    );
     expect(arabic).toContain('وليّ أمري موافق على تسجيلي');
     // ق3 (a″): the one checkbox, and the transfers said calmly.
     expect(arabic).toContain('أوافق على الشروط والأحكام وسياسة الخصوصية');
