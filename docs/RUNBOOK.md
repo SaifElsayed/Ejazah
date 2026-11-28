@@ -493,6 +493,10 @@ Resend's free tier sends 100 mails a day (3,000 a month); past it, a one-time
 code is not delivered, the API logs one warn line, and no mail goes until the
 quota resets at midnight UTC, so a launch needs the paid tier.
 
+**Crash reports** (R3 T183) — `SENTRY_DSN` (the `ijazah-api` project's), and
+the two optional keys `SENTRY_ENVIRONMENT` (`closed-test` or `production`)
+and `SENTRY_RELEASE` (the deploy's git SHA); see «Errors: from crash to fix».
+
 **The panel's host** — `deploy/Caddyfile` is the panel's site block (research
 R-18): Caddy serves the panel's build as static files with the browser
 security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
@@ -982,6 +986,93 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   public repositories only. The two Gitleaks nets above are therefore the whole
   protection. Revisit this if the repository moves to an organisation or becomes
   public.
+
+## Errors: from crash to fix
+
+The phone, the panel and the API report an unexpected error to Sentry (R3
+T183; `docs/ARCHITECTURE.md` §12): one organization, Developer (free) plan, in
+the EU (Frankfurt) region, with three projects, `ijazah-mobile`,
+`ijazah-admin` and `ijazah-api`. Each surface is off while its DSN is unset,
+so development, the tests and a build without the key send nothing.
+
+What a report carries: the error, its stack (read through the uploaded source
+maps), the release, the environment (`development`, `closed-test` or
+`production`), the account's id and nothing else of the person, and the tags
+`surface` (`app`, `admin`), `app.build` (the phone's version code), `route`
+(the screen's route name, never its values) and `error.code` (an error's own
+code). Every event and breadcrumb passes the API's redaction list
+(`apps/api/src/platform/logging/logger.ts`, the phone's and the panel's copies
+held equal by `tests/pipeline/scrub-parity.spec.ts`), without the request's
+body, cookies or query. Not reported: a refusal carrying the API's code
+(`UPDATE_REQUIRED` among them; the API reports what it did not expect itself),
+and a call with no answer (offline, aborted, past its timeout). No replay,
+screenshot, view hierarchy or tracing; release health is on. There is no
+correlation id on the phone's or the panel's report: the API does not return
+its own to the client, so a phone event and the API's are matched by time and
+route.
+
+**Once, by the owner** (each grant to a third party is the owner's word):
+
+1. Make the Sentry account and its organization in the **EU (Frankfurt)** data
+   region. The region is chosen once, at sign-up, and never changes; moving
+   means a new organization.
+2. Make the three projects: `ijazah-mobile` (React Native), `ijazah-admin`
+   (React) and `ijazah-api` (Node).
+3. In each project, three alert rules by e-mail, for `production` and
+   `closed-test`: a new issue is created; an issue changes from resolved to
+   unresolved (a regression); an issue is escalating.
+4. Turn on spike protection (Settings, Spike Protection).
+5. Set a rate limit on the phone's client key (`ijazah-mobile`, Client Keys).
+6. Only on the owner's word: the GitHub integration (suspect commits; it reads
+   the repository), and the Sentry MCP server for agents, limited to
+   `?skills=inspect` (read only, one project at a time).
+
+**The keys, by place** (values only in their place, never in a file or a
+message):
+
+- **EAS**, in the `production` environment (and `development` for the
+  development build): `EXPO_PUBLIC_SENTRY_DSN` (the `ijazah-mobile` DSN),
+  `EXPO_PUBLIC_SENTRY_ENVIRONMENT` (`closed-test` or `production`),
+  `SENTRY_AUTH_TOKEN` (secret visibility: the release build uploads its maps
+  with it) and `SENTRY_ORG` (the organization's slug; `app.json` names the
+  project and the EU address, `https://de.sentry.io/`). Release and dist stay
+  the SDK's own (`com.ijazah.app@<version>+<version code>`, the version code):
+  check that the first closed-test event shows them.
+- **The panel's build** on the host: `VITE_SENTRY_DSN` (the `ijazah-admin`
+  DSN), `VITE_SENTRY_ENVIRONMENT`, `SENTRY_AUTH_TOKEN` and `SENTRY_ORG`. Without
+  the token the build writes no source map at all; with it the maps are hidden,
+  uploaded to `ijazah-admin` and deleted from `apps/admin/build`. After each
+  build, `find apps/admin/build -name '*.map'` must list nothing.
+- **The server**: `SENTRY_DSN` (the `ijazah-api` DSN), `SENTRY_ENVIRONMENT`
+  and `SENTRY_RELEASE` (the deploy's git SHA, `git rev-parse HEAD`). The worker
+  takes the DSN only: its reports carry `NODE_ENV`'s environment and no
+  release.
+
+**From crash to fix:**
+
+1. **Capture.** The SDK catches an unexpected error (a render error the root's
+   boundary shows as «حدث خطأ», another JavaScript error, a native crash or
+   freeze, or an error the API's filter marks unexpected), scrubbed as above.
+2. **Group.** Sentry reads the stack through the uploaded maps and groups the
+   events into an issue.
+3. **Reach us.** An alert rule (new, regression, escalating) e-mails the owner.
+   Nothing else is needed to notice.
+4. **Triage** (the owner, or an agent through the MCP server's `inspect`): the
+   stack trace at the source line, the release (which build, which commit),
+   the breadcrumbs, the route, how many people, and whether it is new in this
+   release.
+5. **Record.** An issue that needs work becomes a `tasks.md` follow-up line
+   first, naming the Sentry issue's id. No fix outside it.
+6. **Fix through the process.** A red test reproducing the stack, the fix, the
+   review, the merge; nothing changes in production outside a pull request.
+   Mark the issue «Resolved in next release».
+7. **Ship.** A new phone build raises the version code (T182's rule); the panel
+   and the API deploy with a new SHA as their release.
+8. **Verify.** Release health shows the new release's crash-free rate. If the
+   issue comes back in a newer release, the regression alert fires (step 3).
+9. **Old builds.** Only when the fix must reach everyone (a security, money or
+   contract reason), raise `min_app_build` by T184's rule; otherwise leave the
+   old builds alone.
 
 ## Incidents
 

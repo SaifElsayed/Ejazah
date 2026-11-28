@@ -26,7 +26,14 @@
           }
         }
       ],
-      "@config-plugins/react-native-webrtc"
+      "@config-plugins/react-native-webrtc",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://de.sentry.io/",
+          "project": "ijazah-mobile"
+        }
+      ]
     ],
     "android": {
       "package": "com.ijazah.app",

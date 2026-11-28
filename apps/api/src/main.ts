@@ -104,7 +104,13 @@ const [
   import('./jobs/deliver-notification.js'),
 ]);
 
-initReporting({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV });
+// R3 T183: the crash reports' environment and release (`SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`).
+initReporting({
+  dsn: config.SENTRY_DSN,
+  environment: config.NODE_ENV,
+  sentryEnvironment: config.SENTRY_ENVIRONMENT,
+  release: config.SENTRY_RELEASE,
+});
 const log = createLogger({ level: config.LOG_LEVEL });
 const database = openDatabase(config.DATABASE_URL, {
   poolMax: config.DATABASE_POOL_MAX,
