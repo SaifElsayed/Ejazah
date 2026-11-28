@@ -122,6 +122,8 @@ import { type AdminInviteQueue, AdminsService } from './admins.service.js';
 import { AuditQueryService } from './audit-query.service.js';
 import { AuditRepository, latestStandingReasonOf } from './audit.repository.js';
 import { HomeService } from './home.service.js';
+// 002:T180 (R2): the start-up report of the registry's keys missing from the database.
+import { reportMissingKeys } from './settings-report.js';
 import { SettingsRepository } from './settings.repository.js';
 import { SettingsService } from './settings.service.js';
 // 005:T024 (B49; FR-624; R-410): the panel's `settings.list` and `settings.update`.
@@ -761,6 +763,17 @@ export { type AuditTargetType, targetLabel } from './labels/target-label.js';
 /** The admin module's settings reader over the `settings` table, for the kernel to read through (T113). */
 export function createSettingsReader(database: Database): SettingsReader {
   return new SettingsService(new SettingsRepository(database));
+}
+
+/**
+ * At start-up, one warn line naming the settings registry's keys no row holds, or the failed read
+ * (002:T180); `main.ts` and `worker.ts` await it after binding the reader. It never throws.
+ */
+export function reportMissingSettings(
+  database: Pick<Database, 'setting'>,
+  log: Pick<Logger, 'warn'>,
+): Promise<void> {
+  return reportMissingKeys(new SettingsRepository(database), log);
 }
 
 /**

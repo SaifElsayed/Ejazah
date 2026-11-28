@@ -17,6 +17,9 @@ const ACTION_TEXT: Readonly<Record<string, MessageKey>> = {
   'admin.reset_mfa': 'admin.audit.actions.adminResetMfa',
   'admin.regenerate_recovery_codes': 'admin.audit.actions.adminRegenerateRecoveryCodes',
   'admin.sign_out': 'admin.audit.actions.adminSignOut',
+  // 002:T178 (R2, Q-4 (a)): `scripts/ops/first-admin.ts`, under the seeded administrator.
+  'admin.bootstrap': 'admin.audit.actions.adminBootstrap',
+  'admin.recover': 'admin.audit.actions.adminRecover',
   'application.approve': 'admin.audit.actions.applicationApprove',
   'application.ban': 'admin.audit.actions.applicationBan',
   'application.reject': 'admin.audit.actions.rejectApplication',

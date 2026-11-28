@@ -893,3 +893,21 @@ describe('006:T021: the programme reads by name', () => {
     },
   );
 });
+
+// 002:T178 (R2, Q-4 (a); SRS DEC-108, ADR 0019 D3): the server owner's script
+// (`scripts/ops/first-admin.ts`), audited under the seeded administrator on the administrator it
+// wrote or recovered (`admin`), so no new target type.
+const T178_SCRIPT_ACTIONS: readonly (readonly [string, string, string])[] = [
+  ['admin.bootstrap', 'إنشاء أول مشرف من الخادم', 'First administrator created on the server'],
+  ['admin.recover', 'استعادة مشرف من الخادم', 'Administrator recovered on the server'],
+];
+
+describe('002:T178: the server script’s actions by name', () => {
+  it.each(T178_SCRIPT_ACTIONS)(
+    '%s reads «%s» and "%s", never the stored code',
+    (action, arText, enText) => {
+      expect(actionText(action, (key: MessageKey) => translate('ar', key))).toBe(arText);
+      expect(actionText(action, (key: MessageKey) => translate('en', key))).toBe(enText);
+    },
+  );
+});

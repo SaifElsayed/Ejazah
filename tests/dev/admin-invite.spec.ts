@@ -178,7 +178,7 @@ describe('a new administrator’s invite (T097)', { tags: ['database'] }, () => 
     );
     expect(
       rows.map((row) => row.column_name).sort(),
-      'review scripts/dev/admin-invite.ts and AdminsService.add together',
+      'review scripts/dev/admin-invite.ts, scripts/ops/first-admin.ts and AdminsService.add together',
     ).toEqual([...written, ...left].sort());
   });
 

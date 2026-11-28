@@ -98,13 +98,8 @@ describe('env.schema (T015, FR-039)', () => {
   // only member is `fake`, such a configuration also carries PAYMENT_GATEWAY's refusal, so each case
   // asserts its key is among the offending ones; development and test accept every stand-in.
   // T001 (Phase 1) adds the sign-in and email selectors to the same rule (contracts/ports.md).
-  it.each([
-    'VIDEO_PROVIDER',
-    'PUSH_PROVIDER',
-    'SMS_PROVIDER',
-    'SIGN_IN_PROVIDER',
-    'EMAIL_PROVIDER',
-  ])(
+  // 002:T177: SMS_PROVIDER leaves it (the case below): no module calls the messaging port.
+  it.each(['VIDEO_PROVIDER', 'PUSH_PROVIDER', 'SIGN_IN_PROVIDER', 'EMAIL_PROVIDER'])(
     'refuses %s=fake in every mode but development and test, naming the key (T153, T168, T001)',
     (key) => {
       for (const nodeEnv of modesOutsideDevelopmentAndTest) {
@@ -124,18 +119,31 @@ describe('env.schema (T015, FR-039)', () => {
       for (const nodeEnv of ['development', 'test']) {
         const config = loadConfig({ ...validEnv, NODE_ENV: nodeEnv, [key]: 'fake' });
         expect(
-          config[
-            key as
-              | 'VIDEO_PROVIDER'
-              | 'PUSH_PROVIDER'
-              | 'SMS_PROVIDER'
-              | 'SIGN_IN_PROVIDER'
-              | 'EMAIL_PROVIDER'
-          ],
+          config[key as 'VIDEO_PROVIDER' | 'PUSH_PROVIDER' | 'SIGN_IN_PROVIDER' | 'EMAIL_PROVIDER'],
         ).toBe('fake');
       }
     },
   );
+
+  // 002:T177 (the full-codebase review's M5, L5-4): the messaging port has only its stand-in and
+  // no module calls it (phone sign-up is deferred, ADR 0012), so a hosted server is no longer
+  // refused for it; SMS_PROVIDER stays `fake` only, with its port.
+  it('takes SMS_PROVIDER=fake, named or by default, on a hosted server: the unused port is out of the stand-in check (002:T177)', () => {
+    for (const nodeEnv of modesOutsideDevelopmentAndTest) {
+      for (const value of [{ SMS_PROVIDER: 'fake' }, {}]) {
+        let offending: readonly string[] = [];
+        try {
+          loadConfig({ ...validEnv, NODE_ENV: nodeEnv, ...value });
+        } catch (error: unknown) {
+          if (!(error instanceof ConfigError)) throw error;
+          // Production still refuses the other stand-ins of `validEnv`; none is the messaging port's.
+          offending = error.offendingKeys;
+        }
+        expect(offending).not.toContain('SMS_PROVIDER');
+      }
+    }
+    expect(loadConfig(validEnv).SMS_PROVIDER).toBe('fake');
+  });
 
   // 002:T147 (M6): local storage writes the PDFs to disk as plaintext, so it is refused outside
   // development and test as the stand-ins are, with its own message; the default stays `local`, so
@@ -902,12 +910,12 @@ describe('the gateway (T056)', () => {
   });
 
   // 003:T116 (PR #144's review, round 1, nit 4; the review session's (a)): T109's «A spec starts a
-  // hosted `live` configuration», every port's values given. The email and SMS ports have no member
-  // but their stand-in yet (env.schema.ts), which production refuses, so those two are its only
-  // refusals until their adapters land; then this case reads «accepted». 002:T148 (B50) gives the
-  // sign-in port its `live` member, which production takes. Every value is a placeholder of the
-  // shape the provider gives, never a real key (R-SEC-1).
-  it('a complete hosted live configuration is refused only for SMS_PROVIDER and EMAIL_PROVIDER, the stand-in-only ports, until their adapters land (003:T116, 002:T148)', () => {
+  // hosted `live` configuration», every port's values given. 002:T148 (B50) gave the sign-in port
+  // its `live` member; 002:T177 gives the email port Resend and takes the messaging port, which no
+  // module calls, out of the stand-in check, so the configuration is now accepted whole, the SMS
+  // stand-in included. Every value is a placeholder of the shape the provider gives, never a real
+  // key (R-SEC-1).
+  it('accepts a complete hosted live configuration: every port live, the unused SMS port on its stand-in (003:T116, 002:T148, 002:T177)', () => {
     const hostedLive: Record<string, string> = {
       NODE_ENV: 'production',
       PORT: '3000',
@@ -949,18 +957,21 @@ describe('the gateway (T056)', () => {
       APPLE_TEAM_ID: 'TEAMPLACEHOLDER',
       APPLE_KEY_ID: 'KEYPLACEHOLDER',
       APPLE_PRIVATE_KEY: 'apple-key-placeholder',
-      EMAIL_PROVIDER: 'fake',
+      EMAIL_PROVIDER: 'resend',
+      EMAIL_PROVIDER_KEY: 're_placeholder',
       EMAIL_FROM: 'no-reply@ijazah.app',
+      EMAIL_FROM_NAME: 'إجازة',
       SUPPORT_EMAIL: 'help@ijazah.app',
       TRUSTED_PROXY: 'X-Forwarded-For',
       TRUSTED_PROXY_ADDRESS: '10.0.0.2',
+      API_BIND_ADDRESS: '127.0.0.1',
       SENTRY_DSN: 'https://placeholder@sentry.example.net/1',
     };
 
-    const failure = refusal(hostedLive);
+    const config = loadConfig(hostedLive);
 
-    expect(failure.offendingKeys).toEqual(['SMS_PROVIDER', 'EMAIL_PROVIDER']);
-    expect(failure.message).not.toContain('placeholder');
+    expect(config.EMAIL_PROVIDER).toBe('resend');
+    expect(config.SMS_PROVIDER).toBe('fake');
   });
 
   it('refuses a key not marked live in live mode, naming it and never its value: the rule is "live", never "not test" (003:T109)', () => {
@@ -1185,6 +1196,148 @@ describe('the sign-in provider (002:T148)', () => {
   });
 });
 
+// 002:T177 (SRS DEC-108; the note under T177, (2) and (3)): Resend behind the email port, its key
+// required with it in every mode, and the sender's name the adapter joins to EMAIL_FROM. Every value
+// is a placeholder, never a real key (R-SEC-1).
+describe('the email sender (002:T177)', () => {
+  const resend: Record<string, string> = {
+    ...validEnv,
+    EMAIL_PROVIDER: 'resend',
+    EMAIL_PROVIDER_KEY: 're_placeholder',
+  };
+
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  const emailKeysIn = (env: Record<string, string>): readonly string[] => {
+    try {
+      loadConfig(env);
+      return [];
+    } catch (error: unknown) {
+      if (!(error instanceof ConfigError)) throw error;
+      return error.offendingKeys.filter((key) => key.startsWith('EMAIL_'));
+    }
+  };
+
+  it('selects Resend with its key in every mode, a hosted server included', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      const config = loadConfig({ ...resend, NODE_ENV: nodeEnv });
+      expect(config.EMAIL_PROVIDER).toBe('resend');
+      expect(config.EMAIL_PROVIDER_KEY).toBe('re_placeholder');
+    }
+    // Production refuses the other stand-ins of `validEnv`, never the email port's keys.
+    expect(
+      emailKeysIn({ ...resend, NODE_ENV: 'production', EMAIL_FROM: 'no-reply@ijazah.app' }),
+    ).toEqual([]);
+  });
+
+  it('refuses Resend without EMAIL_PROVIDER_KEY, absent or empty, in every mode, naming it and never a value', () => {
+    for (const nodeEnv of ['development', 'test']) {
+      for (const env of [
+        without({ ...resend, NODE_ENV: nodeEnv }, 'EMAIL_PROVIDER_KEY'),
+        { ...resend, NODE_ENV: nodeEnv, EMAIL_PROVIDER_KEY: '' },
+      ]) {
+        const failure = refusal(env);
+        expect(failure.offendingKeys).toEqual(['EMAIL_PROVIDER_KEY']);
+        expect(failure.message).toContain(
+          'EMAIL_PROVIDER_KEY (required when EMAIL_PROVIDER=resend (002:T177))',
+        );
+      }
+    }
+    expect(
+      emailKeysIn(
+        without(
+          { ...resend, NODE_ENV: 'production', EMAIL_FROM: 'no-reply@ijazah.app' },
+          'EMAIL_PROVIDER_KEY',
+        ),
+      ),
+    ).toEqual(['EMAIL_PROVIDER_KEY']);
+    // The stand-in reads no key.
+    expect(loadConfig(validEnv).EMAIL_PROVIDER_KEY).toBeUndefined();
+  });
+
+  it('names the sender «إجازة» by default, an empty value included, and takes another one-line name of at most 64 characters', () => {
+    expect(loadConfig(validEnv).EMAIL_FROM_NAME).toBe('إجازة');
+    expect(loadConfig({ ...validEnv, EMAIL_FROM_NAME: '' }).EMAIL_FROM_NAME).toBe('إجازة');
+    expect(loadConfig({ ...validEnv, EMAIL_FROM_NAME: 'منصة إجازة' }).EMAIL_FROM_NAME).toBe(
+      'منصة إجازة',
+    );
+    const longest = 'ن'.repeat(64);
+    expect(loadConfig({ ...validEnv, EMAIL_FROM_NAME: longest }).EMAIL_FROM_NAME).toBe(longest);
+  });
+
+  it.each([
+    ['an opening angle bracket', 'إجازة <x'],
+    ['a closing angle bracket', 'إجازة> x'],
+    ['a double quote', 'إجازة "x"'],
+    ['a newline', 'إجازة\nBcc: x'],
+    ['a carriage return', 'إجازة\rx'],
+    ['65 characters', 'ن'.repeat(65)],
+  ])('refuses an EMAIL_FROM_NAME with %s, naming the key and never the value', (_case, name) => {
+    const failure = refusal({ ...validEnv, EMAIL_FROM_NAME: name });
+    expect(failure.offendingKeys).toEqual(['EMAIL_FROM_NAME']);
+    expect(failure.message).not.toContain(name);
+  });
+
+  it('refuses an unknown member, naming the key and never the value', () => {
+    const failure = refusal({ ...validEnv, EMAIL_PROVIDER: 'postmark-placeholder' });
+    expect(failure.offendingKeys).toEqual(['EMAIL_PROVIDER']);
+    expect(failure.message).not.toContain('placeholder');
+  });
+
+  it('classifies the key as a provider key, so the test setup strips it, and the name as the platform’s own (T114, SC-005)', () => {
+    expect(providerKeys).toContain('EMAIL_PROVIDER_KEY');
+    expect(platformKeys).not.toContain('EMAIL_PROVIDER_KEY');
+    expect(platformKeys).toContain('EMAIL_FROM_NAME');
+    expect(providerKeys).not.toContain('EMAIL_FROM_NAME');
+  });
+});
+
+// 002:T181 (R2's note, Q-7 (a)): the address the API listens on, optional; unset, every interface,
+// which the phone on the same network needs in development. One IP address, never a host name.
+describe('the bind address (002:T181)', () => {
+  function refusal(env: Record<string, string>): ConfigError {
+    try {
+      loadConfig(env);
+    } catch (error: unknown) {
+      if (error instanceof ConfigError) return error;
+      throw error;
+    }
+    throw new Error('the configuration was accepted');
+  }
+
+  it('is unset by default, an empty value included', () => {
+    expect(loadConfig(validEnv).API_BIND_ADDRESS).toBeUndefined();
+    expect(loadConfig({ ...validEnv, API_BIND_ADDRESS: '' }).API_BIND_ADDRESS).toBeUndefined();
+  });
+
+  it('takes one IP address, v4 or v6', () => {
+    for (const address of ['127.0.0.1', '10.0.0.5', '::1']) {
+      expect(loadConfig({ ...validEnv, API_BIND_ADDRESS: address }).API_BIND_ADDRESS).toBe(address);
+    }
+  });
+
+  it('refuses a host name or any other text, naming the key and never the value', () => {
+    for (const value of ['localhost', 'every-interface', '127.0.0.1:3000', '10.0.0.0/8']) {
+      const failure = refusal({ ...validEnv, API_BIND_ADDRESS: value });
+      expect(failure.offendingKeys).toEqual(['API_BIND_ADDRESS']);
+      expect(failure.message).not.toContain(value);
+    }
+  });
+
+  it('classifies it as the platform’s own key', () => {
+    expect(platformKeys).toContain('API_BIND_ADDRESS');
+    expect(providerKeys).not.toContain('API_BIND_ADDRESS');
+  });
+});
+
 describe('loadConfigOrExit (T015, FR-039)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -1318,5 +1471,91 @@ describe('the session media key secret (T084)', () => {
   it('classifies it as the platform’s own key, so a test run may hold it', () => {
     expect(platformKeys).toContain('VIDEO_MEDIA_KEY_SECRET');
     expect(providerKeys).not.toContain('VIDEO_MEDIA_KEY_SECRET');
+  });
+
+  // 002:T177 (PR #159's review, round 1, follow-up 4): «never the provider's own secret» is met by
+  // the separate key, and an operator's copy-paste of another secret into it is refused on a hosted
+  // server: the column key's 32 bytes, or LiveKit's secret as text. Neither is named by value.
+  describe('a hosted server refuses another secret copied into it (002:T177, PR #159 FU4)', () => {
+    const fu4 = '(002:T177, PR #159 FU4)';
+    const productionLivekit = {
+      ...validEnv,
+      NODE_ENV: 'production',
+      VIDEO_PROVIDER: 'livekit',
+      LIVEKIT_URL: 'wss://ejazah-placeholder.livekit.cloud',
+      LIVEKIT_API_KEY: 'APIplaceholder',
+      LIVEKIT_API_SECRET: 'secret-placeholder',
+    };
+    const messageOf = (env: Record<string, string>): string => {
+      try {
+        loadConfig(env);
+        return '';
+      } catch (error: unknown) {
+        if (!(error instanceof ConfigError)) throw error;
+        return error.message;
+      }
+    };
+
+    it('refuses the 32 bytes of ENCRYPTION_KEY, whatever their spelling, naming neither value', () => {
+      const current = validEnv['ENCRYPTION_KEY'] ?? '';
+      // The same 32 bytes in another text: the last character's two unused bits set.
+      const sameBytes = `${current.slice(0, -2)}D=`;
+      expect(sameBytes).not.toBe(current);
+      expect(Buffer.from(sameBytes, 'base64').equals(Buffer.from(current, 'base64'))).toBe(true);
+      for (const copied of [current, sameBytes]) {
+        const env = { ...productionLivekit, VIDEO_MEDIA_KEY_SECRET: copied };
+        expect(mediaKeyRefusals(env)).toEqual(['VIDEO_MEDIA_KEY_SECRET']);
+        expect(messageOf(env)).toContain(fu4);
+        expect(messageOf(env)).toMatch(/VIDEO_MEDIA_KEY_SECRET \(holds ENCRYPTION_KEY's bytes/);
+        expect(messageOf(env)).not.toContain(current);
+        expect(messageOf(env)).not.toContain(sameBytes);
+      }
+      expect(mediaKeyRefusals({ ...productionLivekit, VIDEO_MEDIA_KEY_SECRET: secret })).toEqual(
+        [],
+      );
+    });
+
+    it("refuses LiveKit's secret as text, naming neither value", () => {
+      const env = {
+        ...productionLivekit,
+        LIVEKIT_API_SECRET: secret,
+        VIDEO_MEDIA_KEY_SECRET: secret,
+      };
+      expect(mediaKeyRefusals(env)).toEqual(['VIDEO_MEDIA_KEY_SECRET']);
+      expect(messageOf(env)).toContain(fu4);
+      expect(messageOf(env)).toMatch(/VIDEO_MEDIA_KEY_SECRET \(equals LIVEKIT_API_SECRET/);
+      expect(messageOf(env)).not.toContain(secret);
+    });
+
+    it('refuses neither in development or test, where the stand-ins run', () => {
+      for (const nodeEnv of ['development', 'test']) {
+        const current = validEnv['ENCRYPTION_KEY'] ?? '';
+        expect(
+          loadConfig({ ...validEnv, NODE_ENV: nodeEnv, VIDEO_MEDIA_KEY_SECRET: current })
+            .VIDEO_MEDIA_KEY_SECRET,
+        ).toBe(current);
+        expect(
+          loadConfig({
+            ...productionLivekit,
+            NODE_ENV: nodeEnv,
+            LIVEKIT_API_SECRET: secret,
+            VIDEO_MEDIA_KEY_SECRET: secret,
+          }).VIDEO_MEDIA_KEY_SECRET,
+        ).toBe(secret);
+      }
+    });
+
+    it('compares no malformed value: the format refusal alone, never a throw', () => {
+      // Both malformed alike: their decoded bytes would match, so only the guard keeps FU4 quiet.
+      for (const malformed of ['not base64!', Buffer.alloc(16, 5).toString('base64')]) {
+        const message = messageOf({
+          ...productionLivekit,
+          ENCRYPTION_KEY: malformed,
+          VIDEO_MEDIA_KEY_SECRET: malformed,
+        });
+        expect(message).toMatch(/VIDEO_MEDIA_KEY_SECRET \(/);
+        expect(message).not.toContain(fu4);
+      }
+    });
   });
 });

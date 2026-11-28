@@ -68,9 +68,13 @@ vendor concept enters it; the body may carry a one-time code, so no
 implementation logs it and the logger redacts `text`, `html` and `code`
 (R-SEC-2); the address is validated as one address.
 
-**Selection**: `EMAIL_PROVIDER`, `fake` (the live member arrives with the
-sender chosen at launch), and `EMAIL_FROM` (an address; the stand-in records
-it). Refused outside development and test like every stand-in.
+**Selection**: `EMAIL_PROVIDER`, `fake` or `resend`, and `EMAIL_FROM` (an
+address; the stand-in records it). The stand-in is refused outside development
+and test like every stand-in. The live member, `resend` (002:T177, SRS DEC-108),
+sends one mail per call through Resend's API (`resend.adapter.ts`, plain
+`fetch`, a 10 s timeout, an error carrying the status alone) from `EMAIL_FROM`
+under `EMAIL_FROM_NAME` (default «إجازة»), with `SUPPORT_EMAIL` as the reply
+address, and requires `EMAIL_PROVIDER_KEY`, Resend's API key, in every mode.
 
 **Stand-in behaviour**: records every mail (to, subject, text) so a test reads
 the code it carried; can be told to fail; in development, logs nothing of the

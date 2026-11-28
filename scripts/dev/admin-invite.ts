@@ -19,8 +19,9 @@
 // The values pass `admins.add`'s own input contract. The row is written with SQL, as the seeded
 // administrator's invite above is, because R-API-4 lets only the three composition files import the
 // admin module, so neither `AdminsService.add` nor its repository can be reached from here. The row
-// is the one `AdminsService.add` writes, so A CHANGE TO EITHER IS MADE TO BOTH: the address trimmed
-// and lower-cased, a fresh second-factor secret encrypted to the row's id under
+// is the one `AdminsService.add` writes, and the one the hosted server's `scripts/ops/first-admin.ts`
+// writes (R2 T178), so A CHANGE TO ONE IS MADE TO ALL THREE: the address trimmed and lower-cased, a
+// fresh second-factor secret encrypted to the row's id under
 // `admin_users.mfa_secret_encrypted`, no password, active, invited now, and `invited_by_admin_id`
 // NULL: no administrator invited it. `tests/dev/admin-invite.spec.ts` fails when `admin_users` gains
 // a column. An address another administrator holds is refused by the table's unique constraint and

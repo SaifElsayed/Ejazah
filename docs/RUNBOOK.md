@@ -124,6 +124,8 @@ one-time codes and invite links included, as a text file under
 `<STORAGE_LOCAL_ROOT>/mail/` (`platform/ports/email/index.ts`). The path is
 relative to the API's working directory: under `pnpm dev`, with the default
 `.storage`, that is `apps/api/.storage/mail/`. A test run writes no mail.
+The live sender is `EMAIL_PROVIDER=resend` (Resend, 002:T177), which a hosted
+server runs as «Hosted deploy», «E-mail», says.
 
 ## Reset the local database
 
@@ -230,6 +232,21 @@ source. Once merged, R-DB-1 makes it immutable. So the two rules never apply to
 the same file at the same time: R-PROC-9 governs the generated client, which
 `pnpm db:generate` rebuilds and nobody edits or commits, and R-DB-1 governs the
 migration.
+
+**A hosted deploy: migrate, then seed** (R2 T180). Before the API and the
+worker restart on a new release, a hosted deploy runs `pnpm db:migrate` (the
+owner role, `DATABASE_URL_OWNER`) and then `pnpm db:seed` (the application
+role, `DATABASE_URL`), in that order: a release's new settings reach the
+database only through the seed, and a key no row holds throws at its first
+read (FR-034). The seed inserts only the rows that are absent
+(`ON CONFLICT DO NOTHING`, `prisma/seed.ts:315-322`), so a value an
+administrator changed in the panel is never rewritten
+(`tests/seed/seed.spec.ts:378-390`), and it is safe on every deploy. At
+start-up the API and the worker each read the stored keys once against the
+settings registry: a warn line with `reason` `settings_missing` names every
+key no row holds, which means the seed was skipped: run it.
+`settings_report_failed` means the keys could not be read. Neither line stops
+the process.
 
 ## Add a module
 
@@ -362,6 +379,9 @@ When nobody knows an existing administrator's password, invite a new one the
 same way (T097): `pnpm exec tsx scripts/dev/admin-invite.ts --email <x> --name <y>`
 writes the row `admins.add` writes, with SQL, invited by nobody and with no audit
 entry, refuses an address another administrator holds, and queues the invite.
+A hosted server uses neither: its owner runs `scripts/ops/first-admin.ts`
+(«The first administrator» and «When no administrator can sign in», under
+«Hosted deploy»).
 The panel calls the API at `VITE_API_URL` (in `apps/admin/.env`), and the API
 answers it only when `ADMIN_ALLOWED_ORIGINS` lists `http://localhost:5173`.
 
@@ -462,6 +482,17 @@ proxy's header was set aside for the socket's peer», with `reason`
 `TRUSTED_PROXY_ADDRESS` is not the proxy's address as the API sees it (check
 the address the proxy connects from), or the port is open to others.
 
+**E-mail** — the live sender is Resend (002:T177, SRS DEC-108), from the
+sending domain `send.ijazahapp.com`, verified in Resend on 2026-11-26. Set
+`EMAIL_PROVIDER=resend`, `EMAIL_FROM=no-reply@send.ijazahapp.com`,
+`EMAIL_FROM_NAME=إجازة` and `SUPPORT_EMAIL=support@ijazahapp.com`, where
+replies go; and `EMAIL_PROVIDER_KEY`, which the owner makes in Resend's
+dashboard and sets on the server, never written anywhere by value. The API
+refuses `resend` without the key, and a hosted server refuses the stand-in.
+Resend's free tier sends 100 mails a day (3,000 a month); past it, a one-time
+code is not delivered, the API logs one warn line, and no mail goes until the
+quota resets at midnight UTC, so a launch needs the paid tier.
+
 **The panel's host** — `deploy/Caddyfile` is the panel's site block (research
 R-18): Caddy serves the panel's build as static files with the browser
 security headers and a closed Content Security Policy (SRS NFR-SEC-11). The
@@ -488,12 +519,299 @@ needs no change to it. The steps of 12/1, on the host:
    read the browser console for Content Security Policy violations: none may
    appear except Radix's dialog scroll-lock style, which the policy refuses on
    purpose (`style-src 'self'`, the owner's Q-A4 (a); the comment in
-   `deploy/Caddyfile`). Any other one names a source the file must allow or
+   `deploy/Caddyfile`), and, when a document opens, pdf.js's WebAssembly
+   refusals: the policy has no `'wasm-unsafe-eval'` (`deploy/Caddyfile:38`),
+   and pdf.js catches each one and draws the page with its JavaScript
+   decoders (R2 T181). Any other one names a source the file must allow or
    code that must change.
 
 The API's own site block (its `reverse_proxy` and the live channel's notes
 under «Capacity») joins this file when the API's host is set up; it is not
 part of T147.
+
+**The documents bucket's CORS rule** (R2 T181) — the panel's document viewer
+fetches a document's signed link from the browser (`apps/admin/src/lib/pdf.ts`,
+`withCredentials: false`), so the documents bucket (`S3_BUCKET`) allows `GET`
+from the panel's origin only, `ADMIN_PANEL_ORIGIN` exactly (scheme and host, no
+path):
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://<admin host>"],
+    "AllowedMethods": ["GET"]
+  }
+]
+```
+
+On Cloudflare R2 it is set in the dashboard (the bucket, Settings, CORS
+Policy), or with `npx wrangler r2 bucket cors set <bucket> --file cors.json`,
+whose file wraps the same rule in Wrangler's own shape:
+`{"rules":[{"allowed":{"origins":["https://<admin host>"],"methods":["GET"]}}]}`.
+No other origin and no other method: the phone never reads the bucket from a
+browser, and nothing writes to it but the API. The backup bucket (below) has
+no CORS rule at all.
+
+**The API's bind address** (R2 T181, Q-7 (a)) — `API_BIND_ADDRESS` is the one
+address the API listens on; unset, it listens on every interface, as the phone
+on a development network needs. By the server's shape:
+
+- **The API on the host directly:** `API_BIND_ADDRESS=127.0.0.1`, and Caddy on
+  the same host proxies to it.
+- **The API in a container:** leave `API_BIND_ADDRESS` unset (inside a
+  container `127.0.0.1` is the container's own loopback, which neither a
+  published port nor Caddy can reach). Then either publish no port at all and
+  run Caddy on the same Docker network, `TRUSTED_PROXY_ADDRESS` set to the
+  Caddy container's fixed address on it; or publish the port as
+  `127.0.0.1:<PORT>:<PORT>` only. Never `<PORT>:<PORT>`: Docker's own
+  publishing writes its firewall rules ahead of ufw's, so a port Docker
+  publishes on every interface is open to the internet whatever ufw says.
+
+**The proxy check after a deploy** (R2 T181) — the API's site block proxies to
+the API's own address (`reverse_proxy 127.0.0.1:<PORT>` on the host, the API
+container's name and port on a Docker network). After the deploy, make one
+call to a tRPC procedure through the proxy (sign in to the panel, or open the
+phone app; `/health` does not read the header), then read the API's log since
+the restart: no line «The trusted
+proxy's header was set aside for the socket's peer» with `reason`
+`peer_not_proxy` may appear. One means `TRUSTED_PROXY_ADDRESS` is not the
+address the API's socket sees (see «The proxy and the client's address»): fix
+it before opening the server to anyone, since every rate limit keyed on the
+client's address would otherwise count the proxy.
+
+**Cloudflare** (R2 T181, Q-9 (a)) — when the domain's DNS is on Cloudflare:
+
+- SSL/TLS mode **Full (strict)**, never **Flexible**: Flexible sends Cloudflare's
+  request to the server over plain HTTP, which Caddy answers with a redirect to
+  HTTPS, so every page loops, and the hop to the server is unencrypted.
+- Resend's records (the sending domain's SPF, DKIM and return-path records)
+  are **DNS only** (the grey cloud), as Resend's dashboard gives them.
+- The gateway's webhook reaches the API through Cloudflare's proxy like any
+  request; its HMAC signature guards it, checked on the raw body. Nothing of
+  Cloudflare's may answer it in the API's place: no challenge page or bot rule
+  on the webhook's path.
+- The live channel's ping stays under 60 s (it is 25 s,
+  `LIVE_PING_INTERVAL_MS`), inside Cloudflare's 100 s idle timeout, so a quiet
+  stream is not cut (see «Reverse proxy and the live channel» under
+  «Capacity»).
+
+**Each deploy** (R2 T180) — migrate, then seed, then restart the API and the
+worker, on the server, in this order:
+
+```bash
+pnpm db:migrate   # the owner role (DATABASE_URL_OWNER)
+pnpm db:seed      # the application role (DATABASE_URL); inserts only absent rows
+```
+
+The seed never rewrites a setting an administrator changed («A hosted deploy:
+migrate, then seed» under «Migration workflow»). After the restart, neither
+process's log may hold a warn line with `reason` `settings_missing`: one names
+the keys no row holds, so the seed did not run on this database; run it.
+
+**The first administrator** — after «migrate, then seed», with the worker
+running and the live e-mail sender set, the server's owner runs, on the
+server:
+
+```bash
+pnpm exec tsx scripts/ops/first-admin.ts --email <x> --name <y>
+```
+
+It is refused while any active administrator who can sign in exists (a
+password set; a temporary lock still counts; the seeded `admin@ijazah.invalid`
+never does), without the seeded administrator (run `pnpm db:seed` first),
+without `ADMIN_PANEL_ORIGIN`, which the invitation's link is built from, and
+without `REDIS_URL`, `DATABASE_URL` or `ENCRYPTION_KEY` (`redis_url_missing`,
+`database_url_missing`, `encryption_key_missing`). It writes the administrator
+as "Add admin" does, invited by nobody, records one audit entry,
+`admin.bootstrap`, under the seeded administrator, which stands
+for the platform, and queues the invitation; it prints the administrator's id,
+never the address. The worker sends the mail. Its link opens the panel's
+`/set-password` for `admin_invite_ttl_hours` (48 h): set the password, then the
+second factor (scan the code into an authenticator app), and keep the recovery
+codes it shows once in the password manager. Then add a second administrator
+from the panel (Settings → Admins, "Add admin"), so that each can reset the
+other's second factor («Reset an administrator's second factor»). If it
+answers `invitation_not_queued`, the administrator is written and audited
+but the queue failed or did not answer within 5 seconds: once Redis does, run
+`--recover` (below) for that address.
+
+**When no administrator can sign in** — when the last administrator who could
+sign in has lost the password, the second factor, or both, the server's
+owner runs, on the server, with the worker running:
+
+```bash
+pnpm exec tsx scripts/ops/first-admin.ts --recover --email <x> --reason <r>
+```
+
+In one transaction it clears that administrator's password and its date, the
+second factor's enrolment (with a new secret), the recovery codes, the lock
+and its count, and ends every open session; then it queues a new invitation,
+and the next sign-in repeats the whole setup from its link. There is no way
+back: the old password, second factor and codes are gone. It refuses an
+unknown or a disabled administrator. The audit log records one entry,
+`admin.recover`, under the seeded administrator, with the reason as typed
+(the panel shows «استعادة مشرف من الخادم»): name the cause, never a password
+or a code. A lost second factor alone, while another administrator can sign
+in, is reset from the panel instead; a lost password has no panel path
+(`specs/003-booking/tasks.md` T098, item 1).
+
+## Backups and restore
+
+R2 T179 (SRS DEC-100, DEC-108; ADR 0015). The database is dumped nightly,
+encrypted, sent to a bucket of its own and kept 14 days; the documents keep a
+second copy that ages out after an erasure. Everything below the script is the
+server owner's outside step, taken once the buckets exist.
+
+**What runs nightly** — two commands of `scripts/ops/backup.ts`, as root on the
+server, from the repository's checkout, with `deploy/backup.env` loaded (copy
+`deploy/backup.env.example` to `/etc/ijazah/backup.env`, owner root, mode 0600,
+and fill it there):
+
+- `dump`: `pg_dump --format=custom` as the owner role, piped into
+  `gpg --symmetric --cipher-algo AES256` with the passphrase file, into a
+  temporary file only root reads (removed in every case), uploaded to the
+  backup bucket as `db/<UTC instant>.dump.gpg`; then every `db/` dump older
+  than 14 days is deleted, the newest never.
+- `copy-documents`: every object of the documents bucket that has no copy under
+  `docs/` in the backup bucket is copied there; a copy whose document is gone
+  (erased) moves to `docs-gone/` that night, and a `docs-gone/` copy older than
+  14 days is deleted.
+
+Each prints one line to the journal, counts and the backup bucket's object
+keys, or `failed (<reason>)` / `refused (<reason>)` and exit code 1; never a
+URL, a key or the passphrase, and not the programs' own messages (run the
+failing program by hand to see one). A systemd timer runs them, `dump` first:
+
+```ini
+# /etc/systemd/system/ijazah-backup.service
+[Unit]
+Description=Ijazah nightly backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=<checkout>
+EnvironmentFile=/etc/ijazah/backup.env
+ExecStart=<pnpm> exec tsx scripts/ops/backup.ts dump
+ExecStart=<pnpm> exec tsx scripts/ops/backup.ts copy-documents
+
+# /etc/systemd/system/ijazah-backup.timer
+[Unit]
+Description=Ijazah nightly backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Then `systemctl daemon-reload && systemctl enable --now ijazah-backup.timer`;
+`systemctl list-timers ijazah-backup.timer` shows the next run and `journalctl
+-u ijazah-backup` each night's lines. A failed `dump` fails the unit, so that
+night's `copy-documents` waits for the next. The host needs Node 24 and pnpm (the
+script runs with `tsx`), `gpg` (Ubuntu's own), and `pg_dump`/`pg_restore` of at
+least the database's major version (PostgreSQL's own apt repository); or the
+database container's own through `BACKUP_PG_DUMP=docker exec -i -e PGPASSWORD
+<postgres container> pg_dump` (and the same for `BACKUP_PG_RESTORE`), as the
+drill below did.
+
+**The two buckets and their two tokens:**
+
+- **The documents bucket** (`S3_BUCKET`, the API's own): the API's token reads
+  and writes it. The backup reads it with a second token, **Object Read** only,
+  scoped to that bucket (`DOCUMENTS_S3_*`), so the backup can never change a
+  document.
+- **The backup bucket** (e.g. `ijazah-backups`), holding `db/`, `docs/` and
+  `docs-gone/`: its own token, **Object Read & Write** on that bucket only
+  (`BACKUP_S3_*`), which only `/etc/ijazah/backup.env` holds; the API never
+  has it, so a leaked API key cannot delete a backup. Never public, no CORS
+  rule, no lifecycle rule (the script deletes by age; Cloudflare R2 has no
+  versioning, hence the copy).
+- **The region waits for counsel** (research R-19). On Cloudflare R2 a
+  jurisdiction bucket (e.g. `eu`) has its own endpoint,
+  `https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com`, unreachable from the
+  default one, and a bucket's jurisdiction cannot change after it is created.
+  So both buckets are created only after counsel's answer, in the same place as
+  the database, and `BACKUP_S3_ENDPOINT` / `DOCUMENTS_S3_ENDPOINT` name that
+  endpoint (region `auto`). The script names nothing else: any S3-compatible
+  service works.
+
+**What is kept, and for how long** — 14 days (DEC-100): the dumps of the last
+14 nights; the newest is never deleted, so a dump failing for days, or a clock
+gone wrong, never takes the last good one. A document has its copy under
+`docs/` while it exists; erased, its copy moves to `docs-gone/` that night and
+is deleted 14 days later, so an erased file leaves every copy within about 15
+days, and an erased person's rows leave the dumps within 14 (ADR 0015: within
+30 days).
+
+**The two secrets, and their second copies** — without both, nothing restores:
+
+- **The passphrase**: `openssl rand -base64 32 > /etc/ijazah/backup.passphrase`,
+  owner root, mode 0400 (`BACKUP_PASSPHRASE_FILE`). Without it no dump
+  decrypts.
+- **`ENCRYPTION_KEY`**: a restored database's six `*_encrypted` columns (the
+  second factors, the payout references, the push tokens, …; «Leaked
+  credential») read only under the key they were written with.
+
+The second copy of each is kept in the owner's password manager, under the
+deployment's entry (with `ENCRYPTION_KEY`'s and `VIDEO_MEDIA_KEY_SECRET`'s),
+never written here or anywhere else by value. After a rotation of either, the
+old value stays in that entry until the last dump made under it is past 14 days.
+
+**Restore** — into a new, named database, never over the running one:
+
+1. On the server, load the environment: `set -a; . /etc/ijazah/backup.env;
+   set +a`. The dump to restore is named in the journal's `object=db/…` lines
+   (or the bucket's listing in the provider's dashboard).
+2. Create an empty database owned by the owner role, e.g. `CREATE DATABASE
+   ijazah_restored OWNER ijazah_owner;` as a role allowed to create databases
+   (the roles exist as «Provision the database roles in production» made
+   them).
+3. Run, with that database's URL, never with a password in it: the
+   password comes from root's `~/.pgpass`, or, when the URL names the owner's
+   user, host and port as `DATABASE_URL_OWNER` writes them, from
+   `DATABASE_URL_OWNER` itself, which the script gives `pg_restore` as
+   `PGPASSWORD` only:
+
+   ```bash
+   pnpm exec tsx scripts/ops/backup.ts restore \
+     --target-url postgresql://ijazah_owner@<host>:5432/ijazah_restored \
+     --object db/<instant>.dump.gpg
+   ```
+
+   It refuses without `--target-url`, a target whose database is the one
+   `DATABASE_URL_OWNER` or `DATABASE_URL` names (on any host), a target URL
+   carrying a password (`target_has_password`) or a query string or fragment
+   (`target_has_query`), and an object outside `db/`. It downloads the dump
+   into a temporary file only root reads, decrypts it and restores it in one
+   transaction (`pg_restore --single-transaction --exit-on-error`), so a
+   failure leaves the target empty.
+4. Check it: the tables' row counts look like the day's, and the panel's
+   sign-in works against it (a second factor decrypts only under the right
+   `ENCRYPTION_KEY`).
+5. Switch to it in a stopped window: stop the API and the worker, rename
+   (`ALTER DATABASE ijazah RENAME TO ijazah_before_restore; ALTER DATABASE
+   ijazah_restored RENAME TO ijazah;`) or point `DATABASE_URL` and
+   `DATABASE_URL_OWNER` at it, keep the same `ENCRYPTION_KEY`, then «migrate,
+   then seed» and start both.
+6. A lost document is put back from its copy under `docs/<key>` (or
+   `docs-gone/<key>`) with the provider's own tools; the script has no command
+   for it.
+
+**The drill** — the restore was run once on the development machine on
+2026-11-26 (Q-6 (a)): `ijazah_integrity` (synthetic data) dumped by `dump`
+through `gpg` with a throwaway passphrase (44,991,282 bytes, no Postgres
+signature left in it), downloaded and restored by `restore` into
+`ijazah_restore_drill`, created for the run and dropped by name after it; 54
+tables and 809,798 rows compared, every count equal; one encrypted column
+(`admin_users.mfa_secret_encrypted` of the seeded administrator) read from the
+restored copy with the integrity database's `ENCRYPTION_KEY`. The programs ran
+inside the database container; the upload, the prune and the documents' copy
+are proved against an in-memory S3 (`tests/ops/backup.spec.ts`). Still the
+owner's: the first night against the real buckets once they exist (after
+counsel), and PLAN.md's drill on the server in Phase 6 (restore a night's dump
+into a new database, check it as in step 4, and write the date here).
 
 ## Leaked credential
 
@@ -610,9 +928,27 @@ environment exists yet; until it does, "install" means a developer's `.env`.
   nothing is re-encrypted.
 - **`SMS_PROVIDER_KEY`** and **`EXPO_ACCESS_TOKEN`**. Issued by the SMS provider
   (not chosen yet) and in the Expo account's access tokens.
+- **`EMAIL_PROVIDER_KEY`**, Resend's API key (002:T177), read only while
+  `EMAIL_PROVIDER=resend`. Issued in Resend's dashboard (API Keys): create a
+  new key, install it, restart the API and the worker, then revoke the old one.
+  Mails sent with the old key are not affected; until the restart, a code mail
+  or an invitation sent with a revoked key fails, and the invitation's job
+  retries.
 - **`S3_ACCESS_KEY_ID`** and **`S3_SECRET_ACCESS_KEY`**. Issued by the storage
   provider. Links already signed with the old pair stop working when it is
   deleted; they are short-lived anyway.
+- **`BACKUP_S3_ACCESS_KEY_ID`** / **`BACKUP_S3_SECRET_ACCESS_KEY`** and
+  **`DOCUMENTS_S3_ACCESS_KEY_ID`** / **`DOCUMENTS_S3_SECRET_ACCESS_KEY`** (the
+  backup script's, `deploy/backup.env.example`, 002:T179; the API never reads
+  them). Two tokens of the storage provider: the backup bucket's read-write,
+  the documents' read-only. Make a new token, put it in the script's
+  environment on the server, run `dump` (or `copy-documents`) once, then
+  delete the old token.
+- **The backup passphrase** (the file `BACKUP_PASSPHRASE_FILE` names). Whoever
+  holds it opens every dump made under it. Make a new one, write it to the file
+  and to the owner's password manager (by place, never by value), run `dump`
+  once; keep the old one in the password manager until the last dump made under
+  it is past the 14 days («Backups and restore»), then remove it.
 - **`SENTRY_DSN`**. Not a password, but it lets anyone send events into the
   project. Create a new client key in the Sentry project's settings, install it,
   then disable the old one.
