@@ -129,6 +129,19 @@ describe('GET /terms (T039, FR-127)', () => {
     }
   });
 
+  // R3 (002:T189, Q-C2-3 (a), the owner's word of 2026-11-28): the minors sentence, as the policy's.
+  it('states that a person under 18 uses the app with a guardian’s agreement, in both languages', async () => {
+    version = '2026-10';
+    const arabic = await (await fetch(`${origin}/terms`)).text();
+    expect(arabic).toContain(
+      'إذا كان عمرك أقل من 18 سنة، فاستخدامك للتطبيق يكون بموافقة وليّ أمرك.',
+    );
+    const english = await (await fetch(`${origin}/terms?lang=en`)).text();
+    expect(english).toContain(
+      "If you are under 18, you use the app with your parent's or guardian's agreement.",
+    );
+  });
+
   it('renders the English fragment for ?lang=en, left to right', async () => {
     version = '2026-10';
     const page = await (await fetch(`${origin}/terms?lang=en`)).text();
