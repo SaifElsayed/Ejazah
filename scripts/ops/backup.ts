@@ -458,9 +458,10 @@ async function restore(
   );
   if (runtime.includes(target)) throw new Refused('target_is_runtime');
   // A password in the URL sits in this process's arguments; a query string can name libpq another
-  // database or host than the path does (PR #162's review, round 1, Minor 2).
+  // database or host than the path does (PR #162's review, round 1, Minor 2), and so can a fragment,
+  // which node puts in `hash` while libpq reads `#?host=…` as a parameter (round 2, Minor 1).
   if (parsed.password !== '') throw new Refused('target_has_password');
-  if (parsed.search !== '') throw new Refused('target_has_query');
+  if (parsed.search !== '' || parsed.hash !== '') throw new Refused('target_has_query');
   if (!isDumpKey(object)) throw new Refused('object_not_a_dump');
   await withTempDir(deps.tempRoot, async (dir) => {
     const file = join(dir, 'restore.gpg');

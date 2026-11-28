@@ -615,6 +615,21 @@ describe('restore', () => {
     expect(s3.sent).toEqual([]);
   });
 
+  // PR #162's review, round 2, Minor 1: node's URL puts `#?host=…` in `hash`, while libpq reads it
+  // as a parameter, so a fragment would pass the query check and the same-host rule.
+  it('refuses a target carrying a fragment, and downloads and runs nothing', async () => {
+    for (const target of [
+      'postgresql://ijazah_owner@db.internal:5432/ijazah_restored#?host=elsewhere',
+      'postgresql://ijazah_owner@db.internal:5432/ijazah_restored#x',
+    ]) {
+      lines = [];
+      expect(await run(restore(target))).toBe(1);
+      expect(lines).toEqual(['err: backup restore: refused (target_has_query)']);
+    }
+    expect(runner.runs).toEqual([]);
+    expect(s3.sent).toEqual([]);
+  });
+
   it('gives pg_restore the owner’s password for the owner’s user, host and port, as PGPASSWORD only', async () => {
     expect(await run(restore(RESTORE_TARGET))).toBe(0);
     const steps = runner.runs[0]?.steps ?? [];

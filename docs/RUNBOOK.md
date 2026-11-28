@@ -755,9 +755,9 @@ days, and an erased person's rows leave the dumps within 14 (ADR 0015: within
   credential») read only under the key they were written with.
 
 The second copy of each is kept in the owner's password manager, under the
-deployment's entry (with `ENCRYPTION_KEY`'s and `VIDEO_MEDIA_KEY_SECRET`'s), never written here or
-anywhere else by value. After a rotation of either, the old value stays in that
-entry until the last dump made under it is past 14 days.
+deployment's entry (with `ENCRYPTION_KEY`'s and `VIDEO_MEDIA_KEY_SECRET`'s),
+never written here or anywhere else by value. After a rotation of either, the
+old value stays in that entry until the last dump made under it is past 14 days.
 
 **Restore** — into a new, named database, never over the running one:
 
@@ -782,12 +782,11 @@ entry until the last dump made under it is past 14 days.
 
    It refuses without `--target-url`, a target whose database is the one
    `DATABASE_URL_OWNER` or `DATABASE_URL` names (on any host), a target URL
-   carrying a password (`target_has_password`) or a query string
+   carrying a password (`target_has_password`) or a query string or fragment
    (`target_has_query`), and an object outside `db/`. It downloads the dump
    into a temporary file only root reads, decrypts it and restores it in one
-   transaction (`pg_restore
-   --single-transaction --exit-on-error`), so a failure leaves the target
-   empty.
+   transaction (`pg_restore --single-transaction --exit-on-error`), so a
+   failure leaves the target empty.
 4. Check it: the tables' row counts look like the day's, and the panel's
    sign-in works against it (a second factor decrypts only under the right
    `ENCRYPTION_KEY`).

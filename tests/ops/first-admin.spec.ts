@@ -16,7 +16,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import type { QueryResultRow } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ColumnCipher } from '../../apps/api/src/platform/crypto/encryption';
 import { ADMINISTRATOR, type Queryable } from '../../prisma/seed';
@@ -687,6 +687,38 @@ describe('the output', { tags: ['database'] }, () => {
       expect(failed.err).toHaveLength(1);
       expect(failed.err[0]).toContain('invitation_not_queued');
       expect(failed.err[0]).toContain('--recover');
+    });
+  });
+
+  // PR #162's review, round 2 (mutant R2-F7): once the queue has answered, the bound's timer is
+  // cleared, so it never keeps the process alive for its 5 s.
+  it('clears the bound once the queue has answered', async () => {
+    const email = unique();
+    const bound = 4_321;
+    await inRollback(db, async () => {
+      await plantSeededAdministrator(db);
+      await disableEveryoneWhoCanSignIn(db);
+      const { deps } = recorded(db);
+      const done = lines();
+      const set = vi.spyOn(globalThis, 'setTimeout');
+      const cleared = vi.spyOn(globalThis, 'clearTimeout');
+      try {
+        expect(
+          await execute(
+            { kind: 'bootstrap', email, displayName: 'First Admin' },
+            { ...deps, queueTimeoutMilliseconds: bound },
+            done.output,
+          ),
+        ).toBe(0);
+        const timers = set.mock.calls.flatMap((call, i) =>
+          call[1] === bound ? [set.mock.results[i]?.value] : [],
+        );
+        expect(timers).toHaveLength(1);
+        expect(cleared.mock.calls.map((call) => call[0])).toContain(timers[0]);
+      } finally {
+        set.mockRestore();
+        cleared.mockRestore();
+      }
     });
   });
 });
